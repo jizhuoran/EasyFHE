@@ -117,6 +117,7 @@ file(GLOB native_quantized_cpp
             "native/quantized/cpu/*.cpp")
 file(GLOB native_nested_cpp "native/nested/*.cpp")
 file(GLOB native_transformers_cpp "native/transformers/*.cpp")
+file(GLOB_RECURSE native_fhe_cpp "native/fhe/*.cpp")
 
 file(GLOB native_h "native/*.h")
 file(GLOB native_ao_sparse_h
@@ -127,6 +128,7 @@ file(GLOB native_ao_sparse_h
 file(GLOB native_quantized_h "native/quantized/*.h" "native/quantized/cpu/*.h" "native/quantized/cudnn/*.h")
 file(GLOB native_cpu_h "native/cpu/*.h")
 file(GLOB native_utils_h "native/utils/*.h")
+file(GLOB native_fhe_h "native/fhe/*.h")
 
 file(GLOB native_cuda_cu "native/cuda/*.cu")
 file(GLOB native_cuda_cpp "native/cuda/*.cpp")
@@ -142,6 +144,8 @@ file(GLOB native_quantized_cudnn_cpp "native/quantized/cudnn/*.cpp")
 file(GLOB native_nested_h "native/nested/*.h")
 file(GLOB native_nested_cuda_cu "native/nested/cuda/*.cu")
 file(GLOB native_nested_cuda_cpp "native/nested/cuda/*.cpp")
+file(GLOB_RECURSE native_fhe_cuda_cu "native/fhe/cuda/*.cu")
+file(GLOB_RECURSE native_fhe_cuda_cpp "native/fhe/cuda/*.cpp")
 
 file(GLOB native_hip_hip "native/hip/*.hip")
 file(GLOB native_hip_cpp "native/hip/*.cpp")
@@ -214,7 +218,7 @@ else()
     all_cpu_cpp ${base_cpp} ${ATen_CORE_SRCS} ${native_cpp}
     ${native_ao_sparse_cpp} ${native_sparse_cpp} ${native_nested_cpp}
     ${native_quantized_cpp} ${native_mkl_cpp} ${native_mkldnn_cpp}
-    ${native_transformers_cpp}
+    ${native_transformers_cpp} ${native_fhe_cpp}
     ${native_utils_cpp} ${native_xnnpack} ${generated_sources} ${core_generated_sources}
     ${ATen_CPU_SRCS} ${ATen_QUANTIZED_SRCS} ${ATen_NNAPI_SRCS} ${cpu_kernel_cpp}
   )
@@ -274,6 +278,7 @@ if(USE_CUDA)
     ${native_quantized_cuda_cu}
     ${native_transformers_cuda_cu}
     ${cuda_generated_sources}
+    ${native_fhe_cuda_cu}
   )
   list(APPEND ATen_CUDA_CPP_SRCS
     ${cuda_cpp}
@@ -285,6 +290,7 @@ if(USE_CUDA)
     ${native_quantized_cudnn_cpp}
     ${native_sparse_cuda_cpp}
     ${native_transformers_cuda_cpp}
+    ${native_fhe_cuda_cpp}
   )
   set(ATen_CUDA_LINALG_SRCS ${native_cuda_linalg_cpp})
   if(NOT BUILD_LAZY_CUDA_LINALG)
@@ -570,7 +576,7 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/cmake-exports/ATenConfig.cmake"
 
 set(INSTALL_HEADERS ${base_h} ${ATen_CORE_HEADERS} ${native_nested_h} ${ATen_TRANSFORMER_HEADERS})
 if(NOT INTERN_BUILD_MOBILE)
-  list(APPEND INSTALL_HEADERS ${native_h} ${native_cpu_h} ${native_ao_sparse_h} ${native_quantized_h} ${cuda_h} ${native_cuda_h} ${native_hip_h} ${cudnn_h} ${hip_h} ${xpu_h} ${mps_h} ${native_mps_h} ${native_utils_h} ${miopen_h})
+  list(APPEND INSTALL_HEADERS ${native_h} ${native_cpu_h} ${native_ao_sparse_h} ${native_quantized_h} ${native_fhe_h} ${cuda_h} ${native_cuda_h} ${native_hip_h} ${cudnn_h} ${hip_h} ${xpu_h} ${mps_h} ${native_mps_h} ${native_utils_h} ${miopen_h})
   # Metal
   if(USE_PYTORCH_METAL_EXPORT)
     # Add files needed from exporting metal models(optimized_for_mobile)

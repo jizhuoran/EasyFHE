@@ -15671,3 +15671,20 @@
 # This op is ONLY used by pytorch/XLA in functionalization, and should never show up in vanilla eager mode or in any pytorch tracing contexts.
 - func: _propagate_xla_data(Tensor input, Tensor output) -> ()
   variants: function
+
+# Below are operations for FHE
+
+- func: add_mod(Tensor self, Tensor in_b, *, int mod) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: add_mod_cuda
+
+- func: add_mod_(Tensor(a!) self, Tensor in_b, *, int mod) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: add_mod_cuda_
+
+- func: add_mod.out(Tensor self, Tensor in_b, *, int mod, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: add_mod_out_cuda
