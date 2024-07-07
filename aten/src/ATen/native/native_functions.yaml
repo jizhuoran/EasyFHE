@@ -15688,3 +15688,33 @@
   device_check: NoCheck
   dispatch:
     CUDA: add_mod_out_cuda
+
+- func: sub_mod(Tensor self, Tensor in_b, *, int mod) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: sub_mod_cuda
+
+- func: sub_mod_(Tensor(a!) self, Tensor in_b, *, int mod) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: sub_mod_cuda_
+
+- func: sub_mod.out(Tensor self, Tensor in_b, *, int mod, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: sub_mod_out_cuda
+
+- func: mul_mod(Tensor self, Tensor in_b, *, int mod, int barret_mu0, int barret_mu1) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_mod_cuda
+
+- func: mul_mod_(Tensor(a!) self, Tensor in_b, *, int mod, int barret_mu0, int barret_mu1) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: mul_mod_cuda_
+
+- func: mul_mod.out(Tensor self, Tensor in_b, *, int mod, int barret_mu0, int barret_mu1, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_mod_out_cuda
