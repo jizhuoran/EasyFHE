@@ -1,9 +1,11 @@
 import torch
-
+import numpy as np
+from .Ciphertext import Ciphertext
+from .context import Context
 Tensor = torch.Tensor
 
 
-def add_mod(x: Tensor, y: Tensor, mod, inplace: bool = False) -> Tensor:
+def vec_add_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
     if inplace:
         res = torch.add_mod_(x, y, mod=mod)
     else:
@@ -11,7 +13,7 @@ def add_mod(x: Tensor, y: Tensor, mod, inplace: bool = False) -> Tensor:
     return res
 
 
-def sub_mod(x: Tensor, y: Tensor, mod, inplace: bool = False) -> Tensor:
+def vec_sub_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
     if inplace:
         res = torch.sub_mod_(x, y, mod=mod)
     else:
@@ -19,7 +21,7 @@ def sub_mod(x: Tensor, y: Tensor, mod, inplace: bool = False) -> Tensor:
     return res
 
 
-def mul_mod(
+def vec_mul_mod(
     x: Tensor,
     y: Tensor,
     mod,
