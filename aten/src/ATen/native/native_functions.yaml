@@ -15718,3 +15718,13 @@
   device_check: NoCheck
   dispatch:
     CUDA: mul_mod_out_cuda
+
+- func: NTT(Tensor in, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: ntt_cuda
+
+- func: INTT(Tensor in, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu, Scalar n_inverse) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: intt_cuda

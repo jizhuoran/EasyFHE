@@ -31,3 +31,13 @@ def mul_mod(
     else:
         res = torch.mul_mod(x, y, mod=mod, barret_mu=barret_mu)
     return res
+
+
+def NTT(input: Tensor, omega_table: Tensor, mod, barret_mu) -> Tensor:
+    return torch.NTT(input, omega_table, mod=mod, barret_mu=barret_mu)
+
+
+def INTT(input: Tensor, omega_table: Tensor, mod, barret_mu, n_inverse) -> Tensor:
+    return torch.NTT(
+        input, omega_table, mod=mod, barret_mu=barret_mu, n_inverse=n_inverse
+    )
