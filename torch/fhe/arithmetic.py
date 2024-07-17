@@ -94,7 +94,7 @@ def iNTT(a, N, moduli, moduli_Inv, RootScalePowsInv, NScaleInvModq):
         U0 = np.uint64(U0)
         U1 = U >> 64
         U1 = np.uint64(U1)
-        Q = U0 * qInv
+        Q = int(U0) * int(qInv)
         Q = Q & 0xFFFFFFFFFFFFFFFF
         Hx = int(Q) * int(q)
         H = Hx >> 64

@@ -3,6 +3,12 @@ from . import number_theory as nbtheory
 import numpy as np
 import math
 import random
+import warnings
+
+def custom_warning_format(message, category, filename, lineno, file=None, line=None):
+    return f"{message}\n"
+
+warnings.formatwarning = custom_warning_format
 
 class Context:
     def __init__(self, logN, logq0, logqi, logp, L, K,
@@ -321,9 +327,10 @@ class Context:
 
         self.mult_swk = np.zeros((2, self.dnum, L + K, self.N), dtype=np.uint64)
         if MULT_SWK is None:
-            print("\n -----------------------\n"
-                  "MULT_SWK needs to be set"
-                  "\n -----------------------\n")
+            warnings.warn(
+                "\n------------------------\n"
+                "MULT_SWK needs to be set"
+                "\n------------------------\n", UserWarning)
             # todo: set data in numpy array
         else:
             self.mult_swk[0] = MULT_SWK[0]
