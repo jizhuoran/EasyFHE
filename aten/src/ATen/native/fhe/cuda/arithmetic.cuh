@@ -2,6 +2,10 @@
 
 namespace fhe {
 
+__device__ __forceinline__ uint64_t neg_mod(uint64_t x, uint64_t mod) {
+  return x == 0 ? 0 : mod - x;
+}
+
 __device__ __forceinline__ uint64_t
 add_mod(uint64_t a, uint64_t b, uint64_t mod) {
   uint64_t res = a + b;

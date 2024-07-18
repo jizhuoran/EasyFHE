@@ -15719,12 +15719,67 @@
   dispatch:
     CUDA: mul_mod_out_cuda
 
-- func: NTT(Tensor in, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu) -> Tensor
+- func: add_scalar_mod(Tensor self, Scalar in_b, *, Scalar mod) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: add_scalar_mod_cuda
+
+- func: add_scalar_mod_(Tensor(a!) self, Scalar in_b, *, Scalar mod) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: add_scalar_mod_cuda_
+
+- func: add_scalar_mod.out(Tensor self, Scalar in_b, *, Scalar mod, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: add_scalar_mod_out_cuda
+
+- func: mul_scalar_mod(Tensor self, Scalar in_b, *, Scalar mod, Tensor barret_mu) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_scalar_mod_cuda
+
+- func: mul_scalar_mod_(Tensor(a!) self, Scalar in_b, *, Scalar mod, Tensor barret_mu) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: mul_scalar_mod_cuda_
+
+- func: mul_scalar_mod.out(Tensor self, Scalar in_b, *, Scalar mod, Tensor barret_mu, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_scalar_mod_out_cuda
+
+- func: neg_mod(Tensor self, *, Scalar mod) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: neg_mod_cuda
+
+- func: neg_mod_(Tensor(a!) self, *, Scalar mod) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+     CUDA: neg_mod_cuda_
+
+- func: neg_mod.out(Tensor self, *, Scalar mod, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: neg_mod_out_cuda
+
+- func: NTT(Tensor input, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: ntt_cuda
 
-- func: INTT(Tensor in, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu, Scalar n_inverse) -> Tensor
+- func: INTT(Tensor input, Tensor root_of_unity_table, *, Scalar mod, Tensor barret_mu, Scalar n_inverse) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: intt_cuda
+
+- func: automorphism(Tensor input, Tensor index) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: automorphism_cuda
+
+- func: mod_switch(Tensor input, Scalar new_modulus, Scalar old_modulus) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: mod_switch_cuda

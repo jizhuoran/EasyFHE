@@ -355,24 +355,24 @@ __host__ void InverseNTT(
 namespace at::native {
 
 Tensor ntt_cuda(
-    const Tensor& in,
+    const Tensor& input,
     const Tensor& root_of_unity_table,
     const Scalar& mod,
     const Tensor& barret_mu) {
-  Tensor out = at::empty_like(in);
+  Tensor out = at::empty_like(input);
 
   AT_DISPATCH_V2(
-      in.scalar_type(),
+      input.scalar_type(),
       "ntt_cuda",
       AT_WRAP([&]() {
-        auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+        auto in_ptr = reinterpret_cast<uint64_t*>(input.data_ptr<uint64_t>());
         auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
         auto root_of_unity_table_ptr = reinterpret_cast<uint64_t*>(
             root_of_unity_table.data_ptr<uint64_t>());
         auto barret_mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
 
-        auto N = in.numel();
+        auto N = input.numel();
         TORCH_INTERNAL_ASSERT(
             (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         fhe::NTT(
@@ -390,25 +390,25 @@ Tensor ntt_cuda(
 }
 
 Tensor intt_cuda(
-    const Tensor& in,
+    const Tensor& input,
     const Tensor& root_of_unity_table,
     const Scalar& mod,
     const Tensor& barret_mu,
     const Scalar& n_inverse) {
-  Tensor out = at::empty_like(in);
+  Tensor out = at::empty_like(input);
 
   AT_DISPATCH_V2(
-      in.scalar_type(),
+      input.scalar_type(),
       "intt_cuda",
       AT_WRAP([&]() {
-        auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+        auto in_ptr = reinterpret_cast<uint64_t*>(input.data_ptr<uint64_t>());
         auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
         auto root_of_unity_table_ptr = reinterpret_cast<uint64_t*>(
             root_of_unity_table.data_ptr<uint64_t>());
         auto barret_mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
 
-        auto N = in.numel();
+        auto N = input.numel();
         TORCH_INTERNAL_ASSERT(
             (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         fhe::InverseNTT(
