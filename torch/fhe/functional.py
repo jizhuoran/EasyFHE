@@ -1,8 +1,11 @@
-import torch
 import numpy as np
+
+import torch
 from .Ciphertext import Ciphertext
 from .context import Context
+
 Tensor = torch.Tensor
+from typing import Callable, List, Optional, Tuple, TYPE_CHECKING, Union
 
 
 def vec_add_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
@@ -32,4 +35,246 @@ def vec_mul_mod(
         res = torch.mul_mod_(x, y, mod=mod, barret_mu=barret_mu)
     else:
         res = torch.mul_mod(x, y, mod=mod, barret_mu=barret_mu)
+    return res
+
+
+def modup_core(
+    x: Tensor,
+    hat_inverse_vec: Optional[Tensor],
+    hat_inverse_vec_shoup: Optional[Tensor],
+    prod_q_i_mod_q_j: Optional[Tensor],
+    primes: Tensor,
+    barret_ratio: Tensor,
+    barret_k: Tensor,
+    beta: int,
+    degree: int,
+    alpha: int,
+    num_moduli_after_modup: int,
+    out: Tensor,
+) -> Tensor:
+    res = torch.modup_core(
+        x,
+        hat_inverse_vec,
+        hat_inverse_vec_shoup,
+        prod_q_i_mod_q_j,
+        primes,
+        barret_ratio,
+        barret_k,
+        beta,
+        degree,
+        alpha,
+        num_moduli_after_modup,
+        out=out,
+    )
+
+    return res
+
+
+def modup(
+    x: Tensor,
+    hat_inverse_vec: Optional[Tensor],
+    hat_inverse_vec_shoup: Optional[Tensor],
+    prod_q_i_mod_q_j: Optional[Tensor],
+    primes: Tensor,
+    barret_ratio: Tensor,
+    barret_k: Tensor,
+    beta: int,
+    degree: int,
+    alpha: int,
+    num_moduli_after_modup: int,
+    param_power_of_roots_shoup: Tensor,
+    param_power_of_roots: Tensor,
+    inverse_power_of_roots_div_two: Tensor,
+    inverse_scaled_power_of_roots_div_two: Tensor,
+) -> Tensor:
+    res = torch.modup(
+        x,
+        hat_inverse_vec,
+        hat_inverse_vec_shoup,
+        prod_q_i_mod_q_j,
+        primes,
+        barret_ratio,
+        barret_k,
+        beta,
+        degree,
+        alpha,
+        num_moduli_after_modup,
+        param_power_of_roots_shoup,
+        param_power_of_roots,
+        inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two,
+    )
+
+    return res
+
+
+def moddown_core(
+    x: Tensor,
+    target_chain_idx: int,
+    param_chain_length: int,
+    param_max_num_moduli: int,
+    param_degree: int,
+    param_log_degree: int,
+    hat_inverse_vec_moddown: Optional[Tensor],
+    hat_inverse_vec_shoup_moddown: Optional[Tensor],
+    prod_q_i_mod_q_j_moddown: Optional[Tensor],
+    prod_inv_moddown: Optional[Tensor],
+    prod_inv_shoup_moddown: Optional[Tensor],
+    param_primes: Tensor,
+    param_barret_ratio: Tensor,
+    param_barret_k: Tensor,
+    out: Tensor,
+) -> Tensor:
+    res = torch.moddown_core(
+        x,
+        target_chain_idx,
+        param_chain_length,
+        param_max_num_moduli,
+        param_degree,
+        param_log_degree,
+        hat_inverse_vec_moddown,
+        hat_inverse_vec_shoup_moddown,
+        prod_q_i_mod_q_j_moddown,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        param_primes,
+        param_barret_ratio,
+        param_barret_k,
+        out=out,
+    )
+
+    return res
+
+
+def moddown(
+    x: Tensor,
+    target_chain_idx: int,
+    param_chain_length: int,
+    param_max_num_moduli: int,
+    param_degree: int,
+    param_log_degree: int,
+    hat_inverse_vec_moddown: Optional[Tensor],
+    hat_inverse_vec_shoup_moddown: Optional[Tensor],
+    prod_q_i_mod_q_j_moddown: Optional[Tensor],
+    prod_inv_moddown: Optional[Tensor],
+    prod_inv_shoup_moddown: Optional[Tensor],
+    param_primes: Tensor,
+    param_barret_ratio: Tensor,
+    param_barret_k: Tensor,
+    param_power_of_roots_shoup: Tensor,
+    param_power_of_roots: Tensor,
+    inverse_power_of_roots_div_two: Tensor,
+    inverse_scaled_power_of_roots_div_two: Tensor,
+) -> Tensor:
+    res = torch.moddown(
+        x,
+        target_chain_idx,
+        param_chain_length,
+        param_max_num_moduli,
+        param_degree,
+        param_log_degree,
+        hat_inverse_vec_moddown,
+        hat_inverse_vec_shoup_moddown,
+        prod_q_i_mod_q_j_moddown,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        param_primes,
+        param_barret_ratio,
+        param_barret_k,
+        param_power_of_roots_shoup,
+        param_power_of_roots,
+        inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two,
+    )
+
+    return res
+
+
+def NTT(
+    x: Tensor,
+    start_prime_idx: int,
+    batch: int,
+    param_degree: int,
+    param_power_of_roots_shoup: Tensor,
+    param_primes: Tensor,
+    param_power_of_roots: Tensor,
+) -> Tensor:
+    res = torch.NTT(
+        x,
+        start_prime_idx=start_prime_idx,
+        batch=batch,
+        param_degree=param_degree,
+        param_power_of_roots_shoup=param_power_of_roots_shoup,
+        param_primes=param_primes,
+        param_power_of_roots=param_power_of_roots,
+    )
+    return res
+
+
+def NTT_except_some_range(
+    x: Tensor,
+    start_prime_idx: int,
+    batch: int,
+    param_degree: int,
+    excluded_range_start: int,
+    excluded_range_size: int,
+    param_power_of_roots_shoup: Tensor,
+    param_primes: Tensor,
+    param_power_of_roots: Tensor,
+) -> Tensor:
+    res = torch.NTT_except_some_range_cuda(
+        x,
+        start_prime_idx=start_prime_idx,
+        batch=batch,
+        param_degree=param_degree,
+        excluded_range_start=excluded_range_start,
+        excluded_range_size=excluded_range_size,
+        param_power_of_roots_shoup=param_power_of_roots_shoup,
+        param_primes=param_primes,
+        param_power_of_roots=param_power_of_roots,
+    )
+    return res
+
+
+def iNTT(
+    x: Tensor,
+    start_prime_idx: int,
+    batch: int,
+    param_degree: int,
+    inverse_power_of_roots_div_two: Tensor,
+    param_primes: Tensor,
+    inverse_scaled_power_of_roots_div_two: Tensor,
+) -> Tensor:
+    res = torch.iNTT(
+        x,
+        start_prime_idx=start_prime_idx,
+        batch=batch,
+        param_degree=param_degree,
+        inverse_power_of_roots_div_two=inverse_power_of_roots_div_two,
+        param_primes=param_primes,
+        inverse_scaled_power_of_roots_div_two=inverse_scaled_power_of_roots_div_two,
+    )
+    return res
+
+
+def innerproduct(
+    x: Tensor,
+    ax: Tensor,
+    bx: Tensor,
+    param_degree: int,
+    param_max_num_moduli: int,
+    primes: Tensor,
+    barret_ratio: Tensor,
+    barret_k: Tensor,
+) -> Tensor:
+    res = torch.innerproduct(
+        x,
+        ax=ax,
+        bx=bx,
+        param_degree=param_degree,
+        param_max_num_moduli=param_max_num_moduli,
+        primes=primes,
+        barret_ratio=barret_ratio,
+        barret_k=barret_k,
+    )
     return res
