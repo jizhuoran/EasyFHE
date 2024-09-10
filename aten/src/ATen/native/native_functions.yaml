@@ -286,7 +286,7 @@
     CPU: native_dropout_cpu
     CUDA: native_dropout_cuda
     NestedTensorCPU, NestedTensorCUDA: native_dropout_nested
-  tags: [nondeterministic_seeded, core]
+  tags: [ nondeterministic_seeded, core ]
   autogen: native_dropout.out
 
 - func: native_dropout_backward(Tensor grad_output, Tensor mask, float scale) -> Tensor
@@ -340,7 +340,7 @@
     SparseCPU, SparseCUDA: abs_sparse
     SparseCsrCPU, SparseCsrCUDA: abs_sparse_csr
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_abs
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: abs_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -509,7 +509,7 @@
   device_check: NoCheck   # TensorIterator
   variants: function, method
   structured_delegate: acos.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: acos_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -554,7 +554,7 @@
     MkldnnCPU: mkldnn_add
     ZeroTensor: add_zerotensor
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_add_Tensor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: add_.Tensor(Tensor(a!) self, Tensor other, *, Scalar alpha=1) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -615,7 +615,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: add
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: add_.Scalar(Tensor(a!) self, Scalar other, Scalar alpha=1) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -699,7 +699,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: all.dims_out
   variants: function, method
-  cpp_no_default_args: ['dim']
+  cpp_no_default_args: [ 'dim' ]
   dispatch:
     CompositeExplicitAutograd: all_dims_default
 
@@ -716,7 +716,7 @@
   dispatch:
     CPU, CUDA: all_dims_out
     CompositeExplicitAutograd: all_dims_out_default
-  cpp_no_default_args: ['dim']
+  cpp_no_default_args: [ 'dim' ]
 
 - func: all.dimname(Tensor self, Dimname dim, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -741,7 +741,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: any.dims_out
   variants: function, method
-  cpp_no_default_args: ['dim']
+  cpp_no_default_args: [ 'dim' ]
   tags: core
   dispatch:
     CompositeExplicitAutograd: any_dims_default
@@ -759,7 +759,7 @@
   dispatch:
     CPU, CUDA: any_dims_out
     CompositeExplicitAutograd: any_dims_out_default
-  cpp_no_default_args: ['dim']
+  cpp_no_default_args: [ 'dim' ]
 
 - func: any.dimname(Tensor self, Dimname dim, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -786,7 +786,7 @@
 - func: arange.start_step(Scalar start, Scalar end, Scalar step=1, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   dispatch:
     CompositeExplicitAutograd: arange
-  cpp_no_default_args: ['step']
+  cpp_no_default_args: [ 'step' ]
   tags: core
 
 - func: arange.out(Scalar end, *, Tensor(a!) out) -> Tensor(a!)
@@ -798,7 +798,7 @@
     CPU, Meta: arange_out
     CUDA: arange_cuda_out
     MPS: arange_mps_out
-  cpp_no_default_args: ['step']
+  cpp_no_default_args: [ 'step' ]
 
 # This function is a temporary hack to allow tracing of arange like constructs with dynamic
 # bounds on arange.  Normal arange is not traceable because it does not take any tensor inputs;
@@ -834,7 +834,7 @@
 - func: acosh(Tensor self) -> Tensor
   variants: function, method
   structured_delegate: acosh.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: acosh_(Tensor(a!) self) -> Tensor(a!)
   variants: function, method
@@ -864,7 +864,7 @@
   dispatch:
     SparseCPU, SparseCUDA: asinh_sparse
     SparseCsrCPU, SparseCsrCUDA: asinh_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: asinh_(Tensor(a!) self) -> Tensor(a!)
   variants: function, method
@@ -899,7 +899,7 @@
   dispatch:
     SparseCPU, SparseCUDA: atanh_sparse
     SparseCsrCPU, SparseCsrCUDA: atanh_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: atanh_(Tensor(a!) self) -> Tensor(a!)
   structured_delegate: atanh.out
@@ -955,7 +955,7 @@
   dispatch:
     SparseCPU, SparseCUDA: asin_sparse
     SparseCsrCPU, SparseCsrCUDA: asin_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: asin_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -993,7 +993,7 @@
   dispatch:
     SparseCPU, SparseCUDA: atan_sparse
     SparseCsrCPU, SparseCsrCUDA: atan_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: atan_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1181,7 +1181,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: bitwise_not.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_not_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1246,7 +1246,7 @@
   dispatch:
     CompositeExplicitAutograd: logical_not
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_logical_not
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: logical_not_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1268,7 +1268,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: logical_xor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: logical_xor_(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1289,7 +1289,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: logical_and
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: logical_and_(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1310,7 +1310,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: logical_or
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: logical_or_(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1382,7 +1382,7 @@
 - func: cat.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
   precomputed:
-  - dim -> int dim, int valid, bool all_contiguous, bool all_same_dtype, bool all_same_sizes_and_stride, MemoryFormat memory_format
+    - dim -> int dim, int valid, bool all_contiguous, bool all_same_dtype, bool all_same_sizes_and_stride, MemoryFormat memory_format
   dispatch:
     CPU: cat_out_cpu
     CUDA: cat_out_cuda
@@ -1424,7 +1424,7 @@
   dispatch:
     SparseCPU, SparseCUDA: ceil_sparse
     SparseCsrCPU, SparseCsrCUDA: ceil_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ceil_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1482,21 +1482,21 @@
 - func: clamp(Tensor self, Scalar? min=None, Scalar? max=None) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   structured_delegate: clamp.out
   dispatch:
     QuantizedCPU: clamp_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: clamp.Tensor(Tensor self, Tensor? min=None, Tensor? max=None) -> Tensor
   variants: function, method
   structured_delegate: clamp.Tensor_out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: clamp_(Tensor(a!) self, Scalar? min=None, Scalar? max=None) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   structured_delegate: clamp.out
   tags: pointwise
 
@@ -1507,7 +1507,7 @@
 
 - func: clamp.out(Tensor self, Scalar? min=None, Scalar? max=None, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   structured: True
   structured_inherits: TensorIteratorBase
   dispatch:
@@ -1606,7 +1606,7 @@
 
 # clip is an alias for clamp
 - func: clip(Tensor self, Scalar? min=None, Scalar? max=None) -> Tensor
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   variants: function, method
   tags: pointwise
 
@@ -1615,7 +1615,7 @@
   tags: pointwise
 
 - func: clip_(Tensor(a!) self, Scalar? min=None, Scalar? max=None) -> Tensor(a!)
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   variants: function, method
   tags: pointwise
 
@@ -1624,7 +1624,7 @@
   tags: pointwise
 
 - func: clip.out(Tensor self, Scalar? min=None, Scalar? max=None, *, Tensor(a!) out) -> Tensor(a!)
-  cpp_no_default_args: ['min']
+  cpp_no_default_args: [ 'min' ]
   tags: pointwise
 
 - func: clip.Tensor_out(Tensor self, Tensor? min=None, Tensor? max=None, *, Tensor(a!) out) -> Tensor(a!)
@@ -1713,17 +1713,17 @@
     CompositeImplicitAutograd: conv3d_symint
 
 - func: conv1d.padding(Tensor input, Tensor weight, Tensor? bias=None, SymInt[1] stride=1, str padding="valid", SymInt[1] dilation=1, SymInt groups=1) -> Tensor
-  cpp_no_default_args: ['bias', 'stride', 'padding']
+  cpp_no_default_args: [ 'bias', 'stride', 'padding' ]
   dispatch:
     CompositeImplicitAutograd: conv1d_padding_symint
 
 - func: conv2d.padding(Tensor input, Tensor weight, Tensor? bias=None, SymInt[2] stride=1, str padding="valid", SymInt[2] dilation=1, SymInt groups=1) -> Tensor
-  cpp_no_default_args: ['bias', 'stride', 'padding']
+  cpp_no_default_args: [ 'bias', 'stride', 'padding' ]
   dispatch:
     CompositeImplicitAutograd: conv2d_padding_symint
 
 - func: conv3d.padding(Tensor input, Tensor weight, Tensor? bias=None, SymInt[3] stride=1, str padding="valid", SymInt[3] dilation=1, SymInt groups=1) -> Tensor
-  cpp_no_default_args: ['bias', 'stride', 'padding']
+  cpp_no_default_args: [ 'bias', 'stride', 'padding' ]
   dispatch:
     CompositeImplicitAutograd: conv3d_padding_symint
 
@@ -1784,7 +1784,7 @@
   structured_delegate: cos.out
   dispatch:
     NestedTensorCPU, NestedTensorCUDA: cos_nested
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: cos_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -1805,7 +1805,7 @@
   device_check: NoCheck   # TensorIterator
   variants: function, method
   structured_delegate: cosh.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: cosh_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2122,7 +2122,7 @@
     SparseCPU, SparseCUDA: div_sparse
     ZeroTensor: div_zerotensor
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_div_Tensor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: div_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2148,7 +2148,7 @@
   structured_delegate: div.out_mode
   dispatch:
     SparseCPU, SparseCUDA: div_sparse
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: div_.Tensor_mode(Tensor(a!) self, Tensor other, *, str? rounding_mode) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2175,7 +2175,7 @@
   dispatch:
     CompositeExplicitAutograd: div
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_div_Scalar
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: div_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2189,7 +2189,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: div
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: div_.Scalar_mode(Tensor(a!) self, Scalar other, *, str? rounding_mode) -> Tensor(a!)
   variants: method
@@ -2441,7 +2441,7 @@
   variants: method
   device_check: NoCheck
   device_guard: False
-  tags: [core, inplace_view]
+  tags: [ core, inplace_view ]
   dispatch:
     Meta: resize__symint
     CPU: resize_
@@ -2500,7 +2500,7 @@
   dispatch:
     SparseCPU, SparseCUDA: erf_sparse
     SparseCsrCPU, SparseCsrCUDA: erf_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: erf_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2546,7 +2546,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: exp.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: exp_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2588,7 +2588,7 @@
   dispatch:
     SparseCPU, SparseCUDA: expm1_sparse
     SparseCsrCPU, SparseCsrCUDA: expm1_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: expm1_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -2707,7 +2707,7 @@
   dispatch:
     SparseCPU, SparseCUDA: floor_sparse
     SparseCsrCPU, SparseCsrCUDA: floor_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: floor_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -3041,7 +3041,7 @@
   variants: function, method
   dispatch:
     QuantizedCPU: quantized_index
-  tags: [core, dynamic_output_shape]
+  tags: [ core, dynamic_output_shape ]
   # NB: This function is special-cased in tools/autograd/gen_variable_type.py
   # NB: The following functions are declared in aten/src/ATen/templates/TensorBody.h and defined in aten/src/ATen/TensorIndexing.cpp:
   # - Tensor Tensor::index(ArrayRef<TensorIndex> indices)
@@ -3052,7 +3052,7 @@
   structured: True
   structured_inherits: TensorIteratorBase
   precomputed:
-  - indices -> DimVector sizes, DimVector strides
+    - indices -> DimVector sizes, DimVector strides
   dispatch:
     CPU, CUDA, MPS: index_out
 
@@ -3079,7 +3079,7 @@
   structured: True
   variants: function
   precomputed:
-  - dim -> int dim
+    - dim -> int dim
   dispatch:
     CPU, CUDA: index_copy_out
 
@@ -3177,7 +3177,7 @@
     SparseCPU, SparseCUDA: isnan_sparse
     SparseCsrCPU, SparseCsrCUDA: isnan_sparse_csr
   autogen: isnan.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: is_distributed(Tensor self) -> bool
   variants: function, method
@@ -3457,7 +3457,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: log.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: log_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -3478,7 +3478,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: log10.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: log10_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -3502,7 +3502,7 @@
   dispatch:
     SparseCPU, SparseCUDA: log1p_sparse
     SparseCsrCPU, SparseCsrCUDA: log1p_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: log1p_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -3528,7 +3528,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: log2.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: log2_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -3820,7 +3820,7 @@
   device_check: NoCheck   # TensorIterator
   structured: True
   precomputed:
-  - dim -> int dim
+    - dim -> int dim
   dispatch:
     CPU, CUDA: max_out
     MPS: max_out_mps
@@ -4007,7 +4007,7 @@
   device_check: NoCheck   # TensorIterator
   structured: True
   precomputed:
-  - dim -> int dim
+    - dim -> int dim
   dispatch:
     CPU, CUDA: min_out
     MPS: min_out_mps
@@ -4184,7 +4184,7 @@
     MkldnnCPU: mkldnn_mul
     ZeroTensor: mul_zerotensor
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_mul_Tensor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: mul_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -4218,7 +4218,7 @@
     CompositeExplicitAutograd: mul
     SparseCsrCPU, SparseCsrCUDA: mul_scalar_sparse_csr
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_mul_Scalar
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: mul_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -4634,7 +4634,7 @@
   autogen: rand.generator_with_names_out
 
 - func: rand(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  tags: [core, nondeterministic_seeded]
+  tags: [ core, nondeterministic_seeded ]
   dispatch:
     CompositeExplicitAutograd: rand
 
@@ -4716,7 +4716,7 @@
   autogen: randint_like.low_dtype_out
 
 - func: randn(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  tags: [core, nondeterministic_seeded]
+  tags: [ core, nondeterministic_seeded ]
   dispatch:
     CompositeExplicitAutograd: randn
 
@@ -4756,7 +4756,7 @@
   autogen: randn_like.out
 
 - func: randperm(SymInt n, *, ScalarType? dtype=long, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  tags: [core, nondeterministic_seeded]
+  tags: [ core, nondeterministic_seeded ]
   dispatch:
     CompositeExplicitAutograd: randperm
 
@@ -4794,7 +4794,7 @@
     CPU, Meta: range_out
     CUDA: range_cuda_out
     MPS: range_mps_out
-  cpp_no_default_args: ['step']
+  cpp_no_default_args: [ 'step' ]
 
 - func: ravel(Tensor(a) self) -> Tensor(a)
   variants: function, method
@@ -4803,7 +4803,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: reciprocal.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: reciprocal_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -4828,7 +4828,7 @@
     SparseCPU, SparseCUDA: neg_sparse
     SparseCsrCPU, SparseCsrCUDA: neg_sparse_csr
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_neg
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: neg_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -4933,7 +4933,7 @@
   dispatch:
     SparseCPU, SparseCUDA: round_sparse
     SparseCsrCPU, SparseCsrCUDA: round_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: round_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -4997,7 +4997,7 @@
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_relu
     SparseCPU, SparseCUDA: relu_sparse
     SparseCsrCPU, SparseCsrCUDA: relu_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: relu_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5064,7 +5064,7 @@
     QuantizedCPU: gelu_quantized_cpu
     QuantizedCUDA: gelu_quantized_cuda
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_gelu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: gelu_backward.grad_input(Tensor grad_output, Tensor self, *, str approximate='none', Tensor(a!) grad_input) -> Tensor(a!)
   structured: True
@@ -5115,7 +5115,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: rsqrt.out
   variants: function, method
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: rsqrt_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5249,7 +5249,7 @@
   dispatch:
     QuantizedCPU: sigmoid_quantized_cpu
     MkldnnCPU: mkldnn_sigmoid
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sigmoid_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5295,7 +5295,7 @@
     SparseCsrCPU, SparseCsrCUDA: sin_sparse_csr
     SparseCPU, SparseCUDA: sin_sparse
     NestedTensorCPU, NestedTensorCUDA: sin_nested
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sin_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5341,7 +5341,7 @@
   dispatch:
     SparseCPU, SparseCUDA: sinh_sparse
     SparseCsrCPU, SparseCsrCUDA: sinh_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sinh_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5362,17 +5362,17 @@
     SparseCPU, SparseCUDA: sinh_sparse_out
     SparseCsrCPU, SparseCsrCUDA: sinh_sparse_csr_out
 
-# Returns a copy of this `Variable` that is detached from its autograd graph.
-# This method is OK to call if the `Variable` is a view.
-#
-# NOTE: Previously, if we change the tensor metadata (e.g. sizes / strides /
-# storage / storage_offset) of a tensor created from `detach()`, those metadata
-# in the original tensor will also be updated. However, the new behavior is that
-# those metadata changes to the detached tensor will not update the original tensor
-# anymore, and in the `detach()` function we need to set `allow_tensor_metadata_change_`
-# to false to make such changes explicitly illegal, in order to prevent users from
-# changing metadata of the detached tensor and expecting the original tensor to also
-# be updated.
+  # Returns a copy of this `Variable` that is detached from its autograd graph.
+  # This method is OK to call if the `Variable` is a view.
+  #
+  # NOTE: Previously, if we change the tensor metadata (e.g. sizes / strides /
+  # storage / storage_offset) of a tensor created from `detach()`, those metadata
+  # in the original tensor will also be updated. However, the new behavior is that
+  # those metadata changes to the detached tensor will not update the original tensor
+  # anymore, and in the `detach()` function we need to set `allow_tensor_metadata_change_`
+  # to false to make such changes explicitly illegal, in order to prevent users from
+  # changing metadata of the detached tensor and expecting the original tensor to also
+  # be updated.
   tags: pointwise
 - func: detach(Tensor(a) self) -> Tensor(a)
   variants: function, method
@@ -5462,7 +5462,7 @@
   dispatch:
     CompositeExplicitAutogradNonFunctional: slice_scatter
   autogen: slice_scatter.out
-  tags: [core, view_copy]
+  tags: [ core, view_copy ]
 
 - func: select_scatter(Tensor self, Tensor src, int dim, SymInt index) -> Tensor
   variants: function, method
@@ -5704,7 +5704,7 @@
 # Overload without center & pad mode, needed for forward-compatibility
 - func: stft(Tensor self, int n_fft, int? hop_length=None, int? win_length=None, Tensor? window=None, bool normalized=False, bool? onesided=None, bool? return_complex=None) -> Tensor
   variants: function, method
-  cpp_no_default_args: ['hop_length', 'win_length', 'window', 'normalized']
+  cpp_no_default_args: [ 'hop_length', 'win_length', 'window', 'normalized' ]
 
 - func: stft.center(Tensor self, int n_fft, int? hop_length=None, int? win_length=None, Tensor? window=None, bool center=True, str pad_mode="reflect", bool normalized=False, bool? onesided=None, bool? return_complex=None) -> Tensor
   variants: function, method
@@ -5794,7 +5794,7 @@
   dispatch:
     SparseCPU, SparseCUDA: sqrt_sparse
     SparseCsrCPU, SparseCsrCUDA: sqrt_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sqrt_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5832,12 +5832,12 @@
 - func: std(Tensor self, bool unbiased=True) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std.dim(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -5850,12 +5850,12 @@
 - func: std_mean(Tensor self, bool unbiased=True) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std_mean.dim(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std_mean.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
@@ -5868,7 +5868,7 @@
 - func: std_mean.names_dim(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std_mean.correction_names(Tensor self, Dimname[1] dim, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
@@ -5876,7 +5876,7 @@
 
 - func: std.out(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std.correction_out(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5887,11 +5887,11 @@
 - func: std.names_dim(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std.names_out(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: std.correction_names(Tensor self, Dimname[1] dim, *, Scalar? correction=None, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -5952,7 +5952,7 @@
   dispatch:
     SparseCPU, SparseCUDA: tan_sparse
     SparseCsrCPU, SparseCsrCUDA: tan_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: tan_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -5984,7 +5984,7 @@
     SparseCPU, SparseCUDA: tanh_sparse
     SparseCsrCPU, SparseCsrCUDA: tanh_sparse_csr
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_tanh
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: tanh_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -6203,7 +6203,7 @@
 - func: _nested_view_from_jagged(Tensor(a) self, Tensor offsets, Tensor dummy, Tensor? lengths=None, int ragged_idx=1, Tensor? min_seqlen=None, Tensor? max_seqlen=None) -> Tensor(a)
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_view_from_jagged_copy(Tensor self, Tensor offsets, Tensor dummy, Tensor? lengths=None, int ragged_idx=1, Tensor? min_seqlen=None, Tensor? max_seqlen=None) -> Tensor
   variants: function
@@ -6216,7 +6216,7 @@
 - func: _nested_get_values(Tensor(a) self) -> Tensor(a)
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_get_values_copy(Tensor self) -> Tensor
   variants: function
@@ -6229,32 +6229,32 @@
 - func: _nested_get_offsets(Tensor self) -> Tensor
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 # returns undefined Tensor if no lengths present
 - func: _nested_get_lengths(Tensor self) -> Tensor
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_get_ragged_idx(Tensor self) -> int
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_get_min_seqlen(Tensor self) -> Tensor
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_get_max_seqlen(Tensor self) -> Tensor
   variants: function
   device_check: NoCheck
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_get_jagged_dummy(Tensor any) -> Tensor
   category_override: dummy
-  dispatch: {}
+  dispatch: { }
 
 - func: _nested_compute_contiguous_strides_offsets(Tensor nested_size) -> (Tensor, Tensor)
   variants: function
@@ -6277,7 +6277,7 @@
   dispatch:
     SparseCPU, SparseCUDA: trunc_sparse
     SparseCsrCPU, SparseCsrCUDA: trunc_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: trunc_(Tensor(a!) self) -> Tensor(a!)
   structured_delegate: trunc.out
@@ -6389,13 +6389,13 @@
 - func: var(Tensor self, bool unbiased=True) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var.dim(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
   tags: core
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -6407,7 +6407,7 @@
 
 - func: var.out(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var.correction_out(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -6417,11 +6417,11 @@
 - func: var.names_dim(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var.names_out(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var.correction_names(Tensor self, Dimname[1] dim, *, Scalar? correction=None, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -6434,12 +6434,12 @@
 - func: var_mean(Tensor self, bool unbiased=True) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var_mean.dim(Tensor self, int[1]? dim, bool unbiased=True, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var_mean.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
@@ -6452,7 +6452,7 @@
 - func: var_mean.names_dim(Tensor self, Dimname[1] dim, bool unbiased=True, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
   variants: function
-  cpp_no_default_args: ["unbiased"]
+  cpp_no_default_args: [ "unbiased" ]
 
 - func: var_mean.correction_names(Tensor self, Dimname[1] dim, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
   device_check: NoCheck   # TensorIterator
@@ -6468,7 +6468,7 @@
   variants: function, method
   dispatch:
     CPU, CUDA, MPS: where
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: where.self_out(Tensor condition, Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -6810,7 +6810,7 @@
     QuantizedCPU, QuantizedCUDA: quantized_clone
     NestedTensorCPU, NestedTensorCUDA: clone_nested
   autogen: clone.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: positive(Tensor(a) self) -> Tensor(a)
   variants: function, method
@@ -6863,7 +6863,7 @@
     SparseCPU, SparseCUDA: sub_sparse
     ZeroTensor: sub_zerotensor
     NestedTensorCPU, NestedTensorCUDA: NestedTensor_sub_Tensor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sub_.Tensor(Tensor(a!) self, Tensor other, *, Scalar alpha=1) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -6879,7 +6879,7 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: sub
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sub_.Scalar(Tensor(a!) self, Scalar other, Scalar alpha=1) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -6939,8 +6939,8 @@
     CompositeExplicitAutograd: rsub
   autogen: rsub.Scalar_out
 
-# Functionally the same as addmm, but we give it a different derivative formula
-# that doesn't propagate gradients to non-present entries on sparse.
+  # Functionally the same as addmm, but we give it a different derivative formula
+  # that doesn't propagate gradients to non-present entries on sparse.
   tags: pointwise
 - func: _sparse_addmm(Tensor self, Tensor mat1, Tensor mat2, *, Scalar beta=1, Scalar alpha=1) -> Tensor
   python_module: sparse
@@ -7747,7 +7747,7 @@
 
 # NB: Does NOT check precondition that numel == 1
 - func: _local_scalar_dense(Tensor self) -> Scalar
-  tags: [core, data_dependent_output]
+  tags: [ core, data_dependent_output ]
   dispatch:
     CPU: _local_scalar_dense_cpu
     CUDA: _local_scalar_dense_cuda
@@ -8056,7 +8056,7 @@
   structured: True
   variants: function
   precomputed:
-  - dim -> int dim
+    - dim -> int dim
   dispatch:
     CPU: index_add_cpu_out
     CUDA: index_add_cuda_out
@@ -8077,7 +8077,7 @@
   structured: True
   variants: function
   precomputed:
-  - dim -> int dim
+    - dim -> int dim
   dispatch:
     CPU: index_reduce_cpu_out
     CUDA: index_reduce_cuda_out
@@ -8269,7 +8269,7 @@
   variants: method, function
   dispatch:
     CompositeExplicitAutograd: bitwise_and
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_and.Scalar_Tensor(Scalar self, Tensor other) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -8283,7 +8283,7 @@
   device_check: NoCheck   # TensorIterator
   variants: method, function
   structured_delegate: bitwise_and.Tensor_out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_and_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -8336,7 +8336,7 @@
   variants: method, function
   dispatch:
     CompositeExplicitAutograd: bitwise_or
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_or.Scalar_Tensor(Scalar self, Tensor other) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -8350,7 +8350,7 @@
   device_check: NoCheck   # TensorIterator
   variants: method, function
   structured_delegate: bitwise_or.Tensor_out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_or_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -8403,7 +8403,7 @@
   variants: method, function
   dispatch:
     CompositeExplicitAutograd: bitwise_xor
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_xor.Scalar_Tensor(Scalar self, Tensor other) -> Tensor
   device_check: NoCheck   # TensorIterator
@@ -8417,7 +8417,7 @@
   device_check: NoCheck   # TensorIterator
   variants: method, function
   structured_delegate: bitwise_xor.Tensor_out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: bitwise_xor_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -8801,7 +8801,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: ne_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ne.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -8819,7 +8819,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: ne_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ne_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   structured_delegate: ne.Scalar_out
@@ -8865,7 +8865,7 @@
   dispatch:
     QuantizedCPU: eq_quantized_cpu
     NestedTensorCPU, NestedTensorCUDA: eq_scalar_nested
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: eq.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -8883,7 +8883,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: eq_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ge.Scalar_out(Tensor self, Scalar other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -8902,7 +8902,7 @@
   dispatch:
     QuantizedCPU: ge_quantized_cpu
     NestedTensorCPU, NestedTensorCUDA: ge_scalar_nested
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ge.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -8920,7 +8920,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: ge_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: ge_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   structured_delegate: ge.Scalar_out
@@ -8965,7 +8965,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: le_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: le.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -8983,7 +8983,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: le_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: le_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   structured_delegate: le.Scalar_out
@@ -9029,7 +9029,7 @@
   dispatch:
     QuantizedCPU: gt_quantized_cpu
     NestedTensorCPU, NestedTensorCUDA: gt_scalar_nested
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: gt.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -9047,7 +9047,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: gt_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: gt_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   structured_delegate: gt.Scalar_out
@@ -9092,7 +9092,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: lt_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: lt.Tensor_out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -9110,7 +9110,7 @@
   variants: method, function
   dispatch:
     QuantizedCPU: lt_quantized_cpu
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: lt_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   structured_delegate: lt.Scalar_out
@@ -9216,7 +9216,7 @@
     CPU: nonzero_cpu
     CUDA: nonzero_cuda
     MPS: nonzero_mps
-  tags: [dynamic_output_shape, core]
+  tags: [ dynamic_output_shape, core ]
 
 - func: nonzero_static.out(Tensor self, *, int size, int fill_value=-1, Tensor(a!) out) -> Tensor(a!)
   dispatch:
@@ -9574,7 +9574,7 @@
   dispatch:
     SparseCPU, SparseCUDA: sign_sparse
     SparseCsrCPU, SparseCsrCUDA: sign_sparse_csr
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: sign_(Tensor(a!) self) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -9629,7 +9629,7 @@
   dispatch:
     CPU, CUDA: atan2_out
     MPS: atan2_out_mps
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: atan2_(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -9641,7 +9641,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: atan2.out
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 # arctan2, alias of atan2
 
 - func: arctan2(Tensor self, Tensor other) -> Tensor
@@ -9744,7 +9744,7 @@
   variants: method, function
   dispatch:
     CompositeExplicitAutograd: fmod
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: fmod_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -9766,7 +9766,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: fmod.Tensor_out
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: fmod_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -9852,7 +9852,7 @@
   variants: method, function
   dispatch:
     CompositeExplicitAutograd: remainder
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: remainder_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   variants: method
@@ -9873,7 +9873,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: remainder.Tensor_out
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: remainder_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -9943,7 +9943,7 @@
   structured_delegate: maximum.out
   device_check: NoCheck   # TensorIterator
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: maximum.out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -9975,7 +9975,7 @@
   structured_delegate: minimum.out
   device_check: NoCheck   # TensorIterator
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: minimum.out(Tensor self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
   structured: True
@@ -10144,7 +10144,7 @@
   autogen: unfold_backward.out
 
 - func: equal(Tensor self, Tensor other) -> bool
-  tags: [data_dependent_output, pointwise]
+  tags: [ data_dependent_output, pointwise ]
   variants: method, function
   dispatch:
     CPU: cpu_equal
@@ -10165,7 +10165,7 @@
   device_check: NoCheck   # TensorIterator
   structured_delegate: pow.Tensor_Tensor_out
   variants: method, function
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: pow.Scalar_out(Scalar self, Tensor exponent, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -10178,7 +10178,7 @@
 - func: pow.Scalar(Scalar self, Tensor exponent) -> Tensor
   device_check: NoCheck   # TensorIterator
   structured_delegate: pow.Scalar_out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: pow.Tensor_Scalar_out(Tensor self, Scalar exponent, *, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -10196,7 +10196,7 @@
   variants: function, method
   dispatch:
     SparseCPU, SparseCUDA: pow_sparse_scalar
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: pow_.Scalar(Tensor(a!) self, Scalar exponent) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
@@ -10341,7 +10341,7 @@
 
     #- func: _cat.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
     #dispatch:
-    #CPU: _cat_out_cpu
+  #CPU: _cat_out_cpu
   #CUDA: cat_out_cuda
   #QuantizedCPU: cat_out_quantized_cpu
 
@@ -12140,9 +12140,9 @@
   python_module: nn
   structured: True
   precomputed:
-  - kernel_size -> int kH, int kW
-  - stride -> int dH, int dW
-  - padding -> int padH, int padW
+    - kernel_size -> int kH, int kW
+    - stride -> int dH, int dW
+    - padding -> int padH, int padW
   dispatch:
     CPU: avg_pool2d_out_cpu
     CUDA: avg_pool2d_out_cuda
@@ -12232,9 +12232,9 @@
   python_module: nn
   structured: True
   precomputed:
-  - kernel_size -> int poolSizeT, int poolSizeH, int poolSizeW
-  - output_size -> int outputT, int outputH, int outputW
-  - int numBatch, int numPlanes, int inputT, int inputH, int inputW
+    - kernel_size -> int poolSizeT, int poolSizeH, int poolSizeW
+    - output_size -> int outputT, int outputH, int outputW
+    - int numBatch, int numPlanes, int inputT, int inputH, int inputW
   dispatch:
     CPU: fractional_max_pool3d_out_cpu
     CUDA: fractional_max_pool3d_out_cuda
@@ -12888,23 +12888,23 @@
   python_module: nn
   structured_delegate: tanh_backward.grad_input
 
-# What's a thnn_conv_ versus a slow_conv_?
-#
-# Historically, we have inefficient implementations of convolutions
-# coming from the THNN/THCUNN library.  These convolutions typically
-# operated by computing the Toeplitz matrix and then doing a matrix
-# multiply with the input; this is very memory inefficient!  However,
-# occasionally, we really don't have anything better, so it's helpful
-# to have these fallbacks when there is no more optimized implementation
-# in cudnn or mkldnn, etc.  Both thnn_ and slow_ convolutions fall
-# into this bucket.
-#
-# The difference between these two designations, is that thnn_ refers
-# to a convolution that is still written in the "legacy" style; that is,
-# C code in the THNN/ or THCUNN/ directory.  A slow_ convolution is
-# one that is written in the native style: modern C++.  Algorithmically,
-# these are the same thing, but we give them different prefixes to
-# make the operational distinction clear.
+  # What's a thnn_conv_ versus a slow_conv_?
+  #
+  # Historically, we have inefficient implementations of convolutions
+  # coming from the THNN/THCUNN library.  These convolutions typically
+  # operated by computing the Toeplitz matrix and then doing a matrix
+  # multiply with the input; this is very memory inefficient!  However,
+  # occasionally, we really don't have anything better, so it's helpful
+  # to have these fallbacks when there is no more optimized implementation
+  # in cudnn or mkldnn, etc.  Both thnn_ and slow_ convolutions fall
+  # into this bucket.
+  #
+  # The difference between these two designations, is that thnn_ refers
+  # to a convolution that is still written in the "legacy" style; that is,
+  # C code in the THNN/ or THCUNN/ directory.  A slow_ convolution is
+  # one that is written in the native style: modern C++.  Algorithmically,
+  # these are the same thing, but we give them different prefixes to
+  # make the operational distinction clear.
   tags: pointwise
 
 - func: slow_conv_transpose2d.out(Tensor self, Tensor weight, SymInt[2] kernel_size, Tensor? bias=None, SymInt[2] stride=1, SymInt[2] padding=0, SymInt[2] output_padding=0, SymInt[2] dilation=1, *, Tensor(a!) out) -> Tensor(a!)
@@ -13052,7 +13052,7 @@
     SparseMeta: isinf_sparse_meta
     SparseCsrCPU, SparseCsrCUDA: isinf_sparse_csr
   autogen: isinf.out
-  tags: [core, pointwise]
+  tags: [ core, pointwise ]
 
 - func: record_stream(Tensor(a!) self, Stream s) -> ()
   variants: method
@@ -14166,12 +14166,12 @@
     CompositeExplicitAutograd: linalg_pinv_out
 
 - func: linalg_pinv.atol_rtol_float(Tensor self, *, float? atol=None, float? rtol=None, bool hermitian=False) -> Tensor
-  cpp_no_default_args: ['atol', 'rtol']
+  cpp_no_default_args: [ 'atol', 'rtol' ]
   python_module: linalg
   variants: function
 
 - func: linalg_pinv.atol_rtol_float_out(Tensor self, *, float? atol=None, float? rtol=None, bool hermitian=False, Tensor(a!) out) -> Tensor(a!)
-  cpp_no_default_args: ['atol', 'rtol']
+  cpp_no_default_args: [ 'atol', 'rtol' ]
   python_module: linalg
   variants: function
 
@@ -14253,12 +14253,12 @@
   variants: function
 
 - func: linalg_matrix_rank.atol_rtol_float(Tensor self, *, float? atol=None, float? rtol=None, bool hermitian=False) -> Tensor
-  cpp_no_default_args: ['atol', 'rtol']
+  cpp_no_default_args: [ 'atol', 'rtol' ]
   python_module: linalg
   variants: function
 
 - func: linalg_matrix_rank.atol_rtol_float_out(Tensor self, *, float? atol=None, float? rtol=None, bool hermitian=False, Tensor(a!) out) -> Tensor(a!)
-  cpp_no_default_args: ['atol', 'rtol']
+  cpp_no_default_args: [ 'atol', 'rtol' ]
   python_module: linalg
   variants: function
 
@@ -14336,7 +14336,7 @@
 
 # Note: this function is only for testing.
 - func: _test_ambiguous_defaults.b(Tensor dummy, int a=2, str b="2") -> Tensor
-  cpp_no_default_args: ['a', 'b']
+  cpp_no_default_args: [ 'a', 'b' ]
   python_module: nn
 
 # Note: this function is only for testing.
@@ -15682,7 +15682,7 @@
 - func: add_mod_(Tensor(a!) self, Tensor in_b, *, Scalar mod) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: add_mod_cuda_
+    CUDA: add_mod_cuda_
 
 - func: add_mod.out(Tensor self, Tensor in_b, *, Scalar mod, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15697,7 +15697,7 @@
 - func: sub_mod_(Tensor(a!) self, Tensor in_b, *, Scalar mod) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: sub_mod_cuda_
+    CUDA: sub_mod_cuda_
 
 - func: sub_mod.out(Tensor self, Tensor in_b, *, Scalar mod, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15712,9 +15712,50 @@
 - func: mul_mod_(Tensor(a!) self, Tensor in_b, *, Scalar mod, Tensor barret_mu) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: mul_mod_cuda_
+    CUDA: mul_mod_cuda_
 
 - func: mul_mod.out(Tensor self, Tensor in_b, *, Scalar mod, Tensor barret_mu, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_mod_out_cuda
+
+  #for fhe modup
+- func: modup_core(Tensor self, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, *, Tensor out) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_core_cuda
+
+- func: moddown_core(Tensor self, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, *, Tensor out) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_core_cuda
+
+- func: NTT(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: NTT_cuda
+
+- func: iNTT(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor inverse_power_of_roots_div_two, Tensor param_primes, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: iNTT_cuda
+
+- func: NTT_except_some_range(Tensor self, *, int start_prime_idx, int batch, int param_degree, int excluded_range_start, int excluded_range_size, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: NTT_except_some_range_cuda
+
+- func: modup(Tensor self, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_cuda
+
+- func: moddown(Tensor self, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_cuda
+
+- func: innerproduct(Tensor self, *, Tensor ax, Tensor bx, int param_degree, int param_max_num_moduli, Tensor primes, Tensor barret_ratio, Tensor barret_k) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_cuda
