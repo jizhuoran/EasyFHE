@@ -15673,7 +15673,6 @@
   variants: function
 
 # Below are operations for FHE
-
 - func: add_mod(Tensor self, Tensor in_b, *, Scalar mod) -> Tensor
   device_check: NoCheck
   dispatch:
@@ -15719,43 +15718,112 @@
   dispatch:
     CUDA: mul_mod_out_cuda
 
-  #for fhe modup
-- func: modup_core(Tensor self, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, *, Tensor out) -> Tensor
+- func: modup_core(Tensor self, Tensor in_modup, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: modup_core_cuda
 
-- func: moddown_core(Tensor self, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, *, Tensor out) -> Tensor
+- func: modup_core_(Tensor(a!) self, Tensor in_modup, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_core_cuda_
+
+- func: modup_core.out(Tensor self, Tensor in_modup, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_core_cuda_out
+
+- func: moddown_core(Tensor self, Tensor in_moddown, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: moddown_core_cuda
+
+- func: moddown_core_(Tensor(a!) self, Tensor in_moddown, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_core_cuda_
+
+- func: moddown_core.out(Tensor self, Tensor in_moddown, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_core_cuda_out
 
 - func: NTT(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: NTT_cuda
 
+- func: NTT_(Tensor(a!) self, *, int start_prime_idx, int batch, int param_degree, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: NTT_cuda_
+
+- func: NTT.out(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: NTT_cuda_out
+
 - func: iNTT(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor inverse_power_of_roots_div_two, Tensor param_primes, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: iNTT_cuda
+
+- func: iNTT_(Tensor(a!) self, *, int start_prime_idx, int batch, int param_degree, Tensor inverse_power_of_roots_div_two, Tensor param_primes, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: iNTT_cuda_
+
+- func: iNTT.out(Tensor self, *, int start_prime_idx, int batch, int param_degree, Tensor inverse_power_of_roots_div_two, Tensor param_primes, Tensor inverse_scaled_power_of_roots_div_two, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: iNTT_cuda_out
 
 - func: NTT_except_some_range(Tensor self, *, int start_prime_idx, int batch, int param_degree, int excluded_range_start, int excluded_range_size, Tensor param_power_of_roots_shoup, Tensor param_primes, Tensor param_power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: NTT_except_some_range_cuda
 
-- func: modup(Tensor self, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+- func: modup(Tensor self, Tensor input, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: modup_cuda
 
-- func: moddown(Tensor self, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+- func: modup_(Tensor(a!) self, Tensor input, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_cuda_
+
+- func: modup.out(Tensor self, Tensor input, *, Tensor[] hat_inverse_vec, Tensor[] hat_inverse_vec_shoup, Tensor[] prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, int num_moduli_after_modup, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: modup_cuda_out
+
+- func: moddown(Tensor self, Tensor input, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: moddown_cuda
 
-- func: innerproduct(Tensor self, *, Tensor ax, Tensor bx, int param_degree, int param_max_num_moduli, Tensor primes, Tensor barret_ratio, Tensor barret_k) -> Tensor
+- func: moddown_(Tensor(a!) self, Tensor input, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_cuda_
+
+- func: moddown.out(Tensor self, Tensor input, *, int target_chain_idx, int param_chain_length, int param_max_num_moduli, int param_degree, int param_log_degree, Tensor[] hat_inverse_vec_moddown, Tensor[] hat_inverse_vec_shoup_moddown, Tensor[] prod_q_i_mod_q_j_moddown, Tensor[] prod_inv_moddown, Tensor[] prod_inv_shoup_moddown, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_cuda_out
+
+- func: innerproduct(Tensor self, Tensor in_modup, *, Tensor ax, Tensor bx, int param_degree, int param_max_num_moduli, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: innerproduct_cuda
+
+- func: innerproduct_(Tensor(a!) self, Tensor in_modup, *, Tensor ax, Tensor bx, int param_degree, int param_max_num_moduli, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_cuda_
+
+- func: innerproduct.out(Tensor self, Tensor in_modup, *, Tensor ax, Tensor bx, int param_degree, int param_max_num_moduli, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_cuda_out
