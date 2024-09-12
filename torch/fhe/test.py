@@ -503,7 +503,7 @@ def test_HMult():
     res = homo_ops.homo_mult(ct, ct, cryptoContext)
 
     golden_answer = np.array(N256L4P2.cipher1_after_mult, dtype=np.uint64)
-    golden_answer = golden_answer.reshape(res.cv[:2].shape)
+    golden_answer = golden_answer.reshape(res.cv.shape)
 
     compare = np.array_equal(res.cv[0], golden_answer[0])
     # compare = res == golden_answer

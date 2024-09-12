@@ -8,30 +8,36 @@ from . import KeySwitch
 Tensor = torch.Tensor
 
 def polys_add_mod(a, b, MOD):
-    assert a.shape == b.shape and a.shape[0] == len(MOD)
-    c_ = torch.zeros(a.shape, dtype=torch.uint64, device='cuda')
-    a_ = torch.from_numpy(a).cuda()
-    b_ = torch.from_numpy(b).cuda()
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    curr_limbs = len(MOD)
+    N = a.shape[1]
+    c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
+    a_ = torch.from_numpy(a[:curr_limbs]).cuda()
+    b_ = torch.from_numpy(b[:curr_limbs]).cuda()
     for i, val in enumerate(MOD):
         c_[i] = F.vec_add_mod(a_[i], b_[i], val)
     c = c_.cpu().numpy()
     return c
 
 def polys_sub_mod(a, b, MOD):
-    assert a.shape == b.shape and a.shape[0] == len(MOD)
-    c_ = torch.zeros(a.shape, dtype=torch.uint64, device='cuda')
-    a_ = torch.from_numpy(a).cuda()
-    b_ = torch.from_numpy(b).cuda()
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    curr_limbs = len(MOD)
+    N = a.shape[1]
+    c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
+    a_ = torch.from_numpy(a[:curr_limbs]).cuda()
+    b_ = torch.from_numpy(b[:curr_limbs]).cuda()
     for i, val in enumerate(MOD):
         c_[i] = F.vec_sub_mod(a_[i], b_[i], val)
     c = c_.cpu().numpy()
     return c
 
 def polys_mul_mod(a, b, MOD, mu):
-    assert a.shape == b.shape and a.shape[0] == len(MOD)
-    c_ = torch.zeros(a.shape, dtype=torch.uint64, device='cuda')
-    a_ = torch.from_numpy(a).cuda()
-    b_ = torch.from_numpy(b).cuda()
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    curr_limbs = len(MOD)
+    N = a.shape[1]
+    c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
+    a_ = torch.from_numpy(a[:curr_limbs]).cuda()
+    b_ = torch.from_numpy(b[:curr_limbs]).cuda()
     mu_ = torch.from_numpy(mu).cuda()
     for i, val in enumerate(MOD):
         c_[i] = F.vec_mul_mod(a_[i], b_[i], val, mu_[i])
@@ -39,21 +45,22 @@ def polys_mul_mod(a, b, MOD, mu):
     return c
 
 def homo_add(in0, in1, cryptoContext):
-    assert in0.curr_limbs == in1.curr_limbs
-    curr_limbs = in0.curr_limbs
+    dim = in0.cv.shape[0]
+    curr_limbs = min(in0.curr_limbs, in1.curr_limbs)
+    N = in0.cv.shape[2]
     MOD = cryptoContext.moduliQ[:curr_limbs]
-    res = np.zeros(in0.cv.shape, dtype=np.uint64)
+    res = np.zeros((dim, curr_limbs, N), dtype=np.uint64)
     res[0] = polys_add_mod(in0.cv[0], in1.cv[0], MOD)  # res.ax
     res[1] = polys_add_mod(in0.cv[1], in1.cv[1], MOD)  # res.bx
 
     return Ciphertext(res, curr_limbs)
 
-def homo_mult_core(in0, in1, moduliQ, q_mu):
-    assert in0.curr_limbs == in1.curr_limbs
-    curr_limbs = in0.curr_limbs
-    MOD = moduliQ[:curr_limbs]
-    MU = q_mu[:curr_limbs]
-    res = np.zeros((3, in0.cv.shape[1], in0.cv.shape[2]), dtype=np.uint64)
+# for dim(ct) = 2 only
+def homo_mult_core(in0, in1, MOD, MU):
+    dim = 3
+    curr_limbs = len(MOD)
+    N = in0.cv.shape[2]
+    res = np.zeros((dim, curr_limbs, N), dtype=np.uint64)
 
     res[0] = polys_add_mod(in0.cv[0], in0.cv[1], MOD)  # res.ax
     axbx2 = polys_add_mod(in1.cv[0], in1.cv[1], MOD)
@@ -68,9 +75,7 @@ def homo_mult_core(in0, in1, moduliQ, q_mu):
 
 def homo_mult(in0, in1,
               cryptoContext):
-    assert in0.curr_limbs == in1.curr_limbs
-
-    curr_limbs = in0.curr_limbs
+    curr_limbs = min(in0.curr_limbs, in1.curr_limbs)
     N = cryptoContext.N
     K = cryptoContext.K
     swk = np.array(cryptoContext.mult_swk, dtype=np.uint64)
@@ -92,7 +97,7 @@ def homo_mult(in0, in1,
     PInvModq = cryptoContext.PInvModq
     q_mu = cryptoContext.q_mu
 
-    res = homo_mult_core(in0, in1, moduliQ, q_mu)
+    res = homo_mult_core(in0, in1, moduliQ[:curr_limbs], q_mu[:curr_limbs])
     tmp = KeySwitch.KeySwitch_core(
         res[2], swk,
         moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq, QHatInvModq, pHatModq, PInvModq,
@@ -180,16 +185,21 @@ def ModReduce_ct(ct, levels, cryptoContext):
     qInvModq = cryptoContext.qInvModq
     QlQlInvModqlDivqlModq = cryptoContext.QlQlInvModqlDivqlModq
 
-    res = np.zeros((2, ct.curr_limbs - 1, N), dtype=np.uint64)
+    res = np.zeros((2, curr_limbs - 1, N), dtype=np.uint64)
     for l in range(levels):
         for k in range(2):
             res[k] = DropLastElementAndScale(
                 ct.cv[k], moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
                 QlQlInvModqlDivqlModq[diffQl + l], qInvModq,
                 curr_limbs, N)
-    return Ciphertext(res, ct.curr_limbs-1)
+        curr_limbs-=1
+    return Ciphertext(res, curr_limbs)
 
 def LevelReduce_ct(ct, levels):
-    assert ct.curr_limbs > 1 and ct.curr_limbs > levels
-    ct.cv = ct.cv[:, :ct.curr_limbs-levels, :]
-    return ct
+    assert ct.curr_limbs-levels > 0
+    res_limbs = ct.curr_limbs-levels
+    N = ct.cv.shape[2]
+    res_cv = np.zeros((2, res_limbs, N), dtype=np.uint64)
+    res_cv = ct.cv[:, :ct.curr_limbs-levels, :]
+    return Ciphertext(res_cv, res_limbs)
+

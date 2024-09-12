@@ -19,14 +19,17 @@ def InnerProduct(d2Tilde, key,
 
     sumMult = np.zeros((2, curr_limbs + K, N), dtype=np.uint64)
     product = np.zeros((2, curr_limbs + K, N), dtype=np.uint64)
-    moduliQP = np.concatenate((moduliQ[:curr_limbs], moduliP))
+    L = len(moduliQ)
     beta = math.ceil(curr_limbs / K)
 
     for k in range(2): # deal with 2 dim of a ct
         for j in range(beta):
-            for i in range(len(moduliQP)):
-                product[k][i] = arithmetic.vec_mul_mod(d2Tilde[j][i], key[k][j][i], moduliQP[i])
-                sumMult[k][i] = arithmetic.vec_add_mod(sumMult[k][i], product[k][i], moduliQP[i])
+            for i in range(curr_limbs):
+                product[k][i] = arithmetic.vec_mul_mod(d2Tilde[j][i], key[k][j][i], moduliQ[i])
+                sumMult[k][i] = arithmetic.vec_add_mod(sumMult[k][i], product[k][i], moduliQ[i])
+            for i, pi in zip(range(curr_limbs, curr_limbs + len(moduliP)), range(len(moduliP))):
+                product[k][i] = arithmetic.vec_mul_mod(d2Tilde[j][i], key[k][j][L+pi], moduliP[pi])
+                sumMult[k][i] = arithmetic.vec_add_mod(sumMult[k][i], product[k][i], moduliP[pi])
 
     return sumMult
 

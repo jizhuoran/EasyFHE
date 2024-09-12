@@ -140,7 +140,7 @@ def vec_mul_scalar_mod(a, scalar, MOD):
     N = len(a)
     c = [0]*int(N)
     for ri in range(N):
-        c[ri] = int(a[ri]) * int(scalar) % MOD
+        c[ri] = int(a[ri]) * int(scalar) % int(MOD)
     return c
 
 def vec_mul_mod(a, b, MOD):
@@ -196,7 +196,7 @@ def ModUp_Core(intt_a, d2Tilde,
         a = intt_a[in_C_L_index:in_C_L_index + in_C_L_len, :]
         qi = moduliQ[in_C_L_index:in_C_L_index + in_C_L_len]
 
-        qi_comple = np.concatenate((moduliQ[:in_C_L_index], moduliQ[in_C_L_index + in_C_L_len:]))
+        qi_comple = np.concatenate((moduliQ[:in_C_L_index], moduliQ[in_C_L_index + in_C_L_len:curr_limbs]))
         moduliQP = np.concatenate((qi_comple, moduliP))
 
         assert moduliQP.size == sizeP, "moduliQP.size() should equal to sizeP, check again"
