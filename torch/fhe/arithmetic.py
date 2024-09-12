@@ -167,14 +167,43 @@ def vec_sub_mod(a, b, MOD):
         c[ri] = np.uint64((int(a[ri])+ int(MOD) - int(b[ri])) % int(MOD))
     return c
 
+def vec_neg_mod(a, MOD):
+    N = len(a)
+    c = [0] * int(N)
+    for ri in range(N):
+        c[ri] = np.uint64(int(MOD) - int(a[ri]))
+    return c
+
+
+def vec_add_scalar_mod(a, scalar, MOD):
+    N = len(a)
+    c = [0]*int(N)
+    for ri in range(N):
+        c[ri] = np.uint64((int(a[ri]) + int(scalar)) % int(MOD))
+    return c
+
+
+def vec_sub_scalar_mod(a, scalar, MOD):
+    N = len(a)
+    c = [0]*int(N)
+    for ri in range(N):
+        c[ri] = np.uint64((int(a[ri]) + int(MOD) - int(scalar)) % int(MOD))
+    return c
+
+
+
+
 def vec_switch_modulus(input, new_modulus, old_modulus):
     old_modulus_by_two = int(old_modulus) >> 1
+    old_modulus = int(old_modulus)
+    new_modulus = int(new_modulus)
     diff = old_modulus - new_modulus if old_modulus > new_modulus else new_modulus - old_modulus
 
     res = np.zeros(input.shape, np.uint64)
     if new_modulus >= old_modulus:
         tmp = [diff if n > old_modulus_by_two else 0 for n in input]
-        res[:] = [n + t for n, t in zip(input, tmp)]
+        for cnt, (n, t) in enumerate(zip(input, tmp)):
+            res[cnt] = int(n) + int(t)
     else:  # new_modulus < old_modulus
         tmp = [diff if n > old_modulus_by_two else 0 for n in input]
         res[:] = vec_sub_mod(input, tmp, new_modulus)
