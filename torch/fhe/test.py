@@ -9,6 +9,7 @@ from . import KeySwitch
 from .data import params_N256_L4_P1 as N256L4P1
 from .data import params_N256_L4_P2 as N256L4P2
 from .data import params_N64 as N64
+from .data import params_N64_cheby as N64_cheby
 Tensor = torch.Tensor
 
 
@@ -616,3 +617,61 @@ def test_ModReduce_ct():
     compare = np.array_equal(res.cv[1], golden_answer[1])
     print("res_bx result: ")
     print(compare)
+
+def test_ApproxMod():
+    #test case: N64_L18_P1
+    logN = 6
+    N = 2**logN
+    L = 18
+    K = 1
+    moduliQ = N64_cheby.moduliQ18_N64
+    moduliP = N64_cheby.moduliP1_N64
+    rootsQ = N64_cheby.rootsQ18_N64
+    rootsP = N64_cheby.rootsP1_N64
+    dnum = int(L / K)
+    # swk = np.zeros((2, dnum, L + K, N), dtype=np.uint64)
+    swk = N64_cheby.swk
+    swk = swk.reshape((2, dnum, L + K, N))
+
+    cryptoContext = Context(logN,
+                            60, 59, 60,
+                            L, K,
+                            moduliQ, moduliP, rootsQ, rootsP, swk)
+
+    L=L-2
+    cv = np.array(N64_cheby.cheby_input, dtype=np.uint64)
+    cv = cv.reshape(2, L, N)
+
+    ct = Ciphertext(cv, L)
+    res = homo_ops.EvalChebyshevSeries(ct, cryptoContext)
+
+    golden_answer = np.array(N64_cheby.cheby_output, dtype=np.uint64)
+    golden_answer = golden_answer.reshape(res.cv.shape)
+
+    compare = np.array_equal(res.cv[0], golden_answer[0])
+    # compare = res == golden_answer
+    print("\n\ntest cheby: \n\n res_ax result: ")
+    print(compare)
+    print("\n")
+
+    compare = np.array_equal(res.cv[1], golden_answer[1])
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+
+    res = homo_ops.DoubleAngleIteration(res, cryptoContext)
+    golden_answer = np.array(N64_cheby.doubleAngle_output, dtype=np.uint64)
+    golden_answer = golden_answer.reshape(res.cv.shape)
+
+    compare = np.array_equal(res.cv[0], golden_answer[0])
+    # compare = res == golden_answer
+    print("\n\ntest doubleAngle: \n\n res_ax result: ")
+    print(compare)
+    print("\n")
+
+    compare = np.array_equal(res.cv[1], golden_answer[1])
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
