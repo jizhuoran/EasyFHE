@@ -314,7 +314,7 @@ class Context:
 
                 for j in range(l):
                     temp = self.invMod(self.moduliQ[j], self.moduliQ[l])
-                    QlInvModql = self.mulMod(QlInvModql, int(temp), int(self.moduliQ[l]))
+                    QlInvModql = self.mulMod(int(QlInvModql), int(temp), int(self.moduliQ[l]))
 
                 modulusQ = int(1)
                 for j in range(l):
@@ -411,7 +411,7 @@ class Context:
         if self.gcd(temp, m) != 1:
             raise ValueError("Inverse doesn't exist!!!")
         else:
-            return self.powMod(temp, int(m - 2), int(m))
+            return self.powMod(int(temp), (int(m) - 2), int(m))
 
     def powMod(self, x, y, modulus):
         res = 1
