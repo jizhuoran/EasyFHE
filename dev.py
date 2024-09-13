@@ -71,106 +71,107 @@ def configure_parameters(param: ParamType):
         ]
         return Context_Cuda(logN=log_degree, L=level, dnum=dnum, primes=primes)
 
-# # ##################################modup core###########################################
-# input = torch.tensor(
-#     [5956358506108845] * (2048 * context_cuda.level), dtype=torch.uint64, device="cuda"
-# )
-# num_moduli_after_modup = 5
-# beta = (int)(context_cuda.level / context_cuda.alpha)
-# out = torch.tensor(
-#     [0] * (num_moduli_after_modup * context_cuda.degree * beta), dtype=torch.uint64, device="cuda"
-# )
+# ##################################modup core###########################################
+context_cuda = configure_parameters(ParamType.TYPE_PRECISION)
+input = torch.tensor(
+    [5956358506108845] * (2048 * context_cuda.level), dtype=torch.uint64, device="cuda"
+)
+num_moduli_after_modup = 5
+beta = (int)(context_cuda.level / context_cuda.alpha)
+out = torch.tensor(
+    [0] * (num_moduli_after_modup * context_cuda.degree * beta), dtype=torch.uint64, device="cuda"
+)
 
-# modup = F.modup_core(
-#     input,
-#     context_cuda.hat_inverse_vec,
-#     context_cuda.hat_inverse_vec_shoup,
-#     context_cuda.prod_q_i_mod_q_j,
-#     context_cuda.primes,
-#     context_cuda.barret_ratio,
-#     context_cuda.barret_k,
-#     beta,
-#     context_cuda.degree,
-#     context_cuda.alpha,
-#     num_moduli_after_modup,
-#     out,
-# )
-# modup = modup.cpu()
+modup = F.modup_core(
+    input,
+    context_cuda.hat_inverse_vec,
+    context_cuda.hat_inverse_vec_shoup,
+    context_cuda.prod_q_i_mod_q_j,
+    context_cuda.primes,
+    context_cuda.barret_ratio,
+    context_cuda.barret_k,
+    beta,
+    context_cuda.degree,
+    context_cuda.alpha,
+    num_moduli_after_modup,
+    out,
+)
+modup = modup.cpu()
 
 
-# print("modup res:", modup)
+print("modup res:", modup)
 
-########################################### moddown core##################################
-# input_moddown = torch.tensor(
-#     [5956358506108845] * (2**11 * context_cuda.level), dtype=torch.uint64, device="cuda"
-# )
-# target_chain_idx = context_cuda.level
-# param_chain_length = context_cuda.level
-# param_max_num_moduli = context_cuda.level + context_cuda.alpha
-# param_degree = context_cuda.degree
-# param_log_degree = context_cuda.log_degree
-# to = torch.tensor(
-#     [0] * (param_chain_length * context_cuda.degree), dtype=torch.uint64, device="cuda"
-# )
+########################################## moddown core##################################
+input_moddown = torch.tensor(
+    [5956358506108845] * (2**11 * context_cuda.level), dtype=torch.uint64, device="cuda"
+)
+target_chain_idx = context_cuda.level
+param_chain_length = context_cuda.level
+param_max_num_moduli = context_cuda.level + context_cuda.alpha
+param_degree = context_cuda.degree
+param_log_degree = context_cuda.log_degree
+to = torch.tensor(
+    [0] * (param_chain_length * context_cuda.degree), dtype=torch.uint64, device="cuda"
+)
 
-# moddown = F.moddown_core(
-#     input_moddown,
-#     target_chain_idx,
-#     param_chain_length,
-#     param_max_num_moduli,
-#     param_degree,
-#     param_log_degree,
-#     context_cuda.hat_inverse_vec_moddown,
-#     context_cuda.hat_inverse_vec_shoup_moddown,
-#     context_cuda.prod_q_i_mod_q_j_moddown,
-#     context_cuda.prod_inv_moddown,
-#     context_cuda.prod_inv_shoup_moddown,
-#     context_cuda.primes,
-#     context_cuda.barret_ratio,
-#     context_cuda.barret_k,
-#     to,
-# )
-# print("moddown res:", moddown)
+moddown = F.moddown_core(
+    input_moddown,
+    target_chain_idx,
+    param_chain_length,
+    param_max_num_moduli,
+    param_degree,
+    param_log_degree,
+    context_cuda.hat_inverse_vec_moddown,
+    context_cuda.hat_inverse_vec_shoup_moddown,
+    context_cuda.prod_q_i_mod_q_j_moddown,
+    context_cuda.prod_inv_moddown,
+    context_cuda.prod_inv_shoup_moddown,
+    context_cuda.primes,
+    context_cuda.barret_ratio,
+    context_cuda.barret_k,
+    to,
+)
+print("moddown res:", moddown)
 
-# ########################NTT##########################################
-# start_prime_idx = 0
-# batch = target_chain_idx
-# ntt = F.NTT(
-#     input,
-#     start_prime_idx,
-#     batch,
-#     context_cuda.degree,
-#     context_cuda.power_of_roots_shoup,
-#     context_cuda.primes,
-#     context_cuda.power_of_roots,
-# )
-# print("ntt_res:", ntt)
+########################NTT##########################################
+start_prime_idx = 0
+batch = target_chain_idx
+ntt = F.NTT(
+    input,
+    start_prime_idx,
+    batch,
+    context_cuda.degree,
+    context_cuda.power_of_roots_shoup,
+    context_cuda.primes,
+    context_cuda.power_of_roots,
+)
+print("ntt_res:", ntt)
 
-# ########################iNTT##########################################
-# start_prime_idx = 0
-# batch = target_chain_idx
-# intt = F.iNTT(
-#     input,
-#     start_prime_idx,
-#     batch,
-#     param_degree,
-#     context_cuda.inverse_power_of_roots_div_two,
-#     context_cuda.primes,
-#     context_cuda.inverse_scaled_power_of_roots_div_two,
-# )
-# print("intt_res:", intt)
+########################iNTT##########################################
+start_prime_idx = 0
+batch = target_chain_idx
+intt = F.iNTT(
+    input,
+    start_prime_idx,
+    batch,
+    param_degree,
+    context_cuda.inverse_power_of_roots_div_two,
+    context_cuda.primes,
+    context_cuda.inverse_scaled_power_of_roots_div_two,
+)
+print("intt_res:", intt)
 
 
 #################################KeySwitch################################
 context_cuda = configure_parameters(ParamType.TYPE_PRECISION)
-start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
-end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
 
-inner_start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
-inner_end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# inner_start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# inner_end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
 
-moddown_start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
-moddown_end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# moddown_start_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
+# moddown_end_events = [torch.cuda.Event(enable_timing=True) for _ in range(10)]
 
 num_moduli_after_modup = context_cuda.level + context_cuda.alpha
 beta = (int)(context_cuda.level / context_cuda.alpha)
@@ -198,9 +199,22 @@ bx = torch.tensor(
     dtype=torch.uint64,
     device="cuda",
 )
+modup_out = torch.tensor(
+    [0] * (num_moduli_after_modup * context_cuda.degree * beta), dtype=torch.uint64, device="cuda"
+)
+inner_out = torch.tensor(
+    [0] * (2*context_cuda.max_num_moduli * context_cuda.degree),
+    dtype=torch.uint64,
+    device="cuda",
+)
+moddown_out = torch.tensor(
+    [0] * (param_chain_length * context_cuda.degree), dtype=torch.uint64, device="cuda"
+)
+workspace = torch.tensor([0] * (4*num_moduli_after_modup * context_cuda.degree * beta), dtype=torch.uint64, device="cuda")
 
 for i in range(10):
-    start_events[i].record()
+    # start_events[i].record()
+    modup_start = time.time()
     modup = F.modup(
         input_ks,
         context_cuda.hat_inverse_vec,
@@ -217,10 +231,15 @@ for i in range(10):
         context_cuda.power_of_roots,
         context_cuda.inverse_power_of_roots_div_two,
         context_cuda.inverse_scaled_power_of_roots_div_two,
+        modup_out,
+        inplace=False
     )
-    end_events[i].record()
+    modup_end = time.time()
+    print("modup total time:", (modup_end-modup_start)*1e3,"\n")
+    # end_events[i].record()
     
-    inner_start_events[i].record()
+    # inner_start_events[i].record()
+    start = time.time()
     inner_product = F.innerproduct(
         modup,
         ax,
@@ -229,14 +248,19 @@ for i in range(10):
         context_cuda.primes,
         context_cuda.barret_ratio,
         context_cuda.barret_k,
+        workspace,
+        inner_out,
+        inplace = False
     )
-    inner_end_events[i].record()
+    end = time.time()
+    # inner_end_events[i].record()
+    print("inner total time:", (end-start)*1e3,"\n")
+    
+    sumMult_ax = inner_product[:context_cuda.max_num_moduli * context_cuda.degree]
+    sumMult_bx = inner_product[context_cuda.max_num_moduli * context_cuda.degree:]
 
-
-    sumMult_ax = inner_product[0]
-    sumMult_bx = inner_product[1]
-
-    moddown_start_events[i].record()
+    # moddown_start_events[i].record()
+    moddown_start = time.time()
     moddown_ax = F.moddown(
         sumMult_ax,
         target_chain_idx,
@@ -256,8 +280,12 @@ for i in range(10):
         context_cuda.power_of_roots,
         context_cuda.inverse_power_of_roots_div_two,
         context_cuda.inverse_scaled_power_of_roots_div_two,
+        moddown_out,
+        inplace=False
     )
-    moddown_end_events[i].record()
+    moddown_end = time.time()
+    print("moddown total time:", (moddown_end-moddown_start)*1e3,"\n")
+    # moddown_end_events[i].record()
     torch.cuda.synchronize()
 
     # res_0 = np.load("/home/yons/wwz/project/GPU-FHE/script/pydata/moddown_output_ax.npy")
@@ -265,6 +293,7 @@ for i in range(10):
     # for i in range (param_chain_length*context_cuda.degree):
     #     if(np_moddown_ax[i] != res_0[i]):
     #         print("i=", i, ", res_0=", res_0[i], ",moddown_ax=", moddown_ax[i], "\n")
+    #         break
 
     moddown_bx = F.moddown(
         sumMult_bx,
@@ -285,14 +314,15 @@ for i in range(10):
         context_cuda.power_of_roots,
         context_cuda.inverse_power_of_roots_div_two,
         context_cuda.inverse_scaled_power_of_roots_div_two,
+        moddown_out
     )
 
-torch.cuda.synchronize()
-times = [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
-print("modup cuda time:", times)
+# torch.cuda.synchronize()
+# times = [s.elapsed_time(e) for s, e in zip(start_events, end_events)]
+# print("modup cuda time:", times)
 
-inner_times = [s.elapsed_time(e) for s, e in zip(inner_start_events, inner_end_events)]
-print("inner cuda time:", inner_times)
+# inner_times = [s.elapsed_time(e) for s, e in zip(inner_start_events, inner_end_events)]
+# print("inner cuda time:", inner_times)
 
-moddown_times = [s.elapsed_time(e) for s, e in zip(moddown_start_events, moddown_end_events)]
-print("moddown cuda time:", moddown_times)
+# moddown_times = [s.elapsed_time(e) for s, e in zip(moddown_start_events, moddown_end_events)]
+# print("moddown cuda time:", moddown_times)

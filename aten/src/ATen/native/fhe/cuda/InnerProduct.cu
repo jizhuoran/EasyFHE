@@ -65,7 +65,6 @@ __global__ void mult_(
   const uint64_t op1 = modup_out[i];
   const uint64_t op2_ax = eval_poly_ax[i];
   const uint64_t op2_bx = eval_poly_bx[i];
-  // printf("%lld, %lld, %lld\n", op1,op2_ax, op2_bx);
   const auto mul_ax = mult_64_64_128(op1, op2_ax);
   const auto mul_bx = mult_64_64_128(op1, op2_bx);
   if (Accum) {
@@ -75,7 +74,6 @@ __global__ void mult_(
     accum_ptr_ax[i] = mul_ax;
     accum_ptr_bx[i] = mul_bx;
   }
-  // printf("%lld, %lld\n", accum_ptr_ax[i].lo, accum_ptr_bx[i].lo);
   STRIDED_LOOP_END;
 }
 
@@ -100,7 +98,7 @@ __global__ void Reduce(
 } // namespace fhe
 
 namespace at::native {
-Tensor innerproduct_cuda(
+static void innerproduct_template(
     const Tensor& modup_out,
     const Tensor& ax,
     const Tensor& bx,
@@ -108,33 +106,26 @@ Tensor innerproduct_cuda(
     int64_t param_max_num_moduli,
     const Tensor& primes,
     const Tensor& barret_ratio,
-    const Tensor& barret_k) {
+    const Tensor& barret_k,
+    const Tensor& workspace,
+    Tensor& res) {
   const int total_length = modup_out.size(-1) / param_degree;
   const int beta = total_length / param_max_num_moduli;
   const int length = param_max_num_moduli;
 
-  auto res_ax = ax.clone();
-  auto res_bx = bx.clone();
+  fhe::uint128_t* accum_ax_ptr = reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
+  fhe::uint128_t* accum_bx_ptr = accum_ax_ptr + modup_out.size(-1);
 
-  res_ax.resize_({param_max_num_moduli * param_degree});
-  res_bx.resize_({param_max_num_moduli * param_degree});
-
-  fhe::uint128_t* accum_ax_ptr;
-  fhe::uint128_t* accum_bx_ptr;
-  cudaMalloc(&accum_ax_ptr, modup_out.size(-1) * sizeof(fhe::uint128_t));
-  cudaMalloc(&accum_bx_ptr, modup_out.size(-1) * sizeof(fhe::uint128_t));
   AT_DISPATCH_V2(
-      res_ax.scalar_type(),
+      ax.scalar_type(),
       "inner_product_impl",
       AT_WRAP([&]() {
         auto modup_out_ptr =
             reinterpret_cast<uint64_t*>(modup_out.data_ptr<uint64_t>());
         auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
         auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-        auto res_ax_ptr =
-            reinterpret_cast<uint64_t*>(res_ax.data_ptr<uint64_t>());
-        auto res_bx_ptr =
-            reinterpret_cast<uint64_t*>(res_bx.data_ptr<uint64_t>());
+        auto res_ax_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+        auto res_bx_ptr = res_ax_ptr + param_max_num_moduli * param_degree;
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto barret_ratio_ptr =
@@ -184,7 +175,83 @@ Tensor innerproduct_cuda(
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
-  auto res = at::stack({res_ax, res_bx}, 0);
+}
+
+Tensor innerproduct_cuda(
+    const Tensor& res,
+    const Tensor& modup_out,
+    const Tensor& ax,
+    const Tensor& bx,
+    int64_t param_degree,
+    int64_t param_max_num_moduli,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  Tensor out = at::empty_like(res);
+  innerproduct_template(
+      modup_out,
+      ax,
+      bx,
+      param_degree,
+      param_max_num_moduli,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace,
+      out);
+  return out;
+}
+
+Tensor& innerproduct_cuda_(
+    Tensor& res,
+    const Tensor& modup_out,
+    const Tensor& ax,
+    const Tensor& bx,
+    int64_t param_degree,
+    int64_t param_max_num_moduli,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  innerproduct_template(
+      modup_out,
+      ax,
+      bx,
+      param_degree,
+      param_max_num_moduli,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace,
+      res);
   return res;
 }
+
+Tensor& innerproduct_cuda_out(
+    const Tensor& res,
+    const Tensor& modup_out,
+    const Tensor& ax,
+    const Tensor& bx,
+    int64_t param_degree,
+    int64_t param_max_num_moduli,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace,
+    Tensor& out) {
+  innerproduct_template(
+      modup_out,
+      ax,
+      bx,
+      param_degree,
+      param_max_num_moduli,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace,
+      out);
+  return out;
+}
+
 } // namespace at::native
