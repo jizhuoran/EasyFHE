@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 
 class Ciphertext:
@@ -16,3 +17,22 @@ class Ciphertext:
 
     def __repr__(self):
         return f"Ciphertext(cv={self.cv}, curr_limbs={self.curr_limbs})"
+
+
+class Cipher:
+    def __init__(self, ax, bx, cur_limbs):
+        self.ax = ax
+        self.bx = bx
+        self.cur_limbs = cur_limbs
+    
+    def __repr__(self):
+        return (
+            "Cipher(\n"
+            f"    ax={self.ax},\n"
+            f"    bx={self.bx},\n"
+            f"    cur_limbs={self.cur_limbs}\n"
+            ")"
+        )
+    
+    def __eq__(self, other):
+        return torch.equal(self.ax, other.ax) and torch.equal(self.bx, other.bx) and self.cur_limbs == other.cur_limbs

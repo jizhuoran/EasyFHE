@@ -15674,17 +15674,17 @@
 
 # Below are operations for FHE
 
-- func: add_mod(Tensor self, Tensor in_b, *, Scalar mod) -> Tensor
+- func: add_mod(Tensor self, Tensor in_b, Tensor mod, *, int L) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: add_mod_cuda
 
-- func: add_mod_(Tensor(a!) self, Tensor in_b, *, Scalar mod) -> Tensor(a!)
+- func: add_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int L) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
      CUDA: add_mod_cuda_
 
-- func: add_mod.out(Tensor self, Tensor in_b, *, Scalar mod, Tensor(a!) out) -> Tensor(a!)
+- func: add_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int L, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: add_mod_out_cuda

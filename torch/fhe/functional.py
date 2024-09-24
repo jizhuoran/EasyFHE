@@ -2,7 +2,15 @@ import torch
 import numpy as np
 from .Ciphertext import Ciphertext
 from .context import Context
+
 Tensor = torch.Tensor
+
+
+def cv_add(x, y, modulus, cur_limbs, inplace=False):
+    if inplace:
+        return torch.add_mod_(x, y, modulus, L=cur_limbs)
+    else:
+        return torch.add_mod(x, y, modulus, L=cur_limbs)
 
 
 def vec_add_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
