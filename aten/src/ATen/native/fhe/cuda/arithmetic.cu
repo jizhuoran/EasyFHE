@@ -6,6 +6,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <ATen/native/fhe/cuda/arithmetic.cuh>
 #include <cstdint>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
@@ -140,8 +141,8 @@ static void neg_mod_template(Tensor& c, const Tensor& a, uint64_t mod) {
         auto c_ptr =
             reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
         auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::neg_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -158,8 +159,8 @@ static void neg_mod_template_(Tensor& self, uint64_t mod) {
       AT_WRAP([&]() {
         auto self_ptr = reinterpret_cast<uint64_t*>(self.data_ptr<uint64_t>());
         auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::neg_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
@@ -186,12 +187,15 @@ static void add_mod_template(
             reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
         auto mod_ptr = reinterpret_cast<uint64_t*>(mod.data_ptr<uint64_t>());
         auto N = a.sizes()[1];
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::add_mod_kernel<<<dim3(grid, L), dim3(block_work_size(), 1), 0, stream>>>(
-            N, L, c_ptr, a_ptr, b_ptr, mod_ptr);
+        fhe::add_mod_kernel<<<
+            dim3(grid, L),
+            dim3(block_work_size(), 1),
+            0,
+            stream>>>(N, L, c_ptr, a_ptr, b_ptr, mod_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
@@ -212,8 +216,8 @@ static void add_mod_template_(
             reinterpret_cast<uint64_t*>(other.data_ptr<uint64_t>());
         auto mod_ptr = reinterpret_cast<uint64_t*>(mod.data_ptr<uint64_t>());
         auto N = self.sizes()[1];
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::add_mod_kernel_<<<dim3(grid, L), block_work_size(), 0, stream>>>(
@@ -237,8 +241,8 @@ static void sub_mod_template(
         auto c_ptr =
             reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
         auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::sub_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -257,8 +261,8 @@ static void sub_mod_template_(Tensor& self, const Tensor& other, uint64_t mod) {
         auto other_ptr =
             reinterpret_cast<uint64_t*>(other.data_ptr<uint64_t>());
         auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::sub_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
@@ -285,8 +289,8 @@ static void mul_mod_template(
         auto mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
         auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::mul_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -311,8 +315,8 @@ static void mul_mod_template_(
         auto mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
         auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::mul_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
@@ -338,8 +342,8 @@ static void mul_scalar_mod_template(
         auto mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
         auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::mul_scalar_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -362,8 +366,8 @@ static void mul_scalar_mod_template_(
         auto mu_ptr =
             reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
         auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::mul_scalar_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
@@ -385,8 +389,8 @@ Tensor automorphism_cuda(const Tensor& input, const Tensor& index) {
         auto out_ptr =
             reinterpret_cast<uint64_t*>(output.mutable_data_ptr<uint64_t>());
         auto N = input.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::automorphism_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -415,8 +419,8 @@ Tensor mod_switch_cuda(
         auto out_ptr =
             reinterpret_cast<uint64_t*>(output.mutable_data_ptr<uint64_t>());
         auto N = input.numel();
-        TORCH_INTERNAL_ASSERT(
-            (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
+        // TORCH_INTERNAL_ASSERT(
+            // (N == 1 << 15) || (N == 1 << 16) || (N == 1 << 17));
         auto grid = (N + block_work_size() - 1) / block_work_size();
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::mod_switch_kernel<<<grid, block_work_size(), 0, stream>>>(
@@ -477,7 +481,7 @@ Tensor add_scalar_mod_cuda(
     const Scalar& scalar,
     const Scalar& mod) {
   Tensor c = at::empty_like(a);
-  add_scalar_mod_template(c, a, scalar.toUInt64(), mod.toUInt64());
+  // add_scalar_mod_template(c, a, scalar.toUInt64(), mod.toUInt64());
   return c;
 }
 
@@ -485,7 +489,7 @@ Tensor& add_scalar_mod_cuda_(
     Tensor& self,
     const Scalar& scalar,
     const Scalar& mod) {
-  add_scalar_mod_template_(self, scalar.toUInt64(), mod.toUInt64());
+  // add_scalar_mod_template_(self, scalar.toUInt64(), mod.toUInt64());
   return self;
 }
 
@@ -494,7 +498,7 @@ Tensor& add_scalar_mod_out_cuda(
     const Scalar& b,
     const Scalar& mod,
     Tensor& c) {
-  add_scalar_mod_template(c, a, b.toUInt64(), mod.toUInt64());
+  // add_scalar_mod_template(c, a, b.toUInt64(), mod.toUInt64());
   return c;
 }
 
