@@ -28,8 +28,8 @@ class Cipher:
     def __repr__(self):
         return (
             "Cipher(\n"
-            f"    ax={self.ax},\n"
-            f"    bx={self.bx},\n"
+            f"    ax={self.ax[:self.cur_limbs]},\n"
+            f"    bx={self.bx[:self.cur_limbs]},\n"
             f"    cur_limbs={self.cur_limbs}\n"
             ")"
         )
