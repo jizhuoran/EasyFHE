@@ -13,7 +13,8 @@ from torch.fhe.context_cuda import Context_Cuda
 # T.test_HMult_and_rescale_1()
 # T.test_SwitchModulus()
 T.test_ApproxMod()
-
+T.test_KS3_ct()
+T.test_logN17()
 # a = torch.tensor([6] * (2**15), dtype=torch.uint64, device='cuda')
 # b = torch.tensor([4] * (2**15), dtype=torch.uint64, device='cuda')
 #

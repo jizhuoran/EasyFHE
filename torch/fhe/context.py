@@ -435,12 +435,14 @@ class Context:
             x *= x
         return res
 
-    def bitReverse(self, x):
-        x = (((x & 0xaaaaaaaa) >> 1) | ((x & 0x55555555) << 1))
-        x = (((x & 0xcccccccc) >> 2) | ((x & 0x33333333) << 2))
-        x = (((x & 0xf0f0f0f0) >> 4) | ((x & 0x0f0f0f0f) << 4))
-        x = (((x & 0xff00ff00) >> 8) | ((x & 0x00ff00ff) << 8))
-        return ((x >> 16) | (x << 16))
+    def bitReverse(self, n, bit_size=32):
+        reversed_bits = 0
+        for i in range(bit_size):
+            # 将 n 的最低有效位移到 reversed_bits 的适当位置
+            reversed_bits <<= 1
+            reversed_bits |= (n & 1)
+            n >>= 1
+        return reversed_bits
 
     def gcd(self, a, b):
         if a == 0:

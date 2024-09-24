@@ -10,6 +10,8 @@ from .data import params_N256_L4_P1 as N256L4P1
 from .data import params_N256_L4_P2 as N256L4P2
 from .data import params_N64 as N64
 from .data import params_N64_cheby as N64_cheby
+from .data import params_ks_13 as N8192KS
+from .data import params_ks_17 as N131072KS
 Tensor = torch.Tensor
 
 
@@ -388,6 +390,122 @@ def test_KS_ct():
     print("\n")
 
     golden_answer = N256L4P2.res[1]
+    golden_answer = golden_answer.reshape(res[1].shape)
+    compare = np.array_equal(res[1], golden_answer)
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+
+
+def test_KS3_ct():
+    axax = N8192KS.axax0
+    axax= axax.reshape((4,8192))
+    print(axax.shape)
+    logN = 13
+    N = 2**logN
+    L = 4
+    K = 2
+    moduliQ = N8192KS.moduliQ4_N8192
+    moduliP = N8192KS.moduliP2_N8192
+    rootsQ = N8192KS.rootsQ4_N8192
+    rootsP = N8192KS.rootsP2_N8192
+    dnum = int(L / K)
+    swk = np.zeros((2, dnum, L + K, N), dtype=np.uint64)
+    swk = N8192KS.swk
+    swk = swk.reshape(2, dnum, L + K, N)
+    print(swk.shape)
+    cryptoContext = Context(logN, 53, 52, 52, L, K,
+                            moduliQ, moduliP, rootsQ, rootsP, swk)
+
+    mult_swk = cryptoContext.mult_swk
+    qInvVec = cryptoContext.qInvVec
+    pInvVec = cryptoContext.pInvVec
+    qRootScalePows = cryptoContext.qRootScalePows
+    pRootScalePows = cryptoContext.pRootScalePows
+    qRootScalePowsInv = cryptoContext.qRootScalePowsInv
+    pRootScalePowsInv = cryptoContext.pRootScalePowsInv
+    NScaleInvModq = cryptoContext.NScaleInvModq
+    NScaleInvModp = cryptoContext.NScaleInvModp
+    QHatInvModq = cryptoContext.PartQlHatInvModq
+    QHatModp = cryptoContext.PartQlHatModp
+    pHatInvModp = cryptoContext.pHatInvModp
+    pHatModq = cryptoContext.pHatModq
+    PInvModq = cryptoContext.PInvModq
+
+
+    res = KeySwitch.KeySwitch_core(axax, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
+                                   QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows, pRootScalePowsInv,
+                                   QHatModp, NScaleInvModp, pHatInvModp, L, K, N)
+
+    golden_answer = N8192KS.sumMult0[0]
+    golden_answer = golden_answer.reshape(res[0].shape)
+    compare = np.array_equal(res[0], golden_answer)
+    # compare = res == golden_answer
+    print("\n\ntest 2: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N8192KS.sumMult0[1]
+    golden_answer = golden_answer.reshape(res[1].shape)
+    compare = np.array_equal(res[1], golden_answer)
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+
+
+
+def test_logN17():
+    axax = N131072KS.axax0
+    axax = axax.reshape((4, 131072))
+    print(axax.shape)
+    logN = 17
+    N = 2 ** logN
+    L = 4
+    K = 2
+    moduliQ = N131072KS.moduliQ4_N131072
+    moduliP = N131072KS.moduliP2_N131072
+    rootsQ = N131072KS.rootsQ4_N131072
+    rootsP = N131072KS.rootsP2_N131072
+    dnum = int(L / K)
+    swk = np.zeros((2, dnum, L + K, N), dtype=np.uint64)
+    swk = N131072KS.swk
+    swk = swk.reshape(2, dnum, L + K, N)
+    print(swk.shape)
+    cryptoContext = Context(logN, 53, 52, 52, L, K,
+                            moduliQ, moduliP, rootsQ, rootsP, swk)
+
+    mult_swk = cryptoContext.mult_swk
+    qInvVec = cryptoContext.qInvVec
+    pInvVec = cryptoContext.pInvVec
+    qRootScalePows = cryptoContext.qRootScalePows
+    pRootScalePows = cryptoContext.pRootScalePows
+    qRootScalePowsInv = cryptoContext.qRootScalePowsInv
+    pRootScalePowsInv = cryptoContext.pRootScalePowsInv
+    NScaleInvModq = cryptoContext.NScaleInvModq
+    NScaleInvModp = cryptoContext.NScaleInvModp
+    QHatInvModq = cryptoContext.PartQlHatInvModq
+    QHatModp = cryptoContext.PartQlHatModp
+    pHatInvModp = cryptoContext.pHatInvModp
+    pHatModq = cryptoContext.pHatModq
+    PInvModq = cryptoContext.PInvModq
+
+    res = KeySwitch.KeySwitch_core(axax, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv,
+                                   NScaleInvModq,
+                                   QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows,
+                                   pRootScalePowsInv,
+                                   QHatModp, NScaleInvModp, pHatInvModp, L, K, N)
+
+    golden_answer = N131072KS.sumMult0[0]
+    golden_answer = golden_answer.reshape(res[0].shape)
+    compare = np.array_equal(res[0], golden_answer)
+    # compare = res == golden_answer
+    print("\n\ntest 2: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N131072KS.sumMult0[1]
     golden_answer = golden_answer.reshape(res[1].shape)
     compare = np.array_equal(res[1], golden_answer)
     # compare = res == golden_answer
