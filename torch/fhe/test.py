@@ -495,7 +495,7 @@ def test_KS3_ct():
     res_pad = KeySwitch.KeySwitch_core_pad(axax_pad, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
                                        QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows, pRootScalePowsInv,
                                        QHatModp_pad, NScaleInvModp, pHatInvModp, curr_limbs, K, N)
-    res_pad = np.delete(res_pad, 3, axis=1) # tailor the output
+    res_pad = np.delete(res_pad, range(curr_limbs,ceil_curr_limbs), axis=1) # tailor the output
     print(res_pad.shape)# 输出结果形状
     compare = res_pad == res
     print("\n\ntest padding KS: \n")
