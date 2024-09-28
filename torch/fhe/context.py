@@ -260,6 +260,46 @@ class Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
 
+        # 初始化 PartQlHatModp_pad
+        self.PartQlHatModp_pad = [[[[0 for _ in range(self.dnum * K)] for _ in range(K)] for _ in range(self.dnum)] for _ in range(L)]
+        for l in range(L):
+            beta = math.ceil((l + 1) / K)
+            ceil_curr_limbs = beta*K
+            for k in range(beta):
+                partQ_size = (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                digitSize = K
+                modulusPartQ = int(moduliPartQ[k])
+
+                if k == beta - 1:
+                    digitSize = l + 1 - k * K
+                    for idx in range(digitSize, partQ_size):
+                        modulusPartQ //= int(self.moduliQ[K * k + idx])
+
+                for i in range(digitSize):
+                    partQHat = modulusPartQ // int(self.moduliQ[K * k + i])
+
+                    start_idx = k * K
+                    end_idx = start_idx + digitSize
+                    complBasis_vec = (
+                            self.moduliQ[:start_idx] + self.moduliQ[end_idx:l + 1]
+                    )
+                    offset = len(complBasis_vec)
+                    for j, mod in enumerate(complBasis_vec):
+                        QHatModpj = int(partQHat) % int(mod)
+                        self.PartQlHatModp_pad[l][k][i][j] = QHatModpj
+
+                    complBasis_vec = (
+                            self.moduliQ[l + 1:ceil_curr_limbs]
+                    )
+                    for j, mod in enumerate(complBasis_vec):
+                        self.PartQlHatModp_pad[l][k][i][offset+j] = 0
+
+                    complBasis_vec = self.moduliP
+                    offset = ceil_curr_limbs-K
+                    for j, mod in enumerate(complBasis_vec):
+                        QHatModpj = int(partQHat) % int(mod)
+                        self.PartQlHatModp_pad[l][k][i][offset+j] = QHatModpj
+
         self.pHatModp = [0] * K  # 初始化 pHatModp 列表
         self.pHatInvModp = [0] * K  # 初始化 pHatInvModp 列表
         # 计算 pHatModp

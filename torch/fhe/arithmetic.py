@@ -265,3 +265,59 @@ def ModDown_Core(intt_a,
         res[i] = vec_mul_scalar_mod(res[i], PInvModq[i], moduliQ[i])
 
     return res
+
+
+def ModUp_Core_pad(intt_a, d2Tilde,
+               moduliQ, moduliP, QHatInvModq, QHatModp,
+               curr_limbs, K, N):
+    beta = int(math.ceil(curr_limbs / K))  # total beta groups
+    ceil_curr_limbs = beta*K
+    for j in range(beta):
+        in_C_L_index = j * K
+        in_C_L_len = K if j < (beta - 1) else (curr_limbs - in_C_L_index)
+        sizeP = ceil_curr_limbs # sizeP = curr_limbs - in_C_L_len + K
+
+        a = intt_a[in_C_L_index:in_C_L_index + K, :]
+        qi = moduliQ[in_C_L_index:in_C_L_index + K]
+
+        qi_comple = np.concatenate((moduliQ[:in_C_L_index], moduliQ[in_C_L_index + K:ceil_curr_limbs]))
+        moduliQP = np.concatenate((qi_comple, moduliP))
+
+        assert moduliQP.size == sizeP, "moduliQP.size() should equal to sizeP, check again"
+
+        sum = [[int(0) for _ in range(N)] for _ in range(sizeP)]
+
+        for i in range(K):
+            tmp = vec_mul_scalar_mod(a[i], QHatInvModq[j][in_C_L_len - 1][i], qi[i])
+            for k in range(sizeP):
+                product = vec_mul_scalar_int(tmp, QHatModp[curr_limbs - 1][j][i][k])
+                sum[k] = vec_add_int(sum[k], product)
+
+        ranges = list(range(0, in_C_L_index)) + list(range(in_C_L_index + K, ceil_curr_limbs + K))
+        for k, i in enumerate(ranges):
+            d2Tilde[j][i] = vec_mod_int(sum[k], moduliQP[k])
+
+def ModDown_Core_pad(intt_a,
+                 pHatInvModp, pHatModq, PInvModq,
+                 moduliQ, moduliP,
+                 N, curr_limbs, K,):
+    beta = int(math.ceil(curr_limbs / K))  # total beta groups
+    ceil_curr_limbs = beta*K
+    res = np.zeros((ceil_curr_limbs, N), dtype=np.uint64)
+    tmp3 = np.zeros((K, N), dtype=np.uint64)
+    tmpk = intt_a[ceil_curr_limbs:, :]
+    for k in range(K):
+        tmp3[k] = vec_mul_scalar_mod(tmpk[k], pHatInvModp[k], moduliP[k])
+
+    tmpi = intt_a[:ceil_curr_limbs, :]
+    for i in range(ceil_curr_limbs):
+        sum = [int(0) for _ in range(N)]
+        for k in range(K):
+            product = vec_mul_scalar_int(tmp3[k], pHatModq[k][i])
+            sum = vec_add_int(sum, product)
+
+        res[i] = vec_mod_int(sum, moduliQ[i])
+        res[i] = vec_sub_mod(tmpi[i], res[i], moduliQ[i])
+        res[i] = vec_mul_scalar_mod(res[i], PInvModq[i], moduliQ[i])
+
+    return res

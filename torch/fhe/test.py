@@ -399,9 +399,6 @@ def test_KS_ct():
 
 
 def test_KS3_ct():
-    axax = N8192KS.axax0
-    axax= axax.reshape((4,8192))
-    print(axax.shape)
     logN = 13
     N = 2**logN
     L = 4
@@ -433,7 +430,10 @@ def test_KS3_ct():
     pHatModq = cryptoContext.pHatModq
     PInvModq = cryptoContext.PInvModq
 
-
+    ########## test L=4 ##########
+    axax = N8192KS.axax0
+    axax= axax.reshape((4,8192))
+    print(axax.shape)
     res = KeySwitch.KeySwitch_core(axax, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
                                    QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows, pRootScalePowsInv,
                                    QHatModp, NScaleInvModp, pHatInvModp, L, K, N)
@@ -442,7 +442,7 @@ def test_KS3_ct():
     golden_answer = golden_answer.reshape(res[0].shape)
     compare = np.array_equal(res[0], golden_answer)
     # compare = res == golden_answer
-    print("\n\ntest 2: \n\nres_ax result: ")
+    print("\n\ntest 1 L = 4: \n\nres_ax result: ")
     print(compare)
     print("\n")
 
@@ -454,6 +454,47 @@ def test_KS3_ct():
     print(compare)
     print("\n")
 
+    ########## test L=3 ##########
+    axax = N8192KS.axax1
+    axax = axax.reshape((3, 8192))
+    print(axax.shape)
+    tmp = np.zeros((1, 8192), dtype=np.uint64)
+    axax_pad = np.vstack((axax, tmp)) # dont move, must be declared here
+    print(axax_pad.shape)
+
+    res = KeySwitch.KeySwitch_core(axax, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv,
+                                       NScaleInvModq,
+                                       QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows,
+                                       pRootScalePowsInv,
+                                       QHatModp, NScaleInvModp, pHatInvModp, L - 1, K, N)
+
+    golden_answer = N8192KS.sumMult1[0]
+    golden_answer = golden_answer.reshape(res[0].shape)
+    compare = np.array_equal(res[0], golden_answer)
+    # compare = res == golden_answer
+    print("\n\ntest 2 L = 3: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N8192KS.sumMult1[1]
+    golden_answer = golden_answer.reshape(res[1].shape)
+    compare = np.array_equal(res[1], golden_answer)
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+
+    ########## test padding KS ##########
+    QHatModp_pad = cryptoContext.PartQlHatModp_pad  # note! param for padding
+    res_pad = KeySwitch.KeySwitch_core_pad(axax_pad, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
+                                       QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows, pRootScalePowsInv,
+                                       QHatModp_pad, NScaleInvModp, pHatInvModp, L - 1, K, N)
+    res_pad = np.delete(res_pad, 3, axis=1) # tailor the output
+    print(res_pad.shape)# 输出结果形状
+    compare = res_pad == res
+    print("\n\ntest padding KS: \n")
+    print(compare)
+    print("\n")
 
 
 def test_logN17():
