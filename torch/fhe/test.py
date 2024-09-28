@@ -1,3 +1,5 @@
+import math
+
 import torch
 import numpy as np
 from .Ciphertext import Ciphertext
@@ -457,8 +459,12 @@ def test_KS3_ct():
     ########## test L=3 ##########
     axax = N8192KS.axax1
     axax = axax.reshape((3, 8192))
-    print(axax.shape)
-    tmp = np.zeros((1, 8192), dtype=np.uint64)
+
+    curr_limbs= L-1
+    beta = int(math.ceil(curr_limbs / K))  # total beta groups
+    ceil_curr_limbs = int(beta) * K
+    tmp = np.random.randint(0, 2 ** 50, size=(ceil_curr_limbs-curr_limbs, N), dtype=np.uint64)
+
     axax_pad = np.vstack((axax, tmp)) # dont move, must be declared here
     print(axax_pad.shape)
 
@@ -466,7 +472,7 @@ def test_KS3_ct():
                                        NScaleInvModq,
                                        QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows,
                                        pRootScalePowsInv,
-                                       QHatModp, NScaleInvModp, pHatInvModp, L - 1, K, N)
+                                       QHatModp, NScaleInvModp, pHatInvModp, curr_limbs, K, N)
 
     golden_answer = N8192KS.sumMult1[0]
     golden_answer = golden_answer.reshape(res[0].shape)
@@ -488,7 +494,7 @@ def test_KS3_ct():
     QHatModp_pad = cryptoContext.PartQlHatModp_pad  # note! param for padding
     res_pad = KeySwitch.KeySwitch_core_pad(axax_pad, mult_swk, moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq,
                                        QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows, pRootScalePowsInv,
-                                       QHatModp_pad, NScaleInvModp, pHatInvModp, L - 1, K, N)
+                                       QHatModp_pad, NScaleInvModp, pHatInvModp, curr_limbs, K, N)
     res_pad = np.delete(res_pad, 3, axis=1) # tailor the output
     print(res_pad.shape)# 输出结果形状
     compare = res_pad == res
