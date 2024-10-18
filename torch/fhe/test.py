@@ -504,8 +504,8 @@ def test_KS3_ct():
 
 
 def test_logN17():
-    axax = N131072KS.axax0
-    axax = axax.reshape((4, 131072))
+    axax = N131072KS.axax1
+    axax = axax.reshape((3, 131072))
     print(axax.shape)
     logN = 17
     N = 2 ** logN
@@ -542,9 +542,9 @@ def test_logN17():
                                    NScaleInvModq,
                                    QHatInvModq, pHatModq, PInvModq, moduliP, pInvVec, pRootScalePows,
                                    pRootScalePowsInv,
-                                   QHatModp, NScaleInvModp, pHatInvModp, L, K, N)
+                                   QHatModp, NScaleInvModp, pHatInvModp, L-1, K, N)
 
-    golden_answer = N131072KS.sumMult0[0]
+    golden_answer = N131072KS.sumMult1[0]
     golden_answer = golden_answer.reshape(res[0].shape)
     compare = np.array_equal(res[0], golden_answer)
     # compare = res == golden_answer
@@ -552,7 +552,7 @@ def test_logN17():
     print(compare)
     print("\n")
 
-    golden_answer = N131072KS.sumMult0[1]
+    golden_answer = N131072KS.sumMult1[1]
     golden_answer = golden_answer.reshape(res[1].shape)
     compare = np.array_equal(res[1], golden_answer)
     # compare = res == golden_answer
@@ -840,3 +840,48 @@ def test_ApproxMod():
     print("\nres_bx result: ")
     print(compare)
     print("\n")
+
+def test_cuda_KS():
+    axax = N131072KS.axax0
+    axax = axax.reshape((4, 131072))
+    curr_limbs = 4
+    logN = 17
+    N = 2 ** logN
+    L = 4
+    K = 2
+    moduliQ = N131072KS.moduliQ4_N131072
+    moduliP = N131072KS.moduliP2_N131072
+    rootsQ = N131072KS.rootsQ4_N131072
+    rootsP = N131072KS.rootsP2_N131072
+    dnum = int(L / K)
+    swk = N131072KS.swk
+    swk = swk.reshape(2, dnum, L + K, N)
+    context_cuda = Context(logN, 53, 52, 52, L, K,
+                            moduliQ, moduliP, rootsQ, rootsP, swk)
+    
+    input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
+    ax = torch.tensor(swk[0].reshape(-1),dtype=torch.uint64,device="cuda")
+    bx = torch.tensor(swk[1].reshape(-1),dtype=torch.uint64,device="cuda")
+    res = F.keyswitch(context_cuda=context_cuda, 
+                      input = input_ks,
+                      swk_ax=ax,
+                      swk_bx =bx,
+                      curr_limbs =curr_limbs)
+    
+    res0 = res[0].detach().cpu().numpy()
+    res1 = res[1].detach().cpu().numpy()
+
+    golden_answer = N131072KS.sumMult0[0]
+    golden_answer = golden_answer.reshape(res0.shape)
+    compare = np.array_equal(res0, golden_answer)
+    print("\n\ntest: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N131072KS.sumMult0[1]
+    golden_answer = golden_answer.reshape(res1.shape)
+    compare = np.array_equal(res1, golden_answer)
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+        

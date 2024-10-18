@@ -24,11 +24,13 @@ __device__ void butt_intt_local(
 }
 
 __global__ void Intt8PointPerThreadPhase2OoP(
-    const uint64_t* in,
+    uint64_t* in,
     const int m,
     const int num_prime,
     const int N,
     const int start_prime_idx,
+    const int ceil_curr_limbs,
+    const int gap,
     const int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
@@ -43,16 +45,18 @@ __global__ void Intt8PointPerThreadPhase2OoP(
     int t = N / 2 / m;
     // prime idx
     int np_idx = i / (N / 8) + start_prime_idx;
+    int prime_idx =
+        np_idx + ((np_idx >= 0 && np_idx < ceil_curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
     int m_idx = N_idx / (t / 4);
     int t_idx = N_idx % (t / 4);
     // base address
-    const uint64_t* in_addr = in + np_idx * N;
+    uint64_t* in_addr = in + np_idx * N;
     uint64_t* out_addr = out + np_idx * N;
     const uint64_t* prime_table = primes;
-    uint64_t prime = prime_table[np_idx];
+    uint64_t prime = prime_table[prime_idx];
     int N_init = 2 * m_idx * t + t_idx;
     __syncthreads();
     for (int j = 0; j < 8; j++) {
@@ -65,8 +69,8 @@ __global__ void Intt8PointPerThreadPhase2OoP(
     }
     int tw_idx = m + m_idx;
     int tw_idx2 = (t / 4) * tw_idx + t_idx;
-    const uint64_t* WInv = base_inv + N * np_idx;
-    const uint64_t* WInv_ = base_inv_ + N * np_idx;
+    const uint64_t* WInv = base_inv + N * prime_idx;
+    const uint64_t* WInv_ = base_inv_ + N * prime_idx;
     for (int j = 0; j < 4; j++) {
       butt_intt_local(
           local[2 * j],
@@ -184,11 +188,13 @@ __global__ void Intt8PointPerThreadPhase2OoP(
 }
 
 __global__ void Intt8PointPerThreadPhase1OoP(
-    const uint64_t* in,
+    uint64_t* in,
     const int m,
     const int num_prime,
     const int N,
     const int start_prime_idx,
+    const int ceil_curr_limbs,
+    const int gap,
     int pad,
     int radix,
     const uint64_t* base_inv,
@@ -205,6 +211,8 @@ __global__ void Intt8PointPerThreadPhase1OoP(
     int t = N / 2 / m;
     // prime idx
     int np_idx = i / (N / 8) + start_prime_idx;
+    int prime_idx =
+        np_idx + ((np_idx >= 0 && np_idx < ceil_curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -214,9 +222,9 @@ __global__ void Intt8PointPerThreadPhase1OoP(
     const uint64_t* in_addr = in + np_idx * N;
     uint64_t* out_addr = out + np_idx * N;
     const uint64_t* prime_table = primes;
-    const uint64_t* WInv = base_inv + N * np_idx;
-    const uint64_t* WInv_ = base_inv_ + N * np_idx;
-    uint64_t prime = prime_table[np_idx];
+    const uint64_t* WInv = base_inv + N * prime_idx;
+    const uint64_t* WInv_ = base_inv_ + N * prime_idx;
+    uint64_t prime = prime_table[prime_idx];
     int N_init =
         2 * t / radix * WarpID + Warp_t + pad * (t_idx / (radix * pad));
     for (int j = 0; j < 8; j++) {
@@ -695,6 +703,8 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
     const int start_prime_idx,
     const int excluded_range_start,
     const int excluded_range_end,
+    const int curr_limbs,
+    const int gap,
     const int pad,
     const int radix,
     const uint64_t* base_inv,
@@ -712,6 +722,7 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
     int np_idx = i / (N / 8) + start_prime_idx;
     if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
       continue;
+    int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -720,9 +731,9 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
     // base address
     uint64_t* a_np = op + np_idx * N;
     const uint64_t* prime_table = primes;
-    const uint64_t* W = base_inv + N * np_idx;
-    const uint64_t* W_ = base_inv_ + N * np_idx;
-    uint64_t prime = prime_table[np_idx];
+    const uint64_t* W = base_inv + N * prime_idx;
+    const uint64_t* W_ = base_inv_ + N * prime_idx;
+    uint64_t prime = prime_table[prime_idx];
     int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
         pad * (t_idx / (radix * pad));
     for (int j = 0; j < 8; j++) {
@@ -865,6 +876,8 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
     const int start_prime_idx,
     const int excluded_range_start,
     const int excluded_range_end,
+    const int curr_limbs,
+    const int gap,
     const int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
@@ -880,6 +893,7 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
     int np_idx = num_prime - 1 - (i / (N / 8)) + start_prime_idx;
     if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
       continue;
+    int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -888,14 +902,14 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
     // base address
     uint64_t* a_np = op + np_idx * N;
     const uint64_t* prime_table = primes;
-    uint64_t prime = prime_table[np_idx];
+    uint64_t prime = prime_table[prime_idx];
     int N_init = 2 * m_idx * t + t_idx;
     for (int j = 0; j < 8; j++) {
       local[j] = *(a_np + N_init + t / 4 * j);
     }
     int tw_idx = m + m_idx;
-    const uint64_t* W = base_inv + N * np_idx;
-    const uint64_t* W_ = base_inv_ + N * np_idx;
+    const uint64_t* W = base_inv + N * prime_idx;
+    const uint64_t* W_ = base_inv_ + N * prime_idx;
     for (int j = 0; j < 4; j++) {
       butt_ntt_local(local[j], local[j + 4], W[tw_idx], W_[tw_idx], prime);
     }
@@ -1024,5 +1038,4 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
   }
 }
 
-
-} //namespace fhe
+} // namespace fhe

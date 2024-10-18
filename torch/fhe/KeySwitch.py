@@ -143,17 +143,23 @@ def KeySwitch_core(axax, swk,
                  curr_limbs, K, N):
 
     d2Tilde = Decompose(axax, curr_limbs, K, N)
+    np.savetxt("modup13_input.txt", axax.reshape(-1), fmt='%d')
     d2Tilde = ModUp(axax, d2Tilde,
                     moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq, QHatInvModq,
                     moduliP, pInvVec, pRootScalePows, QHatModp,
                     curr_limbs, K, N)
+    np.savetxt("modup13_out.txt", d2Tilde.reshape(-1), fmt='%d')
     sumMult = InnerProduct(d2Tilde, swk,
                            moduliQ, moduliP,
                            curr_limbs, K, N)
+    np.savetxt( "inner13_ax_out.txt", sumMult[0].reshape(-1),fmt='%d')
+    np.savetxt("inner13_bx_out.txt", sumMult[1].reshape(-1),fmt='%d')
     res = ModDown_ct(sumMult,
                      moduliQ, qInvVec, qRootScalePows, qRootScalePowsInv, NScaleInvModq, pHatModq, PInvModq,
                      moduliP, pInvVec, pRootScalePowsInv, NScaleInvModp, pHatInvModp,
                      curr_limbs, K, N)
+    np.savetxt( "moddown13_ax_out.txt", res[0].reshape(-1),fmt='%d')
+    np.savetxt("moddown13_bx_out.txt", res[1].reshape(-1),fmt='%d')
 
     return res
 

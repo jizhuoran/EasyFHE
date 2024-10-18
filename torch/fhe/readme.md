@@ -5,6 +5,7 @@
     - 如果存在数组tmp[2]，那么 tmp[0]对应ax，tmp[1]对应bx 【这个存放方式与openfhe相反，但是与yhh早期c++工程一致】
 - arithmetic.py中 以int结尾的函数表示输入或者输出涉及128位计算，以mod结尾的至多在内部涉及超过64位计算
 - 以ct结尾的函数表示对密文两个分量做计算，否则对单个分量操作。
+- 本工程keyswitch cuda算子仅支持logN >13 的数据.
 
 ---
 TNT/GPU-FHE 开发指南
