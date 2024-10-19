@@ -1,41 +1,56 @@
-import numpy as np
-
 import torch
-from .Ciphertext import Ciphertext
+from typing import Optional
 from .context import Context
 
 Tensor = torch.Tensor
-from typing import Callable, List, Optional, Tuple, TYPE_CHECKING, Union
 
-
-def vec_add_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
+def cv_neg(x, cur_limbs, inplace=False):
     if inplace:
-        res = torch.add_mod_(x, y, mod=mod)
+        return torch.neg_mod_(x, 0, cur_limbs=cur_limbs)
     else:
-        res = torch.add_mod(x, y, mod=mod)
-    return res
+        return torch.neg_mod(x, 0, cur_limbs=cur_limbs)
 
 
-def vec_sub_mod(x: Tensor, y: Tensor, mod: int, inplace: bool = False) -> Tensor:
+def cv_add(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
-        res = torch.sub_mod_(x, y, mod=mod)
+        return torch.add_mod_(x, y, modulus, cur_limbs=cur_limbs)
     else:
-        res = torch.sub_mod(x, y, mod=mod)
-    return res
+        return torch.add_mod(x, y, modulus, cur_limbs=cur_limbs)
 
 
-def vec_mul_mod(
-    x: Tensor,
-    y: Tensor,
-    mod,
-    barret_mu,
-    inplace: bool = False,
-) -> Tensor:
+def cv_sub(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
-        res = torch.mul_mod_(x, y, mod=mod, barret_mu=barret_mu)
+        return torch.sub_mod_(x, y, modulus, cur_limbs=cur_limbs)
     else:
-        res = torch.mul_mod(x, y, mod=mod, barret_mu=barret_mu)
-    return res
+        return torch.sub_mod(x, y, modulus, cur_limbs=cur_limbs)
+
+
+def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
+    if inplace:
+        return torch.mul_mod_(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
+    else:
+        return torch.mul_mod(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
+
+
+def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
+    if inplace:
+        return torch.add_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
+    else:
+        return torch.add_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
+
+
+def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
+    if inplace:
+        return torch.sub_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
+    else:
+        return torch.sub_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
+
+
+def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
+    if inplace:
+        return torch.mul_scalar_mod_(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
+    else:
+        return torch.mul_scalar_mod(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
 
 
 def modup_core(

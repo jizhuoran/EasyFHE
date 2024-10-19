@@ -9,344 +9,158 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <ATen/native/fhe/cuda/arithmetic.cuh>
+#include <cassert>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-#define BLOCK_SIZE (512)
-#define MAX_NUM_BLOCKS (BLOCK_SIZE)
+#define WORK_PER_THREAD (4)
+#define WARP_SIZE (32)
+#define NUM_WARPS (4)
+#define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
+#define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
+
+#define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
 
 namespace fhe {
 
-__device__ __forceinline__ uint64_t
-add_mod(uint64_t a, uint64_t b, uint64_t mod) {
-  uint64_t res = a + b;
-  return res >= mod ? res - mod : res;
-}
+/* kernel functions */
 
-__device__ __forceinline__ uint64_t
-sub_mod(uint64_t a, uint64_t b, uint64_t mod) {
-  return a >= b ? a - b : a + mod - b;
-}
+#define BARRET_PARAMS_0
+#define BARRET_PARAMS_1 , const uint64_t* barret_mu
 
-__device__ __forceinline__ uint64_t mul_mod(
-    uint64_t a,
-    uint64_t b,
-    uint64_t mod,
-    uint64_t barret_mu0,
-    uint64_t barret_mu1) {
-  uint64_t res;
-  asm("{"
-      " .reg .u64 tmp;\n\t"
-      " .reg .u64 lo, hi;\n\t"
-      // 128-bit multiply
-      " mul.lo.u64 lo, %1, %2;\n\t"
-      " mul.hi.u64 hi, %1, %2;\n\t"
-      // Multiply input and const_ratio
-      // Round 1
-      " mul.hi.u64 tmp, lo, %3;\n\t"
-      " mad.lo.cc.u64 tmp, lo, %4, tmp;\n\t"
-      " madc.hi.u64 %0, lo, %4, 0;\n\t"
-      // Round 2
-      " mad.lo.cc.u64 tmp, hi, %3, tmp;\n\t"
-      " madc.hi.u64 %0, hi, %3, %0;\n\t"
-      // This is all we care about
-      " mad.lo.u64 %0, hi, %4, %0;\n\t"
-      // Barrett subtraction
-      " mul.lo.u64 %0, %0, %5;\n\t"
-      " sub.u64 %0, lo, %0;\n\t"
-      "}"
-      : "=l"(res)
-      : "l"(a), "l"(b), "l"(barret_mu0), "l"(barret_mu1), "l"(mod));
-  return res >= mod ? res - mod : res;
-}
+#define BARRET_ARGS_0
+#define BARRET_ARGS_1 , barret_mu[l * 2], barret_mu[l * 2 + 1]
 
-__global__ void add_mod_kernel(
-    const int64_t N,
-    uint64_t* c,
-    const uint64_t* a,
-    const uint64_t* b,
-    uint64_t mod) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    c[i] = add_mod(a[i], b[i], mod);
+#define GENERATE_KERNEL(NAME, OP, B_TYPE, B_ACCESS, HAS_BARRET)      \
+  __global__ void NAME(                                              \
+      const size_t N,                                                \
+      uint64_t* c,                                                   \
+      const uint64_t* a,                                             \
+      B_TYPE b,                                                      \
+      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {              \
+    auto i = blockIdx.x * blockDim.x + threadIdx.x;                  \
+    auto l = blockIdx.y;                                             \
+    c[l * N + i] =                                                   \
+        OP(a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET); \
   }
-}
 
-__global__ void add_mod_kernel_(
-    const int64_t N,
-    uint64_t* self,
-    const uint64_t* other,
-    uint64_t mod) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    self[i] = add_mod(self[i], other[i], mod);
-  }
-}
+GENERATE_KERNEL(vadd_kernel, add_mod, const uint64_t*, b[l * N + i], 0)
+GENERATE_KERNEL(vsub_kernel, sub_mod, const uint64_t*, b[l * N + i], 0)
+GENERATE_KERNEL(vmul_kernel, mul_mod, const uint64_t*, b[l * N + i], 1)
 
-__global__ void sub_mod_kernel(
-    const int64_t N,
-    uint64_t* c,
-    const uint64_t* a,
-    const uint64_t* b,
-    uint64_t mod) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    c[i] = sub_mod(a[i], b[i], mod);
-  }
-}
+GENERATE_KERNEL(vadd_scalar_kernel, add_mod, const uint64_t, b, 0)
+GENERATE_KERNEL(vsub_scalar_kernel, sub_mod, const uint64_t, b, 0)
+GENERATE_KERNEL(vmul_scalar_kernel, mul_mod, const uint64_t, b, 1)
 
-__global__ void sub_mod_kernel_(
-    const int64_t N,
-    uint64_t* self,
-    const uint64_t* other,
-    uint64_t mod) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    self[i] = sub_mod(self[i], other[i], mod);
-  }
-}
+GENERATE_KERNEL(vneg_kernel, neg_mod, const uint64_t, b, 0)
 
-__global__ void mul_mod_kernel(
-    const int64_t N,
-    uint64_t* c,
-    const uint64_t* a,
-    const uint64_t* b,
-    uint64_t mod,
-    const uint64_t* barret_mu) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    c[i] = mul_mod(a[i], b[i], mod, barret_mu[0], barret_mu[1]);
-  }
-}
-
-__global__ void mul_mod_kernel_(
-    const int64_t N,
-    uint64_t* self,
-    const uint64_t* other,
-    uint64_t mod,
-    const uint64_t* barret_mu) {
-  int64_t i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i < N) {
-    self[i] = mul_mod(self[i], other[i], mod, barret_mu[0], barret_mu[1]);
-  }
-}
+#undef BARRET_PARAMS_0
+#undef BARRET_PARAMS_1
+#undef BARRET_ARGS_0
+#undef BARRET_ARGS_1
+#undef GENERATE_KERNEL
 
 } // namespace fhe
 
 namespace at::native {
 
-static void add_mod_template(
-    Tensor& c,
-    const Tensor& a,
-    const Tensor& b,
-    uint64_t mod) {
-  AT_DISPATCH_V2(
-      a.scalar_type(),
-      "add_mod_cuda",
-      AT_WRAP([&]() {
-        auto a_ptr = reinterpret_cast<uint64_t*>(a.data_ptr<uint64_t>());
-        auto b_ptr = reinterpret_cast<uint64_t*>(b.data_ptr<uint64_t>());
-        auto c_ptr =
-            reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
-        auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::add_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
-            N, c_ptr, a_ptr, b_ptr, mod);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+/* kernel launchers */
 
-static void add_mod_template_(Tensor& self, const Tensor& other, uint64_t mod) {
-  AT_DISPATCH_V2(
-      self.scalar_type(),
-      "add_mod_cuda_",
-      AT_WRAP([&]() {
-        auto self_ptr = reinterpret_cast<uint64_t*>(self.data_ptr<uint64_t>());
-        auto other_ptr =
-            reinterpret_cast<uint64_t*>(other.data_ptr<uint64_t>());
-        auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::add_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
-            N, self_ptr, other_ptr, mod);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+#define BARRET_PARAMS_0
+#define BARRET_PARAMS_1 , const Tensor& barret_mu
 
-static void sub_mod_template(
-    Tensor& c,
-    const Tensor& a,
-    const Tensor& b,
-    uint64_t mod) {
-  AT_DISPATCH_V2(
-      a.scalar_type(),
-      "sub_mod_cuda",
-      AT_WRAP([&]() {
-        auto a_ptr = reinterpret_cast<uint64_t*>(a.data_ptr<uint64_t>());
-        auto b_ptr = reinterpret_cast<uint64_t*>(b.data_ptr<uint64_t>());
-        auto c_ptr =
-            reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
-        auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::sub_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
-            N, c_ptr, a_ptr, b_ptr, mod);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+#define BARRET_ARGS_0
+#define BARRET_ARGS_1 , barret_mu.data_ptr<uint64_t>()
 
-static void sub_mod_template_(Tensor& self, const Tensor& other, uint64_t mod) {
-  AT_DISPATCH_V2(
-      self.scalar_type(),
-      "sub_mod_cuda_",
-      AT_WRAP([&]() {
-        auto self_ptr = reinterpret_cast<uint64_t*>(self.data_ptr<uint64_t>());
-        auto other_ptr =
-            reinterpret_cast<uint64_t*>(other.data_ptr<uint64_t>());
-        auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::sub_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
-            N, self_ptr, other_ptr, mod);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+#define GENERATE_KERNEL(NAME, B_TYPE, B_ACCESS, HAS_BARRET)   \
+  static void NAME##_template(                                \
+      Tensor& c,                                              \
+      const Tensor& a,                                        \
+      const B_TYPE& b,                                        \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,           \
+      int64_t cur_limbs) {                                    \
+    TORCH_INTERNAL_ASSERT(a.dim() == 2);                      \
+    auto N = static_cast<int>(a.sizes()[1]);                  \
+    TORCH_INTERNAL_ASSERT(                                    \
+        (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
+        (N == 1 << 17) || (N == 1 << 18));                    \
+    fhe::NAME##_kernel<<<                                     \
+        dim3(num_blocks(N), cur_limbs),                       \
+        dim3(BLOCK_SIZE, 1)>>>(                               \
+        N,                                                    \
+        c.mutable_data_ptr<uint64_t>(),                       \
+        a.data_ptr<uint64_t>(),                               \
+        B_ACCESS,                                             \
+        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);   \
+    C10_CUDA_KERNEL_LAUNCH_CHECK();                           \
+  }
 
-static void mul_mod_template(
-    Tensor& c,
-    const Tensor& a,
-    const Tensor& b,
-    uint64_t mod,
-    const Tensor& barret_mu) {
-  AT_DISPATCH_V2(
-      a.scalar_type(),
-      "mul_mod_cuda",
-      AT_WRAP([&]() {
-        auto a_ptr = reinterpret_cast<uint64_t*>(a.data_ptr<uint64_t>());
-        auto b_ptr = reinterpret_cast<uint64_t*>(b.data_ptr<uint64_t>());
-        auto c_ptr =
-            reinterpret_cast<uint64_t*>(c.mutable_data_ptr<uint64_t>());
-        auto mu_ptr = reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
-        auto N = a.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::mul_mod_kernel<<<grid, block_work_size(), 0, stream>>>(
-            N, c_ptr, a_ptr, b_ptr, mod, mu_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+GENERATE_KERNEL(vadd, Tensor, b.data_ptr<uint64_t>(), 0)
+GENERATE_KERNEL(vsub, Tensor, b.data_ptr<uint64_t>(), 0)
+GENERATE_KERNEL(vmul, Tensor, b.data_ptr<uint64_t>(), 1)
+GENERATE_KERNEL(vadd_scalar, Scalar, b.toUInt64(), 0)
+GENERATE_KERNEL(vsub_scalar, Scalar, b.toUInt64(), 0)
+GENERATE_KERNEL(vmul_scalar, Scalar, b.toUInt64(), 1)
+GENERATE_KERNEL(vneg, Scalar, 0, 0)
 
-static void mul_mod_template_(
-    Tensor& self,
-    const Tensor& other,
-    uint64_t mod,
-    const Tensor& barret_mu) {
-  AT_DISPATCH_V2(
-      self.scalar_type(),
-      "mul_mod_cuda_",
-      AT_WRAP([&]() {
-        auto self_ptr = reinterpret_cast<uint64_t*>(self.data_ptr<uint64_t>());
-        auto other_ptr =
-            reinterpret_cast<uint64_t*>(other.data_ptr<uint64_t>());
-        auto mu_ptr = reinterpret_cast<uint64_t*>(barret_mu.data_ptr<uint64_t>());
-        auto N = self.numel();
-        TORCH_INTERNAL_ASSERT(
-            N > 0 && N <= std::numeric_limits<int32_t>::max());
-        auto grid = (N + block_work_size() - 1) / block_work_size();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::mul_mod_kernel_<<<grid, block_work_size(), 0, stream>>>(
-            N, self_ptr, other_ptr, mod, mu_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+#undef BARRET_PARAMS_0
+#undef BARRET_PARAMS_1
+#undef BARRET_ARGS_0
+#undef BARRET_ARGS_1
+#undef GENERATE_KERNEL
 
-Tensor add_mod_cuda(const Tensor& a, const Tensor& b, const Scalar& mod) {
-  Tensor c = at::empty_like(a);
-  add_mod_template(c, a, b, mod.toUInt64());
-  return c;
-}
+/* functions */
 
-Tensor& add_mod_cuda_(Tensor& self, const Tensor& other, const Scalar& mod) {
-  add_mod_template_(self, other, mod.toUInt64());
-  return self;
-}
+#define BARRET_PARAMS_0
+#define BARRET_PARAMS_1 , const Tensor& barret_mu
 
-Tensor& add_mod_out_cuda(
-    const Tensor& a,
-    const Tensor& b,
-    const Scalar& mod,
-    Tensor& c) {
-  add_mod_template(c, a, b, mod.toUInt64());
-  return c;
-}
+#define BARRET_ARGS_0
+#define BARRET_ARGS_1 , barret_mu
 
-Tensor sub_mod_cuda(const Tensor& a, const Tensor& b, const Scalar& mod) {
-  Tensor c = at::empty_like(a);
-  sub_mod_template(c, a, b, mod.toUInt64());
-  return c;
-}
+#define GENERATE_FUNCTION(NAME, B_TYPE, HAS_BARRET)                    \
+  Tensor NAME##_cuda(                                                  \
+      const Tensor& a,                                                 \
+      const B_TYPE& b,                                                 \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
+      int64_t cur_limbs) {                                             \
+    Tensor c = at::empty_like(a);                                      \
+    NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
+    return c;                                                          \
+  }                                                                    \
+                                                                       \
+  Tensor& NAME##_cuda_(                                                \
+      Tensor& self,                                                    \
+      const B_TYPE& other,                                             \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
+      int64_t cur_limbs) {                                             \
+    NAME##_template(                                                   \
+        self, self, other, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);   \
+    return self;                                                       \
+  }                                                                    \
+                                                                       \
+  Tensor& NAME##_out_cuda(                                             \
+      const Tensor& a,                                                 \
+      const B_TYPE& b,                                                 \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
+      int64_t cur_limbs,                                               \
+      Tensor& c) {                                                     \
+    NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
+    return c;                                                          \
+  }
 
-Tensor& sub_mod_cuda_(Tensor& self, const Tensor& other, const Scalar& mod) {
-  sub_mod_template_(self, other, mod.toUInt64());
-  return self;
-}
+GENERATE_FUNCTION(vadd, Tensor, 0)
+GENERATE_FUNCTION(vsub, Tensor, 0)
+GENERATE_FUNCTION(vmul, Tensor, 1)
+GENERATE_FUNCTION(vadd_scalar, Scalar, 0)
+GENERATE_FUNCTION(vsub_scalar, Scalar, 0)
+GENERATE_FUNCTION(vmul_scalar, Scalar, 1)
+GENERATE_FUNCTION(vneg, Scalar, 0)
 
-Tensor& sub_mod_out_cuda(
-    const Tensor& a,
-    const Tensor& b,
-    const Scalar& mod,
-    Tensor& c) {
-  sub_mod_template(c, a, b, mod.toUInt64());
-  return c;
-}
-
-Tensor mul_mod_cuda(
-    const Tensor& a,
-    const Tensor& b,
-    const Scalar& mod,
-    const Tensor& barret_mu) {
-  TORCH_CHECK(2 == barret_mu.numel(), "The number of barret_mu should be two!");
-  Tensor c = at::empty_like(a);
-  mul_mod_template(c, a, b, mod.toUInt64(), barret_mu);
-  return c;
-}
-
-Tensor& mul_mod_cuda_(
-    Tensor& self,
-    const Tensor& other,
-    const Scalar& mod,
-    const Tensor& barret_mu) {
-  TORCH_CHECK(2 == barret_mu.numel(), "The number of barret_mu should be two!");
-  mul_mod_template_(self, other, mod.toUInt64(), barret_mu);
-  return self;
-}
-
-Tensor& mul_mod_out_cuda(
-    const Tensor& a,
-    const Tensor& b,
-    const Scalar& mod,
-    const Tensor& barret_mu,
-    Tensor& c) {
-  TORCH_CHECK(2 == barret_mu.numel(), "The number of barret_mu should be two!");
-  mul_mod_template(c, a, b, mod.toUInt64(), barret_mu);
-  return c;
-}
+#undef BARRET_PARAMS_0
+#undef BARRET_PARAMS_1
+#undef BARRET_ARGS_0
+#undef BARRET_ARGS_1
+#undef GENERATE_FUNCTION
 
 } // namespace at::native
