@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 from .Ciphertext import Ciphertext, Cipher
+from .context import Context
 from . import functional as F
 from . import arithmetic
 from . import KeySwitch
@@ -9,6 +10,25 @@ from .data.bsConst import *
 Tensor = torch.Tensor
 
 
+def ct_convert(func):
+    def wrapper(*args, **kw):
+        args_list = list(args)
+        for i in range(len(args_list)):
+            if isinstance(args_list[i], Ciphertext):
+                dim = args_list[i].cv.shape[0]
+                cv = [torch.from_numpy(args_list[i].cv[j]).cuda() for j in range(dim)]
+                cipher = Cipher(cv, args_list[i].curr_limbs)
+                args_list[i] = cipher
+            if isinstance(args_list[i], Context):
+                args_list[i].moduliQ = torch.from_numpy(args_list[i].moduliQ).cuda()
+        new_args = tuple(args_list)
+        res = func(*new_args, **kw)
+        return Ciphertext(res.cv.cpu().numpy(), res.curr_limbs)
+
+    return wrapper
+
+
+@ct_convert
 def cipher_add(in0, in1, cryptoContext):
     assert in0.cur_limbs == in1.cur_limbs
     cv = [
@@ -18,6 +38,7 @@ def cipher_add(in0, in1, cryptoContext):
     return Cipher(cv, in0.cur_limbs)
 
 
+@ct_convert
 def cipher_sub(in0, in1, cryptoContext):
     assert in0.cur_limbs == in1.cur_limbs
     cv = [
@@ -27,6 +48,7 @@ def cipher_sub(in0, in1, cryptoContext):
     return Cipher(cv, in0.cur_limbs)
 
 
+@ct_convert
 def cipher_mul(in0, in1, cryptoContext):
     assert len(in0.cv) == 2 and len(in1.cv) == 2
     assert in0.cur_limbs == in1.cur_limbs
@@ -57,14 +79,17 @@ def cipher_mul(in0, in1, cryptoContext):
     return Cipher([ax, bx, cx], in0.cur_limbs)
 
 
+@ct_convert
 def homo_add(in0, in1, cryptoContext):
     return cipher_add(in0, in1, cryptoContext)
 
 
+@ct_convert
 def homo_sub(in0, in1, cryptoContext):
     return cipher_sub(in0, in1, cryptoContext)
 
 
+@ct_convert
 def homo_mul(in0, in1, cryptoContext):
     cipher = cipher_mul(in0, in1, cryptoContext)
     # TODO keyswitch

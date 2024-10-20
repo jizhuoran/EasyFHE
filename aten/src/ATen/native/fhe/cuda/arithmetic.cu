@@ -115,44 +115,44 @@ GENERATE_KERNEL(vneg, Scalar, 0, 0)
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu
 
-#define GENERATE_FUNCTION(NAME, B_TYPE, HAS_BARRET)                    \
-  Tensor NAME##_cuda(                                                  \
-      const Tensor& a,                                                 \
-      const B_TYPE& b,                                                 \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
-      int64_t cur_limbs) {                                             \
-    Tensor c = at::empty_like(a);                                      \
-    NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
-    return c;                                                          \
-  }                                                                    \
-                                                                       \
-  Tensor& NAME##_cuda_(                                                \
-      Tensor& self,                                                    \
-      const B_TYPE& other,                                             \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
-      int64_t cur_limbs) {                                             \
-    NAME##_template(                                                   \
-        self, self, other, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);   \
-    return self;                                                       \
-  }                                                                    \
-                                                                       \
-  Tensor& NAME##_out_cuda(                                             \
-      const Tensor& a,                                                 \
-      const B_TYPE& b,                                                 \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                    \
-      int64_t cur_limbs,                                               \
-      Tensor& c) {                                                     \
-    NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
-    return c;                                                          \
+#define GENERATE_FUNCTION(NAME, B_TYPE, HAS_BARRET)                       \
+  Tensor NAME##_mod_cuda(                                                 \
+      const Tensor& a,                                                    \
+      const B_TYPE& b,                                                    \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
+      int64_t cur_limbs) {                                                \
+    Tensor c = at::empty_like(a);                                         \
+    v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
+    return c;                                                             \
+  }                                                                       \
+                                                                          \
+  Tensor& NAME##_mod_cuda_(                                               \
+      Tensor& self,                                                       \
+      const B_TYPE& other,                                                \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
+      int64_t cur_limbs) {                                                \
+    v##NAME##_template(                                                   \
+        self, self, other, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);      \
+    return self;                                                          \
+  }                                                                       \
+                                                                          \
+  Tensor& NAME##_mod_out_cuda(                                            \
+      const Tensor& a,                                                    \
+      const B_TYPE& b,                                                    \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
+      int64_t cur_limbs,                                                  \
+      Tensor& c) {                                                        \
+    v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs); \
+    return c;                                                             \
   }
 
-GENERATE_FUNCTION(vadd, Tensor, 0)
-GENERATE_FUNCTION(vsub, Tensor, 0)
-GENERATE_FUNCTION(vmul, Tensor, 1)
-GENERATE_FUNCTION(vadd_scalar, Scalar, 0)
-GENERATE_FUNCTION(vsub_scalar, Scalar, 0)
-GENERATE_FUNCTION(vmul_scalar, Scalar, 1)
-GENERATE_FUNCTION(vneg, Scalar, 0)
+GENERATE_FUNCTION(add, Tensor, 0)
+GENERATE_FUNCTION(sub, Tensor, 0)
+GENERATE_FUNCTION(mul, Tensor, 1)
+GENERATE_FUNCTION(add_scalar, Scalar, 0)
+GENERATE_FUNCTION(sub_scalar, Scalar, 0)
+GENERATE_FUNCTION(mul_scalar, Scalar, 1)
+GENERATE_FUNCTION(neg, Scalar, 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1

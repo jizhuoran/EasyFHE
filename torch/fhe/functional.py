@@ -1,9 +1,26 @@
 import torch
 from typing import Optional
 from .context import Context
+import numpy as np
 
 Tensor = torch.Tensor
 
+
+def cv_convert(func):
+    def wrapper(*args, **kw):
+        args_list = list(args)
+        for i in range(len(args_list)):
+            if isinstance(args_list[i], np.ndarray):
+                args_list[i] = torch.from_numpy(args_list[i])
+                args_list[i] = args_list[i].cuda()
+        new_args = tuple(args_list)
+        res = func(*new_args, **kw)
+        return res.cpu().numpy()
+
+    return wrapper
+
+
+@cv_convert
 def cv_neg(x, cur_limbs, inplace=False):
     if inplace:
         return torch.neg_mod_(x, 0, cur_limbs=cur_limbs)
@@ -11,6 +28,7 @@ def cv_neg(x, cur_limbs, inplace=False):
         return torch.neg_mod(x, 0, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_add(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_mod_(x, y, modulus, cur_limbs=cur_limbs)
@@ -18,6 +36,7 @@ def cv_add(x, y, modulus, cur_limbs, inplace=False):
         return torch.add_mod(x, y, modulus, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_sub(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_mod_(x, y, modulus, cur_limbs=cur_limbs)
@@ -25,6 +44,7 @@ def cv_sub(x, y, modulus, cur_limbs, inplace=False):
         return torch.sub_mod(x, y, modulus, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_mod_(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
@@ -32,6 +52,7 @@ def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
         return torch.mul_mod(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
@@ -39,6 +60,7 @@ def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
         return torch.add_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
@@ -46,6 +68,7 @@ def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
         return torch.sub_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
 
+@cv_convert
 def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_scalar_mod_(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
