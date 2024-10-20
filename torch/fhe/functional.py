@@ -5,6 +5,14 @@ import numpy as np
 
 Tensor = torch.Tensor
 
+def vec_add_mod(x, y, MOD):
+    return [(a+b)%MOD for a, b in zip(x, y)]
+
+def vec_sub_mod(x, y, MOD):
+    return [(a-b)%MOD for a, b in zip(x, y)]
+
+def vec_mul_mod(x, y, MOD):
+    return [(a*b)%MOD for a, b in zip(x, y)]
 
 def cv_convert(func):
     def wrapper(*args, **kw):

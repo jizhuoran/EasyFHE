@@ -11,7 +11,7 @@
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-#define WORK_PER_THREAD (4)
+#define WORK_PER_THREAD (1)
 #define WARP_SIZE (32)
 #define NUM_WARPS (4)
 #define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)

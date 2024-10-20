@@ -4,9 +4,57 @@ from .Ciphertext import Ciphertext
 from .context import Context
 from . import homo_ops
 from . import KeySwitch
-from .data import Hmult3_N16_L12_K3 as HMult3
+# from .data import Hmult3_N16_L12_K3 as HMult3
 from .data import params_ks_13 as N8192KS
 Tensor = torch.Tensor
+
+# my_dict = {
+#     'moduliQ12_N65536' : HMult3.moduliQ12_N65536,
+#     'moduliP3_N65536' : HMult3.moduliP3_N65536,
+#     'rootsQ12_N65536' : HMult3.rootsQ12_N65536,
+#     'rootsP3_N65536' : HMult3.rootsP3_N65536,
+#     'swk' : HMult3.swk,
+#     'cipher1_' : HMult3.cipher1_,
+#     'axax0' : HMult3.axax0,
+#     'sumMult0' : HMult3.sumMult0,
+#     'cipher1_mult1' : HMult3.cipher1_mult1,
+#     'cipher1_mult1_rescale1' : HMult3.cipher1_mult1_rescale1,
+#     'axax1' : HMult3.axax1,
+#     'sumMult1' : HMult3.sumMult1,
+#     'cipher1_mult2_rescale1' : HMult3.cipher1_mult2_rescale1,
+#     'cipher1_mult2_rescale2' : HMult3.cipher1_mult2_rescale2,
+#     'axax2' : HMult3.axax2,
+#     'sumMult2' : HMult3.sumMult2,
+#     'cipher1_mult3_rescale2' : HMult3.cipher1_mult3_rescale2,
+#     'cipher1_mult3_rescale3' : HMult3.cipher1_mult3_rescale3
+# }
+
+# np.savez('torch/fhe/data/Hmult3_N16_L12_K3', **my_dict)  
+
+class Hmult3_N16_L12_K3:
+    def __init__(self):
+        my_dict = np.load('torch/fhe/data/Hmult3_N16_L12_K3.npz', allow_pickle=True)
+        self.moduliQ12_N65536 = my_dict["moduliQ12_N65536"]
+        self.moduliP3_N65536 = my_dict["moduliP3_N65536"]
+        self.rootsQ12_N65536 = my_dict["rootsQ12_N65536"]
+        self.rootsP3_N65536 = my_dict["rootsP3_N65536"]
+        self.swk = my_dict["swk"]
+        self.cipher1_ = my_dict["cipher1_"]
+        self.axax0 = my_dict["axax0"]
+        self.sumMult0 = my_dict["sumMult0"]
+        self.cipher1_mult1 = my_dict["cipher1_mult1"]
+        self.cipher1_mult1_rescale1 = my_dict["cipher1_mult1_rescale1"]
+        self.axax1 = my_dict["axax1"]
+        self.sumMult1 = my_dict["sumMult1"]
+        self.cipher1_mult2_rescale1 = my_dict["cipher1_mult2_rescale1"]
+        self.cipher1_mult2_rescale2 = my_dict["cipher1_mult2_rescale2"]
+        self.axax2 = my_dict["axax2"]
+        self.sumMult2 = my_dict["sumMult2"]
+        self.cipher1_mult3_rescale2 = my_dict["cipher1_mult3_rescale2"]
+        self.cipher1_mult3_rescale3 = my_dict["cipher1_mult3_rescale3"]
+
+HMult3 = Hmult3_N16_L12_K3()
+
 
 def compare_and_print(res, golden, test_name):
     # compare = np.array_equal(res, golden)

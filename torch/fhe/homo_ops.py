@@ -17,13 +17,18 @@ def ct_convert(func):
             if isinstance(args_list[i], Ciphertext):
                 dim = args_list[i].cv.shape[0]
                 cv = [torch.from_numpy(args_list[i].cv[j]).cuda() for j in range(dim)]
+                cv[0], cv[1] = cv[1], cv[0]
                 cipher = Cipher(cv, args_list[i].curr_limbs)
                 args_list[i] = cipher
             if isinstance(args_list[i], Context):
+                cryptoContext = args_list[i]
                 args_list[i].moduliQ = torch.from_numpy(args_list[i].moduliQ).cuda()
         new_args = tuple(args_list)
         res = func(*new_args, **kw)
-        return Ciphertext(res.cv.cpu().numpy(), res.curr_limbs)
+        cryptoContext.moduliQ = cryptoContext.moduliQ.cpu().numpy()
+        cv = res.cv
+        cv[0], cv[1] = cv[1], cv[0]
+        return Ciphertext(np.array(cv), res.cur_limbs)
 
     return wrapper
 
@@ -52,10 +57,10 @@ def cipher_sub(in0, in1, cryptoContext):
 def cipher_mul(in0, in1, cryptoContext):
     assert len(in0.cv) == 2 and len(in1.cv) == 2
     assert in0.cur_limbs == in1.cur_limbs
-    ax = F.cv_mul(
+    bx = F.cv_mul(
         in0.cv[0], in1.cv[0], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
     )
-    bx = F.cv_add(
+    ax = F.cv_add(
         F.cv_mul(
             in0.cv[0],
             in1.cv[1],
@@ -73,10 +78,32 @@ def cipher_mul(in0, in1, cryptoContext):
         cryptoContext.moduliQ,
         in0.cur_limbs,
     )
-    cx = F.cv_mul(
+    axax = F.cv_mul(
         in0.cv[1], in1.cv[1], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
     )
-    return Cipher([ax, bx, cx], in0.cur_limbs)
+
+    return Cipher([bx, ax, axax], in0.cur_limbs)
+
+
+@ct_convert
+def cipher_square(in0, cryptoContext):
+    assert len(in0.cv) == 2
+    bx = F.cv_mul(
+        in0.cv[0], in0.cv[0], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+    )
+    ax = F.cv_mul(
+        in0.cv[0],
+        in0.cv[1],
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
+        in0.cur_limbs,
+    )
+    ax = F.cv_add(ax, ax, cryptoContext.moduliQ, in0.cur_limbs)
+    axax = F.cv_mul(
+        in0.cv[1], in0.cv[1], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+    )
+
+    return Cipher([bx, ax, axax], in0.cur_limbs)
 
 
 @ct_convert
@@ -96,42 +123,31 @@ def homo_mul(in0, in1, cryptoContext):
     return None
 
 
-# def polys_add_mod(a, b, MOD):
-#     assert min(a.shape[0], b.shape[0]) >= len(MOD)
-#     curr_limbs = len(MOD)
-#     N = a.shape[1]
-#     c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
-#     a_ = torch.from_numpy(a[:curr_limbs]).cuda()
-#     b_ = torch.from_numpy(b[:curr_limbs]).cuda()
-#     for i, val in enumerate(MOD):
-#         c_[i] = F.vec_add_mod(a_[i], b_[i], val)
-#     c = c_.cpu().numpy()
-#     return c
+def polys_add_mod(a, b, MOD):
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    c = []
+    for i, val in enumerate(MOD):
+        c.append(F.vec_add_mod(a[i].tolist(), b[i].tolist(), val))
+    c = np.array(c, dtype=np.uint64)
+    return c
 
-# def polys_sub_mod(a, b, MOD):
-#     assert min(a.shape[0], b.shape[0]) >= len(MOD)
-#     curr_limbs = len(MOD)
-#     N = a.shape[1]
-#     c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
-#     a_ = torch.from_numpy(a[:curr_limbs]).cuda()
-#     b_ = torch.from_numpy(b[:curr_limbs]).cuda()
-#     for i, val in enumerate(MOD):
-#         c_[i] = F.vec_sub_mod(a_[i], b_[i], val)
-#     c = c_.cpu().numpy()
-#     return c
 
-# def polys_mul_mod(a, b, MOD, mu):
-#     assert min(a.shape[0], b.shape[0]) >= len(MOD)
-#     curr_limbs = len(MOD)
-#     N = a.shape[1]
-#     c_ = torch.zeros((curr_limbs,N), dtype=torch.uint64, device='cuda')
-#     a_ = torch.from_numpy(a[:curr_limbs]).cuda()
-#     b_ = torch.from_numpy(b[:curr_limbs]).cuda()
-#     mu_ = torch.from_numpy(mu).cuda()
-#     for i, val in enumerate(MOD):
-#         c_[i] = F.vec_mul_mod(a_[i], b_[i], val, mu_[i])
-#     c = c_.cpu().numpy()
-#     return c
+def polys_sub_mod(a, b, MOD):
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    c = []
+    for i, val in enumerate(MOD):
+        c.append(F.vec_sub_mod(a[i].tolist(), b[i].tolist(), val))
+    c = np.array(c, dtype=np.uint64)
+    return c
+
+
+def polys_mul_mod(a, b, MOD, mu):
+    assert min(a.shape[0], b.shape[0]) >= len(MOD)
+    c = []
+    for i, val in enumerate(MOD):
+        c.append(F.vec_mul_mod(a[i].tolist(), b[i].tolist(), val))
+    c = np.array(c, dtype=np.uint64)
+    return c
 
 
 # def polys_add_cnst_mod(a, scalar, MOD):
@@ -197,23 +213,23 @@ def homo_mul(in0, in1, cryptoContext):
 
 
 # for dim(ct) = 2 only
-# def homo_mult_core(in0, in1, MOD, MU):
-#     dim = 3
-#     curr_limbs = len(MOD)
-#     N = in0.cv.shape[2]
-#     res = np.zeros((dim, curr_limbs, N), dtype=np.uint64)
+def homo_mult_core(in0, in1, MOD, MU):
+    dim = 3
+    curr_limbs = len(MOD)
+    N = in0.cv.shape[2]
+    res = np.zeros((dim, curr_limbs, N), dtype=np.uint64)
 
-#     res[0] = polys_add_mod(in0.cv[0], in0.cv[1], MOD)  # res.ax
-#     axbx2 = polys_add_mod(in1.cv[0], in1.cv[1], MOD)
-#     res[0] = polys_mul_mod(res[0], axbx2, MOD, MU)
-#     res[2] = polys_mul_mod(
-#         in0.cv[0], in1.cv[0], MOD, MU
-#     )  # axax, use in the next KS step
-#     res[1] = polys_mul_mod(in0.cv[1], in1.cv[1], MOD, MU)  # res.bx
-#     tmp = polys_add_mod(res[1], res[2], MOD)
-#     res[0] = polys_sub_mod(res[0], tmp, MOD)
+    res[0] = polys_add_mod(in0.cv[0], in0.cv[1], MOD)  # res.ax
+    axbx2 = polys_add_mod(in1.cv[0], in1.cv[1], MOD)
+    res[0] = polys_mul_mod(res[0], axbx2, MOD, MU)
+    res[2] = polys_mul_mod(
+        in0.cv[0], in1.cv[0], MOD, MU
+    )  # axax, use in the next KS step
+    res[1] = polys_mul_mod(in0.cv[1], in1.cv[1], MOD, MU)  # res.bx
+    tmp = polys_add_mod(res[1], res[2], MOD)
+    res[0] = polys_sub_mod(res[0], tmp, MOD)
 
-#     return res
+    return res
 
 
 def homo_mult(in0, in1, cryptoContext):
@@ -239,9 +255,10 @@ def homo_mult(in0, in1, cryptoContext):
     PInvModq = cryptoContext.PInvModq
     q_mu = cryptoContext.q_mu
 
-    res = homo_mult_core(in0, in1, moduliQ[:curr_limbs], q_mu[:curr_limbs])
+    res = cipher_mul(in0, in1, cryptoContext)
+
     tmp = KeySwitch.KeySwitch_core(
-        res[2],
+        res.cv[2],
         swk,
         moduliQ,
         qInvVec,
@@ -263,12 +280,9 @@ def homo_mult(in0, in1, cryptoContext):
         N,
     )
 
-    res = res[:2]
-    MOD = moduliQ[:curr_limbs]
-    res[0] = polys_add_mod(res[0], tmp[0], MOD)  # res.ax
-    res[1] = polys_add_mod(res[1], tmp[1], MOD)  # res.bx
-
-    return Ciphertext(res, curr_limbs)
+    res.cv = res.cv[:2]
+    tmp = Ciphertext(np.array([tmp[0].copy(), tmp[1].copy()]), res.curr_limbs)
+    return cipher_add(res, tmp, cryptoContext)
 
 
 def homo_square_core(in0, MOD, MU):
