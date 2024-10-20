@@ -45,26 +45,24 @@ __global__ void modup_step_two_simple(
 }
 
 __global__ void const_mult_batch(
-    const int degree,
+    size_t degree,
     const uint64_t* primes,
     const uint64_t* op1,
     const uint64_t* op2,
     const uint64_t* op2_psinv,
     const int start_prime_idx,
     const int batch,
+    const int start_op1_idx,
     uint64_t* to) {
   STRIDED_LOOP_START(degree * batch, i);
   const int op2_idx = i / degree;
   const int prime_idx = op2_idx + start_prime_idx;
   const auto prime = primes[prime_idx];
   uint64_t out = mul_and_reduce_shoup(
-      op1[start_prime_idx * degree + i],
-      op2[op2_idx],
-      op2_psinv[op2_idx],
-      prime);
+      op1[start_op1_idx * degree + i], op2[op2_idx], op2_psinv[op2_idx], prime);
   if (out >= prime)
     out -= prime;
-  to[start_prime_idx * degree + i] = out;
+  to[start_op1_idx * degree + i] = out;
   STRIDED_LOOP_END;
 }
 
@@ -107,6 +105,9 @@ __global__ void modup_step_two_kernel(
     const uint64_t* ptr,
     const int begin_idx,
     const int degree,
+    const int alpha,
+    const int curr_limbs,
+    const int level,
     const uint64_t* primes,
     const uint64_t* barrett_ratios,
     const uint64_t* barrett_Ks,
@@ -125,20 +126,26 @@ __global__ void modup_step_two_kernel(
       (degree * end_length + unroll_number - 1) / unroll_number, i);
   const int degree_idx = unroll_number * (i / end_length);
   const int hat_mod_end_idx = i % end_length;
-  const int out_prime_idx =
+  const int out_idx =
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
   uint128_t4 accum = accumulate_in_modup(
-      ptr, degree, s_hat_mod_end, start_length, degree_idx, hat_mod_end_idx);
-  const auto prime = primes[out_prime_idx];
-  const auto barret_ratio = barrett_ratios[out_prime_idx];
-  const auto barret_k = barrett_Ks[out_prime_idx];
+      ptr, degree, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
+  int gap = level - end_length;
+  int prime_idx = out_idx +
+      (((out_idx >= 0 && out_idx < begin_idx) ||
+        (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
+           ? 0
+           : gap);
+  const auto prime = primes[prime_idx];
+  const auto barret_ratio = barrett_ratios[prime_idx];
+  const auto barret_k = barrett_Ks[prime_idx];
   {
     uint64_t out =
         barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
     uint64_t out2 =
         barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
     asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_prime_idx * degree + degree_idx),
+            to + out_idx * degree + degree_idx),
         "l"(out),
         "l"(out2));
   }
@@ -148,7 +155,7 @@ __global__ void modup_step_two_kernel(
     uint64_t out2 =
         barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
     asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_prime_idx * degree + degree_idx + 2),
+            to + out_idx * degree + degree_idx + 2),
         "l"(out),
         "l"(out2));
   }
@@ -178,7 +185,7 @@ __global__ void moddown_kernel(
   const int degree_idx = unroll_number * (i / end_length);
   const int out_prime_idx = i % end_length;
   uint128_t4 accum = accumulate_in_modup(
-      ptr, degree_, hat_mod_end, start_length, degree_idx, out_prime_idx);
+      ptr, degree_, s_hat_mod_end, start_length, degree_idx, out_prime_idx);
   const auto prime = d_primes[out_prime_idx];
   const auto barret_ratio = d_barret_ratio[out_prime_idx];
   const auto barret_k = d_barret_k[out_prime_idx];
@@ -245,22 +252,24 @@ static void iNTT_impl(
     uint64_t* op_ptr,
     int64_t start_prime_idx,
     int64_t batch,
+    int64_t curr_limbs,
+    int64_t level,
     int64_t param_degree,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& param_primes,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  dim3 gridDim(2048);
-  dim3 blockDim(256);
-  const int per_thread_ntt_size = 8;
-  const int first_stage_radix_size = 256;
-  const int second_radix_size = param_degree / first_stage_radix_size;
-  const int pad = 4;
-  const int per_thread_storage =
-      blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
   AT_DISPATCH_V2(
       kUInt64,
       "iNTT_cuda",
       AT_WRAP([&]() {
+        dim3 gridDim(2048);
+        dim3 blockDim(256);
+        const int per_thread_ntt_size = 8;
+        const int first_stage_radix_size = 256;
+        const int second_radix_size = param_degree / first_stage_radix_size;
+        const int pad = 4;
+        const int per_thread_storage =
+            blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
         auto inverse_power_of_roots_div_two_ptr = reinterpret_cast<uint64_t*>(
             inverse_power_of_roots_div_two.data_ptr<uint64_t>());
         auto param_primes_ptr =
@@ -268,6 +277,8 @@ static void iNTT_impl(
         auto inverse_scaled_power_of_roots_div_two_ptr =
             reinterpret_cast<uint64_t*>(
                 inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
+        int gap = level - curr_limbs;
+
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::Intt8PointPerThreadPhase2OoP<<<
             gridDim,
@@ -279,6 +290,8 @@ static void iNTT_impl(
             batch,
             param_degree,
             start_prime_idx,
+            curr_limbs,
+            gap,
             second_radix_size / per_thread_ntt_size,
             inverse_power_of_roots_div_two_ptr,
             inverse_scaled_power_of_roots_div_two_ptr,
@@ -294,6 +307,8 @@ static void iNTT_impl(
             batch,
             param_degree,
             start_prime_idx,
+            curr_limbs,
+            gap,
             pad,
             first_stage_radix_size / 8,
             inverse_power_of_roots_div_two_ptr,
@@ -311,13 +326,17 @@ Tensor iNTT_cuda(
     int64_t param_degree,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& param_primes,
-    const Tensor& inverse_scaled_power_of_roots_div_two) {
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    int64_t curr_limbs,
+    int64_t level) {
   auto res = op.clone();
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
       start_prime_idx,
       batch,
+      curr_limbs,
+      level,
       param_degree,
       inverse_power_of_roots_div_two,
       param_primes,
@@ -333,12 +352,16 @@ Tensor& iNTT_cuda_(
     int64_t param_degree,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& param_primes,
-    const Tensor& inverse_scaled_power_of_roots_div_two) {
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    int64_t curr_limbs,
+    int64_t level) {
   auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
       start_prime_idx,
       batch,
+      curr_limbs,
+      level,
       param_degree,
       inverse_power_of_roots_div_two,
       param_primes,
@@ -355,12 +378,16 @@ Tensor& iNTT_cuda_out(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& param_primes,
     const Tensor& inverse_scaled_power_of_roots_div_two,
+    int64_t curr_limbs,
+    int64_t level,
     Tensor& res) {
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
       start_prime_idx,
       batch,
+      curr_limbs,
+      level,
       param_degree,
       inverse_power_of_roots_div_two,
       param_primes,
@@ -502,6 +529,8 @@ static void NTT_except_some_range_impl(
     int64_t param_degree,
     int64_t excluded_range_start,
     int64_t excluded_range_size,
+    int64_t curr_limbs,
+    int64_t level,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
@@ -524,6 +553,7 @@ static void NTT_except_some_range_impl(
             reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
         auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
             param_power_of_roots.data_ptr<uint64_t>());
+        int gap = level - curr_limbs;
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange<<<
             grid,
@@ -537,6 +567,8 @@ static void NTT_except_some_range_impl(
             start_prime_idx,
             excluded_range_start,
             excluded_range_end,
+            curr_limbs,
+            gap,
             pad,
             first_stage_radix_size / per_thread_ntt_size,
             param_power_of_roots_ptr,
@@ -554,6 +586,8 @@ static void NTT_except_some_range_impl(
             start_prime_idx,
             excluded_range_start,
             excluded_range_end,
+            curr_limbs,
+            gap,
             second_radix_size / per_thread_ntt_size,
             param_power_of_roots_ptr,
             param_power_of_roots_shoup_ptr,
@@ -563,37 +597,13 @@ static void NTT_except_some_range_impl(
       kUInt64);
 }
 
-Tensor NTT_except_some_range_cuda(
-    const Tensor& op,
-    int64_t start_prime_idx,
-    int64_t batch,
-    int64_t param_degree,
-    int64_t excluded_range_start,
-    int64_t excluded_range_size,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_primes,
-    const Tensor& param_power_of_roots) {
-  auto res = op.clone();
-  auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  NTT_except_some_range_impl(
-      op_ptr,
-      start_prime_idx,
-      batch,
-      param_degree,
-      excluded_range_start,
-      excluded_range_size,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
-  return res;
-}
-
 static void const_mult_batch_(
     uint64_t* op1_ptr,
     const Tensor& op2,
     const Tensor& op2_psinv,
     int64_t start_prime_idx,
     int64_t batch,
+    int64_t start_op1_idx,
     int64_t param_degree,
     uint64_t* res_ptr,
     const Tensor& primes) {
@@ -617,6 +627,7 @@ static void const_mult_batch_(
             op2_psinv_ptr,
             (int)start_prime_idx,
             (int)batch,
+            (int)start_op1_idx,
             res_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
@@ -632,12 +643,15 @@ static void modup_matmul_(
     const Tensor& barret_k,
     const int64_t param_alpha_,
     const int64_t param_degree_,
-    const int64_t param_num_moduli_after_modup_,
-    at::TensorList prod_q_i_mod_q_j__) {
+    at::TensorList prod_q_i_mod_q_j__,
+    int64_t curr_limbs,
+    int64_t level_) {
   const int unroll_factor = 4;
-  const int start_length = (int)param_alpha_;
   const int begin_idx = (int)beta_idx * (int)param_alpha_;
-  const int end_length = (int)param_num_moduli_after_modup_ - (int)param_alpha_;
+  int start_length = ((begin_idx + param_alpha_) > curr_limbs)
+      ? (curr_limbs - begin_idx)
+      : param_alpha_;
+  const int end_length = curr_limbs + param_alpha_ - start_length;
   int grid_dim{(int)param_degree_ * end_length / 256 / unroll_factor};
   int block_dim{256};
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_j__[beta_idx];
@@ -663,6 +677,9 @@ static void modup_matmul_(
             ptr,
             begin_idx,
             param_degree_,
+            param_alpha_,
+            curr_limbs,
+            level_,
             primes_ptr,
             barret_ratio_ptr,
             barret_k_ptr,
@@ -680,6 +697,8 @@ static void modup_impl_(
     uint64_t* from_ptr,
     uint64_t* to_ptr,
     int idx,
+    int curr_limbs,
+    int level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     const int64_t param_degree_,
@@ -687,27 +706,36 @@ static void modup_impl_(
     const Tensor& param_primes__,
     const Tensor& param_barret_ratio__,
     const Tensor& param_barret_k__,
-    const int64_t param_num_moduli_after_modup_,
     at::TensorList prod_q_i_mod_q_j__,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  auto hat_inverse_vec = hat_inverse_vec__[idx];
-  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup__[idx];
+  int num_moduli_after_modup = curr_limbs + param_alpha_;
   size_t begin_idx = idx * param_alpha_;
+  size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      ? (curr_limbs - begin_idx)
+      : param_alpha_;
+
+  auto hat_inverse_vec =
+      hat_inverse_vec__[idx * param_alpha_ + (in_C_L_len - 1)];
+  auto hat_inverse_vec_psinv =
+      hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
+
   auto stream = at::cuda::getCurrentCUDAStream();
   cudaMemcpyAsync(
       to_ptr + (param_degree_ * begin_idx),
       from_ptr,
-      8 * param_alpha_ * param_degree_,
+      8 * in_C_L_len * param_degree_,
       cudaMemcpyDeviceToDevice,
       stream);
 
   iNTT_impl(
       to_ptr,
       begin_idx,
-      param_alpha_,
+      in_C_L_len,
+      curr_limbs,
+      level,
       param_degree_,
       inverse_power_of_roots_div_two,
       param_primes__,
@@ -718,7 +746,8 @@ static void modup_impl_(
       hat_inverse_vec,
       hat_inverse_vec_psinv,
       begin_idx,
-      param_alpha_,
+      in_C_L_len,
+      begin_idx,
       param_degree_,
       to_ptr,
       param_primes__);
@@ -732,16 +761,19 @@ static void modup_impl_(
       param_barret_k__,
       param_alpha_,
       param_degree_,
-      param_num_moduli_after_modup_,
-      prod_q_i_mod_q_j__);
+      prod_q_i_mod_q_j__,
+      curr_limbs,
+      level);
 
   NTT_except_some_range_impl(
       to_ptr,
       0,
-      param_num_moduli_after_modup_,
+      num_moduli_after_modup,
       param_degree_,
       begin_idx,
-      param_alpha_,
+      in_C_L_len,
+      curr_limbs,
+      level,
       param_power_of_roots_shoup,
       param_primes__,
       param_power_of_roots);
@@ -749,13 +781,15 @@ static void modup_impl_(
   cudaMemcpyAsync(
       to_ptr + param_degree_ * begin_idx,
       from_ptr,
-      8 * param_alpha_ * param_degree_,
+      8 * in_C_L_len * param_degree_,
       cudaMemcpyDeviceToDevice,
       stream);
 }
 
 static void modup(
     uint64_t* in_ptr,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -765,17 +799,19 @@ static void modup(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     uint64_t* out_ptr) {
+  int num_moduli_after_modup = curr_limbs + param_alpha_;
   for (int i = 0; i < beta; ++i) {
     modup_impl_(
         in_ptr + (param_alpha_ * param_degree_ * i),
-        out_ptr + (param_num_moduli_after_modup_ * param_degree_) * i,
+        out_ptr + (num_moduli_after_modup * param_degree_) * i,
         i,
+        curr_limbs,
+        level,
         hat_inverse_vec__,
         hat_inverse_vec_shoup__,
         param_degree_,
@@ -783,7 +819,6 @@ static void modup(
         param_primes__,
         param_barret_ratio__,
         param_barret_k__,
-        param_num_moduli_after_modup_,
         prod_q_i_mod_q_j__,
         inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two,
@@ -795,6 +830,8 @@ static void modup(
 Tensor modup_cuda(
     const Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -804,17 +841,18 @@ Tensor modup_cuda(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto res = in.clone();
-  res.resize_({param_num_moduli_after_modup_ * param_degree_ * beta});
+  auto res = out.clone();
+  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   modup(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -824,7 +862,6 @@ Tensor modup_cuda(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -835,6 +872,8 @@ Tensor modup_cuda(
 Tensor& modup_cuda_(
     Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -844,15 +883,17 @@ Tensor& modup_cuda_(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
+  out.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
   modup(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -862,7 +903,6 @@ Tensor& modup_cuda_(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -870,9 +910,12 @@ Tensor& modup_cuda_(
       out_ptr);
   return out;
 }
+
 Tensor& modup_cuda_out(
     const Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -882,16 +925,18 @@ Tensor& modup_cuda_out(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     Tensor& res) {
+  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   modup(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -901,7 +946,6 @@ Tensor& modup_cuda_out(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -913,6 +957,8 @@ Tensor& modup_cuda_out(
 static void modup_core_impl_(
     uint64_t* from_ptr,
     uint64_t* to_ptr,
+    int curr_limbs,
+    int level,
     int idx,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
@@ -921,16 +967,22 @@ static void modup_core_impl_(
     const Tensor& param_primes__,
     const Tensor& param_barret_ratio__,
     const Tensor& param_barret_k__,
-    const int64_t param_num_moduli_after_modup_,
     at::TensorList prod_q_i_mod_q_j__) {
-  auto hat_inverse_vec = hat_inverse_vec__[idx];
-  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup__[idx];
+  int num_moduli_after_modup = curr_limbs + param_alpha_;
   size_t begin_idx = idx * param_alpha_;
+  size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      ? (curr_limbs - begin_idx)
+      : param_alpha_;
+  auto hat_inverse_vec =
+      hat_inverse_vec__[idx * param_alpha_ + (in_C_L_len - 1)];
+  auto hat_inverse_vec_psinv =
+      hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
+
   auto stream = at::cuda::getCurrentCUDAStream();
   cudaMemcpyAsync(
       to_ptr + (param_degree_ * begin_idx),
       from_ptr,
-      8 * param_alpha_ * param_degree_,
+      8 * in_C_L_len * param_degree_,
       cudaMemcpyDeviceToDevice,
       stream);
 
@@ -939,7 +991,8 @@ static void modup_core_impl_(
       hat_inverse_vec,
       hat_inverse_vec_psinv,
       begin_idx,
-      param_alpha_,
+      in_C_L_len,
+      begin_idx,
       param_degree_,
       to_ptr,
       param_primes__);
@@ -953,19 +1006,22 @@ static void modup_core_impl_(
       param_barret_k__,
       param_alpha_,
       param_degree_,
-      param_num_moduli_after_modup_,
-      prod_q_i_mod_q_j__);
+      prod_q_i_mod_q_j__,
+      curr_limbs,
+      level);
 
   cudaMemcpyAsync(
       to_ptr + param_degree_ * begin_idx,
       from_ptr,
-      8 * param_alpha_ * param_degree_,
+      8 * in_C_L_len * param_degree_,
       cudaMemcpyDeviceToDevice,
       stream);
 }
 
 static void modup_core(
     uint64_t* in_ptr,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -975,12 +1031,14 @@ static void modup_core(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     uint64_t* out_ptr) {
+  int num_moduli_after_modup = curr_limbs + param_alpha_;
   for (int i = 0; i < beta; ++i) {
     modup_core_impl_(
         in_ptr + (param_alpha_ * param_degree_ * i),
-        out_ptr + (param_num_moduli_after_modup_ * param_degree_) * i,
+        out_ptr + (num_moduli_after_modup * param_degree_) * i,
+        curr_limbs,
+        level,
         i,
         hat_inverse_vec__,
         hat_inverse_vec_shoup__,
@@ -989,7 +1047,6 @@ static void modup_core(
         param_primes__,
         param_barret_ratio__,
         param_barret_k__,
-        param_num_moduli_after_modup_,
         prod_q_i_mod_q_j__);
   }
 }
@@ -997,6 +1054,8 @@ static void modup_core(
 Tensor modup_core_cuda(
     const Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -1005,13 +1064,15 @@ Tensor modup_core_cuda(
     const Tensor& param_barret_k__,
     int64_t beta,
     int64_t param_degree_,
-    int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_) {
+    int64_t param_alpha_) {
   auto res = out.clone();
+  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   modup_core(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -1021,7 +1082,6 @@ Tensor modup_core_cuda(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       out_ptr);
   return res;
 }
@@ -1029,6 +1089,8 @@ Tensor modup_core_cuda(
 Tensor& modup_core_cuda_(
     Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -1037,12 +1099,14 @@ Tensor& modup_core_cuda_(
     const Tensor& param_barret_k__,
     int64_t beta,
     int64_t param_degree_,
-    int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_) {
+    int64_t param_alpha_) {
+  out.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
   modup_core(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -1052,7 +1116,6 @@ Tensor& modup_core_cuda_(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       out_ptr);
   return out;
 }
@@ -1060,6 +1123,8 @@ Tensor& modup_core_cuda_(
 Tensor& modup_core_cuda_out(
     const Tensor& out,
     const Tensor& in,
+    int64_t curr_limbs,
+    int64_t level,
     at::TensorList hat_inverse_vec__,
     at::TensorList hat_inverse_vec_shoup__,
     at::TensorList prod_q_i_mod_q_j__,
@@ -1069,12 +1134,14 @@ Tensor& modup_core_cuda_out(
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
-    int64_t param_num_moduli_after_modup_,
     Tensor& res) {
+  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   modup_core(
       in_ptr,
+      curr_limbs,
+      level,
       hat_inverse_vec__,
       hat_inverse_vec_shoup__,
       prod_q_i_mod_q_j__,
@@ -1084,7 +1151,6 @@ Tensor& modup_core_cuda_out(
       beta,
       param_degree_,
       param_alpha_,
-      param_num_moduli_after_modup_,
       out_ptr);
   return res;
 }
@@ -1136,24 +1202,21 @@ static void SubInplace(
 
 static void moddown_impl(
     uint64_t* from_ptr,
-    const int64_t target_chain_idx,
     const int64_t param_degree,
-    const int64_t param_chain_length,
     const int64_t param_log_degree,
+    const int64_t param_alpha_,
     const int64_t start_length,
+    const int64_t end_length,
     const Tensor& primes,
     at::TensorList prod_q_i_mod_q_j_moddown,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
     uint64_t* to_ptr) {
-  const int gap = param_chain_length - target_chain_idx;
-  const auto prod_q_i_mod_q_j = prod_q_i_mod_q_j_moddown[gap];
-
+  const auto prod_q_i_mod_q_j = prod_q_i_mod_q_j_moddown[0];
   AT_DISPATCH_V2(
       kUInt64,
       "moddownImpl",
       AT_WRAP([&]() {
-        const int end_length = target_chain_idx;
         const int block_dim = 256;
         const int grid_dim = param_degree * end_length / block_dim;
         auto ptr = from_ptr + param_degree * end_length;
@@ -1179,7 +1242,7 @@ static void moddown_impl(
             ptr,
             prod_q_i_mod_q_j_ptr,
             start_length * end_length,
-            start_length,
+            param_alpha_,
             end_length,
             to_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -1189,9 +1252,9 @@ static void moddown_impl(
 
 static void moddown_core_template(
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1202,44 +1265,42 @@ static void moddown_core_template(
     const Tensor& param_primes,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
-    Tensor& to) {
-  const int gap = param_chain_length - target_chain_idx;
-  const int start_length = param_max_num_moduli - target_chain_idx;
-  const int end_length = target_chain_idx;
+    Tensor& res) {
+  const int start_length = level + alpha - curr_limbs; // tempK len
+  const int end_length = curr_limbs;
 
-  auto hat_inverse_vec = hat_inverse_vec_moddown.at(gap);
-  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown.at(gap);
+  auto hat_inverse_vec = hat_inverse_vec_moddown.at(0);
+  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown.at(0);
 
-  auto input = from.clone();
-
-  auto from_ptr = reinterpret_cast<uint64_t*>(input.data_ptr<uint64_t>());
-  auto to_ptr = reinterpret_cast<uint64_t*>(to.data_ptr<uint64_t>());
+  auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
+  auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
   const_mult_batch_(
       from_ptr,
       hat_inverse_vec,
       hat_inverse_vec_psinv,
-      end_length,
-      start_length,
+      level,
+      alpha,
+      curr_limbs,
       param_degree,
       from_ptr,
       param_primes);
 
   moddown_impl(
       from_ptr,
-      target_chain_idx,
       param_degree,
-      param_chain_length,
       param_log_degree,
+      alpha,
       start_length,
+      end_length,
       param_primes,
       prod_q_i_mod_q_j_moddown,
       param_barret_ratio,
       param_barret_k,
       to_ptr);
 
-  const auto& prod_inv = prod_inv_moddown.at(gap);
-  const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(gap);
+  const auto& prod_inv = prod_inv_moddown.at(0);
+  const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(0);
 
   SubInplace(
       to_ptr,
@@ -1258,6 +1319,7 @@ static void moddown_core_template(
       prod_inv_psinv,
       0,
       end_length,
+      0,
       param_degree,
       to_ptr,
       param_primes);
@@ -1266,9 +1328,9 @@ static void moddown_core_template(
 Tensor moddown_core_cuda(
     const Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1280,11 +1342,12 @@ Tensor moddown_core_cuda(
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k) {
   auto res = to.clone();
+  res.resize_({curr_limbs * param_degree});
   moddown_core_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,
@@ -1302,9 +1365,9 @@ Tensor moddown_core_cuda(
 Tensor& moddown_core_cuda_(
     Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1315,11 +1378,12 @@ Tensor& moddown_core_cuda_(
     const Tensor& param_primes,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k) {
+  to.resize_({curr_limbs * param_degree});
   moddown_core_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,
@@ -1337,9 +1401,9 @@ Tensor& moddown_core_cuda_(
 Tensor& moddown_core_cuda_out(
     const Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1351,11 +1415,12 @@ Tensor& moddown_core_cuda_out(
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
     Tensor& res) {
+  res.resize_({curr_limbs * param_degree});
   moddown_core_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,
@@ -1372,9 +1437,9 @@ Tensor& moddown_core_cuda_out(
 
 static void moddown_cuda_template(
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1390,12 +1455,11 @@ static void moddown_cuda_template(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     Tensor& res) {
-  const int gap = param_chain_length - target_chain_idx;
-  const int start_length = param_max_num_moduli - target_chain_idx;
-  const int end_length = target_chain_idx;
+  const int start_length = alpha;
+  const int end_length = curr_limbs;
 
-  auto hat_inverse_vec = hat_inverse_vec_moddown.at(gap);
-  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown.at(gap);
+  auto hat_inverse_vec = hat_inverse_vec_moddown[0];
+  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
 
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
@@ -1404,6 +1468,8 @@ static void moddown_cuda_template(
       from_ptr,
       end_length,
       start_length,
+      curr_limbs,
+      level,
       param_degree,
       inverse_power_of_roots_div_two,
       param_primes,
@@ -1413,19 +1479,20 @@ static void moddown_cuda_template(
       from_ptr,
       hat_inverse_vec,
       hat_inverse_vec_psinv,
-      end_length,
-      start_length,
+      level,
+      alpha,
+      curr_limbs,
       param_degree,
       from_ptr,
       param_primes);
 
   moddown_impl(
       from_ptr,
-      target_chain_idx,
       param_degree,
-      param_chain_length,
       param_log_degree,
+      alpha,
       start_length,
+      end_length,
       param_primes,
       prod_q_i_mod_q_j_moddown,
       param_barret_ratio,
@@ -1441,8 +1508,8 @@ static void moddown_cuda_template(
       param_primes,
       param_power_of_roots);
 
-  const auto& prod_inv = prod_inv_moddown.at(gap);
-  const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(gap);
+  const auto& prod_inv = prod_inv_moddown.at(0);
+  const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(0);
 
   SubInplace(
       to_ptr,
@@ -1461,6 +1528,7 @@ static void moddown_cuda_template(
       prod_inv_psinv,
       0,
       end_length,
+      0,
       param_degree,
       to_ptr,
       param_primes);
@@ -1469,9 +1537,9 @@ static void moddown_cuda_template(
 Tensor moddown_cuda(
     const Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1486,13 +1554,13 @@ Tensor moddown_cuda(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto res = from.clone();
-  res.resize_({param_chain_length * param_degree});
+  auto res = to.clone();
+  res.resize_({curr_limbs * param_degree});
   moddown_cuda_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,
@@ -1514,9 +1582,9 @@ Tensor moddown_cuda(
 Tensor& moddown_cuda_(
     Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1531,11 +1599,12 @@ Tensor& moddown_cuda_(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
+  to.resize_({curr_limbs * param_degree});
   moddown_cuda_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,
@@ -1556,9 +1625,9 @@ Tensor& moddown_cuda_(
 Tensor& moddown_cuda_out(
     const Tensor& to,
     const Tensor& from,
-    int64_t target_chain_idx,
-    int64_t param_chain_length,
-    int64_t param_max_num_moduli,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t alpha,
     int64_t param_degree,
     int64_t param_log_degree,
     at::TensorList hat_inverse_vec_moddown,
@@ -1574,11 +1643,12 @@ Tensor& moddown_cuda_out(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     Tensor& res) {
+  res.resize_({curr_limbs * param_degree});
   moddown_cuda_template(
       from,
-      target_chain_idx,
-      param_chain_length,
-      param_max_num_moduli,
+      curr_limbs,
+      level,
+      alpha,
       param_degree,
       param_log_degree,
       hat_inverse_vec_moddown,

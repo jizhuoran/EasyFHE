@@ -4,6 +4,7 @@ import numpy as np
 import math
 import random
 import warnings
+import torch
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
@@ -413,7 +414,184 @@ class Context:
         self.PModq = np.array(self.PModq, dtype=np.uint64)
         self.qInvModq = np.array(self.qInvModq, dtype=np.uint64)
         self.QlQlInvModqlDivqlModq = np.array(self.QlQlInvModqlDivqlModq, dtype=np.uint64)
+        
+        # for cuda context
+        if torch.cuda.is_available():
+            self.log_degree = logN
+            self.degree = self.N
+            self.level = self.L
+            self.alpha = self.K
+            self.max_num_moduli = self.L+ self.K
+            self.chain_length = self.L
+            self.num_special_moduli = self.K
+            self.primes = np.hstack((moduliQ, moduliP))
+            
+            self.power_of_roots = None
+            self.power_of_roots_shoup = None
+            self.inverse_power_of_roots_div_two = None
+            self.inverse_scaled_power_of_roots_div_two = None
+            self.power_of_roots_vec = []
+            self.power_of_roots_shoup_vec = []
+            self.inv_power_of_roots_vec = []
+            self.inv_power_of_roots_shoup_vec = []
+            self.barret_k = []
+            self.barret_ratio = []
+            
+            #for modup
+            self.num_moduli_after_modup = self.max_num_moduli
+            self.hat_inverse_vec_modup = []
+            self.hat_inverse_vec_shoup_modup = []
+            self.prod_q_i_mod_q_j_modup = []
+            
+            #for moddown
+            self.num_moduli_after_moddown = self.chain_length
+            self.hat_inverse_vec_moddown = []
+            self.hat_inverse_vec_shoup_moddown = []
+            self.prod_q_i_mod_q_j_moddown = []
+            self.prod_inv_moddown = []
+            self.prod_inv_shoup_moddown = []
+            
+            # for output & workspace
+            beta = (int)(self.level / self.alpha)
+            self.inner_workspace = torch.tensor(
+                [0] * (4 * self.num_moduli_after_modup * self.degree * beta),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.inner_out = torch.tensor(
+                [0] * (2 * self.num_moduli_after_modup * self.degree),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.moddown_out_ax = torch.tensor(
+                [0] * (self.num_moduli_after_moddown * self.degree),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.moddown_out_bx = torch.tensor(
+                [0] * (self.num_moduli_after_moddown * self.degree),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.modup_out = torch.tensor(
+                [0] * (self.num_moduli_after_modup * self.degree * beta),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            
+            power_of_roots = self.qRootPows + self.pRootPows
+            inverse_power_of_roots = self.qRootPowsInv + self.pRootPowsInv
+            #cal basic param
+            for i, prime in enumerate(self.primes):
+                barret = math.floor(math.log2(prime)) + 63
+                self.barret_k.append(barret)
 
+                temp = 1 << (barret - 64)
+                temp <<= 64
+                self.barret_ratio.append(temp // prime)
+                power_of_roots_shoup = self.shoup_each(power_of_roots[i], prime)
+                inv_power_of_roots_div_two = self.div_two(inverse_power_of_roots[i], prime)
+                inv_power_of_roots_shoup = self.shoup_each(
+                    inv_power_of_roots_div_two, prime
+                )
+
+                self.power_of_roots_vec.extend(power_of_roots[i])
+                self.power_of_roots_shoup_vec.extend(power_of_roots_shoup) 
+                self.inv_power_of_roots_vec.extend(inv_power_of_roots_div_two)
+                self.inv_power_of_roots_shoup_vec.extend(inv_power_of_roots_shoup)
+
+            self.barret_k = torch.tensor(self.barret_k, dtype=torch.uint64, device="cuda")
+            self.barret_ratio = torch.tensor(
+                self.barret_ratio, dtype=torch.uint64, device="cuda"
+            )
+
+            self.power_of_roots = torch.tensor(
+                self.power_of_roots_vec, dtype=torch.uint64, device="cuda"
+            )
+            self.power_of_roots_shoup = torch.tensor(
+                self.power_of_roots_shoup_vec, dtype=torch.uint64, device="cuda"
+            )
+            self.inverse_power_of_roots_div_two = torch.tensor(
+                self.inv_power_of_roots_vec, dtype=torch.uint64, device="cuda"
+            )
+            self.inverse_scaled_power_of_roots_div_two = torch.tensor(
+                self.inv_power_of_roots_shoup_vec, dtype=torch.uint64, device="cuda"
+            )
+            
+            # cal modup param
+            for l in range(self.L):
+                prod_qi_mod_qj = []
+                for dnum_idx in range(self.dnum):
+                    prod_q_i_mod_q_j = self.PartQlHatModp[l][dnum_idx]
+                    prod_q_i_mod_q_j = prod_q_i_mod_q_j.swapaxes(1,0).flatten()
+                    prod_qi_mod_qj.append(torch.tensor(prod_q_i_mod_q_j, dtype= torch.uint64, device = "cuda"))
+                self.prod_q_i_mod_q_j_modup.append(prod_qi_mod_qj)
+            
+            for dnum_idx in range(self.dnum):
+                for k in range(self.K):
+                    hat_inv_shoup = []
+                    hat_inverse_vec = self.PartQlHatInvModq[dnum_idx][k]
+                    self.hat_inverse_vec_modup.append(torch.tensor(hat_inverse_vec, dtype= torch.uint64, device = "cuda",))
+                    for k_idx in range(self.K):
+                        prime_idx = dnum_idx * self.K + k_idx
+                        prime = self.primes[prime_idx]
+                        shoup = self.shoup(int(hat_inverse_vec[k_idx]), prime)
+                        hat_inv_shoup.append(shoup)
+                    self.hat_inverse_vec_shoup_modup.append(torch.tensor(hat_inv_shoup, dtype= torch.uint64, device = "cuda",))
+            
+            # cal moddown param
+            start_length = self.num_special_moduli
+            end_length = self.chain_length
+            start_begin = self.primes[end_length:]
+            start_end = start_begin[start_length:]
+
+            hat_inv_moddown = self.pHatInvModp
+            hat_inv_shoup_moddown = []
+            for k in range(self.K):
+                prime = self.primes[self.L + k]
+                shoup = self.shoup(int(hat_inv_moddown[k]), prime)
+                hat_inv_shoup_moddown.append(shoup)
+            self.hat_inverse_vec_moddown.append(
+                torch.tensor(hat_inv_moddown, dtype=torch.uint64, device="cuda")
+            )
+            self.hat_inverse_vec_shoup_moddown.append(
+                torch.tensor(hat_inv_shoup_moddown, dtype=torch.uint64, device="cuda")
+            )
+            end_primes = self.set_difference(self.primes, start_begin)
+            prod_q_i_mod_q_j_moddown = self.pHatModq.swapaxes(1,0).flatten()
+            self.prod_q_i_mod_q_j_moddown.append(torch.tensor(prod_q_i_mod_q_j_moddown, dtype=torch.uint64,device="cuda"))
+
+            prod_inv = self.PInvModq
+            prod_shoup = []
+
+            for i, end_prime in enumerate(end_primes):
+                inv = prod_inv[i]
+                prod_shoup.append(self.shoup(int(inv), end_prime))
+
+            self.prod_inv_moddown.append(
+                torch.tensor(prod_inv, dtype=torch.uint64, device="cuda")
+            )
+            self.prod_inv_shoup_moddown.append(
+                torch.tensor(prod_shoup, dtype=torch.uint64, device="cuda")
+            )
+            
+            self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
+
+    def shoup(self, in_value, prime):
+        temp = in_value << 64
+        return int(temp // prime)
+
+    def shoup_each(self, values, prime):
+        return [self.shoup(value, prime) for value in values]
+
+    def div_two(self, in_list, prime):
+        two_inv = self.invMod(2, prime)
+        out_list = [self.mulMod(int(x), int(two_inv), int(prime)) for x in in_list]
+        return out_list
+    
+    def set_difference(self, begin, end):
+        remove_set = set(end)
+        return [item for item in begin if item not in remove_set]
 
 
     def negate(self, r, a):
