@@ -4,7 +4,8 @@ from enum import Enum
 
 import torch
 import torch.fhe.functional as F
-# import torch.fhe.test as T
+import torch.fhe.test as T
+import torch.fhe.testBig as TB
 from torch.fhe.Ciphertext import Ciphertext
 from torch.fhe.context import Context
 # from torch.fhe.context_cuda import Context_Cuda
@@ -41,9 +42,10 @@ print(z)
 # T.test_HMult_and_rescale_1()
 # T.test_SwitchModulus()
 # T.test_ApproxMod()
+T.test_cuda_KS()
+TB.test_KS3_ct()
+TB.test_HMult3()
 # T.test_logN17()
-# T.test_cuda_KS()
-# T.test_KS3_ct()
 # a = torch.tensor([6] * (2**15), dtype=torch.uint64, device='cuda')
 # b = torch.tensor([4] * (2**15), dtype=torch.uint64, device='cuda')
 #
