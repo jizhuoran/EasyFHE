@@ -451,10 +451,15 @@ class Context:
             self.prod_inv_moddown = []
             self.prod_inv_shoup_moddown = []
             
+            self.swk_ax_cuda = torch.tensor(self.mult_swk[0].reshape(-1),dtype=torch.uint64,
+                device="cuda")
+            self.swk_bx_cuda = torch.tensor(self.mult_swk[1].reshape(-1),dtype=torch.uint64,
+                device="cuda")
+            
             # for output & workspace
-            beta = (int)(self.level / self.alpha)
+            self.beta = (int)(self.level / self.alpha)
             self.inner_workspace = torch.tensor(
-                [0] * (4 * self.num_moduli_after_modup * self.degree * beta),
+                [0] * (4 * self.num_moduli_after_modup * self.degree * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )
@@ -474,7 +479,7 @@ class Context:
                 device="cuda",
             )
             self.modup_out = torch.tensor(
-                [0] * (self.num_moduli_after_modup * self.degree * beta),
+                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )

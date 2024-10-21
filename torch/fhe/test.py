@@ -1143,9 +1143,9 @@ def test_ApproxMod():
     print("\n")
 
 def test_cuda_KS():
-    axax = N131072KS.axax0
-    axax = axax.reshape((4, 131072))
-    curr_limbs = 4
+    axax = N131072KS.axax1
+    axax = axax.reshape((3, 131072))
+    curr_limbs = 3
     logN = 17
     N = 2 ** logN
     L = 4
@@ -1159,27 +1159,23 @@ def test_cuda_KS():
     swk = swk.reshape(2, dnum, L + K, N)
     context_cuda = Context(logN, 53, 52, 52, L, K,
                             moduliQ, moduliP, rootsQ, rootsP, swk)
-    
+     
     input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
-    ax = torch.tensor(swk[0].reshape(-1),dtype=torch.uint64,device="cuda")
-    bx = torch.tensor(swk[1].reshape(-1),dtype=torch.uint64,device="cuda")
-    res = F.keyswitch(context_cuda=context_cuda, 
-                      input = input_ks,
-                      swk_ax=ax,
-                      swk_bx =bx,
-                      curr_limbs =curr_limbs)
+    res = F.cv_keyswitch(input = input_ks,
+                      curr_limbs =curr_limbs,
+                      context_cuda=context_cuda)
     
     res0 = res[0].detach().cpu().numpy()
     res1 = res[1].detach().cpu().numpy()
 
-    golden_answer = N131072KS.sumMult0[0]
+    golden_answer = N131072KS.sumMult1[0]
     golden_answer = golden_answer.reshape(res0.shape)
     compare = np.array_equal(res0, golden_answer)
     print("\n\ntest: \n\nres_ax result: ")
     print(compare)
     print("\n")
 
-    golden_answer = N131072KS.sumMult0[1]
+    golden_answer = N131072KS.sumMult1[1]
     golden_answer = golden_answer.reshape(res1.shape)
     compare = np.array_equal(res1, golden_answer)
     print("\nres_bx result: ")
