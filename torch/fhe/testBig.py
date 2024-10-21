@@ -6,6 +6,7 @@ from . import homo_ops
 from . import KeySwitch
 # from .data import Hmult3_N16_L12_K3 as HMult3
 from .data import params_ks_13 as N8192KS
+from .data import cheby_N16 as chebyData
 Tensor = torch.Tensor
 
 # my_dict = {
@@ -173,4 +174,66 @@ def test_HMult3():
     golden_answer = np.array(HMult3.cipher1_mult3_rescale3, dtype=np.uint64).reshape(res.cv.shape)
     compare_and_print(res.cv, golden_answer, "mult3_rescale3")
 
+
+
+
+def test_ApproxMod():
+    #test case: N64_L18_P1
+    logN = 16
+    N = 2**logN
+    L = 18
+    K = 1
+    moduliQ = chebyData.moduliQ18_N65536
+    moduliP = chebyData.moduliP1_N65536
+    rootsQ = chebyData.rootsQ18_N65536
+    rootsP = chebyData.rootsP1_N65536
+    dnum = int(L / K)
+    # swk = np.zeros((2, dnum, L + K, N), dtype=np.uint64)
+    swk = chebyData.swk
+    swk = swk.reshape((2, dnum, L + K, N))
+
+    cryptoContext = Context(logN,
+                            60, 59, 60,
+                            L, K,
+                            moduliQ, moduliP, rootsQ, rootsP, swk)
+    print("finish gen cryptoContext")
+
+    curr_limbs=L-2
+    cv = np.array(chebyData.cheby_input, dtype=np.uint64)
+    cv = cv.reshape(2, curr_limbs, N)
+    ct = Ciphertext(cv, curr_limbs)
+    print("finish gen Ciphertext")
+
+
+    res = homo_ops.EvalChebyshevSeries(ct, cryptoContext)
+    print("finish EvalChebyshev")
+
+    golden_answer = np.array(chebyData.cheby_output, dtype=np.uint64)
+    golden_answer = golden_answer.reshape(res.cv.shape)
+    compare = np.array_equal(res.cv[0], golden_answer[0])
+    # compare = res == golden_answer
+    print("\n\ntest cheby: \n\n res_ax result: ")
+    print(compare)
+    print("\n")
+    compare = np.array_equal(res.cv[1], golden_answer[1])
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+
+    res = homo_ops.DoubleAngleIteration(res, cryptoContext)
+    print("finish DoubleAngleIteration")
+
+    golden_answer = np.array(chebyData.doubleAngle_output, dtype=np.uint64)
+    golden_answer = golden_answer.reshape(res.cv.shape)
+    compare = np.array_equal(res.cv[0], golden_answer[0])
+    # compare = res == golden_answer
+    print("\n\ntest doubleAngle: \n\n res_ax result: ")
+    print(compare)
+    print("\n")
+    compare = np.array_equal(res.cv[1], golden_answer[1])
+    # compare = res == golden_answer
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
 
