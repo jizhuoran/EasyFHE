@@ -6,13 +6,13 @@ import numpy as np
 Tensor = torch.Tensor
 
 def vec_add_mod(x, y, MOD):
-    return [(a+b)%MOD for a, b in zip(x, y)]
+    return [int((int(a)+int(b))%MOD) for a, b in zip(x, y)]
 
 def vec_sub_mod(x, y, MOD):
-    return [(a-b)%MOD for a, b in zip(x, y)]
+    return [int((int(a)-int(b))%MOD) for a, b in zip(x, y)]
 
 def vec_mul_mod(x, y, MOD):
-    return [(a*b)%MOD for a, b in zip(x, y)]
+    return [int((int(a)*int(b))%MOD) for a, b in zip(x, y)]
 
 def cv_convert(func):
     def wrapper(*args, **kw):
@@ -29,11 +29,11 @@ def cv_convert(func):
 
 
 @cv_convert
-def cv_neg(x, cur_limbs, inplace=False):
+def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:
-        return torch.neg_mod_(x, 0, cur_limbs=cur_limbs)
+        return torch.neg_mod_(x, 0, modulus, cur_limbs=cur_limbs)
     else:
-        return torch.neg_mod(x, 0, cur_limbs=cur_limbs)
+        return torch.neg_mod(x, 0, modulus, cur_limbs=cur_limbs)
 
 
 @cv_convert

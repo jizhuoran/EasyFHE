@@ -4,8 +4,8 @@
 
 # import torch
 # import torch.fhe.functional as F
-# import torch.fhe.test as T
-import torch.fhe.testBig as TB
+import torch.fhe.test as T
+# import torch.fhe.testBig as TB
 # from torch.fhe.Ciphertext import Ciphertext
 # from torch.fhe.context import Context
 
@@ -46,7 +46,8 @@ import torch.fhe.testBig as TB
 # T.test_ApproxMod()
 # T.test_cuda_KS()
 # TB.test_KS3_ct()
-TB.test_HMult3()
+T.test_ApproxMod()
+# TB.test_HMult3()
 # T.test_logN17()
 # a = torch.tensor([6] * (2**15), dtype=torch.uint64, device='cuda')
 # b = torch.tensor([4] * (2**15), dtype=torch.uint64, device='cuda')
