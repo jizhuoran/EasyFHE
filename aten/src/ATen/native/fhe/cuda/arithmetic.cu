@@ -13,7 +13,7 @@
 
 #define WORK_PER_THREAD (1)
 #define WARP_SIZE (32)
-#define NUM_WARPS (4)
+#define NUM_WARPS (1)
 #define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
 #define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
 
@@ -29,12 +29,12 @@ namespace fhe {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu[l * 2], barret_mu[l * 2 + 1]
 
-#define GENERATE_KERNEL(NAME, OP, B_TYPE, B_ACCESS, HAS_BARRET)      \
+#define GENERATE_KERNEL(NAME, OP, B_ACCESS, HAS_BARRET)              \
   __global__ void NAME(                                              \
       const size_t N,                                                \
       uint64_t* c,                                                   \
       const uint64_t* a,                                             \
-      B_TYPE b,                                                      \
+      const uint64_t* b,                                             \
       const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {              \
     auto i = blockIdx.x * blockDim.x + threadIdx.x;                  \
     auto l = blockIdx.y;                                             \
@@ -42,15 +42,15 @@ namespace fhe {
         OP(a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET); \
   }
 
-GENERATE_KERNEL(vadd_kernel, add_mod, const uint64_t*, b[l * N + i], 0)
-GENERATE_KERNEL(vsub_kernel, sub_mod, const uint64_t*, b[l * N + i], 0)
-GENERATE_KERNEL(vmul_kernel, mul_mod, const uint64_t*, b[l * N + i], 1)
+GENERATE_KERNEL(vadd_kernel, add_mod, b[l * N + i], 0)
+GENERATE_KERNEL(vsub_kernel, sub_mod, b[l * N + i], 0)
+GENERATE_KERNEL(vmul_kernel, mul_mod, b[l * N + i], 1)
 
-GENERATE_KERNEL(vadd_scalar_kernel, add_mod, const uint64_t, b, 0)
-GENERATE_KERNEL(vsub_scalar_kernel, sub_mod, const uint64_t, b, 0)
-GENERATE_KERNEL(vmul_scalar_kernel, mul_mod, const uint64_t, b, 1)
+GENERATE_KERNEL(vadd_scalar_kernel, add_mod, b[l], 0)
+GENERATE_KERNEL(vsub_scalar_kernel, sub_mod, b[l], 0)
+GENERATE_KERNEL(vmul_scalar_kernel, mul_mod, b[l], 1)
 
-GENERATE_KERNEL(vneg_kernel, neg_mod, const uint64_t, b, 0)
+GENERATE_KERNEL(vneg_kernel, neg_mod, b[l], 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1
@@ -70,36 +70,36 @@ namespace at::native {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu.data_ptr<uint64_t>()
 
-#define GENERATE_KERNEL(NAME, B_TYPE, B_ACCESS, HAS_BARRET)   \
-  static void NAME##_template(                                \
-      Tensor& c,                                              \
-      const Tensor& a,                                        \
-      const B_TYPE& b,                                        \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,           \
-      int64_t cur_limbs) {                                    \
-    TORCH_INTERNAL_ASSERT(a.dim() == 2);                      \
-    auto N = static_cast<int>(a.sizes()[1]);                  \
-    TORCH_INTERNAL_ASSERT(                                    \
-        (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
-        (N == 1 << 17) || (N == 1 << 18));                    \
-    fhe::NAME##_kernel<<<                                     \
-        dim3(num_blocks(N), cur_limbs),                       \
-        dim3(BLOCK_SIZE, 1)>>>(                               \
-        N,                                                    \
-        c.mutable_data_ptr<uint64_t>(),                       \
-        a.data_ptr<uint64_t>(),                               \
-        B_ACCESS,                                             \
-        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);   \
-    C10_CUDA_KERNEL_LAUNCH_CHECK();                           \
+#define GENERATE_KERNEL(NAME, HAS_BARRET)                                      \
+  static void NAME##_template(                                                 \
+      Tensor& c,                                                               \
+      const Tensor& a,                                                         \
+      const Tensor& b,                                                         \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                            \
+      int64_t cur_limbs) {                                                     \
+    TORCH_INTERNAL_ASSERT(a.dim() == 2);                                       \
+    auto N = static_cast<int>(a.sizes()[1]);                                   \
+    TORCH_INTERNAL_ASSERT(                                                     \
+        (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
+        (N == 1 << 17) || (N == 1 << 18));                                     \
+    fhe::NAME##_kernel<<<                                                      \
+        dim3(num_blocks(N), cur_limbs),                                        \
+        dim3(BLOCK_SIZE, 1)>>>(                                                \
+        N,                                                                     \
+        c.mutable_data_ptr<uint64_t>(),                                        \
+        a.data_ptr<uint64_t>(),                                                \
+        b.data_ptr<uint64_t>(),                                                \
+        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);                    \
+    C10_CUDA_KERNEL_LAUNCH_CHECK();                                            \
   }
 
-GENERATE_KERNEL(vadd, Tensor, b.data_ptr<uint64_t>(), 0)
-GENERATE_KERNEL(vsub, Tensor, b.data_ptr<uint64_t>(), 0)
-GENERATE_KERNEL(vmul, Tensor, b.data_ptr<uint64_t>(), 1)
-GENERATE_KERNEL(vadd_scalar, Scalar, b.toUInt64(), 0)
-GENERATE_KERNEL(vsub_scalar, Scalar, b.toUInt64(), 0)
-GENERATE_KERNEL(vmul_scalar, Scalar, b.toUInt64(), 1)
-GENERATE_KERNEL(vneg, Scalar, 0, 0)
+GENERATE_KERNEL(vadd, 0)
+GENERATE_KERNEL(vsub, 0)
+GENERATE_KERNEL(vmul, 1)
+GENERATE_KERNEL(vadd_scalar, 0)
+GENERATE_KERNEL(vsub_scalar, 0)
+GENERATE_KERNEL(vmul_scalar, 1)
+GENERATE_KERNEL(vneg, 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1
@@ -115,10 +115,10 @@ GENERATE_KERNEL(vneg, Scalar, 0, 0)
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu
 
-#define GENERATE_FUNCTION(NAME, B_TYPE, HAS_BARRET)                       \
+#define GENERATE_FUNCTION(NAME, HAS_BARRET)                               \
   Tensor NAME##_mod_cuda(                                                 \
       const Tensor& a,                                                    \
-      const B_TYPE& b,                                                    \
+      const Tensor& b,                                                    \
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
       int64_t cur_limbs) {                                                \
     Tensor c = at::empty_like(a);                                         \
@@ -128,7 +128,7 @@ GENERATE_KERNEL(vneg, Scalar, 0, 0)
                                                                           \
   Tensor& NAME##_mod_cuda_(                                               \
       Tensor& self,                                                       \
-      const B_TYPE& other,                                                \
+      const Tensor& other,                                                \
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
       int64_t cur_limbs) {                                                \
     v##NAME##_template(                                                   \
@@ -138,7 +138,7 @@ GENERATE_KERNEL(vneg, Scalar, 0, 0)
                                                                           \
   Tensor& NAME##_mod_out_cuda(                                            \
       const Tensor& a,                                                    \
-      const B_TYPE& b,                                                    \
+      const Tensor& b,                                                    \
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                       \
       int64_t cur_limbs,                                                  \
       Tensor& c) {                                                        \
@@ -146,13 +146,13 @@ GENERATE_KERNEL(vneg, Scalar, 0, 0)
     return c;                                                             \
   }
 
-GENERATE_FUNCTION(add, Tensor, 0)
-GENERATE_FUNCTION(sub, Tensor, 0)
-GENERATE_FUNCTION(mul, Tensor, 1)
-GENERATE_FUNCTION(add_scalar, Scalar, 0)
-GENERATE_FUNCTION(sub_scalar, Scalar, 0)
-GENERATE_FUNCTION(mul_scalar, Scalar, 1)
-GENERATE_FUNCTION(neg, Scalar, 0)
+GENERATE_FUNCTION(add, 0)
+GENERATE_FUNCTION(sub, 0)
+GENERATE_FUNCTION(mul, 1)
+GENERATE_FUNCTION(add_scalar, 0)
+GENERATE_FUNCTION(sub_scalar, 0)
+GENERATE_FUNCTION(mul_scalar, 1)
+GENERATE_FUNCTION(neg, 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1

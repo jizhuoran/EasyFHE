@@ -15674,17 +15674,17 @@
 
 # Below are operations for FHE
 
-- func: neg_mod(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor
+- func: neg_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: neg_mod_cuda
 
-- func: neg_mod_(Tensor(a!) self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
+- func: neg_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
      CUDA: neg_mod_cuda_
 
-- func: neg_mod.out(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
+- func: neg_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: neg_mod_out_cuda
@@ -15734,47 +15734,47 @@
   dispatch:
     CUDA: mul_mod_out_cuda
 
-- func: add_scalar_mod(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor
+- func: add_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: add_scalar_mod_cuda
 
-- func: add_scalar_mod_(Tensor(a!) self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
+- func: add_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
      CUDA: add_scalar_mod_cuda_
 
-- func: add_scalar_mod.out(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
+- func: add_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: add_scalar_mod_out_cuda
 
-- func: sub_scalar_mod(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor
+- func: sub_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: sub_scalar_mod_cuda
 
-- func: sub_scalar_mod_(Tensor(a!) self, Scalar in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
+- func: sub_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
      CUDA: sub_scalar_mod_cuda_
 
-- func: sub_scalar_mod.out(Tensor self, Scalar in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
+- func: sub_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: sub_scalar_mod_out_cuda
 
-- func: mul_scalar_mod(Tensor self, Scalar in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
+- func: mul_scalar_mod(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: mul_scalar_mod_cuda
 
-- func: mul_scalar_mod_(Tensor(a!) self, Scalar in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
+- func: mul_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
      CUDA: mul_scalar_mod_cuda_
 
-- func: mul_scalar_mod.out(Tensor self, Scalar in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
+- func: mul_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_scalar_mod_out_cuda

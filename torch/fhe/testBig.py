@@ -175,9 +175,9 @@ def test_HMult3():
     compare_and_print(res.cv, golden_answer, "mult3_rescale3")
 
 
-
-
 def test_ApproxMod():
+    print("begin to test_ApproxMod")
+
     #test case: N64_L18_P1
     logN = 16
     N = 2**logN
@@ -236,4 +236,3 @@ def test_ApproxMod():
     print("\nres_bx result: ")
     print(compare)
     print("\n")
-
