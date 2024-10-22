@@ -5,14 +5,18 @@ import numpy as np
 
 Tensor = torch.Tensor
 
+
 def vec_add_mod(x, y, MOD):
-    return [int((int(a)+int(b))%MOD) for a, b in zip(x, y)]
+    return [int((int(a) + int(b)) % MOD) for a, b in zip(x, y)]
+
 
 def vec_sub_mod(x, y, MOD):
-    return [int((int(a)-int(b))%MOD) for a, b in zip(x, y)]
+    return [int((int(a) - int(b)) % MOD) for a, b in zip(x, y)]
+
 
 def vec_mul_mod(x, y, MOD):
-    return [int((int(a)*int(b))%MOD) for a, b in zip(x, y)]
+    return [int((int(a) * int(b)) % MOD) for a, b in zip(x, y)]
+
 
 def cv_convert(func):
     def wrapper(*args, **kw):
@@ -27,6 +31,7 @@ def cv_convert(func):
 
     return wrapper
 
+
 def cv_check(x, modulus, cur_limbs):
     if isinstance(x, torch.Tensor):
         x = x.cpu().numpy()
@@ -38,6 +43,15 @@ def cv_check(x, modulus, cur_limbs):
             if x[l][i] < 0 or x[l][i] >= modulus[l]:
                 print(l, i, x[l][i], modulus[l])
                 # assert False
+
+
+def gen_scalar_tensor(scalar, modulus, cur_limbs):
+    return torch.from_numpy(
+        np.array(
+            [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)],
+            dtype=np.uint64,
+        )
+    ).cuda()
 
 
 @cv_convert

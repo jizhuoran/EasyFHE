@@ -64,7 +64,7 @@ def cipher_mul(in0, in1, cryptoContext):
     assert len(in0.cv) == 2 and len(in1.cv) == 2
     assert in0.cur_limbs == in1.cur_limbs
     bx = F.cv_mul(
-        in0.cv[0], in1.cv[0], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+        in0.cv[0], in1.cv[0], cryptoContext.moduliQ.cpu().numpy(), cryptoContext.q_mu, in0.cur_limbs
     )
     ax = F.cv_add(
         F.cv_mul(
@@ -115,12 +115,7 @@ def cipher_square(in0, cryptoContext):
 @ct_convert
 def cipher_add_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = torch.from_numpy(
-        np.array(
-            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
-            dtype=np.uint64,
-        )
-    ).cuda()
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ.cpu().numpy(), in0.cur_limbs)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1].cpu().numpy(),
@@ -131,12 +126,7 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
 @ct_convert
 def cipher_sub_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = torch.from_numpy(
-        np.array(
-            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
-            dtype=np.uint64,
-        )
-    ).cuda()
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ.cpu().numpy(), in0.cur_limbs)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1].cpu().numpy(),
@@ -147,12 +137,7 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
 @ct_convert
 def cipher_mul_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = torch.from_numpy(
-        np.array(
-            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
-            dtype=np.uint64,
-        )
-    ).cuda()
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ.cpu().numpy(), in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
             cv0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
