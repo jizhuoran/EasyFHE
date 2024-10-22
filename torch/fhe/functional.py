@@ -27,13 +27,25 @@ def cv_convert(func):
 
     return wrapper
 
+def cv_check(x, modulus, cur_limbs):
+    if isinstance(x, torch.Tensor):
+        x = x.cpu().numpy()
+    if isinstance(modulus, torch.Tensor):
+        modulus = modulus.cpu().numpy()
+    assert len(x.shape) == 2
+    for l in range(x.shape[0]):
+        for i in range(x.shape[1]):
+            if x[l][i] < 0 or x[l][i] >= modulus[cur_limbs]:
+                print(l, i, x[l][i], modulus[cur_limbs])
+                # assert False
+
 
 @cv_convert
 def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:
-        return torch.neg_mod_(x, 0, modulus, cur_limbs=cur_limbs)
+        return torch.neg_mod_(x, x, modulus, cur_limbs=cur_limbs)
     else:
-        return torch.neg_mod(x, 0, modulus, cur_limbs=cur_limbs)
+        return torch.neg_mod(x, x, modulus, cur_limbs=cur_limbs)
 
 
 @cv_convert

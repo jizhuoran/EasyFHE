@@ -114,27 +114,60 @@ def cipher_square(in0, cryptoContext):
 
 @ct_convert
 def cipher_add_scalar(in0, scalar, cryptoContext):
+    assert len(in0.cv) == 2
+    scalar_mod = torch.from_numpy(
+        np.array(
+            [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())],
+            dtype=np.uint64,
+        )
+    ).cuda()
+    # F.cv_check(in0.cv[0].cpu().numpy(), cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
-        F.cv_add_scalar(cv0, scalar, cryptoContext.moduliQ, in0.cur_limbs)
-        for cv0 in in0.cv
+        F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
+        in0.cv[1].cpu().numpy(),
     ]
     return Cipher(cv, in0.cur_limbs)
 
 
 @ct_convert
 def cipher_sub_scalar(in0, scalar, cryptoContext):
+    assert len(in0.cv) == 2
+    scalar_mod = torch.from_numpy(
+        np.array(
+            [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())],
+            dtype=np.uint64,
+        )
+    ).cuda()
+    # print("!!!!!")
+    # print("scalar", scalar)
+    # print(cryptoContext.moduliQ.cpu().numpy())
+    # print(
+    #     np.array(
+    #         [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())]
+    #     )
+    # )
+    # print(scalar - scalar_mod.cpu().numpy())
+    # print("!!!!!")
+    # F.cv_check(in0.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
-        F.cv_sub_scalar(cv0, scalar, cryptoContext.moduliQ, in0.cur_limbs)
-        for cv0 in in0.cv
+        F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
+        in0.cv[1].cpu().numpy(),
     ]
     return Cipher(cv, in0.cur_limbs)
 
 
 @ct_convert
 def cipher_mul_scalar(in0, scalar, cryptoContext):
+    assert len(in0.cv) == 2
+    scalar_mod = torch.from_numpy(
+        np.array(
+            [int(scalar) for MOD in cryptoContext.moduliQ.cpu().numpy()],
+            dtype=np.uint64,
+        )
+    ).cuda()
     cv = [
         F.cv_mul_scalar(
-            cv0, scalar, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+            cv0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
         )
         for cv0 in in0.cv
     ]
@@ -216,6 +249,7 @@ def homo_square(in0, cryptoContext):
     tmp = Ciphertext(np.array([tmp[0].copy(), tmp[1].copy()]), res.curr_limbs)
     return cipher_add(res, tmp, cryptoContext)
 
+
 def polys_add_cnst_mod(a, scalar, MOD):
     return F.cv_add_scalar(a, scalar, MOD, len(MOD))
 
@@ -292,41 +326,40 @@ def rescale_ct(ct, cryptoContext):
     return Ciphertext(res, ct.curr_limbs - 1)
 
 
-def DropLastElementAndScale(
-    a,
-    moduliQ,
-    qInvVec,
-    qRootScalePows,
-    qRootScalePowsInv,
-    NScaleInvModq,
-    QlQlInvModqlDivqlModq,
-    qInvModq,
-    curr_limbs,
-    N,
-):
+def DropLastElementAndScale(a, cryptoContext, curr_limbs, l):
     # the same as openfhe: DropLastElementAndScale
-    res = np.zeros((curr_limbs - 1, N), dtype=np.uint64)
+    res = np.zeros((curr_limbs - 1, cryptoContext.N), dtype=np.uint64)
 
     intt_a_last = arithmetic.iNTT(
         a[curr_limbs - 1],
-        N,
-        moduliQ[curr_limbs - 1],
-        qInvVec[curr_limbs - 1],
-        qRootScalePowsInv[curr_limbs - 1],
-        NScaleInvModq[curr_limbs - 1],
+        cryptoContext.N,
+        cryptoContext.moduliQ[curr_limbs - 1],
+        cryptoContext.qInvVec[curr_limbs - 1],
+        cryptoContext.qRootScalePowsInv[curr_limbs - 1],
+        cryptoContext.NScaleInvModq[curr_limbs - 1],
     )
     for i in range(curr_limbs - 1):
         tmp = arithmetic.vec_switch_modulus(
-            intt_a_last, moduliQ[i], moduliQ[curr_limbs - 1]
+            intt_a_last, cryptoContext.moduliQ[i], cryptoContext.moduliQ[curr_limbs - 1]
         )
-        tmp = arithmetic.vec_mul_scalar_mod(tmp, QlQlInvModqlDivqlModq[i], moduliQ[i])
-        res[i] = arithmetic.NTT(tmp, N, moduliQ[i], qInvVec[i], qRootScalePows[i])
+        tmp = arithmetic.vec_mul_scalar_mod(
+            tmp,
+            cryptoContext.QlQlInvModqlDivqlModq[cryptoContext.L - curr_limbs + l][i],
+            cryptoContext.moduliQ[i],
+        )
+        res[i] = arithmetic.NTT(
+            tmp,
+            cryptoContext.N,
+            cryptoContext.moduliQ[i],
+            cryptoContext.qInvVec[i],
+            cryptoContext.qRootScalePows[i],
+        )
 
     for i in range(curr_limbs - 1):
         tmp = arithmetic.vec_mul_scalar_mod(
-            a[i], qInvModq[curr_limbs - 1][i], moduliQ[i]
+            a[i], cryptoContext.qInvModq[curr_limbs - 1][i], cryptoContext.moduliQ[i]
         )
-        res[i] = arithmetic.vec_add_mod(res[i], tmp, moduliQ[i])
+        res[i] = arithmetic.vec_add_mod(res[i], tmp, cryptoContext.moduliQ[i])
 
     return res
 
@@ -334,68 +367,39 @@ def DropLastElementAndScale(
 def ModReduce_ct(ct, levels, cryptoContext):
     assert ct.curr_limbs > 1
 
-    L = cryptoContext.L
     curr_limbs = ct.curr_limbs
-    diffQl = L - curr_limbs
     N = cryptoContext.N
-    moduliQ = cryptoContext.moduliQ
-    qInvVec = cryptoContext.qInvVec
-    qRootScalePows = cryptoContext.qRootScalePows
-    qRootScalePowsInv = cryptoContext.qRootScalePowsInv
-    NScaleInvModq = cryptoContext.NScaleInvModq
-    qInvModq = cryptoContext.qInvModq
-    QlQlInvModqlDivqlModq = cryptoContext.QlQlInvModqlDivqlModq
 
     res = np.zeros((2, curr_limbs - 1, N), dtype=np.uint64)
     for l in range(levels):
         for k in range(2):
             res[k] = DropLastElementAndScale(
                 ct.cv[k],
-                moduliQ,
-                qInvVec,
-                qRootScalePows,
-                qRootScalePowsInv,
-                NScaleInvModq,
-                QlQlInvModqlDivqlModq[diffQl + l],
-                qInvModq,
+                cryptoContext,
                 curr_limbs,
-                N,
+                l,
             )
         curr_limbs -= 1
     return Ciphertext(res, curr_limbs)
 
 
 def LevelReduce_ct(ct, levels):
-    assert ct.curr_limbs - levels > 0
-    res_limbs = ct.curr_limbs - levels
-    N = ct.cv.shape[2]
-    res_cv = np.zeros((2, res_limbs, N), dtype=np.uint64)
-    res_cv = ct.cv[:, : ct.curr_limbs - levels, :]
-    return Ciphertext(res_cv, res_limbs)
+    return Ciphertext(ct.cv, ct.curr_limbs - levels)
 
-
-def add_cnstDouble_ct(ct, cnst, cryptoContext):
+def homo_add_scalar_double(ct, cnst, cryptoContext):
     tmpr = int(abs(cnst) * (2**cryptoContext.logqi))
     MOD = cryptoContext.moduliQ[: ct.curr_limbs]
-    res = np.zeros(ct.cv.shape, dtype=np.uint64)
 
     if cnst < 0:
+        # res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
+        res = np.zeros(ct.cv.shape, dtype=np.uint64)
         res[0] = ct.cv[0]
-        # print("!!!!!", tmpr, np.array(MOD, dtype=np.int64) - tmpr)
         res[1] = polys_sub_cnst_mod(ct.cv[1], tmpr, MOD)
-        # ttt =  F.cv_sub_scalar(ct.cv[1], tmpr, MOD, len(MOD))
-        # if not np.equal(res[1], ttt).all():
-        #     for i in range(res[1].shape[0]):
-        #         if not np.equal(res[1][i], ttt[i]).all():
-        #             print(res[1][i])
-        #             print(ttt[i])
-        # else:
-        #     print("equal")
     else:
-        res[0] = ct.cv[0]
-        res[1] = polys_add_cnst_mod(ct.cv[1], tmpr, MOD)
+        res = cipher_add_scalar(ct, tmpr, cryptoContext).cv
 
     return Ciphertext(res, ct.curr_limbs)
+
 
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = cipher_mul_scalar(in0, scalar, cryptoContext)
@@ -413,48 +417,27 @@ def homo_mul_scalar_double(in0, scalar, cryptoContext):
 
 
 def KeySwitch_ct(axax, cryptoContext):
-
-    K = cryptoContext.K
-    N = cryptoContext.N
-    curr_limbs = axax.shape[0]
-    mult_swk = cryptoContext.mult_swk
-    moduliQ = cryptoContext.moduliQ
-    moduliP = cryptoContext.moduliP
-    qInvVec = cryptoContext.qInvVec
-    pInvVec = cryptoContext.pInvVec
-    qRootScalePows = cryptoContext.qRootScalePows
-    pRootScalePows = cryptoContext.pRootScalePows
-    qRootScalePowsInv = cryptoContext.qRootScalePowsInv
-    pRootScalePowsInv = cryptoContext.pRootScalePowsInv
-    NScaleInvModq = cryptoContext.NScaleInvModq
-    NScaleInvModp = cryptoContext.NScaleInvModp
-    QHatInvModq = cryptoContext.PartQlHatInvModq
-    QHatModp = cryptoContext.PartQlHatModp
-    pHatInvModp = cryptoContext.pHatInvModp
-    pHatModq = cryptoContext.pHatModq
-    PInvModq = cryptoContext.PInvModq
-
     res = KeySwitch.KeySwitch_core(
         axax,
-        mult_swk,
-        moduliQ,
-        qInvVec,
-        qRootScalePows,
-        qRootScalePowsInv,
-        NScaleInvModq,
-        QHatInvModq,
-        pHatModq,
-        PInvModq,
-        moduliP,
-        pInvVec,
-        pRootScalePows,
-        pRootScalePowsInv,
-        QHatModp,
-        NScaleInvModp,
-        pHatInvModp,
-        curr_limbs,
-        K,
-        N,
+        cryptoContext.mult_swk,
+        cryptoContext.moduliQ,
+        cryptoContext.qInvVec,
+        cryptoContext.qRootScalePows,
+        cryptoContext.qRootScalePowsInv,
+        cryptoContext.NScaleInvModq,
+        cryptoContext.QHatInvModq,
+        cryptoContext.pHatModq,
+        cryptoContext.PInvModq,
+        cryptoContext.moduliP,
+        cryptoContext.pInvVec,
+        cryptoContext.pRootScalePows,
+        cryptoContext.pRootScalePowsInv,
+        cryptoContext.QHatModp,
+        cryptoContext.NScaleInvModp,
+        cryptoContext.pHatInvModp,
+        axax.shape[0],
+        cryptoContext.K,
+        cryptoContext.N,
     )
     return res
 
@@ -505,20 +488,20 @@ def InnerL1(
     tmp = LevelReduce_ct(T[5], 1)
     tmp = homo_mul_scalar_int(tmp, (1 << int(s_lg2_divqr_q_last)), cryptoContext)
     qs_qu = homo_add(qs_qu, tmp, cryptoContext)
-    qs_qu = add_cnstDouble_ct(qs_qu, s_divqr_q[0], cryptoContext)
+    qs_qu = homo_add_scalar_double(qs_qu, s_divqr_q[0], cryptoContext)
 
     tmp = T[5]
     tmp = homo_mul_scalar_int(tmp, (1 << int(q_lg2_divqr_q_last)), cryptoContext)
     qq_qu = homo_add(qq_qu, tmp, cryptoContext)
-    qq_qu = add_cnstDouble_ct(qq_qu, q_divqr_q[0], cryptoContext)
+    qq_qu = homo_add_scalar_double(qq_qu, q_divqr_q[0], cryptoContext)
 
     q_su = rescale_ct(q_su, cryptoContext)
-    q_su = add_cnstDouble_ct(q_su, s_divcs_q[0], cryptoContext)
+    q_su = homo_add_scalar_double(q_su, s_divcs_q[0], cryptoContext)
     tmp = LevelReduce_ct(T2[1], 1)
     q_su = homo_add(q_su, tmp, cryptoContext)
 
     q_qu = rescale_ct(q_qu, cryptoContext)
-    q_qu = add_cnstDouble_ct(q_qu, q_divcs_q[0], cryptoContext)
+    q_qu = homo_add_scalar_double(q_qu, q_divcs_q[0], cryptoContext)
     q_qu = homo_add(q_qu, T2[1], cryptoContext)
 
     q_qu = homo_mul(q_qu, qq_qu, cryptoContext)
@@ -534,7 +517,7 @@ def InnerL1(
     q_qu = rescale_ct(q_qu, cryptoContext)
     tmp = LevelReduce_ct(T[5], 1)
     q_qu = homo_add(q_qu, tmp, cryptoContext)
-    q_qu = add_cnstDouble_ct(q_qu, q_s2[0], cryptoContext)
+    q_qu = homo_add_scalar_double(q_qu, q_s2[0], cryptoContext)
 
     # lazy KS: merge KS in computing `q_su` and `qu`
     tmp = LevelReduce_ct(T[4], 1)
@@ -545,7 +528,7 @@ def InnerL1(
         tmp = homo_mul_scalar_double(tmp, divcs_q[i + 1], cryptoContext)
         qu = homo_add(qu, tmp, cryptoContext)
     qu = rescale_ct(qu, cryptoContext)
-    qu = add_cnstDouble_ct(qu, divcs_q[0], cryptoContext)
+    qu = homo_add_scalar_double(qu, divcs_q[0], cryptoContext)
     qu = homo_add(qu, T2[2], cryptoContext)
 
     tmp_qu = cipher_mul(qu, q_qu, cryptoContext)
@@ -570,21 +553,25 @@ def InnerL1(
     qu = rescale_ct(qu, cryptoContext)
     tmp = LevelReduce_ct(T[5], 2)
     qu = homo_add(qu, tmp, cryptoContext)
-    qu = add_cnstDouble_ct(qu, s_s2[0], cryptoContext)
+    qu = homo_add_scalar_double(qu, s_s2[0], cryptoContext)
 
     return qu
+
 
 def EvalChebyshevSeries(x, cryptoContext):
     curr_limbs = x.curr_limbs
 
+    F.cv_check(x.cv[0], cryptoContext.moduliQ, x.curr_limbs)
+
+
     tmp = np.zeros(x.cv.shape, dtype=np.uint64)
     T = [
-        Ciphertext(tmp, curr_limbs),
-        Ciphertext(tmp, curr_limbs),
-        Ciphertext(tmp, curr_limbs - 1),
-        Ciphertext(tmp, curr_limbs - 2),
-        Ciphertext(tmp, curr_limbs - 2),
-        Ciphertext(tmp, curr_limbs - 2),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
     ]
 
     # no linear transformation is needed if a = -1, b = 1, T_1(y) = y
@@ -595,9 +582,9 @@ def EvalChebyshevSeries(x, cryptoContext):
     T[1] = homo_square(T[0], cryptoContext)
     T[1] = homo_add(T[1], T[1], cryptoContext)
     T[1] = rescale_ct(T[1], cryptoContext)
-    T[1] = add_cnstDouble_ct(T[1], -1.0, cryptoContext)
-    T[0] = LevelReduce_ct(T[0], 1)
+    T[1] = homo_add_scalar_double(T[1], -1.0, cryptoContext)
 
+    T[0] = LevelReduce_ct(T[0], 1)
     T[2] = homo_mul(T[0], T[1], cryptoContext)
     T[2] = homo_add(T[2], T[2], cryptoContext)
     T[2] = rescale_ct(T[2], cryptoContext)
@@ -608,26 +595,28 @@ def EvalChebyshevSeries(x, cryptoContext):
     T[3] = homo_square(T[1], cryptoContext)
     T[3] = homo_add(T[3], T[3], cryptoContext)
     T[3] = rescale_ct(T[3], cryptoContext)
-    T[3] = add_cnstDouble_ct(T[3], -1.0, cryptoContext)
+    T[3] = homo_add_scalar_double(T[3], -1.0, cryptoContext)
+
+    T[0] = LevelReduce_ct(T[0], 1)
 
     T[4] = homo_mul(T[1], T[2], cryptoContext)
-    T[1] = LevelReduce_ct(T[1], 1)
     T[4] = homo_add(T[4], T[4], cryptoContext)
     T[4] = rescale_ct(T[4], cryptoContext)
-    T[0] = LevelReduce_ct(T[0], 1)
     T[4] = homo_sub(T[4], T[0], cryptoContext)
 
     T[5] = homo_square(T[2], cryptoContext)
-    T[2] = LevelReduce_ct(T[2], 1)
     T[5] = homo_add(T[5], T[5], cryptoContext)
     T[5] = rescale_ct(T[5], cryptoContext)
-    T[5] = add_cnstDouble_ct(T[5], -1.0, cryptoContext)
+    T[5] = homo_add_scalar_double(T[5], -1.0, cryptoContext)
+
+    T[1] = LevelReduce_ct(T[1], 1)
+    T[2] = LevelReduce_ct(T[2], 1)
 
     T2 = [
-        Ciphertext(tmp, curr_limbs),
-        Ciphertext(tmp, curr_limbs - 1),
-        Ciphertext(tmp, curr_limbs - 2),
-        Ciphertext(tmp, curr_limbs - 3),
+        None,
+        None,
+        None,
+        None,
     ]
 
     # Compute the Chebyshev polynomials T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
@@ -635,13 +624,13 @@ def EvalChebyshevSeries(x, cryptoContext):
     T[5] = LevelReduce_ct(T[5], 1)
     T2[1] = homo_add(T2[1], T2[1], cryptoContext)
     T2[1] = rescale_ct(T2[1], cryptoContext)
-    T2[1] = add_cnstDouble_ct(T2[1], -1.0, cryptoContext)
+    T2[1] = homo_add_scalar_double(T2[1], -1.0, cryptoContext)
 
     # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
     tmpct2 = T2[1]
     T2km1 = T[5]
     tmpct2 = homo_add(tmpct2, tmpct2, cryptoContext)
-    tmpct2 = add_cnstDouble_ct(tmpct2, -1.0, cryptoContext)
+    tmpct2 = homo_add_scalar_double(tmpct2, -1.0, cryptoContext)
     T2km1 = homo_mul(T2km1, tmpct2, cryptoContext)
     T2km1 = rescale_ct(T2km1, cryptoContext)
 
@@ -649,7 +638,7 @@ def EvalChebyshevSeries(x, cryptoContext):
         square = homo_square(T2[i - 1], cryptoContext)
         T2[i] = homo_add(square, square, cryptoContext)
         T2[i] = rescale_ct(T2[i], cryptoContext)
-        T2[i] = add_cnstDouble_ct(T2[i], -1.0, cryptoContext)
+        T2[i] = homo_add_scalar_double(T2[i], -1.0, cryptoContext)
 
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
         tmpct2 = T2[i]
@@ -697,7 +686,7 @@ def EvalChebyshevSeries(x, cryptoContext):
     result = LevelReduce_ct(result, 2)
     result = rescale_ct(result, cryptoContext)
 
-    result = add_cnstDouble_ct(result, first_divcs_q[0], cryptoContext)
+    result = homo_add_scalar_double(result, first_divcs_q[0], cryptoContext)
     result = homo_add(result, T2[3], cryptoContext)
 
     result = homo_mul(result, qu, cryptoContext)
@@ -725,6 +714,6 @@ def DoubleAngleIteration(in0, cryptoContext):
         in0 = ModReduce_ct(in0, 1, cryptoContext)
         in0 = homo_add(in0, in0, cryptoContext)
         # scalar = np.float64(np.float64(-1.0) / np.float64(math.pow((2.0 * M_PI), np.float64(math.pow(2.0, j - r)))))
-        in0 = add_cnstDouble_ct(in0, scalar[j - 1], cryptoContext)
+        in0 = homo_add_scalar_double(in0, scalar[j - 1], cryptoContext)
 
     return in0
