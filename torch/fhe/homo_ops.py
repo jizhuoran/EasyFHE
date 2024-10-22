@@ -157,27 +157,27 @@ def homo_sub(in0, in1, cryptoContext):
 
 def homo_mul(in0, in1, cryptoContext):
     res = cipher_mul(in0, in1, cryptoContext)
-
     input_ks = torch.tensor(res.cv[2].reshape(-1), dtype=torch.uint64, device="cuda")
-    tmp = F.cv_keyswitch(input_ks, res.cur_limbs, cryptoContext)
+    tmp = F.cv_keyswitch(input_ks, res.curr_limbs, cryptoContext)
     tmp0 = tmp[0].detach().cpu().numpy().reshape(res.cv[0].shape)
     tmp1 = tmp[1].detach().cpu().numpy().reshape(res.cv[1].shape)
+    # tmp0 = tmp[0].detach().cpu().numpy().reshape((res.curr_limbs, cryptoContext.N))
+    # tmp1 = tmp[1].detach().cpu().numpy().reshape((res.curr_limbs, cryptoContext.N))
 
     res.cv = res.cv[:2]
-    tmp = Cipher(np.array([tmp0.copy(), tmp1.copy()]), res.cur_limbs)
+    tmp = Cipher(np.array([tmp0.copy(), tmp1.copy()]), res.curr_limbs)
     return cipher_add(res, tmp, cryptoContext)
 
 
-# @ct_convert
 def homo_square(in0, cryptoContext):
     res = cipher_square(in0, cryptoContext)
     input_ks = torch.tensor(res.cv[2].reshape(-1), dtype=torch.uint64, device="cuda")
-    tmp = F.cv_keyswitch(input_ks, res.cur_limbs, cryptoContext)
-    tmp0 = tmp[0].detach().cpu().numpy().reshape(res.cv[0].shape)
-    tmp1 = tmp[1].detach().cpu().numpy().reshape(res.cv[1].shape)
+    tmp = F.cv_keyswitch(input_ks, res.curr_limbs, cryptoContext)
+    tmp0 = tmp[0].detach().cpu().numpy().reshape((res.curr_limbs, cryptoContext.N))
+    tmp1 = tmp[1].detach().cpu().numpy().reshape((res.curr_limbs, cryptoContext.N))
 
     res.cv = res.cv[:2]
-    tmp = Cipher(np.array([tmp0.copy(), tmp1.copy()]), res.cur_limbs)
+    tmp = Cipher(np.array([tmp0.copy(), tmp1.copy()]), res.curr_limbs)
     return cipher_add(res, tmp, cryptoContext)
 
 
