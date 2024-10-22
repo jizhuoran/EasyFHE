@@ -35,8 +35,8 @@ def cv_check(x, modulus, cur_limbs):
     assert len(x.shape) == 2
     for l in range(x.shape[0]):
         for i in range(x.shape[1]):
-            if x[l][i] < 0 or x[l][i] >= modulus[cur_limbs]:
-                print(l, i, x[l][i], modulus[cur_limbs])
+            if x[l][i] < 0 or x[l][i] >= modulus[l]:
+                print(l, i, x[l][i], modulus[l])
                 # assert False
 
 

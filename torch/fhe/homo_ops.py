@@ -117,11 +117,10 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
     scalar_mod = torch.from_numpy(
         np.array(
-            [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())],
+            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
             dtype=np.uint64,
         )
     ).cuda()
-    # F.cv_check(in0.cv[0].cpu().numpy(), cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1].cpu().numpy(),
@@ -134,21 +133,10 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
     scalar_mod = torch.from_numpy(
         np.array(
-            [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())],
+            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
             dtype=np.uint64,
         )
     ).cuda()
-    # print("!!!!!")
-    # print("scalar", scalar)
-    # print(cryptoContext.moduliQ.cpu().numpy())
-    # print(
-    #     np.array(
-    #         [int(int(scalar) % n) for n in list(cryptoContext.moduliQ.cpu().numpy())]
-    #     )
-    # )
-    # print(scalar - scalar_mod.cpu().numpy())
-    # print("!!!!!")
-    # F.cv_check(in0.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1].cpu().numpy(),
@@ -161,7 +149,7 @@ def cipher_mul_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
     scalar_mod = torch.from_numpy(
         np.array(
-            [int(scalar) for MOD in cryptoContext.moduliQ.cpu().numpy()],
+            [int(int(scalar) % int(n)) for n in list(cryptoContext.moduliQ.cpu().numpy())],
             dtype=np.uint64,
         )
     ).cuda()
@@ -248,21 +236,6 @@ def homo_square(in0, cryptoContext):
     res.cv = res.cv[:2]
     tmp = Ciphertext(np.array([tmp[0].copy(), tmp[1].copy()]), res.curr_limbs)
     return cipher_add(res, tmp, cryptoContext)
-
-
-def polys_add_cnst_mod(a, scalar, MOD):
-    return F.cv_add_scalar(a, scalar, MOD, len(MOD))
-
-
-def polys_sub_cnst_mod(a, scalar, MOD):
-    # return F.cv_sub_scalar(a, scalar, MOD, len(MOD))
-    assert a.shape[0] >= len(MOD)
-    curr_limbs = len(MOD)
-    N = a.shape[1]
-    c = np.zeros((curr_limbs, N), dtype=np.uint64)
-    for i, val in enumerate(MOD):
-        c[i] = arithmetic.vec_sub_scalar_mod(a[i], scalar, val)
-    return c
 
 
 def rescale(
@@ -391,10 +364,7 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
     MOD = cryptoContext.moduliQ[: ct.curr_limbs]
 
     if cnst < 0:
-        # res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
-        res = np.zeros(ct.cv.shape, dtype=np.uint64)
-        res[0] = ct.cv[0]
-        res[1] = polys_sub_cnst_mod(ct.cv[1], tmpr, MOD)
+        res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
     else:
         res = cipher_add_scalar(ct, tmpr, cryptoContext).cv
 
@@ -560,9 +530,6 @@ def InnerL1(
 
 def EvalChebyshevSeries(x, cryptoContext):
     curr_limbs = x.curr_limbs
-
-    F.cv_check(x.cv[0], cryptoContext.moduliQ, x.curr_limbs)
-
 
     tmp = np.zeros(x.cv.shape, dtype=np.uint64)
     T = [
