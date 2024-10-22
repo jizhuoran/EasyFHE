@@ -1143,9 +1143,9 @@ def test_ApproxMod():
     print("\n")
 
 def test_cuda_KS():
-    axax = N131072KS.axax1
-    axax = axax.reshape((3, 131072))
-    curr_limbs = 3
+    axax = N131072KS.axax0
+    axax = axax.reshape((4, 131072))
+    curr_limbs = 4
     logN = 17
     N = 2 ** logN
     L = 4
@@ -1161,23 +1161,67 @@ def test_cuda_KS():
                             moduliQ, moduliP, rootsQ, rootsP, swk)
      
     input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
-    res = F.cv_keyswitch(input = input_ks,
+    res0 = F.cv_keyswitch(input = input_ks,
                       curr_limbs =curr_limbs,
                       context_cuda=context_cuda)
+    input_ks = torch.tensor(N131072KS.axax1.reshape(-1), dtype=torch.uint64, device="cuda")
+    res1 = F.cv_keyswitch(input = input_ks,
+                      curr_limbs =curr_limbs-1,
+                      context_cuda=context_cuda)
     
-    res0 = res[0].detach().cpu().numpy()
-    res1 = res[1].detach().cpu().numpy()
+    input_ks = torch.tensor(N131072KS.axax2.reshape(-1), dtype=torch.uint64, device="cuda")
+    res2 = F.cv_keyswitch(input = input_ks,
+                      curr_limbs =curr_limbs-2,
+                      context_cuda=context_cuda)
+    
+    res00 = res0[0].detach().cpu().numpy()
+    res01 = res0[1].detach().cpu().numpy()
+
+    golden_answer = N131072KS.sumMult0[0]
+    golden_answer = golden_answer.reshape(res00.shape)
+    compare = np.array_equal(res00, golden_answer)
+    print("\n\ntest: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N131072KS.sumMult0[1]
+    golden_answer = golden_answer.reshape(res01.shape)
+    compare = np.array_equal(res01, golden_answer)
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+    
+    
+    res10 = res1[0].detach().cpu().numpy()
+    res11 = res1[1].detach().cpu().numpy()
 
     golden_answer = N131072KS.sumMult1[0]
-    golden_answer = golden_answer.reshape(res0.shape)
-    compare = np.array_equal(res0, golden_answer)
+    golden_answer = golden_answer.reshape(res10.shape)
+    compare = np.array_equal(res10, golden_answer)
     print("\n\ntest: \n\nres_ax result: ")
     print(compare)
     print("\n")
 
     golden_answer = N131072KS.sumMult1[1]
-    golden_answer = golden_answer.reshape(res1.shape)
-    compare = np.array_equal(res1, golden_answer)
+    golden_answer = golden_answer.reshape(res11.shape)
+    compare = np.array_equal(res11, golden_answer)
+    print("\nres_bx result: ")
+    print(compare)
+    print("\n")
+    
+    res20 = res2[0].detach().cpu().numpy()
+    res21 = res2[1].detach().cpu().numpy()
+
+    golden_answer = N131072KS.sumMult2[0]
+    golden_answer = golden_answer.reshape(res20.shape)
+    compare = np.array_equal(res20, golden_answer)
+    print("\n\ntest: \n\nres_ax result: ")
+    print(compare)
+    print("\n")
+
+    golden_answer = N131072KS.sumMult2[1]
+    golden_answer = golden_answer.reshape(res21.shape)
+    compare = np.array_equal(res21, golden_answer)
     print("\nres_bx result: ")
     print(compare)
     print("\n")

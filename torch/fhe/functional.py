@@ -304,7 +304,8 @@ def cv_keyswitch(
     context_cuda: Context,
     inplace: bool = False,
 ) -> Tensor:
-    beta = (int)((curr_limbs + 1) / context_cuda.alpha)
+    true_beta = int((curr_limbs +(context_cuda.K -1)) / context_cuda.K)
+    context_cuda.beta = true_beta
     modup_res = cv_modup(
         input,
         curr_limbs=curr_limbs,

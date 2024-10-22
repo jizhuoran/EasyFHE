@@ -236,54 +236,17 @@ def homo_mult(in0, in1, cryptoContext):
     curr_limbs = min(in0.curr_limbs, in1.curr_limbs)
     N = cryptoContext.N
     K = cryptoContext.K
-    swk = np.array(cryptoContext.mult_swk, dtype=np.uint64)
-
-    moduliQ = cryptoContext.moduliQ
-    moduliP = cryptoContext.moduliP
-    qInvVec = cryptoContext.qInvVec
-    pInvVec = cryptoContext.pInvVec
-    qRootScalePows = cryptoContext.qRootScalePows
-    pRootScalePows = cryptoContext.pRootScalePows
-    qRootScalePowsInv = cryptoContext.qRootScalePowsInv
-    pRootScalePowsInv = cryptoContext.pRootScalePowsInv
-    NScaleInvModq = cryptoContext.NScaleInvModq
-    NScaleInvModp = cryptoContext.NScaleInvModp
-    QHatInvModq = cryptoContext.PartQlHatInvModq
-    QHatModp = cryptoContext.PartQlHatModp
-    pHatInvModp = cryptoContext.pHatInvModp
-    pHatModq = cryptoContext.pHatModq
-    PInvModq = cryptoContext.PInvModq
-    q_mu = cryptoContext.q_mu
 
     res = cipher_mul(in0, in1, cryptoContext)
 
-    tmp = KeySwitch.KeySwitch_core(
-        res.cv[2],
-        swk,
-        moduliQ,
-        qInvVec,
-        qRootScalePows,
-        qRootScalePowsInv,
-        NScaleInvModq,
-        QHatInvModq,
-        pHatModq,
-        PInvModq,
-        moduliP,
-        pInvVec,
-        pRootScalePows,
-        pRootScalePowsInv,
-        QHatModp,
-        NScaleInvModp,
-        pHatInvModp,
-        curr_limbs,
-        K,
-        N,
-    )
+    input_ks = torch.tensor(res.cv[2].reshape(-1), dtype=torch.uint64, device="cuda")
+    tmp = F.cv_keyswitch(input_ks, curr_limbs, cryptoContext)
+    tmp0 = tmp[0].detach().cpu().numpy().reshape(res.cv[0].shape)
+    tmp1 = tmp[1].detach().cpu().numpy().reshape(res.cv[1].shape)
 
     res.cv = res.cv[:2]
-    tmp = Ciphertext(np.array([tmp[0].copy(), tmp[1].copy()]), res.curr_limbs)
+    tmp = Ciphertext(np.array([tmp0.copy(), tmp1.copy()]), res.curr_limbs)
     return cipher_add(res, tmp, cryptoContext)
-
 
 def homo_square_core(in0, MOD, MU):
     dim = 3

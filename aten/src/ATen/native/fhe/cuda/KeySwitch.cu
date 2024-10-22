@@ -130,7 +130,7 @@ __global__ void modup_step_two_kernel(
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
   uint128_t4 accum = accumulate_in_modup(
       ptr, degree, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
-  int gap = level - end_length;
+  int gap = level - curr_limbs;
   int prime_idx = out_idx +
       (((out_idx >= 0 && out_idx < begin_idx) ||
         (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
