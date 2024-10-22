@@ -1161,18 +1161,12 @@ def test_cuda_KS():
                             moduliQ, moduliP, rootsQ, rootsP, swk)
      
     input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
-    res0 = F.cv_keyswitch(input = input_ks,
-                      curr_limbs =curr_limbs,
-                      context_cuda=context_cuda)
+    res0 = F.cv_keyswitch(input=input_ks, cur_limbs=curr_limbs, context_cuda=context_cuda)
     input_ks = torch.tensor(N131072KS.axax1.reshape(-1), dtype=torch.uint64, device="cuda")
-    res1 = F.cv_keyswitch(input = input_ks,
-                      curr_limbs =curr_limbs-1,
-                      context_cuda=context_cuda)
+    res1 = F.cv_keyswitch(input=input_ks, cur_limbs=curr_limbs - 1, context_cuda=context_cuda)
     
     input_ks = torch.tensor(N131072KS.axax2.reshape(-1), dtype=torch.uint64, device="cuda")
-    res2 = F.cv_keyswitch(input = input_ks,
-                      curr_limbs =curr_limbs-2,
-                      context_cuda=context_cuda)
+    res2 = F.cv_keyswitch(input=input_ks, cur_limbs=curr_limbs - 2, context_cuda=context_cuda)
     
     res00 = res0[0].detach().cpu().numpy()
     res01 = res0[1].detach().cpu().numpy()

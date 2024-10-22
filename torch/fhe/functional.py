@@ -326,21 +326,21 @@ def cv_innerproduct(
 
 def cv_keyswitch(
     input: Tensor,
-    curr_limbs: int,
+    cur_limbs: int,
     context_cuda: Context,
     inplace: bool = False,
 ) -> Tensor:
-    true_beta = int((curr_limbs +(context_cuda.K -1)) / context_cuda.K)
+    true_beta = int((cur_limbs + (context_cuda.K - 1)) / context_cuda.K)
     context_cuda.beta = true_beta
     modup_res = cv_modup(
         input,
-        curr_limbs=curr_limbs,
+        curr_limbs=cur_limbs,
         context=context_cuda,
         inplace=inplace,
     )
     inner_product = cv_innerproduct(
         modup_res,
-        curr_limbs,
+        cur_limbs,
         context_cuda,
         inplace=inplace,
     )
@@ -350,14 +350,14 @@ def cv_keyswitch(
 
     moddown_ax = cv_moddown(
         sumMult_ax,
-        curr_limbs=curr_limbs,
+        curr_limbs=cur_limbs,
         context=context_cuda,
         inplace=False,
     )
 
     moddown_bx = cv_moddown(
         sumMult_bx,
-        curr_limbs=curr_limbs,
+        curr_limbs=cur_limbs,
         context=context_cuda,
         inplace=False,
     )
