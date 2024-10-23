@@ -362,5 +362,5 @@ def cv_keyswitch(
         inplace=False,
     )
 
-    out = torch.stack((moddown_ax, moddown_bx), dim=0)
-    return out
+    return np.array([moddown_ax.cpu().numpy(), moddown_bx.cpu().numpy()], dtype=np.uint64)
+    return [moddown_ax, moddown_bx]

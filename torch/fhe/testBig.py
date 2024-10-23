@@ -57,14 +57,13 @@ class Hmult3_N16_L12_K3:
 HMult3 = Hmult3_N16_L12_K3()
 
 
-def compare_and_print(res, golden, test_name):
-    # compare = np.array_equal(res, golden)
-    # # compare = res == golden_answer
-    # print(f"\ntest {test_name}: \nresult: ")
-    # print(compare)
-
-    compare0 = np.array_equal(res[0], golden[0])
-    compare1 = np.array_equal(res[1], golden[1])
+def compare_and_print(res, golden, test_name, cur_limbs=-1):
+    if not cur_limbs == -1:
+        compare0 = np.array_equal(res[0][:cur_limbs], golden[0])
+        compare1 = np.array_equal(res[1][:cur_limbs], golden[1])
+    else:
+        compare0 = np.array_equal(res[0], golden[0])
+        compare1 = np.array_equal(res[1], golden[1])
     # compare = res == golden_answer
     print(f"\ntest {test_name}: \nresult: ")
     print(compare0)
@@ -160,11 +159,11 @@ def test_HMult3():
 
     mult = homo_ops.homo_mul(res, res, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult2_rescale1, dtype=np.uint64).reshape(mult.cv.shape)
-    compare_and_print(mult.cv, golden_answer, "mult2_rescale1")
+    compare_and_print(mult.cv, golden_answer, "mult2_rescale1", mult.curr_limbs)
 
     res = homo_ops.ModReduce_ct(mult, 1, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult2_rescale2, dtype=np.uint64).reshape(res.cv.shape)
-    compare_and_print(res.cv, golden_answer, "mult2_rescale2")
+    compare_and_print(res.cv, golden_answer, "mult2_rescale2", res.curr_limbs)
 
     mult = homo_ops.homo_mul(res, res, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult3_rescale2, dtype=np.uint64).reshape(mult.cv.shape)
