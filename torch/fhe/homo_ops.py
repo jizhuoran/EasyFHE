@@ -331,7 +331,8 @@ def homo_mul_scalar_double(in0, scalar, cryptoContext):
 
 
 def KeySwitch_ct(axax, cur_limbs, cryptoContext):
-    return F.cv_keyswitch(axax.reshape(-1), cur_limbs, cryptoContext)
+    input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
+    return F.cv_keyswitch(input_ks, cur_limbs, cryptoContext)
     res = KeySwitch.KeySwitch_core(
         axax,
         cryptoContext.mult_swk,
