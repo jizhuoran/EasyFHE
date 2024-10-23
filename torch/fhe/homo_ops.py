@@ -330,7 +330,8 @@ def homo_mul_scalar_double(in0, scalar, cryptoContext):
     return Ciphertext(np.array(res.cv), in0.curr_limbs)
 
 
-def KeySwitch_ct(axax, cryptoContext):
+def KeySwitch_ct(axax, cur_limbs, cryptoContext):
+    return F.cv_keyswitch(axax.reshape(-1), cur_limbs, cryptoContext)
     res = KeySwitch.KeySwitch_core(
         axax,
         cryptoContext.mult_swk,
@@ -460,7 +461,7 @@ def InnerL1(
 
     qu = cipher_add(qu, qs_su, cryptoContext)
 
-    summult = KeySwitch_ct(axax, cryptoContext)
+    summult = KeySwitch_ct(axax, qu.curr_limbs, cryptoContext)
     summult = Ciphertext(summult, q_qu.curr_limbs)
     qu = cipher_add(qu, summult, cryptoContext)
 
