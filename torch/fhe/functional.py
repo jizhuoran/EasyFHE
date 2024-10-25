@@ -363,4 +363,57 @@ def cv_keyswitch(
     )
 
     return np.array([moddown_ax.cpu().numpy(), moddown_bx.cpu().numpy()], dtype=np.uint64)
-    return [moddown_ax, moddown_bx]
+    # return [moddown_ax, moddown_bx]
+    
+def cv_drop_last_element_and_scale(
+    input: Tensor,
+    context_cuda: Context,
+    cur_limbs: int,
+    l: int,
+    inplace: bool = False,
+) -> Tensor:
+    out = torch.tensor(
+                [0] * ((context_cuda.L - 1) * context_cuda.degree),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+    if inplace:
+        rescale = torch.drop_last_element_and_scale_(
+            out,
+            input,
+            curr_limbs=cur_limbs,
+            l = l,
+            level = context_cuda.L,
+            param_degree = context_cuda.degree,
+            param_primes= context_cuda.primes,
+            param_barret_ratio= context_cuda.barret_ratio,
+            param_barret_k=context_cuda.barret_k,
+            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
+            param_power_of_roots=context_cuda.power_of_roots,
+            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
+            qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
+            qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
+            q_inv_mod_q=context_cuda.q_inv_mod_q,
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+    else:
+        rescale = torch.drop_last_element_and_scale(
+            out,
+            input,
+            curr_limbs=cur_limbs,
+            l = l,
+            level = context_cuda.L,
+            param_degree = context_cuda.degree,
+            param_primes= context_cuda.primes,
+            param_barret_ratio= context_cuda.barret_ratio,
+            param_barret_k=context_cuda.barret_k,
+            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
+            param_power_of_roots=context_cuda.power_of_roots,
+            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
+            qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
+            qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
+            q_inv_mod_q=context_cuda.q_inv_mod_q,
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+        
+    return rescale.detach().cpu().numpy()

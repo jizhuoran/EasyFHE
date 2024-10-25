@@ -451,6 +451,12 @@ class Context:
             self.prod_inv_moddown = []
             self.prod_inv_shoup_moddown = []
             
+            #for drop_last_element_and_scale
+            self.qlql_inv_mod_ql_div_ql_mod_q = None
+            self.qlql_inv_mod_ql_div_ql_mod_q_shoup = None
+            self.q_inv_mod_q = None
+            self.q_inv_mod_q_shoup = None
+            
             self.swk_ax_cuda = torch.tensor(self.mult_swk[0].reshape(-1),dtype=torch.uint64,
                 device="cuda")
             self.swk_bx_cuda = torch.tensor(self.mult_swk[1].reshape(-1),dtype=torch.uint64,
@@ -480,6 +486,11 @@ class Context:
             )
             self.modup_out = torch.tensor(
                 [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.rescale_out = torch.tensor(
+                [0] * ((self.L - 1) * self.degree),
                 dtype=torch.uint64,
                 device="cuda",
             )
@@ -579,6 +590,34 @@ class Context:
             self.prod_inv_shoup_moddown.append(
                 torch.tensor(prod_shoup, dtype=torch.uint64, device="cuda")
             )
+            
+            # cal rescale param
+            QlQlInvModqlDivqlModq = self.QlQlInvModqlDivqlModq.reshape(-1)
+            qlql_inv_mod_ql_div_ql_mod_q_vec = []
+            qlql_inv_mod_ql_div_ql_mod_q_shoup_vec =[]
+            for i in range(self.L-1):
+                for j in range(self.L-1):
+                    QlQlInvModqlDivqlModq_i = QlQlInvModqlDivqlModq[i*(self.L-1)+j]
+                    prime = self.primes[j]
+                    shoup = self.shoup(int(QlQlInvModqlDivqlModq_i),prime)
+                    qlql_inv_mod_ql_div_ql_mod_q_vec.append(QlQlInvModqlDivqlModq_i)
+                    qlql_inv_mod_ql_div_ql_mod_q_shoup_vec.append(shoup)
+            self.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
+            self.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_shoup_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
+            print(self.qlql_inv_mod_ql_div_ql_mod_q_shoup[3])
+            
+            qInvModq = self.qInvModq.reshape(-1)
+            qInvModq_vec = []
+            qInvModq_shoup_vec = []
+            for i in range(self.L):
+                for j in range(self.L):
+                    qInvModq_i = qInvModq[i*self.L +j]
+                    prime = self.primes[j]
+                    shoup = self.shoup(int(qInvModq_i), prime)
+                    qInvModq_vec.append(qInvModq_i)
+                    qInvModq_shoup_vec.append(shoup)
+            self.q_inv_mod_q = torch.tensor(np.array(qInvModq_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
+            self.q_inv_mod_q_shoup = torch.tensor(np.array(qInvModq_shoup_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
             
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
 

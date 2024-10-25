@@ -15883,3 +15883,18 @@
   device_check: NoCheck
   dispatch:
     CUDA: innerproduct_cuda_out
+
+- func: drop_last_element_and_scale(Tensor self, Tensor input, *, int curr_limbs, int l, int level, int param_degree, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: drop_last_element_scale_cuda
+
+- func: drop_last_element_and_scale_(Tensor(a!) self, Tensor input, *, int curr_limbs, int l, int level, int param_degree, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: drop_last_element_scale_cuda_
+
+- func: drop_last_element_and_scale.out(Tensor self, Tensor input, *, int curr_limbs, int l, int level, int param_degree, Tensor param_primes, Tensor param_barret_ratio, Tensor param_barret_k, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: drop_last_element_scale_cuda_out

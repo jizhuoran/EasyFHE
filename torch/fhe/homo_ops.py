@@ -5,7 +5,7 @@ from .context import Context
 from . import functional as F
 from . import arithmetic
 from . import KeySwitch
-from .data.bsConst import *
+# from .data.bsConst import *
 
 Tensor = torch.Tensor
 
@@ -246,6 +246,7 @@ def rescale_ct(ct, cryptoContext):
 def DropLastElementAndScale(a, cryptoContext, curr_limbs, l):
     # the same as openfhe: DropLastElementAndScale
     res = np.zeros((curr_limbs - 1, cryptoContext.N), dtype=np.uint64)
+    np.savetxt("test_in.txt", a.reshape(-1), fmt="%d")
 
     intt_a_last = arithmetic.iNTT(
         a[curr_limbs - 1],
@@ -277,7 +278,7 @@ def DropLastElementAndScale(a, cryptoContext, curr_limbs, l):
             a[i], cryptoContext.qInvModq[curr_limbs - 1][i], cryptoContext.moduliQ[i]
         )
         res[i] = arithmetic.vec_add_mod(res[i], tmp, cryptoContext.moduliQ[i])
-
+    np.savetxt("test_out.txt", res.reshape(-1), fmt="%d")
     return res
 
 
@@ -290,12 +291,8 @@ def ModReduce_ct(ct, levels, cryptoContext):
     res = np.zeros((2, curr_limbs - 1, N), dtype=np.uint64)
     for l in range(levels):
         for k in range(2):
-            res[k] = DropLastElementAndScale(
-                ct.cv[k],
-                cryptoContext,
-                curr_limbs,
-                l,
-            )
+            input = torch.tensor(ct.cv[k].reshape(-1), dtype=torch.uint64, device="cuda")
+            res[k] = F.cv_drop_last_element_and_scale(input, cryptoContext,curr_limbs,l).reshape(curr_limbs-1,N)
         curr_limbs -= 1
     return Ciphertext(res, curr_limbs)
 
