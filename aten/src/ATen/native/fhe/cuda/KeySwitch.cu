@@ -1503,7 +1503,6 @@ static void switch_mudulus(
 
 static void drop_last_element_scale_template(
     const Tensor& from,
-    Tensor& from_copy,
     int64_t curr_limbs,
     int64_t l,
     int64_t level,
@@ -1521,10 +1520,7 @@ static void drop_last_element_scale_template(
     const Tensor& q_inv_mod_q_shoup,
     Tensor& res) {
   const int end_length = curr_limbs - 1;
-
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-  auto from_copy_ptr =
-      reinterpret_cast<uint64_t*>(from_copy.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       from_ptr,
@@ -1567,7 +1563,7 @@ static void drop_last_element_scale_template(
 
   start_op2_idx = (curr_limbs - 1) * (level);
   const_mult_batch_(
-      from_copy_ptr,
+      from_ptr,
       q_inv_mod_q,
       q_inv_mod_q_shoup,
       0,
@@ -1575,12 +1571,12 @@ static void drop_last_element_scale_template(
       0,
       start_op2_idx,
       param_degree,
-      from_copy_ptr,
+      from_ptr,
       param_primes);
 
   vec_add_mod_batch(
       to_ptr,
-      from_copy_ptr,
+      from_ptr,
       param_primes,
       param_barret_ratio,
       param_barret_k,
@@ -1608,12 +1604,10 @@ Tensor drop_last_element_scale_cuda(
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
   auto res = to.clone();
-  auto from_copy = from.clone();
   res.resize_({(curr_limbs - 1) * param_degree});
 
   drop_last_element_scale_template(
       from,
-      from_copy,
       curr_limbs,
       l,
       level,
@@ -1652,12 +1646,10 @@ Tensor& drop_last_element_scale_cuda_(
     const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
-  auto from_copy = from.clone();
   to.resize_({(curr_limbs - 1) * param_degree});
 
   drop_last_element_scale_template(
       from,
-      from_copy,
       curr_limbs,
       l,
       level,
@@ -1697,12 +1689,10 @@ Tensor& drop_last_element_scale_cuda_out(
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup,
     Tensor& res) {
-  auto from_copy = from.clone();
   res.resize_({(curr_limbs - 1) * param_degree});
 
   drop_last_element_scale_template(
       from,
-      from_copy,
       curr_limbs,
       l,
       level,

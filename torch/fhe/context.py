@@ -604,7 +604,6 @@ class Context:
                     qlql_inv_mod_ql_div_ql_mod_q_shoup_vec.append(shoup)
             self.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
             self.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_shoup_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
-            print(self.qlql_inv_mod_ql_div_ql_mod_q_shoup[3])
             
             qInvModq = self.qInvModq.reshape(-1)
             qInvModq_vec = []
