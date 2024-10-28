@@ -372,14 +372,9 @@ def cv_drop_last_element_and_scale(
     l: int,
     inplace: bool = False,
 ) -> Tensor:
-    out = torch.tensor(
-                [0] * ((context_cuda.L - 1) * context_cuda.degree),
-                dtype=torch.uint64,
-                device="cuda",
-            )
     if inplace:
         rescale = torch.drop_last_element_and_scale_(
-            out,
+            context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
             l = l,
@@ -398,7 +393,7 @@ def cv_drop_last_element_and_scale(
             q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
     else:
         rescale = torch.drop_last_element_and_scale(
-            out,
+            context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
             l = l,
