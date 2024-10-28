@@ -240,13 +240,14 @@ def rescale_ct(ct, cryptoContext):
             ct.curr_limbs,
             N,
         )
+        # input = torch.tensor(ct.cv[k].reshape(-1), dtype=torch.uint64, device="cuda")
+        # res[k] = F.cv_rescale(input, cryptoContext, ct.curr_limbs).reshape(ct.curr_limbs - 1, N)
     return Ciphertext(res, ct.curr_limbs - 1)
 
 
 def DropLastElementAndScale(a, cryptoContext, curr_limbs, l):
     # the same as openfhe: DropLastElementAndScale
     res = np.zeros((curr_limbs - 1, cryptoContext.N), dtype=np.uint64)
-    np.savetxt("test_in.txt", a.reshape(-1), fmt="%d")
 
     intt_a_last = arithmetic.iNTT(
         a[curr_limbs - 1],
@@ -278,7 +279,6 @@ def DropLastElementAndScale(a, cryptoContext, curr_limbs, l):
             a[i], cryptoContext.qInvModq[curr_limbs - 1][i], cryptoContext.moduliQ[i]
         )
         res[i] = arithmetic.vec_add_mod(res[i], tmp, cryptoContext.moduliQ[i])
-    np.savetxt("test_out.txt", res.reshape(-1), fmt="%d")
     return res
 
 

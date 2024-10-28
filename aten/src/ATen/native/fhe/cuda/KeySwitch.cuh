@@ -223,13 +223,12 @@ __global__ void negateInplace_(
 
 __global__ void subInplace_(
     size_t degree,
-    size_t log_degree,
     size_t batch,
     const uint64_t* primes,
     uint64_t* op1,
     const uint64_t* op2) {
   STRIDED_LOOP_START(batch * degree, i)
-  const int prime_idx = i >> log_degree;
+  const int prime_idx = i / degree;
   const uint64_t prime = primes[prime_idx];
   if (op1[i] >= op2[i]) {
     op1[i] -= op2[i];
@@ -256,6 +255,25 @@ __global__ void vec_add_mod_batch_(
   const auto barret_ratio = d_barret_ratio[out_prime_idx];
   const auto barret_k = d_barret_k[out_prime_idx];
   barret_reduction_64_64(op1[i] + op2[i], to[i], prime, barret_ratio, barret_k);
+
+  STRIDED_LOOP_END;
+}
+
+__global__ void vec_mod_batch_(
+    int degree_,
+    uint64_t* d_primes,
+    uint64_t* d_barret_ratio,
+    uint64_t* d_barret_k,
+    const uint64_t* op1,
+    const uint64_t batch,
+    uint64_t* to) {
+  STRIDED_LOOP_START((degree_ * batch), i);
+  const int out_prime_idx = i / degree_;
+  const int op1_idx = i % degree_;
+  const auto prime = d_primes[out_prime_idx];
+  const auto barret_ratio = d_barret_ratio[out_prime_idx];
+  const auto barret_k = d_barret_k[out_prime_idx];
+  barret_reduction_64_64(op1[op1_idx], to[i], prime, barret_ratio, barret_k);
 
   STRIDED_LOOP_END;
 }

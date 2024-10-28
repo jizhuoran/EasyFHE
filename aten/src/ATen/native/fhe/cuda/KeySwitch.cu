@@ -953,7 +953,6 @@ static void SubInplace(
     const uint64_t* op2,
     const int64_t batch,
     const int64_t param_degree,
-    const int64_t param_log_degree,
     const Tensor& primes) {
   AT_DISPATCH_V2(
       kUInt64,
@@ -965,7 +964,7 @@ static void SubInplace(
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::subInplace_<<<grid_dim, block_dim, 0, stream>>>(
-            param_degree, param_log_degree, batch, primes_ptr, op1, op2);
+            param_degree, batch, primes_ptr, op1, op2);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
@@ -1074,13 +1073,7 @@ static void moddown_core_template(
   const auto& prod_inv = prod_inv_moddown.at(0);
   const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(0);
 
-  SubInplace(
-      to_ptr,
-      from_ptr,
-      end_length,
-      param_degree,
-      param_log_degree,
-      param_primes);
+  SubInplace(to_ptr, from_ptr, end_length, param_degree, param_primes);
 
   NegateInplace(
       to_ptr, end_length, param_primes, param_degree, param_log_degree);
@@ -1285,13 +1278,7 @@ static void moddown_cuda_template(
   const auto& prod_inv = prod_inv_moddown.at(0);
   const auto& prod_inv_psinv = prod_inv_shoup_moddown.at(0);
 
-  SubInplace(
-      to_ptr,
-      from_ptr,
-      end_length,
-      param_degree,
-      param_log_degree,
-      param_primes);
+  SubInplace(to_ptr, from_ptr, end_length, param_degree, param_primes);
 
   NegateInplace(
       to_ptr, end_length, param_primes, param_degree, param_log_degree);
@@ -1471,6 +1458,40 @@ static void vec_add_mod_batch(
             barret_k_ptr,
             op1_ptr,
             op2_ptr,
+            (int)batch,
+            res_ptr);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+      }),
+      kUInt64);
+}
+
+static void vec_mod_batch(
+    uint64_t* op1_ptr,
+    const Tensor& primes,
+    const Tensor& param_barret_ratio,
+    const Tensor& param_barret_k,
+    int64_t batch,
+    int64_t degree,
+    uint64_t* res_ptr) {
+  AT_DISPATCH_V2(
+      primes.scalar_type(),
+      "vec_add_mod_batch_",
+      AT_WRAP([&]() {
+        auto primes_ptr =
+            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+        auto barret_ratio_ptr = reinterpret_cast<uint64_t*>(
+            param_barret_ratio.data_ptr<uint64_t>());
+        auto barret_k_ptr =
+            reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
+        const int block_dim = 256;
+        const int grid_dim = degree * batch / block_dim;
+        auto stream = at::cuda::getCurrentCUDAStream();
+        fhe::vec_mod_batch_<<<grid_dim, block_dim, 0, stream>>>(
+            (int)degree,
+            primes_ptr,
+            barret_ratio_ptr,
+            barret_k_ptr,
+            op1_ptr,
             (int)batch,
             res_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -1706,6 +1727,181 @@ Tensor& drop_last_element_scale_cuda_out(
       inverse_scaled_power_of_roots_div_two,
       qlql_inv_mod_ql_div_ql_mod_q,
       qlql_inv_mod_ql_div_ql_mod_q_shoup,
+      q_inv_mod_q,
+      q_inv_mod_q_shoup,
+      res);
+
+  return res;
+}
+
+static void rescale_template(
+    const Tensor& from,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t param_degree,
+    const Tensor& param_primes,
+    const Tensor& param_barret_ratio,
+    const Tensor& param_barret_k,
+    const Tensor& param_power_of_roots_shoup,
+    const Tensor& param_power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& q_inv_mod_q,
+    const Tensor& q_inv_mod_q_shoup,
+    Tensor& res) {
+  const int end_length = curr_limbs - 1;
+  auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
+  auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  iNTT_impl(
+      from_ptr,
+      end_length,
+      1,
+      curr_limbs,
+      level,
+      param_degree,
+      inverse_power_of_roots_div_two,
+      param_primes,
+      inverse_scaled_power_of_roots_div_two);
+
+  auto ptr = from_ptr + param_degree * end_length;
+
+  vec_mod_batch(
+      ptr,
+      param_primes,
+      param_barret_ratio,
+      param_barret_k,
+      end_length,
+      param_degree,
+      to_ptr);
+
+  NTT_impl(
+      to_ptr,
+      0,
+      end_length,
+      param_degree,
+      param_power_of_roots_shoup,
+      param_primes,
+      param_power_of_roots);
+
+  SubInplace(from_ptr, to_ptr, end_length, param_degree, param_primes);
+
+  int start_op2_idx = (curr_limbs - 1) * (level);
+  const_mult_batch_(
+      from_ptr,
+      q_inv_mod_q,
+      q_inv_mod_q_shoup,
+      0,
+      end_length,
+      0,
+      start_op2_idx,
+      param_degree,
+      to_ptr,
+      param_primes);
+}
+
+Tensor rescale_cuda(
+    const Tensor& to,
+    const Tensor& from,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t param_degree,
+    const Tensor& param_primes,
+    const Tensor& param_barret_ratio,
+    const Tensor& param_barret_k,
+    const Tensor& param_power_of_roots_shoup,
+    const Tensor& param_power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& q_inv_mod_q,
+    const Tensor& q_inv_mod_q_shoup) {
+  auto res = to.clone();
+  res.resize_({(curr_limbs - 1) * param_degree});
+
+  rescale_template(
+      from,
+      curr_limbs,
+      level,
+      param_degree,
+      param_primes,
+      param_barret_ratio,
+      param_barret_k,
+      param_power_of_roots_shoup,
+      param_power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      q_inv_mod_q,
+      q_inv_mod_q_shoup,
+      res);
+
+  return res;
+}
+
+Tensor& rescale_cuda_(
+    Tensor& to,
+    const Tensor& from,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t param_degree,
+    const Tensor& param_primes,
+    const Tensor& param_barret_ratio,
+    const Tensor& param_barret_k,
+    const Tensor& param_power_of_roots_shoup,
+    const Tensor& param_power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& q_inv_mod_q,
+    const Tensor& q_inv_mod_q_shoup) {
+  to.resize_({(curr_limbs - 1) * param_degree});
+
+  rescale_template(
+      from,
+      curr_limbs,
+      level,
+      param_degree,
+      param_primes,
+      param_barret_ratio,
+      param_barret_k,
+      param_power_of_roots_shoup,
+      param_power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      q_inv_mod_q,
+      q_inv_mod_q_shoup,
+      to);
+
+  return to;
+}
+
+Tensor& rescale_cuda_out(
+    const Tensor& to,
+    const Tensor& from,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t param_degree,
+    const Tensor& param_primes,
+    const Tensor& param_barret_ratio,
+    const Tensor& param_barret_k,
+    const Tensor& param_power_of_roots_shoup,
+    const Tensor& param_power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& q_inv_mod_q,
+    const Tensor& q_inv_mod_q_shoup,
+    Tensor& res) {
+  res.resize_({(curr_limbs - 1) * param_degree});
+
+  rescale_template(
+      from,
+      curr_limbs,
+      level,
+      param_degree,
+      param_primes,
+      param_barret_ratio,
+      param_barret_k,
+      param_power_of_roots_shoup,
+      param_power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
       q_inv_mod_q,
       q_inv_mod_q_shoup,
       res);

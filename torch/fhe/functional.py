@@ -412,3 +412,44 @@ def cv_drop_last_element_and_scale(
             q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
         
     return rescale.detach().cpu().numpy()
+
+def cv_rescale(
+    input: Tensor,
+    context_cuda: Context,
+    cur_limbs: int,
+    inplace: bool = False,
+) -> Tensor:
+    if inplace:
+        rescale = torch.rescale_(
+            context_cuda.rescale_out,
+            input,
+            curr_limbs=cur_limbs,
+            level = context_cuda.L,
+            param_degree = context_cuda.degree,
+            param_primes= context_cuda.primes,
+            param_barret_ratio= context_cuda.barret_ratio,
+            param_barret_k=context_cuda.barret_k,
+            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
+            param_power_of_roots=context_cuda.power_of_roots,
+            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
+            q_inv_mod_q=context_cuda.q_inv_mod_q,
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+    else:
+        rescale = torch.rescale(
+            context_cuda.rescale_out,
+            input,
+            curr_limbs=cur_limbs,
+            level = context_cuda.L,
+            param_degree = context_cuda.degree,
+            param_primes= context_cuda.primes,
+            param_barret_ratio= context_cuda.barret_ratio,
+            param_barret_k=context_cuda.barret_k,
+            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
+            param_power_of_roots=context_cuda.power_of_roots,
+            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
+            q_inv_mod_q=context_cuda.q_inv_mod_q,
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+        
+    return rescale.detach().cpu().numpy()
