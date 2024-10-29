@@ -1,5 +1,6 @@
 from .homo_ops import *
 
+
 def InnerL1(
     T,
     T2,
@@ -104,11 +105,9 @@ def InnerL1(
 
     qu = cipher_add(qu, qs_su, cryptoContext)
 
-    summult = F.cv_keyswitch(axax, qu.curr_limbs, cryptoContext)
-    
-    
-    # KeySwitch_cv(axax, qu.curr_limbs, cryptoContext)
-    summult = Ciphertext(np.array(summult), q_qu.curr_limbs)
+    summult = F.cv_keyswitch(axax, qu.cur_limbs, cryptoContext)
+
+    summult = Cipher(summult, q_qu.cur_limbs)
 
     qu = cipher_add(qu, summult, cryptoContext)
 
@@ -121,9 +120,7 @@ def InnerL1(
 
 
 def EvalChebyshevSeries(x, cryptoContext):
-    curr_limbs = x.curr_limbs
 
-    tmp = np.zeros(x.cv.shape, dtype=np.uint64)
     T = [
         None,
         None,

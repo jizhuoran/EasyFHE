@@ -28,7 +28,7 @@ def cv_convert(func):
         new_args = tuple(args_list)
         res = func(*new_args, **kw)
         if isinstance(res, list):
-            res = [ r.cpu().numpy() for r in res ]
+            res = [r.cpu().numpy() for r in res]
         else:
             res = res.cpu().numpy()
         return res
@@ -58,7 +58,7 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
     ).cuda()
 
 
-@cv_convert
+# @cv_convert
 def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.neg_mod_(x, x, modulus, cur_limbs=cur_limbs)
@@ -66,7 +66,7 @@ def cv_neg(x, modulus, cur_limbs, inplace=False):
         return torch.neg_mod(x, x, modulus, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_add(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_mod_(x, y, modulus, cur_limbs=cur_limbs)
@@ -74,7 +74,7 @@ def cv_add(x, y, modulus, cur_limbs, inplace=False):
         return torch.add_mod(x, y, modulus, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_sub(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_mod_(x, y, modulus, cur_limbs=cur_limbs)
@@ -82,7 +82,7 @@ def cv_sub(x, y, modulus, cur_limbs, inplace=False):
         return torch.sub_mod(x, y, modulus, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_mod_(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
@@ -90,7 +90,7 @@ def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
         return torch.mul_mod(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
@@ -98,7 +98,7 @@ def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
         return torch.add_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
@@ -106,12 +106,13 @@ def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
         return torch.sub_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
 
-@cv_convert
+# @cv_convert
 def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_scalar_mod_(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
     else:
         return torch.mul_scalar_mod(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
+
 
 def cv_modup(
     x: Tensor,
@@ -127,7 +128,7 @@ def cv_modup(
             level=context.level,
             hat_inverse_vec=context.hat_inverse_vec_modup,
             hat_inverse_vec_shoup=context.hat_inverse_vec_shoup_modup,
-            prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs-1],
+            prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
             primes=context.primes,
             barret_ratio=context.barret_ratio,
             barret_k=context.barret_k,
@@ -147,7 +148,7 @@ def cv_modup(
             level=context.level,
             hat_inverse_vec=context.hat_inverse_vec_modup,
             hat_inverse_vec_shoup=context.hat_inverse_vec_shoup_modup,
-            prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs-1],
+            prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
             primes=context.primes,
             barret_ratio=context.barret_ratio,
             barret_k=context.barret_k,
@@ -327,7 +328,8 @@ def cv_innerproduct(
         )
     return res
 
-@cv_convert
+
+# @cv_convert
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
@@ -349,15 +351,8 @@ def cv_keyswitch(
         inplace=inplace,
     )
 
-    sumMult_ax = inner_product[0]
-    sumMult_bx = inner_product[1]
-
-    moddown_ax = cv_moddown(
-        sumMult_ax,
-        curr_limbs=cur_limbs,
-        context=context_cuda,
-        inplace=False,
-    )
+    sumMult_bx = inner_product[0]
+    sumMult_ax = inner_product[1]
 
     moddown_bx = cv_moddown(
         sumMult_bx,
@@ -366,9 +361,16 @@ def cv_keyswitch(
         inplace=False,
     )
 
-    # return np.array([moddown_ax.cpu().numpy(), moddown_bx.cpu().numpy()], dtype=np.uint64)
-    return [moddown_ax, moddown_bx]
-    
+    moddown_ax = cv_moddown(
+        sumMult_ax,
+        curr_limbs=cur_limbs,
+        context=context_cuda,
+        inplace=False,
+    )
+
+    return [moddown_bx, moddown_ax]
+
+
 def cv_drop_last_element_and_scale(
     input: Tensor,
     context_cuda: Context,
@@ -381,11 +383,11 @@ def cv_drop_last_element_and_scale(
             context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            l = l,
-            level = context_cuda.L,
-            param_degree = context_cuda.degree,
-            param_primes= context_cuda.primes,
-            param_barret_ratio= context_cuda.barret_ratio,
+            l=l,
+            level=context_cuda.L,
+            param_degree=context_cuda.degree,
+            param_primes=context_cuda.primes,
+            param_barret_ratio=context_cuda.barret_ratio,
             param_barret_k=context_cuda.barret_k,
             param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
             param_power_of_roots=context_cuda.power_of_roots,
@@ -394,17 +396,18 @@ def cv_drop_last_element_and_scale(
             qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
             qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
             q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+        )
     else:
         rescale = torch.drop_last_element_and_scale(
             context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            l = l,
-            level = context_cuda.L,
-            param_degree = context_cuda.degree,
-            param_primes= context_cuda.primes,
-            param_barret_ratio= context_cuda.barret_ratio,
+            l=l,
+            level=context_cuda.L,
+            param_degree=context_cuda.degree,
+            param_primes=context_cuda.primes,
+            param_barret_ratio=context_cuda.barret_ratio,
             param_barret_k=context_cuda.barret_k,
             param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
             param_power_of_roots=context_cuda.power_of_roots,
@@ -413,9 +416,11 @@ def cv_drop_last_element_and_scale(
             qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
             qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
             q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
-        
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+        )
+
     return rescale.reshape(-1, context_cuda.N)
+
 
 def cv_rescale(
     input: Tensor,
@@ -428,36 +433,34 @@ def cv_rescale(
             context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            level = context_cuda.L,
-            param_degree = context_cuda.degree,
-            param_primes= context_cuda.primes,
-            param_barret_ratio= context_cuda.barret_ratio,
+            level=context_cuda.L,
+            param_degree=context_cuda.degree,
+            param_primes=context_cuda.primes,
+            param_barret_ratio=context_cuda.barret_ratio,
             param_barret_k=context_cuda.barret_k,
             param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
             param_power_of_roots=context_cuda.power_of_roots,
             inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
             q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+        )
     else:
         rescale = torch.rescale(
             context_cuda.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            level = context_cuda.L,
-            param_degree = context_cuda.degree,
-            param_primes= context_cuda.primes,
-            param_barret_ratio= context_cuda.barret_ratio,
+            level=context_cuda.L,
+            param_degree=context_cuda.degree,
+            param_primes=context_cuda.primes,
+            param_barret_ratio=context_cuda.barret_ratio,
             param_barret_k=context_cuda.barret_k,
             param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
             param_power_of_roots=context_cuda.power_of_roots,
             inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
             q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
-        
-    return rescale.reshape(-1, context_cuda.N)
+            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+        )
 
-# def KeySwitch_cv(axax, cur_limbs, cryptoContext):
-#     input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
-#     return cv_keyswitch(input_ks, cur_limbs, cryptoContext)
+    return rescale.reshape(-1, context_cuda.N)
