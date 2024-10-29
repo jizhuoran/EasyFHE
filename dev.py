@@ -11,7 +11,4 @@ from torch.fhe.context import Context
 
 TB.test_HMult3()
 
-# TB.test_HMult3()
-# # TB.test_ApproxMod()
-
-# TB.test_ApproxMod()
+TB.test_ApproxMod()

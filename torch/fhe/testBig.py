@@ -1,8 +1,10 @@
+import time
 import torch
 import numpy as np
 from .Ciphertext import Ciphertext
 from .context import Context
 from . import homo_ops
+from . import bootstrap
 from . import KeySwitch
 # from .data import Hmult3_N16_L12_K3 as HMult3
 from .data import params_ks_13 as N8192KS
@@ -203,8 +205,11 @@ def test_ApproxMod():
     ct = Ciphertext(cv, curr_limbs)
     print("finish gen Ciphertext")
 
+    start = time.time()
+    res = bootstrap.EvalChebyshevSeries(ct, cryptoContext)
+    end = time.time()
+    print(f"EvalChebyshevSeries time: {end - start}")
 
-    res = homo_ops.EvalChebyshevSeries(ct, cryptoContext)
     print("finish EvalChebyshev")
 
     golden_answer = np.array(chebyData.cheby_output, dtype=np.uint64)
@@ -220,7 +225,7 @@ def test_ApproxMod():
     print(compare)
     print("\n")
 
-    res = homo_ops.DoubleAngleIteration(res, cryptoContext)
+    res = bootstrap.DoubleAngleIteration(res, cryptoContext)
     print("finish DoubleAngleIteration")
 
     golden_answer = np.array(chebyData.doubleAngle_output, dtype=np.uint64)

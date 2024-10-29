@@ -27,7 +27,11 @@ def cv_convert(func):
                 args_list[i] = args_list[i].cuda()
         new_args = tuple(args_list)
         res = func(*new_args, **kw)
-        return res.cpu().numpy()
+        if isinstance(res, list):
+            res = [ r.cpu().numpy() for r in res ]
+        else:
+            res = res.cpu().numpy()
+        return res
 
     return wrapper
 
@@ -323,7 +327,7 @@ def cv_innerproduct(
         )
     return res
 
-
+@cv_convert
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
@@ -362,8 +366,8 @@ def cv_keyswitch(
         inplace=False,
     )
 
-    return np.array([moddown_ax.cpu().numpy(), moddown_bx.cpu().numpy()], dtype=np.uint64)
-    # return [moddown_ax, moddown_bx]
+    # return np.array([moddown_ax.cpu().numpy(), moddown_bx.cpu().numpy()], dtype=np.uint64)
+    return [moddown_ax, moddown_bx]
     
 def cv_drop_last_element_and_scale(
     input: Tensor,
@@ -411,7 +415,7 @@ def cv_drop_last_element_and_scale(
             q_inv_mod_q=context_cuda.q_inv_mod_q,
             q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
         
-    return rescale.detach().cpu().numpy()
+    return rescale.reshape(-1, context_cuda.N)
 
 def cv_rescale(
     input: Tensor,
@@ -452,4 +456,8 @@ def cv_rescale(
             q_inv_mod_q=context_cuda.q_inv_mod_q,
             q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup)
         
-    return rescale.detach().cpu().numpy()
+    return rescale.reshape(-1, context_cuda.N)
+
+# def KeySwitch_cv(axax, cur_limbs, cryptoContext):
+#     input_ks = torch.tensor(axax.reshape(-1), dtype=torch.uint64, device="cuda")
+#     return cv_keyswitch(input_ks, cur_limbs, cryptoContext)
