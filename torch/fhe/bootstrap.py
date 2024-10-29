@@ -17,7 +17,7 @@ def InnerL1(
 ):
     # weightedSum Core computation
     # level = T[4] -1
-    tmp = LevelReduce_ct(T[4], 1)
+    tmp = cipher_level_reduce(T[4], 1)
     q_su = homo_mul_scalar_double(tmp, s_divcs_q[5], cryptoContext)
     qs_qu = homo_mul_scalar_double(tmp, s_divqr_q[5], cryptoContext)
 
@@ -27,7 +27,7 @@ def InnerL1(
 
     for i in range(4):
         # level = T[i] -1
-        tmp1 = LevelReduce_ct(T[i], 1)
+        tmp1 = cipher_level_reduce(T[i], 1)
         tmp = homo_mul_scalar_double(tmp1, s_divcs_q[i + 1], cryptoContext)
         q_su = homo_add(q_su, tmp, cryptoContext)
         tmp = homo_mul_scalar_double(tmp1, s_divqr_q[i + 1], cryptoContext)
@@ -41,10 +41,10 @@ def InnerL1(
         # NOTE: set the last element of q_divqr_q zero
         qq_qu = homo_add(qq_qu, tmp, cryptoContext)
 
-    qq_qu = rescale_ct(qq_qu, cryptoContext)
-    qs_qu = rescale_ct(qs_qu, cryptoContext)
+    qq_qu = cipher_rescale(qq_qu, cryptoContext)
+    qs_qu = cipher_rescale(qs_qu, cryptoContext)
 
-    tmp = LevelReduce_ct(T[5], 1)
+    tmp = cipher_level_reduce(T[5], 1)
     tmp = homo_mul_scalar_int(tmp, (1 << int(s_lg2_divqr_q_last)), cryptoContext)
     qs_qu = homo_add(qs_qu, tmp, cryptoContext)
     qs_qu = homo_add_scalar_double(qs_qu, s_divqr_q[0], cryptoContext)
@@ -54,49 +54,49 @@ def InnerL1(
     qq_qu = homo_add(qq_qu, tmp, cryptoContext)
     qq_qu = homo_add_scalar_double(qq_qu, q_divqr_q[0], cryptoContext)
 
-    q_su = rescale_ct(q_su, cryptoContext)
+    q_su = cipher_rescale(q_su, cryptoContext)
     q_su = homo_add_scalar_double(q_su, s_divcs_q[0], cryptoContext)
-    tmp = LevelReduce_ct(T2[1], 1)
+    tmp = cipher_level_reduce(T2[1], 1)
     q_su = homo_add(q_su, tmp, cryptoContext)
 
-    q_qu = rescale_ct(q_qu, cryptoContext)
+    q_qu = cipher_rescale(q_qu, cryptoContext)
     q_qu = homo_add_scalar_double(q_qu, q_divcs_q[0], cryptoContext)
     q_qu = homo_add(q_qu, T2[1], cryptoContext)
 
     q_qu = homo_mul(q_qu, qq_qu, cryptoContext)
-    tmp = LevelReduce_ct(T[4], 1)
+    tmp = cipher_level_reduce(T[4], 1)
     qq_su = homo_mul_scalar_double(tmp, q_s2[5], cryptoContext)
 
     for i in range(4):
-        tmp = LevelReduce_ct(T[i], 1)
+        tmp = cipher_level_reduce(T[i], 1)
         tmp = homo_mul_scalar_double(tmp, q_s2[i + 1], cryptoContext)
         qq_su = homo_add(qq_su, tmp, cryptoContext)
 
     q_qu = homo_add(q_qu, qq_su, cryptoContext)
-    q_qu = rescale_ct(q_qu, cryptoContext)
-    tmp = LevelReduce_ct(T[5], 1)
+    q_qu = cipher_rescale(q_qu, cryptoContext)
+    tmp = cipher_level_reduce(T[5], 1)
     q_qu = homo_add(q_qu, tmp, cryptoContext)
     q_qu = homo_add_scalar_double(q_qu, q_s2[0], cryptoContext)
 
     # lazy KS: merge KS in computing `q_su` and `qu`
-    tmp = LevelReduce_ct(T[4], 1)
+    tmp = cipher_level_reduce(T[4], 1)
     qu = homo_mul_scalar_double(tmp, divcs_q[5], cryptoContext)
     for i in range(4):
         # level = T[i] -1
-        tmp = LevelReduce_ct(T[i], 1)
+        tmp = cipher_level_reduce(T[i], 1)
         tmp = homo_mul_scalar_double(tmp, divcs_q[i + 1], cryptoContext)
         qu = homo_add(qu, tmp, cryptoContext)
-    qu = rescale_ct(qu, cryptoContext)
+    qu = cipher_rescale(qu, cryptoContext)
     qu = homo_add_scalar_double(qu, divcs_q[0], cryptoContext)
     qu = homo_add(qu, T2[2], cryptoContext)
 
     tmp_qu = cipher_mul(qu, q_qu, cryptoContext)
     tmp_q_su = cipher_mul(q_su, qs_qu, cryptoContext)
-    tmp = LevelReduce_ct(T[4], 2)
+    tmp = cipher_level_reduce(T[4], 2)
     qs_su = homo_mul_scalar_double(tmp, s_s2[5], cryptoContext)
     for i in range(4):
         # level = T[i] -1
-        tmp = LevelReduce_ct(T[i], 2)
+        tmp = cipher_level_reduce(T[i], 2)
         tmp = homo_mul_scalar_double(tmp, s_s2[i + 1], cryptoContext)
         qs_su = homo_add(qs_su, tmp, cryptoContext)
 
@@ -111,8 +111,8 @@ def InnerL1(
 
     qu = cipher_add(qu, summult, cryptoContext)
 
-    qu = rescale_ct(qu, cryptoContext)
-    tmp = LevelReduce_ct(T[5], 2)
+    qu = cipher_rescale(qu, cryptoContext)
+    tmp = cipher_level_reduce(T[5], 2)
     qu = homo_add(qu, tmp, cryptoContext)
     qu = homo_add_scalar_double(qu, s_s2[0], cryptoContext)
 
@@ -137,36 +137,36 @@ def EvalChebyshevSeries(x, cryptoContext):
     # uses binary tree multiplication
     T[1] = homo_square(T[0], cryptoContext)
     T[1] = homo_add(T[1], T[1], cryptoContext)
-    T[1] = rescale_ct(T[1], cryptoContext)
+    T[1] = cipher_rescale(T[1], cryptoContext)
     T[1] = homo_add_scalar_double(T[1], -1.0, cryptoContext)
 
-    T[0] = LevelReduce_ct(T[0], 1)
+    T[0] = cipher_level_reduce(T[0], 1)
     T[2] = homo_mul(T[0], T[1], cryptoContext)
     T[2] = homo_add(T[2], T[2], cryptoContext)
-    T[2] = rescale_ct(T[2], cryptoContext)
-    T[0] = LevelReduce_ct(T[0], 1)
+    T[2] = cipher_rescale(T[2], cryptoContext)
+    T[0] = cipher_level_reduce(T[0], 1)
     T[2] = homo_sub(T[2], T[0], cryptoContext)
-    T[1] = LevelReduce_ct(T[1], 1)
+    T[1] = cipher_level_reduce(T[1], 1)
 
     T[3] = homo_square(T[1], cryptoContext)
     T[3] = homo_add(T[3], T[3], cryptoContext)
-    T[3] = rescale_ct(T[3], cryptoContext)
+    T[3] = cipher_rescale(T[3], cryptoContext)
     T[3] = homo_add_scalar_double(T[3], -1.0, cryptoContext)
 
-    T[0] = LevelReduce_ct(T[0], 1)
+    T[0] = cipher_level_reduce(T[0], 1)
 
     T[4] = homo_mul(T[1], T[2], cryptoContext)
     T[4] = homo_add(T[4], T[4], cryptoContext)
-    T[4] = rescale_ct(T[4], cryptoContext)
+    T[4] = cipher_rescale(T[4], cryptoContext)
     T[4] = homo_sub(T[4], T[0], cryptoContext)
 
     T[5] = homo_square(T[2], cryptoContext)
     T[5] = homo_add(T[5], T[5], cryptoContext)
-    T[5] = rescale_ct(T[5], cryptoContext)
+    T[5] = cipher_rescale(T[5], cryptoContext)
     T[5] = homo_add_scalar_double(T[5], -1.0, cryptoContext)
 
-    T[1] = LevelReduce_ct(T[1], 1)
-    T[2] = LevelReduce_ct(T[2], 1)
+    T[1] = cipher_level_reduce(T[1], 1)
+    T[2] = cipher_level_reduce(T[2], 1)
 
     T2 = [
         None,
@@ -177,9 +177,9 @@ def EvalChebyshevSeries(x, cryptoContext):
 
     # Compute the Chebyshev polynomials T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     T2[1] = homo_square(T[5], cryptoContext)
-    T[5] = LevelReduce_ct(T[5], 1)
+    T[5] = cipher_level_reduce(T[5], 1)
     T2[1] = homo_add(T2[1], T2[1], cryptoContext)
-    T2[1] = rescale_ct(T2[1], cryptoContext)
+    T2[1] = cipher_rescale(T2[1], cryptoContext)
     T2[1] = homo_add_scalar_double(T2[1], -1.0, cryptoContext)
 
     # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
@@ -188,21 +188,21 @@ def EvalChebyshevSeries(x, cryptoContext):
     tmpct2 = homo_add(tmpct2, tmpct2, cryptoContext)
     tmpct2 = homo_add_scalar_double(tmpct2, -1.0, cryptoContext)
     T2km1 = homo_mul(T2km1, tmpct2, cryptoContext)
-    T2km1 = rescale_ct(T2km1, cryptoContext)
+    T2km1 = cipher_rescale(T2km1, cryptoContext)
 
     for i in range(2, 4):
         square = homo_square(T2[i - 1], cryptoContext)
         T2[i] = homo_add(square, square, cryptoContext)
-        T2[i] = rescale_ct(T2[i], cryptoContext)
+        T2[i] = cipher_rescale(T2[i], cryptoContext)
         T2[i] = homo_add_scalar_double(T2[i], -1.0, cryptoContext)
 
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
         tmpct2 = T2[i]
         T2km1 = homo_mul(T2km1, tmpct2, cryptoContext)
         T2km1 = homo_add(T2km1, T2km1, cryptoContext)
-        T2km1 = rescale_ct(T2km1, cryptoContext)
+        T2km1 = cipher_rescale(T2km1, cryptoContext)
         tmpct2 = T[5]
-        tmpct2 = LevelReduce_ct(tmpct2, i)
+        tmpct2 = cipher_level_reduce(tmpct2, i)
         T2km1 = homo_sub(T2km1, tmpct2, cryptoContext)
 
     qu = InnerL1(
@@ -239,15 +239,15 @@ def EvalChebyshevSeries(x, cryptoContext):
         tmp = homo_mul_scalar_double(T[i], first_divcs_q[i + 1], cryptoContext)
         result = homo_add(result, tmp, cryptoContext)
 
-    result = LevelReduce_ct(result, 2)
-    result = rescale_ct(result, cryptoContext)
+    result = cipher_level_reduce(result, 2)
+    result = cipher_rescale(result, cryptoContext)
 
     result = homo_add_scalar_double(result, first_divcs_q[0], cryptoContext)
     result = homo_add(result, T2[3], cryptoContext)
 
     result = homo_mul(result, qu, cryptoContext)
-    result = rescale_ct(result, cryptoContext)
-    su = LevelReduce_ct(su, 1)
+    result = cipher_rescale(result, cryptoContext)
+    su = cipher_level_reduce(su, 1)
     result = homo_add(result, su, cryptoContext)
     result = homo_sub(result, T2km1, cryptoContext)
 
@@ -267,7 +267,7 @@ def DoubleAngleIteration(in0, cryptoContext):
 
     for j in range(1, r + 1):
         in0 = homo_square(in0, cryptoContext)
-        in0 = ModReduce_ct(in0, 1, cryptoContext)
+        in0 = cipher_mod_reduce(in0, 1, cryptoContext)
         in0 = homo_add(in0, in0, cryptoContext)
         # scalar = np.float64(np.float64(-1.0) / np.float64(math.pow((2.0 * M_PI), np.float64(math.pow(2.0, j - r)))))
         in0 = homo_add_scalar_double(in0, scalar[j - 1], cryptoContext)

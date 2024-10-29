@@ -2,7 +2,7 @@ import math
 
 import torch
 import numpy as np
-from .Ciphertext import Ciphertext, Cipher
+from .Ciphertext import Cipher
 from .context import Context
 from . import functional as F
 from . import homo_ops
@@ -997,7 +997,7 @@ def test_rescale_ct():
     rootsP = N256L4P2.rootsP2_N256
     cryptoContext = Context(logN, 53, 52, 52, L, K, moduliQ, moduliP, rootsQ, rootsP)
     ct = Ciphertext(cv, L)
-    res = homo_ops.rescale_ct(ct, cryptoContext)
+    res = homo_ops.cipher_rescale(ct, cryptoContext)
 
     golden_answer = np.array(N256L4P2.cipher1_after_mult_rescale, dtype=np.uint64)
     golden_answer = golden_answer.reshape(res.cv.shape)
@@ -1038,7 +1038,7 @@ def test_HMult_and_rescale_1():
     )
     ct = Ciphertext(cv, L)
     mult = homo_ops.homo_mult(ct, ct, cryptoContext)
-    res = homo_ops.rescale_ct(mult, cryptoContext)
+    res = homo_ops.cipher_rescale(mult, cryptoContext)
 
     golden_answer = np.array(N256L4P2.cipher1_after_mult_rescale, dtype=np.uint64)
     golden_answer = golden_answer.reshape(res.cv.shape)
@@ -1072,7 +1072,7 @@ def test_ModReduce_ct():
     rootsP = N256L4P2.rootsP2_N256
     cryptoContext = Context(logN, 53, 52, 52, L, K, moduliQ, moduliP, rootsQ, rootsP)
     ct = Ciphertext(cv, L)
-    res = homo_ops.ModReduce_ct(ct, 1, cryptoContext)
+    res = homo_ops.cipher_mod_reduce(ct, 1, cryptoContext)
 
     golden_answer = np.array(N256L4P2.cipher1_after_mult_ModReduce, dtype=np.uint64)
     golden_answer = golden_answer.reshape(res.cv.shape)
