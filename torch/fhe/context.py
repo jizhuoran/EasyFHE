@@ -439,9 +439,9 @@ class Context:
             
             #for modup
             self.num_moduli_after_modup = self.max_num_moduli
-            self.hat_inverse_vec_modup = []
-            self.hat_inverse_vec_shoup_modup = []
-            self.prod_q_i_mod_q_j_modup = []
+            self.hat_inverse_vec_modup = None
+            self.hat_inverse_vec_shoup_modup = None
+            self.prod_q_i_mod_q_j_modup = None
             
             #for moddown
             self.num_moduli_after_moddown = self.chain_length
@@ -535,25 +535,31 @@ class Context:
             )
             
             # cal modup param
+            prod_q_i_mod_q_j_modup = []
             for l in range(self.L):
                 prod_qi_mod_qj = []
                 for dnum_idx in range(self.dnum):
                     prod_q_i_mod_q_j = self.PartQlHatModp[l][dnum_idx]
                     prod_q_i_mod_q_j = prod_q_i_mod_q_j.swapaxes(1,0).flatten()
-                    prod_qi_mod_qj.append(torch.tensor(prod_q_i_mod_q_j, dtype= torch.uint64, device = "cuda"))
-                self.prod_q_i_mod_q_j_modup.append(prod_qi_mod_qj)
+                    prod_qi_mod_qj.append(prod_q_i_mod_q_j)
+                prod_q_i_mod_q_j_modup.append(prod_qi_mod_qj)
+            self.prod_q_i_mod_q_j_modup = torch.tensor(np.array(prod_q_i_mod_q_j_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
             
+            hat_inverse_vec_modup = []
+            hat_inverse_vec_shoup_modup = []
             for dnum_idx in range(self.dnum):
                 for k in range(self.K):
                     hat_inv_shoup = []
                     hat_inverse_vec = self.PartQlHatInvModq[dnum_idx][k]
-                    self.hat_inverse_vec_modup.append(torch.tensor(hat_inverse_vec, dtype= torch.uint64, device = "cuda",))
+                    hat_inverse_vec_modup.append(hat_inverse_vec)
                     for k_idx in range(self.K):
                         prime_idx = dnum_idx * self.K + k_idx
                         prime = self.primes[prime_idx]
                         shoup = self.shoup(int(hat_inverse_vec[k_idx]), prime)
                         hat_inv_shoup.append(shoup)
-                    self.hat_inverse_vec_shoup_modup.append(torch.tensor(hat_inv_shoup, dtype= torch.uint64, device = "cuda",))
+                    hat_inverse_vec_shoup_modup.append(hat_inv_shoup)
+            self.hat_inverse_vec_modup = torch.tensor(np.array(hat_inverse_vec_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
+            self.hat_inverse_vec_shoup_modup = torch.tensor(np.array(hat_inverse_vec_shoup_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
             
             # cal moddown param
             start_length = self.num_special_moduli
@@ -563,19 +569,21 @@ class Context:
 
             hat_inv_moddown = self.pHatInvModp
             hat_inv_shoup_moddown = []
+            hat_inverse_vec_moddown = []
+            hat_inverse_vec_shoup_moddown = []
             for k in range(self.K):
                 prime = self.primes[self.L + k]
                 shoup = self.shoup(int(hat_inv_moddown[k]), prime)
                 hat_inv_shoup_moddown.append(shoup)
-            self.hat_inverse_vec_moddown.append(
-                torch.tensor(hat_inv_moddown, dtype=torch.uint64, device="cuda")
-            )
-            self.hat_inverse_vec_shoup_moddown.append(
-                torch.tensor(hat_inv_shoup_moddown, dtype=torch.uint64, device="cuda")
-            )
+            hat_inverse_vec_moddown.append(hat_inv_moddown)
+            self.hat_inverse_vec_moddown = torch.tensor(np.array(hat_inverse_vec_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
+            hat_inverse_vec_shoup_moddown.append(hat_inv_shoup_moddown)
+            self.hat_inverse_vec_shoup_moddown = torch.tensor(np.array(hat_inverse_vec_shoup_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
+
+            prod_q_i_mod_q_j_moddown = []
             end_primes = self.set_difference(self.primes, start_begin)
-            prod_q_i_mod_q_j_moddown = self.pHatModq.swapaxes(1,0).flatten()
-            self.prod_q_i_mod_q_j_moddown.append(torch.tensor(prod_q_i_mod_q_j_moddown, dtype=torch.uint64,device="cuda"))
+            prod_q_i_mod_q_j_moddown.append(self.pHatModq.swapaxes(1,0).flatten())
+            self.prod_q_i_mod_q_j_moddown = torch.tensor(np.array(prod_q_i_mod_q_j_moddown,dtype=np.uint64), dtype=torch.uint64,device="cuda")
 
             prod_inv = self.PInvModq
             prod_shoup = []
@@ -583,13 +591,14 @@ class Context:
             for i, end_prime in enumerate(end_primes):
                 inv = prod_inv[i]
                 prod_shoup.append(self.shoup(int(inv), end_prime))
+            
+            prod_inv_moddown = []
+            prod_inv_moddown.append(prod_inv)
+            self.prod_inv_moddown = torch.tensor(np.array(prod_inv_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
 
-            self.prod_inv_moddown.append(
-                torch.tensor(prod_inv, dtype=torch.uint64, device="cuda")
-            )
-            self.prod_inv_shoup_moddown.append(
-                torch.tensor(prod_shoup, dtype=torch.uint64, device="cuda")
-            )
+            prod_inv_shoup_moddown = []
+            prod_inv_shoup_moddown.append(prod_shoup)
+            self.prod_inv_shoup_moddown = torch.tensor(np.array(prod_shoup,dtype=np.uint64), dtype=torch.uint64, device="cuda")
             
             # cal rescale param
             QlQlInvModqlDivqlModq = self.QlQlInvModqlDivqlModq.reshape(-1)
