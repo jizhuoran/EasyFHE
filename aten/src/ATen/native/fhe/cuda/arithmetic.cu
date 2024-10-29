@@ -13,7 +13,7 @@
 
 #define WORK_PER_THREAD (1)
 #define WARP_SIZE (32)
-#define NUM_WARPS (1)
+#define NUM_WARPS (8)
 #define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
 #define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
 
@@ -70,27 +70,27 @@ namespace at::native {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu.data_ptr<uint64_t>()
 
-#define GENERATE_KERNEL(NAME, HAS_BARRET)                                      \
-  static void NAME##_template(                                                 \
-      Tensor& c,                                                               \
-      const Tensor& a,                                                         \
-      const Tensor& b,                                                         \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                            \
-      int64_t cur_limbs) {                                                     \
-    TORCH_INTERNAL_ASSERT(a.dim() == 2);                                       \
-    auto N = static_cast<int>(a.sizes()[1]);                                   \
-    TORCH_INTERNAL_ASSERT(                                                     \
-        (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
-        (N == 1 << 17) || (N == 1 << 18));                                     \
-    fhe::NAME##_kernel<<<                                                      \
-        dim3(num_blocks(N), cur_limbs),                                        \
-        dim3(BLOCK_SIZE, 1)>>>(                                                \
-        N,                                                                     \
-        c.mutable_data_ptr<uint64_t>(),                                        \
-        a.data_ptr<uint64_t>(),                                                \
-        b.data_ptr<uint64_t>(),                                                \
-        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);                    \
-    C10_CUDA_KERNEL_LAUNCH_CHECK();                                            \
+#define GENERATE_KERNEL(NAME, HAS_BARRET)                     \
+  static void NAME##_template(                                \
+      Tensor& c,                                              \
+      const Tensor& a,                                        \
+      const Tensor& b,                                        \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,           \
+      int64_t cur_limbs) {                                    \
+    TORCH_INTERNAL_ASSERT(a.dim() == 2);                      \
+    auto N = static_cast<int>(a.sizes()[1]);                  \
+    TORCH_INTERNAL_ASSERT(                                    \
+        (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
+        (N == 1 << 17) || (N == 1 << 18));                    \
+    fhe::NAME##_kernel<<<                                     \
+        dim3(num_blocks(N), cur_limbs),                       \
+        dim3(BLOCK_SIZE, 1)>>>(                               \
+        N,                                                    \
+        c.mutable_data_ptr<uint64_t>(),                       \
+        a.data_ptr<uint64_t>(),                               \
+        b.data_ptr<uint64_t>(),                               \
+        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);   \
+    C10_CUDA_KERNEL_LAUNCH_CHECK();                           \
   }
 
 GENERATE_KERNEL(vadd, 0)
