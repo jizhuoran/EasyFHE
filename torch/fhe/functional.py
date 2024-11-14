@@ -256,14 +256,16 @@ def cv_innerproduct(
     x: Tensor,
     curr_limbs: int,
     context_cuda: Context,
+    swk_ax: Tensor,
+    swk_bx: Tensor,
     inplace: bool = False,
 ) -> Tensor:
     if inplace:
         res = torch.innerproduct_(
             context_cuda.inner_out,
             x,
-            ax=context_cuda.swk_ax_cuda,
-            bx=context_cuda.swk_bx_cuda,
+            ax=swk_ax,
+            bx=swk_bx,
             curr_limbs=curr_limbs,
             alpha=context_cuda.alpha,
             level=context_cuda.level,
@@ -277,8 +279,8 @@ def cv_innerproduct(
         res = torch.innerproduct(
             context_cuda.inner_out,
             x,
-            ax=context_cuda.swk_ax_cuda,
-            bx=context_cuda.swk_bx_cuda,
+            ax=swk_ax,
+            bx=swk_bx,
             curr_limbs=curr_limbs,
             alpha=context_cuda.alpha,
             level=context_cuda.level,
@@ -294,6 +296,8 @@ def cv_innerproduct(
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
+    swk_ax: Tensor,
+    swk_bx: Tensor,
     context_cuda: Context,
     inplace: bool = False,
 ) -> Tensor:
@@ -309,6 +313,8 @@ def cv_keyswitch(
         modup_res,
         cur_limbs,
         context_cuda,
+        swk_ax,
+        swk_bx,
         inplace=inplace,
     )
 
@@ -425,3 +431,69 @@ def cv_rescale(
         )
 
     return rescale.reshape(-1, context_cuda.N)
+
+def cv_automorphism_transform(
+    context_cuda: Context,
+    input: Tensor,
+    l: int,
+    N: int,
+    i: int,
+    precomp_vec: Tensor
+) -> Tensor:
+    automorphism_transform = torch.automorphism_transform(
+        context_cuda.automorphism_transform_out,
+        input,
+        l=l,
+        N=N,
+        i=i,
+        precomp_vec=precomp_vec
+    )
+
+    return automorphism_transform
+
+def cv_switch_modulus(
+    context_cuda: Context, 
+    input: Tensor, 
+    L0 : int, 
+    ) -> Tensor:
+    switch_modulus = torch.switch_modulus(
+        context_cuda.switch_modulus_out,
+        input,
+        primes = context_cuda.primes,
+        N = context_cuda.degree,
+        L0 = L0,
+        logN = context_cuda.logN,
+        level = context_cuda.level,
+        inverse_power_of_roots_div_two = context_cuda.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two  = context_cuda.inverse_scaled_power_of_roots_div_two,
+        param_power_of_roots_shoup = context_cuda.power_of_roots_shoup,
+        param_power_of_roots = context_cuda.power_of_roots
+    )
+    return switch_modulus
+
+def cv_mul_by_monomial(
+    context_cuda: Context,
+    input: Tensor,
+    qVec: Tensor,
+    tmp: Tensor,
+    l: int,
+    monomialDeg: int,
+    curr_limbs: int
+) -> Tensor:
+    mul_by_monomial = torch.mul_by_monomial(
+        input, 
+        qVec,
+        tmp = tmp,
+        primes = context_cuda.primes,
+        l = l,
+        N = context_cuda.degree,
+        M = context_cuda.M,
+        monomialDeg=monomialDeg,
+        curr_limbs = curr_limbs,
+        level=context_cuda.level,
+        inverse_power_of_roots_div_two = context_cuda.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two  = context_cuda.inverse_scaled_power_of_roots_div_two,
+        param_power_of_roots_shoup = context_cuda.power_of_roots_shoup,
+        param_power_of_roots = context_cuda.power_of_root
+    )
+    return mul_by_monomial

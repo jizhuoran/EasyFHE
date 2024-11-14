@@ -227,7 +227,7 @@ class Context:
             modulusPartQ = moduliPartQ[k]
             for l in range(sizePartQk):
                 if l > 0:
-                    modulusPartQ = int(int(modulusPartQ) // int(self.moduliQ[(k + 1) * K - l]))
+                    modulusPartQ = int(int(modulusPartQ) // int(self.moduliQ[k * K + sizePartQk - l]))
                 for i in range(sizePartQk - l):
                     moduli = int(self.moduliQ[k * K + i])
                     QHat = modulusPartQ // moduli

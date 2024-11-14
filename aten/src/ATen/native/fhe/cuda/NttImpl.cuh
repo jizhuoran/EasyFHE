@@ -1,10 +1,6 @@
-
 #pragma once
 
-#include <ATen/cuda/CUDAContext.h>
-#include <crt/device_functions.h>
 #include "ATen/native/fhe/cuda/Utils.cuh"
-
 namespace fhe {
 __device__ void butt_intt_local(
     uint64_t& x,
@@ -1039,3 +1035,139 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
 }
 
 } // namespace fhe
+
+namespace at::native {
+
+void iNTT_impl(
+    uint64_t* op_ptr,
+    int64_t start_prime_idx,
+    int64_t batch,
+    int64_t curr_limbs,
+    int64_t level,
+    int64_t param_degree,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& param_primes,
+    const Tensor& inverse_scaled_power_of_roots_div_two) {
+  AT_DISPATCH_V2(
+      kUInt64,
+      "iNTT_cuda",
+      AT_WRAP([&]() {
+        dim3 gridDim(2048);
+        dim3 blockDim(256);
+        const int per_thread_ntt_size = 8;
+        const int first_stage_radix_size = 256;
+        const int second_radix_size = param_degree / first_stage_radix_size;
+        const int pad = 4;
+        const int per_thread_storage =
+            blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
+        auto inverse_power_of_roots_div_two_ptr = reinterpret_cast<uint64_t*>(
+            inverse_power_of_roots_div_two.data_ptr<uint64_t>());
+        auto param_primes_ptr =
+            reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+        auto inverse_scaled_power_of_roots_div_two_ptr =
+            reinterpret_cast<uint64_t*>(
+                inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
+        int gap = level - curr_limbs;
+
+        auto stream = at::cuda::getCurrentCUDAStream();
+        fhe::Intt8PointPerThreadPhase2OoP<<<
+            gridDim,
+            blockDim,
+            per_thread_storage,
+            stream>>>(
+            op_ptr,
+            first_stage_radix_size,
+            batch,
+            param_degree,
+            start_prime_idx,
+            curr_limbs,
+            gap,
+            second_radix_size / per_thread_ntt_size,
+            inverse_power_of_roots_div_two_ptr,
+            inverse_scaled_power_of_roots_div_two_ptr,
+            param_primes_ptr,
+            op_ptr);
+        fhe::Intt8PointPerThreadPhase1OoP<<<
+            gridDim,
+            (first_stage_radix_size / 8) * pad,
+            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
+            stream>>>(
+            op_ptr,
+            1,
+            batch,
+            param_degree,
+            start_prime_idx,
+            curr_limbs,
+            gap,
+            pad,
+            first_stage_radix_size / 8,
+            inverse_power_of_roots_div_two_ptr,
+            inverse_scaled_power_of_roots_div_two_ptr,
+            param_primes_ptr,
+            op_ptr);
+      }),
+      kUInt64);
+}
+
+void NTT_impl(
+    uint64_t* op_ptr,
+    int64_t start_prime_idx,
+    int64_t batch,
+    int64_t param_degree,
+    const Tensor& param_power_of_roots_shoup,
+    const Tensor& param_primes,
+    const Tensor& param_power_of_roots) {
+  dim3 gridDim(2048);
+  dim3 blockDim(256);
+  const int per_thread_ntt_size = 8;
+  const int first_stage_radix_size = 256;
+  const int second_radix_size = param_degree / first_stage_radix_size;
+  const int pad = 4;
+  const int per_thread_storage =
+      blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
+  AT_DISPATCH_V2(
+      kUInt64,
+      "NTT_cuda",
+      AT_WRAP([&]() {
+        auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
+            param_power_of_roots_shoup.data_ptr<uint64_t>());
+        auto param_primes_ptr =
+            reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+        auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
+            param_power_of_roots.data_ptr<uint64_t>());
+        auto stream = at::cuda::getCurrentCUDAStream();
+        fhe::Ntt8PointPerThreadPhase1<<<
+            gridDim,
+            (first_stage_radix_size / 8) * pad,
+            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
+            stream>>>(
+            op_ptr,
+            1,
+            batch,
+            param_degree,
+            start_prime_idx,
+            pad,
+            first_stage_radix_size / per_thread_ntt_size,
+            param_power_of_roots_ptr,
+            param_power_of_roots_shoup_ptr,
+            param_primes_ptr);
+        fhe::Ntt8PointPerThreadPhase2<<<
+            gridDim,
+            blockDim.x,
+            per_thread_storage,
+            stream>>>(
+            op_ptr,
+            first_stage_radix_size,
+            batch,
+            param_degree,
+            start_prime_idx,
+            second_radix_size / per_thread_ntt_size,
+            param_power_of_roots_ptr,
+            param_power_of_roots_shoup_ptr,
+            param_primes_ptr);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+      }),
+      kUInt64);
+}
+
+} // end native namespace
