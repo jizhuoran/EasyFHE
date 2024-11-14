@@ -15913,3 +15913,48 @@
   device_check: NoCheck
   dispatch:
     CUDA: rescale_cuda_out
+
+- func: automorphism_transform(Tensor self, Tensor a, *, int l, int N, int i, Tensor precomp_vec) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: automorphism_transform_cuda
+
+- func: automorphism_transform_(Tensor(a!) self, Tensor a, *, int l, int N, int i, Tensor precomp_vec) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: automorphism_transform_cuda_
+
+- func: automorphism_transform.out(Tensor self, Tensor a, *, int l, int N, int i, Tensor precomp_vec, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: automorphism_transform_cuda_out
+
+- func: switch_modulus(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: switch_modulus_cuda
+
+- func: switch_modulus_(Tensor(a!) self, Tensor input, *, Tensor primes, int N, int L0, int logN, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: switch_modulus_cuda_
+
+- func: switch_modulus.out(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: switch_modulus_cuda_out
+
+- func: mul_by_monomial(Tensor self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_by_monomial_cuda
+
+- func: mul_by_monomial_(Tensor(a!) self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_by_monomial_cuda_
+
+- func: mul_by_monomial.out(Tensor self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor(a!) out) -> Tensor(a!)
+  device_check: NoCheck
+  dispatch:
+    CUDA: mul_by_monomial_cuda_out
