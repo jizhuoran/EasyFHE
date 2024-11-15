@@ -17,14 +17,13 @@ class Cipher:
         return res
 
     def __repr__(self):
-        return (
-            "Cipher(\n"
-            f"    ax={self.cv[0][:self.cur_limbs]},\n"
-            f"    bx={self.cv[1][:self.cur_limbs]},\n"
-            f"    cx={self.cv[2][:self.cur_limbs]},\n" if len(self.cv) > 2 else ""
-            f"    cur_limbs={self.cur_limbs}\n"
-            ")"
-        )
+
+        s = "Cipher(\n"
+        for i, cv in enumerate(self.cv):
+            s += f"cv{i}={cv[:self.cur_limbs]},\n"
+        s += f"cur_limbs={self.cur_limbs}\n"
+        s += ")"
+        return s
     
     def __eq__(self, other):
         if not isinstance(other, Cipher):
