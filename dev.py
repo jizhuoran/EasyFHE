@@ -12,22 +12,27 @@ import torch.fhe.homo_ops as OP
 
 import torch.fhe.client.client as client
 
-param, cc, key = client.gen_crypto_context(3, 50, 8)
-mult_key = client.gen_mult_keys(cc, key)
+param, cc, key, cryptoContext = client.gen_crypto_context()
+cryptoContext.moduliQ = torch.tensor(cryptoContext.moduliQ, dtype=torch.uint64, device="cuda")
+cryptoContext.q_mu = torch.tensor(cryptoContext.q_mu, dtype=torch.uint64, device="cuda")
+
 rotate_key = client.gen_rotate_keys(cc, key, [1, -2])
 
-x1 = torch.tensor([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
+x1 = torch.tensor([0.25, 0.5, 0.75], device="cuda")
 print("x1: ", x1)
 cipher1 = client.encrypt(x1, cc, key)
+cipher2 = OP.homo_mul(cipher1, cipher1, cryptoContext)
+cipher2 = OP.cipher_rescale(cipher2, cryptoContext)
 
-print("cipher1: ", cipher1)
+plain2 = client.decrypt(cipher2, param, cc, key)
+print("plain2: ", plain2)
 
-plain1 = client.decrypt(cipher1, param, cc, key)
-print("plain1: ", plain1)
+cipher3 = OP.homo_mul(cipher2, cipher2, cryptoContext)
+cipher3 = OP.cipher_rescale(cipher3, cryptoContext)
+plain3 = client.decrypt(cipher3, param, cc, key)
 
+print("plain3: ", plain3)
 
-exit(0)
+# TB.test_HMult3()
 
-TB.test_HMult3()
-
-TB.test_ApproxMod()
+# TB.test_ApproxMod()

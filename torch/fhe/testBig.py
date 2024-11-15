@@ -158,6 +158,8 @@ def test_HMult3():
     swk = swk.reshape(2, dnum, L + K, N)
     swk = swk[::-1] ##convert 102
 
+    print("swk type", type(swk))
+
     cryptoContext = Context(logN, 53, 52, 52, L, K,
                             moduliQ, moduliP, rootsQ, rootsP, swk)
     

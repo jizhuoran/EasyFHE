@@ -3,8 +3,8 @@ import numpy as np
 import torch
 
 class Cipher:
-    def __init__(self, ax, bx, cur_limbs):
-        self.cv = [ax, bx]
+    def __init__(self, cv0, cv1, cur_limbs):
+        self.cv = [cv0, cv1]
         self.cur_limbs = cur_limbs
     
     def __init__(self, cv, cur_limbs):

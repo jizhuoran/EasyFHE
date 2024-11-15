@@ -366,7 +366,7 @@ class Context:
 
                 self.QlQlInvModqlDivqlModq[k][i] = np.uint64(result)
 
-        self.mult_swk = np.zeros((2, self.dnum, L + K, self.N), dtype=np.uint64)
+        self.mult_swk = [None, None]
         if MULT_SWK is None:
             warnings.warn(
                 "\n------------------------\n"

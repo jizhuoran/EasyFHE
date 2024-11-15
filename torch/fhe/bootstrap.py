@@ -105,7 +105,13 @@ def InnerL1(
 
     qu = cipher_add(qu, qs_su, cryptoContext)
 
-    summult = F.cv_keyswitch(axax, qu.cur_limbs, cryptoContext)
+    summult = F.cv_keyswitch(
+        axax,
+        qu.cur_limbs,
+        cryptoContext.swk_ax_cuda,
+        cryptoContext.swk_bx_cuda,
+        cryptoContext,
+    )
 
     summult = Cipher(summult, q_qu.cur_limbs)
 

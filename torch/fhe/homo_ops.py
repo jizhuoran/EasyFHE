@@ -138,7 +138,14 @@ def homo_sub(in0, in1, cryptoContext):
 def homo_mul(in0, in1, cryptoContext):
     res = cipher_mul(in0, in1, cryptoContext)
     tmp = Cipher(
-        F.cv_keyswitch(res.cv[2], res.cur_limbs, cryptoContext), cur_limbs=in0.cur_limbs
+        F.cv_keyswitch(
+            res.cv[2],
+            res.cur_limbs,
+            cryptoContext.swk_ax_cuda,
+            cryptoContext.swk_bx_cuda,
+            cryptoContext,
+        ),
+        cur_limbs=in0.cur_limbs,
     )
     res.cv = res.cv[:2]
     return cipher_add(res, tmp, cryptoContext)
@@ -147,7 +154,14 @@ def homo_mul(in0, in1, cryptoContext):
 def homo_square(in0, cryptoContext):
     res = cipher_square(in0, cryptoContext)
     tmp = Cipher(
-        F.cv_keyswitch(res.cv[2], res.cur_limbs, cryptoContext), cur_limbs=in0.cur_limbs
+        F.cv_keyswitch(
+            res.cv[2],
+            res.cur_limbs,
+            cryptoContext.swk_ax_cuda,
+            cryptoContext.swk_bx_cuda,
+            cryptoContext,
+        ),
+        cur_limbs=in0.cur_limbs,
     )
     res.cv = res.cv[:2]
     return cipher_add(res, tmp, cryptoContext)
