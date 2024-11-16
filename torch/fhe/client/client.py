@@ -90,26 +90,19 @@ def encrypt(x, cc, keys):
     ptx = cc.MakeCKKSPackedPlaintext(x.tolist())
     cipher = cc.Encrypt(keys.publicKey, ptx)
     data = cipher.GetVectorOfData()
-    cv0 = torch.tensor(
-        data[: len(data) // 2], device=x.device, dtype=torch.uint64
-    ).reshape(-1, cc.GetRingDimension())
-    cv1 = torch.tensor(
-        data[len(data) // 2 :], device=x.device, dtype=torch.uint64
-    ).reshape(-1, cc.GetRingDimension())
-    return Cipher.Cipher([cv0, cv1], cv0.shape[0])
+    cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
+    return Cipher.Cipher(cv, cv[0].shape[0])
 
 
 def decrypt(x, param, cc, keys):
     assert len(x.cv) == 2
-    ptx = cc.MakeCKKSPackedPlaintext([.0])
+    ptx = cc.MakeCKKSPackedPlaintext([0.0])
     ctx = cc.Encrypt(keys.publicKey, ptx)
     for _ in range(param.GetMultiplicativeDepth() + 1 - x.cur_limbs):
         ctx = cc.EvalMult(ctx, ctx)
         ctx = cc.Rescale(ctx)
-    data = []
-    for cv in x.cv:
-        data.extend(cv.reshape(-1).tolist())
-    ctx.SetVectorOfData(data, len(x.cv), x.cur_limbs, cc.GetRingDimension())
+    data = [cv.tolist() for cv in x.cv]
+    ctx.SetVectorOfData(data, x.cur_limbs)
     ptx = cc.Decrypt(ctx, keys.secretKey)
     return torch.tensor(
         ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
