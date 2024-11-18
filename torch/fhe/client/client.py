@@ -19,18 +19,19 @@ def gen_crypto_context(
     dcrtBits=59,
     firstMod=60,
     AuxModSize=60,
+    approxModDepth=9,
+    rotate_index=[1, 2, 4],
     secretKeyDist=openfhe.UNIFORM_TERNARY,
     rescaleTech=openfhe.ScalingTechnique.FIXEDMANUAL,
 ):
 
+    AuxModSize = 60  # OpenFHE is 60bits
+
     N = int(2**logN)
     slots = int(2**logSlots)
 
-    depth = (
-        levelEnc
-        + levelDec
-        + maxLevelsRemaining
-        + (R_UNIFORM - 1 if secretKeyDist == openfhe.UNIFORM_TERNARY else 0)
+    depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
+        approxModDepth, [levelEnc, levelDec], secretKeyDist
     )
 
     L = depth + 1  # GPUFHE: L
@@ -57,13 +58,19 @@ def gen_crypto_context(
     cc.Enable(openfhe.PKESchemeFeature.ADVANCEDSHE)
     cc.Enable(openfhe.PKESchemeFeature.FHE)
 
+    cc.EvalBootstrapSetup([levelEnc, levelDec], [0, 0], slots)
     keys = cc.KeyGen()
 
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
 
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    MULT_SWK = MULT_SWK[::-1]
+
+    cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+    ROT_SWK = cc.GetEvalRotateKey()
+
+    cc.EvalBootstrapKeyGen(keys.secretKey, slots)
+    BOOT_KEY = cc.GetEvalBootstrapKey()
 
     GPUFHE_Context = Context.Context(
         logN,
@@ -77,6 +84,8 @@ def gen_crypto_context(
         rootsQ,
         rootsP,
         MULT_SWK,
+        ROT_SWK,
+        BOOT_KEY
     )
 
     return parameters, cc, keys, GPUFHE_Context
