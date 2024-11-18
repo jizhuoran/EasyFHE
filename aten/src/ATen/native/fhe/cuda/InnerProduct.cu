@@ -108,8 +108,8 @@ __global__ void Reduce(
 namespace at::native {
 static void innerproduct_template(
     const Tensor& modup_out,
-    const Tensor& ax,
     const Tensor& bx,
+    const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
     int64_t level,
@@ -125,9 +125,9 @@ static void innerproduct_template(
   const int mult_length = (level + alpha);
   int gap = level - curr_limbs;
 
-  fhe::uint128_t* accum_ax_ptr =
+  fhe::uint128_t* accum_bx_ptr =
       reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
-  fhe::uint128_t* accum_bx_ptr = accum_ax_ptr + modup_out.size(-1);
+  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
 
   AT_DISPATCH_V2(
       ax.scalar_type(),
@@ -137,9 +137,9 @@ static void innerproduct_template(
             reinterpret_cast<uint64_t*>(modup_out.data_ptr<uint64_t>());
         auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
         auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-        auto res_ax_ptr =
-            reinterpret_cast<uint64_t*>(res[0].data_ptr<uint64_t>());
         auto res_bx_ptr =
+            reinterpret_cast<uint64_t*>(res[0].data_ptr<uint64_t>());
+        auto res_ax_ptr =
             reinterpret_cast<uint64_t*>(res[1].data_ptr<uint64_t>());
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
@@ -203,8 +203,8 @@ static void innerproduct_template(
 Tensor innerproduct_cuda(
     const Tensor& res,
     const Tensor& modup_out,
-    const Tensor& ax,
     const Tensor& bx,
+    const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
     int64_t level,
@@ -217,8 +217,8 @@ Tensor innerproduct_cuda(
   out.resize_({2, (curr_limbs + alpha) * param_degree});
   innerproduct_template(
       modup_out,
-      ax,
       bx,
+      ax,
       curr_limbs,
       alpha,
       level,
@@ -234,8 +234,8 @@ Tensor innerproduct_cuda(
 Tensor& innerproduct_cuda_(
     Tensor& res,
     const Tensor& modup_out,
-    const Tensor& ax,
     const Tensor& bx,
+    const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
     int64_t level,
@@ -246,8 +246,8 @@ Tensor& innerproduct_cuda_(
     const Tensor& workspace) {
   innerproduct_template(
       modup_out,
-      ax,
       bx,
+      ax,
       curr_limbs,
       alpha,
       level,
@@ -263,8 +263,8 @@ Tensor& innerproduct_cuda_(
 Tensor& innerproduct_cuda_out(
     const Tensor& res,
     const Tensor& modup_out,
-    const Tensor& ax,
     const Tensor& bx,
+    const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
     int64_t level,
@@ -276,8 +276,8 @@ Tensor& innerproduct_cuda_out(
     Tensor& out) {
   innerproduct_template(
       modup_out,
-      ax,
       bx,
+      ax,
       curr_limbs,
       alpha,
       level,

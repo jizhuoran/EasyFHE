@@ -141,8 +141,8 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_ax_cuda,
             cryptoContext.swk_bx_cuda,
+            cryptoContext.swk_ax_cuda,
             cryptoContext,
         ),
         cur_limbs=in0.cur_limbs,
@@ -157,8 +157,8 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_ax_cuda,
             cryptoContext.swk_bx_cuda,
+            cryptoContext.swk_ax_cuda,
             cryptoContext,
         ),
         cur_limbs=in0.cur_limbs,

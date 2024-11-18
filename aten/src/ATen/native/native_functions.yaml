@@ -15869,17 +15869,17 @@
   dispatch:
     CUDA: moddown_cuda_out
 
-- func: innerproduct(Tensor self, Tensor in_modup, *, Tensor ax, Tensor bx, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+- func: innerproduct(Tensor self, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: innerproduct_cuda
 
-- func: innerproduct_(Tensor(a!) self, Tensor in_modup, *, Tensor ax, Tensor bx, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor(a!)
+- func: innerproduct_(Tensor(a!) self, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: innerproduct_cuda_
 
-- func: innerproduct.out(Tensor self, Tensor in_modup, *, Tensor ax, Tensor bx, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace, Tensor(a!) out) -> Tensor(a!)
+- func: innerproduct.out(Tensor self, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int level, int param_degree, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: innerproduct_cuda_out

@@ -256,48 +256,28 @@ def cv_innerproduct(
     x: Tensor,
     curr_limbs: int,
     context_cuda: Context,
-    swk_ax: Tensor,
     swk_bx: Tensor,
+    swk_ax: Tensor,
     inplace: bool = False,
 ) -> Tensor:
     if inplace:
-        res = torch.innerproduct_(
-            context_cuda.inner_out,
-            x,
-            ax=swk_ax,
-            bx=swk_bx,
-            curr_limbs=curr_limbs,
-            alpha=context_cuda.alpha,
-            level=context_cuda.level,
-            param_degree=context_cuda.degree,
-            primes=context_cuda.primes,
-            barret_ratio=context_cuda.barret_ratio,
-            barret_k=context_cuda.barret_k,
-            workspace=context_cuda.inner_workspace,
-        )
+        res = torch.innerproduct_(context_cuda.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
+                                  alpha=context_cuda.alpha, level=context_cuda.level, param_degree=context_cuda.degree,
+                                  primes=context_cuda.primes, barret_ratio=context_cuda.barret_ratio,
+                                  barret_k=context_cuda.barret_k, workspace=context_cuda.inner_workspace)
     else:
-        res = torch.innerproduct(
-            context_cuda.inner_out,
-            x,
-            ax=swk_ax,
-            bx=swk_bx,
-            curr_limbs=curr_limbs,
-            alpha=context_cuda.alpha,
-            level=context_cuda.level,
-            param_degree=context_cuda.degree,
-            primes=context_cuda.primes,
-            barret_ratio=context_cuda.barret_ratio,
-            barret_k=context_cuda.barret_k,
-            workspace=context_cuda.inner_workspace,
-        )
+        res = torch.innerproduct(context_cuda.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
+                                 alpha=context_cuda.alpha, level=context_cuda.level, param_degree=context_cuda.degree,
+                                 primes=context_cuda.primes, barret_ratio=context_cuda.barret_ratio,
+                                 barret_k=context_cuda.barret_k, workspace=context_cuda.inner_workspace)
     return res
 
 
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
-    swk_ax: Tensor,
     swk_bx: Tensor,
+    swk_ax: Tensor,
     context_cuda: Context,
     inplace: bool = False,
 ) -> Tensor:
@@ -313,8 +293,8 @@ def cv_keyswitch(
         modup_res,
         cur_limbs,
         context_cuda,
-        swk_ax,
         swk_bx,
+        swk_ax,
         inplace=inplace,
     )
 

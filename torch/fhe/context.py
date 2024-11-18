@@ -456,10 +456,10 @@ class Context:
             self.qlql_inv_mod_ql_div_ql_mod_q_shoup = None
             self.q_inv_mod_q = None
             self.q_inv_mod_q_shoup = None
-            
-            self.swk_ax_cuda = torch.tensor(self.mult_swk[0].reshape(-1),dtype=torch.uint64,
+
+            self.swk_bx_cuda = torch.tensor(self.mult_swk[0].reshape(-1),dtype=torch.uint64,
                 device="cuda")
-            self.swk_bx_cuda = torch.tensor(self.mult_swk[1].reshape(-1),dtype=torch.uint64,
+            self.swk_ax_cuda = torch.tensor(self.mult_swk[1].reshape(-1),dtype=torch.uint64,
                 device="cuda")
             
             # for output & workspace

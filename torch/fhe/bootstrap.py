@@ -108,8 +108,8 @@ def InnerL1(
     summult = F.cv_keyswitch(
         axax,
         qu.cur_limbs,
-        cryptoContext.swk_ax_cuda,
         cryptoContext.swk_bx_cuda,
+        cryptoContext.swk_ax_cuda,
         cryptoContext,
     )
 

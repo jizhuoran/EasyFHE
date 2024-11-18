@@ -63,7 +63,6 @@ def gen_crypto_context(
 
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    MULT_SWK = MULT_SWK[::-1]
 
     GPUFHE_Context = Context.Context(
         logN,
