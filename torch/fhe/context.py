@@ -12,9 +12,24 @@ def custom_warning_format(message, category, filename, lineno, file=None, line=N
 warnings.formatwarning = custom_warning_format
 
 class Context:
-    def __init__(self, logN, logq0, logqi, logp, L, K,
-                 moduliQ = None, moduliP = None, rootsQ= None, rootsP=None, MULT_SWK= None,
-                 h=64, sigma=32,):
+    def __init__(
+        self,
+        logN,
+        logq0,
+        logqi,
+        logp,
+        L,
+        K,
+        moduliQ=None,
+        moduliP=None,
+        rootsQ=None,
+        rootsP=None,
+        MULT_SWK=None,
+        ROT_SWK=None,
+        BOOT_KEY=None,
+        h=64,
+        sigma=32,
+    ):
 
         self.logN = logN
         self.logqi = logqi
@@ -54,7 +69,9 @@ class Context:
                     break
                 bnd += 1
             # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
-            self.qRoots[0] = nbtheory.root_of_unity(order=self.M, modulus=self.moduliQ[0])
+            self.qRoots[0] = nbtheory.root_of_unity(
+                order=self.M, modulus=self.moduliQ[0]
+            )
             # print("moduliQ[0]", self.moduliQ[0])
             bnd = 1
             while cnt < L:
@@ -66,7 +83,9 @@ class Context:
                 if self.primeTest(prime2):
                     self.moduliQ[cnt] = prime2
                     # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
-                    self.qRoots[cnt] = nbtheory.root_of_unity(order=self.M, modulus=self.moduliQ[cnt - 1])
+                    self.qRoots[cnt] = nbtheory.root_of_unity(
+                        order=self.M, modulus=self.moduliQ[cnt - 1]
+                    )
                     cnt += 1
                 bnd += 1
 
@@ -88,11 +107,17 @@ class Context:
             # print(i)
             self.qTwok[i] = 2 * (int(math.log2(self.moduliQ[i])) + 1)
             self.qrVec[i] = (1 << self.qTwok[i]) // self.moduliQ[i]
-            self.qkVec[i] = ((nbtheory.mod_inv(1 << 62, self.moduliQ[i]) << 62) - 1) // self.moduliQ[i]
+            self.qkVec[i] = (
+                (nbtheory.mod_inv(1 << 62, self.moduliQ[i]) << 62) - 1
+            ) // self.moduliQ[i]
             self.qRootsInv[i] = nbtheory.mod_inv(self.qRoots[i], int(self.moduliQ[i]))
             self.NInvModq[i] = nbtheory.mod_inv(self.N, int(self.moduliQ[i]))
-            self.NScaleInvModq[i] = self.mulMod(int(self.NInvModq[i]), int(1 << 32), int(self.moduliQ[i]))
-            self.NScaleInvModq[i] = self.mulMod(int(self.NScaleInvModq[i]), int(1 << 32), int(self.moduliQ[i]))
+            self.NScaleInvModq[i] = self.mulMod(
+                int(self.NInvModq[i]), int(1 << 32), int(self.moduliQ[i])
+            )
+            self.NScaleInvModq[i] = self.mulMod(
+                int(self.NScaleInvModq[i]), int(1 << 32), int(self.moduliQ[i])
+            )
             self.qInvVec[i] = self.inv(self.moduliQ[i])
             self.qRootPows[i] = [0] * self.N
             self.qRootPowsInv[i] = [0] * self.N
@@ -105,21 +130,45 @@ class Context:
                 jprime = self.bitReverse(j) >> (32 - self.logN)
                 self.qRootPows[i][jprime] = int(power)
                 # tmp = (power << 64)
-                tmp = (int(power) << 64)
+                tmp = int(power) << 64
                 self.qRootScalePowsOverq[i][jprime] = int(tmp // int(self.moduliQ[i]))
                 self.qRootScalePows[i][jprime] = int(
-                    self.mulMod(int(self.qRootPows[i][jprime]), int(1 << 32), int(self.moduliQ[i])))
+                    self.mulMod(
+                        int(self.qRootPows[i][jprime]),
+                        int(1 << 32),
+                        int(self.moduliQ[i]),
+                    )
+                )
                 self.qRootScalePows[i][jprime] = int(
-                    self.mulMod(int(self.qRootScalePows[i][jprime]), int(1 << 32), int(self.moduliQ[i])))
+                    self.mulMod(
+                        int(self.qRootScalePows[i][jprime]),
+                        int(1 << 32),
+                        int(self.moduliQ[i]),
+                    )
+                )
                 self.qRootPowsInv[i][jprime] = int(powerInv)
                 self.qRootScalePowsInv[i][jprime] = int(
-                    self.mulMod(int(self.qRootPowsInv[i][jprime]), int(1 << 32), int(self.moduliQ[i])))
+                    self.mulMod(
+                        int(self.qRootPowsInv[i][jprime]),
+                        int(1 << 32),
+                        int(self.moduliQ[i]),
+                    )
+                )
                 self.qRootScalePowsInv[i][jprime] = int(
-                    self.mulMod(int(self.qRootScalePowsInv[i][jprime]), int(1 << 32), int(self.moduliQ[i])))
+                    self.mulMod(
+                        int(self.qRootScalePowsInv[i][jprime]),
+                        int(1 << 32),
+                        int(self.moduliQ[i]),
+                    )
+                )
                 if j < self.N - 1:
-                    power = self.mulMod(int(power), int(self.qRoots[i]), int(self.moduliQ[i]))
-                    powerInv = self.mulMod(powerInv, int(self.qRootsInv[i]), int(self.moduliQ[i]))
-        q_mu = [] # for barret mul mod
+                    power = self.mulMod(
+                        int(power), int(self.qRoots[i]), int(self.moduliQ[i])
+                    )
+                    powerInv = self.mulMod(
+                        powerInv, int(self.qRootsInv[i]), int(self.moduliQ[i])
+                    )
+        q_mu = []  # for barret mul mod
         for mod in self.moduliQ:
             x = 2**128 // mod
             low = x & ((1 << 64) - 1)  # 取低64位
@@ -149,14 +198,18 @@ class Context:
                 prime1 = (1 << logp) + bnd * self.M + 1
                 if self.primeTest(prime1):
                     self.moduliP[cnt] = prime1
-                    self.pRoots[cnt] = nbtheory.root_of_unity(order=self.M, modulus=self.moduliP[cnt])
+                    self.pRoots[cnt] = nbtheory.root_of_unity(
+                        order=self.M, modulus=self.moduliP[cnt]
+                    )
                     cnt += 1
                 if cnt == self.K:
                     break
                 prime2 = (1 << logp) - bnd * self.M + 1
                 if self.primeTest(prime2):
                     self.moduliP[cnt] = prime2
-                    self.pRoots[cnt] = nbtheory.root_of_unity(order=self.M, modulus=self.moduliP[cnt])
+                    self.pRoots[cnt] = nbtheory.root_of_unity(
+                        order=self.M, modulus=self.moduliP[cnt]
+                    )
                     cnt += 1
                 bnd += 1
 
@@ -175,11 +228,17 @@ class Context:
             # print(i)
             self.pTwok[i] = 2 * (int(math.log2(self.moduliP[i])) + 1)
             self.prVec[i] = (1 << self.pTwok[i]) // self.moduliP[i]
-            self.pkVec[i] = ((nbtheory.mod_inv(1 << 62, self.moduliP[i]) << 62) - 1) // self.moduliP[i]
+            self.pkVec[i] = (
+                (nbtheory.mod_inv(1 << 62, self.moduliP[i]) << 62) - 1
+            ) // self.moduliP[i]
             self.pRootsInv[i] = nbtheory.mod_inv(self.pRoots[i], int(self.moduliP[i]))
             self.NInvModp[i] = nbtheory.mod_inv(self.N, int(self.moduliP[i]))
-            self.NScaleInvModp[i] = self.mulMod(int(self.NInvModp[i]), int(1 << 32), int(self.moduliP[i]))
-            self.NScaleInvModp[i] = self.mulMod(int(self.NScaleInvModp[i]), int(1 << 32), int(self.moduliP[i]))
+            self.NScaleInvModp[i] = self.mulMod(
+                int(self.NInvModp[i]), int(1 << 32), int(self.moduliP[i])
+            )
+            self.NScaleInvModp[i] = self.mulMod(
+                int(self.NScaleInvModp[i]), int(1 << 32), int(self.moduliP[i])
+            )
             self.pInvVec[i] = self.inv(self.moduliP[i])
             self.pRootPows[i] = [0] * self.N
             self.pRootPowsInv[i] = [0] * self.N
@@ -191,22 +250,32 @@ class Context:
             for j in range(self.N):
                 jprime = self.bitReverse(j) >> (32 - self.logN)
                 self.pRootPows[i][jprime] = int(power)
-                tmp = (int(power) << 64)
+                tmp = int(power) << 64
                 self.pRootScalePowsOverp[i][jprime] = tmp // self.moduliP[i]
-                self.pRootScalePows[i][jprime] = self.mulMod(self.pRootPows[i][jprime], int(1 << 32),
-                                                             int(self.moduliP[i]))
-                self.pRootScalePows[i][jprime] = self.mulMod(self.pRootScalePows[i][jprime], int(1 << 32),
-                                                             int(self.moduliP[i]))
+                self.pRootScalePows[i][jprime] = self.mulMod(
+                    self.pRootPows[i][jprime], int(1 << 32), int(self.moduliP[i])
+                )
+                self.pRootScalePows[i][jprime] = self.mulMod(
+                    self.pRootScalePows[i][jprime], int(1 << 32), int(self.moduliP[i])
+                )
                 self.pRootPowsInv[i][jprime] = powerInv
-                self.pRootScalePowsInv[i][jprime] = self.mulMod(self.pRootPowsInv[i][jprime], int(1 << 32),
-                                                                int(self.moduliP[i]))
-                self.pRootScalePowsInv[i][jprime] = self.mulMod(self.pRootScalePowsInv[i][jprime], int(1 << 32),
-                                                                int(self.moduliP[i]))
+                self.pRootScalePowsInv[i][jprime] = self.mulMod(
+                    self.pRootPowsInv[i][jprime], int(1 << 32), int(self.moduliP[i])
+                )
+                self.pRootScalePowsInv[i][jprime] = self.mulMod(
+                    self.pRootScalePowsInv[i][jprime],
+                    int(1 << 32),
+                    int(self.moduliP[i]),
+                )
                 if j < self.N - 1:
-                    power = self.mulMod(power, int(self.pRoots[i]), int(self.moduliP[i]))
-                    powerInv = self.mulMod(powerInv, int(self.pRootsInv[i]), int(self.moduliP[i]))
+                    power = self.mulMod(
+                        power, int(self.pRoots[i]), int(self.moduliP[i])
+                    )
+                    powerInv = self.mulMod(
+                        powerInv, int(self.pRootsInv[i]), int(self.moduliP[i])
+                    )
 
-        p_mu = [] # for barret mul mod
+        p_mu = []  # for barret mul mod
         for mod in self.moduliP:
             x = 2**128 // mod
             low = x & ((1 << 64) - 1)  # 取低64位
@@ -216,18 +285,22 @@ class Context:
 
         moduliPartQ = [0] * self.dnum
         for j in range(self.dnum):
-            moduliPartQ[j]= int(1)
-            for i in range(K*j, K*(j+1)):
-                if i<L:
+            moduliPartQ[j] = int(1)
+            for i in range(K * j, K * (j + 1)):
+                if i < L:
                     moduliPartQ[j] *= int(self.moduliQ[i])
 
-        self.PartQlHatInvModq = [[[0 for _ in range(K)] for _ in range(K)] for _ in range(self.dnum)]
+        self.PartQlHatInvModq = [
+            [[0 for _ in range(K)] for _ in range(K)] for _ in range(self.dnum)
+        ]
         for k in range(self.dnum):
             sizePartQk = (L - (k * K)) if (k == self.dnum - 1) else K
             modulusPartQ = moduliPartQ[k]
             for l in range(sizePartQk):
                 if l > 0:
-                    modulusPartQ = int(int(modulusPartQ) // int(self.moduliQ[k * K + sizePartQk - l]))
+                    modulusPartQ = int(
+                        int(modulusPartQ) // int(self.moduliQ[k * K + sizePartQk - l])
+                    )
                 for i in range(sizePartQk - l):
                     moduli = int(self.moduliQ[k * K + i])
                     QHat = modulusPartQ // moduli
@@ -235,11 +308,19 @@ class Context:
                     self.PartQlHatInvModq[k][sizePartQk - l - 1][i] = QHatInvModqi
 
         # 初始化 PartQlHatModp
-        self.PartQlHatModp = [[[[0 for _ in range(self.dnum * K)] for _ in range(K)] for _ in range(self.dnum)] for _ in range(L)]
+        self.PartQlHatModp = [
+            [
+                [[0 for _ in range(self.dnum * K)] for _ in range(K)]
+                for _ in range(self.dnum)
+            ]
+            for _ in range(L)
+        ]
         for l in range(L):
             beta = math.ceil((l + 1) / K)
             for k in range(beta):
-                partQ_size = (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                partQ_size = (
+                    (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                )
                 digitSize = K
                 modulusPartQ = int(moduliPartQ[k])
 
@@ -254,7 +335,9 @@ class Context:
                     start_idx = k * K
                     end_idx = start_idx + digitSize
                     complBasis_vec = (
-                            self.moduliQ[:start_idx] + self.moduliQ[end_idx:l + 1] + self.moduliP
+                        self.moduliQ[:start_idx]
+                        + self.moduliQ[end_idx : l + 1]
+                        + self.moduliP
                     )
 
                     for j, mod in enumerate(complBasis_vec):
@@ -262,12 +345,20 @@ class Context:
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
 
         # 初始化 PartQlHatModp_pad
-        self.PartQlHatModp_pad = [[[[0 for _ in range(self.dnum * K)] for _ in range(K)] for _ in range(self.dnum)] for _ in range(L)]
+        self.PartQlHatModp_pad = [
+            [
+                [[0 for _ in range(self.dnum * K)] for _ in range(K)]
+                for _ in range(self.dnum)
+            ]
+            for _ in range(L)
+        ]
         for l in range(L):
             beta = math.ceil((l + 1) / K)
-            ceil_curr_limbs = beta*K
+            ceil_curr_limbs = beta * K
             for k in range(beta):
-                partQ_size = (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                partQ_size = (
+                    (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                )
                 digitSize = K
                 modulusPartQ = int(moduliPartQ[k])
 
@@ -282,24 +373,22 @@ class Context:
                     start_idx = k * K
                     end_idx = start_idx + digitSize
                     complBasis_vec = (
-                            self.moduliQ[:start_idx] + self.moduliQ[end_idx:l + 1]
+                        self.moduliQ[:start_idx] + self.moduliQ[end_idx : l + 1]
                     )
                     offset = len(complBasis_vec)
                     for j, mod in enumerate(complBasis_vec):
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp_pad[l][k][i][j] = QHatModpj
 
-                    complBasis_vec = (
-                            self.moduliQ[l + 1:ceil_curr_limbs]
-                    )
+                    complBasis_vec = self.moduliQ[l + 1 : ceil_curr_limbs]
                     for j, mod in enumerate(complBasis_vec):
-                        self.PartQlHatModp_pad[l][k][i][offset+j] = 0
+                        self.PartQlHatModp_pad[l][k][i][offset + j] = 0
 
                     complBasis_vec = self.moduliP
-                    offset = ceil_curr_limbs-K
+                    offset = ceil_curr_limbs - K
                     for j, mod in enumerate(complBasis_vec):
                         QHatModpj = int(partQHat) % int(mod)
-                        self.PartQlHatModp_pad[l][k][i][offset+j] = QHatModpj
+                        self.PartQlHatModp_pad[l][k][i][offset + j] = QHatModpj
 
         self.pHatModp = [0] * K  # 初始化 pHatModp 列表
         self.pHatInvModp = [0] * K  # 初始化 pHatInvModp 列表
@@ -312,7 +401,9 @@ class Context:
 
         # 计算 pHatInvModp # [k] qhat_k^-1 mod q_k
         for k in range(K):
-            self.pHatInvModp[k] = int(self.invMod(int(self.pHatModp[k]), self.moduliP[k]))
+            self.pHatInvModp[k] = int(
+                self.invMod(int(self.pHatModp[k]), self.moduliP[k])
+            )
 
         # 初始化 pHatModq
         self.pHatModq = [[0] * L for _ in range(K)]
@@ -321,7 +412,9 @@ class Context:
                 self.pHatModq[k][i] = int(1)
                 for s in list(range(k)) + list(range(k + 1, K)):
                     temp = int(self.moduliP[s]) % int(self.moduliQ[i])
-                    self.pHatModq[k][i] = self.mulMod(int(self.pHatModq[k][i]), temp, int(self.moduliQ[i]))
+                    self.pHatModq[k][i] = self.mulMod(
+                        int(self.pHatModq[k][i]), temp, int(self.moduliQ[i])
+                    )
 
         self.PModq = [0] * L  # 初始化 PModq
 
@@ -330,7 +423,9 @@ class Context:
             self.PModq[i] = int(1)
             for k in range(K):
                 temp = self.moduliP[k] % self.moduliQ[i]
-                self.PModq[i] = self.mulMod(int(self.PModq[i]), int(temp), int(self.moduliQ[i]))
+                self.PModq[i] = self.mulMod(
+                    int(self.PModq[i]), int(temp), int(self.moduliQ[i])
+                )
 
         self.PInvModq = [0] * L  # 初始化 PInvModq
         # 计算 PInvModq
@@ -339,8 +434,10 @@ class Context:
 
         self.qInvModq = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
-            for j in list(range(i))+list(range(i+1, L)):
-                self.qInvModq[i][j] = self.invMod(int(self.moduliQ[i]), int(self.moduliQ[j]))
+            for j in list(range(i)) + list(range(i + 1, L)):
+                self.qInvModq[i][j] = self.invMod(
+                    int(self.moduliQ[i]), int(self.moduliQ[j])
+                )
 
         # rescale param
         # sizeQ in openFHE equals to L here.
@@ -355,7 +452,9 @@ class Context:
 
                 for j in range(l):
                     temp = self.invMod(self.moduliQ[j], self.moduliQ[l])
-                    QlInvModql = self.mulMod(int(QlInvModql), int(temp), int(self.moduliQ[l]))
+                    QlInvModql = self.mulMod(
+                        int(QlInvModql), int(temp), int(self.moduliQ[l])
+                    )
 
                 modulusQ = int(1)
                 for j in range(l):
@@ -371,7 +470,9 @@ class Context:
             warnings.warn(
                 "\n------------------------\n"
                 "MULT_SWK needs to be set"
-                "\n------------------------\n", UserWarning)
+                "\n------------------------\n",
+                UserWarning,
+            )
             # todo: set data in numpy array
         else:
             self.mult_swk[0] = MULT_SWK[0]
@@ -413,19 +514,21 @@ class Context:
         self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
         self.PModq = np.array(self.PModq, dtype=np.uint64)
         self.qInvModq = np.array(self.qInvModq, dtype=np.uint64)
-        self.QlQlInvModqlDivqlModq = np.array(self.QlQlInvModqlDivqlModq, dtype=np.uint64)
-        
+        self.QlQlInvModqlDivqlModq = np.array(
+            self.QlQlInvModqlDivqlModq, dtype=np.uint64
+        )
+
         # for cuda context
         if torch.cuda.is_available():
             self.log_degree = logN
             self.degree = self.N
             self.level = self.L
             self.alpha = self.K
-            self.max_num_moduli = self.L+ self.K
+            self.max_num_moduli = self.L + self.K
             self.chain_length = self.L
             self.num_special_moduli = self.K
             self.primes = np.hstack((moduliQ, moduliP))
-            
+
             self.power_of_roots = None
             self.power_of_roots_shoup = None
             self.inverse_power_of_roots_div_two = None
@@ -436,31 +539,31 @@ class Context:
             self.inv_power_of_roots_shoup_vec = []
             self.barret_k = []
             self.barret_ratio = []
-            
-            #for modup
+
+            # for modup
             self.num_moduli_after_modup = self.max_num_moduli
             self.hat_inverse_vec_modup = None
             self.hat_inverse_vec_shoup_modup = None
             self.prod_q_i_mod_q_j_modup = None
-            
-            #for moddown
+
+            # for moddown
             self.num_moduli_after_moddown = self.chain_length
             self.hat_inverse_vec_moddown = []
             self.hat_inverse_vec_shoup_moddown = []
             self.prod_q_i_mod_q_j_moddown = []
             self.prod_inv_moddown = []
             self.prod_inv_shoup_moddown = []
-            
-            #for drop_last_element_and_scale
+
+            # for drop_last_element_and_scale
             self.qlql_inv_mod_ql_div_ql_mod_q = None
             self.qlql_inv_mod_ql_div_ql_mod_q_shoup = None
             self.q_inv_mod_q = None
             self.q_inv_mod_q_shoup = None
 
-            self.swk_bx_cuda = torch.tensor(self.mult_swk[0].reshape(-1),dtype=torch.uint64,
-                device="cuda")
-            self.swk_ax_cuda = torch.tensor(self.mult_swk[1].reshape(-1),dtype=torch.uint64,
-                device="cuda")
+            self.swk_bx_cuda = torch.tensor(
+                self.mult_swk[0].reshape(-1),dtype=torch.uint64, device="cuda")
+            self.swk_ax_cuda = torch.tensor(
+                self.mult_swk[1].reshape(-1),dtype=torch.uint64, device="cuda")
             
             # for output & workspace
             self.beta = (int)(self.level / self.alpha)
@@ -494,10 +597,10 @@ class Context:
                 dtype=torch.uint64,
                 device="cuda",
             )
-            
+
             power_of_roots = self.qRootPows + self.pRootPows
             inverse_power_of_roots = self.qRootPowsInv + self.pRootPowsInv
-            #cal basic param
+            # cal basic param
             for i, prime in enumerate(self.primes):
                 barret = math.floor(math.log2(prime)) + 63
                 self.barret_k.append(barret)
@@ -506,17 +609,21 @@ class Context:
                 temp <<= 64
                 self.barret_ratio.append(temp // prime)
                 power_of_roots_shoup = self.shoup_each(power_of_roots[i], prime)
-                inv_power_of_roots_div_two = self.div_two(inverse_power_of_roots[i], prime)
+                inv_power_of_roots_div_two = self.div_two(
+                    inverse_power_of_roots[i], prime
+                )
                 inv_power_of_roots_shoup = self.shoup_each(
                     inv_power_of_roots_div_two, prime
                 )
 
                 self.power_of_roots_vec.extend(power_of_roots[i])
-                self.power_of_roots_shoup_vec.extend(power_of_roots_shoup) 
+                self.power_of_roots_shoup_vec.extend(power_of_roots_shoup)
                 self.inv_power_of_roots_vec.extend(inv_power_of_roots_div_two)
                 self.inv_power_of_roots_shoup_vec.extend(inv_power_of_roots_shoup)
 
-            self.barret_k = torch.tensor(self.barret_k, dtype=torch.uint64, device="cuda")
+            self.barret_k = torch.tensor(
+                self.barret_k, dtype=torch.uint64, device="cuda"
+            )
             self.barret_ratio = torch.tensor(
                 self.barret_ratio, dtype=torch.uint64, device="cuda"
             )
@@ -533,18 +640,22 @@ class Context:
             self.inverse_scaled_power_of_roots_div_two = torch.tensor(
                 self.inv_power_of_roots_shoup_vec, dtype=torch.uint64, device="cuda"
             )
-            
+
             # cal modup param
             prod_q_i_mod_q_j_modup = []
             for l in range(self.L):
                 prod_qi_mod_qj = []
                 for dnum_idx in range(self.dnum):
                     prod_q_i_mod_q_j = self.PartQlHatModp[l][dnum_idx]
-                    prod_q_i_mod_q_j = prod_q_i_mod_q_j.swapaxes(1,0).flatten()
+                    prod_q_i_mod_q_j = prod_q_i_mod_q_j.swapaxes(1, 0).flatten()
                     prod_qi_mod_qj.append(prod_q_i_mod_q_j)
                 prod_q_i_mod_q_j_modup.append(prod_qi_mod_qj)
-            self.prod_q_i_mod_q_j_modup = torch.tensor(np.array(prod_q_i_mod_q_j_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
-            
+            self.prod_q_i_mod_q_j_modup = torch.tensor(
+                np.array(prod_q_i_mod_q_j_modup, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+
             hat_inverse_vec_modup = []
             hat_inverse_vec_shoup_modup = []
             for dnum_idx in range(self.dnum):
@@ -558,9 +669,17 @@ class Context:
                         shoup = self.shoup(int(hat_inverse_vec[k_idx]), prime)
                         hat_inv_shoup.append(shoup)
                     hat_inverse_vec_shoup_modup.append(hat_inv_shoup)
-            self.hat_inverse_vec_modup = torch.tensor(np.array(hat_inverse_vec_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
-            self.hat_inverse_vec_shoup_modup = torch.tensor(np.array(hat_inverse_vec_shoup_modup,dtype=np.uint64), dtype= torch.uint64, device = "cuda")
-            
+            self.hat_inverse_vec_modup = torch.tensor(
+                np.array(hat_inverse_vec_modup, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.hat_inverse_vec_shoup_modup = torch.tensor(
+                np.array(hat_inverse_vec_shoup_modup, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+
             # cal moddown param
             start_length = self.num_special_moduli
             end_length = self.chain_length
@@ -576,14 +695,26 @@ class Context:
                 shoup = self.shoup(int(hat_inv_moddown[k]), prime)
                 hat_inv_shoup_moddown.append(shoup)
             hat_inverse_vec_moddown.append(hat_inv_moddown)
-            self.hat_inverse_vec_moddown = torch.tensor(np.array(hat_inverse_vec_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
+            self.hat_inverse_vec_moddown = torch.tensor(
+                np.array(hat_inverse_vec_moddown, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
             hat_inverse_vec_shoup_moddown.append(hat_inv_shoup_moddown)
-            self.hat_inverse_vec_shoup_moddown = torch.tensor(np.array(hat_inverse_vec_shoup_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
+            self.hat_inverse_vec_shoup_moddown = torch.tensor(
+                np.array(hat_inverse_vec_shoup_moddown, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
 
             prod_q_i_mod_q_j_moddown = []
             end_primes = self.set_difference(self.primes, start_begin)
-            prod_q_i_mod_q_j_moddown.append(self.pHatModq.swapaxes(1,0).flatten())
-            self.prod_q_i_mod_q_j_moddown = torch.tensor(np.array(prod_q_i_mod_q_j_moddown,dtype=np.uint64), dtype=torch.uint64,device="cuda")
+            prod_q_i_mod_q_j_moddown.append(self.pHatModq.swapaxes(1, 0).flatten())
+            self.prod_q_i_mod_q_j_moddown = torch.tensor(
+                np.array(prod_q_i_mod_q_j_moddown, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
 
             prod_inv = self.PInvModq
             prod_shoup = []
@@ -591,42 +722,66 @@ class Context:
             for i, end_prime in enumerate(end_primes):
                 inv = prod_inv[i]
                 prod_shoup.append(self.shoup(int(inv), end_prime))
-            
+
             prod_inv_moddown = []
             prod_inv_moddown.append(prod_inv)
-            self.prod_inv_moddown = torch.tensor(np.array(prod_inv_moddown,dtype=np.uint64), dtype=torch.uint64, device="cuda")
+            self.prod_inv_moddown = torch.tensor(
+                np.array(prod_inv_moddown, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
 
             prod_inv_shoup_moddown = []
             prod_inv_shoup_moddown.append(prod_shoup)
-            self.prod_inv_shoup_moddown = torch.tensor(np.array(prod_shoup,dtype=np.uint64), dtype=torch.uint64, device="cuda")
-            
+            self.prod_inv_shoup_moddown = torch.tensor(
+                np.array(prod_shoup, dtype=np.uint64), dtype=torch.uint64, device="cuda"
+            )
+
             # cal rescale param
             QlQlInvModqlDivqlModq = self.QlQlInvModqlDivqlModq.reshape(-1)
             qlql_inv_mod_ql_div_ql_mod_q_vec = []
-            qlql_inv_mod_ql_div_ql_mod_q_shoup_vec =[]
-            for i in range(self.L-1):
-                for j in range(self.L-1):
-                    QlQlInvModqlDivqlModq_i = QlQlInvModqlDivqlModq[i*(self.L-1)+j]
+            qlql_inv_mod_ql_div_ql_mod_q_shoup_vec = []
+            for i in range(self.L - 1):
+                for j in range(self.L - 1):
+                    QlQlInvModqlDivqlModq_i = QlQlInvModqlDivqlModq[
+                        i * (self.L - 1) + j
+                    ]
                     prime = self.primes[j]
-                    shoup = self.shoup(int(QlQlInvModqlDivqlModq_i),prime)
+                    shoup = self.shoup(int(QlQlInvModqlDivqlModq_i), prime)
                     qlql_inv_mod_ql_div_ql_mod_q_vec.append(QlQlInvModqlDivqlModq_i)
                     qlql_inv_mod_ql_div_ql_mod_q_shoup_vec.append(shoup)
-            self.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
-            self.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(np.array(qlql_inv_mod_ql_div_ql_mod_q_shoup_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
-            
+            self.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(
+                np.array(qlql_inv_mod_ql_div_ql_mod_q_vec, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(
+                np.array(qlql_inv_mod_ql_div_ql_mod_q_shoup_vec, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+
             qInvModq = self.qInvModq.reshape(-1)
             qInvModq_vec = []
             qInvModq_shoup_vec = []
             for i in range(self.L):
                 for j in range(self.L):
-                    qInvModq_i = qInvModq[i*self.L +j]
+                    qInvModq_i = qInvModq[i * self.L + j]
                     prime = self.primes[j]
                     shoup = self.shoup(int(qInvModq_i), prime)
                     qInvModq_vec.append(qInvModq_i)
                     qInvModq_shoup_vec.append(shoup)
-            self.q_inv_mod_q = torch.tensor(np.array(qInvModq_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
-            self.q_inv_mod_q_shoup = torch.tensor(np.array(qInvModq_shoup_vec,dtype=np.uint64), dtype=torch.uint64,device="cuda")
-            
+            self.q_inv_mod_q = torch.tensor(
+                np.array(qInvModq_vec, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.q_inv_mod_q_shoup = torch.tensor(
+                np.array(qInvModq_shoup_vec, dtype=np.uint64),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
 
     def shoup(self, in_value, prime):
@@ -640,11 +795,10 @@ class Context:
         two_inv = self.invMod(2, prime)
         out_list = [self.mulMod(int(x), int(two_inv), int(prime)) for x in in_list]
         return out_list
-    
+
     def set_difference(self, begin, end):
         remove_set = set(end)
         return [item for item in begin if item not in remove_set]
-
 
     def negate(self, r, a):
         r = -a
@@ -693,7 +847,7 @@ class Context:
         return res
 
     def inv(self, x):
-        UINT64_MAX = 0xffffffffffffffff
+        UINT64_MAX = 0xFFFFFFFFFFFFFFFF
         return pow(int(x), UINT64_MAX, UINT64_MAX + 1)
 
     def pow(self, x, y):
@@ -710,7 +864,7 @@ class Context:
         for i in range(bit_size):
             # 将 n 的最低有效位移到 reversed_bits 的适当位置
             reversed_bits <<= 1
-            reversed_bits |= (n & 1)
+            reversed_bits |= n & 1
             n >>= 1
         return reversed_bits
 
@@ -774,5 +928,6 @@ class Context:
             if mod != p - 1 and temp2 % 2 == 0:
                 return False
         return True
-    def method(self): # function to initialize variables
+
+    def method(self):  # function to initialize variables
         pass
