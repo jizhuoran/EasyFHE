@@ -25,7 +25,7 @@ def cipher_level_reduce(ct, levels):
 def cipher_add(in0, in1, cryptoContext):
     assert in0.cur_limbs == in1.cur_limbs
     cv = [
-        F.cv_add(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs)
+        F.cv_add(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
     ]
     return Cipher(cv, in0.cur_limbs)
@@ -34,7 +34,7 @@ def cipher_add(in0, in1, cryptoContext):
 def cipher_sub(in0, in1, cryptoContext):
     assert in0.cur_limbs == in1.cur_limbs
     cv = [
-        F.cv_sub(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs)
+        F.cv_sub(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
     ]
     return Cipher(cv, in0.cur_limbs)
@@ -44,28 +44,28 @@ def cipher_mul(in0, in1, cryptoContext):
     assert len(in0.cv) == 2 and len(in1.cv) == 2
     assert in0.cur_limbs == in1.cur_limbs
     bx = F.cv_mul(
-        in0.cv[0], in1.cv[0], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+        in0.cv[0], in1.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
     ax = F.cv_add(
         F.cv_mul(
             in0.cv[0],
             in1.cv[1],
-            cryptoContext.moduliQ,
-            cryptoContext.q_mu,
+            cryptoContext.moduliQ_cuda,
+            cryptoContext.q_mu_cuda,
             in0.cur_limbs,
         ),
         F.cv_mul(
             in0.cv[1],
             in1.cv[0],
-            cryptoContext.moduliQ,
-            cryptoContext.q_mu,
+            cryptoContext.moduliQ_cuda,
+            cryptoContext.q_mu_cuda,
             in0.cur_limbs,
         ),
-        cryptoContext.moduliQ,
+        cryptoContext.moduliQ_cuda,
         in0.cur_limbs,
     )
     axax = F.cv_mul(
-        in0.cv[1], in1.cv[1], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+        in0.cv[1], in1.cv[1], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
     return Cipher([bx, ax, axax], in0.cur_limbs)
 
@@ -73,18 +73,18 @@ def cipher_mul(in0, in1, cryptoContext):
 def cipher_square(in0, cryptoContext):
     assert len(in0.cv) == 2
     bx = F.cv_mul(
-        in0.cv[0], in0.cv[0], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+        in0.cv[0], in0.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
     ax = F.cv_mul(
         in0.cv[0],
         in0.cv[1],
-        cryptoContext.moduliQ,
-        cryptoContext.q_mu,
+        cryptoContext.moduliQ_cuda,
+        cryptoContext.q_mu_cuda,
         in0.cur_limbs,
     )
-    ax = F.cv_add(ax, ax, cryptoContext.moduliQ, in0.cur_limbs)
+    ax = F.cv_add(ax, ax, cryptoContext.moduliQ_cuda, in0.cur_limbs)
     axax = F.cv_mul(
-        in0.cv[1], in0.cv[1], cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+        in0.cv[1], in0.cv[1], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
 
     return Cipher([bx, ax, axax], in0.cur_limbs)
@@ -94,7 +94,7 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
-        F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
+        F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
         in0.cv[1],
     ]
     return Cipher(cv, in0.cur_limbs)
@@ -102,9 +102,9 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
 
 def cipher_sub_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
     cv = [
-        F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
+        F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
         in0.cv[1],
     ]
     return Cipher(cv, in0.cur_limbs)
@@ -112,10 +112,10 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
 
 def cipher_mul_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
-            cv0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs
+            cv0, scalar_mod, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
         )
         for cv0 in in0.cv
     ]
@@ -123,7 +123,7 @@ def cipher_mul_scalar(in0, scalar, cryptoContext):
 
 
 def cipher_neg(in0, cryptoContext):
-    cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
+    cv = [F.cv_neg(cv0, cryptoContext.moduliQ_cuda, in0.cur_limbs) for cv0 in in0.cv]
     return Cipher(cv, in0.cur_limbs)
 
 

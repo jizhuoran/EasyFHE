@@ -82,6 +82,7 @@ def cv_modup(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
+    beta = (curr_limbs + context.K - 1) // context.K
     if inplace:
         res = torch.modup_(
             context.modup_out,
@@ -94,7 +95,7 @@ def cv_modup(
             primes=context.primes,
             barret_ratio=context.barret_ratio,
             barret_k=context.barret_k,
-            beta=context.beta,
+            beta=beta,
             degree=context.degree,
             alpha=context.alpha,
             param_power_of_roots_shoup=context.power_of_roots_shoup,
@@ -114,7 +115,7 @@ def cv_modup(
             primes=context.primes,
             barret_ratio=context.barret_ratio,
             barret_k=context.barret_k,
-            beta=context.beta,
+            beta=beta,
             degree=context.degree,
             alpha=context.alpha,
             param_power_of_roots_shoup=context.power_of_roots_shoup,
@@ -123,7 +124,7 @@ def cv_modup(
             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
         )
 
-    return res
+    return res.reshape(-1, context.N)
 
 
 def cv_moddown(
@@ -177,7 +178,7 @@ def cv_moddown(
             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
         )
 
-    return res
+    return res.reshape(-1, context.N)
 
 
 def NTT(
@@ -270,7 +271,7 @@ def cv_innerproduct(
                                  alpha=context_cuda.alpha, level=context_cuda.level, param_degree=context_cuda.degree,
                                  primes=context_cuda.primes, barret_ratio=context_cuda.barret_ratio,
                                  barret_k=context_cuda.barret_k, workspace=context_cuda.inner_workspace)
-    return res
+    return res.reshape(2, -1, context_cuda.N)
 
 
 def cv_keyswitch(
@@ -290,7 +291,7 @@ def cv_keyswitch(
         inplace=inplace,
     )
     inner_product = cv_innerproduct(
-        modup_res,
+        modup_res.reshape(-1),
         cur_limbs,
         context_cuda,
         swk_bx,
@@ -423,13 +424,13 @@ def cv_automorphism_transform(
     automorphism_transform = torch.automorphism_transform(
         context_cuda.automorphism_transform_out,
         input,
-        l=l,
-        N=N,
-        i=i,
+        l=int(l),
+        N=int(N),
+        i=int(i),
         precomp_vec=precomp_vec
     )
 
-    return automorphism_transform
+    return automorphism_transform.reshape(-1, context_cuda.N)
 
 def cv_switch_modulus(
     context_cuda: Context, 
@@ -449,7 +450,8 @@ def cv_switch_modulus(
         param_power_of_roots_shoup = context_cuda.power_of_roots_shoup,
         param_power_of_roots = context_cuda.power_of_roots
     )
-    return switch_modulus
+    return switch_modulus.reshape(-1, context_cuda.N)
+
 
 def cv_mul_by_monomial(
     context_cuda: Context,
@@ -471,9 +473,9 @@ def cv_mul_by_monomial(
         monomialDeg=monomialDeg,
         curr_limbs = curr_limbs,
         level=context_cuda.level,
-        inverse_power_of_roots_div_two = context_cuda.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two  = context_cuda.inverse_scaled_power_of_roots_div_two,
-        param_power_of_roots_shoup = context_cuda.power_of_roots_shoup,
-        param_power_of_roots = context_cuda.power_of_root
+        inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
+        param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
+        param_power_of_roots=context_cuda.power_of_roots
     )
-    return mul_by_monomial
+    return mul_by_monomial.reshape(-1, context_cuda.N)

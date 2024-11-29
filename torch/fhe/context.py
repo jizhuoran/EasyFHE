@@ -5,12 +5,156 @@ import math
 import random
 import warnings
 import torch
+from enum import Enum
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
 
 warnings.formatwarning = custom_warning_format
+class SecretKeyDist(Enum):
+    GAUSSIAN = 0
+    UNIFORM_TERNARY = 1
+    SPARSE_TERNARY = 2
 
+class ScalingTechnique(Enum):
+    FIXEDMANUAL = 0
+    FIXEDAUTO = 1
+    FLEXIBLEAUTO = 2
+    FLEXIBLEAUTOEXT = 3
+    NORESCALE = 4
+    INVALID_RS_TECHNIQUE = 5
+
+class CKKS_Boot_Params:
+    def __init__(self, level_budget, layers_coll, layers_rem, num_rotations, baby_step, giant_step, num_rotations_rem, baby_step_rem, giant_step_rem):
+        self.level_budget = level_budget          # the level budget
+        self.layers_coll =layers_coll           # the number of layers to collapse in one level
+        self.layers_rem = layers_rem            # the number of layers remaining to be collapsed in one level to have exactly the number of levels specified in the level budget
+        self.num_rotations = num_rotations         # the number of rotations in one level
+        self.baby_step = baby_step             # the baby step in the baby-step giant-step strategy
+        self.giant_step = giant_step            # the giant step in the baby-step giant-step strategy
+        self.num_rotations_rem = num_rotations_rem     # the number of rotations in the remaining level
+        self.baby_step_rem = baby_step_rem         # the baby step in the baby-step giant-step strategy for the remaining level
+        self.giant_step_rem = giant_step_rem        # the giant step in the baby-step giant-step strategy for the remaining level
+        self.total_elements = 9
+
+class BsContext:
+    def __init__(self, cryptoContext, levelBudget, dim1, numslots, correctionFactor, rescaleTech, secretKeyDist):
+        # self.key_map = {}
+        # self.left_rot_key_map = {} # {index, cipher}
+        self.M = cryptoContext.N *2
+        slots = self.M // 4 if numslots == 0 else numslots
+        self.correctionFactor = correctionFactor
+        self.secretKeyDist = secretKeyDist
+        self.m_U0hatTPre = None
+        self.m_U0hatTPreFFT = None
+        self.m_U0Pre = None
+        self.m_U0PreFFT = None
+        self.paramsDec = None
+        self.paramsEnc = None
+        self.rescaleTech = rescaleTech
+
+        # precom = scheme.precom
+        if correctionFactor == 0:
+            if rescaleTech == ScalingTechnique.FLEXIBLEAUTO or rescaleTech == ScalingTechnique.FLEXIBLEAUTOEXT:
+                tmp = round(-0.265 * (2 * math.log2(self.M  / 2) + math.log2(slots)) + 19.1)
+                if tmp < 7:
+                    self.m_correctionFactor = 7
+                elif tmp > 13:
+                    self.m_correctionFactor = 13
+                else:
+                    self.m_correctionFactor = int(tmp)
+            else:
+                self.m_correctionFactor = 9
+        else:
+            self.m_correctionFactor = correctionFactor
+
+        self.slots = slots
+        self.dim1 = dim1[0]
+
+        logSlots = math.log2(slots)
+        newBudget = [levelBudget[0], levelBudget[1]]
+        if levelBudget[0] > logSlots:
+            print(f"\nWarning, the level budget for encoding cannot be this large. The budget was changed to {int(logSlots)}")
+            newBudget[0] = int(logSlots)
+
+        if levelBudget[0] < 1:
+            print(f"\nWarning, the level budget for encoding has to be at least 1. The budget was changed to 1")
+            newBudget[0] = 1
+
+        if levelBudget[1] > logSlots:
+            print(f"\nWarning, the level budget for decoding cannot be this large. The budget was changed to {int(logSlots)}")
+            newBudget[1] = int(logSlots)
+
+        if levelBudget[1] < 1:
+            print(f"\nWarning, the level budget for decoding has to be at least 1. The budget was changed to 1")
+            newBudget[1] = 1
+
+        self.paramsEnc = self.GetCollapsedFFTParams(slots, newBudget[0], dim1[0])
+        self.paramsDec = self.GetCollapsedFFTParams(slots, newBudget[1], dim1[1])
+
+    # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
+
+    def SelectLayers(self, logSlots, budget):
+        layers = math.ceil(logSlots / budget)
+        rows = logSlots // layers
+        rem = logSlots % layers
+
+        dim = rows
+        if rem != 0:
+            dim = rows + 1
+
+        # The above choice ensures dim <= budget
+        if dim < budget:
+            layers -= 1
+            rows = logSlots // layers
+            rem = logSlots - rows * layers
+            dim = rows
+
+            if rem != 0:
+                dim = rows + 1
+
+            # The above choice ensures dim >= budget
+            while dim != budget:
+                rows -= 1
+                rem = logSlots - rows * layers
+                dim = rows
+                if rem != 0:
+                    dim = rows + 1
+
+        return [layers, rows, rem]
+
+    def GetCollapsedFFTParams(self, slots, levelBudget, dim1):
+        dims = self.SelectLayers(int(math.log2(slots)), levelBudget)
+        layersCollapse = dims[0]
+        remCollapse = dims[2]
+
+        flagRem = 1 if remCollapse != 0 else 0
+
+        numRotations = (1 << (layersCollapse + 1)) - 1
+        numRotationsRem = (1 << (remCollapse + 1)) - 1
+
+        # Computing the baby-step b and the giant-step g for the collapsed layers for decoding.
+        if dim1 == 0 or dim1 > numRotations:
+            if numRotations > 7:
+                g = 1 << (int(layersCollapse / 2) + 2)
+            else:
+                g = 1 << (int(layersCollapse / 2) + 1)
+        else:
+            g = dim1
+
+        b = (numRotations + 1) // g
+        bRem = 0
+        gRem = 0
+
+        if flagRem:
+            if numRotationsRem > 7:
+                gRem = 1 << (int(remCollapse / 2) + 2)
+            else:
+                gRem = 1 << (int(remCollapse / 2) + 1)
+            bRem = (numRotationsRem + 1) // gRem
+
+        # If this return statement changes then CKKS_BOOT_PARAMS should be altered as well
+        return CKKS_Boot_Params(int(levelBudget), layersCollapse, remCollapse, int(numRotations), b, g, int(numRotationsRem), bRem, gRem)
 class Context:
     def __init__(
         self,
@@ -30,12 +174,19 @@ class Context:
         h=64,
         sigma=32,
     ):
+        self.BsContext = None
+        self.logp = logp
+        self.slots = None # 固定值
+        self.qVec = None
+        self.left_rot_key_map = {} #{ax:[index, beta, swk], bx:[index, beta, swk]}
+        self.key_map = {}
+        self.correctionFactor = 0
 
         self.logN = logN
         self.logqi = logqi
         self.L = int(L)
         self.K = int(K)
-        self.dnum = int(L / K)
+        self.dnum = math.ceil(L / K)
         self.h = h
         self.sigma = sigma
         self.N = int(1 << logN)
@@ -175,6 +326,8 @@ class Context:
             high = x >> 64  # 取高64位
             q_mu.append([low, high])
         self.q_mu = np.array(q_mu, dtype=np.uint64)
+        self.q_mu_cuda = torch.from_numpy(np.array(q_mu, dtype=np.uint64)).cuda()
+        self.moduliQ_cuda = torch.from_numpy(np.array(self.moduliQ, dtype=np.uint64)).cuda()
 
         self.moduliP = [0] * self.K
         self.prVec = [0] * self.K
@@ -597,6 +750,16 @@ class Context:
                 dtype=torch.uint64,
                 device="cuda",
             )
+            self.automorphism_transform_out = torch.tensor(
+                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                dtype=torch.uint64,
+                device="cuda",
+            )
+            self.switch_modulus_out = torch.tensor(
+                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                dtype=torch.uint64,
+                device="cuda",
+            )
 
             power_of_roots = self.qRootPows + self.pRootPows
             inverse_power_of_roots = self.qRootPowsInv + self.pRootPowsInv
@@ -781,8 +944,30 @@ class Context:
                 dtype=torch.uint64,
                 device="cuda",
             )
+            self.PModq_cuda = torch.tensor(self.PModq, dtype=torch.uint64, device="cuda")
 
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
+    def precompute_auto_map(self, n, k, precomp):
+        """Precomputes the automorphism map."""
+        m = n << 1  # cyclOrder
+        logm = round(np.log2(m))
+        logn = round(np.log2(n))
+
+        for j in range(n):
+            j_tmp = (j << 1) + 1
+            idx = ((j_tmp * k) - (((j_tmp * k) >> logm) << logm)) >> 1
+            j_rev = self.reverse_bits(j, logn)
+            idx_rev = self.reverse_bits(idx, logn)
+            precomp[j_rev] = idx_rev
+
+        return torch.from_numpy(np.array(precomp)).cuda()
+    def reverse_bits(self, num, num_bits):
+        """Reverses the bits of a number."""
+        rev = 0
+        for i in range(num_bits):
+            rev = (rev << 1) | (num & 1)
+            num >>= 1
+        return rev
 
     def shoup(self, in_value, prime):
         temp = in_value << 64

@@ -6,6 +6,7 @@ import torch
 import torch.fhe.functional as F
 import torch.fhe.test as T
 import torch.fhe.testBig as TB
+import torch.fhe.boostrapping as bstest
 from torch.fhe.context import Context
 
 import torch.fhe.homo_ops as OP
@@ -32,6 +33,8 @@ import torch.fhe.client.client as client
 # plain3 = client.decrypt(cipher3, param, cc, key)
 #
 # print("plain3: ", plain3)
+
+bstest.BootstrapTest_N65536L26lB44()
 
 TB.test_HMult3()
 
