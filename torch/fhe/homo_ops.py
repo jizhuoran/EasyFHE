@@ -167,8 +167,16 @@ def homo_square(in0, cryptoContext):
     return cipher_add(res, tmp, cryptoContext)
 
 
+def cpp_round(_float, _len=0):
+    i = int(_float)
+    if isinstance(_float, float):
+        return i if ((_float - i) < 0.5) else i + 1
+    else:
+        return round(_float, _len)
+
+
 def homo_add_scalar_double(ct, cnst, cryptoContext):
-    tmpr = int(abs(cnst) * (2**cryptoContext.logqi))
+    tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
     if cnst < 0:
         res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
     else:
@@ -185,7 +193,7 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 
 
 def homo_mul_scalar_double(in0, scalar, cryptoContext):
-    tmpr = abs(scalar) * (2**cryptoContext.logqi)
+    tmpr = cpp_round(abs(scalar) * (2 ** cryptoContext.logqi))
     res = cipher_mul_scalar(in0, tmpr, cryptoContext)
     if scalar < 0:
         res = cipher_neg(res, cryptoContext)

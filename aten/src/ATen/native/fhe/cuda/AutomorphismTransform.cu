@@ -28,12 +28,14 @@ __global__ void automorphism_transform_kernel(
     int N,
     int i,
     const int* precomp_vec) {
-  int k = blockIdx.y; // Index for the segment in l
-  int j = blockIdx.x * blockDim.x + threadIdx.x; // Index for the elements within the segment (up to N)}
+  STRIDED_LOOP_START(l * N, idx)
+  int k = idx / N; // Index for the segment in l
+  int j = idx % N; // Index for the elements within the segment (up to N)}
   if (k < l && j < N) {
     int offset = k * N;
-    ra[offset + j] = a[offset + precomp_vec[j]];
+    ra[idx] = a[offset + precomp_vec[j]];
   }
+  STRIDED_LOOP_END;
 }
 } // namespace fhe
 
@@ -57,12 +59,10 @@ static void automorphism_transform_template(
         auto a_ptr = reinterpret_cast<uint64_t*>(a.data_ptr<uint64_t>());
         auto precomp_vec_ptr =
             reinterpret_cast<int32_t*>(precomp_vec.data_ptr<int32_t>());
-        dim3 grid(num_blocks(N), l); // One block for each `k` (segment)
-        dim3 block(
-            BLOCK_SIZE,
-            1); // One thread for each element in a segment (up to `N`)
+        const int block_dim = 256;
+        const int grid_dim = N * l / block_dim;
         auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::automorphism_transform_kernel<<<grid, block, 0, stream>>>(
+        fhe::automorphism_transform_kernel<<<grid_dim, block_dim, 0, stream>>>(
             ra_ptr, a_ptr, l, N, i, precomp_vec_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
@@ -76,7 +76,7 @@ Tensor automorphism_transform_cuda(
     int64_t N,
     int64_t i,
     const Tensor& precomp_vec) {
-  Tensor out = at::empty_like(ra);
+  Tensor out = at::empty_like(a);
   automorphism_transform_template(out, a, l, N, i, precomp_vec);
   return out;
 }
@@ -88,6 +88,7 @@ Tensor& automorphism_transform_cuda_(
     int64_t N,
     int64_t i,
     const Tensor& precomp_vec) {
+  ra.resize_({l * N});
   automorphism_transform_template(ra, a, l, N, i, precomp_vec);
   return ra;
 }
@@ -100,6 +101,7 @@ Tensor& automorphism_transform_cuda_out(
     int64_t i,
     const Tensor& precomp_vec,
     Tensor& out) {
+  ra.resize_({l * N});
   automorphism_transform_template(out, a, l, N, i, precomp_vec);
   return out;
 }

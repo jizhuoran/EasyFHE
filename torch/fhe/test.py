@@ -13,7 +13,7 @@ from .data import params_N256_L4_P2 as N256L4P2
 from .data import params_N64 as N64
 from .data import params_N64_cheby as N64_cheby
 from .data import params_ks_13 as N8192KS
-from .data import params_ks_17 as N131072KS
+# from .data import params_ks_17 as N131072KS
 Tensor = torch.Tensor
 
 

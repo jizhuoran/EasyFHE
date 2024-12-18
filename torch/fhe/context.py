@@ -39,8 +39,6 @@ class CKKS_Boot_Params:
 
 class BsContext:
     def __init__(self, cryptoContext, levelBudget, dim1, numslots, correctionFactor, rescaleTech, secretKeyDist):
-        # self.key_map = {}
-        # self.left_rot_key_map = {} # {index, cipher}
         self.M = cryptoContext.N *2
         slots = self.M // 4 if numslots == 0 else numslots
         self.correctionFactor = correctionFactor
@@ -178,7 +176,7 @@ class Context:
         self.logp = logp
         self.slots = None # 固定值
         self.qVec = None
-        self.left_rot_key_map = {} #{ax:[index, beta, swk], bx:[index, beta, swk]}
+        self.left_rot_key_map = {} #{index: [ax， bx]}
         self.key_map = {}
         self.correctionFactor = 0
 

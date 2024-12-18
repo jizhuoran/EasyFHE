@@ -65,7 +65,7 @@ Tensor switch_modulus_cuda(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  Tensor out = at::empty_like(res);
+  Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
   switch_modulus_template(
       out,
@@ -94,6 +94,7 @@ Tensor& switch_modulus_cuda_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
+  res.resize_({L0 * N});
   switch_modulus_template(
       res,
       in,
@@ -122,6 +123,7 @@ Tensor& switch_modulus_cuda_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
+  out.resize_({L0 * N});
   switch_modulus_template(
       out,
       in,
