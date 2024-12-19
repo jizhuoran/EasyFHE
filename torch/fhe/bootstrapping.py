@@ -8,6 +8,8 @@ from . import homo_ops
 from .data import m_U0PreFFT_mx
 from .data import m_U0hatTPreFFT_mx
 
+from .client import client as client
+
 Tensor = torch.Tensor
 NORMAL_CIPHER_SIZE = 2
 BASE_NUM_LEVELS_TO_DROP = 1
@@ -1865,6 +1867,7 @@ def get_bootstrap_depth(approx_mod_depth, level_budget, secret_key_dist):
 
 
 def BootstrapTest_N65536L26lB44():
+    logSlots = 6
     slots = 64
     levelsRemaining = 3
     secretKeyDist = SecretKeyDist.UNIFORM_TERNARY
@@ -1872,6 +1875,7 @@ def BootstrapTest_N65536L26lB44():
     dim1 = [0, 0]
     levelBudget = [4, 4]
     depth = levelsRemaining + get_bootstrap_depth(9, levelBudget, secretKeyDist)
+    print(f"Depth: {depth}")
     L0 = depth + 1
     dnum = 3
     K = math.ceil(L0 * 1.0 / dnum)
@@ -1881,10 +1885,28 @@ def BootstrapTest_N65536L26lB44():
     N = 65536
 
     l = 2
-    cipher_cv = np.loadtxt("/home/yons/Desktop/test_data/input_cipher.txt", dtype=np.uint64)
+    cipher_cv = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/input_cipher.txt", dtype=np.uint64)
     ax_cipher = torch.tensor(cipher_cv[1], dtype=torch.uint64, device="cuda").reshape([l, N])
     bx_cipher = torch.tensor(cipher_cv[0], dtype=torch.uint64, device="cuda").reshape([l, N])
     cipher = Cipher([ax_cipher, bx_cipher], 2)
+
+
+    parameters, cc, keys, GPUFHE_Context = client.gen_crypto_context(
+        encodedLevel=0,
+        logN=logN,
+        logSlots=logSlots,
+        maxLevelsRemaining=levelsRemaining,
+        levelEnc=levelBudget[0],
+        levelDec=levelBudget[1],
+        dnum=dnum,
+        dcrtBits=logp,
+        firstMod=60,
+        AuxModSize=60,
+        approxModDepth=9,
+        rotate_index=[]
+    )
+
+
 
     moduliQ26 = np.array(
         [1152921504606584833, 576460752340123649, 576460752267509761, 576460752337502209, 576460752272228353,
@@ -1905,14 +1927,20 @@ def BootstrapTest_N65536L26lB44():
         800790938143, 17749908910371, 11469071954203, 21482204621753, 6744827058362, 17679085976867, 19946736815584,
         102116018653, 10353721066739, ])
 
-    keymap_key = np.loadtxt("/home/yons/Desktop/test_data/key_map_key.txt", dtype=np.int32)
-    keymap_ax = np.loadtxt("/home/yons/Desktop/test_data/key_map_ax.txt", dtype=np.uint64)
-    keymap_bx = np.loadtxt("/home/yons/Desktop/test_data/key_map_bx.txt", dtype=np.uint64)
+    keymap_key = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/key_map_key.txt", dtype=np.int32)
+    keymap_ax = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/key_map_ax.txt", dtype=np.uint64)
+    keymap_bx = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/key_map_bx.txt", dtype=np.uint64)
 
     # swk = generate_random_uint64_array(2 * dnum * (L + K) * N).reshape(2, dnum, L + K, N)
     swk_ax = keymap_ax.reshape(dnum, L + K, N)
     swk_bx = keymap_bx.reshape(dnum, L + K, N)
     swk = [swk_bx, swk_ax]
+
+    print(moduliQ26)
+    print(moduliP9)
+    print(rootsQ26)
+    print(rootsP9)
+    print(swk)
 
     cryptoContext = Context(logN,
                             60, 59, 59,
@@ -1920,8 +1948,8 @@ def BootstrapTest_N65536L26lB44():
                             moduliQ26, moduliP9, rootsQ26, rootsP9, swk)
     cryptoContext.BsContext = BsContext(cryptoContext, levelBudget, dim1, slots, 0, rescaleTech, secretKeyDist)
 
-    keymap0_ax = np.loadtxt("/home/yons/Desktop/test_data/key_map0_ax.txt", dtype=np.uint64).reshape(-1, N)
-    keymap0_bx = np.loadtxt("/home/yons/Desktop/test_data/key_map0_bx.txt", dtype=np.uint64).reshape(-1, N)
+    keymap0_ax = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/key_map0_ax.txt", dtype=np.uint64).reshape(-1, N)
+    keymap0_bx = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/key_map0_bx.txt", dtype=np.uint64).reshape(-1, N)
     cryptoContext.key_map['0'] = [torch.tensor(keymap0_bx, dtype=torch.uint64, device="cuda"),
                                   torch.tensor(keymap0_ax, dtype=torch.uint64, device="cuda")]
     for j in range(dnum):
@@ -1929,17 +1957,17 @@ def BootstrapTest_N65536L26lB44():
         bx = torch.tensor(keymap_bx[j].reshape(-1, N), dtype=torch.uint64, device="cuda")
         cryptoContext.key_map[str(keymap_key[j + 1])] = [bx, ax]
 
-    left_rotation_keymap_key = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key.txt", dtype=np.int64)
-    left_rotation_keymap_ax = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax.txt", dtype=np.uint64)
-    left_rotation_keymap_bx = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx.txt", dtype=np.uint64)
+    left_rotation_keymap_key = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_key.txt", dtype=np.int64)
+    left_rotation_keymap_ax = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_ax.txt", dtype=np.uint64)
+    left_rotation_keymap_bx = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_bx.txt", dtype=np.uint64)
     for i in range(left_rotation_keymap_ax.shape[0]):
         ax = torch.tensor(left_rotation_keymap_ax[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
         bx = torch.tensor(left_rotation_keymap_bx[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
         cryptoContext.left_rot_key_map[str(left_rotation_keymap_key[i])] = [bx, ax]
 
-    left_rotation_keymap_key_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key_c2s.txt", dtype=np.int64)
-    left_rotation_keymap_ax_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax_c2s.txt", dtype=np.uint64)
-    left_rotation_keymap_bx_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx_c2s.txt", dtype=np.uint64)
+    left_rotation_keymap_key_c2s = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_key_c2s.txt", dtype=np.int64)
+    left_rotation_keymap_ax_c2s = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_ax_c2s.txt", dtype=np.uint64)
+    left_rotation_keymap_bx_c2s = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_bx_c2s.txt", dtype=np.uint64)
     for i in range(left_rotation_keymap_ax_c2s.shape[0]):
         ax = torch.tensor(left_rotation_keymap_ax_c2s[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
         bx = torch.tensor(left_rotation_keymap_bx_c2s[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
@@ -1952,9 +1980,9 @@ def BootstrapTest_N65536L26lB44():
                 continue
         cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])] = [bx, ax]
 
-    left_rotation_keymap_key_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key_s2c.txt", dtype=np.int64)
-    left_rotation_keymap_ax_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax_s2c.txt", dtype=np.uint64)
-    left_rotation_keymap_bx_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx_s2c.txt", dtype=np.uint64)
+    left_rotation_keymap_key_s2c = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_key_s2c.txt", dtype=np.int64)
+    left_rotation_keymap_ax_s2c = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_ax_s2c.txt", dtype=np.uint64)
+    left_rotation_keymap_bx_s2c = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/leftRotKeyMap_bx_s2c.txt", dtype=np.uint64)
     for i in range(left_rotation_keymap_ax_s2c.shape[0]):
         ax = torch.tensor(left_rotation_keymap_ax_s2c[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
         bx = torch.tensor(left_rotation_keymap_bx_s2c[i].reshape(-1, N), dtype=torch.uint64, device="cuda")
@@ -1973,8 +2001,13 @@ def BootstrapTest_N65536L26lB44():
     result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
                    secretKeyDist=secretKeyDist, L0=L, slots=slots)
 
-    result_answer_ax = np.loadtxt("/home/yons/Desktop/test_data/result_ax.txt", dtype=np.uint64)
-    result_answer_bx = np.loadtxt("/home/yons/Desktop/test_data/result_bx.txt", dtype=np.uint64)
+    result_answer_ax = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/result_ax.txt", dtype=np.uint64)
+    result_answer_bx = np.loadtxt("/home/zrji/GPU-FHE/torch/fhe/data/result_bx.txt", dtype=np.uint64)
+
+    print(result_answer_ax)
+    print(result_answer_bx)
+    print(result_answer_ax.shape)
+    print(result_answer_bx.shape)
 
     result_ax = result.cv[1].cpu().numpy().reshape(-1)
     result_bx = result.cv[0].cpu().numpy().reshape(-1)

@@ -63,6 +63,11 @@ def gen_crypto_context(
 
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
 
+    print("moduliQ: ", moduliQ)
+    print("rootsQ: ", rootsQ)
+    print("moduliP: ", moduliP)
+    print("rootsP: ", rootsP)
+
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
 

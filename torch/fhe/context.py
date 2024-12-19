@@ -255,10 +255,10 @@ class Context:
         for i in range(L):
             # print(i)
             self.qTwok[i] = 2 * (int(math.log2(self.moduliQ[i])) + 1)
-            self.qrVec[i] = (1 << self.qTwok[i]) // self.moduliQ[i]
+            self.qrVec[i] = (1 << int(self.qTwok[i])) // int(self.moduliQ[i])
             self.qkVec[i] = (
-                (nbtheory.mod_inv(1 << 62, self.moduliQ[i]) << 62) - 1
-            ) // self.moduliQ[i]
+                (nbtheory.mod_inv(1 << 62, int(self.moduliQ[i])) << 62) - 1
+            ) // int(self.moduliQ[i])
             self.qRootsInv[i] = nbtheory.mod_inv(self.qRoots[i], int(self.moduliQ[i]))
             self.NInvModq[i] = nbtheory.mod_inv(self.N, int(self.moduliQ[i]))
             self.NScaleInvModq[i] = self.mulMod(
@@ -319,7 +319,7 @@ class Context:
                     )
         q_mu = []  # for barret mul mod
         for mod in self.moduliQ:
-            x = 2**128 // mod
+            x = 2**128 // int(mod)
             low = x & ((1 << 64) - 1)  # 取低64位
             high = x >> 64  # 取高64位
             q_mu.append([low, high])
@@ -378,10 +378,10 @@ class Context:
         for i in range(K):
             # print(i)
             self.pTwok[i] = 2 * (int(math.log2(self.moduliP[i])) + 1)
-            self.prVec[i] = (1 << self.pTwok[i]) // self.moduliP[i]
+            self.prVec[i] = (1 << int(self.pTwok[i])) // int(self.moduliP[i])
             self.pkVec[i] = (
-                (nbtheory.mod_inv(1 << 62, self.moduliP[i]) << 62) - 1
-            ) // self.moduliP[i]
+                (nbtheory.mod_inv(1 << 62, int(self.moduliP[i])) << 62) - 1
+            ) // int(self.moduliP[i])
             self.pRootsInv[i] = nbtheory.mod_inv(self.pRoots[i], int(self.moduliP[i]))
             self.NInvModp[i] = nbtheory.mod_inv(self.N, int(self.moduliP[i]))
             self.NScaleInvModp[i] = self.mulMod(
@@ -402,7 +402,7 @@ class Context:
                 jprime = self.bitReverse(j) >> (32 - self.logN)
                 self.pRootPows[i][jprime] = int(power)
                 tmp = int(power) << 64
-                self.pRootScalePowsOverp[i][jprime] = tmp // self.moduliP[i]
+                self.pRootScalePowsOverp[i][jprime] = tmp // int(self.moduliP[i])
                 self.pRootScalePows[i][jprime] = self.mulMod(
                     self.pRootPows[i][jprime], int(1 << 32), int(self.moduliP[i])
                 )
@@ -428,7 +428,7 @@ class Context:
 
         p_mu = []  # for barret mul mod
         for mod in self.moduliP:
-            x = 2**128 // mod
+            x = 2**128 // int(mod)
             low = x & ((1 << 64) - 1)  # 取低64位
             high = x >> 64  # 取高64位
             p_mu.append([low, high])
@@ -768,7 +768,7 @@ class Context:
 
                 temp = 1 << (barret - 64)
                 temp <<= 64
-                self.barret_ratio.append(temp // prime)
+                self.barret_ratio.append(int(temp) // int(prime))
                 power_of_roots_shoup = self.shoup_each(power_of_roots[i], prime)
                 inv_power_of_roots_div_two = self.div_two(
                     inverse_power_of_roots[i], prime
@@ -969,7 +969,7 @@ class Context:
 
     def shoup(self, in_value, prime):
         temp = in_value << 64
-        return int(temp // prime)
+        return int(int(temp) // int(prime))
 
     def shoup_each(self, values, prime):
         return [self.shoup(value, prime) for value in values]
