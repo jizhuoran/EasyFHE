@@ -177,7 +177,7 @@ class Context:
         self.slots = None # 固定值
         self.qVec = None
         self.left_rot_key_map = {} #{index: [ax， bx]}
-        self.key_map = {}
+        self.key_map = None
         self.correctionFactor = 0
 
         self.logN = logN
