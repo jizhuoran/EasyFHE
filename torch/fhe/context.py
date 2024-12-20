@@ -193,6 +193,8 @@ class Context:
         self.Nh = self.N >> 1
         self.p = 1 << logqi
 
+        self.precompute_auto_map = {}
+
         self.moduliQ = [0] * L
         self.qrVec = [0] * L
         self.qTwok = [0] * L
@@ -945,8 +947,10 @@ class Context:
             self.PModq_cuda = torch.tensor(self.PModq, dtype=torch.uint64, device="cuda")
 
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
-    def precompute_auto_map(self, n, k, precomp):
-        """Precomputes the automorphism map."""
+    def compute_auto_map(self, n, k, precomp):
+        """computes the automorphism map or return precomputed one."""
+        if int(k) in self.precompute_auto_map:
+            return self.precompute_auto_map[int(k)]
         m = n << 1  # cyclOrder
         logm = round(np.log2(m))
         logn = round(np.log2(n))

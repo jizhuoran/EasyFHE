@@ -9,6 +9,8 @@ from .data import m_U0PreFFT_mx
 from .data import m_U0hatTPreFFT_mx
 import pickle
 import torch.profiler
+from .client import client as client
+
 
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
@@ -32,7 +34,6 @@ def profile_python_function(func):
     return wrapper
 
 BS_CONST_DIR = "/home/zrji/GPU-FHE/torch/fhe/data/"
-# from .client import client as client
 
 Tensor = torch.Tensor
 NORMAL_CIPHER_SIZE = 2
@@ -689,7 +690,7 @@ def eval_fast_key_switch_core_ext(d2Tilde, auto_index, key_map, expand_length, b
     swk = cryptoContext.left_rot_key_map[str(auto_index)]
     swk_bx = swk[0][:beta, :, :]
     swk_ax = swk[1][:beta, :, :]
-
+    
     res = F.cv_innerproduct(
         d2Tilde.reshape(-1),
         curr_limbs=curr_limbs,
@@ -742,10 +743,7 @@ def eval_fast_rotation_ext_add_first_true(bx, digits, curr_limbs, index, cryptoC
 
     vec_len = N
     vec = np.zeros(vec_len, dtype=np.int32)
-    start = time.time()
-    vec_tensor = cryptoContext.precompute_auto_map(N, auto_index, vec)
-    end = time.time()
-    print(f"Precompute auto map time: {end - start}")
+    vec_tensor = cryptoContext.compute_auto_map(N, auto_index, vec)
     cv1 = automorphism_transform(sumaxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     cv0 = automorphism_transform(sumbxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     return Cipher([cv0, cv1], curr_limbs)
@@ -772,7 +770,7 @@ def eval_fast_rotation_ext_add_first_false(digits, curr_limbs, index, cryptoCont
 
     vec_len = N
     vec = np.zeros(vec_len, dtype=np.int32)
-    vec_tensor = cryptoContext.precompute_auto_map(N, auto_index, vec)
+    vec_tensor = cryptoContext.compute_auto_map(N, auto_index, vec)
 
     cv1 = automorphism_transform(sum_ax_mult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     cv0 = automorphism_transform(sum_bx_mult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
@@ -972,7 +970,7 @@ def eval_coeffs_to_slots(A, A_len, ctxt, cryptoContext):
                     auto_index = find_automorphism_index_2n_complex(rot_out[s][i], M)
                     map_len = N
                     map = np.zeros(map_len, dtype=np.int32)
-                    map_tensor = cryptoContext.precompute_auto_map(N, auto_index, map)
+                    map_tensor = cryptoContext.compute_auto_map(N, auto_index, map)
 
                     first_current = automorphism_transform(inner_ks_down.cv[0], curr_limbs, N, auto_index, map_tensor,
                                                            cryptoContext)
@@ -1039,7 +1037,7 @@ def eval_coeffs_to_slots(A, A_len, ctxt, cryptoContext):
                     auto_index = find_automorphism_index_2n_complex(rot_out[stop][i], M)
                     map_len = N
                     map = np.zeros(map_len, dtype=np.int32)
-                    map_tensor = cryptoContext.precompute_auto_map(N, auto_index, map)
+                    map_tensor = cryptoContext.compute_auto_map(N, auto_index, map)
 
                     # first_current = [0] * len
                     first_current = automorphism_transform(inner_ks_down.cv[0], curr_limbs, N, auto_index, map_tensor,
@@ -1170,7 +1168,7 @@ def eval_slots_to_coeffs(A, A_len, ctxt, cryptoContext):
 
                     auto_index = find_automorphism_index_2n_complex(rot_out[s][i], M)
                     map_ = np.zeros(N, dtype=np.int32)
-                    map_tensor = cryptoContext.precompute_auto_map(N, auto_index, map_)
+                    map_tensor = cryptoContext.compute_auto_map(N, auto_index, map_)
 
                     first_current = automorphism_transform(inner_ks_down.cv[0], curr_limbs, N, auto_index, map_tensor,
                                                            cryptoContext)
@@ -1245,7 +1243,7 @@ def eval_slots_to_coeffs(A, A_len, ctxt, cryptoContext):
 
                     auto_index = find_automorphism_index_2n_complex(rot_out[s][i], M)
                     map_ = np.zeros(N, dtype=np.int32)
-                    map_tensor = cryptoContext.precompute_auto_map(N, auto_index, map_)
+                    map_tensor = cryptoContext.compute_auto_map(N, auto_index, map_)
 
                     # first_current = [0] * len_
                     first_current = automorphism_transform(inner_ks_down.cv[0], curr_limbs, N, auto_index, map_tensor,
@@ -1366,7 +1364,7 @@ def conjugate_demo(cipher, cryptoContext):
 
     vec_len = N
     vec = np.zeros(vec_len, dtype=np.int32)
-    vec_tensor = cryptoContext.precompute_auto_map(N, auto_index, vec)  # 自动映射预计算
+    vec_tensor = cryptoContext.compute_auto_map(N, auto_index, vec)  # 自动映射预计算
 
     cipher.cv[1] = automorphism_transform(res_cipher.cv[1], curr_limbs, N, auto_index, vec_tensor, cryptoContext)
     cipher.cv[0] = automorphism_transform(bxrot.cv[0], curr_limbs, N, auto_index, vec_tensor, cryptoContext)
@@ -1400,7 +1398,7 @@ def fast_rotate_demo(cipher, index, cryptoContext):
     # Precompute the automorphism map
     vec_len = N
     vec = np.zeros(vec_len, dtype=np.int32)
-    vec_tensor = cryptoContext.precompute_auto_map(N, auto_index, vec)  # Equivalent to PrecomputeAutoMap
+    vec_tensor = cryptoContext.compute_auto_map(N, auto_index, vec)  # Equivalent to PrecomputeAutoMap
 
     # Apply the AutomorphismTransform to ax and bx
     cipher.cv[1] = automorphism_transform(res_cipher.cv[1], curr_limbs, N, auto_index, vec_tensor, cryptoContext)
@@ -1679,17 +1677,18 @@ class Plaintext:
         return True
 
 
-m_U0hatTPreFFT_dim1 = 4
-m_U0hatTPreFFT_dim2 = np.array([15, 3, 3, 3])
-m_U0hatTPreFFT_limbs = np.array([31, 32, 33, 34])
-mx_len = 65536
-mx_slots = 64
-m_U0PreFFT_dim1 = 4
-m_U0PreFFT_dim2 = np.array([3, 3, 3, 15])
-m_U0PreFFT_limbs = np.array([17, 16, 15, 14])
-
 
 def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
+
+    m_U0hatTPreFFT_dim1 = len(context.m_U0hatTPreFFT_dim)
+    m_U0hatTPreFFT_dim2 = context.m_U0hatTPreFFT_dim
+    m_U0hatTPreFFT_limbs = context.m_U0hatTPreFFT_limbs
+    mx_len = context.N
+    mx_slots = context.slots
+    m_U0PreFFT_dim1 = len(context.m_U0PreFFT_dim)
+    m_U0PreFFT_dim2 = context.m_U0PreFFT_dim
+    m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
+
     M = context.M
     N = context.N
     slots = M // 4 if numslots == 0 else numslots
@@ -1833,7 +1832,7 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 LHScnt = 0
                 for k in range(limbs):
                     for l in range(mx_len):
-                        m_U0hatTPreFFT[LHScnt] = m_U0hatTPreFFT_mx.m_U0hatTPreFFT_mx[RHScnt]
+                        m_U0hatTPreFFT[LHScnt] = context.m_U0hatTPreFFT_mx[RHScnt]
                         LHScnt += 1
                         RHScnt += 1
 
@@ -1852,12 +1851,16 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 LHScnt = 0
                 for k in range(limbs):
                     for l in range(mx_len):
-                        m_U0PreFFT[LHScnt] = m_U0PreFFT_mx.m_U0PreFFT_mx[RHScnt]
+                        m_U0PreFFT[LHScnt] = context.m_U0PreFFT_mx[RHScnt]
                         LHScnt += 1
                         RHScnt += 1
                 m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
                 precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs)
 
+    for key, value in context.left_rot_key_map.items():
+        vec = np.zeros(context.N, dtype=np.int32)
+        vec_tensor = context.compute_auto_map(context.N, int(key), vec)
+        context.precompute_auto_map[int(key)] = vec_tensor
 
 # test code
 def get_bootstrap_depth(approx_mod_depth, level_budget, secret_key_dist):
@@ -1906,8 +1909,7 @@ def save_context(cryptoContext, path = "torch/fhe/data/"):
     cryptoContext.switch_modulus_out = cryptoContext.switch_modulus_out.cpu().numpy()
     cryptoContext.PModq_cuda = cryptoContext.PModq_cuda.cpu().numpy()
 
-    for key, value in cryptoContext.key_map.items():
-        cryptoContext.key_map[key] = [v.cpu().numpy() for v in value]
+    cryptoContext.key_map = [v.cpu().numpy() for v in cryptoContext.key_map]
     
     for key, value in cryptoContext.left_rot_key_map.items():
         cryptoContext.left_rot_key_map[key] = [v.cpu().numpy() for v in value]
@@ -1915,11 +1917,24 @@ def save_context(cryptoContext, path = "torch/fhe/data/"):
     # Save the instance to a file
     with open(path + 'crypto.pkl', 'wb') as file:
         pickle.dump(cryptoContext, file)
+    # with open('torch/fhe/data/' + 'parameters.pkl', 'wb') as file:
+    #     pickle.dump(parameters, file)
+    # with open('torch/fhe/data/' + 'cc.pkl', 'wb') as file:
+    #     pickle.dump(cc, file)
+    # with open('torch/fhe/data/' + 'keys.pkl', 'wb') as file:
+    #     pickle.dump(keys, file)
+
+
 
 def load_context(path = "torch/fhe/data/"):
     with open(path + 'crypto.pkl', 'rb') as file:
         cryptoContext = pickle.load(file)
-    
+    # with open(path + 'parameters.pkl', 'rb') as file:
+    #     parameters = pickle.load(file)
+    # with open(path + 'cc.pkl', 'rb') as file:
+    #     cc = pickle.load(file)
+    # with open(path + 'keys.pkl', 'rb') as file:
+    #     keys = pickle.load(file)
     cryptoContext.q_mu_cuda = torch.tensor(cryptoContext.q_mu_cuda, dtype = torch.uint64, device = "cuda")
     cryptoContext.moduliQ_cuda = torch.tensor(cryptoContext.moduliQ_cuda, dtype = torch.uint64, device = "cuda")
     cryptoContext.primes = torch.tensor(cryptoContext.primes, dtype = torch.uint64, device = "cuda")
@@ -1953,9 +1968,8 @@ def load_context(path = "torch/fhe/data/"):
     cryptoContext.switch_modulus_out = torch.tensor(cryptoContext.switch_modulus_out, dtype = torch.uint64, device = "cuda")
     cryptoContext.PModq_cuda = torch.tensor(cryptoContext.PModq_cuda, dtype = torch.uint64, device = "cuda")
 
-    for key, value in cryptoContext.key_map.items():
-        cryptoContext.key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-    
+    cryptoContext.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in cryptoContext.key_map]
+
     for key, value in cryptoContext.left_rot_key_map.items():
         cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
 
@@ -1963,7 +1977,7 @@ def load_context(path = "torch/fhe/data/"):
 
 def BootstrapTest_N65536L26lB44():
     logSlots = 6
-    slots = 64
+    slots = 1 << logSlots
     levelsRemaining = 3
     secretKeyDist = SecretKeyDist.UNIFORM_TERNARY
     rescaleTech = ScalingTechnique.FIXEDMANUAL
@@ -1976,12 +1990,12 @@ def BootstrapTest_N65536L26lB44():
     L = L0
     logN = 16
     logp = 59
-    N = 65536
+    N = 1 << logN
 
     load_from_file = True
     if load_from_file:
         cryptoContext = load_context()
-    else:
+    elif False:
         moduliQ26 = np.array(
             [1152921504606584833, 576460752340123649, 576460752267509761, 576460752337502209, 576460752272228353,
             576460752331210753, 576460752273801217, 576460752329900033, 576460752279306241, 576460752329506817,
@@ -2001,35 +2015,9 @@ def BootstrapTest_N65536L26lB44():
             800790938143, 17749908910371, 11469071954203, 21482204621753, 6744827058362, 17679085976867, 19946736815584,
             102116018653, 10353721066739, ])
         
-
         keymap_key = np.loadtxt(BS_CONST_DIR+"key_map_key.txt", dtype=np.int32)
         keymap_ax = np.loadtxt(BS_CONST_DIR+"key_map_ax.txt", dtype=np.uint64)
         keymap_bx = np.loadtxt(BS_CONST_DIR+"key_map_bx.txt", dtype=np.uint64)
-
-        # parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY = client.gen_crypto_context(
-        #     encodedLevel=0,
-        #     logN=logN,
-        #     logSlots=logSlots,
-        #     maxLevelsRemaining=levelsRemaining,
-        #     levelEnc=levelBudget[0],
-        #     levelDec=levelBudget[1],
-        #     dnum=dnum,
-        #     dcrtBits=59,
-        #     firstMod=60,
-        #     AuxModSize=logp,
-        #     approxModDepth=9,
-        #     rotate_index=[]
-        # )
-    # begin
-        # moduliQ26 = np.array(moduliQ)
-        # moduliP9 = np.array(moduliP)
-        # rootsQ26 = np.array(rootsQ)
-        # rootsP9 = np.array(rootsP)
-
-        # keymap_key = [0] + [i + dnum for i in range(dnum)] 
-        # keymap_ax = MULT_SWK[0] 
-        # keymap_bx = MULT_SWK[1] 
-    # end
 
         swk_ax = keymap_ax.reshape(dnum, L + K, N)
         swk_bx = keymap_bx.reshape(dnum, L + K, N)
@@ -2041,61 +2029,130 @@ def BootstrapTest_N65536L26lB44():
                                 L, K,
                                 moduliQ26, moduliP9, rootsQ26, rootsP9, swk)
 
-    key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
-    key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
-    cryptoContext.key_map = [key_map_bx_fixed, key_map_ax_fixed]
+        key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
+        key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
+        cryptoContext.key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
-    left_rotation_keymap_key = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key.txt", dtype=np.int64)
-    left_rotation_keymap_ax = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax.txt", dtype=np.uint64)
-    left_rotation_keymap_bx = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx.txt", dtype=np.uint64)
-    for i in range(0, left_rotation_keymap_ax.shape[0], cryptoContext.dnum):
-        # for j in range(cryptoContext.dnum):
-        ax = torch.tensor(left_rotation_keymap_ax[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        bx = torch.tensor(left_rotation_keymap_bx[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key[i] / cryptoContext.dnum))] = [bx, ax]
+        left_rotation_keymap_key = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key.txt", dtype=np.int64)
+        left_rotation_keymap_ax = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax.txt", dtype=np.uint64)
+        left_rotation_keymap_bx = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx.txt", dtype=np.uint64)
+        for i in range(0, left_rotation_keymap_ax.shape[0], cryptoContext.dnum):
+            # for j in range(cryptoContext.dnum):
+            ax = torch.tensor(left_rotation_keymap_ax[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            bx = torch.tensor(left_rotation_keymap_bx[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key[i] / cryptoContext.dnum))] = [bx, ax]
 
-    left_rotation_keymap_key_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key_c2s.txt", dtype=np.int64)
-    left_rotation_keymap_ax_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax_c2s.txt", dtype=np.uint64)
-    left_rotation_keymap_bx_c2s = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx_c2s.txt", dtype=np.uint64)
-    for i in range(0, left_rotation_keymap_ax_c2s.shape[0], cryptoContext.dnum):
-        ax = torch.tensor(left_rotation_keymap_ax_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        bx = torch.tensor(left_rotation_keymap_bx_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        if left_rotation_keymap_key_c2s[i] in cryptoContext.left_rot_key_map.keys():
-            if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != bx or
-                    cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != ax):
-                print("errorrrrr! same key left_rotation_keymap_key_c2s", i)
-                return
-            else:
-                continue
-        cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_c2s[i] / cryptoContext.dnum))] = [bx, ax]
+        left_rotation_keymap_key_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key_c2s.txt", dtype=np.int64)
+        left_rotation_keymap_ax_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax_c2s.txt", dtype=np.uint64)
+        left_rotation_keymap_bx_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx_c2s.txt", dtype=np.uint64)
+        for i in range(0, left_rotation_keymap_ax_c2s.shape[0], cryptoContext.dnum):
+            ax = torch.tensor(left_rotation_keymap_ax_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            bx = torch.tensor(left_rotation_keymap_bx_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            if left_rotation_keymap_key_c2s[i] in cryptoContext.left_rot_key_map.keys():
+                if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != bx or
+                        cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != ax):
+                    print("errorrrrr! same key left_rotation_keymap_key_c2s", i)
+                    return
+                else:
+                    continue
+            cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_c2s[i] / cryptoContext.dnum))] = [bx, ax]
 
-    left_rotation_keymap_key_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_key_s2c.txt", dtype=np.int64)
-    left_rotation_keymap_ax_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_ax_s2c.txt", dtype=np.uint64)
-    left_rotation_keymap_bx_s2c = np.loadtxt("/home/yons/Desktop/test_data/leftRotKeyMap_bx_s2c.txt", dtype=np.uint64)
-    for i in range(0, left_rotation_keymap_ax_s2c.shape[0], cryptoContext.dnum):
-        ax = torch.tensor(left_rotation_keymap_ax_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        bx = torch.tensor(left_rotation_keymap_bx_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                          dtype=torch.uint64, device="cuda")
-        if left_rotation_keymap_key_s2c[i] in cryptoContext.left_rot_key_map.keys():
-            if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != bx or
-                    cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != ax):
-                print("errorrrrr! same key left_rotation_keymap_key_s2c", i)
-                return
-            else:
-                continue
-        cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_s2c[i] / cryptoContext.dnum))] = [bx, ax]
+        left_rotation_keymap_key_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key_s2c.txt", dtype=np.int64)
+        left_rotation_keymap_ax_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax_s2c.txt", dtype=np.uint64)
+        left_rotation_keymap_bx_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx_s2c.txt", dtype=np.uint64)
+        for i in range(0, left_rotation_keymap_ax_s2c.shape[0], cryptoContext.dnum):
+            ax = torch.tensor(left_rotation_keymap_ax_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            bx = torch.tensor(left_rotation_keymap_bx_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
+                            dtype=torch.uint64, device="cuda")
+            if left_rotation_keymap_key_s2c[i] in cryptoContext.left_rot_key_map.keys():
+                if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != bx or
+                        cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != ax):
+                    print("errorrrrr! same key left_rotation_keymap_key_s2c", i)
+                    return
+                else:
+                    continue
+            cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_s2c[i] / cryptoContext.dnum))] = [bx, ax]
+
+            cryptoContext.m_U0hatTPreFFT_mx = m_U0hatTPreFFT_mx.m_U0hatTPreFFT_mx
+            cryptoContext.m_U0PreFFT_mx = m_U0PreFFT_mx.m_U0PreFFT_mx
+            cryptoContext.m_U0hatTPreFFT_dim = np.array([15, 3, 3, 3])
+            cryptoContext.m_U0hatTPreFFT_limbs = np.array([31, 32, 33, 34])
+            cryptoContext.m_U0PreFFT_dim = np.array([3, 3, 3, 15])
+            cryptoContext.m_U0PreFFT_limbs = np.array([17, 16, 15, 14])
+            
+
+
+            save_context(cryptoContext)
+            cryptoContext = load_context()
+    else:
+        parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY = client.gen_crypto_context(
+                encodedLevel=0,
+                logN=logN,
+                logSlots=logSlots,
+                maxLevelsRemaining=levelsRemaining,
+                levelEnc=levelBudget[0],
+                levelDec=levelBudget[1],
+                dnum=dnum,
+                dcrtBits=59,
+                firstMod=60,
+                AuxModSize=logp,
+                approxModDepth=9,
+                rotate_index=[]
+            )
+        # begin
+        moduliQ26 = np.array(moduliQ)
+        moduliP9 = np.array(moduliP)
+        rootsQ26 = np.array(rootsQ)
+        rootsP9 = np.array(rootsP)
+
+        swk_bx = MULT_SWK[0].reshape(dnum, L + K, N)
+        swk_ax = MULT_SWK[1].reshape(dnum, L + K, N)
+        swk = [swk_bx, swk_ax]
+
+        cryptoContext = Context(logN,
+                                60, 59, 59,
+                                L, K,
+                                moduliQ26, moduliP9, rootsQ26, rootsP9, swk)
+
+        cryptoContext.m_U0hatTPreFFT_mx = BOOT_KEY['C2S']
+        cryptoContext.m_U0PreFFT_mx = BOOT_KEY['S2C']
+        cryptoContext.m_U0hatTPreFFT_dim = BOOT_KEY['C2S_dim']
+        cryptoContext.m_U0PreFFT_dim = BOOT_KEY['S2C_dim']
+        cryptoContext.m_U0hatTPreFFT_limbs = BOOT_KEY['C2S_limbs']
+        cryptoContext.m_U0PreFFT_limbs = BOOT_KEY['S2C_limbs']
+
+
+        key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
+        key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
+        cryptoContext.key_map = [key_map_bx_fixed, key_map_ax_fixed]
+        
+        for i, bx, ax in ROT_SWK:
+            cryptoContext.left_rot_key_map[str(i)] = [torch.tensor(bx, dtype=torch.uint64, device="cuda").reshape(cryptoContext.dnum, -1, N)
+                                                      ,
+                                                      torch.tensor(ax, dtype=torch.uint64, device="cuda").reshape(cryptoContext.dnum, -1, N)]
 
         save_context(cryptoContext)
         cryptoContext = load_context()
 
+
+
+
     cryptoContext.BsContext = BsContext(cryptoContext, levelBudget, dim1, slots, 0, rescaleTech, secretKeyDist)
 
     eval_bootstrap_setup(cryptoContext, levelBudget, dim1, slots, 0)
+
+    # x = [(i % 11) / 100 for i in range(slots)]
+    # print(x)
+    # x = torch.tensor(x, device="cuda")
+    # cipher = client.encrypt(x, cc, keys)
+    # cipher.cv[0] = cipher.cv[0][:2]
+    # cipher.cv[1] = cipher.cv[1][:2]
+    # cipher.cur_limbs = 2
 
     l = 2
     cipher_cv = np.loadtxt(BS_CONST_DIR+"input_cipher.txt", dtype=np.uint64)
@@ -2106,7 +2163,13 @@ def BootstrapTest_N65536L26lB44():
     result = cipher
     result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
                             secretKeyDist=secretKeyDist, L0=L, slots=slots)
-
+    
+    # print(result)
+    # after_boot = client.decrypt(result, parameters, cc, keys)
+    # print(after_boot)
+    # after_boot = after_boot.cpu().numpy().reshape(-1)
+    # x = x.cpu().numpy().reshape(-1)
+    # print("diff", np.abs(after_boot - x))
 
     # Print the accumulated execution times
     print("\nTotal execution time for each function:")

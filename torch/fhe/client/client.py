@@ -4,6 +4,7 @@ from .. import Ciphertext as Cipher
 from .. import context as Context
 
 import numpy as np
+import time
 
 R_UNIFORM = 6
 
@@ -24,6 +25,8 @@ def gen_crypto_context(
     secretKeyDist=openfhe.UNIFORM_TERNARY,
     rescaleTech=openfhe.ScalingTechnique.FIXEDMANUAL,
 ):
+
+    start = time.time()
 
     AuxModSize = 60  # OpenFHE is 60bits
 
@@ -61,37 +64,53 @@ def gen_crypto_context(
     cc.EvalBootstrapSetup([levelEnc, levelDec], [0, 0], slots)
     keys = cc.KeyGen()
 
-    moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
-
     cc.EvalMultKeyGen(keys.secretKey)
-    MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    print("MULT_SWK: ", MULT_SWK.shape)
-
     cc.EvalBootstrapKeyGen(keys.secretKey, slots)
-    BOOT_KEY = cc.GetEvalBootstrapKey()
-
-    for slot, C2S_A, S2C_A in BOOT_KEY:
-        C2S_A = np.array(C2S_A, dtype=np.uint64)
-        S2C_A = np.array(S2C_A, dtype=np.uint64)
-
-        # print("slot: ", slot)
-        # print("C2S_A: ", C2S_A.shape)
-        # print("S2C_A: ", S2C_A.shape)
-
-    # print("BOOT_KEY: ", BOOT_KEY)
-
     cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+
+
+    stop1 = time.time()
+    print("Time to generate keys: ", stop1 - start)
+
+    moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
+    stop2 = time.time()
+    print("Time to get moduli: ", stop2 - stop1)
+    MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
+    stop3 = time.time()
+    print("Time to get mult key: ", stop3 - stop2)
+    BOOT_KEY = cc.GetEvalBootstrapKey()
+    C2S, S2C = [], []
+    C2S_dim, S2C_dim = [], []
+    C2S_limbs, S2C_limbs = [], []
+    for slot, C2S_arr, S2C_arr in BOOT_KEY:
+        for i in range(len(C2S_arr)):
+            C2S_dim.append(len(C2S_arr[i]))
+            for j in range(len(C2S_arr[i])):
+                if j == 0:
+                    C2S_limbs.append(len(C2S_arr[i][j]))
+                for k in range(len(C2S_arr[i][j])):
+                    C2S += C2S_arr[i][j][k]
+        for i in range(len(S2C_arr)):
+            S2C_dim.append(len(S2C_arr[i]))
+            for j in range(len(S2C_arr[i])):
+                if j == 0:
+                    S2C_limbs.append(len(S2C_arr[i][j]))
+                for k in range(len(S2C_arr[i][j])):
+                    S2C += S2C_arr[i][j][k]
+    BOOT_KEY = {
+        "C2S": C2S,
+        "S2C": S2C,
+        "C2S_dim": C2S_dim,
+        "S2C_dim": S2C_dim,
+        "C2S_limbs": C2S_limbs,
+        "S2C_limbs": S2C_limbs,
+    }
+    stop4 = time.time()
+    print("Time to get boot key: ", stop4 - stop3)
     ROT_SWK = cc.GetEvalRotateKey()
-
-    for index, ax, bx in ROT_SWK:
-        ax = np.array(ax, dtype=np.uint64)
-        bx = np.array(bx, dtype=np.uint64)
-
-        print("index: ", index)
-        # print("ax: ", ax.shape)
-        # print("bx: ", bx.shape)
-
-
+    stop5 = time.time()
+    print("Time to get rotate key: ", stop5 - stop4)
+    
     return parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY
 
     # GPUFHE_Context = Context.Context(
