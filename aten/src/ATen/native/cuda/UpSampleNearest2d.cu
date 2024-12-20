@@ -93,7 +93,7 @@ __global__ void upsample_nearest2d_nhwc_out_frame(
     float width_scale,
     const size_t out_numel) {
 
-  const int64_t index = blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t index = ((int64_t) blockIdx.x) * blockDim.x + threadIdx.x;
 
   if (index < out_numel) {
     const auto c = index % channels;
@@ -122,7 +122,7 @@ __global__ void upsample_nearest2d_backward_out_frame(
     scalar_t* grad_i,
     float height_scale,
     float width_scale) {
-  int64_t dst_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  int64_t dst_idx = ((int64_t) blockIdx.x) * blockDim.x + threadIdx.x;
   if (dst_idx >= dim_c * dst_dim_h * dst_dim_w)
     return;
 
@@ -240,9 +240,9 @@ static void upsample_nearest2d_out_cuda_template(
     at::Tensor input = input_.contiguous(at::MemoryFormat::ChannelsLast);
 
     TORCH_CHECK(input.numel() < std::numeric_limits<int64_t>::max(),
-      "upsample_nearest_nhwc only supports input tensors with less than 2^63 - 1 elements");
+      "upsample_nearest_nhwc only supports input tensors with less than 2^63 - 1 elements, but got ", input.sizes());
     TORCH_CHECK(output.numel() < std::numeric_limits<int64_t>::max(),
-      "upsample_nearest_nhwc only supports output tensors with less than 2^63 - 1 elements");
+      "upsample_nearest_nhwc only supports output tensors with less than 2^63 - 1 elements, but got ", output.sizes());
 
     const int64_t num_kernels = output.numel();
     const int64_t num_threads = std::min(at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock, 1024);
@@ -370,9 +370,9 @@ static void upsample_nearest2d_backward_out_cuda_template(
     Tensor grad_output = grad_output_.contiguous(at::MemoryFormat::ChannelsLast);
 
     TORCH_CHECK(grad_input.numel() < std::numeric_limits<int>::max(),
-      "upsample_nearest_nhwc only supports grad_input tensors with less than INT_MAX elements");
+      "upsample_nearest_nhwc only supports grad_input tensors with less than INT_MAX elements, but got ", grad_input.sizes());
     TORCH_CHECK(grad_output.numel() < std::numeric_limits<int>::max(),
-      "upsample_nearest_nhwc only supports grad_output tensors with less than INT_MAX elements");
+      "upsample_nearest_nhwc only supports grad_output tensors with less than INT_MAX elements, but got ", grad_output.sizes());
 
     const int num_kernels = grad_input.numel();
     const int num_threads = std::min(at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock, 1024);
@@ -409,8 +409,8 @@ static void upsample_nearest2d_backward_out_cuda_template(
         at::cuda::getCurrentDeviceProperties()->maxThreadsPerBlock, MAX_THREADS)};
     dim3 gdim{ceil_div(n, bdim.x)};
     // safe check for int64 indexing; implicitly restrict launch config for kernel
-    TORCH_CHECK(grad_input.numel() <= std::numeric_limits<int64_t>::max(), "upsample2d grad_input.numel() <= std::numeric_limits<int64_t>::max()");
-    TORCH_CHECK(grad_output.numel() <= std::numeric_limits<int64_t>::max(), "upsample2d grad_output.numel() <= std::numeric_limits<int64_t>::max()");
+    TORCH_CHECK(grad_input.numel() <= std::numeric_limits<int64_t>::max(), "upsample2d grad_input.numel() <= std::numeric_limits<int64_t>::max(), but got ", grad_input.sizes());
+    TORCH_CHECK(grad_output.numel() <= std::numeric_limits<int64_t>::max(), "upsample2d grad_output.numel() <= std::numeric_limits<int64_t>::max(), but got ", grad_output.sizes());
 
     cudaStream_t stream = at::cuda::getCurrentCUDAStream();
     AT_DISPATCH_FLOATING_TYPES_AND3(ScalarType::Half, ScalarType::BFloat16, ScalarType::Byte, grad_output.scalar_type(), "upsample_nearest2d_backward_out_frame", [&] {

@@ -2,17 +2,16 @@
 
 import torch
 import torch.distributed as dist
-
 import torch.distributed._functional_collectives as funcol
 import torch.nn as nn
 from torch.distributed._tensor import DeviceMesh, DTensor
-
-from torch.distributed._tensor.debug.comm_mode import CommDebugMode
 from torch.distributed._tensor.placement_types import Shard
+from torch.distributed.tensor.debug import CommDebugMode
 from torch.testing._internal.common_distributed import requires_nccl
 from torch.testing._internal.common_utils import run_tests, TestCase
 from torch.testing._internal.distributed._tensor.common_dtensor import MLPModule
 from torch.testing._internal.distributed.fake_pg import FakeStore
+
 
 c10d_functional = torch.ops.c10d_functional
 c10d_ops = torch.ops.c10d
@@ -93,7 +92,6 @@ class TestCommMode(TestCase):
         self.assertEqual(comm_counts[c10d_functional.reduce_scatter_tensor], 1)
 
     def test_comm_mode_with_dtensor(self):
-        world_pg = self.world_pg
         mesh = DeviceMesh(self.device_type, list(range(self.world_size)))
 
         def f(x, y):
@@ -118,8 +116,6 @@ class TestCommMode(TestCase):
     def test_comm_mode_with_c10d(self):
         if not torch.cuda.is_available():
             return
-
-        world_pg = self.world_pg
 
         inp = torch.rand(2, 8, 16).cuda()
         all_gather_out = inp.new_empty(self.world_size * 2, 8, 16)
@@ -203,7 +199,7 @@ class TestCommMode(TestCase):
         self.checksAssert(comm_mode, c10d_ops.reduce_scatter_, 1, 1)
 
         # tests c10d reduce_scatter_tensor_coalesced
-        with comm_mode as A, dist._coalescing_manager() as B:
+        with comm_mode, dist._coalescing_manager():
             dist.reduce_scatter_tensor(all_gather_out, inp)
 
         self.checksAssert(comm_mode, c10d_ops.reduce_scatter_tensor_coalesced_, 1, 1)

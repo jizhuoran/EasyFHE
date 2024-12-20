@@ -1,6 +1,5 @@
 # mypy: allow-untyped-defs
-"""Locally Optimal Block Preconditioned Conjugate Gradient methods.
-"""
+"""Locally Optimal Block Preconditioned Conjugate Gradient methods."""
 # Author: Pearu Peterson
 # Created: February 2020
 
@@ -788,7 +787,7 @@ class LOBPCG:
             torch.norm(R, 2, (0,))
             * (torch.norm(X, 2, (0,)) * (A_norm + E[: X.shape[-1]] * B_norm)) ** -1
         )
-        converged = rerr < tol
+        converged = rerr.real < tol  # this is a norm so imag is 0.0
         count = 0
         for b in converged:
             if not b:
@@ -842,7 +841,6 @@ class LOBPCG:
         compiling functions using lobpcg.
         """
         # do nothing when in TorchScript mode
-        pass
 
     # Internal methods
 
@@ -902,7 +900,7 @@ class LOBPCG:
         if self.ivars["istep"] == 0:
             Ri = self._get_rayleigh_ritz_transform(self.X)
             M = _utils.qform(_utils.qform(self.A, self.X), Ri)
-            E, Z = _utils.symeig(M, largest)
+            _E, Z = _utils.symeig(M, largest)
             self.X = mm(self.X, mm(Ri, Z))
             self.update_residual()
             np = 0
@@ -920,13 +918,7 @@ class LOBPCG:
             # Update E, X, P
             self.X[:, nc:] = mm(S_, Z[:, : n - nc])
             self.E[nc:] = E_[: n - nc]
-            P = mm(
-                S_,
-                mm(
-                    Z[:, n - nc :],
-                    _utils.basis(Z[: n - nc, n - nc :].mT),
-                ),
-            )
+            P = mm(S_, mm(Z[:, n - nc :], _utils.basis(Z[: n - nc, n - nc :].mT)))
             np = P.shape[-1]
 
             # check convergence
@@ -986,7 +978,6 @@ class LOBPCG:
 
         """
         B = self.B
-        mm = torch.matmul
         SBS = _utils.qform(B, S)
         d_row = SBS.diagonal(0, -2, -1) ** -0.5
         d_col = d_row.reshape(d_row.shape[0], 1)
@@ -996,9 +987,7 @@ class LOBPCG:
             R, d_row.diag_embed(), upper=True, left=False
         )
 
-    def _get_svqb(
-        self, U: Tensor, drop: bool, tau: float  # Tensor  # bool  # float
-    ) -> Tensor:
+    def _get_svqb(self, U: Tensor, drop: bool, tau: float) -> Tensor:
         """Return B-orthonormal U.
 
         .. note:: When `drop` is `False` then `svqb` is based on the
@@ -1107,7 +1096,6 @@ class LOBPCG:
         BU = mm_B(self.B, U)
         VBU = mm(V.mT, BU)
         i = j = 0
-        stats = ""
         for i in range(i_max):
             U = U - mm(V, VBU)
             drop = False

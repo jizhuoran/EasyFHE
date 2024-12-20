@@ -1,5 +1,5 @@
 # Owner(s): ["module: multiprocessing"]
-
+# ruff: noqa: F841
 import contextlib
 import copy
 import gc
@@ -47,9 +47,6 @@ TEST_CUDA_IPC = (
 )  # https://github.com/pytorch/pytorch/issues/90940
 
 TEST_MULTIGPU = TEST_CUDA_IPC and torch.cuda.device_count() > 1
-
-if TEST_CUDA_IPC:
-    torch.cuda.memory._set_allocator_settings("expandable_segments:False")
 
 
 class SubProcess(mp.Process):
@@ -1084,10 +1081,7 @@ if __name__ == "__main__":
         t = torch.randn(5, 5).cuda()
         self.assertTrue(t.is_shared())
 
-    @unittest.skipIf(
-        sys.platform != "linux",
-        "Only runs on Linux; requires prctl(2)",
-    )
+    @unittest.skipIf(sys.platform != "linux", "Only runs on Linux; requires prctl(2)")
     def test_set_thread_name(self):
         name = "test name"
         mp._set_thread_name(name)

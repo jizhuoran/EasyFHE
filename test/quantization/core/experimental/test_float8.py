@@ -17,6 +17,7 @@ from torch.testing._internal.common_utils import (
     TestCase,
 )
 
+
 FLOAT8_DTYPES = [
     torch.float8_e5m2,
     torch.float8_e5m2fnuz,
@@ -266,7 +267,7 @@ class TestFloat8Dtype(TestCase):
         with DeterministicGuard(torch.are_deterministic_algorithms_enabled()):
             for use_deterministic in (True, False):
                 torch.use_deterministic_algorithms(use_deterministic)
-                x = torch.empty(4, 4, device=device, dtype=dtype)
+                torch.empty(4, 4, device=device, dtype=dtype)
 
 
 instantiate_device_type_tests(TestFloat8Dtype, globals())

@@ -213,7 +213,7 @@ def _insert_stage_symbolic_backward(
                 input_nodes = list(node.all_input_nodes)
                 grads_proxy = fx.Proxy(grads)
                 for i, input_node in enumerate(input_nodes):
-                    assign_or_accumulate_grad(input_node, grads_proxy[i].node)
+                    assign_or_accumulate_grad(input_node, grads_proxy[i].node)  # type: ignore[index]
 
     return g
 
@@ -364,7 +364,7 @@ class DetachExecutor(fx.Interpreter):
         super().__init__(module, garbage_collect_values)
         self.value_remap = {}
 
-    def run(self, *args, initial_env=None):
+    def run(self, *args, initial_env=None):  # type: ignore[override]
         self.value_remap = {}
         return super().run(*args, initial_env=initial_env)
 
@@ -415,15 +415,15 @@ class _LinearNodeList:
     def __init__(self, node_list):
         self.serialize_node_list = []
         for node in node_list:
-            node_args = fx.node.map_arg(node.args, lambda n: _NodeReference(n.name))
-            node_kwargs = fx.node.map_arg(node.kwargs, lambda n: _NodeReference(n.name))
+            node_args = fx.node.map_arg(node.args, lambda n: _NodeReference(n.name))  # type: ignore[arg-type,return-value]
+            node_kwargs = fx.node.map_arg(node.kwargs, lambda n: _NodeReference(n.name))  # type: ignore[arg-type,return-value]
             serialize_node = fx.Node(
-                graph=None,
+                graph=None,  # type: ignore[arg-type]
                 name=node.name,
                 op=node.op,
                 target=node.target,
-                args=node_args,
-                kwargs=node_kwargs,
+                args=node_args,  # type: ignore[arg-type]
+                kwargs=node_kwargs,  # type: ignore[arg-type]
                 return_type=node.type,
             )
             serialize_node.meta = copy.copy(node.meta)
@@ -446,8 +446,8 @@ class _LinearNodeList:
             deser_node = graph.create_node(
                 op=node.op,
                 target=node.target,
-                args=node_args,
-                kwargs=node_kwargs,
+                args=node_args,  # type: ignore[arg-type]
+                kwargs=node_kwargs,  # type: ignore[arg-type]
                 name=node.name,
                 type_expr=node.type,
             )
@@ -512,7 +512,7 @@ def _modify_graph_op_device(
                 _modify_graph_op_device(submod, new_device)
             elif isinstance(submod, InterpreterModule):
                 # If unflattening has been performed, we need to access its graph module by `.graph_module`
-                _modify_graph_op_device(submod.graph_module, new_device)
+                _modify_graph_op_device(submod.graph_module, new_device)  # type: ignore[arg-type]
             else:
                 logger.warning(
                     f"Skipping device modification for submodule {node.target} because it is a {type(submod)}"  # noqa: G004
@@ -688,33 +688,33 @@ class Pipe(torch.nn.Module):
             logger.info("Auto-splitting model")
             traced = split_policy(traced)  # type: ignore[arg-type]
 
-        logger.debug(traced.print_readable(print_output=False))
+        logger.debug(traced.print_readable(print_output=False))  # type: ignore[operator]
 
         # Deduplicate `get_attr` nodes that refer to the same parameter . Downstream code for moving
         # parameters relies on the invariant that parameter accesses happen once. This is not necessarily
         # the case (especially with custom tracers), so fix that up here.
         get_attr_nodes: Dict[str, fx.Node] = {}
-        for node in traced.graph.nodes:
+        for node in traced.graph.nodes:  # type: ignore[union-attr]
             if node.op == "get_attr":
                 get_attr_nodes.setdefault(node.target, node)
 
                 if get_attr_nodes[node.target] != node:
                     node.replace_all_uses_with(get_attr_nodes[node.target])
-                    traced.graph.erase_node(node)
+                    traced.graph.erase_node(node)  # type: ignore[operator, union-attr]
 
         # avoid looking at next node by keeping track of previous pipe_split
         prev_pipe_split_idx = -1
         pipe_split_nodes_to_erase = set()
-        for i, node in enumerate(traced.graph.nodes):
+        for i, node in enumerate(traced.graph.nodes):  # type: ignore[arg-type, union-attr]
             if (node.op, node.target) == ("call_function", pipe_split):
                 if prev_pipe_split_idx == i - 1:
                     pipe_split_nodes_to_erase.add(node)
                 prev_pipe_split_idx = i
 
         for node in pipe_split_nodes_to_erase:
-            traced.graph.erase_node(node)
+            traced.graph.erase_node(node)  # type: ignore[operator, union-attr]
 
-        traced.recompile()
+        traced.recompile()  # type: ignore[operator]
 
         part_idx = 0
 
@@ -730,7 +730,7 @@ class Pipe(torch.nn.Module):
 
         # TODO: what does split do with module invocations? does it move the modules
         # into the submodules?
-        split = split_module(traced, mod, split_callback)
+        split = split_module(traced, mod, split_callback)  # type: ignore[arg-type]
         # a (custom) tracer can produce dead code like orphan get_attr nodes
         split.graph.eliminate_dead_code()
 
@@ -771,7 +771,7 @@ class Pipe(torch.nn.Module):
 
         # A list of param referrals for deferred deletion.
         # To be accumulated in `move_param_to_callee`.
-        to_delete = list()
+        to_delete = []
 
         def _recursive_getattr_with_parent(mod, fqn):
             # Returns getattr call given a nested FQN, and the last parent
@@ -932,8 +932,7 @@ class Pipe(torch.nn.Module):
                         if node.op == "get_attr":
                             # get_attr might get access deeper level attribute
                             fqn = scope + "." + node.target if scope else node.target
-                            if fqn in unused_attributes:  # used, remove it
-                                unused_attributes.remove(fqn)
+                            unused_attributes.discard(fqn)
                 for _name, _submod in _mod.named_children():
                     stack.append((scope + "." + _name if scope else _name, _submod))
             # delete unused attributes
@@ -1004,7 +1003,7 @@ class Pipe(torch.nn.Module):
     ) -> ExportedProgram:
         logger.info("Tracing model ...")
         try:
-            ep = torch.export.export(
+            ep = torch.export.export_for_training(
                 mod,
                 example_args,
                 example_kwargs,
@@ -1076,12 +1075,12 @@ class Pipe(torch.nn.Module):
             )
         else:
             # Support kwargs for the first stage
-            submod0.graph._codegen = copy.deepcopy(traced.graph._codegen)
+            submod0.graph._codegen = copy.deepcopy(traced.graph._codegen)  # type: ignore[union-attr]
             # `_replace` is actually not "private" or internal. based on this doc:
             # To prevent conflicts with field names, the method and attribute names
             # start with an underscore
-            submod0.graph._codegen.pytree_info = (
-                submod0.graph._codegen.pytree_info._replace(out_spec=None)
+            submod0.graph._codegen.pytree_info = (  # type: ignore[union-attr]
+                submod0.graph._codegen.pytree_info._replace(out_spec=None)  # type: ignore[operator, union-attr]
             )
             submod0.recompile()
 
@@ -1144,6 +1143,13 @@ class Pipe(torch.nn.Module):
 
 
 class SplitPoint(Enum):
+    """
+    Enum representing the points at which a split can occur in the execution of a submodule.
+    Attributes:
+        BEGINNING: Represents adding a split point *before* the execution of a certain submodule in the `forward` function.
+        END: Represents adding a split point *after* the execution of a certain submodule in the `forward` function.
+    """
+
     BEGINNING = 1
     END = 2
 

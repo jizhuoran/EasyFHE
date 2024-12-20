@@ -1,4 +1,5 @@
 # Owner(s): ["module: inductor"]
+# ruff: noqa: F841
 import contextlib
 import os
 import subprocess
@@ -13,6 +14,7 @@ from torch._inductor.codecache import PyCodeCache
 from torch._inductor.test_case import run_tests, TestCase
 from torch._inductor.utils import fresh_inductor_cache
 from torch.testing import FileCheck
+from torch.testing._internal.common_cuda import xfailIfSM89
 from torch.testing._internal.common_device_type import expectedFailureXPU
 from torch.testing._internal.inductor_utils import GPU_TYPE, HAS_GPU
 
@@ -20,10 +22,19 @@ from torch.testing._internal.inductor_utils import GPU_TYPE, HAS_GPU
 class TestKernelBenchmark(TestCase):
     device_type = GPU_TYPE
 
+    # to make sure the subprocess runs on the exact same path as the parent process
+    # we augment the PYTHONPATH env var
+    python_path = ""
+
     @classmethod
     def setUpClass(cls):
         cls.exit_stack = contextlib.ExitStack()
         cls.exit_stack.enter_context(patch.object(config, "benchmark_kernel", True))
+        # setup the augmented PYTHONPATH to pass to the subprocess calls
+        augmented_pp = ":".join(sys.path)
+        if os.environ.get("PYTHONPATH"):
+            augmented_pp = f"{os.environ.get('PYTHONPATH')}:{augmented_pp}"
+        cls.python_path = augmented_pp
 
     @classmethod
     def tearDownClass(cls):
@@ -31,11 +42,11 @@ class TestKernelBenchmark(TestCase):
 
     def setUp(self):
         super().setUp()
-        PyCodeCache.cache.clear()
+        PyCodeCache.cache_clear()
 
     def get_compiled_module(self):
         compiled_module = None
-        for v in PyCodeCache.cache.values():
+        for v in PyCodeCache.modules:
             if hasattr(v, "benchmark_compiled_module"):
                 self.assertTrue(
                     compiled_module is None, "Found multiple compiled modules"
@@ -47,11 +58,11 @@ class TestKernelBenchmark(TestCase):
 
     def verify_compiled_kernels(self, GB_count=1):
         compiled_module = self.get_compiled_module()
-
         # now run the compiled module in subprocess and check its output
         bench_out = subprocess.check_output(
             f"{sys.executable} {compiled_module.__file__} -kc".split(),
             stderr=subprocess.STDOUT,
+            env={**os.environ, "PYTHONPATH": self.python_path},
         ).decode()
 
         # make sure we have the bandwidth information in the output
@@ -65,7 +76,11 @@ class TestKernelBenchmark(TestCase):
         try:
             out = subprocess.check_output(
                 f"{sys.executable} {compiled_module.__file__}".split(),
-                env={**os.environ.copy(), "TORCHINDUCTOR_DUMP_LAUNCH_PARAMS": "1"},
+                env={
+                    **os.environ.copy(),
+                    "TORCHINDUCTOR_DUMP_LAUNCH_PARAMS": "1",
+                    "PYTHONPATH": self.python_path,
+                },
                 stderr=subprocess.STDOUT,
             )
         except subprocess.CalledProcessError as e:
@@ -81,10 +96,12 @@ class TestKernelBenchmark(TestCase):
             compiled_module.__file__, f"{compiled_module.__file__}.cleaned"
         )
         self.assertTrue("@triton_heuristics" not in cleaned_triton)
+        self.assertTrue(".run(" not in cleaned_triton)
         try:
             out = subprocess.check_output(
                 f"{sys.executable} {compiled_module.__file__}.cleaned".split(),
                 stderr=subprocess.STDOUT,
+                env={**os.environ, "PYTHONPATH": self.python_path},
             )
         except subprocess.CalledProcessError as e:
             print("Failed when when running cleaned triton", e)
@@ -98,6 +115,7 @@ class TestKernelBenchmark(TestCase):
         bench_out = subprocess.check_output(
             f"{sys.executable} {compiled_module.__file__} -k".split(),
             stderr=subprocess.STDOUT,
+            env={**os.environ, "PYTHONPATH": self.python_path},
         ).decode()
 
         # make sure we have the bandwidth information in the output
@@ -368,6 +386,7 @@ class TestKernelBenchmark(TestCase):
         self.check_bandwidth(compiled_module, "0.006")
 
     @expectedFailureXPU
+    @xfailIfSM89
     @config.patch(max_autotune=True, max_autotune_gemm_backends="TRITON")
     def test_slice_mm_bandwidth_computation(self):
         M, N, K = 1000, 2000, 3000
@@ -408,6 +427,18 @@ class TestKernelBenchmark(TestCase):
         # 20000 * 4 = 80KB for b
         # 20000 * 5000 * 4 = 200MB for a
         self.check_bandwidth(compiled_module, "0.200")
+
+    def test_split_scan(self):
+        @torch.compile
+        def f(a):
+            return a.cumsum(-1)
+
+        a = torch.rand(10000, 5000, device=GPU_TYPE)
+        f(a.reshape(-1))
+        compiled_module = self.get_compiled_module()
+        # 10000 * 5000 * 4 = 200 MB for a
+        # Double that for output as well
+        self.check_bandwidth(compiled_module, "0.400")
 
     @config.patch("triton.unique_kernel_names", True)
     @config.patch(benchmark_kernel=False)
@@ -455,6 +486,20 @@ class TestKernelBenchmark(TestCase):
 
         a = torch.randn(128, 128, device=GPU_TYPE)
         f(a)
+        compiled_module = self.get_compiled_module()
+        self.verify_remove_inductor_deps(compiled_module)
+
+    @config.patch("triton.unique_kernel_names", True)
+    @config.patch(benchmark_kernel=False)
+    @config.patch(compile_threads=1)
+    def test_remove_inductor_deps_scalar(self):
+        @torch.compile
+        def f(a, b):
+            return a + b
+
+        a = torch.tensor(1.0, device=GPU_TYPE)
+        b = torch.tensor(2.0, device=GPU_TYPE)
+        f(a, b)
         compiled_module = self.get_compiled_module()
         self.verify_remove_inductor_deps(compiled_module)
 

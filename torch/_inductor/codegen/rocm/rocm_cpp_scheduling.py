@@ -8,8 +8,8 @@ from ...scheduler import BaseSchedulerNode, BaseScheduling, Scheduler, Scheduler
 from ...utils import get_fused_kernel_name, get_kernel_metadata, sympy_product
 from ...virtualized import V
 from ..common import IndentedBuffer
-
 from .rocm_template_buffer import ROCmTemplateBuffer
+
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ class ROCmCPPScheduling(BaseScheduling):
     It handles fusion decisions and ROCm C++ specific template code generation.
     """
 
-    def __init__(self, scheduler: Scheduler):
+    def __init__(self, scheduler: Scheduler) -> None:
         super().__init__()
         self.scheduler = scheduler
 
@@ -61,7 +61,9 @@ class ROCmCPPScheduling(BaseScheduling):
             compile_wrapper = IndentedBuffer()
             compile_wrapper.writeline("async_compile.rocm(r'''")
             compile_wrapper.splice(src_code, strip=True)
-            compile_wrapper.writeline("''', 'so')")
+            compile_wrapper.writeline(
+                f"''', 'so', aot_compile={str(V.graph.aot_mode)})"
+            )
 
             metadata_comment = f"# kernel path: {kernel_path}"
             origins, detailed_origins = get_kernel_metadata(node_schedule, wrapper)
@@ -75,6 +77,7 @@ class ROCmCPPScheduling(BaseScheduling):
         self,
         template_node: BaseSchedulerNode,
         epilogue_nodes: Sequence[BaseSchedulerNode],
+        prologue_nodes: Sequence[BaseSchedulerNode],
     ):
         """
         Codegen a ROCm template, possibly with fused epilogues
@@ -83,7 +86,7 @@ class ROCmCPPScheduling(BaseScheduling):
             template_node
         ), "Template node passed to ROCmScheduler.codegen_template must be a SchedulerNode that wraps a ROCmTemplateBuffer"
         template_node = cast(SchedulerNode, template_node)
-        _, (numel, rnumel) = template_node.group
+        _, (_numel, rnumel) = template_node.group
         assert rnumel == 1
         ctb: ROCmTemplateBuffer = cast(ROCmTemplateBuffer, template_node.node)
         kernel, render = ctb.make_kernel_render(ctb)

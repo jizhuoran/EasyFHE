@@ -1,5 +1,4 @@
-"""Implement various linear algebra algorithms for low rank matrices.
-"""
+"""Implement various linear algebra algorithms for low rank matrices."""
 
 __all__ = ["svd_lowrank", "pca_lowrank"]
 
@@ -72,7 +71,7 @@ def get_approximate_basis(
     if M is not None:
         X = X - matmul(M, R)
     Q = torch.linalg.qr(X).Q
-    for i in range(niter):
+    for _ in range(niter):
         X = matmul(A.mH, Q)
         if M is not None:
             X = X - matmul(M.mH, Q)

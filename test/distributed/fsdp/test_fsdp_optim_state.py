@@ -29,7 +29,7 @@ from torch.distributed.fsdp.fully_sharded_data_parallel import (
 from torch.distributed.optim import _NamedOptimizer
 from torch.testing._internal.common_distributed import skip_if_lt_x_gpu
 from torch.testing._internal.common_fsdp import (
-    CUDAInitMode,
+    DEVICEInitMode,
     FSDPInitMode,
     FSDPTest,
     TransformerWithSharedParams,
@@ -40,6 +40,7 @@ from torch.testing._internal.common_utils import (
     run_tests,
     TEST_WITH_DEV_DBG_ASAN,
 )
+
 
 STATE_DICT_TYPES = [StateDictType.FULL_STATE_DICT, StateDictType.SHARDED_STATE_DICT]
 
@@ -369,7 +370,7 @@ class TestFSDPOptimState(FSDPTest):
         model = TransformerWithSharedParams.init(
             group,
             FSDPInitMode.RECURSIVE if wrap else FSDPInitMode.NO_FSDP,
-            CUDAInitMode.CUDA_BEFORE,
+            DEVICEInitMode.DEVICE_BEFORE,
             deterministic=True,
         )
         optim = optim_class(model.parameters(), lr=0.01)
@@ -1509,7 +1510,7 @@ class TestFSDPOptimState(FSDPTest):
         ) = self._init_nested_model(wrap=False, use_multiple_param_groups=False)
         if should_check_method_fn("rekey_optim_state_dict"):
             with context_fn():
-                rekeyed_osd = FSDP.rekey_optim_state_dict(
+                FSDP.rekey_optim_state_dict(
                     fsdp_osd,  # from `full_optim_state_dict()`
                     OptimStateKeyType.PARAM_ID,
                     nonwrapped_model,
@@ -1586,7 +1587,7 @@ class TestFSDPOptimState(FSDPTest):
     @skip_if_lt_x_gpu(2)
     def test_compatible_with_trec(self):
         class DenseModel(torch.nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.net1 = nn.Sequential(nn.Linear(8, 16), nn.ReLU())
                 self.net2 = nn.Sequential(nn.Linear(16, 32), nn.ReLU())
@@ -1597,7 +1598,7 @@ class TestFSDPOptimState(FSDPTest):
                 return self.net4(self.net3(self.net2(self.net1(x))))
 
         class FakeMPModel(torch.nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 torch.manual_seed(0)
                 self.dense = FSDP(DenseModel().cuda(), use_orig_params=True)
@@ -1649,7 +1650,7 @@ class TestFSDPOptimState(FSDPTest):
         )
 
         # Make optim1 has a different state.
-        for i in range(5):
+        for _ in range(5):
             batch = torch.rand(5, 8).cuda()
             loss = models[1](batch).sum()
             loss.backward()
@@ -1672,7 +1673,7 @@ class TestFSDPOptimState(FSDPTest):
     @skip_if_lt_x_gpu(2)
     def test_optim_state_without_param_groups(self):
         class SimpleModel(torch.nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 torch.manual_seed(0)
                 self.net1 = nn.Sequential(nn.Linear(2, 4), nn.ReLU())
@@ -1764,7 +1765,7 @@ class TestFSDPOptimState(FSDPTest):
         initializer = self._model_class[model_class]
 
         # First, run a wrapped model with full world size for a few iterations
-        model1, optim1, optim_input1 = initializer(
+        model1, optim1, _ = initializer(
             wrap=True,
             use_multiple_param_groups=use_multiple_param_groups,
         )
@@ -1787,7 +1788,7 @@ class TestFSDPOptimState(FSDPTest):
             new_group = dist.distributed_c10d._get_default_group()
         # Second, run a wrapped model with (possibly) halved world size and
         # (possibly) differing `optim_input` across ranks
-        model2, optim2, optim_input2 = initializer(
+        model2, optim2, _ = initializer(
             wrap=True,
             group=new_group,
             use_multiple_param_groups=use_multiple_param_groups,
@@ -1860,7 +1861,8 @@ class TestFSDPOptimState(FSDPTest):
             FSDP.optim_state_dict(model, optim), osd, check_same_param_keys=True
         )
         step()
-        osd_to_load = FSDP.optim_state_dict_to_load(
+
+        osd_to_load = FSDP.optim_state_dict_to_load(  # noqa: F841
             model, optim, osd, load_directly=True
         )
         self._check_same_state(
@@ -1993,7 +1995,7 @@ class TestFSDPOptimState(FSDPTest):
             loss.backward()
             fsdp_optim.step()
             orig_state_dict = deepcopy(fsdp_optim.state_dict())
-            optim_state_dict = FSDP.optim_state_dict(fsdp_model, fsdp_optim)
+            FSDP.optim_state_dict(fsdp_model, fsdp_optim)
             FSDP.optim_state_dict_to_load(
                 fsdp_model,
                 fsdp_optim,

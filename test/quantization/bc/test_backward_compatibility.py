@@ -12,7 +12,6 @@ import torch.ao.nn.quantized as nnq
 import torch.ao.nn.quantized.dynamic as nnqd
 import torch.ao.quantization.quantize_fx as quantize_fx
 import torch.nn as nn
-
 from torch.ao.quantization import MinMaxObserver, PerChannelMinMaxObserver
 from torch.fx import GraphModule
 from torch.testing._internal.common_quantization import skipIfNoFBGEMM
@@ -43,10 +42,8 @@ def get_filenames(self, subname):
     test_file = os.path.realpath(sys.modules[module_id].__file__)
     base_name = os.path.join(os.path.dirname(test_file), "../serialized", munged_id)
 
-    subname_output = ""
     if subname:
         base_name += "_" + subname
-        subname_output = f" ({subname})"
 
     input_file = base_name + ".input.pt"
     state_dict_file = base_name + ".state_dict.pt"
@@ -114,7 +111,8 @@ class TestSerialization(TestCase):
             torch.save(qmodule(input_tensor), expected_file)
 
         input_tensor = torch.load(input_file)
-        qmodule.load_state_dict(torch.load(state_dict_file))
+        # weights_only = False as sometimes get ScriptObject here
+        qmodule.load_state_dict(torch.load(state_dict_file, weights_only=False))
         qmodule_scripted = torch.jit.load(scripted_module_file)
         qmodule_traced = torch.jit.load(traced_module_file)
         expected = torch.load(expected_file)
@@ -143,7 +141,7 @@ class TestSerialization(TestCase):
         """
         (
             input_file,
-            state_dict_file,
+            _,
             scripted_module_file,
             traced_module_file,
             expected_file,
@@ -194,7 +192,7 @@ class TestSerialization(TestCase):
             input_file,
             state_dict_file,
             _,
-            traced_module_file,
+            _,
             expected_file,
             _package_file,
             _get_attr_targets_file,
@@ -218,7 +216,7 @@ class TestSerialization(TestCase):
         """
         (
             input_file,
-            state_dict_file,
+            _,
             _scripted_module_file,
             _traced_module_file,
             expected_file,
@@ -267,7 +265,7 @@ class TestSerialization(TestCase):
         # load input tensor
         input_tensor = torch.load(input_file)
         expected_output_tensor = torch.load(expected_file)
-        expected_get_attrs = torch.load(get_attr_targets_file)
+        expected_get_attrs = torch.load(get_attr_targets_file, weights_only=False)
 
         # load model from package and verify output and get_attr targets match
         imp = torch.package.PackageImporter(package_file)
@@ -515,7 +513,7 @@ class TestSerialization(TestCase):
     )
     def test_lstm(self):
         class LSTMModule(torch.nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.lstm = nnqd.LSTM(input_size=3, hidden_size=7, num_layers=1).to(
                     dtype=torch.float
@@ -545,7 +543,7 @@ class TestSerialization(TestCase):
 
     def test_default_qat_qconfig(self):
         class Model(nn.Module):
-            def __init__(self):
+            def __init__(self) -> None:
                 super().__init__()
                 self.linear = nn.Linear(5, 5)
                 self.relu = nn.ReLU()

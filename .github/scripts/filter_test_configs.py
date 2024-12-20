@@ -15,6 +15,7 @@ from urllib.request import Request, urlopen
 
 import yaml
 
+
 REENABLE_TEST_REGEX = "(?i)(Close(d|s)?|Resolve(d|s)?|Fix(ed|es)?) (#|https://github.com/pytorch/pytorch/issues/)([0-9]+)"
 
 PREFIX = "test-config/"
@@ -331,7 +332,7 @@ def process_jobs(
         # The job name from github is in the PLATFORM / JOB (CONFIG) format, so breaking
         # it into its two components first
         current_platform, _ = (n.strip() for n in job_name.split(JOB_NAME_SEP, 1) if n)
-    except ValueError as error:
+    except ValueError:
         warnings.warn(f"Invalid job name {job_name}, returning")
         return test_matrix
 
@@ -503,6 +504,9 @@ def perform_misc_tasks(
     set_output(
         "ci-verbose-test-logs",
         check_for_setting(labels, pr_body, "ci-verbose-test-logs"),
+    )
+    set_output(
+        "ci-test-showlocals", check_for_setting(labels, pr_body, "ci-test-showlocals")
     )
     set_output(
         "ci-no-test-timeout", check_for_setting(labels, pr_body, "ci-no-test-timeout")

@@ -2,10 +2,12 @@ import ast
 import copy
 import functools
 import json
+import re
 import timeit
 from collections import namedtuple
 
 import benchmark_utils
+
 import numpy as np
 
 import torch
@@ -110,10 +112,9 @@ def _build_test(
 
         if tags is None:
             raise ValueError("Missing tags in configs")
-        input_config = str(test_attrs)[1:-1].replace("'", "")
+
         op = bench_op()
         assert op is not None, "Can't create test"
-        tensor_error_info = None
         # op_name_function is a dictionary which has op_name and op_function.
         # an example of op_name_function is:
         # {'op_name' : 'abs', 'op_function' : torch.abs}
@@ -249,6 +250,37 @@ class BenchmarkRunner:
             else:
                 print(f"{mode} Execution Time (us) : {reported_run_time_us[0]:.3f}\n")
 
+    def _perf_result_to_dict(self, reported_run_time_us, test_case):
+        """This function is the parallel of _print_perf_result, which instead of
+        writing information to terminal, returns a dictionary.
+        """
+        if self.args.report_aibench:
+            return {}
+        out = {
+            "test_name": test_case.test_config.test_name,
+            "input_config": test_case.test_config.input_config,
+            "mode": "JIT" if self.use_jit else "Eager",
+            "run": "Backward" if test_case.test_config.run_backward else "Forward",
+            "latency": round(reported_run_time_us[0], 3),
+            "latency unit": "us",
+        }
+
+        # parsing test_case.test_config.input_config, adding it as entries to the 'out' dictionary
+        # input: 'M: 1, N: 1, K: 1, device: cpu'
+        # output: {'M':'1', 'N':'1', 'K':'1', 'device': 'cpu'}
+        # splitting the string on unnested commas
+        key_vals = re.split(
+            r",(?![^(){}[\]]*[)\]}])", test_case.test_config.input_config
+        )  # 'M: (32, 16), ZPB: 2' -> ['M: (32, 16)', 'ZPB: 2']
+        key_vals = [
+            (key.strip(), value.strip())
+            for key, value in map(lambda str: str.split(":"), key_vals)  # noqa: C417
+        ]  # ['M: (32, 16)', 'ZPB: 2'] -> [('M', '(32, 16)'), ('ZPB', '2')]
+        for key, value in key_vals:
+            out[key] = value
+
+        return out
+
     def _predict_num_iter_needed(self, i):
         return i * self.multiplier
 
@@ -339,16 +371,12 @@ class BenchmarkRunner:
         return cmd_flag is None or test_flag == cmd_flag
 
     def _check_operator_first_char(self, test_flag, cmd_flag):
-        if cmd_flag is None or test_flag[:1].lower() in cmd_flag:
-            return True
-        return False
+        return cmd_flag is None or test_flag[:1].lower() in cmd_flag
 
     def _check_keep_list(self, test_flag, cmd_flag_list):
-        if cmd_flag_list is None or any(
+        return cmd_flag_list is None or any(
             test_flag == cmd_flag for cmd_flag in cmd_flag_list
-        ):
-            return True
-        return False
+        )
 
     def _keep_test(self, test_case):
         # TODO: consider regex matching for test filtering.
@@ -362,7 +390,7 @@ class BenchmarkRunner:
         )
 
         # Filter framework, operator, test_name, tag, forward_only
-        if (
+        return (
             self._check_keep(op_test_config.test_name, self.args.test_name)
             and self._check_keep_list(test_case.op_bench.module_name(), operators)
             and self._check_operator_first_char(
@@ -381,10 +409,7 @@ class BenchmarkRunner:
                 or "device" not in test_case.test_config.input_config
                 or self.args.device in op_test_config.test_name
             )
-        ):
-            return True
-
-        return False
+        )
 
     def _print_test_case_info(self, test_case):
         # Print out the test name and skip the real execution
@@ -404,6 +429,9 @@ class BenchmarkRunner:
 
     def run(self):
         self._print_header()
+
+        if self.args.output_json:
+            perf_list = []
 
         for test_metainfo in BENCHMARK_TESTER:
             for test in _build_test(*test_metainfo):
@@ -445,3 +473,11 @@ class BenchmarkRunner:
                 ]
 
                 self._print_perf_result(reported_time, test_case)
+                if self.args.output_json:
+                    perf_list.append(
+                        self._perf_result_to_dict(reported_time, test_case)
+                    )
+
+        if self.args.output_json:
+            with open(self.args.output_json, "w") as f:
+                json.dump(perf_list, f)

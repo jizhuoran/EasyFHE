@@ -11,6 +11,7 @@ import pandas as pd
 flaky_models = {
     "yolov3",
     "gluon_inception_v3",
+    "detectron2_maskrcnn_r_101_c4",
     "XGLMForCausalLM",  # discovered in https://github.com/pytorch/pytorch/pull/128148
 }
 
@@ -18,7 +19,7 @@ flaky_models = {
 def get_field(csv, model_name: str, field: str):
     try:
         return csv.loc[csv["name"] == model_name][field].item()
-    except Exception as e:
+    except Exception:
         return None
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import textwrap
 from dataclasses import dataclass
-from typing import Sequence
+from typing import TYPE_CHECKING
 
 from torchgen.api.translate import translate
 from torchgen.api.types import DispatcherSignature
@@ -22,6 +22,10 @@ from torchgen.model import (
 from torchgen.utils import mapMaybe
 
 
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+
 def is_tensor(typ: Type) -> bool:
     return isinstance(typ, BaseType) and typ.name == BaseTy.Tensor
 
@@ -36,16 +40,14 @@ def is_tensor_list(typ: Type) -> bool:
 
 def unwrap_tensor(name: str, cur_level_var: str) -> list[str]:
     result = f"""\
-    Tensor {name}_value;
-    optional<int64_t> {name}_bdim;
-    std::tie({name}_value, {name}_bdim) = unwrapTensorAtLevel({name}, {cur_level_var});"""
+    auto [{name}_value, {name}_bdim] = unwrapTensorAtLevel({name}, {cur_level_var});"""
     return textwrap.dedent(result).split("\n")
 
 
 def unwrap_optional_tensor(name: str, cur_level_var: str) -> list[str]:
     result = f"""\
-    optional<Tensor> {name}_value;
-    optional<int64_t> {name}_bdim;
+    std::optional<Tensor> {name}_value;
+    std::optional<int64_t> {name}_bdim;
     if ({name}) {{
         std::tie({name}_value, {name}_bdim) = unwrapTensorAtLevel({name}.value(), {cur_level_var});
     }}"""
@@ -113,7 +115,7 @@ def gen_returns(
             idx += 2
         elif is_tensor_list(ret.type):
             wrapped_returns.append(
-                f"makeBatchedVector(std::get<{idx}>({results_var}), std::get<{idx+1}>({results_var}), {cur_level_var})"
+                f"makeBatchedVector(std::get<{idx}>({results_var}), std::get<{idx + 1}>({results_var}), {cur_level_var})"
             )
             idx += 2
         else:
@@ -209,7 +211,14 @@ def gen_vmap_plumbing(native_function: NativeFunction) -> str | None:
         return None
     if len(returns) == 0:
         return gen_vmap_plumbing_no_returns(native_function)
-    if not all(ret.type.is_tensor_like() for ret in returns):
+    return_symint_overrides = [
+        "_scaled_dot_product_flash_attention",
+        "_scaled_dot_product_cudnn_attention",
+    ]
+    if (
+        not all(ret.type.is_tensor_like() for ret in returns)
+        and schema.name.unambiguous_name() not in return_symint_overrides
+    ):
         return None
     # in-place views need special handling
     if "inplace_view" in native_function.tags:

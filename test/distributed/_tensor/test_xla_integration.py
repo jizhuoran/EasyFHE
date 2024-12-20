@@ -43,7 +43,7 @@ def with_xla(func: Callable) -> Callable:
 
 class DTensorXLAIntegrationTest(TestCase):
     class SimpleLinear(nn.Module):
-        def __init__(self):
+        def __init__(self) -> None:
             super(DTensorXLAIntegrationTest.SimpleLinear, self).__init__()
             self.fc1 = nn.Linear(128, 64)
             self.relu = nn.ReLU()
@@ -150,7 +150,7 @@ class DTensorXLAIntegrationTest(TestCase):
             shard_spec = [Shard(0)]
             # annoate fc1 and fc2
             if isinstance(mod, nn.Linear):
-                for name, param in mod.named_parameters():
+                for _, param in mod.named_parameters():
                     # annotate the parameter tensors directly
                     distribute_tensor(param, mesh, shard_spec)
 

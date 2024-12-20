@@ -16,6 +16,7 @@ torch.cuda
     default_stream
     device
     device_count
+    device_memory_used
     device_of
     get_arch_list
     get_device_capability
@@ -100,6 +101,7 @@ Memory management
     :nosignatures:
 
      empty_cache
+     get_per_process_memory_fraction
      list_gpu_processes
      mem_get_info
      memory_stats
@@ -120,6 +122,20 @@ Memory management
      get_allocator_backend
      CUDAPluggableAllocator
      change_current_allocator
+     MemPool
+     MemPoolContext
+
+.. currentmodule:: torch.cuda.memory
+
+.. autosummary::
+    :toctree: generated
+    :nosignatures:
+
+    caching_allocator_enable
+
+.. currentmodule:: torch.cuda
+.. autoclass:: torch.cuda.use_mem_pool
+
 .. FIXME The following doesn't seem to exist. Is it supposed to?
    https://github.com/pytorch/pytorch/issues/27785
    .. autofunction:: reset_max_memory_reserved
@@ -181,6 +197,7 @@ See the :doc:`documentation <cuda._sanitizer>` for information on how to use it.
 .. for tracking purposes
 .. py:module:: torch.cuda.comm
 .. py:module:: torch.cuda.error
+.. py:module:: torch.cuda.gds
 .. py:module:: torch.cuda.graphs
 .. py:module:: torch.cuda.jiterator
 .. py:module:: torch.cuda.memory

@@ -1,3 +1,4 @@
+# mypy: allow-untyped-decorators
 # mypy: allow-untyped-defs
 import inspect
 from typing import Callable, Dict, List, Optional, Tuple
@@ -6,6 +7,7 @@ import torch
 import torch._decomp
 from torch import Tensor
 from torch._prims_common.wrappers import _maybe_remove_out_wrapper
+
 
 decomposition_table = torch._decomp.decomposition_table
 decomposition_table_for_jvp: Dict[torch._ops.OperatorBase, Callable] = {}
@@ -105,7 +107,7 @@ def trace(self: Tensor) -> Tensor:
 def log_sigmoid_forward(self: Tensor) -> Tuple[Tensor, Tensor]:
     min = torch.minimum(self.new_zeros(()), self)
     z = torch.exp(-torch.abs(self))
-    if self.is_cuda:
+    if self.is_cuda or self.is_xpu:
         buffer = self.new_zeros((0,))
     else:
         buffer = z

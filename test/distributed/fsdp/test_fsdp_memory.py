@@ -17,6 +17,7 @@ from torch.testing._internal.common_utils import (
 )
 from torch.utils.checkpoint import checkpoint
 
+
 if not dist.is_available():
     print("Distributed not available, skipping tests", file=sys.stderr)
     sys.exit(0)
@@ -107,8 +108,6 @@ class TestFSDPMemory(FSDPTest):
 
     def _dist_train(self, with_checkpoint, expected, model_hidden_dim, iterations):
         gpu_id = self.rank
-        world_size = self.world_size
-
         batch = torch.randn(size=(2, 3, 224, 224)).cuda()
 
         model = create_model(

@@ -11,8 +11,7 @@
 #include <c10/util/irange.h>
 
 namespace at::native::xnnpack {
-namespace internal {
-namespace convolution2d {
+namespace internal::convolution2d {
 
 namespace {
 
@@ -188,7 +187,7 @@ ContextConv2D create(
   TORCH_CHECK(
       available(
           weight_nhwc,
-          (bias.has_value() && bias->defined()) ? at::OptionalIntArrayRef(bias->sizes()) : c10::nullopt,
+          (bias.has_value() && bias->defined()) ? at::OptionalIntArrayRef(bias->sizes()) : std::nullopt,
           padding_expanded,
           stride_expanded,
           dilation_expanded,
@@ -451,7 +450,7 @@ unpack_prepacked_sizes_conv2d(const IValue& ivalue) {
   const auto& bias = std::get<1>(tuple);
   return IValue(std::make_tuple(
       std::get<0>(tuple).sizes(),
-      (bias && bias->defined()) ? at::OptionalIntArrayRef(bias->sizes()) : c10::nullopt,
+      (bias && bias->defined()) ? at::OptionalIntArrayRef(bias->sizes()) : std::nullopt,
       std::get<2>(tuple),
       std::get<3>(tuple),
       std::get<4>(tuple),
@@ -464,7 +463,6 @@ Tensor conv2d_transpose_clamp_run(
   return op_context->run(input);
 }
 
-} // namespace convolution2d
 } // namespace internal
 
 bool use_convolution2d(

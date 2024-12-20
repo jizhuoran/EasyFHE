@@ -8,7 +8,9 @@
 #include <cstdint>
 #include <cstring>
 #include <iosfwd>
+#ifndef C10_EMBEDDED
 #include <ostream>
+#endif // C10_EMBEDDED
 
 #if defined(__CUDACC__) && !defined(USE_ROCM)
 #include <cuda_bf16.h>
@@ -72,8 +74,8 @@ inline C10_HOST_DEVICE uint16_t round_to_nearest_even(float src) {
   } else {
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-member-init)
     union {
-      uint32_t U32;
-      float F32;
+      uint32_t U32; // NOLINT(facebook-hte-BadMemberName)
+      float F32; // NOLINT(facebook-hte-BadMemberName)
     };
 
     F32 = src;
@@ -100,7 +102,7 @@ struct alignas(2) BFloat16 {
 
   constexpr C10_HOST_DEVICE BFloat16(unsigned short bits, from_bits_t)
       : x(bits) {}
-  inline C10_HOST_DEVICE BFloat16(float value);
+  /* implicit */ inline C10_HOST_DEVICE BFloat16(float value);
   inline C10_HOST_DEVICE operator float() const;
 
 #if defined(__CUDACC__) && !defined(USE_ROCM)
@@ -114,12 +116,14 @@ struct alignas(2) BFloat16 {
 #endif
 };
 
+#ifndef C10_EMBEDDED
 C10_API inline std::ostream& operator<<(
     std::ostream& out,
     const BFloat16& value) {
   out << (float)value;
   return out;
 }
+#endif // C10_EMBEDDED
 
 } // namespace c10
 

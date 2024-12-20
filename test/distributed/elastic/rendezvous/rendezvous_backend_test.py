@@ -29,7 +29,6 @@ class RendezvousBackendTestMixin(ABC):
     @abstractmethod
     def _corrupt_state(self) -> None:
         """Corrupts the state stored in the backend."""
-        pass
 
     def _set_state(
         self, state: bytes, token: Optional[Any] = None
@@ -71,7 +70,7 @@ class RendezvousBackendTestMixin(ABC):
         self.assertTrue(has_set)
 
     def test_set_state_sets_backend_state_if_token_is_current(self) -> None:
-        state1, token1, has_set1 = self._set_state(b"x")
+        _, token1, has_set1 = self._set_state(b"x")
 
         state2, token2, has_set2 = self._set_state(b"y", token1)
 
@@ -81,7 +80,7 @@ class RendezvousBackendTestMixin(ABC):
         self.assertTrue(has_set2)
 
     def test_set_state_returns_current_backend_state_if_token_is_old(self) -> None:
-        state1, token1, _ = self._set_state(b"x")
+        _, token1, _ = self._set_state(b"x")
 
         state2, token2, _ = self._set_state(b"y", token1)
 

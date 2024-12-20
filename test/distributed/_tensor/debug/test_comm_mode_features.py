@@ -6,7 +6,7 @@ from typing import Any, Dict
 import torch
 from torch.distributed._tensor import DeviceMesh
 from torch.distributed._tensor.api import distribute_tensor, DTensor
-from torch.distributed._tensor.debug import CommDebugMode
+from torch.distributed.tensor.debug import CommDebugMode
 from torch.distributed.tensor.parallel import (
     ColwiseParallel,
     parallelize_module,
@@ -196,7 +196,7 @@ class TestCommModeFeatures(DTensorTestBase):
             output_tp.sum().backward()
 
         # checks to see if all sub-modules make it into the module_depth_dictionary
-        self.assertEqual(len(comm_mode.advanced_module_tracker.module_depth_dict), 5)
+        self.assertEqual(len(comm_mode.advanced_module_tracker.module_helper_dict), 5)
 
         # checks to see if all collectives were correctly traced at the module-level
 
@@ -245,10 +245,13 @@ class TestCommModeFeatures(DTensorTestBase):
         comm_mode = CommDebugMode()
         with comm_mode:
             self.assertEqual(
-                len(comm_mode.advanced_module_tracker.module_depth_dict), 1
+                len(comm_mode.advanced_module_tracker.module_helper_dict), 1
             )
-            self.assertEqual(comm_mode.comm_module_counts, {})
-            output_tp = model(inp)
+            self.assertEqual(
+                comm_mode.comm_module_counts,
+                {"Global": {"forward": {}, "backward": {}}},
+            )
+            model(inp)
 
         model_args = ModelArgs(dropout_p=0.0)
         model2 = Transformer(model_args).to(device=self.device_type)
@@ -261,7 +264,7 @@ class TestCommModeFeatures(DTensorTestBase):
 
         comm_mode = CommDebugMode()
         with comm_mode:
-            output = model2(inp)
+            model2(inp)
 
         # checks to see if all collectives were correctly traced at the module-level
         self.assertEqual(

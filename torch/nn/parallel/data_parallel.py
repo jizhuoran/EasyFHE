@@ -11,11 +11,10 @@ from torch._utils import (
     _get_device_index,
     _get_devices_properties,
 )
-
-from ..modules import Module
-from .parallel_apply import parallel_apply
-from .replicate import replicate
-from .scatter_gather import gather, scatter_kwargs
+from torch.nn.modules import Module
+from torch.nn.parallel.parallel_apply import parallel_apply
+from torch.nn.parallel.replicate import replicate
+from torch.nn.parallel.scatter_gather import gather, scatter_kwargs
 
 
 __all__ = ["DataParallel", "data_parallel"]
@@ -142,7 +141,7 @@ class DataParallel(Module, Generic[T]):
         super().__init__()
         torch._C._log_api_usage_once("torch.nn.parallel.DataParallel")
         device_type = _get_available_device_type()
-        if device_type is None:
+        if device_type is None or device_type == "mps":
             self.module = module
             self.device_ids = []
             return

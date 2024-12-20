@@ -22,6 +22,7 @@ from warnings import WarningMessage
 import torch._numpy as np
 from torch._numpy import arange, asarray as asanyarray, empty, float32, intp, ndarray
 
+
 __all__ = [
     "assert_equal",
     "assert_almost_equal",
@@ -259,10 +260,6 @@ def assert_equal(actual, desired, err_msg="", verbose=True):
         isactnan = gisnan(actual)
         if isdesnan and isactnan:
             return  # both nan, so equal
-
-        # handle signed zero specially for floats
-        array_actual = np.asarray(actual)
-        array_desired = np.asarray(desired)
 
         if desired == 0 and actual == 0:
             if not signbit(desired) == signbit(actual):
@@ -1210,7 +1207,7 @@ def _assert_valid_refcount(op):
     gc.disable()
     try:
         rc = sys.getrefcount(i)
-        for j in range(15):
+        for _ in range(15):
             d = op(b, c)
         assert_(sys.getrefcount(i) >= rc)
     finally:
@@ -2146,7 +2143,7 @@ def _assert_no_gc_cycles_context(name=None):
     gc.disable()
     gc_debug = gc.get_debug()
     try:
-        for i in range(100):
+        for _ in range(100):
             if gc.collect() == 0:
                 break
         else:
@@ -2378,7 +2375,7 @@ def _no_tracing(func):
 def _get_glibc_version():
     try:
         ver = os.confstr("CS_GNU_LIBC_VERSION").rsplit(" ")[1]
-    except Exception as inst:
+    except Exception:
         ver = "0.0"
 
     return ver

@@ -10,9 +10,10 @@ from types import MappingProxyType
 from typing import Optional
 
 import torch
-from .common import device_from_inputs, fake_tensor_unsupported
 
+from .common import device_from_inputs, fake_tensor_unsupported
 from .registry import register_backend
+
 
 log = logging.getLogger(__name__)
 
@@ -62,10 +63,6 @@ def tvm(
             tasks, task_weights = auto_scheduler.extract_tasks(
                 mod["main"], params, target
             )
-            for task in tasks:
-                print(task.compute_dag)
-            else:
-                print("No tasks")
             if len(tasks) != 0:
                 tuner = auto_scheduler.TaskScheduler(tasks, task_weights)
                 if not os.path.exists(log_file):

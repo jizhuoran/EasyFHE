@@ -1,9 +1,11 @@
 import argparse
 
 import benchmark_core
+
 import benchmark_utils
 
 import torch
+
 
 """Performance microbenchmarks's main binary.
 
@@ -50,6 +52,13 @@ def parse_args():
         "--list_ops",
         help="List operators without running them",
         action="store_true",
+    )
+
+    parser.add_argument(
+        "--output-json",
+        "--output_json",
+        help="JSON file path to write the results to",
+        default=None,
     )
 
     parser.add_argument(

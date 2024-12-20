@@ -7,8 +7,6 @@ import torch
 import torch.distributed as dist
 from torch import nn, optim
 from torch._guards import active_fake_mode
-from torch.distributed._composable.fsdp import FSDPModule
-from torch.distributed._composable.fsdp._fsdp_param_group import FSDPParamGroup
 from torch.distributed._tools.mem_tracker import _RefType, _State, MemTracker
 from torch.distributed.distributed_c10d import (
     _IllegalWork,
@@ -16,10 +14,13 @@ from torch.distributed.distributed_c10d import (
     ReduceOp,
     Work,
 )
+from torch.distributed.fsdp import FSDPModule
+from torch.distributed.fsdp._fully_shard._fsdp_param_group import FSDPParamGroup
 from torch.futures import Future
 from torch.utils._python_dispatch import TorchDispatchMode
 from torch.utils._pytree import tree_map_only
 from torch.utils.weak import WeakIdKeyDictionary, weakref
+
 
 _TOTAL_KEY = "Total"
 
@@ -569,7 +570,6 @@ class FSDPMemTracker(MemTracker):
         self, *external: Union[nn.Module, optim.Optimizer, torch.Tensor]
     ) -> None:
         """This is no-op for ``FSDPMemTracker``"""
-        pass
 
     def __enter__(self) -> "FSDPMemTracker":
         self._in_fake_mode = True if active_fake_mode() else False

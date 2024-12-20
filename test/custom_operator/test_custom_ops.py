@@ -12,6 +12,7 @@ import torch._library.utils as utils
 from torch import ops
 from torch.testing._internal.common_utils import IS_WINDOWS, run_tests, TestCase
 
+
 torch.ops.import_module("pointwise")
 
 
@@ -77,9 +78,9 @@ def forward(self, arg0_1):
         x = torch.randn(3, device="meta")
         self.assertNotIn("my_custom_ops2", sys.modules.keys())
         with self.assertRaisesRegex(NotImplementedError, r"'my_custom_ops2'"):
-            y = torch.ops.custom.sin.default(x)
+            torch.ops.custom.sin.default(x)
         torch.ops.import_module("my_custom_ops2")
-        y = torch.ops.custom.sin.default(x)
+        torch.ops.custom.sin.default(x)
 
     def test_calling_custom_op_string(self):
         output = ops.custom.op2("abc", "def")

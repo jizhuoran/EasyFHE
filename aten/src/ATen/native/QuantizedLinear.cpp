@@ -32,14 +32,14 @@
 #endif // USE_FBGEMM
 
 namespace caffe2 {
-CAFFE_KNOWN_TYPE(c10::intrusive_ptr<LinearPackedParamsBase>);
+CAFFE_KNOWN_TYPE(c10::intrusive_ptr<LinearPackedParamsBase>)
 } // namespace caffe2
 
 #ifdef USE_FBGEMM
 namespace caffe2 {
 // Required for cpp_custom_type_hack to work
-CAFFE_KNOWN_TYPE(fbgemm::PackBMatrix<int8_t>);
-CAFFE_KNOWN_TYPE(c10::intrusive_ptr<PackedLinearWeightFp16>);
+CAFFE_KNOWN_TYPE(fbgemm::PackBMatrix<int8_t>)
+CAFFE_KNOWN_TYPE(c10::intrusive_ptr<PackedLinearWeightFp16>)
 } // namespace caffe2
 #endif // USE_FBGEMM
 
@@ -404,7 +404,7 @@ Tensor fbgemm_pack_gemm_matrix_fp16(const Tensor& weight) {
   auto ptr = std::make_unique<fbgemm::PackedGemmMatrixFP16>(
       fbgemm::matrix_op_t::Transpose, K, N, 1, weight_contig_ptr);
   c10::intrusive_ptr<LinearPackedParamsBase> packed_weight =
-      c10::make_intrusive<PackedLinearWeightFp16>(std::move(ptr), c10::nullopt);
+      c10::make_intrusive<PackedLinearWeightFp16>(std::move(ptr), std::nullopt);
   auto unique_ptr_wrapper =
       std::make_unique<decltype(packed_weight)>(std::move(packed_weight));
   return cpp_custom_type_hack::create(

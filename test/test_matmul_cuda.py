@@ -4,6 +4,7 @@ import unittest
 from itertools import product
 from functools import partial
 from typing import Optional
+import re
 
 import torch
 
@@ -33,14 +34,17 @@ from torch.testing._internal.common_utils import (
     parametrize,
     run_tests,
     skipIfRocmVersionLessThan,
+    TEST_CUDA,
     TEST_WITH_ROCM,
     skipIfRocm,
     TestCase,
 )
 
 _IS_SM8X = False
-if torch.cuda.is_available():
+_IS_SM9X = False
+if TEST_CUDA:
     _IS_SM8X = torch.cuda.get_device_capability(0)[0] == 8
+    _IS_SM9X = torch.cuda.get_device_capability(0)[0] == 9
 
 # Protects against includes accidentally setting the default dtype
 assert torch.get_default_dtype() is torch.float32
@@ -558,6 +562,7 @@ class TestFP8MatmulCuda(TestCase):
         self.assertEqual(out_fp8, out_fp8_s)
 
     @unittest.skipIf(not PLATFORM_SUPPORTS_FP8 or IS_WINDOWS, f8_msg)
+    @unittest.skipIf(not _IS_SM9X, "rowwise implementation is currently sm90 specific")
     @skipIfRocm()
     @parametrize("use_fast_accum", [True, False])
     def test_float8_rowwise_scaling_sanity(self, device, use_fast_accum: bool) -> None:
@@ -566,8 +571,8 @@ class TestFP8MatmulCuda(TestCase):
         x = torch.full((M, K), fill_value, device=device)
         y = torch.full((N, K), fill_value, device=device)
 
-        x_scales = torch.ones(x.shape[0], device=device, dtype=torch.float32)
-        y_scales = torch.ones(y.shape[0], device=device, dtype=torch.float32)
+        x_scales = torch.ones((x.shape[0], 1), device=device, dtype=torch.float32)
+        y_scales = torch.ones((1, y.shape[0]), device=device, dtype=torch.float32)
 
         x_fp8 = x.to(torch.float8_e4m3fn)
         y_fp8 = y.to(torch.float8_e4m3fn).t()
@@ -597,30 +602,36 @@ class TestFP8MatmulCuda(TestCase):
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "For row-wise scaling, scale_a must be size 1024 but got 1 and scale_b must be size 2048 but got 2",
+            re.escape(
+                "For RowWise scaling, scale_a should be (1024, 1) and scale_b "
+                "should be (1, 2048). Got scale_a.size()=(1, 1) and scale_b.size()=(1, 2)"
+            ),
         ):
             torch._scaled_mm(
                 x_fp8,
                 y_fp8,
-                scale_a=torch.ones((), device="cuda"),
-                scale_b=torch.ones((2), device="cuda"),
+                scale_a=torch.ones((1, 1), device="cuda"),
+                scale_b=torch.ones((1, 2), device="cuda"),
                 out_dtype=torch.bfloat16,
             )
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "For row-wise scaling, scale_b must have size 2048 but got 2049.",
+            re.escape(
+                " For RowWise scaling, scale_a should be (1024, 1) and scale_b "
+                "should be (1, 2048). Got scale_a.size()=(1024, 1) and scale_b.size()=(1, 2049)"
+            ),
         ):
             torch._scaled_mm(
                 x_fp8,
                 y_fp8,
-                scale_a=torch.ones((M), device="cuda"),
-                scale_b=torch.ones((N + 1), device="cuda"),
+                scale_a=torch.ones((M, 1), device="cuda"),
+                scale_b=torch.ones((1, N + 1), device="cuda"),
                 out_dtype=torch.bfloat16,
             )
         with self.assertRaisesRegex(
             RuntimeError,
-            "Both scale_a and scale_b must be 1-dimensional tensors",
+            re.escape("For non-TensorWise scaling, scale tensors must be 2-dimensional"),
         ):
             torch._scaled_mm(
                 x_fp8,
@@ -632,29 +643,32 @@ class TestFP8MatmulCuda(TestCase):
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "Both scale_a and scale_b must be contiguous.",
+            re.escape(
+                "Both scale_a and scale_b must be contiguous for RowWise scaling."
+            ),
         ):
             torch._scaled_mm(
                 x_fp8,
                 y_fp8,
-                scale_a=torch.ones((M), device="cuda"),
-                scale_b=torch.ones((N * 2), device="cuda")[::2],
+                scale_a=torch.ones((M, 1), device="cuda"),
+                scale_b=torch.ones((1, N * 2), device="cuda")[:, ::2],
                 out_dtype=torch.bfloat16,
             )
 
         with self.assertRaisesRegex(
             RuntimeError,
-            "For row-wise scaling the second input is required to be a float8_e4m3fn dtype.",
+            re.escape("Expected b.dtype() == at::kFloat8_e4m3fn to be true, but got false."),
         ):
             torch._scaled_mm(
                 x_fp8,
                 y_fp8.to(torch.float8_e5m2),
-                scale_a=torch.ones((M), device="cuda"),
-                scale_b=torch.ones((N), device="cuda"),
+                scale_a=torch.ones((M, 1), device="cuda"),
+                scale_b=torch.ones((1, N), device="cuda"),
                 out_dtype=torch.bfloat16,
             )
 
     @unittest.skipIf(not PLATFORM_SUPPORTS_FP8 or IS_WINDOWS, f8_msg)
+    @unittest.skipIf(not _IS_SM9X, "rowwise implementation is currently sm90 specific")
     @skipIfRocm()
     @parametrize("base_dtype", [torch.bfloat16])
     def test_scaled_mm_vs_emulated_row_wise(self, base_dtype):
@@ -687,6 +701,33 @@ class TestFP8MatmulCuda(TestCase):
             atol, rtol = 2e-3, 2e-3
 
         torch.testing.assert_close(out_scaled_mm, out_emulated, atol=atol, rtol=rtol)
+
+    @unittest.skipIf(not PLATFORM_SUPPORTS_FP8, f8_msg)
+    @parametrize("which_dim_zero", [0, 1, 2])
+    @parametrize("use_torch_compile", [False, True])
+    def test_zero_dim_tensorwise(self, which_dim_zero, use_torch_compile) -> None:
+        device = "cuda"
+        x_dtype, y_dtype = torch.float8_e4m3fn, torch.float8_e4m3fn
+        out_dtype = torch.bfloat16
+        M, K, N = 32, 32, 32
+        if which_dim_zero == 0:
+            M = 0
+        elif which_dim_zero == 1:
+            K = 0
+        elif which_dim_zero == 2:
+            N = 0
+
+        x_fp8 = torch.zeros(M, K, device=device).to(x_dtype)
+        y_fp8 = torch.zeros(N, K, device=device, dtype=y_dtype).t()
+        out_fp32 = torch.mm(x_fp8.to(torch.float), y_fp8.to(torch.float))
+        scale_a = torch.tensor(float('-inf'), device=device)
+        scale_b = torch.tensor(float('-inf'), device=device)
+        f = torch._scaled_mm
+        if use_torch_compile:
+            f = torch.compile(torch._scaled_mm)
+        out_fp8 = f(x_fp8, y_fp8, scale_a, scale_b, out_dtype=out_dtype)
+        self.assertEqual(out_dtype, out_fp8.dtype)
+        self.assertEqual(out_fp32, out_fp8.to(torch.float))
 
 
 @unittest.skipIf(TEST_WITH_ROCM, "ROCm doesn't support CUTLASS")

@@ -37,6 +37,7 @@ from .transformed_distribution import TransformedDistribution
 from .uniform import Uniform
 from .utils import _sum_rightmost, euler_constant as _euler_gamma
 
+
 _KL_REGISTRY: Dict[
     Tuple[Type, Type], Callable
 ] = {}  # Source of truth mapping a few general (type, type) pairs to functions.
@@ -968,4 +969,4 @@ def _add_kl_info():
         )
     kl_info = "\n\t".join(rows)
     if kl_divergence.__doc__:
-        kl_divergence.__doc__ += kl_info  # type: ignore[operator]
+        kl_divergence.__doc__ += kl_info

@@ -7,6 +7,7 @@ import sympy
 
 import torch
 import torch.fx
+from torch._dispatch.python import enable_python_dispatcher
 from torch.fx.experimental.symbolic_shapes import (
     compute_unbacked_bindings,
     rebind_unbacked,
@@ -14,7 +15,9 @@ from torch.fx.experimental.symbolic_shapes import (
     sym_eq,
 )
 from torch.utils import _pytree as pytree
+from torch.utils._ordered_set import OrderedSet
 from torch.utils._pytree import tree_map
+
 from .virtualized import V
 
 
@@ -71,8 +74,8 @@ class FakeTensorUpdater:
     fake tensors stop changing.
     """
 
-    def __init__(self, graph: torch.fx.Graph):
-        self.processed_hashes = set()
+    def __init__(self, graph: torch.fx.Graph) -> None:
+        self.processed_hashes = OrderedSet[Any]()
         self.graph = graph
 
         for node in self.graph.nodes:
@@ -83,7 +86,6 @@ class FakeTensorUpdater:
         return (node, node.target, id(node.args), id(node.kwargs))
 
     def incremental_update(self):
-        processed = set()
         existing_storages: DefaultDict[Optional[int], int] = defaultdict(int)
         for node in self.graph.nodes:
             existing_storages[get_node_storage(node)] += 1
@@ -147,7 +149,7 @@ class FakeTensorUpdater:
                 or node.target == operator.getitem
             )
 
-        to_process = set()
+        to_process = OrderedSet[int]()
         for node in self.graph.nodes:
             if (
                 self.hash_node(node) in self.processed_hashes
@@ -161,7 +163,7 @@ class FakeTensorUpdater:
             is_valid, args, kwargs = get_fake_args_kwargs(node)
             if not is_valid:
                 continue
-            with V.fake_mode:
+            with V.fake_mode, enable_python_dispatcher():
                 new_fake_tensor = node.target(*args, **kwargs)
             if "val" in node.meta and is_fake_tensor_same(
                 new_fake_tensor, node.meta["val"]

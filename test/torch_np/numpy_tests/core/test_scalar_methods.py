@@ -8,11 +8,9 @@ import functools
 import sys
 import types
 from typing import Any, Type
-
 from unittest import skipIf as skipif, SkipTest
 
 import pytest
-
 from pytest import raises as assert_raises
 
 from torch.testing._internal.common_utils import (
@@ -230,8 +228,7 @@ class TestClassGetitemMisc(TestCase):
     @skipif(sys.version_info >= (3, 9), reason="Requires python 3.8")
     @parametrize("cls", [np.number, np.complexfloating, np.int64])
     def test_class_getitem_38(self, cls: Type[np.number]) -> None:
-        match = "Type subscription requires python >= 3.9"
-        with pytest.raises(TypeError):  # , match=match):
+        with pytest.raises(TypeError):
             cls[Any]
 
 
@@ -240,7 +237,11 @@ class TestClassGetitemMisc(TestCase):
 class TestBitCount(TestCase):
     # derived in part from the cpython test "test_bit_count"
 
-    @parametrize("itype", np.sctypes["int"] + np.sctypes["uint"])
+    @parametrize(
+        "itype",
+        [np.int8, np.int16, np.int32, np.int64]
+        + [np.uint8, np.uint16, np.uint32, np.uint64],
+    )
     def test_small(self, itype):
         for a in range(max(np.iinfo(itype).min, 0), 128):
             msg = f"Smoke test for {itype}({a}).bit_count()"

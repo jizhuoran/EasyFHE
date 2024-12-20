@@ -19,10 +19,9 @@ import torch.distributed as dist
 from torch._utils import _get_device_index
 from torch.autograd import Function, Variable
 from torch.distributed.algorithms.join import Join, Joinable, JoinHook
+from torch.nn.modules import Module
+from torch.nn.parallel.scatter_gather import gather, scatter_kwargs
 from torch.utils._pytree import tree_flatten, tree_unflatten
-
-from ..modules import Module
-from .scatter_gather import gather, scatter_kwargs
 
 
 RPC_AVAILABLE = False
@@ -46,6 +45,7 @@ if dist.rpc.is_available():
 
 if TYPE_CHECKING:
     from torch.utils.hooks import RemovableHandle
+
 
 __all__ = ["DistributedDataParallel"]
 
@@ -541,6 +541,12 @@ class DistributedDataParallel(Module, Joinable):
         broadcast_buffers (bool): Flag that enables syncing (broadcasting)
                           buffers of the module at beginning of the ``forward``
                           function. (default: ``True``)
+        init_sync (bool): Whether to sync during initialization to verify param
+                          shapes and broadcast parameters and buffers.
+                          WARNING: if this is set to False the user is required
+                          to ensure themselves that the weights are the same on
+                          all ranks.
+                          (default: ``True``)
         process_group: The process group to be used for distributed data
                        all-reduction. If ``None``, the default process group, which
                        is created by :func:`torch.distributed.init_process_group`,
@@ -632,6 +638,7 @@ class DistributedDataParallel(Module, Joinable):
         output_device=None,
         dim=0,
         broadcast_buffers=True,
+        init_sync=True,
         process_group=None,
         bucket_cap_mb=None,
         find_unused_parameters=False,
@@ -645,7 +652,7 @@ class DistributedDataParallel(Module, Joinable):
     ):
         super().__init__()
         Joinable.__init__(self)
-        self.logger = None
+        self.logger: Optional[dist.Logger] = None
         if bool(delay_all_reduce_named_params is not None) != bool(
             param_to_hook_all_reduce is not None
         ):
@@ -672,7 +679,10 @@ class DistributedDataParallel(Module, Joinable):
             self.process_group = device_mesh.get_group(mesh_dim=0)
             from torch.distributed.device_mesh import _mesh_resources
 
-            if _mesh_resources.get_parent_mesh(device_mesh) is not None:
+            root_mesh = _mesh_resources.get_root_mesh(device_mesh)
+            # if a root mesh is not the same as device_mesh,
+            # meaning the device_mesh is sliced out from the root mesh.
+            if root_mesh != device_mesh:
                 # TODO: This is a temporary work around to enable DDP + TP.
                 # We should do the logic in DDP so that the 2D implementation is
                 # sound and the state_dict works out of the box.
@@ -818,17 +828,21 @@ class DistributedDataParallel(Module, Joinable):
 
         # Build parameters for reducer.
         parameters, expect_sparse_gradient = self._build_params_for_reducer()
-        # Verify model equivalence.
-        _verify_param_shape_across_processes(self.process_group, parameters)
-        # Sync params and buffers. Ensures all DDP models start off at the same value.
-        _sync_module_states(
-            module=self.module,
-            process_group=self.process_group,
-            broadcast_bucket_size=self.broadcast_bucket_size,
-            src=0,
-            params_and_buffers_to_ignore=self.parameters_to_ignore,
-            broadcast_buffers=self.broadcast_buffers,
-        )
+
+        # All collectives during initialization are gated by this flag.
+        if init_sync:
+            # Verify model equivalence.
+            _verify_param_shape_across_processes(self.process_group, parameters)
+            # Sync params and buffers. Ensures all DDP models start off at the same value.
+            _sync_module_states(
+                module=self.module,
+                process_group=self.process_group,
+                broadcast_bucket_size=self.broadcast_bucket_size,
+                src=0,
+                params_and_buffers_to_ignore=self.parameters_to_ignore,
+                broadcast_buffers=self.broadcast_buffers,
+            )
+
         # In debug mode, build a mapping of parameter index -> parameter.
         param_to_name_mapping = self._build_debug_param_to_name_mapping(parameters)
 
@@ -1207,9 +1221,11 @@ class DistributedDataParallel(Module, Joinable):
             param_to_name_mapping,
             # User can set dist._DEFAULT_FIRST_BUCKET_BYTES to tune DDP first
             # bucket.
-            dist._DEFAULT_FIRST_BUCKET_BYTES
-            if self.bucket_bytes_cap_default
-            else self.bucket_bytes_cap,
+            (
+                dist._DEFAULT_FIRST_BUCKET_BYTES
+                if self.bucket_bytes_cap_default
+                else self.bucket_bytes_cap
+            ),
         )
 
         self.logger = dist.Logger(self.reducer)
@@ -1482,7 +1498,7 @@ class DistributedDataParallel(Module, Joinable):
 
     def _should_disable_cpp_reducer(self) -> bool:
         return self._use_python_reducer and (
-            torch._utils.is_compiling() or self._force_to_disable_cpp_reducer
+            torch.compiler.is_compiling() or self._force_to_disable_cpp_reducer
         )
 
     def _pre_forward(self, *inputs, **kwargs):
@@ -1491,11 +1507,11 @@ class DistributedDataParallel(Module, Joinable):
 
         # Disable the python reducer if compiled_autograd is not enabled.
         if self._accum_grad_hooks:
-            for index, h in enumerate(self._accum_grad_hooks):
+            for h in self._accum_grad_hooks:
                 h.remove()
             self._accum_grad_hooks.clear()
 
-        if not self._lazy_init_ran and not torch._utils.is_compiling():
+        if not self._lazy_init_ran and not torch.compiler.is_compiling():
             self._lazy_init()
 
         if self._delay_all_reduce_all_params:

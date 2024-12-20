@@ -7,6 +7,7 @@ from textwrap import dedent
 from torch.package import PackageExporter, PackageImporter, sys_importer
 from torch.testing._internal.common_utils import run_tests
 
+
 try:
     from .common import PackageTestCase
 except ImportError:
@@ -14,6 +15,7 @@ except ImportError:
     from common import PackageTestCase
 
 from pathlib import Path
+
 
 packaging_directory = Path(__file__).parent
 
@@ -80,7 +82,7 @@ class TestSaveLoad(PackageTestCase):
 
         buffer.seek(0)
         hi = PackageImporter(buffer)
-        loaded_obj = hi.load_pickle("res", "obj.pkl")
+        hi.load_pickle("res", "obj.pkl")
 
         package_b = hi.import_module("package_b")
         self.assertEqual(package_b.result, "package_b")

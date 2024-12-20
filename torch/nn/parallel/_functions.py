@@ -4,8 +4,7 @@ from typing import List, Optional
 import torch
 from torch._utils import _get_device_index
 from torch.autograd import Function
-
-from . import comm
+from torch.nn.parallel import comm
 
 
 class Broadcast(Function):
@@ -17,15 +16,14 @@ class Broadcast(Function):
         target_gpus = [_get_device_index(x, True) for x in target_gpus]
         ctx.target_gpus = target_gpus
         if len(inputs) == 0:
-            return tuple()
+            return ()
         ctx.num_inputs = len(inputs)
         ctx.input_device = inputs[0].get_device()
         outputs = comm.broadcast_coalesced(inputs, ctx.target_gpus)
         non_differentiables = []
         for idx, input_requires_grad in enumerate(ctx.needs_input_grad[1:]):
             if not input_requires_grad:
-                for output in outputs:
-                    non_differentiables.append(output[idx])
+                non_differentiables.extend(output[idx] for output in outputs)
         ctx.mark_non_differentiable(*non_differentiables)
         return tuple([t for tensors in outputs for t in tensors])
 

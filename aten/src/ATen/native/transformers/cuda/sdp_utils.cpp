@@ -25,7 +25,10 @@
 #include <c10/util/string_view.h>
 
 #if USE_ROCM
+#if defined(USE_FLASH_ATTENTION) || defined(USE_MEM_EFF_ATTENTION)
 #include <aotriton/flash.h>
+#define USE_AOTRITON 1
+#endif
 #endif
 
 /**
@@ -53,9 +56,18 @@ namespace {
 // TODO(eqy): more benchmarking to determine whether this should include sm86/89
 // Needs to be kept in-sync with test_fused_chocie in test_transformers.py
 bool check_prefer_cudnn_attention() {
-#if defined(CUDNN_VERSION) && CUDNN_VERSION >= 90000
+  // TODO(eqy): Re-enable by default after upgrading to a release later than 9.5.0
+  // see context: https://github.com/pytorch/pytorch/issues/138340
+  // return false;
+#if defined(CUDNN_VERSION)
+
+#if CUDNN_VERSION > 90000
   auto dprops = at::cuda::getCurrentDeviceProperties();
   return dprops->major >= 9;
+#else
+  return false;
+#endif
+
 #else
   return false;
 #endif
@@ -63,18 +75,7 @@ bool check_prefer_cudnn_attention() {
 
 // flash_attention V2 is universally faster than efficient_attention and Math
 std::array<SDPBackend, num_backends> priority_order(sdp_params const& params) {
-  constexpr std::array<SDPBackend, num_backends> default_order{
-      SDPBackend::flash_attention,
-      SDPBackend::cudnn_attention,
-      SDPBackend::efficient_attention,
-      SDPBackend::math};
-  constexpr std::array<SDPBackend, num_backends> cudnn_order{
-      SDPBackend::cudnn_attention,
-      SDPBackend::flash_attention,
-      SDPBackend::efficient_attention,
-      SDPBackend::math};
-  static const bool prefer_cudnn = check_prefer_cudnn_attention();
-  return prefer_cudnn ? cudnn_order : default_order;
+  return at::globalContext().sDPPriorityOrder();
 }
 
 bool use_tensor_cores(sdp_params const& params, cudaDeviceProp* dprops, bool is_half) {
@@ -102,6 +103,10 @@ int64_t minimum_gemm_alignment(sdp_params const& params) {
   return matmul_alignment_mn;
 }
 
+// On ROCM, ME and FA share the backend, and hence they share the checking
+// function for fundamental limitations by the GPU kernel
+// caller_is_meff is added to make the TORCH_WARN message showing the correct result
+template<bool caller_is_meff = false>
 bool check_head_dim_size_flash(sdp_params const& params, bool debug) {
   // All head_dim sizes must be equal and less than 256
   const auto max_size = c10::SymInt(256);
@@ -113,7 +118,8 @@ bool check_head_dim_size_flash(sdp_params const& params, bool debug) {
   if (!(same_head_dim_size && (query_size_last <= max_size))) {
     if (debug) {
       TORCH_WARN(
-          "Flash attention requires q,k,v to have the same last dimension and to be less than or equal to 256.",
+          caller_is_meff ? "Efficient attention on ROCM" : "Flash attention",
+          " requires q,k,v to have the same last dimension and to be less than or equal to 256.",
           " Got Query.size(-1): ",
           query_size_last,
           ", Key.size(-1): ",
@@ -127,6 +133,8 @@ bool check_head_dim_size_flash(sdp_params const& params, bool debug) {
   return true;
 }
 
+// See check_head_dim_size_flash above for the purpose of caller_is_meff
+template<bool caller_is_meff = false>
 bool check_head_dim_size_flash_nested(sdp_params const& params, bool debug) {
   const auto max_size = c10::SymInt(256);
   const auto query_size_last = params.query.sym_size(-1);
@@ -138,7 +146,9 @@ bool check_head_dim_size_flash_nested(sdp_params const& params, bool debug) {
         (query_size_last <= max_size))) {
     if (debug) {
       TORCH_WARN(
-          "For NestedTensor inputs, Flash attention requires q,k,v to have the same last dimension and to be a multiple of 8 and less than or equal to 256.",
+          "For NestedTensor inputs,",
+          caller_is_meff ? " Efficient attention on ROCM " : " Flash attention",
+          " requires q,k,v to have the same last dimension and to be a multiple of 8 and less than or equal to 256.",
           " Got Query.size(-1): ",
           query_size_last,
           ", Key.size(-1): ",
@@ -208,6 +218,7 @@ bool check_flash_attention_hardware_support(sdp_params const& params, bool debug
   using sm80 = SMVersion<8, 0>;
   using sm90 = SMVersion<9, 0>;
 #if USE_ROCM
+#if USE_AOTRITON
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   if (hipSuccess != aotriton::v2::flash::check_gpu(stream)) {
       auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -217,6 +228,9 @@ bool check_flash_attention_hardware_support(sdp_params const& params, bool debug
       }
       return false;
   }
+#else
+  return false;
+#endif
 #else
   auto dprops = at::cuda::getCurrentDeviceProperties();
   if (!check_sm_version<sm80, sm90>(dprops)) {
@@ -239,6 +253,7 @@ bool check_mem_efficient_hardware_support(sdp_params const& params, bool debug) 
   using sm50 = SMVersion<5, 0>;
   using sm90 = SMVersion<9, 0>;
 #if USE_ROCM
+#if USE_AOTRITON
   auto stream = at::cuda::getCurrentCUDAStream().stream();
   if (hipSuccess != aotriton::v2::flash::check_gpu(stream)) {
       auto dprops = at::cuda::getCurrentDeviceProperties();
@@ -248,6 +263,9 @@ bool check_mem_efficient_hardware_support(sdp_params const& params, bool debug) 
       }
       return false;
   }
+#else
+  return false;
+#endif
 #else
   auto dprops = at::cuda::getCurrentDeviceProperties();
   if (!check_sm_version<sm50, sm90>(dprops)) {
@@ -339,31 +357,34 @@ bool check_cudnn_tensor_shapes(sdp_params const& params, bool debug) {
   const auto d_qk = params.query.sym_size(3);
   const auto d_v = params.value.sym_size(3);
   long cudnn_version = at::detail::getCUDAHooks().versionCuDNN();
-  if (d_qk % 8 != 0 || d_v % 8 != 0) {
-    if (debug) {
-      TORCH_WARN("head_dim should be a multiple of 8");
-    }
-    return false;
-  }
-  auto head_dim_limit = 128;
-  auto dprops = at::cuda::getCurrentDeviceProperties();
-  auto sm90orabove = dprops->major >= 9;
-  head_dim_limit = cudnn_version >= 90000 && sm90orabove ? 256 : head_dim_limit;
-  if (d_qk > head_dim_limit || d_v > head_dim_limit) {
-    if (debug) {
-      TORCH_WARN("head_dim should be no more than ", head_dim_limit);
-    }
-    return false;
-  }
   if (cudnn_version < 8903) {
     if (debug) {
       TORCH_WARN("SDPA fprop requires cudnn 8.9.3 or higher");
     }
     return false;
   }
-  if (params.dropout != 0.0 && cudnn_version < 8906) {
+  if (cudnn_version < 8906 && params.dropout != 0.0) {
     if (debug) {
       TORCH_WARN("Dropout reference is only supported on 8.9.6 onwards.");
+    }
+    return false;
+  }
+  constexpr auto head_dim_limit = 128;
+  if (d_qk > head_dim_limit || d_v > head_dim_limit) {
+    if (debug) {
+      TORCH_WARN("head_dim should be no more than ", head_dim_limit);
+    }
+    return false;
+  }
+  if (d_qk % 8 != 0 || d_v % 8 != 0) {
+    if (debug) {
+      TORCH_WARN("head_dim should be a multiple of 8");
+    }
+    return false;
+  }
+  if (cudnn_version < 8906 && s_k % 64 != 0 ) {
+    if (debug) {
+      TORCH_WARN("not-multiple-of-64 seq_kv is not supported below 8.9.6");
     }
     return false;
   }
@@ -374,7 +395,7 @@ bool check_cudnn_tensor_shapes(sdp_params const& params, bool debug) {
       }
       return false;
     }
-    if ((s_q % 64 != 0 || s_k % 64 != 0) && params.dropout != 0.0) {
+    if (params.dropout != 0.0 && (s_q % 64 != 0 || s_k % 64 != 0)) {
       if (debug) {
         TORCH_WARN(
             "s_q not a multiple of 64 with padding/dropout is not supported with cudnn version 9.0.0");
@@ -382,9 +403,9 @@ bool check_cudnn_tensor_shapes(sdp_params const& params, bool debug) {
       return false;
     }
   }
-  if (s_k % 64 != 0 && cudnn_version < 8906) {
+  if (s_q == 1 || s_k == 1) {
     if (debug) {
-      TORCH_WARN("not-multiple-of-64 seq_kv is not supported below 8.9.6");
+      TORCH_WARN_ONCE("cudnn SDPA does not support sequence length 1.");
     }
     return false;
   }
@@ -535,7 +556,7 @@ bool can_use_cudnn_attention(const sdp_params& params, bool debug) {
 #endif
 #if defined(CUDNN_VERSION) && CUDNN_VERSION < 90000
   if (debug) {
-    TORCH_WARN(CUDNN_VERSION, "cuDNN version too old to use Flash Attention! (< v9.0.0)");
+    TORCH_WARN(CUDNN_VERSION, " cuDNN version too old to use CuDNN Attention (< v9.0.0)");
   }
   return false;
 #endif
@@ -551,9 +572,8 @@ bool can_use_cudnn_attention(const sdp_params& params, bool debug) {
           check_tensor_shapes,
           check_cudnn_tensor_shapes,
           check_cudnn_deterministic,
-          // check_is_causal,
           check_dtypes_low_precision,
-          check_for_attn_mask_cudnn,
+          check_attn_mask_shape,
           check_cudnn_hardware_support
           );
   for (auto& constraint : general_constraints) {
@@ -564,12 +584,21 @@ bool can_use_cudnn_attention(const sdp_params& params, bool debug) {
   return true;
 }
 
-bool can_use_flash_attention(sdp_params const& params, bool debug) {
-#ifndef USE_FLASH_ATTENTION
-  TORCH_WARN_ONCE(!debug, "Torch was not compiled with flash attention.");
+bool is_flash_attention_available() {
+#ifdef USE_FLASH_ATTENTION
+  return true;
+#else
   return false;
 #endif
+}
 
+bool can_use_flash_attention(sdp_params const& params, bool debug) {
+#ifndef USE_FLASH_ATTENTION
+  if (debug) {
+    TORCH_WARN("Torch was not compiled with flash attention.");
+  }
+  return false;
+#else // defined(USE_FLASH_ATTENTION)
   // Define gate functions that determine if a flash kernel can be ran
   // Replace with std::to_array when we migrate to c++20
   constexpr auto general_constraints = array_of<bool (*)(sdp_params const&, bool)>(
@@ -577,7 +606,7 @@ bool can_use_flash_attention(sdp_params const& params, bool debug) {
       check_all_tensors_on_device,
       check_tensor_shapes,
       check_for_attn_mask,
-      check_head_dim_size_flash,
+      check_head_dim_size_flash<false /*caller_is_meff*/>,
       check_flash_attention_hardware_support,
       check_requires_grad_and_head_dim_gt192_constraints_on_sm86_89,
       check_flash_causal_non_square_seqlens,
@@ -591,7 +620,7 @@ bool can_use_flash_attention(sdp_params const& params, bool debug) {
   if (has_for_nested_inputs(params)) {
     constexpr auto nested_constraints = array_of<bool (*)(sdp_params const&, bool)>(
         check_batch_size_nested,
-        check_head_dim_size_flash_nested,
+        check_head_dim_size_flash_nested<false /*caller_is_meff*/>,
         check_for_seq_len_0_nested_tensor);
     for (auto& constraint : nested_constraints) {
       if (!constraint(params, debug)) {
@@ -599,9 +628,10 @@ bool can_use_flash_attention(sdp_params const& params, bool debug) {
       }
     }
   }
+  constexpr bool backend_supports_grouped_query_attention = true;
   if (has_only_dense_inputs(params)) {
     constexpr auto dense_constraints = array_of<bool (*)(sdp_params const&, bool)>(
-        check_batch_size_and_num_heads_dense,
+        check_batch_size_and_num_heads_dense<backend_supports_grouped_query_attention>,
         check_nonzero_sequence_lengths_dense,
         check_last_dim_stride_equals_1_dense<true /*ignore_singleton_dim=*/>);
     for (auto& constraint : dense_constraints) {
@@ -611,6 +641,7 @@ bool can_use_flash_attention(sdp_params const& params, bool debug) {
     }
   }
   return true;
+#endif // defined(USE_FLASH_ATTENTION)
 }
 
 bool can_use_mem_efficient_attention(sdp_params const& params, bool debug) {
@@ -634,7 +665,12 @@ bool can_use_mem_efficient_attention(sdp_params const& params, bool debug) {
       check_all_tensors_on_device,
       check_mem_efficient_hardware_support,
       check_tensor_shapes,
-      check_head_dim_size_mem_efficient);
+#ifdef USE_ROCM
+      check_head_dim_size_flash<true /* caller_is_meff */>
+#else
+      check_head_dim_size_mem_efficient
+#endif
+  );
   for (auto& constraint : general_constraints) {
     if (!constraint(params, debug)) {
       return false;
@@ -642,12 +678,12 @@ bool can_use_mem_efficient_attention(sdp_params const& params, bool debug) {
   }
 
   if (has_for_nested_inputs(params)) {
-#ifdef USE_ROCM
-    TORCH_WARN_ONCE(false, "[ROCM] no support for nested tensors in memory efficient attention.");
-    return false;
-#endif
     constexpr auto nested_constraints = array_of<bool (*)(sdp_params const&, bool)>(
+#ifndef USE_ROCM  // ME and FA shares backend on ROCM and thus supports training
         check_requires_grad_and_nested,
+#else // Meanwhile ME on ROCM share the limits of FA about head dimensions
+        check_head_dim_size_flash_nested<true /* caller_is_meff */>,
+#endif
         check_batch_size_nested,
         check_for_seq_len_0_nested_tensor);
     for (auto& constraint : nested_constraints) {
@@ -658,9 +694,9 @@ bool can_use_mem_efficient_attention(sdp_params const& params, bool debug) {
   }
   if (has_only_dense_inputs(params)) {
     constexpr auto dense_constraints = array_of<bool (*)(sdp_params const&, bool)>(
-        check_batch_size_and_num_heads_dense,
         check_nonzero_sequence_lengths_dense,
-        check_last_dim_stride_equals_1_dense<false /*ignore_singleton_dim=*/>);
+        check_last_dim_stride_equals_1_dense<false /*ignore_singleton_dim=*/>,
+        check_batch_size_and_num_heads_dense<false /*supports_grouped_query_attention=*/>);
     for (auto& constraint : dense_constraints) {
       if (!constraint(params, debug)) {
         return false;

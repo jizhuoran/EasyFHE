@@ -9,14 +9,15 @@ Global flags for aot autograd
 """
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
+
 
 # Converts torch rng ops to their functional philox rng equivalents. Note that
 # we functionalize only CUDA rng ops today.
 functionalize_rng_ops = False
 
 # can be useful for debugging if we are incorrectly creating meta fake tensors
-fake_tensor_allow_meta = os.environ.get("FAKE_ALLOW_META", True)
+fake_tensor_allow_meta = os.environ.get("FAKE_ALLOW_META", "1") != "0"
 
 # Enables optional asserts in hotpath code to check for errors.  If
 # you are seeing weird accuracy problems, try turning this on.
@@ -24,25 +25,34 @@ fake_tensor_allow_meta = os.environ.get("FAKE_ALLOW_META", True)
 # but it is on by default for aot_eager.
 debug_assert = False
 
-debug_partitioner = os.environ.get("AOT_PARTITIONER_DEBUG", False)
-
-# Today, if you are in a situation where there is "false aliasing"
-# (e.g. you have a bunch of model parameters that all alias the same underlying buffer),
-# our checks for this situation are very slow if these inputs have dynamic shapes.
-# This config is set to ensure that there aren't too many aliased inputs in this situation,
-# so that we error loudly instead of compiling forever.
-# Eventually, we should make these checks faster.
-# For now, however, you can simply turn off dynamic shapes by marking your inputs static
-# when you run into this situation.
-_max_aliased_inputs_with_dynamic_shapes_enabled = 5
+debug_partitioner = os.environ.get("AOT_PARTITIONER_DEBUG", "0") != "0"
 
 static_weight_shapes = True
 
 # Applies CSE to the graph before partitioning
 cse = True
 
+from torch._inductor.config import is_fbcode
+
+
+enable_autograd_cache = (
+    os.environ.get("TORCHINDUCTOR_AUTOGRAD_CACHE", "0" if is_fbcode() else "1") == "1"
+)
+
+
+def remote_autograd_cache_default() -> Optional[bool]:
+    if os.environ.get("TORCHINDUCTOR_AUTOGRAD_REMOTE_CACHE") == "1":
+        return True
+    if os.environ.get("TORCHINDUCTOR_AUTOGRAD_REMOTE_CACHE") == "0":
+        return False
+    return None
+
+
+enable_remote_autograd_cache = remote_autograd_cache_default()
+
+
 # When AOTAutograd regenerates aliased graph outputs,
-# attempte to use functionalization's view-replay logic
+# attempt to use functionalization's view-replay logic
 # before falling back to the autograd engine's view replay or as_strided.
 # This can have some perf implications
 # (although for many models this will not matter).
@@ -57,8 +67,11 @@ cse = True
 # eventually: either default this config to false completely
 # once XLA pin update works,
 # or default config to true and fix relevant bugs
-from torch._inductor.config import is_fbcode
 
+
+# View replay is currently not compatible with AOTAutogradCache, since
+# FunctionalTensors are not serializable. We'll need to make them
+# serializable before enabling warm cache with this config turned on.
 view_replay_for_aliased_outputs = not is_fbcode()
 
 # Restricts the amount of computation AOTAutograd can do.
@@ -142,6 +155,11 @@ fake_tensor_allow_unsafe_data_ptr_access = True
 # tokens.
 unlift_effect_tokens = False
 
+
+# Run aot eager decomp partition with CrossRefFakeMode
+# options = False, "all", "custom_ops"
+fake_tensor_crossref = False
+
 # This mode specifies that we should also keep track of the real
 # tensor along with the fake tensor, and do real compute.  While
 # seemingly this eliminates the whole point of fake tensors, there are
@@ -172,20 +190,33 @@ unlift_effect_tokens = False
 # of tensors in question.
 fake_tensor_propagate_real_tensors = False
 
+# This controls whether we collect donated buffer. This flag must be set
+# False if a user wants to retain_graph=True for backward.
+donated_buffer = False if is_fbcode() else True
+
 # Controls the default graph output format used by draw_graph
 # Supported formats are defined here https://graphviz.org/docs/outputs/
 torch_compile_graph_format = os.environ.get("TORCH_COMPILE_GRAPH_FORMAT", "svg")
 
-enable_autograd_cache = os.environ.get("ENABLE_AOT_AUTOGRAD_CACHE", "0") == "1"
+# Valid only if fake_tensor_propagate_real_tensors = True; if a fake-real
+# kernel mismatch is detected, bypasses by making a fake kernel from the
+# real tensor outputs.
+generate_fake_kernels_from_real_mismatches = False
+
 
 # Error on BypassAOTAutogradCache instead of just a warning
 # Used for tests
 strict_autograd_cache = False
 
+# See Note [AOTAutograd Tangent Subclassness for mutated inputs]
+# TODO(ivankobzarev): Remove this config, being able to deduce it compile time.
+disable_guess_zero_tangent_for_mutated_input_subclass = False
+
 if TYPE_CHECKING:
     from torch.utils._config_typing import *  # noqa: F401, F403
 
 from torch.utils._config_module import install_config_module
+
 
 # adds patch, save_config, invalid config checks, etc
 install_config_module(sys.modules[__name__])

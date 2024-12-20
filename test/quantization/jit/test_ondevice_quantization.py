@@ -5,25 +5,19 @@ from typing import Dict
 
 import torch
 import torch._C
-
 from torch.ao.quantization import default_dynamic_qconfig, per_channel_dynamic_qconfig
-
 from torch.ao.quantization.quantize_jit import (
     _prepare_ondevice_dynamic_jit,
     _quantize_ondevice_dynamic_jit,
     convert_dynamic_jit,
     prepare_dynamic_jit,
 )
-
 from torch.jit.mobile import _load_for_lite_interpreter, LiteScriptModule
-
 from torch.testing import FileCheck
-
 from torch.testing._internal.common_quantization import (
     get_script_module,
     LinearAddModel,
 )
-
 from torch.testing._internal.common_utils import TestCase
 from torch.utils import bundled_inputs as bundled_inputs
 
@@ -40,7 +34,7 @@ class myMod(torch.nn.Module):
 
 
 class MyConvLinearModule(torch.nn.Module):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.conv = torch.nn.Conv2d(3, 5, 3)
         weight = torch.nn.Parameter(torch.ones(5, 5))
@@ -184,7 +178,6 @@ class TestOnDeviceDynamicPTQInsertObservers(TestCase):
     def test_weight_only_observers(self):
         model = MyConvLinearModule()
         qconfig_dict = {"": default_dynamic_qconfig}
-        inputs = model.get_example_inputs()
         scripted_model = OnDevicePTQUtils.insert_observers(model, qconfig_dict)
         observe_forward_graph = scripted_model.observe_forward.graph
         num_weight_only_observers = 0
@@ -385,7 +378,7 @@ class TestOnDeviceDynamicPTQFinalize(TestCase):
         thrown = False
         try:
             m(*inputs)
-        except Exception as e:
+        except Exception:
             thrown = True
         self.assertTrue(thrown)
 
@@ -405,7 +398,7 @@ class TestOnDeviceDynamicPTQFinalize(TestCase):
         thrown = False
         try:
             m(*inputs)
-        except Exception as e:
+        except Exception:
             thrown = True
         self.assertTrue(thrown)
 

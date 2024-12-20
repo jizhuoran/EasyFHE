@@ -7,6 +7,7 @@ from torch._dynamo.testing import make_test_cls_with_patches
 from torch.fx.experimental import _config as fx_config
 from torch.testing._internal.common_utils import slowTest, TEST_Z3
 
+
 try:
     from . import (
         test_aot_autograd,
@@ -27,6 +28,7 @@ except ImportError:
     import test_functions
     import test_higher_order_ops
     import test_misc
+
     import test_modules
     import test_repros
     import test_sdpa
@@ -83,11 +85,6 @@ if TEST_Z3:
         unittest.expectedFailure(
             DynamicShapesMiscTests.test_parameter_free_dynamic_shapes  # noqa: F821
         )
-
-unittest.expectedFailure(
-    # Test is only valid without dynamic shapes
-    DynamicShapesReproTests.test_many_views_with_mutation_dynamic_shapes  # noqa: F821
-)
 
 # Test takes too long ~700s as of 414a1fd29f04d06e41b7f895368dd1f83a4be29d
 DynamicShapesExportTests.test_retracibility_dynamic_shapes = slowTest(  # noqa: F821

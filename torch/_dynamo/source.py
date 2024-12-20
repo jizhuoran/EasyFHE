@@ -10,31 +10,67 @@ from . import utils
 from .bytecode_transformation import create_call_function, create_instruction
 from .utils import enum_repr
 
+
 # It shouldn't be supported to construct an NNModuleVariable inside an FSDP module,
 # so those cases are omitted intentionally
-_GUARD_SOURCE_NN_MODULE = {
-    GuardSource.LOCAL: GuardSource.LOCAL_NN_MODULE,
-    GuardSource.GLOBAL: GuardSource.GLOBAL_NN_MODULE,
-    GuardSource.LOCAL_NN_MODULE: GuardSource.LOCAL_NN_MODULE,
-    GuardSource.GLOBAL_NN_MODULE: GuardSource.GLOBAL_NN_MODULE,
+
+# represents nn.Modules tracked with NNModuleVariable (specialized is implicit in the variable name)
+_GUARD_SOURCE_SPECIALIZED_NN_MODULE = {
+    GuardSource.LOCAL: GuardSource.LOCAL_SPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL: GuardSource.GLOBAL_SPECIALIZED_NN_MODULE,
+    GuardSource.LOCAL_SPECIALIZED_NN_MODULE: GuardSource.LOCAL_SPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL_SPECIALIZED_NN_MODULE: GuardSource.GLOBAL_SPECIALIZED_NN_MODULE,
+    # Just to ensure that guard_source() works
+    GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.LOCAL_FSDP_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_FSDP_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
+}
+
+# represents nn.Modules tracked with UnspecializedNNModuleVariable
+_GUARD_SOURCE_UNSPECIALIZED_NN_MODULE = {
+    GuardSource.LOCAL: GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL: GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE,
+    # this happens for an UnspecializedNNModule submodule on a NNModuleVariable
+    GuardSource.LOCAL_SPECIALIZED_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE,
+    GuardSource.GLOBAL_SPECIALIZED_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE,
+    # Just to ensure that guard_source() works
+    GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.LOCAL_FSDP_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_FSDP_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
+}
+
+# represents nn.Modules tracked with UnspecializedBuiltinNNModuleVariable
+_GUARD_SOURCE_UNSPECIALIZED_BUILTIN_NN_MODULE = {
+    GuardSource.LOCAL: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.LOCAL_SPECIALIZED_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL_SPECIALIZED_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    # Just to ensure that guard_source() works
+    GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE,
+    GuardSource.LOCAL_FSDP_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_FSDP_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
 }
 
 _GUARD_SOURCE_FSDP_MODULE = {
     GuardSource.LOCAL: GuardSource.LOCAL_FSDP_MODULE,
     GuardSource.GLOBAL: GuardSource.GLOBAL_FSDP_MODULE,
-    GuardSource.LOCAL_NN_MODULE: GuardSource.LOCAL_FSDP_MODULE,
-    GuardSource.GLOBAL_NN_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
+    GuardSource.LOCAL_SPECIALIZED_NN_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_SPECIALIZED_NN_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
     GuardSource.LOCAL_FSDP_MODULE: GuardSource.LOCAL_FSDP_MODULE,
     GuardSource.GLOBAL_FSDP_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
-}
-
-_GUARD_SOURCE_NOT_NN_MODULE = {
-    GuardSource.LOCAL: GuardSource.LOCAL,
-    GuardSource.GLOBAL: GuardSource.GLOBAL,
-    GuardSource.LOCAL_NN_MODULE: GuardSource.LOCAL,
-    GuardSource.GLOBAL_NN_MODULE: GuardSource.GLOBAL,
-    GuardSource.LOCAL_FSDP_MODULE: GuardSource.LOCAL,
-    GuardSource.GLOBAL_FSDP_MODULE: GuardSource.GLOBAL,
+    GuardSource.LOCAL_UNSPECIALIZED_NN_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_NN_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
+    GuardSource.LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.LOCAL_FSDP_MODULE,
+    GuardSource.GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE: GuardSource.GLOBAL_FSDP_MODULE,
 }
 
 
@@ -67,10 +103,20 @@ def reconstruct_getitem(
 @dataclasses.dataclass(frozen=True)
 class LocalSource(Source):
     local_name: str
-    cell_or_freevar: bool = False
+
+    # Whether this local is an input to the root frame.
+    is_input: bool = False
+
+    # Whether the item at this source is the _content_ of a cell that is
+    # dereferenced from the root frame, i.e., it's a part of the `co_cellvars`
+    # or `co_freevars`.
+    is_derefed_cell_contents: bool = False
 
     def reconstruct(self, codegen):
-        codegen.append_output(codegen.create_load(self.local_name))
+        if self.is_derefed_cell_contents:
+            codegen.load_deref(self.local_name)
+        else:
+            codegen.append_output(codegen.create_load(self.local_name))
 
     def guard_source(self):
         return GuardSource.LOCAL
@@ -156,6 +202,11 @@ class WeakRefCallSource(ChainedSource):
 
 
 @dataclasses.dataclass(frozen=True)
+class CallFunctionNoArgsSource(WeakRefCallSource):
+    pass
+
+
+@dataclasses.dataclass(frozen=True)
 class AttrSource(ChainedSource):
     member: str
 
@@ -181,6 +232,25 @@ class AttrSource(ChainedSource):
         return f"{self.base.name()}.{self.member}"
 
 
+@dataclasses.dataclass(frozen=True)
+class LocalCellSource(Source):
+    """
+    Conceptually, this class is `LocalSource` for cell objects implicitly
+    generated by Python (e.g., captured variables).
+    """
+
+    local_name: str
+
+    def reconstruct(self, codegen):
+        # Although `LOAD_FAST` and `LOAD_CLOSURE` have the same semantics,
+        # Dynamo's bytecode transformation differentiates them slightly, so we
+        # always emit `LOAD_CLOSURE` here.
+        codegen.append_output(codegen.create_load_closure(self.local_name))
+
+    # All the other methods are intentionally unimplemented because e.g., a
+    # local cell object should never be used for guards.
+
+
 # Represents tensor.grad source. It could be represented by AttrSource as well.
 # But, we could access grad field on tensor directly in C++ without going
 # through the Python bytecodes. Therefore, we use a separate source for grad
@@ -203,7 +273,13 @@ class GradSource(ChainedSource):
 @dataclasses.dataclass(frozen=True)
 class ParamBufferSource(AttrSource):
     def guard_source(self):
-        return _GUARD_SOURCE_NN_MODULE[self.base.guard_source()]
+        return _GUARD_SOURCE_SPECIALIZED_NN_MODULE[self.base.guard_source()]
+
+
+# Special AttrSource to differentiate module._buffers or module._parameters
+@dataclasses.dataclass(frozen=True)
+class UnspecializedParamBufferSource(AttrSource):
+    pass
 
 
 # This source is intended to be used in places where a source is needed but it is expected
@@ -225,7 +301,7 @@ class EphemeralSource(Source):
     def name(self):
         return f"<ephemeral{': ' + self.desc if self.desc is not None else ''}>"
 
-    def make_guard(self):
+    def make_guard(self, fn):
         raise NotImplementedError
 
     def is_ephemeral(self):
@@ -259,15 +335,17 @@ class TensorPropertySource(ChainedSource):
             assert self.idx is not None
 
     def reconstruct(self, codegen):
-        def gen_fn():
-            self.base.reconstruct(codegen)
-            codegen.append_output(codegen.create_load_attr(self.prop.method_name()))
+        codegen.add_push_null(
+            lambda: codegen.load_import_from(
+                utils.__name__, f"call_{self.prop.method_name()}"
+            )
+        )
+        self.base.reconstruct(codegen)
 
-        codegen.add_push_null(gen_fn)
         if self.idx is not None:
             codegen.append_output(codegen.create_load_const(self.idx))
         codegen.extend_output(
-            create_call_function(1 if self.idx is not None else 0, False)
+            create_call_function(2 if self.idx is not None else 1, False)
         )
 
     def guard_source(self):
@@ -344,6 +422,17 @@ class ScriptObjectQualifiedNameSource(ChainedSource):
 
     def name(self):
         return f"{self.base.name()}._type().qualified_name()"
+
+
+class AttrProxySource(ChainedSource):
+    def reconstruct(self, codegen):
+        self.base.reconstruct(codegen)
+
+    def guard_source(self):
+        return self.base.guard_source()
+
+    def name(self):
+        return f"{self.base.name()}.get_base()"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -486,7 +575,7 @@ class ODictGetItemSource(ChainedSource):
     def reconstruct(self, codegen):
         codegen.add_push_null(
             lambda: codegen.append_output(
-                codegen._create_load_const(collections.OrderedDict.__getitem__)
+                codegen.create_load_const_unchecked(collections.OrderedDict.__getitem__)
             )
         )
         reconstruct_getitem(self, codegen, index_is_slice=False)
@@ -523,16 +612,22 @@ class NNModuleSource(ChainedSource):
         self.base.reconstruct(codegen)
 
     def guard_source(self):
-        return _GUARD_SOURCE_NN_MODULE[self.base.guard_source()]
+        return _GUARD_SOURCE_SPECIALIZED_NN_MODULE[self.base.guard_source()]
 
     def name(self):
         return self.base.name()
 
 
 @dataclasses.dataclass(frozen=True)
-class NotNNModuleSource(NNModuleSource):
+class UnspecializedNNModuleSource(NNModuleSource):
     def guard_source(self):
-        return _GUARD_SOURCE_NOT_NN_MODULE[self.base.guard_source()]
+        return _GUARD_SOURCE_UNSPECIALIZED_NN_MODULE[self.base.guard_source()]
+
+
+@dataclasses.dataclass(frozen=True)
+class UnspecializedBuiltinNNModuleSource(UnspecializedNNModuleSource):
+    def guard_source(self):
+        return _GUARD_SOURCE_UNSPECIALIZED_BUILTIN_NN_MODULE[self.base.guard_source()]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -545,6 +640,31 @@ class FSDPNNModuleSource(NNModuleSource):
 class GlobalStateSource(Source):
     def name(self):
         return ""
+
+    def guard_source(self):
+        return GuardSource.GLOBAL
+
+
+@dataclasses.dataclass(frozen=True)
+class TorchFunctionModeStackSource(Source):
+    ind: int
+
+    def name(self):
+        return f"___get_torch_function_mode_stack_at({self._get_index()})"
+
+    def _get_index(self):
+        from .variables.torch_function import TorchFunctionModeStackVariable
+
+        return TorchFunctionModeStackVariable.get_mode_index(self.ind)
+
+    def reconstruct(self, codegen):
+        codegen.add_push_null(
+            lambda: codegen.load_import_from(
+                utils.__name__, "get_torch_function_mode_stack_at"
+            )
+        )
+        codegen.extend_output([codegen.create_load_const(self._get_index())])
+        codegen.extend_output(create_call_function(1, False))
 
     def guard_source(self):
         return GuardSource.GLOBAL
@@ -631,16 +751,22 @@ class BackwardStateSource(Source):
         return GuardSource.BACKWARD_STATE
 
 
-def is_from_local_source(source: Source, *, allow_cell_or_freevar=True):
+def is_from_local_source(source: Source, *, only_allow_input=False):
     if isinstance(source, ChainedSource):
-        return is_from_local_source(
-            source.base, allow_cell_or_freevar=allow_cell_or_freevar
-        )
+        return is_from_local_source(source.base, only_allow_input=only_allow_input)
     if not isinstance(source, LocalSource):
         return False
-    if not allow_cell_or_freevar and source.cell_or_freevar:
+    if only_allow_input and not source.is_input:
         return False
     return True
+
+
+def is_from_unspecialized_param_buffer_source(source: Source):
+    if isinstance(source, UnspecializedParamBufferSource):
+        return True
+    if isinstance(source, ChainedSource):
+        return is_from_unspecialized_param_buffer_source(source.base)
+    return False
 
 
 def is_from_flatten_script_object_source(source: Source):
@@ -667,7 +793,3 @@ def is_from_defaults(source: Source):
     if isinstance(source, ChainedSource):
         return is_from_defaults(source.base)
     return False
-
-
-def is_cell_contents(source: Source):
-    return isinstance(source, AttrSource) and source.member == "cell_contents"

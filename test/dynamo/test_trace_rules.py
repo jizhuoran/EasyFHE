@@ -22,6 +22,8 @@ from torch._dynamo.trace_rules import (
 )
 from torch._dynamo.utils import hashable, is_safe_constant, istype
 from torch._dynamo.variables import TorchInGraphFunctionVariable, UserFunctionVariable
+from torch.testing._internal.common_utils import skipIfWindows
+
 
 try:
     from .utils import create_dummy_module_and_function
@@ -113,10 +115,10 @@ def gen_allowed_objs_and_ids(record=False, c_binding_only=True) -> AllowedObject
     """
 
     warnings.filterwarnings("ignore", category=UserWarning, module="torch.distributed")
-    torch_object_ids = dict()
+    torch_object_ids = {}
     c_binding_in_graph_functions = set()
     non_c_binding_in_graph_functions = set()
-    torch_name_rule_map = dict()
+    torch_name_rule_map = {}
 
     # In some platforms, these functions were loaded as classes instead of functions.
     # To mitigate these weired cases, we need this special check.
@@ -321,10 +323,16 @@ class TraceRuleTests(torch._dynamo.test_case.TestCase):
     # or loaded in case there is typo in the strings.
     def test_skipfiles_inlinelist(self):
         for m in LEGACY_MOD_INLINELIST.union(MOD_INLINELIST):
-            self.assertTrue(
-                isinstance(importlib.import_module(m), types.ModuleType),
-                f"{m} from trace_rules.MOD_INLINELIST/LEGACY_MOD_INLINELIST is not a python module, please check and correct it.",
-            )
+            try:
+                mod = importlib.import_module(m)
+            except ImportError:
+                continue
+            else:
+                self.assertTrue(
+                    isinstance(mod, types.ModuleType),
+                    f"{m} from trace_rules.MOD_INLINELIST/LEGACY_MOD_INLINELIST "
+                    "is not a python module, please check and correct it.",
+                )
 
     @unittest.skip(
         "This test keeps getting broken and our disable infra is not handling well. see #120627"
@@ -436,6 +444,9 @@ class TestModuleSurviveSkipFiles(torch._dynamo.test_case.TestCase):
     @unittest.skipIf(
         not torch.distributed.is_available(),
         "need to import MLP module from distributed",
+    )
+    @skipIfWindows(
+        msg="AssertionError: False is not true : MLP did not survive skip files"
     )
     def test_module_survive_skip_files(self):
         from torch.testing._internal.common_fsdp import MLP

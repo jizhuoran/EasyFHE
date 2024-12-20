@@ -1,4 +1,5 @@
 # Owner(s): ["oncall: distributed"]
+# ruff: noqa: F841
 
 import os
 import sys
@@ -14,7 +15,7 @@ from torch.testing._internal.common_distributed import (
     requires_gloo,
     requires_nccl,
     skip_if_lt_x_gpu,
-    skip_if_rocm,
+    skip_if_rocm_multiprocess,
 )
 from torch.testing._internal.common_utils import (
     NO_MULTIPROCESSING_SPAWN,
@@ -22,6 +23,7 @@ from torch.testing._internal.common_utils import (
     skip_but_pass_in_sandcastle_if,
     TEST_WITH_DEV_DBG_ASAN,
 )
+
 
 torch.backends.cuda.matmul.allow_tf32 = False
 
@@ -111,7 +113,7 @@ if BACKEND == "gloo" or BACKEND == "nccl":
             BACKEND != "nccl", "Only nccl backend supports all_to_all_fp16"
         )
         @skip_if_lt_x_gpu(int(os.environ["WORLD_SIZE"]))
-        @skip_if_rocm
+        @skip_if_rocm_multiprocess
         def test_all_to_all_fp16(self):
             store = dist.FileStore(self.file_name, self.world_size)
             dist.init_process_group(
@@ -136,7 +138,7 @@ if BACKEND == "gloo" or BACKEND == "nccl":
             BACKEND != "nccl", "Only nccl backend supports all_to_all_fp16"
         )
         @skip_if_lt_x_gpu(int(os.environ["WORLD_SIZE"]))
-        @skip_if_rocm
+        @skip_if_rocm_multiprocess
         def test_all_to_all_bfp16(self):
             store = dist.FileStore(self.file_name, self.world_size)
             dist.init_process_group(

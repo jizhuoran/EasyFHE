@@ -4,10 +4,15 @@ import math
 import os
 import subprocess
 from pathlib import Path
-from typing import Callable, Sequence
+from typing import Callable, TYPE_CHECKING
 
-from tools.stats.import_test_stats import get_disabled_tests, get_slow_tests
+from tools.stats.import_test_stats import get_disabled_tests
 from tools.testing.test_run import ShardedTest, TestRun
+
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -41,7 +46,7 @@ if IS_ROCM and not IS_MEM_LEAK_CHECK:
         assert count > 0  # there must be at least 1 GPU
         # Limiting to 8 GPUs(PROCS)
         NUM_PROCS = min(count, 8)
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         # The safe default for ROCm GHA runners is to run tests serially.
         NUM_PROCS = 1
 
@@ -257,5 +262,4 @@ def calculate_shards(
 
 
 def get_test_case_configs(dirpath: str) -> None:
-    get_slow_tests(dirpath=dirpath)
     get_disabled_tests(dirpath=dirpath)

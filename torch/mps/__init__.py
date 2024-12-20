@@ -8,7 +8,8 @@ See https://developer.apple.com/documentation/metalperformanceshaders for more d
 from typing import Union
 
 import torch
-from .. import Tensor
+from torch import Tensor
+
 
 _is_in_bad_fork = getattr(torch._C, "_mps_is_in_bad_fork", lambda: False)
 _default_mps_generator: torch._C.Generator = None  # type: ignore[assignment]
@@ -139,8 +140,30 @@ def recommended_max_memory() -> int:
     return torch._C._mps_recommendedMaxMemory()
 
 
+def _compile_shader(source: str):
+    r"""Compiles compute shader from source and allows one to invoke kernels
+    defined there from the comfort of Python runtime
+    Example::
+
+        >>> # xdoctest: +REQUIRES(env:TORCH_DOCTEST_MPS)
+        >>> lib = torch.mps._compile_shader(
+        ... "kernel void full(device float* out, constant float& val, uint idx [[thread_position_in_grid]]) { out[idx] = val; }"
+        ...  )
+        >>> x = torch.zeros(16, device="mps")
+        >>> lib.full(x, 3.14)
+    """
+    if not hasattr(torch._C, "_mps_compileShader"):
+        raise RuntimeError("MPS is not available")
+    return torch._C._mps_compileShader(source)
+
+
+def is_available() -> bool:
+    return device_count() > 0
+
+
 from . import profiler
 from .event import Event
+
 
 __all__ = [
     "device_count",
@@ -156,4 +179,5 @@ __all__ = [
     "Event",
     "profiler",
     "recommended_max_memory",
+    "is_available",
 ]

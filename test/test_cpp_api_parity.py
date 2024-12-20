@@ -16,6 +16,7 @@ import torch
 import torch.testing._internal.common_nn as common_nn
 import torch.testing._internal.common_utils as common
 
+
 # NOTE: turn this on if you want to print source code of all C++ tests (e.g. for debugging purpose)
 PRINT_CPP_SOURCE = False
 
@@ -41,7 +42,7 @@ if not common.IS_ARM64:
         (sample_module.module_tests, common_nn.NewModuleTest),
         (sample_functional.functional_tests, common_nn.NewModuleTest),
         (common_nn.module_tests, common_nn.NewModuleTest),
-        (common_nn.new_module_tests, common_nn.NewModuleTest),
+        (common_nn.get_new_module_tests(), common_nn.NewModuleTest),
         (common_nn.criterion_tests, common_nn.CriterionTest),
     ]:
         for test_params_dict in test_params_dicts:
