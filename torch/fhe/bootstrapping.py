@@ -224,15 +224,16 @@ def eval_linear_wsum_mutable(ciphertexts, ciphertexts_num, constants, cryptoCont
 
 @profile_python_function
 def mod_down_and_equal(a, l, dl, logN):
-    ra = torch.tensor([0] * ((l - dl) << logN), dtype=torch.uint64,
-                      device="cuda").reshape((l - dl), -1)  # Create a new array of the required size
-    ra[:(l - dl)][:] = a[:(l - dl)][:]  # Copy values from a to ra
-    return ra  # Return the new array
+    # ra = torch.tensor([0] * ((l - dl) << logN), dtype=torch.uint64,
+    #                   device="cuda").reshape((l - dl), -1)  # Create a new array of the required size
+    # ra[:(l - dl)][:] = a[:(l - dl)][:]  # Copy values from a to ra
+    return a[:(l - dl)]
+      # Return the new array
 
 @profile_python_function
 def mod_down_by_and_equal(cipher: Cipher, dl, cryptoContext: Context):
-    cipher.cv[0] = mod_down_and_equal(cipher.cv[0], cipher.cur_limbs, dl, cryptoContext.logN)
-    cipher.cv[1] = mod_down_and_equal(cipher.cv[1], cipher.cur_limbs, dl, cryptoContext.logN)
+    # cipher.cv[0] = mod_down_and_equal(cipher.cv[0], cipher.cur_limbs, dl, cryptoContext.logN)
+    # cipher.cv[1] = mod_down_and_equal(cipher.cv[1], cipher.cur_limbs, dl, cryptoContext.logN)
     cipher.cur_limbs -= dl
     return cipher
 
@@ -752,8 +753,10 @@ def eval_fast_rotation_ext_add_first_true(bx, digits, curr_limbs, index, cryptoC
 
     vec_len = N
     vec = np.zeros(vec_len, dtype=np.int32)
+    start = time.time()
     vec_tensor = cryptoContext.precompute_auto_map(N, auto_index, vec)
-
+    end = time.time()
+    print(f"Precompute auto map time: {end - start}")
     cv1 = automorphism_transform(sumaxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     cv0 = automorphism_transform(sumbxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     return Cipher([cv0, cv1], curr_limbs)
@@ -801,25 +804,27 @@ def key_switch_ext(result, cipher, cipher_size, add_first, cryptoContext):
     logN = cryptoContext.logN
     K = cryptoContext.K
 
-    # Initialize result arrays to zero
-    result_bx = torch.tensor([0] * ((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1,
-                                                                                                          cryptoContext.N)
-    result_ax = torch.tensor([0] * ((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1,
-                                                                                                          cryptoContext.N)
-    result = Cipher([result_bx, result_ax], curr_limbs)
+    # # Initialize result arrays to zero
+    # result_bx = torch.tensor([0] * ((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1,
+    #                                                                                                       cryptoContext.N)
+    # result_ax = torch.tensor([0] * ((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1,
+    #                                                                                                       cryptoContext.N)
+    result = Cipher([], curr_limbs)
 
     if add_first:
-        result.cv[0] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+        cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                        cryptoContext.q_mu_cuda,
                                        curr_limbs)
 
     else:
         # If not adding the first, we ensure bx is zero-initialized
-        result.cv[0][0:curr_limbs << logN] = [0] * (curr_limbs << logN)
-    result.cv[1] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+        # result.cv[0][0:curr_limbs << logN] = [0] * (curr_limbs << logN)
+        cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+
+    cv1 = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                    cryptoContext.q_mu_cuda,
                                    curr_limbs)
-    return result
+    return Cipher([cv0, cv1], curr_limbs)
 
 @profile_python_function
 def eval_mult_ext(cipher, pt, cryptoContext):
@@ -1995,7 +2000,7 @@ def BootstrapTest_N65536L26lB44():
     logp = 59
     N = 65536
 
-    load_from_file = False
+    load_from_file = True
     if load_from_file:
         cryptoContext = load_context()
     else:
