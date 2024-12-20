@@ -63,37 +63,54 @@ def gen_crypto_context(
 
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
 
-    print("moduliQ: ", moduliQ)
-    print("rootsQ: ", rootsQ)
-    print("moduliP: ", moduliP)
-    print("rootsP: ", rootsP)
-
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-
-    cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
-    ROT_SWK = cc.GetEvalRotateKey()
+    print("MULT_SWK: ", MULT_SWK.shape)
 
     cc.EvalBootstrapKeyGen(keys.secretKey, slots)
     BOOT_KEY = cc.GetEvalBootstrapKey()
 
-    GPUFHE_Context = Context.Context(
-        logN,
-        firstMod,
-        dcrtBits,
-        AuxModSize,
-        L,
-        K,
-        moduliQ,
-        moduliP,
-        rootsQ,
-        rootsP,
-        MULT_SWK,
-        ROT_SWK,
-        BOOT_KEY
-    )
+    for slot, C2S_A, S2C_A in BOOT_KEY:
+        C2S_A = np.array(C2S_A, dtype=np.uint64)
+        S2C_A = np.array(S2C_A, dtype=np.uint64)
 
-    return parameters, cc, keys, GPUFHE_Context
+        # print("slot: ", slot)
+        # print("C2S_A: ", C2S_A.shape)
+        # print("S2C_A: ", S2C_A.shape)
+
+    # print("BOOT_KEY: ", BOOT_KEY)
+
+    cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+    ROT_SWK = cc.GetEvalRotateKey()
+
+    for index, ax, bx in ROT_SWK:
+        ax = np.array(ax, dtype=np.uint64)
+        bx = np.array(bx, dtype=np.uint64)
+
+        print("index: ", index)
+        # print("ax: ", ax.shape)
+        # print("bx: ", bx.shape)
+
+
+    return parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY
+
+    # GPUFHE_Context = Context.Context(
+    #     logN,
+    #     firstMod,
+    #     dcrtBits,
+    #     AuxModSize,
+    #     L,
+    #     K,
+    #     moduliQ,
+    #     moduliP,
+    #     rootsQ,
+    #     rootsP,
+    #     MULT_SWK,
+    #     ROT_SWK,
+    #     BOOT_KEY
+    # )
+
+    # return parameters, cc, keys, GPUFHE_Context
 
 
 def gen_rotate_keys(cc, keys, rot):
