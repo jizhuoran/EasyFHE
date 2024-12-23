@@ -11,6 +11,9 @@ class Cipher:
         self.cv = cv
         self.cur_limbs = cur_limbs
     
+    def clone(self):
+        return Cipher([x.clone() for x in self.cv], self.cur_limbs)
+
     def drop_axax(self):
         assert len(self.cv) == 3
         res, self.cv = self.cv[-1], self.cv[:-1]
