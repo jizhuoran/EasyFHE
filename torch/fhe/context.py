@@ -12,6 +12,19 @@ K_UNIFORM = 512
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
 
+def reduce_rotation(index, slots):
+    islots = int(slots)
+    index = int(index)
+
+    # if slots is a power of 2
+    if (int(slots) & int(slots - 1)) == 0:
+        n = int(math.log2(slots))
+        if index >= 0:
+            return index - ((index >> n) << n)
+        return index + islots + ((abs(index) >> n) << n)
+
+    return (islots + index % islots) % islots
+
 warnings.formatwarning = custom_warning_format
 class SecretKeyDist(Enum):
     GAUSSIAN = 0
@@ -147,6 +160,118 @@ class BsContext:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
 
+        self.compute_C2S_rot(cryptoContext)
+        self.compute_S2C_rot(cryptoContext)
+
+    def compute_C2S_rot(self, cryptoContext):
+        slots = self.slots
+
+        N = cryptoContext.N
+        M = cryptoContext.M
+        K = cryptoContext.K
+        logN = cryptoContext.logN
+        special_limbs = K
+
+        # precom = cryptoContext.BsContext
+        level_budget = self.paramsEnc.level_budget
+        layers_collapse = self.paramsEnc.layers_coll
+        rem_collapse = self.paramsEnc.layers_rem
+        num_rotations = self.paramsEnc.num_rotations
+        b = self.paramsEnc.baby_step
+        g = self.paramsEnc.giant_step
+        num_rotations_rem = self.paramsEnc.num_rotations_rem
+        b_rem = self.paramsEnc.baby_step_rem
+        g_rem = self.paramsEnc.giant_step_rem
+
+        stop = -1
+        flag_rem = 0
+
+        if rem_collapse != 0:
+            stop = 0
+            flag_rem = 1
+
+        rot_in = [[] for _ in range(level_budget)]
+        for i in range(level_budget):
+            if flag_rem == 1 and i == 0:
+                rot_in[i] = [0] * (num_rotations_rem + 1)
+            else:
+                rot_in[i] = [0] * (num_rotations + 1)
+
+        rot_out = [[] for _ in range(level_budget)]
+        for i in range(level_budget):
+            rot_out[i] = [0] * (b + b_rem)
+
+        for s in range(level_budget - 1, stop, -1):
+            for j in range(g):
+                rot_in[s][j] = reduce_rotation(
+                    (j - (num_rotations + 1) // 2 + 1) * (1 << ((s - flag_rem) * layers_collapse + rem_collapse)),
+                    slots)
+
+            for i in range(b):
+                rot_out[s][i] = reduce_rotation((g * i) * (1 << ((s - flag_rem) * layers_collapse + rem_collapse)), M // 4)
+
+        if flag_rem:
+            for j in range(g_rem):
+                rot_in[stop][j] = reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1), slots)
+
+            for i in range(b_rem):
+                rot_out[stop][i] = reduce_rotation((g_rem * i), M // 4)
+        
+        self.C2S_rot_in = rot_in
+        self.C2S_rot_out = rot_out
+
+    def compute_S2C_rot(self, cryptoContext):
+        slots = self.slots
+
+        N = cryptoContext.N
+        M = cryptoContext.M
+        K = cryptoContext.K
+        logN = cryptoContext.logN
+        special_limbs = K
+
+        # precom = cryptoContext.BsContext
+        level_budget = self.paramsDec.level_budget
+        layers_collapse = self.paramsDec.layers_coll
+        rem_collapse = self.paramsDec.layers_rem
+        num_rotations = self.paramsDec.num_rotations
+        b = self.paramsDec.baby_step
+        g = self.paramsDec.giant_step
+        num_rotations_rem = self.paramsDec.num_rotations_rem
+        b_rem = self.paramsDec.baby_step_rem
+        g_rem = self.paramsDec.giant_step_rem
+
+        flag_rem = 1 if rem_collapse != 0 else 0
+
+        rot_in = []
+        rot_out = []
+
+        for i in range(level_budget):
+            if flag_rem == 1 and i == (level_budget - 1):
+                rot_in.append(np.zeros(num_rotations_rem + 1))
+
+            else:
+                rot_in.append(np.zeros(num_rotations + 1))
+        for i in range(level_budget):
+            rot_out.append(np.zeros(b + b_rem))
+
+        for s in range(level_budget - flag_rem):
+            for j in range(g):
+                rot_in[s][j] = reduce_rotation((j - ((num_rotations + 1) / 2) + 1) * (1 << (s * layers_collapse)), M // 4)
+
+            for i in range(b):
+                rot_out[s][i] = reduce_rotation((g * i) * (1 << (s * layers_collapse)), M // 4)
+
+        if flag_rem:
+            s = level_budget - flag_rem
+            for j in range(g_rem):
+                rot_in[s][j] = reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1) * (1 << (s * layers_collapse)),
+                                            M // 4)
+
+            for i in range(b_rem):
+                rot_out[s][i] = reduce_rotation((g_rem * i) * (1 << (s * layers_collapse)), M // 4)
+
+        self.S2C_rot_in = rot_in
+        self.S2C_rot_out = rot_out
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
 
