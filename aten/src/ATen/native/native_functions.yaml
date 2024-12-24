@@ -15796,6 +15796,11 @@
 
 # Below are operations for FHE
 
+- func: set_zero(Tensor self, int N) -> Tensor
+  device_check: NoCheck
+  dispatch:
+     CUDA: set_zero_cuda
+
 - func: neg_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:

@@ -26,6 +26,8 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
         )
     ).cuda()
 
+def set_zero(x, N):
+    torch.set_zero(x, N)
 
 def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:

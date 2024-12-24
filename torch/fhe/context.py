@@ -65,6 +65,7 @@ class BsContext:
         self.paramsDec = None
         self.paramsEnc = None
         self.rescaleTech = rescaleTech
+        self.precompute_auto_map = {}
 
         # precom = scheme.precom
         if correctionFactor == 0:
@@ -162,6 +163,86 @@ class BsContext:
 
         self.compute_C2S_rot(cryptoContext)
         self.compute_S2C_rot(cryptoContext)
+
+        for key, _ in cryptoContext.left_rot_key_map.items():
+            self.precompute_auto_map[int(key)] = self.compute_auto_map(int(key), cryptoContext)
+
+        self.QplusP_map = {}
+        self.QmuplusPmu_map = {}
+        for cur_limbs in range(len(cryptoContext.moduliQ)):
+            self.QplusP_map[cur_limbs] = torch.tensor(np.concatenate((cryptoContext.moduliQ[0:cur_limbs], cryptoContext.moduliP[0:cryptoContext.K])), dtype=torch.uint64, device="cuda")
+            self.QmuplusPmu_map[cur_limbs] = torch.tensor(np.concatenate((cryptoContext.q_mu[0:cur_limbs], cryptoContext.p_mu[:cryptoContext.K])), dtype=torch.uint64, device="cuda")
+
+        #compute auto index map
+        self.auto_index = {}
+        self.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
+        for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
+            self.auto_index[(1 << step) * slots] = self.find_auto_index((1 << step) * slots, cryptoContext.N << 1)
+        for i in self.C2S_rot_in + self.C2S_rot_out + self.S2C_rot_in + self.S2C_rot_out:
+            for j in i:
+                if j not in self.auto_index:
+                    self.auto_index[j] = self.find_auto_index(j, cryptoContext.N << 1)
+
+    def find_auto_index(self, i, m):
+        def inv_mod(a, m):
+            m0, x0, x1 = m, 0, 1
+            if m == 1:
+                return 0
+            while a > 1:
+                q = a // m
+                m, a = a % m, m
+                x0, x1 = x1 - q * x0, x0
+            if x1 < 0:
+                x1 += m0
+            return x1
+
+        if i == 0:
+            return 1
+
+        # Conjugation automorphism
+        if i == m - 1:
+            return i
+
+        # Generator
+        if i < 0:
+            g0 = inv_mod(5, m)
+            g0 = (g0 * 5) % m
+        else:
+            g0 = 5
+
+        i_unsigned = abs(i)
+        g = g0
+
+        for j in range(1, int(i_unsigned)):
+            g = (g * g0) % m
+
+        return g
+
+
+    def compute_auto_map(self, k, cryptoContext):
+
+        def reverse_bits(num, num_bits):
+            """Reverses the bits of a number."""
+            rev = 0
+            for i in range(num_bits):
+                rev = (rev << 1) | (num & 1)
+                num >>= 1
+            return rev
+
+        """computes the automorphism map"""
+        n = cryptoContext.N
+        m = n << 1  # cyclOrder
+        logm = round(np.log2(m))
+        logn = round(np.log2(n))
+        res = np.zeros(n, dtype=np.int32)
+        for j in range(n):
+            j_tmp = (j << 1) + 1
+            idx = ((j_tmp * k) - (((j_tmp * k) >> logm) << logm)) >> 1
+            j_rev = reverse_bits(j, logn)
+            idx_rev = reverse_bits(idx, logn)
+            res[j_rev] = idx_rev
+
+        return torch.from_numpy(np.array(res)).cuda()
 
     def compute_C2S_rot(self, cryptoContext):
         slots = self.slots
@@ -375,8 +456,6 @@ class Context:
         self.logNh = logN - 1
         self.Nh = self.N >> 1
         self.p = 1 << logqi
-
-        self.precompute_auto_map = {}
 
         self.moduliQ = [0] * L
         self.qrVec = [0] * L
@@ -1130,29 +1209,6 @@ class Context:
             self.PModq_cuda = torch.tensor(self.PModq, dtype=torch.uint64, device="cuda")
 
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
-    def compute_auto_map(self, n, k, precomp):
-        """computes the automorphism map or return precomputed one."""
-        if int(k) in self.precompute_auto_map:
-            return self.precompute_auto_map[int(k)]
-        m = n << 1  # cyclOrder
-        logm = round(np.log2(m))
-        logn = round(np.log2(n))
-
-        for j in range(n):
-            j_tmp = (j << 1) + 1
-            idx = ((j_tmp * k) - (((j_tmp * k) >> logm) << logm)) >> 1
-            j_rev = self.reverse_bits(j, logn)
-            idx_rev = self.reverse_bits(idx, logn)
-            precomp[j_rev] = idx_rev
-
-        return torch.from_numpy(np.array(precomp)).cuda()
-    def reverse_bits(self, num, num_bits):
-        """Reverses the bits of a number."""
-        rev = 0
-        for i in range(num_bits):
-            rev = (rev << 1) | (num & 1)
-            num >>= 1
-        return rev
 
     def shoup(self, in_value, prime):
         temp = in_value << 64
