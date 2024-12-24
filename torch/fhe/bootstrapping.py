@@ -1654,10 +1654,11 @@ def BootstrapTest_N65536L26lB44():
     logp = 59
     N = 1 << logN
 
-    load_from_file = False 
+    load_from_file = True
+    using_openfhe = False
     if load_from_file:
         cryptoContext = load_context()
-    elif False:
+    elif not using_openfhe:
         moduliQ26 = np.array(
             [1152921504606584833, 576460752340123649, 576460752267509761, 576460752337502209, 576460752272228353,
             576460752331210753, 576460752273801217, 576460752329900033, 576460752279306241, 576460752329506817,
@@ -1751,7 +1752,7 @@ def BootstrapTest_N65536L26lB44():
 
             save_context(cryptoContext)
             cryptoContext = load_context()
-    else:
+    else: # using openfhe
         parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY = client.gen_crypto_context(
                 encodedLevel=0,
                 logN=logN,
@@ -1808,19 +1809,20 @@ def BootstrapTest_N65536L26lB44():
 
     eval_bootstrap_setup(cryptoContext, levelBudget, dim1, slots, 0)
 
-    # x = [(i % 11) / 100 for i in range(slots)]
-    # print(x)
-    # x = torch.tensor(x, device="cuda")
-    # cipher = client.encrypt(x, cc, keys)
-    # cipher.cv[0] = cipher.cv[0][:2]
-    # cipher.cv[1] = cipher.cv[1][:2]
-    # cipher.cur_limbs = 2
-
-    l = 2
-    cipher_cv = np.loadtxt(BS_CONST_DIR+"input_cipher.txt", dtype=np.uint64)
-    ax_cipher = torch.tensor(cipher_cv[1], dtype=torch.uint64, device="cuda").reshape([l, N])
-    bx_cipher = torch.tensor(cipher_cv[0], dtype=torch.uint64, device="cuda").reshape([l, N])
-    cipher = Cipher([ax_cipher, bx_cipher], 2)
+    if using_openfhe:
+        x = [(i % 11) / 100 for i in range(slots)]
+        print(x)
+        x = torch.tensor(x, device="cuda")
+        cipher = client.encrypt(x, cc, keys)
+        cipher.cv[0] = cipher.cv[0][:2]
+        cipher.cv[1] = cipher.cv[1][:2]
+        cipher.cur_limbs = 2
+    else:
+        l = 2
+        cipher_cv = np.loadtxt(BS_CONST_DIR+"input_cipher.txt", dtype=np.uint64)
+        ax_cipher = torch.tensor(cipher_cv[1], dtype=torch.uint64, device="cuda").reshape([l, N])
+        bx_cipher = torch.tensor(cipher_cv[0], dtype=torch.uint64, device="cuda").reshape([l, N])
+        cipher = Cipher([ax_cipher, bx_cipher], 2)
 
     result = cipher
     result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
@@ -1831,58 +1833,57 @@ def BootstrapTest_N65536L26lB44():
                             secretKeyDist=secretKeyDist, L0=L, slots=slots)
     end = time.time()
     print("time", end - start)
-
-    # # Set up the profiler
-    # with torch.profiler.profile(
-    #     activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-    #     on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
-    #     record_shapes=True,
-    #     profile_memory=True,
-    #     with_stack=True
-    # ) as profiler:
-    #     # Start profiling specific functions with torch.profiler.record_function()
-    #     result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
-    #                     secretKeyDist=secretKeyDist, L0=L, slots=slots)
-
-    # # Get the profiling results
-    # profiler_results = profiler.key_averages()
-
-    # # Print the profiling summary in a table format
-    # print(profiler_results.table(sort_by="self_cpu_time_total"))
-
-    # profiler.export_chrome_trace("log/trace.json")
-    # print(result)
-    # after_boot = client.decrypt(result, parameters, cc, keys)
-    # print(after_boot)
-    # after_boot = after_boot.cpu().numpy().reshape(-1)
-    # x = x.cpu().numpy().reshape(-1)
-    # print("diff", np.abs(after_boot - x))
-
+    
     # Print the accumulated execution times
     print("\nTotal execution time for each function:")
     sorted_execution_times = sorted(execution_times.items(), key=lambda x: x[1], reverse=True)
     for func_name, total_time in sorted_execution_times:
         print(f"{func_name}: {total_time:.6f} seconds")
 
+    pytorch_profiling = False
+    if pytorch_profiling:
+        # Set up the profiler
+        with torch.profiler.profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True
+        ) as profiler:
+            # Start profiling specific functions with torch.profiler.record_function()
+            result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
+                            secretKeyDist=secretKeyDist, L0=L, slots=slots)
 
+        # Get the profiling results
+        profiler_results = profiler.key_averages()
 
+        # Print the profiling summary in a table format
+        print(profiler_results.table(sort_by="self_cpu_time_total"))
 
-    result_answer_ax = np.loadtxt(BS_CONST_DIR+"result_ax.txt", dtype=np.uint64)
-    result_answer_bx = np.loadtxt(BS_CONST_DIR+"result_bx.txt", dtype=np.uint64)
+    if using_openfhe:
+        print(result)
+        after_boot = client.decrypt(result, parameters, cc, keys)
+        print(after_boot)
+        after_boot = after_boot.cpu().numpy().reshape(-1)
+        x = x.cpu().numpy().reshape(-1)
+        print("diff", np.abs(after_boot - x))
+    else:
+        result_answer_ax = np.loadtxt(BS_CONST_DIR+"result_ax.txt", dtype=np.uint64)
+        result_answer_bx = np.loadtxt(BS_CONST_DIR+"result_bx.txt", dtype=np.uint64)
 
-    print(result_answer_ax)
-    print(result_answer_bx)
-    print(result_answer_ax.shape)
-    print(result_answer_bx.shape)
+        print(result_answer_ax)
+        print(result_answer_bx)
+        print(result_answer_ax.shape)
+        print(result_answer_bx.shape)
 
-    result_ax = result.cv[1].cpu().numpy().reshape(-1)
-    result_bx = result.cv[0].cpu().numpy().reshape(-1)
-    # for i in range(result.cur_limbs * cryptoContext.N):
-    #     if(result_ax[i] != result_answer_ax[i]):
-    #         print(i, result_ax[i], result_answer_ax[i])
-    #         break
-    compare0 = np.array_equal(result_ax, result_answer_ax)
-    compare1 = np.array_equal(result_bx, result_answer_bx)
-    print(f"\ntest BootstrapTest_N65536L26lB44: \nresult: ")
-    print(compare0)
-    print(compare1)
+        result_ax = result.cv[1].cpu().numpy().reshape(-1)
+        result_bx = result.cv[0].cpu().numpy().reshape(-1)
+        # for i in range(result.cur_limbs * cryptoContext.N):
+        #     if(result_ax[i] != result_answer_ax[i]):
+        #         print(i, result_ax[i], result_answer_ax[i])
+        #         break
+        compare0 = np.array_equal(result_ax, result_answer_ax)
+        compare1 = np.array_equal(result_bx, result_answer_bx)
+        print(f"\ntest BootstrapTest_N65536L26lB44: \nresult: ")
+        print(compare0)
+        print(compare1)
