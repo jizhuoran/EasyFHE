@@ -1530,307 +1530,101 @@ def get_bootstrap_depth(approx_mod_depth, level_budget, secret_key_dist):
     return approx_mod_depth + level_budget[0] + level_budget[1]
 
 def save_context(cryptoContext, openfhe_context, path = "torch/fhe/data/"):
-    cryptoContext.q_mu_cuda = cryptoContext.q_mu_cuda.cpu().numpy()
-    cryptoContext.moduliQ_cuda = cryptoContext.moduliQ_cuda.cpu().numpy()
-    cryptoContext.primes = cryptoContext.primes.cpu().numpy()
-    cryptoContext.power_of_roots = cryptoContext.power_of_roots.cpu().numpy()
-    cryptoContext.power_of_roots_shoup = cryptoContext.power_of_roots_shoup.cpu().numpy()
-    cryptoContext.inverse_power_of_roots_div_two = cryptoContext.inverse_power_of_roots_div_two.cpu().numpy()
-    cryptoContext.inverse_scaled_power_of_roots_div_two = cryptoContext.inverse_scaled_power_of_roots_div_two.cpu().numpy()
-    cryptoContext.barret_k = cryptoContext.barret_k.cpu().numpy()
-    cryptoContext.barret_ratio = cryptoContext.barret_ratio.cpu().numpy()
-    cryptoContext.hat_inverse_vec_modup = cryptoContext.hat_inverse_vec_modup.cpu().numpy()
-    cryptoContext.hat_inverse_vec_shoup_modup = cryptoContext.hat_inverse_vec_shoup_modup.cpu().numpy()
-    cryptoContext.prod_q_i_mod_q_j_modup = cryptoContext.prod_q_i_mod_q_j_modup.cpu().numpy()
-    cryptoContext.hat_inverse_vec_moddown = cryptoContext.hat_inverse_vec_moddown.cpu().numpy()
-    cryptoContext.hat_inverse_vec_shoup_moddown = cryptoContext.hat_inverse_vec_shoup_moddown.cpu().numpy()
-    cryptoContext.prod_q_i_mod_q_j_moddown = cryptoContext.prod_q_i_mod_q_j_moddown.cpu().numpy()
-    cryptoContext.prod_inv_moddown = cryptoContext.prod_inv_moddown.cpu().numpy()
-    cryptoContext.prod_inv_shoup_moddown = cryptoContext.prod_inv_shoup_moddown.cpu().numpy()
-    cryptoContext.qlql_inv_mod_ql_div_ql_mod_q = cryptoContext.qlql_inv_mod_ql_div_ql_mod_q.cpu().numpy()
-    cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup = cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu().numpy()
-    cryptoContext.q_inv_mod_q = cryptoContext.q_inv_mod_q.cpu().numpy()
-    cryptoContext.q_inv_mod_q_shoup = cryptoContext.q_inv_mod_q_shoup.cpu().numpy()
-    cryptoContext.swk_bx_cuda = cryptoContext.swk_bx_cuda.cpu().numpy()
-    cryptoContext.swk_ax_cuda = cryptoContext.swk_ax_cuda.cpu().numpy()
-    cryptoContext.inner_workspace = cryptoContext.inner_workspace.cpu().numpy()
-    cryptoContext.inner_out = cryptoContext.inner_out.cpu().numpy()
-    cryptoContext.moddown_out_ax = cryptoContext.moddown_out_ax.cpu().numpy()
-    cryptoContext.moddown_out_bx = cryptoContext.moddown_out_bx.cpu().numpy()
-    cryptoContext.modup_out = cryptoContext.modup_out.cpu().numpy()
-    cryptoContext.rescale_out = cryptoContext.rescale_out.cpu().numpy()
-    cryptoContext.automorphism_transform_out = cryptoContext.automorphism_transform_out.cpu().numpy()
-    cryptoContext.switch_modulus_out = cryptoContext.switch_modulus_out.cpu().numpy()
-    cryptoContext.PModq_cuda = cryptoContext.PModq_cuda.cpu().numpy()
-
-    cryptoContext.key_map = [v.cpu().numpy() for v in cryptoContext.key_map]
-    
-    for key, value in cryptoContext.left_rot_key_map.items():
-        cryptoContext.left_rot_key_map[key] = [v.cpu().numpy() for v in value]
-
-    # Save the instance to a file
     with open(path + 'crypto.pkl', 'wb') as file:
-        pickle.dump((cryptoContext, openfhe_context.Serialize()), file)
-
-
+        pickle.dump((cryptoContext.Serialize(), openfhe_context.Serialize()), file)
 
 def load_context(path = "torch/fhe/data/"):
     with open(path + 'crypto.pkl', 'rb') as file:
-        cryptoContext, openfhe_context_str = pickle.load(file)
-
-    openfhe_context = client.OpenFHEContext.Deserialize(openfhe_context_str)
-
-    cryptoContext.q_mu_cuda = torch.tensor(cryptoContext.q_mu_cuda, dtype = torch.uint64, device = "cuda")
-    cryptoContext.moduliQ_cuda = torch.tensor(cryptoContext.moduliQ_cuda, dtype = torch.uint64, device = "cuda")
-    cryptoContext.primes = torch.tensor(cryptoContext.primes, dtype = torch.uint64, device = "cuda")
-    cryptoContext.power_of_roots = torch.tensor(cryptoContext.power_of_roots, dtype = torch.uint64, device = "cuda")
-    cryptoContext.power_of_roots_shoup = torch.tensor(cryptoContext.power_of_roots_shoup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.inverse_power_of_roots_div_two = torch.tensor(cryptoContext.inverse_power_of_roots_div_two, dtype = torch.uint64, device = "cuda")
-    cryptoContext.inverse_scaled_power_of_roots_div_two = torch.tensor(cryptoContext.inverse_scaled_power_of_roots_div_two, dtype = torch.uint64, device = "cuda")
-    cryptoContext.barret_k = torch.tensor(cryptoContext.barret_k, dtype = torch.uint64, device = "cuda")
-    cryptoContext.barret_ratio = torch.tensor(cryptoContext.barret_ratio, dtype = torch.uint64, device = "cuda")
-    cryptoContext.hat_inverse_vec_modup = torch.tensor(cryptoContext.hat_inverse_vec_modup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.hat_inverse_vec_shoup_modup = torch.tensor(cryptoContext.hat_inverse_vec_shoup_modup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.prod_q_i_mod_q_j_modup = torch.tensor(cryptoContext.prod_q_i_mod_q_j_modup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.hat_inverse_vec_moddown = torch.tensor(cryptoContext.hat_inverse_vec_moddown, dtype = torch.uint64, device = "cuda")
-    cryptoContext.hat_inverse_vec_shoup_moddown = torch.tensor(cryptoContext.hat_inverse_vec_shoup_moddown, dtype = torch.uint64, device = "cuda")
-    cryptoContext.prod_q_i_mod_q_j_moddown = torch.tensor(cryptoContext.prod_q_i_mod_q_j_moddown, dtype = torch.uint64, device = "cuda")
-    cryptoContext.prod_inv_moddown = torch.tensor(cryptoContext.prod_inv_moddown, dtype = torch.uint64, device = "cuda")
-    cryptoContext.prod_inv_shoup_moddown = torch.tensor(cryptoContext.prod_inv_shoup_moddown, dtype = torch.uint64, device = "cuda")
-    cryptoContext.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q, dtype = torch.uint64, device = "cuda")
-    cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.q_inv_mod_q = torch.tensor(cryptoContext.q_inv_mod_q, dtype = torch.uint64, device = "cuda")
-    cryptoContext.q_inv_mod_q_shoup = torch.tensor(cryptoContext.q_inv_mod_q_shoup, dtype = torch.uint64, device = "cuda")
-    cryptoContext.swk_bx_cuda = torch.tensor(cryptoContext.swk_bx_cuda, dtype = torch.uint64, device = "cuda")
-    cryptoContext.swk_ax_cuda = torch.tensor(cryptoContext.swk_ax_cuda, dtype = torch.uint64, device = "cuda")
-    cryptoContext.inner_workspace = torch.tensor(cryptoContext.inner_workspace, dtype = torch.uint64, device = "cuda")
-    cryptoContext.inner_out = torch.tensor(cryptoContext.inner_out, dtype = torch.uint64, device = "cuda")
-    cryptoContext.moddown_out_ax = torch.tensor(cryptoContext.moddown_out_ax, dtype = torch.uint64, device = "cuda")
-    cryptoContext.moddown_out_bx = torch.tensor(cryptoContext.moddown_out_bx, dtype = torch.uint64, device = "cuda")
-    cryptoContext.modup_out = torch.tensor(cryptoContext.modup_out, dtype = torch.uint64, device = "cuda")
-    cryptoContext.rescale_out = torch.tensor(cryptoContext.rescale_out, dtype = torch.uint64, device = "cuda")
-    cryptoContext.automorphism_transform_out = torch.tensor(cryptoContext.automorphism_transform_out, dtype = torch.uint64, device = "cuda")
-    cryptoContext.switch_modulus_out = torch.tensor(cryptoContext.switch_modulus_out, dtype = torch.uint64, device = "cuda")
-    cryptoContext.PModq_cuda = torch.tensor(cryptoContext.PModq_cuda, dtype = torch.uint64, device = "cuda")
-
-    cryptoContext.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in cryptoContext.key_map]
-
-    for key, value in cryptoContext.left_rot_key_map.items():
-        cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-
+        cryptoContext_byte, openfhe_context_byte = pickle.load(file)
+    openfhe_context = client.OpenFHEContext.Deserialize(openfhe_context_byte)
+    cryptoContext = Context.Deserialize(cryptoContext_byte)
     return cryptoContext, openfhe_context
 
 def BootstrapTest_N65536L26lB44():
-    logSlots = 6
-    slots = 1 << logSlots
-    levelsRemaining = 3
-    secretKeyDist = SecretKeyDist.UNIFORM_TERNARY
-    rescaleTech = ScalingTechnique.FIXEDMANUAL
-    dim1 = [0, 0]
-    levelBudget = [4, 4]
-    depth = levelsRemaining + get_bootstrap_depth(9, levelBudget, secretKeyDist)
-    L0 = depth + 1
-    dnum = 3
-    K = math.ceil(L0 * 1.0 / dnum)
-    L = L0
-    logN = 14
-    logp = 59
-    N = 1 << logN
 
-    load_from_file = False
-    using_openfhe = True
+    load_from_file = True
     if load_from_file:
         cryptoContext, openfhe_context = load_context()
     else:
-        if not using_openfhe:
-            moduliQ26 = np.array(
-                [1152921504606584833, 576460752340123649, 576460752267509761, 576460752337502209, 576460752272228353,
-                576460752331210753, 576460752273801217, 576460752329900033, 576460752279306241, 576460752329506817,
-                576460752284418049, 576460752329113601, 576460752286253057, 576460752328327169, 576460752289005569,
-                576460752325705729, 576460752289529857, 576460752321642497, 576460752289923073, 576460752319414273,
-                576460752298180609, 576460752319021057, 576460752298835969, 576460752315482113, 576460752300015617,
-                576460752308273153, ])
-            rootsQ26 = np.array([
-                18043022392882, 9864335377277, 8953348410340, 60935135015, 308940258959, 4927150527883, 1364616692108,
-                4626619421836, 5167116140063, 51256291259317, 4216999963069, 3124074488816, 13706574615761, 26898031712068,
-                12481347222717, 8161815494988, 1549889294979, 8917348739478, 4426162160102, 5029855326074, 8856820954566,
-                1072858004773, 3047882667676, 9939870822671, 1034043136987, 3760097055997])
-            moduliP9 = np.array([
-                1152921504598720513, 1152921504597016577, 1152921504595968001, 1152921504592822273, 1152921504592429057,
-                1152921504589938689, 1152921504586530817, 1152921504583647233, 1152921504581419009, ])
-            rootsP9 = np.array([
-                800790938143, 17749908910371, 11469071954203, 21482204621753, 6744827058362, 17679085976867, 19946736815584,
-                102116018653, 10353721066739, ])
+        openfhe_context, cryptoContext = client.gen_contexts(
+                logN=14,
+                logSlots=6,
+                maxLevelsRemaining=3,
+                levelBudget=[4, 4],
+                dnum=3,
+                dcrtBits=59,
+                firstMod=60,
+                approxModDepth=9,
+                rotate_index=[],
+                secretKeyDist=SecretKeyDist.UNIFORM_TERNARY,
+                rescaleTech=ScalingTechnique.FIXEDMANUAL,
+            )
 
-            keymap_key = np.loadtxt(BS_CONST_DIR+"key_map_key.txt", dtype=np.int32)
-            keymap_ax = np.loadtxt(BS_CONST_DIR+"key_map_ax.txt", dtype=np.uint64)
-            keymap_bx = np.loadtxt(BS_CONST_DIR+"key_map_bx.txt", dtype=np.uint64)
+        save_context(cryptoContext, openfhe_context)
+        cryptoContext, openfhe_context = load_context()
 
-            swk_ax = keymap_ax.reshape(dnum, L + K, N)
-            swk_bx = keymap_bx.reshape(dnum, L + K, N)
-            swk = [swk_bx, swk_ax]
+    dim1 = [0, 0]
+    cryptoContext.BsContext = BsContext(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0, cryptoContext.rescaleTech, cryptoContext.secretKeyDist)
 
-            cryptoContext = Context(logN,
-                                    60, 59, 59,
-                                    L, K,
-                                    moduliQ26, moduliP9, rootsQ26, rootsP9, swk)
+    eval_bootstrap_setup(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0)
 
-            key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
-            key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
-            cryptoContext.key_map = [key_map_bx_fixed, key_map_ax_fixed]
-
-            left_rotation_keymap_key = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key.txt", dtype=np.int64)
-            left_rotation_keymap_ax = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax.txt", dtype=np.uint64)
-            left_rotation_keymap_bx = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx.txt", dtype=np.uint64)
-            for i in range(0, left_rotation_keymap_ax.shape[0], cryptoContext.dnum):
-                # for j in range(cryptoContext.dnum):
-                ax = torch.tensor(left_rotation_keymap_ax[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                bx = torch.tensor(left_rotation_keymap_bx[i:i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key[i] / cryptoContext.dnum))] = [bx, ax]
-
-            left_rotation_keymap_key_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key_c2s.txt", dtype=np.int64)
-            left_rotation_keymap_ax_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax_c2s.txt", dtype=np.uint64)
-            left_rotation_keymap_bx_c2s = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx_c2s.txt", dtype=np.uint64)
-            for i in range(0, left_rotation_keymap_ax_c2s.shape[0], cryptoContext.dnum):
-                ax = torch.tensor(left_rotation_keymap_ax_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                bx = torch.tensor(left_rotation_keymap_bx_c2s[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                if left_rotation_keymap_key_c2s[i] in cryptoContext.left_rot_key_map.keys():
-                    if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != bx or
-                            cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_c2s[i])][0] != ax):
-                        print("errorrrrr! same key left_rotation_keymap_key_c2s", i)
-                        return
-                    else:
-                        continue
-                cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_c2s[i] / cryptoContext.dnum))] = [bx, ax]
-
-            left_rotation_keymap_key_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_key_s2c.txt", dtype=np.int64)
-            left_rotation_keymap_ax_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_ax_s2c.txt", dtype=np.uint64)
-            left_rotation_keymap_bx_s2c = np.loadtxt(BS_CONST_DIR+"leftRotKeyMap_bx_s2c.txt", dtype=np.uint64)
-            for i in range(0, left_rotation_keymap_ax_s2c.shape[0], cryptoContext.dnum):
-                ax = torch.tensor(left_rotation_keymap_ax_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                bx = torch.tensor(left_rotation_keymap_bx_s2c[i: i + cryptoContext.dnum].reshape(cryptoContext.dnum, -1, N),
-                                dtype=torch.uint64, device="cuda")
-                if left_rotation_keymap_key_s2c[i] in cryptoContext.left_rot_key_map.keys():
-                    if (cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != bx or
-                            cryptoContext.left_rot_key_map[str(left_rotation_keymap_key_s2c[i])][0] != ax):
-                        print("errorrrrr! same key left_rotation_keymap_key_s2c", i)
-                        return
-                    else:
-                        continue
-                cryptoContext.left_rot_key_map[str(int(left_rotation_keymap_key_s2c[i] / cryptoContext.dnum))] = [bx, ax]
-
-                cryptoContext.m_U0hatTPreFFT_mx = m_U0hatTPreFFT_mx.m_U0hatTPreFFT_mx
-                cryptoContext.m_U0PreFFT_mx = m_U0PreFFT_mx.m_U0PreFFT_mx
-                cryptoContext.m_U0hatTPreFFT_dim = np.array([15, 3, 3, 3])
-                cryptoContext.m_U0hatTPreFFT_limbs = np.array([31, 32, 33, 34])
-                cryptoContext.m_U0PreFFT_dim = np.array([3, 3, 3, 15])
-                cryptoContext.m_U0PreFFT_limbs = np.array([17, 16, 15, 14])
-
-                save_context(cryptoContext)
-                cryptoContext = load_context()
-
-        else: # using openfhe
-            openfhe_context, gpufhe_context = client.gen_contexts(
-                    logN=logN,
-                    logSlots=logSlots,
-                    maxLevelsRemaining=levelsRemaining,
-                    levelEnc=levelBudget[0],
-                    levelDec=levelBudget[1],
-                    dnum=dnum,
-                    dcrtBits=59,
-                    firstMod=60,
-                    approxModDepth=9,
-                    rotate_index=[]
-                )
-            
-            cryptoContext = gpufhe_context
-
-            save_context(cryptoContext, openfhe_context)
-            cryptoContext, openfhe_context = load_context()
-
-    cryptoContext.BsContext = BsContext(cryptoContext, levelBudget, dim1, slots, 0, rescaleTech, secretKeyDist)
-
-    eval_bootstrap_setup(cryptoContext, levelBudget, dim1, slots, 0)
-
-    if using_openfhe:
-        x = [(i % 11) / 100 for i in range(slots)]
-        x = torch.tensor(x, device="cuda")
-        cipher = openfhe_context.encrypt(x)
-        cipher.cv[0] = cipher.cv[0][:2]
-        cipher.cv[1] = cipher.cv[1][:2]
-        cipher.cur_limbs = 2
-    else:
-        l = 2
-        cipher_cv = np.loadtxt(BS_CONST_DIR+"input_cipher.txt", dtype=np.uint64)
-        ax_cipher = torch.tensor(cipher_cv[1], dtype=torch.uint64, device="cuda").reshape([l, N])
-        bx_cipher = torch.tensor(cipher_cv[0], dtype=torch.uint64, device="cuda").reshape([l, N])
-        cipher = Cipher([ax_cipher, bx_cipher], 2)
-
+# Test the correctness of the bootstrapping
+    x = [(i % 11) / 100 for i in range(cryptoContext.slots)]
+    x = torch.tensor(x, device="cuda")
+    cipher = openfhe_context.encrypt(x)
+    cipher.cv[0] = cipher.cv[0][:2]
+    cipher.cv[1] = cipher.cv[1][:2]
+    cipher.cur_limbs = 2
+    
     result = cipher
-    result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
-                            secretKeyDist=secretKeyDist, L0=L, slots=slots)
+    result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
+                            secretKeyDist=cryptoContext.secretKeyDist, L0=cryptoContext.L, slots=cryptoContext.slots)
 
-    start = time.time()
-    result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
-                            secretKeyDist=secretKeyDist, L0=L, slots=slots)
-    end = time.time()
-    print("time", end - start)
-
-    # Print the accumulated execution times
-    print("\nTotal execution time for each function:")
-    sorted_execution_times = sorted(execution_times.items(), key=lambda x: x[1], reverse=True)
-    for func_name, total_time in sorted_execution_times:
-        print(f"{func_name}: {total_time:.6f} seconds")
-
-    pytorch_profiling = False
-    if pytorch_profiling:
-        # Set up the profiler
-        with torch.profiler.profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
-            record_shapes=True,
-            profile_memory=True,
-            with_stack=True
-        ) as profiler:
-            # Start profiling specific functions with torch.profiler.record_function()
-            result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=rescaleTech,
-                            secretKeyDist=secretKeyDist, L0=L, slots=slots)
-
-        # Get the profiling results
-        profiler_results = profiler.key_averages()
-
-        # Print the profiling summary in a table format
-        print(profiler_results.table(sort_by="self_cpu_time_total"))
-
-    if using_openfhe:
-        print(result)
-        after_boot = openfhe_context.decrypt(result)
-        print(after_boot)
-        after_boot = after_boot.cpu().numpy().reshape(-1)
-        x = x.cpu().numpy().reshape(-1)
-        print("diff", np.abs(after_boot - x))
+    after_boot = openfhe_context.decrypt(result)
+    after_boot = after_boot.cpu().numpy().reshape(-1)
+    x = x.cpu().numpy().reshape(-1)
+    if(np.any(np.abs(after_boot - x) > 1e-3)):
+        print("Error is too large!")
+        print("Error is too large!")
+        print("Error is too large!")
     else:
-        result_answer_ax = np.loadtxt(BS_CONST_DIR+"result_ax.txt", dtype=np.uint64)
-        result_answer_bx = np.loadtxt(BS_CONST_DIR+"result_bx.txt", dtype=np.uint64)
+        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_N65536L26lB44: Test passed!")
 
-        print(result_answer_ax)
-        print(result_answer_bx)
-        print(result_answer_ax.shape)
-        print(result_answer_bx.shape)
+    measure_execution_time = False
+    if measure_execution_time:
+        start = time.time()
+        result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
+                                secretKeyDist=cryptoContext.secretKeyDist, L0=cryptoContext.L, slots=cryptoContext.slots)
+        end = time.time()
+        print("time", end - start)
 
-        result_ax = result.cv[1].cpu().numpy().reshape(-1)
-        result_bx = result.cv[0].cpu().numpy().reshape(-1)
-        # for i in range(result.cur_limbs * cryptoContext.N):
-        #     if(result_ax[i] != result_answer_ax[i]):
-        #         print(i, result_ax[i], result_answer_ax[i])
-        #         break
-        compare0 = np.array_equal(result_ax, result_answer_ax)
-        compare1 = np.array_equal(result_bx, result_answer_bx)
-        print(f"\ntest BootstrapTest_N65536L26lB44: \nresult: ")
-        print(compare0)
-        print(compare1)
+
+        # Print the accumulated execution times
+        print("\nTotal execution time for each function:")
+        sorted_execution_times = sorted(execution_times.items(), key=lambda x: x[1], reverse=True)
+        for func_name, total_time in sorted_execution_times:
+            print(f"{func_name}: {total_time:.6f} seconds")
+        
+        pytorch_profiling = False
+        if pytorch_profiling:
+            # Set up the profiler
+            with torch.profiler.profile(
+                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
+                record_shapes=True,
+                profile_memory=True,
+                with_stack=True
+            ) as profiler:
+                # Start profiling specific functions with torch.profiler.record_function()
+                result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
+                                secretKeyDist=cryptoContext.secretKeyDist, L0=cryptoContext.L, slots=cryptoContext.slots)
+
+            # Get the profiling results
+            profiler_results = profiler.key_averages()
+
+            # Print the profiling summary in a table format
+            print(profiler_results.table(sort_by="self_cpu_time_total"))
+
+    

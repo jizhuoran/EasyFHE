@@ -5,6 +5,7 @@ import math
 import random
 import warnings
 import torch
+import pickle
 from enum import Enum
 
 K_UNIFORM = 512
@@ -421,11 +422,13 @@ class Context:
     def __init__(
         self,
         logN,
+        logSlots,
         logq0,
         logqi,
         logp,
         L,
         K,
+        levelBudget,
         moduliQ=None,
         moduliP=None,
         rootsQ=None,
@@ -433,12 +436,18 @@ class Context:
         MULT_SWK=None,
         ROT_SWK=None,
         BOOT_KEY=None,
+        secretKeyDist=None,
+        rescaleTech=None,
         h=64,
         sigma=32
     ):
+        self.levelBudget = levelBudget
+        self.logSlots = logSlots
+        self.secretKeyDist = secretKeyDist
+        self.rescaleTech = rescaleTech
         self.BsContext = None
         self.logp = logp
-        self.slots = None # 固定值
+        self.slots = 1 << logSlots
         self.qVec = None
         self.left_rot_key_map = {} #{index: [ax， bx]}
         self.key_map = None
@@ -1378,3 +1387,87 @@ class Context:
 
     def method(self):  # function to initialize variables
         pass
+
+    def Serialize(self):
+        self.q_mu_cuda = self.q_mu_cuda.cpu().numpy()
+        self.moduliQ_cuda = self.moduliQ_cuda.cpu().numpy()
+        self.primes = self.primes.cpu().numpy()
+        self.power_of_roots = self.power_of_roots.cpu().numpy()
+        self.power_of_roots_shoup = self.power_of_roots_shoup.cpu().numpy()
+        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu().numpy()
+        self.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cpu().numpy()
+        self.barret_k = self.barret_k.cpu().numpy()
+        self.barret_ratio = self.barret_ratio.cpu().numpy()
+        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu().numpy()
+        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu().numpy()
+        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu().numpy()
+        self.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cpu().numpy()
+        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu().numpy()
+        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu().numpy()
+        self.prod_inv_moddown = self.prod_inv_moddown.cpu().numpy()
+        self.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cpu().numpy()
+        self.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cpu().numpy()
+        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu().numpy()
+        self.q_inv_mod_q = self.q_inv_mod_q.cpu().numpy()
+        self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cpu().numpy()
+        self.swk_bx_cuda = self.swk_bx_cuda.cpu().numpy()
+        self.swk_ax_cuda = self.swk_ax_cuda.cpu().numpy()
+        self.inner_workspace = self.inner_workspace.cpu().numpy()
+        self.inner_out = self.inner_out.cpu().numpy()
+        self.moddown_out_ax = self.moddown_out_ax.cpu().numpy()
+        self.moddown_out_bx = self.moddown_out_bx.cpu().numpy()
+        self.modup_out = self.modup_out.cpu().numpy()
+        self.rescale_out = self.rescale_out.cpu().numpy()
+        self.automorphism_transform_out = self.automorphism_transform_out.cpu().numpy()
+        self.switch_modulus_out = self.switch_modulus_out.cpu().numpy()
+        self.PModq_cuda = self.PModq_cuda.cpu().numpy()
+
+        self.key_map = [v.cpu().numpy() for v in self.key_map]
+        
+        for key, value in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [v.cpu().numpy() for v in value]
+
+        return pickle.dumps(self)
+    
+
+    def Deserialize(ctx_bytes):
+        cryptoContext = pickle.loads(ctx_bytes)
+        cryptoContext.q_mu_cuda = torch.tensor(cryptoContext.q_mu_cuda, dtype = torch.uint64, device = "cuda")
+        cryptoContext.moduliQ_cuda = torch.tensor(cryptoContext.moduliQ_cuda, dtype = torch.uint64, device = "cuda")
+        cryptoContext.primes = torch.tensor(cryptoContext.primes, dtype = torch.uint64, device = "cuda")
+        cryptoContext.power_of_roots = torch.tensor(cryptoContext.power_of_roots, dtype = torch.uint64, device = "cuda")
+        cryptoContext.power_of_roots_shoup = torch.tensor(cryptoContext.power_of_roots_shoup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.inverse_power_of_roots_div_two = torch.tensor(cryptoContext.inverse_power_of_roots_div_two, dtype = torch.uint64, device = "cuda")
+        cryptoContext.inverse_scaled_power_of_roots_div_two = torch.tensor(cryptoContext.inverse_scaled_power_of_roots_div_two, dtype = torch.uint64, device = "cuda")
+        cryptoContext.barret_k = torch.tensor(cryptoContext.barret_k, dtype = torch.uint64, device = "cuda")
+        cryptoContext.barret_ratio = torch.tensor(cryptoContext.barret_ratio, dtype = torch.uint64, device = "cuda")
+        cryptoContext.hat_inverse_vec_modup = torch.tensor(cryptoContext.hat_inverse_vec_modup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.hat_inverse_vec_shoup_modup = torch.tensor(cryptoContext.hat_inverse_vec_shoup_modup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.prod_q_i_mod_q_j_modup = torch.tensor(cryptoContext.prod_q_i_mod_q_j_modup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.hat_inverse_vec_moddown = torch.tensor(cryptoContext.hat_inverse_vec_moddown, dtype = torch.uint64, device = "cuda")
+        cryptoContext.hat_inverse_vec_shoup_moddown = torch.tensor(cryptoContext.hat_inverse_vec_shoup_moddown, dtype = torch.uint64, device = "cuda")
+        cryptoContext.prod_q_i_mod_q_j_moddown = torch.tensor(cryptoContext.prod_q_i_mod_q_j_moddown, dtype = torch.uint64, device = "cuda")
+        cryptoContext.prod_inv_moddown = torch.tensor(cryptoContext.prod_inv_moddown, dtype = torch.uint64, device = "cuda")
+        cryptoContext.prod_inv_shoup_moddown = torch.tensor(cryptoContext.prod_inv_shoup_moddown, dtype = torch.uint64, device = "cuda")
+        cryptoContext.qlql_inv_mod_ql_div_ql_mod_q = torch.tensor(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q, dtype = torch.uint64, device = "cuda")
+        cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.q_inv_mod_q = torch.tensor(cryptoContext.q_inv_mod_q, dtype = torch.uint64, device = "cuda")
+        cryptoContext.q_inv_mod_q_shoup = torch.tensor(cryptoContext.q_inv_mod_q_shoup, dtype = torch.uint64, device = "cuda")
+        cryptoContext.swk_bx_cuda = torch.tensor(cryptoContext.swk_bx_cuda, dtype = torch.uint64, device = "cuda")
+        cryptoContext.swk_ax_cuda = torch.tensor(cryptoContext.swk_ax_cuda, dtype = torch.uint64, device = "cuda")
+        cryptoContext.inner_workspace = torch.tensor(cryptoContext.inner_workspace, dtype = torch.uint64, device = "cuda")
+        cryptoContext.inner_out = torch.tensor(cryptoContext.inner_out, dtype = torch.uint64, device = "cuda")
+        cryptoContext.moddown_out_ax = torch.tensor(cryptoContext.moddown_out_ax, dtype = torch.uint64, device = "cuda")
+        cryptoContext.moddown_out_bx = torch.tensor(cryptoContext.moddown_out_bx, dtype = torch.uint64, device = "cuda")
+        cryptoContext.modup_out = torch.tensor(cryptoContext.modup_out, dtype = torch.uint64, device = "cuda")
+        cryptoContext.rescale_out = torch.tensor(cryptoContext.rescale_out, dtype = torch.uint64, device = "cuda")
+        cryptoContext.automorphism_transform_out = torch.tensor(cryptoContext.automorphism_transform_out, dtype = torch.uint64, device = "cuda")
+        cryptoContext.switch_modulus_out = torch.tensor(cryptoContext.switch_modulus_out, dtype = torch.uint64, device = "cuda")
+        cryptoContext.PModq_cuda = torch.tensor(cryptoContext.PModq_cuda, dtype = torch.uint64, device = "cuda")
+
+        cryptoContext.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in cryptoContext.key_map]
+
+        for key, value in cryptoContext.left_rot_key_map.items():
+            cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+
+        return cryptoContext

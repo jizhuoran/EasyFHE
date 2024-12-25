@@ -2,12 +2,8 @@ from . import openfhe as openfhe
 import torch
 from .. import Ciphertext as Cipher
 from .. import context as Context
-
+import pickle
 import numpy as np
-import time
-
-R_UNIFORM = 6
-
 
 class OpenFHEContext:
     def __init__(self, cc, pk, sk, depth):
@@ -22,13 +18,13 @@ class OpenFHEContext:
         public_key_bytes = openfhe.Serialize(self.publicKey, openfhe.BINARY)
         secret_key_bytes = openfhe.Serialize(self.secretKey, openfhe.BINARY)
         depth = self.depth
-        return (cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth)
+        return pickle.dumps((cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth))
 
     def Deserialize(ser):
         openfhe.ClearEvalMultKeys()
         openfhe.ReleaseAllContexts()
 
-        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth = ser
+        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth = pickle.loads(ser)
         cc = openfhe.DeserializeCryptoContextString(cc_bytes, openfhe.BINARY)
         pk = openfhe.DeserializePublicKeyString(public_key_bytes, openfhe.BINARY)
         sk = openfhe.DeserializePrivateKeyString(secret_key_bytes, openfhe.BINARY)
@@ -63,27 +59,28 @@ class OpenFHEContext:
 
 
 def gen_contexts(
-    logN=16,
-    logSlots=14,
-    maxLevelsRemaining=1,
-    levelEnc=4,
-    levelDec=4,
-    dnum=3,
-    dcrtBits=59,
-    firstMod=60,
-    approxModDepth=9,
-    rotate_index=[1, 2, 4],
-    secretKeyDist=openfhe.UNIFORM_TERNARY,
-    rescaleTech=openfhe.ScalingTechnique.FIXEDMANUAL,
+    logN,
+    logSlots,
+    maxLevelsRemaining,
+    levelBudget,
+    dnum,
+    dcrtBits,
+    firstMod,
+    approxModDepth,
+    rotate_index,
+    secretKeyDist,
+    rescaleTech
 ):
-
-    start = time.time()
 
     N = int(2**logN)
     slots = int(2**logSlots)
 
+    openfhe_secretKeyDist = openfhe.SecretKeyDist.UNIFORM_TERNARY
+    openfhe_rescaleTech = openfhe.ScalingTechnique.FIXEDMANUAL
+
+
     depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
-        approxModDepth, [levelEnc, levelDec], secretKeyDist
+        approxModDepth, levelBudget, openfhe_secretKeyDist
     )
 
     L = depth + 1  # GPUFHE: L
@@ -95,8 +92,8 @@ def gen_contexts(
     parameters.SetScalingModSize(dcrtBits)  #  logqi GPU-FHE
     parameters.SetFirstModSize(firstMod)  # logq0 GPU-FHE
     # parameters.SetAuxModSize(AuxModSize) #  logp (yhh added) GPU-FHE
-    parameters.SetScalingTechnique(rescaleTech)
-    parameters.SetSecretKeyDist(secretKeyDist)
+    parameters.SetScalingTechnique(openfhe_rescaleTech)
+    parameters.SetSecretKeyDist(openfhe_secretKeyDist)
     parameters.SetNumLargeDigits(dnum)  # dnum GPU-FHE
     parameters.SetRingDim(N)
     parameters.SetBatchSize(slots)  # ZRJI: slots
@@ -110,22 +107,15 @@ def gen_contexts(
     cc.Enable(openfhe.PKESchemeFeature.ADVANCEDSHE)
     cc.Enable(openfhe.PKESchemeFeature.FHE)
 
-    cc.EvalBootstrapSetup([levelEnc, levelDec], [0, 0], slots)
+    cc.EvalBootstrapSetup(levelBudget, [0, 0], slots)
     keys = cc.KeyGen()
 
     cc.EvalMultKeyGen(keys.secretKey)
     cc.EvalBootstrapKeyGen(keys.secretKey, slots)
     cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
 
-    stop1 = time.time()
-    print("Time to generate keys: ", stop1 - start)
-
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
-    stop2 = time.time()
-    print("Time to get moduli: ", stop2 - stop1)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    stop3 = time.time()
-    print("Time to get mult key: ", stop3 - stop2)
     BOOT_KEY = cc.GetEvalBootstrapKey()
     C2S, S2C = [], []
     C2S_dim, S2C_dim = [], []
@@ -153,20 +143,18 @@ def gen_contexts(
         "C2S_limbs": C2S_limbs,
         "S2C_limbs": S2C_limbs,
     }
-    stop4 = time.time()
-    print("Time to get boot key: ", stop4 - stop3)
     ROT_SWK = cc.GetEvalRotateKey()
-    stop5 = time.time()
-    print("Time to get rotate key: ", stop5 - stop4)
 
     openfhe_context = OpenFHEContext(cc, keys.publicKey, keys.secretKey, depth)
     gpufhe_context = Context.Context(
         logN,
+        logSlots,
         firstMod,
         dcrtBits,
         60,  # openfhe is 60 bits
         L,
         K,
+        levelBudget,
         moduliQ,
         moduliP,
         rootsQ,
@@ -174,6 +162,8 @@ def gen_contexts(
         MULT_SWK,
         ROT_SWK,
         BOOT_KEY,
+        secretKeyDist,
+        rescaleTech
     )
 
     return openfhe_context, gpufhe_context
