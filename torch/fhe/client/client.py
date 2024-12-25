@@ -34,7 +34,7 @@ class OpenFHEContext:
     def encode(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
         ptx.Encode()
-        return np.array(ptx.GetCKKSPackedValue(), dtype=np.complexfloating)
+        return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
 
     def encrypt(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
