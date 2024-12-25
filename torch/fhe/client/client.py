@@ -9,8 +9,60 @@ import time
 R_UNIFORM = 6
 
 
-def gen_crypto_context(
-    encodedLevel=0,
+class OpenFHEContext:
+    def __init__(self, cc, pk, sk, depth):
+        self.cc = cc
+        self.publicKey = pk
+        self.secretKey = sk
+        self.depth = depth
+
+    def Serialize(self):
+        cc_bytes = openfhe.Serialize(self.cc, openfhe.BINARY)
+        mul_key_bytes = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+        public_key_bytes = openfhe.Serialize(self.publicKey, openfhe.BINARY)
+        secret_key_bytes = openfhe.Serialize(self.secretKey, openfhe.BINARY)
+        depth = self.depth
+        return (cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth)
+
+    def Deserialize(ser):
+        openfhe.ClearEvalMultKeys()
+        openfhe.ReleaseAllContexts()
+
+        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth = ser
+        cc = openfhe.DeserializeCryptoContextString(cc_bytes, openfhe.BINARY)
+        pk = openfhe.DeserializePublicKeyString(public_key_bytes, openfhe.BINARY)
+        sk = openfhe.DeserializePrivateKeyString(secret_key_bytes, openfhe.BINARY)
+        openfhe.DeserializeEvalMultKeyString(mul_key_bytes, openfhe.BINARY)
+        return OpenFHEContext(cc, pk, sk, depth)
+
+    def encode(self, x):
+        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
+        ptx.Encode()
+        return np.array(ptx.GetCKKSPackedValue(), dtype=np.complexfloating)
+
+    def encrypt(self, x):
+        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
+        cipher = self.cc.Encrypt(self.publicKey, ptx)
+        data = cipher.GetVectorOfData()
+        cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
+        return Cipher.Cipher(cv, cv[0].shape[0])
+
+    def decrypt(self, x):
+        assert len(x.cv) == 2
+        ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
+        ctx = self.cc.Encrypt(self.publicKey, ptx)
+        for _ in range(self.depth + 1 - x.cur_limbs):
+            ctx = self.cc.EvalMult(ctx, ctx)
+            ctx = self.cc.Rescale(ctx)
+        data = [cv.tolist() for cv in x.cv]
+        ctx.SetVectorOfData(data, x.cur_limbs)
+        ptx = self.cc.Decrypt(ctx, self.secretKey)
+        return torch.tensor(
+            ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
+        )
+
+
+def gen_contexts(
     logN=16,
     logSlots=14,
     maxLevelsRemaining=1,
@@ -19,7 +71,6 @@ def gen_crypto_context(
     dnum=3,
     dcrtBits=59,
     firstMod=60,
-    AuxModSize=60,
     approxModDepth=9,
     rotate_index=[1, 2, 4],
     secretKeyDist=openfhe.UNIFORM_TERNARY,
@@ -27,8 +78,6 @@ def gen_crypto_context(
 ):
 
     start = time.time()
-
-    AuxModSize = 60  # OpenFHE is 60bits
 
     N = int(2**logN)
     slots = int(2**logSlots)
@@ -67,7 +116,6 @@ def gen_crypto_context(
     cc.EvalMultKeyGen(keys.secretKey)
     cc.EvalBootstrapKeyGen(keys.secretKey, slots)
     cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
-
 
     stop1 = time.time()
     print("Time to generate keys: ", stop1 - start)
@@ -110,50 +158,22 @@ def gen_crypto_context(
     ROT_SWK = cc.GetEvalRotateKey()
     stop5 = time.time()
     print("Time to get rotate key: ", stop5 - stop4)
-    
-    return parameters, cc, keys, moduliQ, moduliP, rootsQ, rootsP, MULT_SWK, ROT_SWK, BOOT_KEY
 
-    # GPUFHE_Context = Context.Context(
-    #     logN,
-    #     firstMod,
-    #     dcrtBits,
-    #     AuxModSize,
-    #     L,
-    #     K,
-    #     moduliQ,
-    #     moduliP,
-    #     rootsQ,
-    #     rootsP,
-    #     MULT_SWK,
-    #     ROT_SWK,
-    #     BOOT_KEY
-    # )
-
-    # return parameters, cc, keys, GPUFHE_Context
-
-
-def gen_rotate_keys(cc, keys, rot):
-    return cc.EvalRotateKeyGen(keys.secretKey, rot)
-
-
-def encrypt(x, cc, keys):
-    ptx = cc.MakeCKKSPackedPlaintext(x.tolist())
-    cipher = cc.Encrypt(keys.publicKey, ptx)
-    data = cipher.GetVectorOfData()
-    cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-    return Cipher.Cipher(cv, cv[0].shape[0])
-
-
-def decrypt(x, param, cc, keys):
-    assert len(x.cv) == 2
-    ptx = cc.MakeCKKSPackedPlaintext([0.0])
-    ctx = cc.Encrypt(keys.publicKey, ptx)
-    for _ in range(param.GetMultiplicativeDepth() + 1 - x.cur_limbs):
-        ctx = cc.EvalMult(ctx, ctx)
-        ctx = cc.Rescale(ctx)
-    data = [cv.tolist() for cv in x.cv]
-    ctx.SetVectorOfData(data, x.cur_limbs)
-    ptx = cc.Decrypt(ctx, keys.secretKey)
-    return torch.tensor(
-        ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
+    openfhe_context = OpenFHEContext(cc, keys.publicKey, keys.secretKey, depth)
+    gpufhe_context = Context.Context(
+        logN,
+        firstMod,
+        dcrtBits,
+        60,  # openfhe is 60 bits
+        L,
+        K,
+        moduliQ,
+        moduliP,
+        rootsQ,
+        rootsP,
+        MULT_SWK,
+        ROT_SWK,
+        BOOT_KEY,
     )
+
+    return openfhe_context, gpufhe_context

@@ -434,7 +434,7 @@ class Context:
         ROT_SWK=None,
         BOOT_KEY=None,
         h=64,
-        sigma=32,
+        sigma=32
     ):
         self.BsContext = None
         self.logp = logp
@@ -1209,6 +1209,27 @@ class Context:
             self.PModq_cuda = torch.tensor(self.PModq, dtype=torch.uint64, device="cuda")
 
             self.primes = torch.tensor(self.primes, dtype=torch.uint64, device="cuda")
+
+
+        swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
+        swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
+        
+        self.m_U0hatTPreFFT_mx = BOOT_KEY['C2S']
+        self.m_U0PreFFT_mx = BOOT_KEY['S2C']
+        self.m_U0hatTPreFFT_dim = BOOT_KEY['C2S_dim']
+        self.m_U0PreFFT_dim = BOOT_KEY['S2C_dim']
+        self.m_U0hatTPreFFT_limbs = BOOT_KEY['C2S_limbs']
+        self.m_U0PreFFT_limbs = BOOT_KEY['S2C_limbs']
+
+        key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
+        key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
+        self.key_map = [key_map_bx_fixed, key_map_ax_fixed]
+
+        for i, bx, ax in ROT_SWK:
+            self.left_rot_key_map[str(i)] = [torch.tensor(bx, dtype=torch.uint64, device="cuda").reshape(self.dnum, -1, self.N)
+                                                    ,
+                                                    torch.tensor(ax, dtype=torch.uint64, device="cuda").reshape(self.dnum, -1, self.N)]
+            
 
     def shoup(self, in_value, prime):
         temp = in_value << 64

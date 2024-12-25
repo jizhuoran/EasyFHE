@@ -1,4 +1,4 @@
-# import numpy as np
+import numpy as np
 # import time
 # from enum import Enum
 
@@ -11,9 +11,9 @@ import torch.fhe.bootstrapping as bstest
 
 # import torch.fhe.homo_ops as OP
 
-# import torch.fhe.client.client as client
+import torch.fhe.client.client as client
 
-# param, cc, key, cryptoContext = client.gen_crypto_context()
+
 # cryptoContext.moduliQ = torch.tensor(cryptoContext.moduliQ, dtype=torch.uint64, device="cuda")
 # cryptoContext.q_mu = torch.tensor(cryptoContext.q_mu, dtype=torch.uint64, device="cuda")
 #
