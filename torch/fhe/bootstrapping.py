@@ -1405,77 +1405,20 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
     precom.m_params_dec = context.BsContext.GetCollapsedFFTParams(slots, new_budget[1], dim1[1])
 
     if level_budget[0] == 1 and level_budget[1] == 1:
-        if N == 64:
-            if context.L == 18 and context.K == 6:
-                LTMatrix_Row = LTMatrix_Row_Q18P6
-                LTMatrix_Column = LTMatrix_Column_Q18P6
-                LTMatrix_mx_len = LTMatrix_mx_len_Q18P6
-
-                m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q18P6
-                m_U0Pre_limbs = m_U0Pre_limbs_Q18P6
-
-                precom.LTMatrix_Row = LTMatrix_Row_Q18P6
-                precom.LTMatrix_Column = LTMatrix_Column_Q18P6
-                precom.LTMatrix_mx_len = LTMatrix_mx_len_Q18P6
-
-                precom.m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q18P6
-                precom.m_U0Pre_limbs = m_U0Pre_limbs_Q18P6
-
-                m_U0hatTPre_mx = m_U0hatTPre_mx_Q18P6
-                m_U0Pre_mx = m_U0Pre_mx_Q18P6
-            elif context.L == 18 and context.K == 1:
-                LTMatrix_Row = LTMatrix_Row_Q18P1
-                LTMatrix_Column = LTMatrix_Column_Q18P1
-                LTMatrix_mx_len = LTMatrix_mx_len_Q18P1
-
-                m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q18P1
-                m_U0Pre_limbs = m_U0Pre_limbs_Q18P1
-
-                precom.LTMatrix_Row = LTMatrix_Row_Q18P1
-                precom.LTMatrix_Column = LTMatrix_Column_Q18P1
-                precom.LTMatrix_mx_len = LTMatrix_mx_len_Q18P1
-
-                precom.m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q18P1
-                precom.m_U0Pre_limbs = m_U0Pre_limbs_Q18P1
-
-                m_U0hatTPre_mx = m_U0hatTPre_mx_Q18P1
-                m_U0Pre_mx = m_U0Pre_mx_Q18P1
-            else:
-                raise ValueError("error! matrix for current L and K has not generated yet!\n")
-        elif N == 65536:
-            if context.L == 32 and context.K == 1:
-                LTMatrix_Row = LTMatrix_Row_Q32P1_N65536
-                LTMatrix_Column = LTMatrix_Column_Q32P1_N65536
-                LTMatrix_mx_len = LTMatrix_mx_len_Q32P1_N65536
-
-                m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q32P1_N65536
-                m_U0Pre_limbs = m_U0Pre_limbs_Q32P1_N65536
-
-                precom.LTMatrix_Row = LTMatrix_Row_Q32P1_N65536
-                precom.LTMatrix_Column = LTMatrix_Column_Q32P1_N65536
-                precom.LTMatrix_mx_len = LTMatrix_mx_len_Q32P1_N65536
-
-                precom.m_U0hatTPre_limbs = m_U0hatTPre_limbs_Q32P1_N65536
-                precom.m_U0Pre_limbs = m_U0Pre_limbs_Q32P1_N65536
-
-                m_U0hatTPre_mx = m_U0hatTPre_mx_Q32P1_N65536
-                m_U0Pre_mx = m_U0Pre_mx_Q32P1_N65536
-            else:
-                raise ValueError("error! matrix for current L and K has not generated yet!\n")
-
-        # fixme: change to on-the-fly compute
-        precom.m_U0Pre = [None] * LTMatrix_Row
-        precom.m_U0hatTPre = [None] * LTMatrix_Row
-        for i in range(LTMatrix_Row):
-            # precom.m_U0hatTPre
-            m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
-            m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
-            precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
-
-            # precom.m_U0Pre
-            m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
-            m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
-            precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
+        pass
+        # # todo: to be implemented, need to get from openfhe
+        # precom.m_U0Pre = [None] * LTMatrix_Row
+        # precom.m_U0hatTPre = [None] * LTMatrix_Row
+        # for i in range(LTMatrix_Row):
+        #     # precom.m_U0hatTPre
+        #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
+        #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
+        #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
+        #
+        #     # precom.m_U0Pre
+        #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
+        #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
+        #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
     else:
         RHScnt = 0
         precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
@@ -1566,15 +1509,14 @@ def BootstrapTest_N65536L26lB44():
 
     eval_bootstrap_setup(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0)
 
-# Test the correctness of the bootstrapping
+    # Test the correctness of the bootstrapping
     x = [(i % 11) / 100 for i in range(cryptoContext.slots)]
     x = torch.tensor(x, device="cuda")
     cipher = openfhe_context.encrypt(x)
     cipher.cv[0] = cipher.cv[0][:2]
     cipher.cv[1] = cipher.cv[1][:2]
     cipher.cur_limbs = 2
-    
-    result = cipher
+
     result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
                             secretKeyDist=cryptoContext.secretKeyDist, L0=cryptoContext.L, slots=cryptoContext.slots)
 
