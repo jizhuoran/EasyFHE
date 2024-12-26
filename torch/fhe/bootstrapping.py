@@ -5,8 +5,6 @@ from .Ciphertext import Cipher
 from .context import *
 from . import functional as F
 from . import homo_ops
-from .data import m_U0PreFFT_mx
-from .data import m_U0hatTPreFFT_mx
 import pickle
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
