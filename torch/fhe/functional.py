@@ -458,22 +458,16 @@ def cv_switch_modulus(
 def cv_mul_by_monomial(
     context_cuda: Context,
     input: Tensor,
-    qVec: Tensor,
-    tmp: Tensor,
     l: int,
     monomialDeg: int,
-    curr_limbs: int
 ) -> Tensor:
     mul_by_monomial = torch.mul_by_monomial(
-        input, 
-        qVec,
-        tmp = tmp,
+        input,
         primes = context_cuda.primes,
         l = l,
         N = context_cuda.degree,
         M = context_cuda.M,
         monomialDeg=monomialDeg,
-        curr_limbs = curr_limbs,
         level=context_cuda.level,
         inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
