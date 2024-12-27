@@ -197,3 +197,21 @@ def homo_mul_scalar_double(in0, scalar, cryptoContext):
     if scalar < 0:
         res = cipher_neg(res, cryptoContext)
     return Cipher(res.cv, in0.cur_limbs)
+
+def homo_rotate(cipher, auto_index, ctx):
+    cur_limbs = cipher.cur_limbs
+    swk = ctx.left_rot_key_map[str(auto_index)]
+    res = F.cv_keyswitch(cipher.cv[1], cur_limbs, swk[0], swk[1], ctx)
+    bxrot = F.cv_add(cipher.cv[0], res[0], ctx.moduliQ_cuda, cur_limbs)
+
+    # vec_tensor = ctx.compute_auto_map(ctx.N, auto_index, None)
+    vec_tensor = ctx.BsContext.precompute_auto_map[auto_index]
+
+    # Apply the AutomorphismTransform to ax and bx
+    cv0 = F.cv_automorphism_transform(ctx, bxrot, cur_limbs, ctx.N, auto_index, vec_tensor)
+    cv1 = F.cv_automorphism_transform(ctx, res[1], cur_limbs, ctx.N, auto_index, vec_tensor)
+
+    return Cipher([cv0, cv1], cur_limbs)
+
+def homo_conjugate(cipher, auto_index, ctx):
+    return homo_rotate(cipher, auto_index, ctx)

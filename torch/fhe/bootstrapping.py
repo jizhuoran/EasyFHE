@@ -996,53 +996,6 @@ def eval_linear_transform(A, A_len, ct, scheme):
     # TODO: to be implemented
     pass
 
-@profile_python_function
-# def conjugate_demo(cipher, cryptoContext):
-#     cur_limbs = cipher.cur_limbs
-#     N = cryptoContext.N
-#     M = N << 1
-#     logN = cryptoContext.logN
-
-#     auto_index = 2 * N - 1  # 自动映射索引
-
-#     KS_input = cipher.cv[1]
-
-#     # res_len = cur_limbs << logN
-
-#     # beta = math.ceil((cur_limbs * 1.0 / cryptoContext.K))
-#     swk = cryptoContext.left_rot_key_map[str(auto_index)]
-#     swk_bx = swk[0]#[:beta, :, :]
-#     swk_ax = swk[1]#[:beta, :, :]
-#     res = F.cv_keyswitch(KS_input, cur_limbs, swk_bx, swk_ax, cryptoContext)
-#     res_cipher = Cipher(res, cur_limbs)
-
-#     bxrot = homo_ops.cipher_add(res_cipher, cipher, cryptoContext)
-
-#     # vec_len = N
-#     # vec = np.zeros(vec_len, dtype=np.int32)
-#     vec_tensor = cryptoContext.compute_auto_map(N, auto_index, None)  # 自动映射预计算
-
-#     cv1 = automorphism_transform(res_cipher.cv[1], cur_limbs, N, auto_index, vec_tensor, cryptoContext)
-#     cv0 = automorphism_transform(bxrot.cv[0], cur_limbs, N, auto_index, vec_tensor, cryptoContext)
-#     return Cipher([cv0, cv1], cur_limbs)
-
-# @profile_python_function
-def fast_rotate_demo(cipher, auto_index, ctx):
-    cur_limbs = cipher.cur_limbs
-    swk = ctx.left_rot_key_map[str(auto_index)]
-    res = F.cv_keyswitch(cipher.cv[1], cur_limbs, swk[0], swk[1], ctx)
-    bxrot = F.cv_add(cipher.cv[0], res[0], ctx.moduliQ_cuda, cur_limbs)
-
-    # vec_tensor = ctx.compute_auto_map(ctx.N, auto_index, None)
-    vec_tensor = ctx.BsContext.precompute_auto_map[auto_index]
-
-
-    # Apply the AutomorphismTransform to ax and bx
-    cv1 = automorphism_transform(res[1], cur_limbs, ctx.N, auto_index, vec_tensor, ctx)
-    cv0 = automorphism_transform(bxrot, cur_limbs, ctx.N, auto_index, vec_tensor, ctx)
-
-    return Cipher([cv0, cv1], cur_limbs)
-
 # @profile_python_function
 def apply_double_angle_iterations(ciphertext, cryptoContext):
     # Determine r based on the scheme's secretKeyDist attribute
@@ -1124,7 +1077,6 @@ def switch_modulus_with_intt_ntt(input_tensor, l, cryptoContext):
 def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescaleTech, secretKeyDist, L0, slots):
     M = cryptoContext.M
     N = cryptoContext.N
-    logN = cryptoContext.logN
     cryptoContext.slots = slots
     precom = cryptoContext.BsContext
     bs_ctx = cryptoContext.BsContext
@@ -1171,7 +1123,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         print("CoeffsToSlots done")
 
         conj = Cipher([ctxtEnc.cv[0].clone(), ctxtEnc.cv[1].clone()], ctxtEnc.cur_limbs)
-        conj = fast_rotate_demo(conj, 2 * N - 1, cryptoContext)
+        conj = homo_ops.homo_conjugate(conj, 2 * N - 1, cryptoContext)
 
         ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.cipher_add(ctxtEnc, conj, cryptoContext)
@@ -1207,12 +1159,11 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, slots, ctxtEnc, cryptoContext)
-            # ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc.slots, ctxtEnc, cryptoContext)
 
     else:
         for step in range(int(math.log2(N // (2 * slots)))):
             auto_index = cryptoContext.BsContext.auto_index[(1 << step) * slots]
-            temp = fast_rotate_demo(raised, auto_index, cryptoContext)
+            temp = homo_ops.homo_rotate(raised, auto_index, cryptoContext)
             raised = homo_ops.cipher_add(raised, temp, cryptoContext)
         raised = homo_ops.cipher_mod_reduce(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
@@ -1222,7 +1173,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, cryptoContext.slots, raised, cryptoContext)
 
 
-        conj = fast_rotate_demo(ctxtEnc, 2 * N - 1, cryptoContext)
+        conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
         ctxtEnc = homo_ops.cipher_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
@@ -1244,13 +1195,11 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec_curr_limbs = ctxtEnc.cur_limbs - precom.paramsDec.level_budget + 1
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, slots, ctxtEnc, cryptoContext)
 
-        # ctxtDec_rot = Cipher([ctxtDec.cv[0].clone(), ctxtDec.cv[1].clone()], ctxtDec.cur_limbs)  # ctxtDec.copy()
-        # FastRotate_KeyGen(scheme.secretKey, slots, scheme)
+
         auto_index = cryptoContext.BsContext.auto_index[slots]
-        ctxtDec_rot = fast_rotate_demo(ctxtDec, auto_index, cryptoContext)
+        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, auto_index, cryptoContext)
         ctxtDec = homo_ops.cipher_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     corFactor = 1 << round(correction)
