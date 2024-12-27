@@ -225,28 +225,6 @@ def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
     return rct1, rct2
 
 # @profile_python_function
-def my_mult_and_equal(cipher0, cipher1, cryptoContext):
-    axbx1 = F.cv_add(cipher0.cv[1], cipher0.cv[0], cryptoContext.moduliQ_cuda, cipher0.cur_limbs)
-    axbx2 = F.cv_add(cipher1.cv[1], cipher1.cv[0], cryptoContext.moduliQ_cuda, cipher0.cur_limbs)
-    axbx1 = F.cv_mul(axbx1, axbx2, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, cipher0.cur_limbs)
-    bxbx = F.cv_mul(cipher0.cv[0], cipher1.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda,
-                    cipher0.cur_limbs)
-    axax = F.cv_mul(cipher0.cv[1], cipher1.cv[1], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda,
-                    cipher0.cur_limbs)
-    axbx1 = F.cv_sub(axbx1, axax, cryptoContext.moduliQ_cuda, cipher0.cur_limbs)
-    axbx1 = F.cv_sub(axbx1, bxbx, cryptoContext.moduliQ_cuda, cipher0.cur_limbs)
-
-    curr_limbs = cipher0.cur_limbs
-    beta = math.ceil((curr_limbs * 1.0 / cryptoContext.K))
-    swk_ax = cryptoContext.key_map[1][0:beta, :, :]
-    swk_bx = cryptoContext.key_map[0][0:beta, :, :]
-    res = F.cv_keyswitch(axax, curr_limbs, swk_bx, swk_ax, cryptoContext)
-
-    sumaxmult = F.cv_add(res[1], axbx1, cryptoContext.moduliQ_cuda, curr_limbs)
-    sumbxmult = F.cv_add(res[0], bxbx, cryptoContext.moduliQ_cuda, curr_limbs)
-    return Cipher([sumbxmult, sumaxmult], curr_limbs)
-
-# @profile_python_function
 def inner_eval_chebyshev_ps(coefficients, coefficients_len,
                             k, m, T, T2, cryptoContext: Context):
     # Compute k * 2^(m-1) - k
@@ -357,7 +335,7 @@ def inner_eval_chebyshev_ps(coefficients, coefficients_len,
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result, qu = check_and_adjust_level(result, qu, cryptoContext)
-    result = my_mult_and_equal(result, qu, cryptoContext)
+    result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
     result, su = check_and_adjust_level(result, su, cryptoContext)
     result = homo_ops.cipher_add(result, su, cryptoContext)
@@ -590,7 +568,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         result = homo_ops.cipher_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result, qu = check_and_adjust_level(result, qu, cryptoContext)
-    result = my_mult_and_equal(result, qu, cryptoContext)
+    result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
     result, su = check_and_adjust_level(result, su, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
