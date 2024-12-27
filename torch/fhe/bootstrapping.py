@@ -602,45 +602,39 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, index, add_first, cryptoConte
     cv1 = F.cv_automorphism_transform(sumaxmult, expand_limbs, auto_index, cryptoContext)
     return Cipher([cv0, cv1], curr_limbs)
 
-# @profile_python_function
 def key_switch_ext(cipher, cipher_size, add_first, cryptoContext):
 
     assert cipher_size == 2 # Only 2-dim ciphertexts are supported
     curr_limbs = cipher.cur_limbs
+    K = cryptoContext.K
     N = cryptoContext.N
     logN = cryptoContext.logN
-    K = cryptoContext.K
 
+    cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+    cv1 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
     if add_first:
-        cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                                       cryptoContext.q_mu_cuda,
-                                       curr_limbs)
-    else:
-        # If not adding the first, we ensure bx is zero-initialized
-        cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+        cv0[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                               cryptoContext.q_mu_cuda, curr_limbs)
 
-    cv1 = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                                   cryptoContext.q_mu_cuda,
-                                   curr_limbs)
+    cv1[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                           cryptoContext.q_mu_cuda, curr_limbs)
     return Cipher([cv0, cv1], curr_limbs)
 
-# @profile_python_function
 def eval_mult_ext(cipher, pt, cryptoContext):
     cur_limbs = cipher.cur_limbs
-    # Perform the multiplication on ax and bx components
     moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
     mu = cryptoContext.BsContext.QmuplusPmu_map[cur_limbs]
-    cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cipher.cv[0].shape[0])
-    cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cipher.cv[0].shape[0])
+    limbsExt = cur_limbs+cryptoContext.K
+    cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
+    cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
     return Cipher([cv0, cv1], cur_limbs)
-#
-# @profile_python_function
+
 def eval_add_ext(cipher0, cipher1, cryptoContext):
     assert cipher0.cur_limbs == cipher1.cur_limbs
-    cur_limbs = min(cipher0.cv[0].shape[0], cipher1.cv[0].shape[0])
+    limbsExt = cipher0.cur_limbs + cryptoContext.K
     moduli = cryptoContext.BsContext.QplusP_map[cipher0.cur_limbs]
     cv = [
-        F.cv_add(cv0, cv1, moduli, cur_limbs, inplace=True)
+        F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True)
         for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
     ]
     return Cipher(cv, cipher0.cur_limbs)
@@ -663,8 +657,6 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
 
     special_limbs = cryptoContext.K
     logN = cryptoContext.logN
-    N = cryptoContext.N
-    M = N << 1
 
     # Set up configuration
     loop_direction = config["loop_direction"]
