@@ -613,7 +613,7 @@ def reverse_bits(num, num_bits):
 
 # @profile_python_function
 def automorphism_transform(a, l, N, i, precomp_vec, cryptoContext):
-    ra = F.cv_automorphism_transform(cryptoContext, a, int(l), int(N), int(i), precomp_vec)
+    ra = F.cv_automorphism_transform(a, int(l), int(i), cryptoContext)
     return ra
 
 # @profile_python_function

@@ -416,20 +416,18 @@ def cv_rescale(
     return rescale.reshape(-1, context_cuda.N)
 
 def cv_automorphism_transform(
-    context_cuda: Context,
     input: Tensor,
     l: int,
-    N: int,
     i: int,
-    precomp_vec: Tensor
+    context_cuda: Context
 ) -> Tensor:
     automorphism_transform = torch.automorphism_transform(
         context_cuda.automorphism_transform_out,
         input,
         l=int(l),
-        N=int(N),
+        N=context_cuda.N,
         i=int(i),
-        precomp_vec=precomp_vec
+        precomp_vec=context_cuda.BsContext.precompute_auto_map[i]
     )
 
     return automorphism_transform.reshape(-1, context_cuda.N)
