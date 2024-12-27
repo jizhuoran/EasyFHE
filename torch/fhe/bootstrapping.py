@@ -617,9 +617,8 @@ def automorphism_transform(a, l, N, i, precomp_vec, cryptoContext):
     return ra
 
 # @profile_python_function
-def eval_fast_rotation_ext_add_first_true(bx, digits, curr_limbs, index, cryptoContext):
+def eval_fast_rotation_ext(bx, digits, curr_limbs, index, add_first, cryptoContext):
     N = cryptoContext.N
-    M = N << 1
     alpha = cryptoContext.K
     logN = cryptoContext.logN
     K = cryptoContext.K
@@ -635,48 +634,18 @@ def eval_fast_rotation_ext_add_first_true(bx, digits, curr_limbs, index, cryptoC
     sumaxmult, sumbxmult = eval_fast_key_switch_core_ext(digits, auto_index, cryptoContext.left_rot_key_map,
                                                          expand_length, beta, curr_limbs, cryptoContext)
 
-    cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                            cryptoContext.q_mu_cuda, curr_limbs)
+    if (add_first):
+        cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                                cryptoContext.q_mu_cuda, curr_limbs)
+        sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, curr_limbs, inplace=True)
 
-    sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, curr_limbs, inplace=True)
 
     # vec_len = N
     # vec = np.zeros(vec_len, dtype=np.int32)
     vec_tensor = cryptoContext.BsContext.precompute_auto_map[auto_index]
     # cryptoContext.compute_auto_map(N, auto_index, vec)
-    cv1 = automorphism_transform(sumaxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     cv0 = automorphism_transform(sumbxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
-    return Cipher([cv0, cv1], curr_limbs)
-
-# @profile_python_function
-def eval_fast_rotation_ext_add_first_false(digits, curr_limbs, index, cryptoContext):
-    N = cryptoContext.N
-    M = N << 1
-    alpha = cryptoContext.K
-    logN = cryptoContext.logN
-    K = cryptoContext.K
-    beta = int(np.ceil(curr_limbs / alpha))  # Calculate the beta value
-
-    # Find the automorphism index that corresponds to the rotation index.
-    auto_index = cryptoContext.BsContext.auto_index[index]
-
-    expand_limbs = curr_limbs + K
-    expand_length = expand_limbs << logN
-
-    # Inner Product
-    sum_ax_mult, sum_bx_mult = eval_fast_key_switch_core_ext(digits, auto_index,
-                                                             cryptoContext.left_rot_key_map, expand_length, beta,
-                                                             curr_limbs, cryptoContext)
-
-    # vec_len = N
-    # vec = np.zeros(vec_len, dtype=np.int32)
-    # vec_tensor = cryptoContext.compute_auto_map(N, auto_index, vec)
-
-    vec_tensor = cryptoContext.BsContext.precompute_auto_map[auto_index]
-
-
-    cv1 = automorphism_transform(sum_ax_mult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
-    cv0 = automorphism_transform(sum_bx_mult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
+    cv1 = automorphism_transform(sumaxmult, expand_limbs, N, auto_index, vec_tensor, cryptoContext)
     return Cipher([cv0, cv1], curr_limbs)
 
 # @profile_python_function
@@ -796,8 +765,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         for j in range(g):
             if rot_in[s][j] != 0:
                 cv0 = result.cv[0].reshape(-1, cryptoContext.N) if eval_fast_rotation_reshape else result.cv[0]
-                fast_rotation_ext[j] = eval_fast_rotation_ext_add_first_true(
-                    cv0, digits, result.cur_limbs, rot_in[s][j], cryptoContext
+                fast_rotation_ext[j] = eval_fast_rotation_ext(
+                    cv0, digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
                 )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
@@ -833,8 +802,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = eval_fast_rotation_ext_add_first_false(
-                        inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], cryptoContext
+                    inner_ks_down_ext = eval_fast_rotation_ext(
+                        None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
@@ -864,8 +833,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         
         for j in range(g_rem):
             if rot_in[s][j] != 0:
-                fast_rotation_ext[j] = eval_fast_rotation_ext_add_first_true(
-                    result.cv[0], digits, result.cur_limbs, rot_in[s][j], cryptoContext
+                fast_rotation_ext[j] = eval_fast_rotation_ext(
+                    result.cv[0], digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
                 )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
@@ -900,8 +869,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = eval_fast_rotation_ext_add_first_false(
-                        inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], cryptoContext
+                    inner_ks_down_ext = eval_fast_rotation_ext(
+                        None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
