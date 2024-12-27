@@ -179,10 +179,10 @@ def eval_linear_wsum_mutable(ciphertexts, ciphertexts_num, constants, cryptoCont
             minIdx = i
     for i in range(minIdx):
         if ciphertexts[i].cur_limbs < minLevel:
-            mod_down_to_and_equal(ciphertexts[i], minLevel, cryptoContext)
+            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
     for i in range(minIdx + 1, ciphertexts_num):
         if ciphertexts[i].cur_limbs < minLevel:
-            mod_down_to_and_equal(ciphertexts[i], minLevel, cryptoContext)
+            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
     wsum = eval_mult_in_place(ciphertexts[0], constants[0],
                               cryptoContext)
     for i in range(1, ciphertexts_num):
@@ -193,35 +193,14 @@ def eval_linear_wsum_mutable(ciphertexts, ciphertexts_num, constants, cryptoCont
     return wsum
 
 # @profile_python_function
-def mod_down_and_equal(a, l, dl, logN):
-    # ra = torch.tensor([0] * ((l - dl) << logN), dtype=torch.uint64,
-    #                   device="cuda").reshape((l - dl), -1)  # Create a new array of the required size
-    # ra[:(l - dl)][:] = a[:(l - dl)][:]  # Copy values from a to ra
-    return a[:(l - dl)]
-      # Return the new array
-
-# @profile_python_function
-def mod_down_by_and_equal(cipher: Cipher, dl, cryptoContext: Context):
-    # cipher.cv[0] = mod_down_and_equal(cipher.cv[0], cipher.cur_limbs, dl, cryptoContext.logN)
-    # cipher.cv[1] = mod_down_and_equal(cipher.cv[1], cipher.cur_limbs, dl, cryptoContext.logN)
-    cipher.cur_limbs -= dl
-    return cipher
-
-# @profile_python_function
-def mod_down_to_and_equal(cipher: Cipher, l, cryptoContext: Context):
-    dl = cipher.cur_limbs - l
-    mod_down_by_and_equal(cipher, dl, cryptoContext)
-    return cipher
-
-# @profile_python_function
 def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
     rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
     rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
 
     if rct1.cur_limbs > rct2.cur_limbs:
-        mod_down_to_and_equal(rct1, rct2.cur_limbs, cryptoContext)
+        rct1=homo_ops.cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
     elif rct1.cur_limbs < rct2.cur_limbs:
-        mod_down_to_and_equal(rct2, rct1.cur_limbs, cryptoContext)
+        rct2=homo_ops.cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
     return rct1, rct2
 
 # @profile_python_function
@@ -276,7 +255,7 @@ def inner_eval_chebyshev_ps(coefficients, coefficients_len,
             cu = eval_linear_wsum_mutable(ctxs, dc, weights, cryptoContext)
 
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
-        cu = mod_down_to_and_equal(cu, T2[m - 1].cur_limbs, cryptoContext)
+        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -326,7 +305,7 @@ def inner_eval_chebyshev_ps(coefficients, coefficients_len,
             su = T[k - 1]
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        su = mod_down_by_and_equal(su, 1, cryptoContext)
+        su = homo_ops.cipher_level_reduce(su, 1)
 
     if flag_c:
         T2[m - 1], cu = check_and_adjust_level(T2[m - 1], cu, cryptoContext)
@@ -418,7 +397,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     # Adjust levels of T
     for i in range(1, k):
         level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-        T[i - 1] = mod_down_by_and_equal(T[i - 1], level_diff, cryptoContext)
+        T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
 
     # T2 = [Cipher([T[0].cv[0].clone(), T[0].cv[1].clone()], T[0].cur_limbs) for _ in range(m)]
     T2 = [0 for _ in range(m)]

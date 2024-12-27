@@ -204,9 +204,6 @@ def homo_rotate(cipher, auto_index, ctx):
     res = F.cv_keyswitch(cipher.cv[1], cur_limbs, swk[0], swk[1], ctx)
     bxrot = F.cv_add(cipher.cv[0], res[0], ctx.moduliQ_cuda, cur_limbs)
 
-    # vec_tensor = ctx.compute_auto_map(ctx.N, auto_index, None)
-    vec_tensor = ctx.BsContext.precompute_auto_map[auto_index]
-
     # Apply the AutomorphismTransform to ax and bx
     cv0 = F.cv_automorphism_transform(bxrot, cur_limbs, auto_index, ctx)
     cv1 = F.cv_automorphism_transform(res[1], cur_limbs, auto_index, ctx)
