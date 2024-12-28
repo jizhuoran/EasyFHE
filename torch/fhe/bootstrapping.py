@@ -4,60 +4,67 @@ from .context import *
 from . import functional as F
 from . import homo_ops
 from . import hoisting_keyswitch
-import pickle
+from . import utils
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
-from .client import client as client
-
-
-# Global dictionary to accumulate execution time for each function
-execution_times = {}
-
-def profile_python_function(func):
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        result = func(*args, **kwargs)
-        end_time = time.time()
-
-        # Calculate the execution time for this call
-        exec_time = end_time - start_time
-        
-        # Update the global dictionary with the accumulated time for this function
-        if func.__name__ not in execution_times:
-            execution_times[func.__name__] = 0
-        execution_times[func.__name__] += exec_time
-
-        # print(f"Function {func.__name__} executed in {exec_time:.6f} seconds")
-        return result
-    return wrapper
-
-
-def profile_pytorch_function(func):
-    def wrapper(*args, **kwargs):
-        # Set up the profiler
-        with torch.profiler.profile(
-            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
-            record_shapes=True,
-            profile_memory=True,
-            with_stack=True
-        ) as profiler:
-            result = func(*args, **kwargs)
-        return result
-    return wrapper
-
-
-BS_CONST_DIR = "/home/zrji/GPU-FHE/torch/fhe/data/"
 
 Tensor = torch.Tensor
 NORMAL_CIPHER_SIZE = 2
 BASE_NUM_LEVELS_TO_DROP = 1
-# ENCRYPTION = 0
-# MULTIPLICATION = 1
-CONJUGATION = 2
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 m_correctionFactor = 0  # correction factor, which we scale the message by to improve precision
+
+# @profile_python_function
+def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
+    num_towers = cur_limbs
+    p = cryptoContext.p
+    q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
+
+    sc_factor = p
+
+    # Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
+    MAX_BITS_IN_WORD = 126
+
+    # Compute approxFactor
+    log_sf = int(math.ceil(math.log2(math.fabs(sc_factor))))
+    log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD else MAX_BITS_IN_WORD
+    log_approx = log_sf - log_valid
+    approx_factor = pow(2, log_approx)
+
+    large = int((constant / approx_factor * sc_factor) + 0.5)
+    large_abs = abs(large)
+    bound = 1 << 63
+
+    if large_abs > bound:
+        for i in range(num_towers):
+            reduced = large % q_vec[i]
+            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+    else:
+        sc_constant = int(large)
+        for i in range(num_towers):
+            reduced = sc_constant % int(q_vec[i])
+            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+    return factors
+
+# @profile_python_function
+def eval_mult_in_place(ciphertext, constant, cryptoContext):
+
+    # print("eval_mult_in_place", "constant", constant)
+
+    cur_limbs = ciphertext.cur_limbs
+    factors = np.zeros(cur_limbs, dtype=np.uint64)
+
+    # Generate the factors needed for multiplication
+    factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
+    factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
+    cv = [
+        F.cv_mul_scalar(
+            cv0, factors, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, ciphertext.cur_limbs
+        )
+        for cv0 in ciphertext.cv
+    ]
+    return Cipher(cv, ciphertext.cur_limbs)
 
 
 # @profile_python_function
@@ -556,6 +563,34 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     return result
 
 
+# @profile_python_function
+def apply_double_angle_iterations(ciphertext, cryptoContext):
+    # Determine r based on the scheme's secretKeyDist attribute
+    if cryptoContext.BsContext.secretKeyDist == SecretKeyDist.UNIFORM_TERNARY:
+        r = R_UNIFORM
+    elif cryptoContext.BsContext.secretKeyDist == SecretKeyDist.SPARSE_TERNARY:
+        r = R_SPARSE
+    else:
+        raise ValueError("set secretKeyDist first!")
+
+    for j in range(1, r + 1):
+        # Equivalent of cc->EvalSquareInPlace(ciphertext);
+        ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
+
+        # Equivalent of cc->EvalAdd(ciphertext, ciphertext);
+        ciphertext = homo_ops.cipher_add(ciphertext, ciphertext, cryptoContext)
+
+        # Equivalent of ModReduceInternalInPlace(ciphertext, 1, scheme)
+        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext)
+
+        # Calculate scalar as per the formula
+        scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
+
+        # Equivalent of cc->EvalAddInPlace(ciphertext, scalar);
+        ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
+    return ciphertext
+
+
 def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     def key_switch_ext(cipher, cipher_size, add_first, cryptoContext):
         assert cipher_size == 2  # Only 2-dim ciphertexts are supported
@@ -787,57 +822,22 @@ def eval_slots_to_coeffs(A, ctxt, cryptoContext):
 
     return merged_function(A, ctxt, cryptoContext, flag_rem, cryptoContext.BsContext.S2C_rot_in, cryptoContext.BsContext.S2C_rot_out, config)
 
+# @profile_python_function
+def eval_linear_transform(A, A_len, ct, scheme):
+    # TODO: to be implemented
+    pass
 
 # @profile_python_function
-def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
-    num_towers = cur_limbs
-    p = cryptoContext.p
-    q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
-
-    sc_factor = p
-
-    # Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
-    MAX_BITS_IN_WORD = 126
-
-    # Compute approxFactor
-    log_sf = int(math.ceil(math.log2(math.fabs(sc_factor))))
-    log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD else MAX_BITS_IN_WORD
-    log_approx = log_sf - log_valid
-    approx_factor = pow(2, log_approx)
-
-    large = int((constant / approx_factor * sc_factor) + 0.5)
-    large_abs = abs(large)
-    bound = 1 << 63
-
-    if large_abs > bound:
-        for i in range(num_towers):
-            reduced = large % q_vec[i]
-            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-    else:
-        sc_constant = int(large)
-        for i in range(num_towers):
-            reduced = sc_constant % int(q_vec[i])
-            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-    return factors
+def mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
+    l = cipher.cur_limbs
+    cipher.cv[0] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[0], l, monomial_degree)
+    cipher.cv[1] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[1], l, monomial_degree)
+    return cipher
 
 # @profile_python_function
-def eval_mult_in_place(ciphertext, constant, cryptoContext):
-
-    # print("eval_mult_in_place", "constant", constant)
-
-    cur_limbs = ciphertext.cur_limbs
-    factors = np.zeros(cur_limbs, dtype=np.uint64)
-
-    # Generate the factors needed for multiplication
-    factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
-    factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
-    cv = [
-        F.cv_mul_scalar(
-            cv0, factors, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, ciphertext.cur_limbs
-        )
-        for cv0 in ciphertext.cv
-    ]
-    return Cipher(cv, ciphertext.cur_limbs)
+def switch_modulus_with_intt_ntt(input_tensor, l, cryptoContext): #todo: to be renamed
+    res = F.cv_switch_modulus(cryptoContext, input_tensor, l)
+    return res
 
 # @profile_python_function
 def adjust_ciphertext(cryptoContext, ciphertext, correction):
@@ -854,50 +854,6 @@ def adjust_ciphertext(cryptoContext, ciphertext, correction):
 
         ciphertext = homo_ops.cipher_mod_reduce(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
-
-# @profile_python_function
-def eval_linear_transform(A, A_len, ct, scheme):
-    # TODO: to be implemented
-    pass
-
-# @profile_python_function
-def apply_double_angle_iterations(ciphertext, cryptoContext):
-    # Determine r based on the scheme's secretKeyDist attribute
-    if cryptoContext.BsContext.secretKeyDist == SecretKeyDist.UNIFORM_TERNARY:
-        r = R_UNIFORM
-    elif cryptoContext.BsContext.secretKeyDist == SecretKeyDist.SPARSE_TERNARY:
-        r = R_SPARSE
-    else:
-        raise ValueError("set secretKeyDist first!")
-
-    for j in range(1, r + 1):
-        # Equivalent of cc->EvalSquareInPlace(ciphertext);
-        ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
-
-        # Equivalent of cc->EvalAdd(ciphertext, ciphertext);
-        ciphertext = homo_ops.cipher_add(ciphertext, ciphertext, cryptoContext)
-
-        # Equivalent of ModReduceInternalInPlace(ciphertext, 1, scheme)
-        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext)
-
-        # Calculate scalar as per the formula
-        scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
-
-        # Equivalent of cc->EvalAddInPlace(ciphertext, scalar);
-        ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
-    return ciphertext
-
-# @profile_python_function
-def mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
-    l = cipher.cur_limbs
-    cipher.cv[0] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[0], l, monomial_degree)
-    cipher.cv[1] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[1], l, monomial_degree)
-    return cipher
-
-# @profile_python_function
-def switch_modulus_with_intt_ntt(input_tensor, l, cryptoContext):
-    res = F.cv_switch_modulus(cryptoContext, input_tensor, l)
-    return res
 
 # @profile_python_function
 def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescaleTech, secretKeyDist, L0, slots):
@@ -1188,22 +1144,12 @@ def get_bootstrap_depth(approx_mod_depth, level_budget, secret_key_dist):
     # Compute and return the depth
     return approx_mod_depth + level_budget[0] + level_budget[1]
 
-def save_context(cryptoContext, openfhe_context, path = "torch/fhe/data/"):
-    with open(path + 'crypto.pkl', 'wb') as file:
-        pickle.dump((cryptoContext.Serialize(), openfhe_context.Serialize()), file)
-
-def load_context(path = "torch/fhe/data/"):
-    with open(path + 'crypto.pkl', 'rb') as file:
-        cryptoContext_byte, openfhe_context_byte = pickle.load(file)
-    openfhe_context = client.OpenFHEContext.Deserialize(openfhe_context_byte)
-    cryptoContext = Context.Deserialize(cryptoContext_byte)
-    return cryptoContext, openfhe_context
 
 def BootstrapTest_N65536L26lB44():
 
     load_from_file = True
     if load_from_file:
-        cryptoContext, openfhe_context = load_context()
+        cryptoContext, openfhe_context = utils.load_context()
     else:
         openfhe_context, cryptoContext = client.gen_contexts(
                 logN=14,
@@ -1219,8 +1165,8 @@ def BootstrapTest_N65536L26lB44():
                 rescaleTech=ScalingTechnique.FIXEDMANUAL,
             )
 
-        save_context(cryptoContext, openfhe_context)
-        cryptoContext, openfhe_context = load_context()
+        utils.save_context(cryptoContext, openfhe_context)
+        cryptoContext, openfhe_context = utils.load_context()
 
     dim1 = [0, 0]
     cryptoContext.BsContext = BsContext(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0, cryptoContext.rescaleTech, cryptoContext.secretKeyDist)
@@ -1250,7 +1196,7 @@ def BootstrapTest_N65536L26lB44():
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
 
-    measure_execution_time = False
+    measure_execution_time = True
     if measure_execution_time:
         start = time.time()
         result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
@@ -1261,7 +1207,7 @@ def BootstrapTest_N65536L26lB44():
 
         # Print the accumulated execution times
         print("\nTotal execution time for each function:")
-        sorted_execution_times = sorted(execution_times.items(), key=lambda x: x[1], reverse=True)
+        sorted_execution_times = sorted(utils.execution_times.items(), key=lambda x: x[1], reverse=True)
         for func_name, total_time in sorted_execution_times:
             print(f"{func_name}: {total_time:.6f} seconds")
         
