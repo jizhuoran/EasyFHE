@@ -154,10 +154,10 @@ class BsContext:
         ], dtype=np.float64)
 
 
-        # Chebyshev series coefficients for modular reduction
+        # Coefficients of the Chebyshev series interpolating 1/(2 Pi) Sin(2 Pi K x)
         if secretKeyDist == SecretKeyDist.SPARSE_TERNARY:
             self.coefficients = np.copy(coefficientsSparse)
-            self.k = 1.0
+            self.k = 1.0 #do not divide by k as we already did it during precomputation
         else:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
