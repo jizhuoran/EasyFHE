@@ -582,10 +582,8 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
     return result
 
-
 # @profile_python_function
 def apply_double_angle_iterations(ciphertext, cryptoContext):
-    # Determine r based on the scheme's secretKeyDist attribute
     if cryptoContext.BsContext.secretKeyDist == SecretKeyDist.UNIFORM_TERNARY:
         r = R_UNIFORM
     elif cryptoContext.BsContext.secretKeyDist == SecretKeyDist.SPARSE_TERNARY:
@@ -594,19 +592,10 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
         raise ValueError("set secretKeyDist first!")
 
     for j in range(1, r + 1):
-        # Equivalent of cc->EvalSquareInPlace(ciphertext);
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
-
-        # Equivalent of cc->EvalAdd(ciphertext, ciphertext);
         ciphertext = homo_ops.cipher_add(ciphertext, ciphertext, cryptoContext)
-
-        # Equivalent of ModReduceInternalInPlace(ciphertext, 1, scheme)
-        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext)
-
-        # Calculate scalar as per the formula
+        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext) #todo: after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
-
-        # Equivalent of cc->EvalAddInPlace(ciphertext, scalar);
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
     return ciphertext
 
