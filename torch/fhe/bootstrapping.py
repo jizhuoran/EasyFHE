@@ -835,9 +835,10 @@ def mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
     return cipher
 
 # @profile_python_function
-def switch_modulus_with_intt_ntt(input_tensor, l, cryptoContext): #todo: to be renamed
-    res = F.cv_switch_modulus(cryptoContext, input_tensor, l)
-    return res
+def cipher_mod_raise(cipher, L0, cryptoContext):
+    cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
+    cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
+    return Cipher([cv0, cv1], L0)
 
 # @profile_python_function
 def adjust_ciphertext(cryptoContext, ciphertext, correction):
@@ -881,9 +882,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
     scalar = round(post)
 
     tmp = adjust_ciphertext(cryptoContext, ciphertext, correction)
-    cv0 = switch_modulus_with_intt_ntt(tmp.cv[0], L0, cryptoContext)  # bx
-    cv1 = switch_modulus_with_intt_ntt(tmp.cv[1], L0, cryptoContext)  # ax
-    raised = Cipher([cv0, cv1], L0)
+    raised = cipher_mod_raise(tmp, L0, cryptoContext)
 
 
     constantEvalMult = pre * (1.0 / (bs_ctx.k * N))

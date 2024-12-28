@@ -432,10 +432,10 @@ def cv_automorphism_transform(
 
     return automorphism_transform.reshape(-1, context_cuda.N)
 
-def cv_switch_modulus(
-    context_cuda: Context, 
+def cv_switch_modulus_with_intt_ntt(
     input: Tensor, 
-    L0 : int, 
+    L0 : int,
+    context_cuda: Context
     ) -> Tensor:
     switch_modulus = torch.switch_modulus(
         context_cuda.switch_modulus_out,
