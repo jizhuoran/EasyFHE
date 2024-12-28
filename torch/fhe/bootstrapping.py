@@ -1,10 +1,9 @@
-import math, time
-import torch
-import numpy as np
+import time
 from .Ciphertext import Cipher
 from .context import *
 from . import functional as F
 from . import homo_ops
+from . import hoisting_keyswitch
 import pickle
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
@@ -557,103 +556,48 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     return result
 
 
-# @profile_python_function
-def eval_fast_rotation_precompute(input, curr_limbs, cryptoContext):
-    res = F.cv_modup(input, curr_limbs, cryptoContext)
-    return res.clone()
-
-def eval_fast_key_switch_core_ext(d2Tilde, auto_index, key_map, expand_length, beta, curr_limbs, cryptoContext):
-    swk = cryptoContext.left_rot_key_map[str(auto_index)]
-    swk_bx = swk[0][:beta, :, :]
-    swk_ax = swk[1][:beta, :, :]
-    
-    res = F.cv_innerproduct(
-        d2Tilde.reshape(-1),
-        curr_limbs=curr_limbs,
-        context_cuda=cryptoContext,
-        swk_bx=swk_bx,
-        swk_ax=swk_ax
-    )
-    return res[1], res[0]
-
-# @profile_python_function
-def eval_fast_rotation_ext(bx, digits, curr_limbs, index, add_first, cryptoContext):
-    alpha = cryptoContext.K
-    logN = cryptoContext.logN
-    K = cryptoContext.K
-    beta = int(np.ceil(curr_limbs / alpha))  # Calculate beta as per the original C++ code
-
-    # Find the automorphism index that corresponds to rotation index.
-    auto_index = cryptoContext.BsContext.auto_index[index]
-
-    expand_limbs = curr_limbs + K
-    expand_length = expand_limbs << logN
-
-    # Inner Product
-    sumaxmult, sumbxmult = eval_fast_key_switch_core_ext(digits, auto_index, cryptoContext.left_rot_key_map,
-                                                         expand_length, beta, curr_limbs, cryptoContext)
-
-    if (add_first):
-        cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                                cryptoContext.q_mu_cuda, curr_limbs)
-        sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, curr_limbs, inplace=True)
-
-    cv0 = F.cv_automorphism_transform(sumbxmult, expand_limbs, auto_index, cryptoContext)
-    cv1 = F.cv_automorphism_transform(sumaxmult, expand_limbs, auto_index, cryptoContext)
-    return Cipher([cv0, cv1], curr_limbs)
-
-def key_switch_ext(cipher, cipher_size, add_first, cryptoContext):
-
-    assert cipher_size == 2 # Only 2-dim ciphertexts are supported
-    curr_limbs = cipher.cur_limbs
-    K = cryptoContext.K
-    N = cryptoContext.N
-    logN = cryptoContext.logN
-
-    cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
-    cv1 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
-    if add_first:
-        cv0[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                               cryptoContext.q_mu_cuda, curr_limbs)
-
-    cv1[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                           cryptoContext.q_mu_cuda, curr_limbs)
-    return Cipher([cv0, cv1], curr_limbs)
-
-def eval_mult_ext(cipher, pt, cryptoContext):
-    cur_limbs = cipher.cur_limbs
-    moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
-    mu = cryptoContext.BsContext.QmuplusPmu_map[cur_limbs]
-    limbsExt = cur_limbs+cryptoContext.K
-    cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
-    cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
-    return Cipher([cv0, cv1], cur_limbs)
-
-def eval_add_ext(cipher0, cipher1, cryptoContext):
-    assert cipher0.cur_limbs == cipher1.cur_limbs
-    limbsExt = cipher0.cur_limbs + cryptoContext.K
-    moduli = cryptoContext.BsContext.QplusP_map[cipher0.cur_limbs]
-    cv = [
-        F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True)
-        for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
-    ]
-    return Cipher(cv, cipher0.cur_limbs)
-
-# @profile_python_function
-def key_switch_down(sumaxmult, sumbxmult, curr_limbs, cryptoContext):
-    res_ax = F.cv_moddown(sumaxmult, curr_limbs, cryptoContext)
-    res_bx = F.cv_moddown(sumbxmult, curr_limbs, cryptoContext)
-    return Cipher([res_bx, res_ax], curr_limbs)
-
-# @profile_python_function
-def add_and_equal(in0, in1, cur_limbs, cryptoContext):
-    # moduli = torch.from_numpy(
-        # np.concatenate((cryptoContext.moduliQ[0:cur_limbs], cryptoContext.moduliP[0:cryptoContext.K]))).cuda()
-    moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
-    res = F.cv_add(in0, in1, moduli, in0.shape[0])
-    return res
-
 def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
+    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext):
+        assert cipher_size == 2  # Only 2-dim ciphertexts are supported
+        curr_limbs = cipher.cur_limbs
+        K = cryptoContext.K
+        N = cryptoContext.N
+        logN = cryptoContext.logN
+
+        cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+        cv1 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+        if add_first:
+            cv0[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                                                  cryptoContext.q_mu_cuda, curr_limbs)
+
+        cv1[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                                              cryptoContext.q_mu_cuda, curr_limbs)
+        return Cipher([cv0, cv1], curr_limbs)
+
+    def eval_mult_ext(cipher, pt, cryptoContext):
+        cur_limbs = cipher.cur_limbs
+        moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
+        mu = cryptoContext.BsContext.QmuplusPmu_map[cur_limbs]
+        limbsExt = cur_limbs + cryptoContext.K
+        cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
+        cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
+        return Cipher([cv0, cv1], cur_limbs)
+
+    def eval_add_ext(cipher0, cipher1, cryptoContext):
+        assert cipher0.cur_limbs == cipher1.cur_limbs
+        limbsExt = cipher0.cur_limbs + cryptoContext.K
+        moduli = cryptoContext.BsContext.QplusP_map[cipher0.cur_limbs]
+        cv = [
+            F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True)
+            for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
+        ]
+        return Cipher(cv, cipher0.cur_limbs)
+
+    # @profile_python_function
+    def cv_add_ext(in0, in1, cur_limbs, cryptoContext):
+        moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
+        res = F.cv_add(in0, in1, moduli, in0.shape[0])
+        return res
 
     special_limbs = cryptoContext.K
     logN = cryptoContext.logN
@@ -690,20 +634,15 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         curr_limbs = result.cur_limbs
         limbs_ext = curr_limbs + special_limbs
         len_ext = limbs_ext << logN
-        len_ = curr_limbs << logN
-        alpha = cryptoContext.K
-        beta = (curr_limbs + alpha - 1) // alpha
-        
-        digits_len = beta * len_ext
-        digits = eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
-        
-        
+
+        digits = hoisting_keyswitch.eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
+
         fast_rotation_ext = [None for _ in range(g)]
         
         for j in range(g):
             if rot_in[s][j] != 0:
                 cv0 = result.cv[0].reshape(-1, cryptoContext.N) if eval_fast_rotation_reshape else result.cv[0]
-                fast_rotation_ext[j] = eval_fast_rotation_ext(
+                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
                     cv0, digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
                 )
             else:
@@ -724,41 +663,37 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
                     auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
 
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
-                    first = add_and_equal(first, first_current, curr_limbs, cryptoContext)
+                    first = cv_add_ext(first, first_current, curr_limbs, cryptoContext)
                     
-                    inner_digits = eval_fast_rotation_precompute(
+                    inner_digits = hoisting_keyswitch.eval_fast_rotation_precompute(
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = eval_fast_rotation_ext(
+                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
                         None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                    first = add_and_equal(first, tmp_first, curr_limbs, cryptoContext)
+                    first = cv_add_ext(first, tmp_first, curr_limbs, cryptoContext)
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
-        result.cv[0] = add_and_equal(result.cv[0], first, curr_limbs, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
+        result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     if flag_rem:
         result = homo_ops.cipher_mod_reduce(result, cipher_mod_levels, cryptoContext)
         curr_limbs = result.cur_limbs
         limbs_ext = curr_limbs + special_limbs
         len_ext = limbs_ext << logN
-        len_ = curr_limbs << logN
-        alpha = cryptoContext.K
-        beta = (curr_limbs + alpha - 1) // alpha
-        
-        digits_len = beta * len_ext
-        digits = eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
+
+        digits = hoisting_keyswitch.eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
         
         fast_rotation_ext = [None for _ in range(g_rem)]
         
@@ -766,7 +701,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         
         for j in range(g_rem):
             if rot_in[s][j] != 0:
-                fast_rotation_ext[j] = eval_fast_rotation_ext(
+                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
                     result.cv[0], digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
                 )
             else:
@@ -787,38 +722,35 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
                     auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
-                    map_tensor = cryptoContext.BsContext.precompute_auto_map[auto_index]
 
-                    # map_tensor = cryptoContext.compute_auto_map(N, auto_index, None)
-                    
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
-                    first = add_and_equal(first, first_current, curr_limbs, cryptoContext)
+                    first = cv_add_ext(first, first_current, curr_limbs, cryptoContext)
                     
-                    inner_digits = eval_fast_rotation_precompute(
+                    inner_digits = hoisting_keyswitch.eval_fast_rotation_precompute(
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = eval_fast_rotation_ext(
+                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
                         None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                    first = add_and_equal(first, tmp_first, curr_limbs, cryptoContext)
+                    first = cv_add_ext(first, tmp_first, curr_limbs, cryptoContext)
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
-        result.cv[0] = add_and_equal(result.cv[0], first, curr_limbs, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
+        result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     return result
 
 
 # @profile_python_function
-def eval_coeffs_to_slots(A, A_len, ctxt, cryptoContext):
+def eval_coeffs_to_slots(A, ctxt, cryptoContext):
 
     precom = cryptoContext.BsContext
 
@@ -838,7 +770,7 @@ def eval_coeffs_to_slots(A, A_len, ctxt, cryptoContext):
     return merged_function(A, ctxt, cryptoContext, flag_rem, cryptoContext.BsContext.C2S_rot_in, cryptoContext.BsContext.C2S_rot_out, config)
 
 # @profile_python_function
-def eval_slots_to_coeffs(A, A_len, ctxt, cryptoContext):
+def eval_slots_to_coeffs(A, ctxt, cryptoContext):
 
     precom = cryptoContext.BsContext
     flag_rem = 1 if precom.paramsDec.layers_rem != 0 else 0
@@ -1011,8 +943,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, precom.LTMatrix_Row, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, cryptoContext.slots, raised,
-                                           cryptoContext)  # slots全局固定
+            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)  # slots全局固定
 
 
         conj = Cipher([ctxtEnc.cv[0].clone(), ctxtEnc.cv[1].clone()], ctxtEnc.cur_limbs)
@@ -1049,7 +980,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, slots, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
     else:
         for step in range(int(math.log2(N // (2 * slots)))):
@@ -1061,7 +992,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, cryptoContext.slots, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
 
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
@@ -1086,7 +1017,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, slots, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
 
         auto_index = cryptoContext.BsContext.auto_index[slots]
@@ -1102,7 +1033,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
     return ctxtDec
 
 
-class Plaintext:
+class Plaintext: #todo: move to Ciphertext
     def __init__(self, mx, N, slots, l):
         self.mx = mx
         self.N = N
