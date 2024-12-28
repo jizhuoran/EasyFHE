@@ -1,6 +1,6 @@
 from .Ciphertext import Cipher
 from . import functional as F
-from .data.bsConst import *
+# from .data.bsConst import *
 
 
 def cipher_rescale(ct, cryptoContext):

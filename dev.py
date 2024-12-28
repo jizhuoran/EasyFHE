@@ -34,7 +34,9 @@ import torch.fhe.client.client as client
 #
 # print("plain3: ", plain3)
 
-bstest.BootstrapTest_N65536L26lB44()
+
+bstest.run_test_cases()
+# bstest.BootstrapTest_N65536L26lB44()
 
 # TB.test_HMult3()
 
