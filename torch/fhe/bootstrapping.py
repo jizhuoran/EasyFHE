@@ -68,56 +68,56 @@ def eval_mult_in_place(ciphertext, constant, cryptoContext):
     return Cipher(cv, ciphertext.cur_limbs)
 
 
-# @profile_python_function
-def degree(coefficients, poly_degree):
-    deg = 1
-    for i in range(poly_degree - 1, 0, -1):
-        if coefficients[i] == 0:
-            deg += 1
-        else:
-            break
-    return poly_degree - deg
-
-
-PREC = math.pow(2, -20)
-
-# @profile_python_function
 def is_not_equal_one(val):
-    return val < 1 - PREC or val > 1 + PREC
+    PREC = math.pow(2, -20)
+    return val <= 1 - PREC or val >= 1 + PREC
 
-# @profile_python_function
-def long_division_chebyshev(f, f_len, g, g_len):
-    n = degree(f, f_len)
-    k = degree(g, g_len)
+def degree(coefficients):
+    coefficients_size = len(coefficients)
+    indx = coefficients_size
+    # indx becomes negative (-1) only when all coefficients are zeroes. in this case we return 0
+    while True:
+        indx -= 1
+        if indx < 0:
+            return 0
+        if coefficients[indx] != 0:
+            break
+    return indx
 
-    if n != f_len - 1:
-        raise ValueError("LongDivisionChebyshev: The dominant coefficient of the dividend is zero.")
+# f and g are vectors of Chebyshev interpolation coefficients of the two polynomials.
+# We assume their dominant coefficient is not zero. LongDivisionChebyshev returns the
+# vector of Chebyshev interpolation coefficients for the quotient and remainder of the
+# division f/g. longDiv is a struct that contains the vectors of coefficients for the
+# quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
+# the same format.
+def long_division_chebyshev(f, g):
+    n = degree(f)
+    k = degree(g)
 
-    if k != g_len - 1:
-        raise ValueError("LongDivisionChebyshev: The dominant coefficient of the divisor is zero.")
+    if n != len(f) - 1:
+        raise Exception("LongDivisionChebyshev: The dominant coefficient of the dividend is zero.")
+    if k != len(g) - 1:
+        raise Exception("LongDivisionChebyshev: The dominant coefficient of the divisor is zero.")
+    if n < k:
+        return np.array([1.0]), np.array(f)
 
-    r_len = f_len
-    r = np.copy(f)  # Copy of f
-    q_len = max(0, n - k + 1)
-    q = np.zeros(q_len, dtype=np.float64)
-    if (n - k) >= 0:
-        q2_len = n - k + 1
-        # q_len = q2_len
-        q = np.zeros(q2_len)
-        # q2 = np.zeros(q2_len)
-        while n - k > 0:
-            q[n - k] = 2 * r[r_len - 1]
-            if is_not_equal_one(g[k]):
-                q[n - k] /= g[g_len - 1]
+    q = np.zeros(n - k + 1)
+    r = np.copy(f)
+    d = np.zeros(len(g) + n)
 
-            d_len = n + 1
-            d = np.zeros(d_len)
+    while n > k:
+        d.resize(n + 1, refcheck=False)
+        d.fill(0)  # 替换 '@' 为 0
+        q[n - k] = 2 * r[-1]
+        if is_not_equal_one(g[k]):
+            q[n - k] /= g[-1]
 
-            if k == n - k:
-                d[0] = 2 * g[n - k]
-                for i in range(1, 2 * k + 1):
-                    d[i] = g[abs(n - k - i)]
-            elif k > n - k:
+        if k == (n - k):
+            d[0] = 2 * g[n - k]
+            for i in range(1, 2 * k + 1):
+                d[i] = g[abs(n - k - i)]
+        else:
+            if k > (n - k):
                 d[0] = 2 * g[n - k]
                 for i in range(1, k - (n - k) + 1):
                     d[i] = g[abs(n - k - i)] + g[n - k + i]
@@ -129,70 +129,54 @@ def long_division_chebyshev(f, f_len, g, g_len):
                     if i != n - k:
                         d[i] = g[abs(i - n + k)]
 
-            if is_not_equal_one(r[r_len - 1]):
-                d *= r[r_len - 1]
+        if is_not_equal_one(r[-1]):
+            # d *= f[n]
+            d *= r[-1]
+        if is_not_equal_one(g[-1]):
+            # d /= g[k]
+            d /= g[-1]
 
-            if is_not_equal_one(g[g_len - 1]):
-                d /= g[g_len - 1]
+        # f -= d
+        r = r - d
+        if len(r) > 1:
+            n = degree(r)
+            r.resize(n + 1, refcheck = False)
 
-            if r_len < d_len:
-                raise ValueError("error: r_len < d_len!")
+    if n == k:
+        d = np.copy(g)
+        q[0] = r[-1]
+        if is_not_equal_one(g[-1]):
+            q[0] /= g[-1]
+        if is_not_equal_one(r[-1]):
+            d *= r[-1]
+        if is_not_equal_one(g[-1]):
+            d /= g[-1]
+        r = r - d
+        if len(r) > 1:
+            n = degree(r)
+            r.resize(n + 1, refcheck = False)
 
-            r -= d[:r_len]  # Element-wise subtraction
-
-            if r_len > 1:
-                n = degree(r, r_len)
-                r_len = n + 1
-                r = r[:n + 1]  # Resize r
-
-        if n == k:
-            q[0] = r[r_len - 1]
-            if is_not_equal_one(g[g_len - 1]):
-                q[0] /= g[g_len - 1]
-
-            d_len = g_len
-            d = np.copy(g)
-            if is_not_equal_one(r[r_len - 1]):
-                d *= r[r_len - 1]
-            if is_not_equal_one(g[g_len - 1]):
-                d /= g[g_len - 1]
-
-            if r_len < d_len:
-                raise ValueError("error: r_len < d_len!")
-
-            r -= d[:r_len]  # Element-wise subtraction
-
-            if r_len > 1:
-                n = degree(r, r_len)
-                r_len = n + 1
-                r = r[:n + 1]  # Resize r
-        q[0] *= 2  # Adjust the first coefficient
-    else:
-        q_len = 1
-        q = np.zeros(q_len)
-        if r_len < f_len:
-            raise ValueError("error: r_len < d_len!")
-        r = np.copy(f)
-
-    return q, q_len, r, r_len
+    q[0] *= 2
+    return q, r
 
 # @profile_python_function
-def eval_linear_wsum_mutable(ciphertexts, ciphertexts_num, constants, cryptoContext: Context):
+def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
+    input_size = len(constants)
     minLevel = ciphertexts[0].cur_limbs
     minIdx = 0
-    for i in range(1, ciphertexts_num):
+    for i in range(1, input_size):
         if ciphertexts[i].cur_limbs < minLevel:
             minLevel = ciphertexts[i].cur_limbs
             minIdx = i
     for i in range(minIdx):
         if ciphertexts[i].cur_limbs < minLevel:
             ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    for i in range(minIdx + 1, ciphertexts_num):
+    for i in range(minIdx + 1, input_size):
         if ciphertexts[i].cur_limbs < minLevel:
             ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
     wsum = eval_mult_in_place(ciphertexts[0], constants[0],
                               cryptoContext)
-    for i in range(1, ciphertexts_num):
+    for i in range(1, input_size):
         tmp = eval_mult_in_place(ciphertexts[i], constants[i],
                                  cryptoContext)
         wsum = homo_ops.cipher_add(wsum, tmp, cryptoContext)
@@ -211,43 +195,35 @@ def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
     return rct1, rct2
 
 # @profile_python_function
-def inner_eval_chebyshev_ps(coefficients, coefficients_len,
+def inner_eval_chebyshev_ps(coefficients,
                             k, m, T, T2, cryptoContext: Context):
     # Compute k * 2^(m-1) - k
     k2m2k = k * (1 << (m - 1)) - k
 
-    # Initialize Tkm
-    Tkm_len = int(k2m2k + k) + 1
-    Tkm = np.zeros(Tkm_len)
+    # Divide coefficients by T^{k*2^{m-1}}
+    Tkm = np.zeros(int(k2m2k + k) + 1)
     Tkm[-1] = 1.0  # Tkm.back() = 1
-
-    # Divide coefficients by T^k*2^(m-1)
-    divqr_q, divqr_q_len, divqr_r, divqr_r_len = long_division_chebyshev(coefficients, coefficients_len, Tkm, Tkm_len)
+    divqr_q, divqr_r= long_division_chebyshev(coefficients, Tkm)
 
     # Subtract x^(k(2^(m-1) - 1)) from r
-    if int(k2m2k - degree(divqr_r, divqr_r_len)) <= 0:
-        divqr_r[int(k2m2k)] -= 1
-        r2_len = degree(divqr_r, divqr_r_len) + 1
-        r2 = np.zeros(r2_len)
-        r2[:min(divqr_r_len, r2_len)] = divqr_r[:min(divqr_r_len, r2_len)]
-        divqr_r[int(k2m2k)] += 1
+    r2=np.copy(divqr_r)
+    if (int(k2m2k - degree(divqr_r))<=0):
+        r2[k2m2k]-=1
+        r2.resize(degree(r2)+1, refcheck=False)
     else:
-        r2_len = int(k2m2k + 1)
-        r2 = np.zeros(r2_len)
-        r2[:min(divqr_r_len, r2_len)] = divqr_r[:min(divqr_r_len, r2_len)]
-        r2[-1] = -1
+        r2.resize(k2m2k+1,refcheck=False)
+        r2[-1]=-1
 
     # Divide r2 by q
-    divcs_q, divcs_q_len, divcs_r, divcs_r_len = long_division_chebyshev(r2, r2_len, divqr_q, divqr_q_len)
+    divcs_q, divcs_r = long_division_chebyshev(r2, divqr_q)
 
     # Add x^(k(2^(m-1) - 1)) to s
-    s2_len = int(k2m2k + 1)
-    s2 = np.zeros(s2_len)
-    s2[:min(divcs_r_len, s2_len)] = divcs_r[:min(divcs_r_len, s2_len)]
+    s2 = np.copy(divcs_r)
+    s2.resize(k2m2k+1, refcheck= False)
     s2[-1] = 1.0
 
     # Evaluate c at u
-    dc = degree(divcs_q, divcs_q_len)
+    dc = degree(divcs_q)
     flag_c = False
     if dc >= 1:
         if dc == 1:
@@ -259,55 +235,51 @@ def inner_eval_chebyshev_ps(coefficients, coefficients_len,
         else:
             ctxs = [T[i] for i in range(dc)]
             weights = divcs_q[1:dc + 1]
-            cu = eval_linear_wsum_mutable(ctxs, dc, weights, cryptoContext)
+            cu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
 
+        # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
+        # Need to reduce levels up to the level of T2[m-1].
         cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
         flag_c = True
 
     # Evaluate q and s2 at u
-    if degree(divqr_q, divqr_q_len) > k:
-        qu = inner_eval_chebyshev_ps(divqr_q, divqr_q_len, k, m - 1, T, T2, cryptoContext)
+    if degree(divqr_q) > k:
+        qu = inner_eval_chebyshev_ps(divqr_q, k, m - 1, T, T2, cryptoContext)
     else:
-        qcopy = np.zeros(k)
-        qcopy_len = k
-        qcopy[:min(divqr_q_len, qcopy_len)] = divqr_q[:min(divqr_q_len, qcopy_len)]
-        deg_qcopy = degree(qcopy, qcopy_len)
+        qcopy=np.copy(divqr_q)
+        qcopy.resize(k, refcheck=False)
+        deg_qcopy = degree(qcopy)
         if deg_qcopy > 0:
             ctxs = [T[i] for i in range(deg_qcopy)]
             weights = divqr_q[1:deg_qcopy + 1]
-            qu = eval_linear_wsum_mutable(ctxs, deg_qcopy, weights, cryptoContext)
+            qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
             sum = T[k - 1]
-            for i in range(int(math.log2(divqr_q[divqr_q_len - 1]))):
+            for i in range(int(math.log2(divqr_q[-1]))):
                 sum = homo_ops.cipher_add(sum, sum, cryptoContext)
             qu, sum = check_and_adjust_level(qu, sum, cryptoContext)
             qu = homo_ops.cipher_add(qu, sum, cryptoContext)
         else:
             sum = T[k - 1]
-            for i in range(int(math.log2(divqr_q[divqr_q_len - 1]))):
+            for i in range(int(math.log2(divqr_q[- 1]))):
                 sum = homo_ops.cipher_add(sum, sum, cryptoContext)
             qu = sum
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
 
     # Evaluate s2 at u
-    if degree(s2, s2_len) > k:
-        su = inner_eval_chebyshev_ps(s2, s2_len, k, m - 1, T, T2, cryptoContext)
+    if degree(s2) > k:
+        su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
     else:
-        scopy_len = k
-        scopy = np.zeros(scopy_len)
-        scopy[:min(s2_len, scopy_len)] = s2[:min(s2_len, scopy_len)]
-        deg_scopy = degree(scopy, scopy_len)
+        scopy=np.copy(s2)
+        scopy.resize(k, refcheck=False)
+        deg_scopy = degree(scopy)
         if deg_scopy > 0:
             ctxs = [T[i] for i in range(deg_scopy)]
             weights = s2[1:deg_scopy + 1]
-            su = eval_linear_wsum_mutable(ctxs, deg_scopy, weights, cryptoContext)
-            if T[k - 1].cur_limbs > su.cur_limbs:
-                su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
-                su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
-            else:
-                su, T[k - 1] = check_and_adjust_level(su, T[k - 1], cryptoContext)
-                su = homo_ops.cipher_add(su, T[k - 1], cryptoContext)
+            su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
+            su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
         else:
             su = T[k - 1]
 
@@ -328,74 +300,140 @@ def inner_eval_chebyshev_ps(coefficients, coefficients_len,
 
     return result
 
+def PopulateParameterPS(upper_bound_degree):
+    # Initialize the mlist array with zeros
+    mlist = np.zeros(upper_bound_degree, dtype=np.int32)
+
+    # Define the degree ranges and corresponding m values
+    # Each tuple is (start_n, end_n, m)
+    ranges = [
+        (1, 2, 1),        # n in [1,2], m = 1
+        (3, 11, 2),       # n in [3,11], m = 2
+        (12, 13, 3),      # n in [12,13], m = 3
+        (14, 17, 2),      # n in [14,17], m = 2
+        (18, 55, 3),      # n in [18,55], m = 3
+        (56, 59, 4),      # n in [56,59], m = 4
+        (60, 76, 3),      # n in [60,76], m = 3
+        (77, 239, 4),     # n in [77,239], m = 4
+        (240, 247, 5),    # n in [240,247], m = 5
+        (248, 284, 4),    # n in [248,284], m = 4
+        (285, 991, 5),    # n in [285,991], m = 5
+        (992, 1007, 6),   # n in [992,1007], m = 6
+        (1008, 1083, 5),  # n in [1008,1083], m = 5
+        (1084, 2015, 6),  # n in [1084,2015], m = 6
+        (2016, 2031, 7),  # n in [2016,2031], m = 7
+        (2032, 2204, 6)    # n in [2032,2204], m = 6
+    ]
+
+    for start, end, m in ranges:
+        if upper_bound_degree < start:
+            # If the upper bound is less than the start of the current range, no need to continue
+            break
+        # Determine the actual end for slicing to avoid exceeding upper_bound_degree
+        actual_end = min(end, upper_bound_degree)
+        # Set the value m for the slice [start-1, actual_end)
+        # In Python, slicing is end-exclusive
+        mlist[start-1 : actual_end] = m
+
+    return mlist
+
+# Compute positive integers k,m such that n < k(2^m-1), k is close to sqrt(n/2)
+# and the depth = ceil(log2(k))+m is minimized. Moreover, for that depth the
+# number of homomorphic multiplications = k+2m+2^(m-1)-4 is minimized.
+# Since finding these parameters involve testing many possible values, we
+# hardcode them for commonly used degrees, and provide a heuristic which
+# minimizes the number of homomorphic multiplications for the rest of the
+# degrees.
+def ComputeDegreesPS(n):
+    if n == 0:
+        raise ValueError("ComputeDegreesPS: The degree is zero. There is no need to evaluate the polynomial.")
+
+    UPPER_BOUND_PS = 2204
+
+    # Index n-1 in the list corresponds to degree n
+    if n <= UPPER_BOUND_PS:
+        mlist = PopulateParameterPS(UPPER_BOUND_PS)
+        m = mlist[n - 1]
+        k = math.floor(n / ((1 << m) - 1)) + 1
+        return [k, m]
+    else:
+        klist = []
+        mlist = []
+        multlist = []
+
+        sqrt_half_n = math.sqrt(n / 2)
+        floor_log2_sqrt_half_n = math.floor(math.log2(sqrt_half_n)) if sqrt_half_n > 0 else 0
+
+        for k in range(1, n + 1):
+            # Calculate the upper bound for m to avoid excessive iterations
+            max_m = math.ceil(math.log2(n / k) + 1) + 1
+            for m in range(1, int(max_m) + 1):
+                lhs = n
+                rhs = k * ((1 << m) - 1)
+                if lhs - rhs < 0:
+                    floor_log2_k = math.floor(math.log2(k))
+                    if abs(floor_log2_k - floor_log2_sqrt_half_n) <= 1:
+                        klist.append(k)
+                        mlist.append(m)
+                        mult = k + 2 * m + (1 << (m - 1)) - 4
+                        multlist.append(mult)
+
+        if not multlist:
+            raise ValueError("No valid (k, m) pairs found for the given n.")
+
+        min_mult = min(multlist)
+        min_index = multlist.index(min_mult)
+
+        return [klist[min_index], mlist[min_index]]
+
 # @profile_python_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
-
-    coefficients_len = len(coefficients)
-    deg = 1
-    for i in range(coefficients_len - 1, 0, -1):
-        if coefficients[i] == 0:
-            deg += 1
-        else:
-            break
-    n = coefficients_len - deg
-
+    rescaleTech=ScalingTechnique.FIXEDMANUAL #todo: should be read from context
+    n = degree(coefficients)
     f2 = np.copy(coefficients)
-    f2_len = coefficients_len
+    # Make sure the coefficients do not have the zero dominant terms
+    if coefficients[- 1] == 0:
+        f2.resize(n+1, refcheck=False)
 
-    if coefficients[coefficients_len - 1] == 0:
-        f2_len = n + 1
+    degs = ComputeDegreesPS(n)
+    k = degs[0]
+    m = degs[1]
 
-    klist = []
-    mlist = []
-
-    sqn2 = math.sqrt(n / 2)
-
-    for k in range(1, n + 1):
-        for m in range(1, math.ceil(math.log2(n / k)) + 2):
-            if n - k * ((1 << m) - 1) < 0:
-                if -2 <= k - sqn2 <= 2:
-                    klist.append(k)
-                    mlist.append(m)
-
-    min_index = mlist.index(min(mlist)) if mlist else -1
-
-    degs = [klist[min_index], mlist[min_index]] if min_index != -1 else []
-
-    k, m = degs[0], degs[1]
-
-    # Linear transformation
-    if a == -1 and b == 1:
-        y = x  # y == T[0]
+    # computes linear transformation y = -1 + 2 (x-a)/(b-a)
+    # consumes one level when a <> -1 && b <> 1
+    T = [0 for _ in range(k)]
+    if (a - round(a) < 1e-10) and (b - round(b) < 1e-10) and \
+       (round(a) == -1) and (round(b) == 1):
+        T[0]=x
     else:
         alpha = 2 / (b - a)
         beta = 2 * a / (b - a)
-        y = eval_mult_in_place(x, alpha, cryptoContext)
-        y = homo_ops.cipher_mod_reduce(y, 1, cryptoContext)
-        y = homo_ops.homo_add_scalar_double(y, -1.0 - beta, cryptoContext)
+        T[0] = eval_mult_in_place(x, alpha, cryptoContext)
+        T[0] = homo_ops.cipher_mod_reduce(T[0], 1, cryptoContext)
+        T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
-    T = [0 for _ in range(k)]
-    T[0] = y
-    # T = [Cipher([x.cv[0].clone(), x.cv[1].clone()], x.cur_limbs) for _ in range(k)]
-    # T[0] = y
-
+    # Computes Chebyshev polynomials up to degree k
+    # for y: T_1(y) = y, T_2(y), ... , T_k(y)
+    # uses binary tree multiplication
     for i in range(2, k + 1):
         if i & (i - 1) == 0:  # i is a power of 2
+            # compute T_{2i}(y) = 2*T_i(y)^2 - 1
             square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
             T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
             T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
             T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
-
-        else:
+        else: # non-power of 2
             if i % 2 == 1:  # i is odd
-                tmpct1, tmpct2 = check_and_adjust_level(T[i // 2 - 1], T[i // 2], cryptoContext)
+                # compute T_{2i+1}(y) = 2*T_i(y)*T_{i+1}(y) - y
+                tmpct1, tmpct2 = check_and_adjust_level(T[i // 2 - 1], T[i // 2], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
                 prod = homo_ops.homo_mul(tmpct1, tmpct2, cryptoContext)
                 T[i - 1] = homo_ops.homo_add(prod, prod, cryptoContext)
                 T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
-                T[i - 1], tmpct2 = check_and_adjust_level(T[i - 1], y, cryptoContext)
-                T[i - 1] = homo_ops.homo_sub(T[i - 1], tmpct2, cryptoContext)
+                T[i - 1], tmpct2 = check_and_adjust_level(T[i - 1], T[0], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
+                T[i - 1] = homo_ops.homo_sub(T[i - 1], tmpct2, cryptoContext) # todo: merge check_and_adjust_level into the func
 
-            else:  # i is even
+            else:  # i is even but not power of 2
+                # compute T_{2i}(y) = 2*T_i(y)^2 - 1
                 square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
                 T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
@@ -408,75 +446,56 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
     # T2 = [Cipher([T[0].cv[0].clone(), T[0].cv[1].clone()], T[0].cur_limbs) for _ in range(m)]
     T2 = [0 for _ in range(m)]
-    T2[0] = T[k - 1]
-
+    T2[0] = T[-1]
     for i in range(1, m):
         square = homo_ops.homo_square(T2[i - 1], cryptoContext)
         T2[i] = homo_ops.homo_add(square, square, cryptoContext)
         T2[i] = homo_ops.cipher_mod_reduce(T2[i], 1, cryptoContext)
         T2[i] = homo_ops.homo_add_scalar_double(T2[i], -1.0, cryptoContext)
 
+    # computes T_{k(2*m - 1)}(y)
     T2km1 = T2[0]
     for i in range(1, m):
-        tmpct1, tmpct2 = check_and_adjust_level(T2km1, T2[i], cryptoContext)
-        prod = homo_ops.homo_mul(tmpct1, tmpct2, cryptoContext)
+        # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
+        tmpct1, tmpct2 = check_and_adjust_level(T2km1, T2[i], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
+        prod = homo_ops.homo_mul(tmpct1, tmpct2, cryptoContext) # todo: merge check_and_adjust_level into homo_ops
+        # prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         T2km1 = homo_ops.cipher_mod_reduce(T2km1, 1, cryptoContext)
         T2km1, tmpct2 = check_and_adjust_level(T2km1, T2[0], cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, tmpct2, cryptoContext)
 
-    # Compute k*2^{m-1}-k
+    # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
 
-    # Initialize f2
-    new_f2_len = 2 * k2m2k + k + 1
-    if f2_len < new_f2_len:
-        new_f2 = np.zeros(new_f2_len)
-        for i in range(f2_len):
-            new_f2[i] = f2[i]
-        # f2 = None
-        for i in range(f2_len, new_f2_len):
-            new_f2[i] = 0.0
-        new_f2[new_f2_len - 1] = 1
-        f2_len = new_f2_len
-        f2 = new_f2
-    else:
-        f2_len = new_f2_len
-        f2[f2_len - 1] = 1
+    f2.resize(2 * k2m2k + k + 1, refcheck=False)
+    f2[-1]=1
 
     # Divide f2 by T^{k*2^{m-1}}
-    Tkm_len = k2m2k + k + 1
-    Tkm = np.zeros(Tkm_len)
-    Tkm[Tkm_len - 1] = 1
+    Tkm = np.zeros(k2m2k + k + 1)
+    Tkm[- 1] = 1
 
-    divqr_q, divqr_q_len, divqr_r, divqr_r_len = long_division_chebyshev(f2, f2_len, Tkm, Tkm_len)
-    TKm = None
-    f2 = None
+    divqr_q, divqr_r = long_division_chebyshev(f2, Tkm)
 
-    if k2m2k - degree(divqr_r, divqr_r_len) <= 0:
-        divqr_r[k2m2k] -= 1
-        r2_len = degree(divqr_r, divqr_r_len) + 1
-        r2 = np.zeros(r2_len)
-        r2[:min(len(divqr_r), r2_len)] = divqr_r[:min(len(divqr_r), r2_len)]
-        divqr_r[k2m2k] += 1
+    r2 = np.copy(divqr_r)
+    if k2m2k - degree(divqr_r) <= 0:
+        r2[k2m2k]-=1
+        r2.resize(degree(r2)+1, refcheck = False)
     else:
-        r2_len = k2m2k + 1
-        r2 = np.zeros(r2_len)
-        r2[:min(len(divqr_r), r2_len)] = divqr_r[:min(len(divqr_r), r2_len)]
-        r2[r2_len - 1] = -1
+        r2.resize(k2m2k+1, refcheck = False)
+        r2[-1] = -1
 
     # Divide r2 by q
-    divcs_q, divcs_q_len, divcs_r, divcs_r_len = long_division_chebyshev(r2, r2_len, divqr_q, divqr_q_len)
-    r2 = None
+    divcs_q, divcs_r = long_division_chebyshev(r2, divqr_q)
+
     # Add x^{k(2^{m-1} - 1)} to s
-    s2_len = k2m2k + 1
-    s2 = np.zeros(k2m2k + 1)
-    s2[:min(len(divcs_r), s2_len)] = divcs_r[:min(len(divcs_r), s2_len)]
+    s2 = np.copy(divcs_r)
+    s2.resize(k2m2k + 1, refcheck=False)
     s2[-1] = 1
 
     # Evaluate c at u
     cu = None
-    dc = degree(divcs_q, divcs_q_len)
+    dc = degree(divcs_q)
     flag_c = False
 
     if dc >= 1:
@@ -489,64 +508,64 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         else:
             ctxs = [T[i] for i in range(dc)]
             weights = divcs_q[1:dc + 1]
-            cu = eval_linear_wsum_mutable(ctxs, dc, weights, cryptoContext)
-            ctxs = None
-            weights = None
+            cu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+
+        # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
 
-    # Evaluate q and s2 at u
+    # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     qu = None
-    if degree(divqr_q, divqr_q_len) > k:
-        qu = inner_eval_chebyshev_ps(divqr_q, divqr_q_len, k, m - 1, T, T2, cryptoContext)
+    if degree(divqr_q) > k:
+        qu = inner_eval_chebyshev_ps(divqr_q, k, m - 1, T, T2, cryptoContext)
     else:
-        qcopy_len = k
-        qcopy = np.zeros(qcopy_len)
-        qcopy[:min(len(divqr_q), qcopy_len)] = divqr_q[:qcopy_len]
-
-        deg_qcopy = degree(qcopy, qcopy_len)
+        # dq = k from construction
+        # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
+        q_copy = np.copy(divqr_q[:k])
+        deg_qcopy = degree(q_copy)
         if deg_qcopy > 0:
             ctxs = [T[i] for i in range(deg_qcopy)]
             weights = divqr_q[1:deg_qcopy + 1]
-            qu = eval_linear_wsum_mutable(ctxs, deg_qcopy, weights, cryptoContext)
+            qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            # the highest order coefficient will always be 2 after one division because of the Chebyshev division rule
             sum = homo_ops.cipher_add(T[k - 1], T[k - 1], cryptoContext)
             qu, sum, = check_and_adjust_level(qu, sum, cryptoContext)
             qu = homo_ops.cipher_add(qu, sum, cryptoContext)
         else:
             qu = T[k - 1]
-            for _ in range(1, divqr_q[divqr_q_len - 1]):
+            for _ in range(1, divqr_q[- 1]):
                 qu = homo_ops.cipher_add(qu, T[k - 1], cryptoContext)
+
+        # adds the free term (at x^0)
         qu = homo_ops.cipher_add_scalar(qu, divqr_q[0] / 2, cryptoContext)
+        # The number of levels of qu is the same as the number of levels of T[k-1] + 1.
+        # Will only get here when m = 2, so the number of levels of qu and T2[m-1] will be the same.
+
 
     # Evaluate s2 at u
     su = None
-    deg_s2 = degree(s2, s2_len)
+    deg_s2 = degree(s2)
     if deg_s2 > k:
-        su = inner_eval_chebyshev_ps(s2, s2_len, k, m - 1, T, T2, cryptoContext)
+        su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
     else:
-        scopy_len = k
-        scopy = np.zeros(scopy_len)
-        scopy[:min(len(s2), scopy_len)] = s2[:scopy_len]
-
-        deg_scopy = degree(scopy, scopy_len)
+        # ds = k from construction
+        # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
+        scopy = np.copy(s2[:k])
+        deg_scopy = degree(scopy)
         if deg_scopy > 0:
             ctxs = [T[i] for i in range(deg_scopy)]
             weights = s2[1:deg_scopy + 1]
-            su = eval_linear_wsum_mutable(ctxs, deg_scopy, weights, cryptoContext)
-            if T[k - 1].cur_limbs > su.cur_limbs:
-                su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
-                su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
-            else:
-                su, T[k - 1] = check_and_adjust_level(su, T[k - 1], cryptoContext)
-                su = homo_ops.cipher_add(su, T[k - 1], cryptoContext)
-
+            su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            # the highest order coefficient will always be 1 because s2 is monic.
+            su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
+            su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
         else:
             su = T[k - 1]
-
+        # adds the free term (at x^0)
         su = homo_ops.cipher_add_scalar(su, s2[0] / 2, cryptoContext)
-        scopy = None
+        # The number of levels of su is the same as the number of levels of T[k-1] + 1.
+        # Will only get here when m = 2, so need to reduce the number of levels by 1.
 
-    # Final result computation
     if flag_c:
         T2[m - 1], cu = check_and_adjust_level(T2[m - 1], cu, cryptoContext)
         result = homo_ops.cipher_add(T2[m - 1], cu, cryptoContext)
