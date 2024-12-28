@@ -67,6 +67,56 @@ def eval_mult_in_place(ciphertext, constant, cryptoContext):
     ]
     return Cipher(cv, ciphertext.cur_limbs)
 
+# @profile_python_function
+def adjust_ciphertext(cryptoContext, ciphertext, correction):
+    rescale_tech = cryptoContext.BsContext.rescaleTech
+
+    if rescale_tech == 'FLEXIBLEAUTO' or rescale_tech == 'FLEXIBLEAUTOEXT':
+        # TODO: to be implemented
+        pass
+    else:
+        # Scaling down the message by a correction factor
+        cnst = math.pow(2, -correction)
+
+        ciphertext = eval_mult_in_place(ciphertext, cnst, cryptoContext)
+
+        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    return ciphertext
+
+# @profile_python_function
+def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
+    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
+    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
+
+    if rct1.cur_limbs > rct2.cur_limbs:
+        rct1=homo_ops.cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
+    elif rct1.cur_limbs < rct2.cur_limbs:
+        rct2=homo_ops.cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
+    return rct1, rct2
+
+# @profile_python_function
+def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
+    input_size = len(constants)
+    minLevel = ciphertexts[0].cur_limbs
+    minIdx = 0
+    for i in range(1, input_size):
+        if ciphertexts[i].cur_limbs < minLevel:
+            minLevel = ciphertexts[i].cur_limbs
+            minIdx = i
+    for i in range(minIdx):
+        if ciphertexts[i].cur_limbs < minLevel:
+            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
+    for i in range(minIdx + 1, input_size):
+        if ciphertexts[i].cur_limbs < minLevel:
+            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
+    wsum = eval_mult_in_place(ciphertexts[0], constants[0],
+                              cryptoContext)
+    for i in range(1, input_size):
+        tmp = eval_mult_in_place(ciphertexts[i], constants[i],
+                                 cryptoContext)
+        wsum = homo_ops.cipher_add(wsum, tmp, cryptoContext)
+    wsum = homo_ops.cipher_mod_reduce(wsum, 1, cryptoContext)
+    return wsum
 
 def is_not_equal_one(val):
     PREC = math.pow(2, -20)
@@ -159,40 +209,6 @@ def long_division_chebyshev(f, g):
     q[0] *= 2
     return q, r
 
-# @profile_python_function
-def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
-    input_size = len(constants)
-    minLevel = ciphertexts[0].cur_limbs
-    minIdx = 0
-    for i in range(1, input_size):
-        if ciphertexts[i].cur_limbs < minLevel:
-            minLevel = ciphertexts[i].cur_limbs
-            minIdx = i
-    for i in range(minIdx):
-        if ciphertexts[i].cur_limbs < minLevel:
-            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    for i in range(minIdx + 1, input_size):
-        if ciphertexts[i].cur_limbs < minLevel:
-            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    wsum = eval_mult_in_place(ciphertexts[0], constants[0],
-                              cryptoContext)
-    for i in range(1, input_size):
-        tmp = eval_mult_in_place(ciphertexts[i], constants[i],
-                                 cryptoContext)
-        wsum = homo_ops.cipher_add(wsum, tmp, cryptoContext)
-    wsum = homo_ops.cipher_mod_reduce(wsum, 1, cryptoContext)
-    return wsum
-
-# @profile_python_function
-def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
-    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
-    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
-
-    if rct1.cur_limbs > rct2.cur_limbs:
-        rct1=homo_ops.cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
-    elif rct1.cur_limbs < rct2.cur_limbs:
-        rct2=homo_ops.cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
-    return rct1, rct2
 
 # @profile_python_function
 def inner_eval_chebyshev_ps(coefficients,
@@ -835,23 +851,6 @@ def eval_slots_to_coeffs(A, ctxt, cryptoContext):
 def eval_linear_transform(A, ct, scheme):
     # TODO: to be implemented
     pass
-
-
-# @profile_python_function
-def adjust_ciphertext(cryptoContext, ciphertext, correction):
-    rescale_tech = cryptoContext.BsContext.rescaleTech
-
-    if rescale_tech == 'FLEXIBLEAUTO' or rescale_tech == 'FLEXIBLEAUTOEXT':
-        # TODO: to be implemented
-        pass
-    else:
-        # Scaling down the message by a correction factor
-        cnst = math.pow(2, -correction)
-
-        ciphertext = eval_mult_in_place(ciphertext, cnst, cryptoContext)
-
-        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    return ciphertext
 
 # @profile_python_function
 def cipher_mod_raise(cipher, L0, cryptoContext):
