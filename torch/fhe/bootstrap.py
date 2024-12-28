@@ -273,7 +273,7 @@ def DoubleAngleIteration(in0, cryptoContext):
 
     for j in range(1, r + 1):
         in0 = homo_square(in0, cryptoContext)
-        in0 = cipher_mod_reduce(in0, 1, cryptoContext)
+        in0 = homo_rescale(in0, 1, cryptoContext)
         in0 = homo_add(in0, in0, cryptoContext)
         # scalar = np.float64(np.float64(-1.0) / np.float64(math.pow((2.0 * M_PI), np.float64(math.pow(2.0, j - r)))))
         in0 = homo_add_scalar_double(in0, scalar[j - 1], cryptoContext)

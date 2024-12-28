@@ -172,7 +172,7 @@ def test_HMult3():
     golden_answer = np.array(HMult3.cipher1_mult1, dtype=np.uint64).reshape((len(mult.cv), mult.cur_limbs, mult.cv[0].shape[1]))
     compare_and_print(mult, golden_answer[::-1], "mult1")
 
-    res = homo_ops.cipher_mod_reduce(mult, 1, cryptoContext)
+    res = homo_ops.homo_rescale(mult, 1, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult1_rescale1, dtype=np.uint64).reshape((len(res.cv), res.cur_limbs, res.cv[0].shape[1]))
     compare_and_print(res, golden_answer[::-1], "mult1_rescale1")
 
@@ -180,7 +180,7 @@ def test_HMult3():
     golden_answer = np.array(HMult3.cipher1_mult2_rescale1, dtype=np.uint64).reshape((len(mult.cv), mult.cur_limbs, mult.cv[0].shape[1]))
     compare_and_print(mult, golden_answer[::-1], "mult2_rescale1", mult.cur_limbs)
 
-    res = homo_ops.cipher_mod_reduce(mult, 1, cryptoContext)
+    res = homo_ops.homo_rescale(mult, 1, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult2_rescale2, dtype=np.uint64).reshape((len(res.cv), res.cur_limbs, res.cv[0].shape[1]))
     compare_and_print(res, golden_answer[::-1], "mult2_rescale2", res.cur_limbs)
 
@@ -188,7 +188,7 @@ def test_HMult3():
     golden_answer = np.array(HMult3.cipher1_mult3_rescale2, dtype=np.uint64).reshape((len(mult.cv), mult.cur_limbs, mult.cv[0].shape[1]))
     compare_and_print(mult, golden_answer[::-1], "mult3_rescale1")
 
-    res = homo_ops.cipher_mod_reduce(mult, 1, cryptoContext)
+    res = homo_ops.homo_rescale(mult, 1, cryptoContext)
     golden_answer = np.array(HMult3.cipher1_mult3_rescale3, dtype=np.uint64).reshape((len(res.cv), res.cur_limbs, res.cv[0].shape[1]))
     compare_and_print(res, golden_answer[::-1], "mult3_rescale3")
 

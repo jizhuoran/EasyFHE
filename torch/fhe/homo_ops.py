@@ -16,16 +16,6 @@ def cipher_rescale(ct, cryptoContext):
     res1 = F.cv_rescale(ct.cv[1], cryptoContext, ct.cur_limbs)
     return Cipher([res0, res1], ct.cur_limbs - 1)
 
-
-def cipher_mod_reduce(ct, levels, cryptoContext):
-    curr_limbs = ct.cur_limbs
-    for l in range(levels):
-        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], cryptoContext, curr_limbs, l)
-        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], cryptoContext, curr_limbs, l)
-        curr_limbs -= 1
-    return Cipher([res0, res1], curr_limbs)
-
-
 def cipher_level_reduce(ct, levels):
     return Cipher(ct.cv, ct.cur_limbs - levels)
 
@@ -183,6 +173,13 @@ def homo_square(in0, cryptoContext):
     res.cv = res.cv[:2]
     return cipher_add(res, tmp, cryptoContext)
 
+def homo_rescale(ct, levels, cryptoContext):
+    curr_limbs = ct.cur_limbs
+    for l in range(levels):
+        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], cryptoContext, curr_limbs, l)
+        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], cryptoContext, curr_limbs, l)
+        curr_limbs -= 1
+    return Cipher([res0, res1], curr_limbs)
 
 def cpp_round(_float, _len=0):
     i = int(_float)

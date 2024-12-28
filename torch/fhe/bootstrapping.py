@@ -80,7 +80,7 @@ def adjust_ciphertext(cryptoContext, ciphertext, correction):
 
         ciphertext = eval_mult_in_place(ciphertext, cnst, cryptoContext)
 
-        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
 
 # @profile_python_function
@@ -104,7 +104,7 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
         tmp = eval_mult_in_place(ciphertexts[i], constants[i],
                                  cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
-    wsum = homo_ops.cipher_mod_reduce(wsum, 1, cryptoContext)
+    wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext)
     return wsum
 
 def is_not_equal_one(val):
@@ -234,7 +234,7 @@ def inner_eval_chebyshev_ps(coefficients,
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = eval_mult_in_place(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.cipher_mod_reduce(cu, 1, cryptoContext)
+                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
         else:
@@ -295,7 +295,7 @@ def inner_eval_chebyshev_ps(coefficients,
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
@@ -409,7 +409,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         alpha = 2 / (b - a)
         beta = 2 * a / (b - a)
         T[0] = eval_mult_in_place(x, alpha, cryptoContext)
-        T[0] = homo_ops.cipher_mod_reduce(T[0], 1, cryptoContext)
+        T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext)
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
     # Computes Chebyshev polynomials up to degree k
@@ -420,21 +420,21 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             # compute T_{2i}(y) = 2*T_i(y)^2 - 1
             square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
             T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-            T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
+            T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
             T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
         else: # non-power of 2
             if i % 2 == 1:  # i is odd
                 # compute T_{2i+1}(y) = 2*T_i(y)*T_{i+1}(y) - y
                 prod = homo_ops.homo_mul(T[i // 2 - 1], T[i // 2], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(prod, prod, cryptoContext)
-                T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
+                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
                 T[i - 1] = homo_ops.homo_sub(T[i - 1], T[0], cryptoContext)
 
             else:  # i is even but not power of 2
                 # compute T_{2i}(y) = 2*T_i(y)^2 - 1
                 square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-                T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
+                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
                 T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
 
     # Adjust levels of T
@@ -449,7 +449,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     for i in range(1, m):
         square = homo_ops.homo_square(T2[i - 1], cryptoContext)
         T2[i] = homo_ops.homo_add(square, square, cryptoContext)
-        T2[i] = homo_ops.cipher_mod_reduce(T2[i], 1, cryptoContext)
+        T2[i] = homo_ops.homo_rescale(T2[i], 1, cryptoContext)
         T2[i] = homo_ops.homo_add_scalar_double(T2[i], -1.0, cryptoContext)
 
     # computes T_{k(2*m - 1)}(y)
@@ -458,7 +458,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
         prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
-        T2km1 = homo_ops.cipher_mod_reduce(T2km1, 1, cryptoContext)
+        T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
     # Compute k*2^{m-1}-k because we use it a lot
@@ -498,7 +498,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = eval_mult_in_place(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.cipher_mod_reduce(cu, 1, cryptoContext)
+                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
         else:
@@ -566,7 +566,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         result = homo_ops.cipher_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
 
@@ -584,7 +584,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     for j in range(1, r + 1):
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
         ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
-        ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext) #todo: after new add implemented, should be move to the end
+        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) #todo: after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
     return ciphertext
@@ -663,7 +663,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     
     for s in loop_range:
         if (loop_direction == "forward" and s != 0) or (loop_direction == "backward" and s != level_budget -1):
-            result = homo_ops.cipher_mod_reduce(result, cipher_mod_levels, cryptoContext)
+            result = homo_ops.homo_rescale(result, cipher_mod_levels, cryptoContext)
         
         curr_limbs = result.cur_limbs
         limbs_ext = curr_limbs + special_limbs
@@ -722,7 +722,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     if flag_rem:
-        result = homo_ops.cipher_mod_reduce(result, cipher_mod_levels, cryptoContext)
+        result = homo_ops.homo_rescale(result, cipher_mod_levels, cryptoContext)
         curr_limbs = result.cur_limbs
         limbs_ext = curr_limbs + special_limbs
         len_ext = limbs_ext << logN
@@ -876,7 +876,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
 
     if slots == M // 4: # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
-        raised = homo_ops.cipher_mod_reduce(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
@@ -889,8 +889,8 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.cipher_mod_reduce(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -901,8 +901,8 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
 
 
         if rescaleTech != ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.cipher_mod_reduce(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
         ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
 
@@ -919,7 +919,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         # In the case of FLEXIBLEAUTO, we need one extra tower
         # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
         if rescaleTech != ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
@@ -938,7 +938,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         # ---------------------
         # Running CoeffsToSlots
         # ---------------------
-        raised = homo_ops.cipher_mod_reduce(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
@@ -950,7 +950,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, 1, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -960,7 +960,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, bs_ctx.coefficients, -1, 1, cryptoContext)
 
         if rescaleTech != ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
 
         # scale the message back up after Chebyshev interpolation
@@ -972,7 +972,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         # In the case of FLEXIBLEAUTO, we need one extra tower
         # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
         if rescaleTech != ScalingTechnique.FIXEDMANUAL:
-            ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
@@ -987,7 +987,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    ctxtDec = homo_ops.cipher_mod_reduce(ctxtDec, 1, cryptoContext)
+    ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
 
     return ctxtDec
 

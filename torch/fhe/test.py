@@ -1072,7 +1072,7 @@ def test_ModReduce_ct():
     rootsP = N256L4P2.rootsP2_N256
     cryptoContext = Context(logN, 53, 52, 52, L, K, moduliQ, moduliP, rootsQ, rootsP)
     ct = Ciphertext(cv, L)
-    res = homo_ops.cipher_mod_reduce(ct, 1, cryptoContext)
+    res = homo_ops.homo_rescale(ct, 1, cryptoContext)
 
     golden_answer = np.array(N256L4P2.cipher1_after_mult_ModReduce, dtype=np.uint64)
     golden_answer = golden_answer.reshape(res.cv.shape)
