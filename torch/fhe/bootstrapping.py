@@ -828,18 +828,6 @@ def eval_linear_transform(A, ct, scheme):
     # TODO: to be implemented
     pass
 
-# @profile_python_function
-def mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
-    l = cipher.cur_limbs
-    cipher.cv[0] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[0], l, monomial_degree)
-    cipher.cv[1] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[1], l, monomial_degree)
-    return cipher
-
-# @profile_python_function
-def cipher_mod_raise(cipher, L0, cryptoContext):
-    cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
-    cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
-    return Cipher([cv0, cv1], L0)
 
 # @profile_python_function
 def adjust_ciphertext(cryptoContext, ciphertext, correction):
@@ -856,6 +844,19 @@ def adjust_ciphertext(cryptoContext, ciphertext, correction):
 
         ciphertext = homo_ops.cipher_mod_reduce(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
+
+# @profile_python_function
+def cipher_mod_raise(cipher, L0, cryptoContext):
+    cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
+    cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
+    return Cipher([cv0, cv1], L0)
+
+# @profile_python_function
+def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
+    l = cipher.cur_limbs
+    cipher.cv[0] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[0], l, monomial_degree)
+    cipher.cv[1] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[1], l, monomial_degree)
+    return cipher
 
 # @profile_python_function
 def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescaleTech, secretKeyDist, L0, slots):
@@ -904,7 +905,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
         ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.cipher_add(ctxtEnc, conj, cryptoContext)
-        ctxtEncI = mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
+        ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
             ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -924,7 +925,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
         ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
 
-        ctxtEncI = mult_by_monomial_and_equal(ctxtEncI, M // 4, cryptoContext)
+        ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, M // 4, cryptoContext)
         ctxtEnc = homo_ops.cipher_add(ctxtEnc, ctxtEncI, cryptoContext)
 
         # scale the message back up after Chebyshev interpolation
