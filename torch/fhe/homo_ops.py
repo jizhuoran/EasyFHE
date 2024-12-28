@@ -1,6 +1,15 @@
 from .Ciphertext import Cipher
 from . import functional as F
 
+def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
+    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
+    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
+
+    if rct1.cur_limbs > rct2.cur_limbs:
+        rct1=cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
+    elif rct1.cur_limbs < rct2.cur_limbs:
+        rct2=cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
+    return rct1, rct2
 
 def cipher_rescale(ct, cryptoContext):
     res0 = F.cv_rescale(ct.cv[0], cryptoContext, ct.cur_limbs)
@@ -127,14 +136,23 @@ def cipher_neg(in0, cryptoContext):
 
 
 def homo_add(in0, in1, cryptoContext):
+    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
+        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
+
     return cipher_add(in0, in1, cryptoContext)
 
 
 def homo_sub(in0, in1, cryptoContext):
+    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
+        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
+
     return cipher_sub(in0, in1, cryptoContext)
 
 
 def homo_mul(in0, in1, cryptoContext):
+    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
+        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
+
     res = cipher_mul(in0, in1, cryptoContext)
     tmp = Cipher(
         F.cv_keyswitch(

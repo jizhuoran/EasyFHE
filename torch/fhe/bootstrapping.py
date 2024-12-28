@@ -84,17 +84,6 @@ def adjust_ciphertext(cryptoContext, ciphertext, correction):
     return ciphertext
 
 # @profile_python_function
-def check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext: Context):
-    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
-    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
-
-    if rct1.cur_limbs > rct2.cur_limbs:
-        rct1=homo_ops.cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
-    elif rct1.cur_limbs < rct2.cur_limbs:
-        rct2=homo_ops.cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
-    return rct1, rct2
-
-# @profile_python_function
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     input_size = len(constants)
     minLevel = ciphertexts[0].cur_limbs
@@ -114,7 +103,7 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     for i in range(1, input_size):
         tmp = eval_mult_in_place(ciphertexts[i], constants[i],
                                  cryptoContext)
-        wsum = homo_ops.cipher_add(wsum, tmp, cryptoContext)
+        wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
     wsum = homo_ops.cipher_mod_reduce(wsum, 1, cryptoContext)
     return wsum
 
@@ -272,13 +261,12 @@ def inner_eval_chebyshev_ps(coefficients,
             qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
             sum = T[k - 1]
             for i in range(int(math.log2(divqr_q[-1]))):
-                sum = homo_ops.cipher_add(sum, sum, cryptoContext)
-            qu, sum = check_and_adjust_level(qu, sum, cryptoContext)
-            qu = homo_ops.cipher_add(qu, sum, cryptoContext)
+                sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            qu = homo_ops.homo_add(qu, sum, cryptoContext)
         else:
             sum = T[k - 1]
             for i in range(int(math.log2(divqr_q[- 1]))):
-                sum = homo_ops.cipher_add(sum, sum, cryptoContext)
+                sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = sum
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
@@ -294,8 +282,7 @@ def inner_eval_chebyshev_ps(coefficients,
             ctxs = [T[i] for i in range(deg_scopy)]
             weights = s2[1:deg_scopy + 1]
             su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
-            su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
-            su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
+            su = homo_ops.homo_add(su, T[k - 1], cryptoContext)
         else:
             su = T[k - 1]
 
@@ -303,16 +290,13 @@ def inner_eval_chebyshev_ps(coefficients,
         su = homo_ops.cipher_level_reduce(su, 1)
 
     if flag_c:
-        T2[m - 1], cu = check_and_adjust_level(T2[m - 1], cu, cryptoContext)
-        result = homo_ops.cipher_add(T2[m - 1], cu, cryptoContext)
+        result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
     else:
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
-    result, qu = check_and_adjust_level(result, qu, cryptoContext)
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
-    result, su = check_and_adjust_level(result, su, cryptoContext)
-    result = homo_ops.cipher_add(result, su, cryptoContext)
+    result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
 
@@ -441,12 +425,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         else: # non-power of 2
             if i % 2 == 1:  # i is odd
                 # compute T_{2i+1}(y) = 2*T_i(y)*T_{i+1}(y) - y
-                tmpct1, tmpct2 = check_and_adjust_level(T[i // 2 - 1], T[i // 2], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
-                prod = homo_ops.homo_mul(tmpct1, tmpct2, cryptoContext)
+                prod = homo_ops.homo_mul(T[i // 2 - 1], T[i // 2], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(prod, prod, cryptoContext)
                 T[i - 1] = homo_ops.cipher_mod_reduce(T[i - 1], 1, cryptoContext)
-                T[i - 1], tmpct2 = check_and_adjust_level(T[i - 1], T[0], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
-                T[i - 1] = homo_ops.homo_sub(T[i - 1], tmpct2, cryptoContext) # todo: merge check_and_adjust_level into the func
+                T[i - 1] = homo_ops.homo_sub(T[i - 1], T[0], cryptoContext)
 
             else:  # i is even but not power of 2
                 # compute T_{2i}(y) = 2*T_i(y)^2 - 1
@@ -460,7 +442,8 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
         T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
 
-    # T2 = [Cipher([T[0].cv[0].clone(), T[0].cv[1].clone()], T[0].cur_limbs) for _ in range(m)]
+    # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
+    # T2[0] is used as a placeholder
     T2 = [0 for _ in range(m)]
     T2[0] = T[-1]
     for i in range(1, m):
@@ -473,13 +456,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     T2km1 = T2[0]
     for i in range(1, m):
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
-        tmpct1, tmpct2 = check_and_adjust_level(T2km1, T2[i], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
-        prod = homo_ops.homo_mul(tmpct1, tmpct2, cryptoContext) # todo: merge check_and_adjust_level into homo_ops
-        # prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext) # todo: merge check_and_adjust_level into homo_ops
+        prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         T2km1 = homo_ops.cipher_mod_reduce(T2km1, 1, cryptoContext)
-        T2km1, tmpct2 = check_and_adjust_level(T2km1, T2[0], cryptoContext)
-        T2km1 = homo_ops.homo_sub(T2km1, tmpct2, cryptoContext)
+        T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
     # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
@@ -544,13 +524,12 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             weights = divqr_q[1:deg_qcopy + 1]
             qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
             # the highest order coefficient will always be 2 after one division because of the Chebyshev division rule
-            sum = homo_ops.cipher_add(T[k - 1], T[k - 1], cryptoContext)
-            qu, sum, = check_and_adjust_level(qu, sum, cryptoContext)
-            qu = homo_ops.cipher_add(qu, sum, cryptoContext)
+            sum = homo_ops.homo_add(T[k - 1], T[k - 1], cryptoContext)
+            qu = homo_ops.homo_add(qu, sum, cryptoContext)
         else:
             qu = T[k - 1]
             for _ in range(1, divqr_q[- 1]):
-                qu = homo_ops.cipher_add(qu, T[k - 1], cryptoContext)
+                qu = homo_ops.homo_add(qu, T[k - 1], cryptoContext)
 
         # adds the free term (at x^0)
         qu = homo_ops.cipher_add_scalar(qu, divqr_q[0] / 2, cryptoContext)
@@ -573,8 +552,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             weights = s2[1:deg_scopy + 1]
             su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
             # the highest order coefficient will always be 1 because s2 is monic.
-            su, tmp_T = check_and_adjust_level(su, T[k - 1], cryptoContext)
-            su = homo_ops.cipher_add(su, tmp_T, cryptoContext)
+            su = homo_ops.homo_add(su, T[k - 1], cryptoContext)
         else:
             su = T[k - 1]
         # adds the free term (at x^0)
@@ -583,17 +561,13 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # Will only get here when m = 2, so need to reduce the number of levels by 1.
 
     if flag_c:
-        T2[m - 1], cu = check_and_adjust_level(T2[m - 1], cu, cryptoContext)
-        result = homo_ops.cipher_add(T2[m - 1], cu, cryptoContext)
+        result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
     else:
         result = homo_ops.cipher_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
-    result, qu = check_and_adjust_level(result, qu, cryptoContext)
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.cipher_mod_reduce(result, 1, cryptoContext)
-    result, su = check_and_adjust_level(result, su, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
-    result, T2km1 = check_and_adjust_level(result, T2km1, cryptoContext)
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
 
     return result
@@ -609,7 +583,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
 
     for j in range(1, r + 1):
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
-        ciphertext = homo_ops.cipher_add(ciphertext, ciphertext, cryptoContext)
+        ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
         ciphertext = homo_ops.cipher_mod_reduce(ciphertext, 1, cryptoContext) #todo: after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
@@ -911,7 +885,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
 
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
         ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext)
-        ctxtEnc = homo_ops.cipher_add(ctxtEnc, conj, cryptoContext)
+        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
@@ -933,7 +907,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
 
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, M // 4, cryptoContext)
-        ctxtEnc = homo_ops.cipher_add(ctxtEnc, ctxtEncI, cryptoContext)
+        ctxtEnc = homo_ops.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
 
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
@@ -959,7 +933,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
         for step in range(int(math.log2(N // (2 * slots)))):
             auto_index = cryptoContext.BsContext.auto_index[(1 << step) * slots]
             temp = homo_ops.homo_rotate(raised, auto_index, cryptoContext)
-            raised = homo_ops.cipher_add(raised, temp, cryptoContext)
+            raised = homo_ops.homo_add(raised, temp, cryptoContext)
 
         # ---------------------
         # Running CoeffsToSlots
@@ -973,7 +947,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
 
 
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
-        ctxtEnc = homo_ops.cipher_add(ctxtEnc, conj, cryptoContext)
+        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == ScalingTechnique.FIXEDMANUAL:
             ctxtEnc = homo_ops.cipher_mod_reduce(ctxtEnc, 1, cryptoContext)
@@ -1008,7 +982,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
 
         auto_index = cryptoContext.BsContext.auto_index[slots]
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, auto_index, cryptoContext)
-        ctxtDec = homo_ops.cipher_add(ctxtDec, ctxtDec_rot, cryptoContext)
+        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
