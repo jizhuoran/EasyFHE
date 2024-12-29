@@ -1,6 +1,12 @@
 from .Ciphertext import Cipher
 from . import functional as F
 
+import math
+import numpy as np
+import torch
+
+BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
+
 def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
     rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
     rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
@@ -11,7 +17,7 @@ def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
         rct2=cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
     return rct1, rct2
 
-def cipher_rescale(ct, cryptoContext):
+def cipher_rescale(ct, cryptoContext):  #todo: deprecated, to be removed, as well as inner functions
     res0 = F.cv_rescale(ct.cv[0], cryptoContext, ct.cur_limbs)
     res1 = F.cv_rescale(ct.cv[1], cryptoContext, ct.cur_limbs)
     return Cipher([res0, res1], ct.cur_limbs - 1)
@@ -202,7 +208,8 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
 
     return Cipher(res, ct.cur_limbs)
 
-
+#fixme: corresponds to MultByIntegerInPlace in openfhe, the scalar in openfhe is uint64_t
+#fixme: either call `abs` before `cipher_mul_scalar`, or prohibit scalar<0
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = cipher_mul_scalar(in0, scalar, cryptoContext)
     if scalar < 0:
@@ -210,12 +217,108 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
     return Cipher(res.cv, in0.cur_limbs)
 
 
-def homo_mul_scalar_double(in0, scalar, cryptoContext):
-    tmpr = cpp_round(abs(scalar) * (2 ** cryptoContext.logqi))
-    res = cipher_mul_scalar(in0, tmpr, cryptoContext)
-    if scalar < 0:
-        res = cipher_neg(res, cryptoContext)
-    return Cipher(res.cv, in0.cur_limbs)
+from enum import Enum
+
+class LargeScalingFactorConstants(Enum):
+    MAX_BITS_IN_WORD = 61
+    MAX_LOG_STEP     = 60
+
+# CRTMult in ckkspackedencoding.cpp
+def crt_mult(a, b, mods):
+    if len(a) != len(b) or len(a) != len(mods):
+        raise ValueError("Input lists 'a', 'b', and 'mods' must have the same length.")
+
+    result = np.zeros(len(a), dtype=np.uint64)
+    for i in range(len(mods)):
+        result[i] = ((int(a[i]) * int(b[i])) % int(mods[i]))
+
+    return result
+
+# note: GetElementForEvalMult in ckksrns-leveledshe.cpp
+def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
+    num_towers = cur_limbs
+    q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
+    sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+    # note: Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
+    MAX_BITS_IN_WORD_LOCAL = 125
+
+    # Compute approxFactor, a value to scale down by, in case the value exceeds a 64-bit integer.
+    log_approx = 0
+    res = math.fabs(constant * sc_factor)
+    if res > 0:
+        log_sf = int(math.ceil(math.log2(res)))
+        log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD_LOCAL else MAX_BITS_IN_WORD_LOCAL
+        log_approx = log_sf - log_valid
+
+    approx_factor = float(pow(2, log_approx))
+
+    large = int((constant / approx_factor * sc_factor) + 0.5)
+    large_abs = abs(large)
+    bound = 1 << 63
+
+    factors = np.zeros(num_towers, dtype=np.uint64) #todo: allocate inside or outside? or remove outside allocation
+    if large_abs >= bound:
+        for i in range(num_towers):
+            reduced = large % q_vec[i]
+            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+    else:
+        sc_constant = int(large)
+        for i in range(num_towers):
+            reduced = sc_constant % int(q_vec[i])
+            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+
+    # Scale back up by approxFactor within the CRT multiplications.
+    if log_approx > 0:
+        log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
+        int_step = 1 << log_step
+        crt_approx = np.full(num_towers, int_step, dtype=np.uint64)
+        log_approx -= log_step
+
+        while log_approx > 0:
+            log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
+            int_step = 1 << log_step
+            crt_sf = np.full(num_towers, int_step, dtype=np.uint64)
+            crt_approx = crt_mult(crt_approx, crt_sf, q_vec)
+            log_approx -= log_step
+        factors = crt_mult(factors, crt_approx, q_vec)
+
+    return factors
+
+# note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
+def eval_mult_core_in_place(ciphertext, constant, cryptoContext):
+    cur_limbs = ciphertext.cur_limbs
+    factors = np.zeros(cur_limbs, dtype=np.uint64)
+    factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
+    #todo: should merged with cipher_mul_scalar
+    factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
+    cv = [
+        F.cv_mul_scalar(
+            cv_i,
+            factors,
+            cryptoContext.moduliQ_cuda,
+            cryptoContext.q_mu_cuda,
+            ciphertext.cur_limbs,
+        )
+        for cv_i in ciphertext.cv
+    ]
+
+    scFactor = cryptoContext.GetScalingFactorReal(cur_limbs)
+    return Cipher(cv, ciphertext.cur_limbs, ciphertext.noise_deg+1, ciphertext.scaling_factor*scFactor)
+
+# note: EvalMultInPlace in ckksrns-leveledshe.cpp
+def homo_mul_scalar_double(cipher, cnst, cryptoContext):
+    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+        if cipher.noise_deg == 2:
+            cipher = homo_rescale(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    return eval_mult_core_in_place(cipher, cnst, cryptoContext)
+
+# def homo_mul_scalar_double(in0, scalar, cryptoContext):
+#     tmpr = cpp_round(abs(scalar) * (2 ** cryptoContext.logqi))
+#     res = cipher_mul_scalar(in0, tmpr, cryptoContext)
+#     if scalar < 0:
+#         res = cipher_neg(res, cryptoContext)
+#     return Cipher(res.cv, in0.cur_limbs)
 
 def homo_rotate(cipher, auto_index, ctx):
     cur_limbs = cipher.cur_limbs

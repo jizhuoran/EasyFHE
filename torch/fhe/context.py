@@ -421,9 +421,9 @@ class Context:
         self,
         logN,
         logSlots,
-        logq0,
-        logqi,
-        logp,
+        logq0, #todo: rename to firstMod
+        logqi, #todo: rename to dcrtBits
+        logp, #todo: rename to specialMod
         L,
         K,
         levelBudget,
@@ -940,6 +940,69 @@ class Context:
             self.QlQlInvModqlDivqlModq, dtype=np.uint64
         )
 
+        #todo: scalingFactorsReal and scalingFactorsRealBig should be move to cuda?
+        # note that they are vector of doubles in openfhe. now is set to float
+        # todo: check if self.dmoduliQ needs to be moved to cuda
+        DEFAULT_EXTRA_MOD_SIZE = 20
+        extraBits = DEFAULT_EXTRA_MOD_SIZE if self.rescaleTech == "FLEXIBLEAUTOEXT" else 0
+        # Pre-compute scaling factors for each level (used in FLEXIBLE* scaling techniques)
+        if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
+            self.scalingFactorsReal = [0.0] * self.L
+            if self.L == 1 and extraBits == 0:
+                # mult depth = 0 and FLEXIBLEAUTO
+                # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
+                # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
+                self.scalingFactorsReal[0] = 2 ** self.logqi
+            elif self.L == 2 and extraBits > 0:
+                # mult depth = 0 and FLEXIBLEAUTOEXT
+                # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
+                # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
+                self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
+                self.scalingFactorsReal[1] = 2 ** self.logqi
+            else:
+                self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
+                if extraBits > 0:
+                    self.scalingFactorsReal[1] = float(self.moduliQ[self.L - 2])
+                lastPresetFactor = (
+                    self.scalingFactorsReal[0]
+                    if extraBits == 0
+                    else self.scalingFactorsReal[1]
+                )
+                # number of levels with pre-calculated factors
+                numPresetFactors = 1 if extraBits == 0 else 2
+
+                for k in range(numPresetFactors, self.L):
+                    prevSF = self.scalingFactorsReal[k - 1]
+                    self.scalingFactorsReal[k] = (
+                        prevSF * prevSF / float(self.moduliQ[self.L - k])
+                    )
+                    ratio = self.scalingFactorsReal[k] / lastPresetFactor
+                    if ratio <= 0.5 or ratio >= 2.0:
+                        print(
+                            "FLEXIBLEAUTO cannot support this number of levels in this parameter setting. Please use FIXEDMANUAL or FIXEDAUTO instead."
+                        )
+
+            self.scalingFactorsRealBig = [0.0] * (self.L - 1)
+            if len(self.scalingFactorsRealBig) > 0:
+                if extraBits == 0:
+                    self.scalingFactorsRealBig[0] = (
+                        self.scalingFactorsReal[0] * self.scalingFactorsReal[0]
+                    )
+                else:
+                    self.scalingFactorsRealBig[0] = (
+                        self.scalingFactorsReal[0] * self.scalingFactorsReal[1]
+                    )
+                for k in range(1, self.L - 1):
+                    self.scalingFactorsRealBig[k] = (
+                        self.scalingFactorsReal[k] * self.scalingFactorsReal[k]
+                    )
+            # Moduli as real
+            self.dmoduliQ = [0.0] * self.L
+            for i in range(self.L):
+                self.dmoduliQ[i] = float(self.moduliQ[i])
+        else:
+            self.approxSF = 2 ** self.logqi
+
         # for cuda context
         if torch.cuda.is_available():
             self.log_degree = logN
@@ -1236,7 +1299,16 @@ class Context:
             self.left_rot_key_map[str(i)] = [torch.tensor(bx, dtype=torch.uint64, device="cuda").reshape(self.dnum, -1, self.N)
                                                     ,
                                                     torch.tensor(ax, dtype=torch.uint64, device="cuda").reshape(self.dnum, -1, self.N)]
-            
+
+    def GetScalingFactorReal(self, cur_limbs): #todo: introduce level or transfer limbs to level inside
+        lvl = self.L - cur_limbs # openfhe use `level` to do the index
+        if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
+            if lvl >= len(self.scalingFactorsReal):
+                # openfhetodo: Return an error here.
+                return self.approxSF
+            return self.scalingFactorsReal[lvl]
+        return self.approxSF
+
 
     def shoup(self, in_value, prime):
         temp = in_value << 64

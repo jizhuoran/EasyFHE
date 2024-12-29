@@ -372,7 +372,7 @@ def cv_drop_last_element_and_scale(
     return rescale.reshape(-1, context_cuda.N)
 
 
-def cv_rescale(
+def cv_rescale( #todo: deprecated, to be removed, as well as inner functions
     input: Tensor,
     context_cuda: Context,
     cur_limbs: int,

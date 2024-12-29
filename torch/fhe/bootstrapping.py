@@ -19,60 +19,67 @@ m_correctionFactor = (
 )
 
 # @profile_python_function
-def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
-    num_towers = cur_limbs
-    p = cryptoContext.p
-    q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
-
-    sc_factor = p
-
-    # Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
-    MAX_BITS_IN_WORD = 126
-
-    # Compute approxFactor
-    log_sf = int(math.ceil(math.log2(math.fabs(sc_factor))))
-    log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD else MAX_BITS_IN_WORD
-    log_approx = log_sf - log_valid
-    approx_factor = pow(2, log_approx)
-
-    large = int((constant / approx_factor * sc_factor) + 0.5)
-    large_abs = abs(large)
-    bound = 1 << 63
-
-    if large_abs > bound:
-        for i in range(num_towers):
-            reduced = large % q_vec[i]
-            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-    else:
-        sc_constant = int(large)
-        for i in range(num_towers):
-            reduced = sc_constant % int(q_vec[i])
-            factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-    return factors
-
+# note: rewrite in homo_ops
+# def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
+#     num_towers = cur_limbs
+#     p = cryptoContext.p
+#     q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
+#
+#     sc_factor = p
+#
+#     # Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
+#     MAX_BITS_IN_WORD = 126
+#
+#     # Compute approxFactor
+#     log_sf = int(math.ceil(math.log2(math.fabs(sc_factor))))
+#     log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD else MAX_BITS_IN_WORD
+#     log_approx = log_sf - log_valid
+#     approx_factor = pow(2, log_approx)
+#
+#     large = int((constant / approx_factor * sc_factor) + 0.5)
+#     large_abs = abs(large)
+#     bound = 1 << 63
+#
+#     if large_abs > bound:
+#         for i in range(num_towers):
+#             reduced = large % q_vec[i]
+#             factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+#     else:
+#         sc_constant = int(large)
+#         for i in range(num_towers):
+#             reduced = sc_constant % int(q_vec[i])
+#             factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
+#     return factors
+#
+# # note: done!
+# def eval_mult_core_in_place(ciphertext, constant, cryptoContext):
+#     cur_limbs = ciphertext.cur_limbs
+#     factors = np.zeros(cur_limbs, dtype=np.uint64)
+#     factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext) #todo: should be reimplemented
+#     factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
+#     cv = [
+#         F.cv_mul_scalar(
+#             cv_i,
+#             factors,
+#             cryptoContext.moduliQ_cuda,
+#             cryptoContext.q_mu_cuda,
+#             ciphertext.cur_limbs,
+#         )
+#         for cv_i in ciphertext.cv
+#     ]
+#
+#     scFactor = cryptoContext.GetScalingFactorReal(cur_limbs)
+#     return Cipher(cv, ciphertext.cur_limbs, ciphertext.noise_deg+1, ciphertext.scaling_factor*scFactor)
 
 # @profile_python_function
-def eval_mult_in_place(ciphertext, constant, cryptoContext):
+# # note: done!
+# def eval_mult_in_place(ciphertext, constant, cryptoContext):
+#     if cryptoContext.rescaleTech != "FIXEDMANUAL":
+#         if ciphertext.noise_deg == 2:
+#             ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+#
+#     return eval_mult_core_in_place(ciphertext, constant, cryptoContext)
 
-    # print("eval_mult_in_place", "constant", constant)
-
-    cur_limbs = ciphertext.cur_limbs
-    factors = np.zeros(cur_limbs, dtype=np.uint64)
-
-    # Generate the factors needed for multiplication
-    factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
-    factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
-    cv = [
-        F.cv_mul_scalar(
-            cv0,
-            factors,
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
-            ciphertext.cur_limbs,
-        )
-        for cv0 in ciphertext.cv
-    ]
-    return Cipher(cv, ciphertext.cur_limbs)
 
 
 # @profile_python_function
