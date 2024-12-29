@@ -397,8 +397,9 @@ def ComputeDegreesPS(n):
         return [klist[min_index], mlist[min_index]]
 
 # @profile_python_function
+# note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
-    rescaleTech="FIXEDMANUAL" #todo: should be read from context
+    rescaleTech=cryptoContext.rescaleTech
     n = degree(coefficients)
     f2 = np.copy(coefficients)
     # Make sure the coefficients do not have the zero dominant terms
@@ -451,6 +452,15 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     for i in range(1, k):
         level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
         T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+
+    # if rescaleTech ==ScalingTechnique.FIXEDMANUAL:
+    #     # brings all powers of x to the same level
+    #     for i in range(1, k):
+    #         level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
+    #         T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+    # # else:
+    # #     for i in range(1, k):
+    # #         AdjustLevelsAndDepthInPlace(T[i - 1], T[k - 1]);
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
@@ -839,7 +849,7 @@ def eval_linear_transform(A, ct, scheme):
     pass
 
 # @profile_python_function
-def cipher_mod_raise(cipher, L0, cryptoContext):
+def cipher_mod_raise(cipher, L0, cryptoContext): #todo: set noisedeg and scalingfactor
     cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
     cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
     return Cipher([cv0, cv1], L0)
@@ -853,6 +863,7 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
 
 
 # @profile_python_function
+# note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
@@ -883,7 +894,21 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     pre = 1.0 / post
     scalar = round(post)
 
-    tmp = adjust_ciphertext(cryptoContext, ciphertext, correction)
+    # -------------------
+    # raising the modulus
+    # -------------------
+    # In FLEXIBLEAUTO, raising the ciphertext to a larger number
+    # of towers is a bit more complex, because we need to adjust
+    # it's scaling factor to the one that corresponds to the level
+    # it's being raised to.
+    # Increasing the modulus
+
+    tmp = ciphertext
+    # tmp = homo_ops.homo_rescale(tmp, tmp.noise_deg-1) #todo: should uncomment after implemented flexibleauto
+    tmp = adjust_ciphertext(cryptoContext, tmp, correction) #todo: fix the impelementation
+
+    # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
+    # CKKS bootstrapping faster.
     raised = cipher_mod_raise(tmp, L0, cryptoContext)
 
     constantEvalMult = pre * (1.0 / (bs_ctx.k * N))
@@ -909,6 +934,13 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         if rescaleTech == "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            # while(ctxtEnc.noise_deg>1):#below should be indented and omit BASE_NUM_LEVELS_TO_DROP
+            #     ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            #     ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        # else:
+        #     if ctxtEnc.noise_deg==2:
+        #         ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        #         ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -969,6 +1001,11 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
         if rescaleTech == "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
+            # while ctxtEnc.noise_deg>1: #todo: indent, and omit specified levels?
+            #     ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
+        # else:
+        #     if ctxtEnc.noise_deg ==2 :
+        #         ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -1006,6 +1043,12 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
     ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
+    # if rescaleTech == ScalingTechnique.FIXEDMANUAL:
+    # fixme: 这一步rescale是我自己加的，
+    #  如果是flexibleauto， 用openfhe解密的话，需要在解密函数里，解密前判断一下自己把最后一次rescale做了，
+    #  因为只传多项式给openfhe（没有传noisedeg scalingfactor那些参数），openfhe没有其它信息不会去多做一次rescale
+    #  如果是FIXEDMANUAL，避免在bs之后再接其它计算出问题，这里应该手动的rescale一下
+    #     ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
 
     return ctxtDec
 

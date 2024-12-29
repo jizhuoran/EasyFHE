@@ -16,6 +16,8 @@ def cipher_rescale(ct, cryptoContext):
     res1 = F.cv_rescale(ct.cv[1], cryptoContext, ct.cur_limbs)
     return Cipher([res0, res1], ct.cur_limbs - 1)
 
+#todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
+# should not be used directly in other rescale modes!!! except when openfhe directly used it
 def cipher_level_reduce(ct, levels):
     return Cipher(ct.cv, ct.cur_limbs - levels)
 
@@ -174,6 +176,8 @@ def homo_square(in0, cryptoContext):
     return cipher_add(res, tmp, cryptoContext)
 
 def homo_rescale(ct, levels, cryptoContext):
+    if levels == 0: return Cipher(ct.cv, ct.curr_limbs)
+
     curr_limbs = ct.cur_limbs
     for l in range(levels):
         res0 = F.cv_drop_last_element_and_scale(ct.cv[0], cryptoContext, curr_limbs, l)
