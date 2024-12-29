@@ -86,7 +86,7 @@ def adjust_ciphertext(cryptoContext, ciphertext, correction):
         # Scaling down the message by a correction factor
         cnst = math.pow(2, -correction)
 
-        ciphertext = eval_mult_in_place(ciphertext, cnst, cryptoContext)
+        ciphertext = homo_ops.homo_mul_scalar_double(ciphertext, cnst, cryptoContext)
 
         ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
@@ -107,10 +107,10 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     for i in range(minIdx + 1, input_size):
         if ciphertexts[i].cur_limbs < minLevel:
             ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    wsum = eval_mult_in_place(ciphertexts[0], constants[0],
+    wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0],
                               cryptoContext)
     for i in range(1, input_size):
-        tmp = eval_mult_in_place(ciphertexts[i], constants[i],
+        tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i],
                                  cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
     wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext)
@@ -243,7 +243,7 @@ def inner_eval_chebyshev_ps(coefficients,
     if dc >= 1:
         if dc == 1:
             if divcs_q[1] != 1:
-                cu = eval_mult_in_place(T[0], divcs_q[1], cryptoContext)
+                cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
                 cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
@@ -418,7 +418,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         alpha = 2 / (b - a)
         beta = 2 * a / (b - a)
-        T[0] = eval_mult_in_place(x, alpha, cryptoContext)
+        T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
         T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext)
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
@@ -507,7 +507,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if dc >= 1:
         if dc == 1:
             if divcs_q[1] != 1:
-                cu = eval_mult_in_place(T[0], divcs_q[1], cryptoContext)
+                cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
                 cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
