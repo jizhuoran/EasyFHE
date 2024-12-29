@@ -77,7 +77,7 @@ def eval_mult_in_place(ciphertext, constant, cryptoContext):
 
 # @profile_python_function
 def adjust_ciphertext(cryptoContext, ciphertext, correction):
-    rescale_tech = cryptoContext.BsContext.rescaleTech
+    rescale_tech = cryptoContext.rescaleTech
 
     if rescale_tech == "FLEXIBLEAUTO" or rescale_tech == "FLEXIBLEAUTOEXT":
         # TODO: to be implemented
@@ -585,9 +585,9 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
 # @profile_python_function
 def apply_double_angle_iterations(ciphertext, cryptoContext):
-    if cryptoContext.BsContext.secretKeyDist == "UNIFORM_TERNARY":
+    if cryptoContext.secretKeyDist == "UNIFORM_TERNARY":
         r = R_UNIFORM
-    elif cryptoContext.BsContext.secretKeyDist == "SPARSE_TERNARY":
+    elif cryptoContext.secretKeyDist == "SPARSE_TERNARY":
         r = R_SPARSE
     else:
         raise ValueError("set secretKeyDist first!")
@@ -853,17 +853,21 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
 
 
 # @profile_python_function
-def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescaleTech, secretKeyDist, L0, slots):
+def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
-    cryptoContext.slots = slots
+    cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
     bs_ctx = cryptoContext.BsContext
     moduliQ = cryptoContext.moduliQ
-    rescaleTech = precom.rescaleTech
+    rescaleTech = cryptoContext.rescaleTech
 
-    assert num_iterations == 1  # Only one iteration is supported
-    assert rescaleTech == "FIXEDMANUAL"  # Only FIXEDMANUAL is supported
+    assert rescaleTech == "FIXEDMANUAL"  # Only FIXEDMANUAL is supported #todo: to be removed
+    if (rescaleTech=="FLEXIBLEAUTOEXT"):
+        pass
+        # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
+        # as it is multiplied by auxiliary plaintext
+        #todo: to be implemented, should raise less modulus
 
     q = moduliQ[0]
     q_double = float(q)
@@ -886,7 +890,7 @@ def eval_bootstrap(cryptoContext, ciphertext, num_iterations, precision, rescale
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)#todo: check cc->EvalMultInPlace
 
     ctxtDec = None  # Initialize decrypted ciphertext
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (precom.paramsDec.level_budget == 1) #todo: align with openfhe, but should be refactored
+    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (precom.paramsDec.level_budget == 1) #todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
 
     if slots == M // 4: # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
@@ -1037,9 +1041,8 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
     m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
 
     M = context.M
-    N = context.N
     slots = M // 4 if numslots == 0 else numslots
-    rescale_tech = context.BsContext.rescaleTech
+    rescale_tech = context.rescaleTech
     precom = context.BsContext
 
     # 设置 correction_factor
@@ -1215,8 +1218,7 @@ def BootstrapTest_N65536L26lB44(
     cipher.cv[1] = cipher.cv[1][:2]
     cipher.cur_limbs = 2
 
-    result = eval_bootstrap(cryptoContext, cipher, num_iterations=1, precision=0, rescaleTech=cryptoContext.rescaleTech,
-                            secretKeyDist=cryptoContext.secretKeyDist, L0=cryptoContext.L, slots=cryptoContext.slots)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
 
     after_boot = openfhe_context.decrypt(result)
     after_boot = after_boot.cpu().numpy().reshape(-1)
@@ -1233,16 +1235,7 @@ def BootstrapTest_N65536L26lB44(
     measure_execution_time = True
     if measure_execution_time:
         start = time.time()
-        result = eval_bootstrap(
-            cryptoContext,
-            cipher,
-            num_iterations=1,
-            precision=0,
-            rescaleTech=cryptoContext.rescaleTech,
-            secretKeyDist=cryptoContext.secretKeyDist,
-            L0=cryptoContext.L,
-            slots=cryptoContext.slots,
-        )
+        result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
         end = time.time()
         print("time", end - start)
 
@@ -1265,16 +1258,8 @@ def BootstrapTest_N65536L26lB44(
                 with_stack=True,
             ) as profiler:
                 # Start profiling specific functions with torch.profiler.record_function()
-                result = eval_bootstrap(
-                    cryptoContext,
-                    cipher,
-                    num_iterations=1,
-                    precision=0,
-                    rescaleTech=cryptoContext.rescaleTech,
-                    secretKeyDist=cryptoContext.secretKeyDist,
-                    L0=cryptoContext.L,
-                    slots=cryptoContext.slots,
-                )
+                result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots,
+                                        cryptoContext=cryptoContext)
 
             # Get the profiling results
             profiler_results = profiler.key_averages()
@@ -1319,16 +1304,7 @@ def run_test_cases():
         cipher = Cipher([torch.tensor(x, dtype = torch.uint64, device = "cuda") for x in input], 2)
 
         result = cipher
-        result = eval_bootstrap(
-            cryptoContext,
-            cipher,
-            num_iterations=1,
-            precision=0,
-            rescaleTech=cryptoContext.rescaleTech,
-            secretKeyDist=cryptoContext.secretKeyDist,
-            L0=cryptoContext.L,
-            slots=cryptoContext.slots,
-        )
+        result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
 
         res_cv0 = result.cv[0].cpu().numpy().reshape(-1)
         res_cv1 = result.cv[1].cpu().numpy().reshape(-1)

@@ -58,14 +58,12 @@ class BsContext:
         self.M = cryptoContext.N *2
         slots = self.M // 4 if numslots == 0 else numslots
         self.correctionFactor = correctionFactor
-        self.secretKeyDist = secretKeyDist
         self.m_U0hatTPre = None
         self.m_U0hatTPreFFT = None
         self.m_U0Pre = None
         self.m_U0PreFFT = None
         self.paramsDec = None
         self.paramsEnc = None
-        self.rescaleTech = rescaleTech
         self.precompute_auto_map = {}
 
         # precom = scheme.precom
@@ -175,7 +173,7 @@ class BsContext:
             self.QmuplusPmu_map[cur_limbs] = torch.tensor(np.concatenate((cryptoContext.q_mu[0:cur_limbs], cryptoContext.p_mu[:cryptoContext.K])), dtype=torch.uint64, device="cuda")
 
         #compute auto index map
-        self.auto_index = {}
+        self.auto_index = {} # todo: should be saved in global context
         self.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
         for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
             self.auto_index[(1 << step) * slots] = self.find_auto_index((1 << step) * slots, cryptoContext.N << 1)
