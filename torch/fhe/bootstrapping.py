@@ -1159,19 +1159,6 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs)
 
 
-# test code
-def get_bootstrap_depth(approx_mod_depth, level_budget, secret_key_dist):
-    # Constants equivalent to C++ code
-    R_UNIFORM = 6  # 替代值，需根据实际情况填写
-
-    # Adjust approx_mod_depth based on secretKeyDist
-    if secret_key_dist == "UNIFORM_TERNARY":
-        approx_mod_depth += R_UNIFORM - 1
-
-    # Compute and return the depth
-    return approx_mod_depth + level_budget[0] + level_budget[1]
-
-
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
@@ -1328,7 +1315,7 @@ def run_test_cases():
         eval_bootstrap_setup(
             cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0
         )
-        
+
         cipher = Cipher([torch.tensor(x, dtype = torch.uint64, device = "cuda") for x in input], 2)
 
         result = cipher
