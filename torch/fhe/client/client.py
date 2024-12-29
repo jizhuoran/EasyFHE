@@ -72,12 +72,25 @@ def gen_contexts(
     rescaleTech
 ):
 
+    SecretKeyDist_MAP = {
+        "GAUSSIAN": openfhe.SecretKeyDist.GAUSSIAN,
+        "UNIFORM_TERNARY": openfhe.SecretKeyDist.UNIFORM_TERNARY,
+        "SPARSE_TERNARY": openfhe.SecretKeyDist.SPARSE_TERNARY,
+    }
+
+    ScalingTechnique_MAP = {
+        "FIXEDMANUAL": openfhe.ScalingTechnique.FIXEDMANUAL,
+        "FIXEDAUTO": openfhe.ScalingTechnique.FIXEDAUTO,
+        "FLEXIBLEAUTO": openfhe.ScalingTechnique.FLEXIBLEAUTO,
+        "FLEXIBLEAUTOEXT": openfhe.ScalingTechnique.FLEXIBLEAUTOEXT,
+        "NORESCALE": openfhe.ScalingTechnique.NORESCALE,
+    }
+
     N = int(2**logN)
     slots = int(2**logSlots)
 
-    openfhe_secretKeyDist = openfhe.SecretKeyDist.UNIFORM_TERNARY
-    openfhe_rescaleTech = openfhe.ScalingTechnique.FIXEDMANUAL
-
+    openfhe_secretKeyDist = SecretKeyDist_MAP[secretKeyDist]
+    openfhe_rescaleTech = ScalingTechnique_MAP[rescaleTech]
 
     depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
         approxModDepth, levelBudget, openfhe_secretKeyDist

@@ -16071,17 +16071,17 @@
   dispatch:
     CUDA: switch_modulus_cuda_out
 
-- func: mul_by_monomial(Tensor self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor
+- func: mul_by_monomial(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda
 
-- func: mul_by_monomial_(Tensor(a!) self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor(a!)
+- func: mul_by_monomial_(Tensor(a!) self, *, Tensor primes, int l, int N, int M, int monomialDeg, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda_
 
-- func: mul_by_monomial.out(Tensor self, Tensor qVec, *, Tensor tmp, Tensor primes, int l, int N, int M, int monomialDeg, int curr_limbs, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor(a!) out) -> Tensor(a!)
+- func: mul_by_monomial.out(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int level, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor param_power_of_roots_shoup, Tensor param_power_of_roots, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda_out

@@ -26,8 +26,8 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
         )
     ).cuda()
 
-def set_zero(x, N):
-    torch.set_zero(x, N)
+def cv_set_zero(x, length):
+    torch.set_zero(x, length)
 
 def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:
@@ -416,28 +416,26 @@ def cv_rescale(
     return rescale.reshape(-1, context_cuda.N)
 
 def cv_automorphism_transform(
-    context_cuda: Context,
     input: Tensor,
     l: int,
-    N: int,
     i: int,
-    precomp_vec: Tensor
+    context_cuda: Context
 ) -> Tensor:
     automorphism_transform = torch.automorphism_transform(
         context_cuda.automorphism_transform_out,
         input,
         l=int(l),
-        N=int(N),
+        N=context_cuda.N,
         i=int(i),
-        precomp_vec=precomp_vec
+        precomp_vec=context_cuda.BsContext.precompute_auto_map[i]
     )
 
     return automorphism_transform.reshape(-1, context_cuda.N)
 
-def cv_switch_modulus(
-    context_cuda: Context, 
+def cv_switch_modulus_with_intt_ntt(
     input: Tensor, 
-    L0 : int, 
+    L0 : int,
+    context_cuda: Context
     ) -> Tensor:
     switch_modulus = torch.switch_modulus(
         context_cuda.switch_modulus_out,
@@ -458,22 +456,16 @@ def cv_switch_modulus(
 def cv_mul_by_monomial(
     context_cuda: Context,
     input: Tensor,
-    qVec: Tensor,
-    tmp: Tensor,
     l: int,
     monomialDeg: int,
-    curr_limbs: int
 ) -> Tensor:
     mul_by_monomial = torch.mul_by_monomial(
-        input, 
-        qVec,
-        tmp = tmp,
+        input,
         primes = context_cuda.primes,
         l = l,
         N = context_cuda.degree,
         M = context_cuda.M,
         monomialDeg=monomialDeg,
-        curr_limbs = curr_limbs,
         level=context_cuda.level,
         inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,

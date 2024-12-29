@@ -27,18 +27,18 @@ def reduce_rotation(index, slots):
     return (islots + index % islots) % islots
 
 warnings.formatwarning = custom_warning_format
-class SecretKeyDist(Enum):
-    GAUSSIAN = 0
-    UNIFORM_TERNARY = 1
-    SPARSE_TERNARY = 2
+# class SecretKeyDist(Enum):
+#     GAUSSIAN = 0
+#     UNIFORM_TERNARY = 1
+#     SPARSE_TERNARY = 2
 
-class ScalingTechnique(Enum):
-    FIXEDMANUAL = 0
-    FIXEDAUTO = 1
-    FLEXIBLEAUTO = 2
-    FLEXIBLEAUTOEXT = 3
-    NORESCALE = 4
-    INVALID_RS_TECHNIQUE = 5
+# class ScalingTechnique(Enum):
+#     FIXEDMANUAL = 0
+#     FIXEDAUTO = 1
+#     FLEXIBLEAUTO = 2
+#     FLEXIBLEAUTOEXT = 3
+#     NORESCALE = 4
+#     INVALID_RS_TECHNIQUE = 5
 
 class CKKS_Boot_Params:
     def __init__(self, level_budget, layers_coll, layers_rem, num_rotations, baby_step, giant_step, num_rotations_rem, baby_step_rem, giant_step_rem):
@@ -70,7 +70,7 @@ class BsContext:
 
         # precom = scheme.precom
         if correctionFactor == 0:
-            if rescaleTech == ScalingTechnique.FLEXIBLEAUTO or rescaleTech == ScalingTechnique.FLEXIBLEAUTOEXT:
+            if rescaleTech == "FLEXIBLEAUTO" or rescaleTech == "FLEXIBLEAUTOEXT":
                 tmp = round(-0.265 * (2 * math.log2(self.M  / 2) + math.log2(slots)) + 19.1)
                 if tmp < 7:
                     self.m_correctionFactor = 7
@@ -154,10 +154,10 @@ class BsContext:
         ], dtype=np.float64)
 
 
-        # Chebyshev series coefficients for modular reduction
-        if secretKeyDist == SecretKeyDist.SPARSE_TERNARY:
+        # Coefficients of the Chebyshev series interpolating 1/(2 Pi) Sin(2 Pi K x)
+        if secretKeyDist == "SPARSE_TERNARY":
             self.coefficients = np.copy(coefficientsSparse)
-            self.k = 1.0
+            self.k = 1.0 #do not divide by k as we already did it during precomputation
         else:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
