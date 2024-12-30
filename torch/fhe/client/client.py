@@ -39,9 +39,12 @@ class OpenFHEContext:
     def encrypt(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
         cipher = self.cc.Encrypt(self.publicKey, ptx)
+        # sc_Factor = cipher.GetScalingFactor()
+        # noise_deg = cipher.GetNoiseDeg()
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-        return Cipher.Cipher(cv, cv[0].shape[0])
+        # return Cipher.Cipher(cv, cv[0].shape[0], sc_Factor, noise_deg) # todo:set scaling factor and noise deg here?
+        return Cipher.Cipher(cv, cv[0].shape[0], 0.0, 1)
 
     def decrypt(self, x):
         assert len(x.cv) == 2

@@ -29,7 +29,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
             # Print error message and raise an exception to stop the program
             print("cryptoContext.L != L0")
             raise Exception("Error: cryptoContext.L != L0")
-        target_sf = cryptoContext.GetScalingFactorReal(limbs = (L0 - lvl))
+        target_sf = cryptoContext.GetScalingFactorReal(cur_limbs = (L0 - lvl))
         source_sf = ciphertext.scaling_factor
         num_towers = len(ciphertext.cv)
         mod_to_drop = float(cryptoContext.moduliQ[num_towers - 1])
@@ -569,15 +569,15 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     for j in range(1, r + 1):
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
         ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
-        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) #todo: after new add implemented, should be move to the end
+        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) #todo:  after support FLEXIBLEAUTO, after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
     return ciphertext
 
 
 def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
-    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext):
-        assert cipher_size == 2  # Only 2-dim ciphertexts are supported
+    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size
+        assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove judgement
         curr_limbs = cipher.cur_limbs
         K = cryptoContext.K
         N = cryptoContext.N
@@ -591,7 +591,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
 
         cv1[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                               cryptoContext.q_mu_cuda, curr_limbs)
-        return Cipher([cv0, cv1], curr_limbs)
+        return Cipher([cv0, cv1], curr_limbs, cipher.scaling_factor, cipher.noise_deg)
 
     def eval_mult_ext(cipher, pt, cryptoContext):
         cur_limbs = cipher.cur_limbs
@@ -600,7 +600,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         limbsExt = cur_limbs + cryptoContext.K
         cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
         cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
-        return Cipher([cv0, cv1], cur_limbs)
+        return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor+pt.scaling_factor, cipher.noise_deg+pt.noise_deg)
 
     def eval_add_ext(cipher0, cipher1, cryptoContext):
         assert cipher0.cur_limbs == cipher1.cur_limbs
@@ -610,7 +610,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
             F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True)
             for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
         ]
-        return Cipher(cv, cipher0.cur_limbs)
+        return Cipher(cv, cipher0.cur_limbs, cipher0.scaling_factor, cipher0.noise_deg)
 
     # @profile_python_function
     def cv_add_ext(in0, in1, cur_limbs, cryptoContext):
@@ -638,7 +638,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     g_rem = params.giant_step_rem
     b_rem = params.baby_step_rem
 
-    result = Cipher([ctxt.cv[0].clone(), ctxt.cv[1].clone()], ctxt.cur_limbs)
+    result = Cipher([ctxt.cv[0].clone(), ctxt.cv[1].clone()], ctxt.cur_limbs, ctxt.scaling_factor, ctxt.noise_deg)
 
     # Determine loop range based on direction
     if loop_direction == "forward":
@@ -662,7 +662,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
             if rot_in[s][j] != 0:
                 cv0 = result.cv[0].reshape(-1, cryptoContext.N) if eval_fast_rotation_reshape else result.cv[0]
                 fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
-                    cv0, digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
+                    cv0, digits, result.cur_limbs, result.scaling_factor, result.noise_deg, rot_in[s][j], True, cryptoContext
                 )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
@@ -682,7 +682,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0],
+                                                                       curr_limbs, inner.scaling_factor, inner.noise_deg, cryptoContext)
                     auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
 
                     first_current = F.cv_automorphism_transform(
@@ -694,7 +695,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     )
                     
                     inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
-                        None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
+                        None, inner_digits, inner_ks_down.cur_limbs,
+                        inner_ks_down.scaling_factor, inner_ks_down.noise_deg, rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
@@ -703,7 +705,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs,
+                                                    outer.scaling_factor, outer.noise_deg,cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     if flag_rem:
@@ -721,7 +724,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         for j in range(g_rem):
             if rot_in[s][j] != 0:
                 fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
-                    result.cv[0], digits, result.cur_limbs, rot_in[s][j], True, cryptoContext
+                    result.cv[0], digits, result.cur_limbs, result.scaling_factor,
+                    result.noise_deg, rot_in[s][j], True, cryptoContext
                 )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
@@ -741,7 +745,9 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
+                                                                       inner.scaling_factor, inner.noise_deg,
+                                                                       cryptoContext)
                     auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
 
                     first_current = F.cv_automorphism_transform(
@@ -753,7 +759,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     )
                     
                     inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
-                        None, inner_digits, inner_ks_down.cur_limbs, rot_out[s][i], False, cryptoContext
+                        None, inner_digits, inner_ks_down.cur_limbs,
+                        inner_ks_down.scaling_factor, inner_ks_down.noise_deg,rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
@@ -762,7 +769,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, outer.scaling_factor, outer.noise_deg, cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     return result
@@ -813,10 +820,10 @@ def eval_linear_transform(A, ct, scheme):
     pass
 
 # @profile_python_function
-def cipher_mod_raise(cipher, L0, cryptoContext): #todo: set noisedeg and scalingfactor
+def cipher_mod_raise(cipher, L0, cryptoContext):
     cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
     cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
-    return Cipher([cv0, cv1], L0)
+    return Cipher([cv0, cv1], L0, cipher.scaling_factor, cipher.noise_deg)
 
 # @profile_python_function
 def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
@@ -837,7 +844,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     moduliQ = cryptoContext.moduliQ
     rescaleTech = cryptoContext.rescaleTech
 
-    assert rescaleTech == "FIXEDMANUAL"  # Only FIXEDMANUAL is supported #todo: to be removed
+    assert rescaleTech == "FIXEDMANUAL" or rescaleTech == "FLEXIBLEAUTO" #todo: FLEXIBLEAUTOEXT is not implemented yet
+
     if (rescaleTech=="FLEXIBLEAUTOEXT"):
         pass
         # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
@@ -868,7 +876,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # Increasing the modulus
 
     tmp = ciphertext
-    # tmp = homo_ops.homo_rescale(tmp, tmp.noise_deg-1) #todo: should uncomment after implemented flexibleauto
+    tmp = homo_ops.homo_rescale(tmp, tmp.noise_deg-1, cryptoContext)
     tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
 
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
@@ -876,7 +884,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     raised = cipher_mod_raise(tmp, L0, cryptoContext)
 
     constantEvalMult = pre * (1.0 / (bs_ctx.k * N))
-    raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)#todo: check cc->EvalMultInPlace
+    raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
     isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (precom.paramsDec.level_budget == 1) #todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
@@ -896,15 +904,15 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            # while(ctxtEnc.noise_deg>1):#below should be indented and omit BASE_NUM_LEVELS_TO_DROP
-            #     ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            #     ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        # else:
-        #     if ctxtEnc.noise_deg==2:
-        #         ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        #         ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            # ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext) #todo: deprecated, remove
+            # ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext) #todo: deprecated, remove
+            while(ctxtEnc.noise_deg>1):
+                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        else:
+            if ctxtEnc.noise_deg==2:
+                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -964,12 +972,12 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
-            # while ctxtEnc.noise_deg>1: #todo: indent, and omit specified levels?
-            #     ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
-        # else:
-        #     if ctxtEnc.noise_deg ==2 :
-        #         ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
+            # ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext) #todo: deprecated, remove
+            while ctxtEnc.noise_deg>1:
+                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
+        else:
+            if ctxtEnc.noise_deg ==2 :
+                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -1127,9 +1135,7 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 m_U0hatTPreFFT = torch.tensor(
                     m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
                 )
-                precom.m_U0hatTPreFFT[i][j] = Plaintext(
-                    m_U0hatTPreFFT, mx_len, mx_slots, limbs
-                )
+                precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs, 0, 1)#todo: the scaling factor should be read from openfhe which is saved in a vector
                 # print(i,j)
 
         RHScnt = 0
@@ -1147,7 +1153,7 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                         LHScnt += 1
                         RHScnt += 1
                 m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
-                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs)
+                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs, 0, 1) #todo: the scaling factor should be read from openfhe which is saved in a vector
 
 
 
@@ -1205,6 +1211,13 @@ def BootstrapTest_N65536L26lB44(
     cipher.cv[0] = cipher.cv[0][:2]
     cipher.cv[1] = cipher.cv[1][:2]
     cipher.cur_limbs = 2
+
+    # print(cryptoContext.moduliQ)
+    # note: do not support FLEXIBLEAUTOEXT　currently,
+    # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
+    # todo: generalize the setting, or set in encrypt function
+    cipher.scaling_factor = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+    cipher.noise_deg = 1
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
 
@@ -1289,7 +1302,11 @@ def run_test_cases():
             cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0
         )
 
-        cipher = Cipher([torch.tensor(x, dtype = torch.uint64, device = "cuda") for x in input], 2)
+        # note: do not support FLEXIBLEAUTOEXT　currently,
+        # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
+        # todo: generalize the setting
+        cipher = Cipher([torch.tensor(x, dtype = torch.uint64, device = "cuda") for x in input], 2,
+                        scaling_factor=cryptoContext.GetScalingFactorReal(cryptoContext.L), noise_deg=1)
 
         result = cipher
         result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)

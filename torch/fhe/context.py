@@ -1333,8 +1333,9 @@ class Context:
     # @return the precomputed table
     def GetModReduceFactor(self, cur_limbs = None):
         if cur_limbs is None:
-            cur_limbs = self.L
-        l = self.L - cur_limbs
+            cur_limbs = 0
+        # l = self.L - cur_limbs #todo: check the meaning of input in openfhe
+        l = cur_limbs
         if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
             return self.dmoduliQ[l]
         return self.approxSF
