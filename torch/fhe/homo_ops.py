@@ -329,25 +329,89 @@ def cpp_round(_float, _len=0):
         return round(_float, _len)
 
 #todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
+def get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
+    cur_limbs = ciphertext.cur_limbs
+    moduli = cryptoContext.moduliQ[:cur_limbs]
+
+    # Scaling factor
+    sc_factor = 0
+    if cryptoContext.rescaleTech == 'FLEXIBLEAUTOEXT' and cur_limbs == 0:
+        sc_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    else:
+        sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+    # Compute approxFactor to avoid overflow issues
+    log_approx = 0
+    res = math.fabs(constant * sc_factor)
+    if res > 0:
+        log_sf = int(math.ceil(math.log2(res)))
+        log_valid = min(log_sf, LargeScalingFactorConstants.MAX_BITS_IN_WORD.value)
+        log_approx = log_sf - log_valid
+
+    approx_factor = float(pow(2, log_approx))
+    sc_constant = int(constant * sc_factor / approx_factor + 0.5)
+
+    crt_constant = np.full(cur_limbs, sc_constant, dtype=np.uint64)
+
+    # Scale back up by approxFactor
+    if log_approx > 0:
+        log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+        int_step = 2 ** log_step
+        crt_approx = np.full(cur_limbs, int_step, dtype=np.uint64)
+        log_approx -= log_step
+
+        while log_approx > 0:
+            log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+            int_step = 2 ** log_step
+            crt_sf = np.full(cur_limbs, int_step, dtype=np.uint64)
+            crt_approx = crt_mult(crt_approx, crt_sf, moduli)
+            log_approx -= log_step
+
+        crt_constant = crt_mult(crt_constant, crt_approx, moduli)
+
+    # Handle FLEXIBLEAUTOEXT mode at level 0
+    if cryptoContext.rescaleTech == 'FLEXIBLEAUTOEXT' and cur_limbs == 0:
+        return crt_constant
+
+    # Final scaling factor adjustments
+    int_sc_factor = int(sc_factor + 0.5)
+    crt_sc_factor = np.full(cur_limbs, int_sc_factor, dtype=np.uint64)
+
+    for i in range(1, ciphertext.noise_deg):  # Adjust the loop range as needed based on noise scale degree
+        crt_constant = crt_mult(crt_constant, crt_sc_factor, moduli)
+
+    return crt_constant
+
 def homo_add_scalar_double(ct, cnst, cryptoContext):
     #todo: to be continued
 
-    # tmpr = GetElementForEvalAddOrSub(ciphertext, tmpr) #tmpr should be a scalar vector, the following cipher function should be changed
-    # if cnst < 0:
-    #     res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
-    # else:
-    #     res = cipher_add_scalar(ct, tmpr, cryptoContext).cv
-    #
-    # return Cipher(res, ct.cur_limbs)
-
-    # deprecated version
-    tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
+    tmpr = get_element_for_eval_add_or_sub(ct, math.fabs(cnst), cryptoContext) #tmpr should be a scalar vector, the following cipher function should be changed
+    tmpr_tensor = torch.from_numpy(
+        np.array(
+            [int(int(tmpr[l]) % int(cryptoContext.moduliQ[l])) for l in range(ct.cur_limbs)],
+            dtype=np.uint64,
+        )
+    ).cuda()
     if cnst < 0:
-        res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
+        res = [
+            F.cv_sub_scalar(ct.cv[0], tmpr_tensor, cryptoContext.moduliQ_cuda, ct.cur_limbs),
+            ct.cv[1],
+        ]
     else:
-        res = cipher_add_scalar(ct, tmpr, cryptoContext).cv
+        res = [
+            F.cv_add_scalar(ct.cv[0], tmpr_tensor, cryptoContext.moduliQ_cuda, ct.cur_limbs),
+            ct.cv[1],
+        ]
 
     return Cipher(res, ct.cur_limbs)
+
+    # deprecated version
+    # tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
+    # if cnst < 0:
+    #     res = cipher_sub_scalar(ct, tmpr1[0], cryptoContext).cv
+    # else:
+    #     res = cipher_add_scalar(ct, tmpr1[0], cryptoContext).cv
+    # return Cipher(res, ct.cur_limbs)
 
 #fixme: corresponds to MultByIntegerInPlace in openfhe, the scalar in openfhe is uint64_t
 #fixme: either call `abs` before `cipher_mul_scalar`, or prohibit scalar<0
