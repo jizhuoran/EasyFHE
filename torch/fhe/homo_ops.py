@@ -198,8 +198,19 @@ def cpp_round(_float, _len=0):
     else:
         return round(_float, _len)
 
-
+#todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
 def homo_add_scalar_double(ct, cnst, cryptoContext):
+    #todo: to be continued
+
+    # tmpr = GetElementForEvalAddOrSub(ciphertext, tmpr) #tmpr should be a scalar vector, the following cipher function should be changed
+    # if cnst < 0:
+    #     res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
+    # else:
+    #     res = cipher_add_scalar(ct, tmpr, cryptoContext).cv
+    #
+    # return Cipher(res, ct.cur_limbs)
+
+    # deprecated version
     tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
     if cnst < 0:
         res = cipher_sub_scalar(ct, tmpr, cryptoContext).cv
