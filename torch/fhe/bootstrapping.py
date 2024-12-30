@@ -83,18 +83,35 @@ m_correctionFactor = (
 
 
 # @profile_python_function
-def adjust_ciphertext(cryptoContext, ciphertext, correction):
+def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     rescale_tech = cryptoContext.rescaleTech
 
     if rescale_tech == "FLEXIBLEAUTO" or rescale_tech == "FLEXIBLEAUTOEXT":
-        # TODO: to be implemented
-        pass
+        lvl = 0 if rescale_tech == "FLEXIBLEAUTO" else 1
+        if cryptoContext.L != L0:
+            # Print error message and raise an exception to stop the program
+            print("cryptoContext.L != L0")
+            raise Exception("Error: cryptoContext.L != L0")
+        target_sf = cryptoContext.GetScalingFactorReal(limbs = (L0 - lvl))
+        source_sf = ciphertext.scaling_factor
+        num_towers = len(ciphertext.cv)
+        mod_to_drop = float(cryptoContext.moduliQ[num_towers - 1])
+        # in the case of FLEXIBLEAUTO, we need to bring the ciphertext to the right scale using a
+        # a scaling multiplication. Note the at currently FLEXIBLEAUTO is only supported for NATIVEINT = 64.
+        # So the other branch is for future purposes (in case we decide to add add the FLEXIBLEAUTO support
+        # for NATIVEINT = 128.
+        # Scaling down the message by a correction factor to emulate using a larger q0.
+        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
+        adjustment_factor = (target_sf / source_sf) * (mod_to_drop / source_sf) * math.pow(2, -correction) # if NATIVEINT != 128
+        ciphertext = homo_ops.homo_mul_scalar_double(ciphertext, adjustment_factor, cryptoContext)
+        ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        ciphertext.scaling_factor = target_sf
+
     else:
-        # Scaling down the message by a correction factor
+        # Scaling down the message by a correction factor to emulate using a larger q0.
+        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
         cnst = math.pow(2, -correction)
-
         ciphertext = homo_ops.homo_mul_scalar_double(ciphertext, cnst, cryptoContext)
-
         ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
 
@@ -912,7 +929,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
     tmp = ciphertext
     # tmp = homo_ops.homo_rescale(tmp, tmp.noise_deg-1) #todo: should uncomment after implemented flexibleauto
-    tmp = adjust_ciphertext(cryptoContext, tmp, correction) #todo: fix the impelementation
+    tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
 
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
     # CKKS bootstrapping faster.

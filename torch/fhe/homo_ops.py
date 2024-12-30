@@ -7,6 +7,7 @@ import torch
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
 
+#todo: deprecated in the future
 def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
     rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
     rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
@@ -16,6 +17,137 @@ def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
     elif rct1.cur_limbs < rct2.cur_limbs:
         rct2=cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
     return rct1, rct2
+
+# note: AdjustLevelsInPlace in rns-leveledshe.cpp
+# mainly for "FIXEDMANUAL" case
+def adjust_levels(ct1, ct2, cryptoContext):
+    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
+    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
+    if rct1.cur_limbs > rct2.cur_limbs:
+        rct1 = cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
+    elif rct1.cur_limbs < rct2.cur_limbs:
+        rct2 = cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
+    return rct1, rct2
+
+# note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
+def adjust_levels_and_depth(ct1, ct2, cryptoContext):
+    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
+    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
+    L = cryptoContext.L
+    c1_cur_limbs = rct1.cur_limbs
+    c2_cur_limbs = rct2.cur_limbs
+    c1lvl = L - c1_cur_limbs
+    c2lvl = L - c2_cur_limbs
+    c1depth = rct1.noise_deg
+    c2depth = rct2.noise_deg
+    sizeQl1 = c1_cur_limbs
+    sizeQl2 = c2_cur_limbs
+
+    if c1lvl < c2lvl:
+        if c1depth == 2:
+            if c2depth == 2:
+                scf1 = rct1.scaling_factor
+                scf2 = rct2.scaling_factor
+                scf = cryptoContext.GetScalingFactorReal(limbs=c1_cur_limbs)
+                q1 = cryptoContext.GetModReduceFactor(sizeQl1 - 1)
+                rct1 = eval_mult_core(rct1, scf2 / scf1 * q1 / scf, cryptoContext)
+                rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                if (c1lvl+1<c2lvl):
+                    rct1 =cipher_level_reduce(rct1, c2lvl - c1lvl - 1)
+                rct1.scaling_factor = rct2.scaling_factor
+            else:
+                if c1lvl +1 ==c2lvl:
+                    homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                else:
+                    scf1 = rct1.scaling_factor
+                    scf2 = cryptoContext.GetScalingFactorRealBig(limbs = (L-(c2lvl-1)))
+                    scf = cryptoContext.GetScalingFactorReal(limbs = (L-c1lvl))
+                    q1 = cryptoContext.GetModReduceFactor(sizeQl1 - 1)
+                    rct1 = eval_mult_core(rct1, scf2 / scf * q1 / scf, cryptoContext)
+                    rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                    if (c1lvl+2<c2lvl):
+                        rct1 =cipher_level_reduce(rct1, c2lvl - c1lvl - 2)
+                    rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                    rct1.scaling_factor = rct2.scaling_factor
+        else:
+            if c2depth==2:
+                scf1 = rct1.scaling_factor
+                scf2 = rct2.scaling_factor
+                scf = cryptoContext.GetScalingFactorReal(limbs=c1_cur_limbs)
+                rct1 = eval_mult_core(rct1, scf2 / scf1 / scf, cryptoContext)
+                rct1 = cipher_level_reduce(rct1, c2lvl - c1lvl)
+                rct1.scaling_factor = scf2
+            else:
+                scf1 = rct1.scaling_factor
+                scf2 = cryptoContext.GetScalingFactorRealBig(limbs = (L-(c2lvl-1)))
+                scf = cryptoContext.GetScalingFactorReal(limbs = (L-c1lvl))
+                rct1 = eval_mult_core(rct1, scf2 / scf1 / scf, cryptoContext)
+                if (c1lvl+1<c2lvl):
+                    rct1 = cipher_level_reduce(rct1, c2lvl - c1lvl - 1)
+                rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                rct1.scaling_factor = rct2.scaling_factor
+    elif c1lvl>c2lvl:
+        if c2depth == 2:
+            if c1depth == 2:
+                scf2 = rct2.scaling_factor
+                scf1 = rct1.scaling_factor
+                scf = cryptoContext.GetScalingFactorReal(limbs=c2_cur_limbs)
+                q2 = cryptoContext.GetModReduceFactor(sizeQl2 - 1)
+                rct2 = eval_mult_core(rct2, scf1 / scf2 * q2 / scf, cryptoContext)
+                rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                if c2lvl+1 <c1lvl:
+                    rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl - 1)
+                rct2.scaling_factor = rct1.scaling_factor
+            else:
+                if c2lvl+1 == c1lvl:
+                    rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                else:
+                    scf2 = rct2.scaling_factor
+                    scf1 = cryptoContext.GetScalingFactorRealBig(limbs = (L-(c1lvl-1)))
+                    scf = cryptoContext.GetScalingFactorReal(limbs = c2_cur_limbs)
+                    q2 = cryptoContext.GetModReduceFactor(sizeQl2 - 1)
+                    rct2 = eval_mult_core(rct2, scf1 / scf2 * q2 / scf, cryptoContext)
+                    rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                    if c2lvl+2 < c1lvl:
+                        rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl - 2)
+                    rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                    rct2.scaling_factor = rct1.scaling_factor
+        else:
+            if c1depth ==2:
+                scf2 = rct2.scaling_factor
+                scf1 = rct1.scaling_factor
+                scf = cryptoContext.GetScalingFactorReal(limbs=c2_cur_limbs)
+                rct2 = eval_mult_core(rct2, scf1 / scf2 / scf, cryptoContext)
+                rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl)
+                rct2.scaling_factor = scf1
+            else:
+                scf2 = rct2.scaling_factor
+                scf1 = cryptoContext.GetScalingFactorRealBig(limbs = (L-(c1lvl-1)))
+                scf = cryptoContext.GetScalingFactorReal(limbs = c2_cur_limbs)
+                rct2 = eval_mult_core(rct2, scf1 / scf2 / scf)
+                if c2lvl+1 < c1lvl:
+                    rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl - 1)
+                rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                rct2.scaling_factor = rct1.scaling_factor
+    else:
+        if c1depth < c2depth:
+            rct1 = eval_mult_core(rct1, 1.0, cryptoContext)
+        elif c2depth < c1depth:
+            rct2 = eval_mult_core(rct2, 1.0, cryptoContext)
+    return rct1, rct2
+
+
+# note: AdjustForMultInPlace in rns-leveledshe.cpp
+def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
+    rescaleTech = cryptoContext.rescaleTech
+
+    if rescaleTech == "FIXEDMANUAL":
+        rct1,rct2 = adjust_levels(ct1, ct2, cryptoContext)
+    else:
+        rct1,rct2 = adjust_levels_and_depth(ct1, ct2, cryptoContext)
+
+    return rct1, rct2
+
 
 def cipher_rescale(ct, cryptoContext):  #todo: deprecated, to be removed, as well as inner functions
     res0 = F.cv_rescale(ct.cv[0], cryptoContext, ct.cur_limbs)
@@ -135,22 +267,20 @@ def cipher_neg(in0, cryptoContext):
 
 def homo_add(in0, in1, cryptoContext):
     if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
-        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
+        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext) #fixme: should be outplace explicitly?
 
     return cipher_add(in0, in1, cryptoContext)
 
 
 def homo_sub(in0, in1, cryptoContext):
     if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
-        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
+        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext) #fixme: should be outplace explicitly?
 
     return cipher_sub(in0, in1, cryptoContext)
 
 
 def homo_mul(in0, in1, cryptoContext):
-    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
-        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext)
-
+    in0, in1 = adjust_for_mult(in0, in1, cryptoContext)
     res = cipher_mul(in0, in1, cryptoContext)
     tmp = Cipher(
         F.cv_keyswitch(
@@ -297,7 +427,7 @@ def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
     return factors
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
-def eval_mult_core_in_place(ciphertext, constant, cryptoContext):
+def eval_mult_core(ciphertext, constant, cryptoContext):
     cur_limbs = ciphertext.cur_limbs
     factors = np.zeros(cur_limbs, dtype=np.uint64)
     factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
@@ -322,7 +452,7 @@ def homo_mul_scalar_double(cipher, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL":
         if cipher.noise_deg == 2:
             cipher = homo_rescale(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    return eval_mult_core_in_place(cipher, cnst, cryptoContext)
+    return eval_mult_core(cipher, cnst, cryptoContext)
 
 # def homo_mul_scalar_double(in0, scalar, cryptoContext):
 #     tmpr = cpp_round(abs(scalar) * (2 ** cryptoContext.logqi))
