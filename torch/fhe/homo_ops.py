@@ -144,7 +144,11 @@ def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
     if rescaleTech == "FIXEDMANUAL":
         rct1,rct2 = adjust_levels(ct1, ct2, cryptoContext)
     else:
+        # inline `AdjustLevelsAndDepthToOneInPlace` in ckksrns-leveledshe.cpp as following
         rct1,rct2 = adjust_levels_and_depth(ct1, ct2, cryptoContext)
+        if rct1.noise_deg==2:
+            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
     return rct1, rct2
 
