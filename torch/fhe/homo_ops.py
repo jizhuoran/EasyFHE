@@ -1,22 +1,11 @@
 from .Ciphertext import Cipher
 from . import functional as F
-
+from .Ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
-
-#todo: deprecated in the future
-def cipher_check_and_adjust_level(ct1: Cipher, ct2: Cipher, cryptoContext):
-    rct1 = Cipher([ct1.cv[0].clone(), ct1.cv[1].clone()], ct1.cur_limbs)
-    rct2 = Cipher([ct2.cv[0].clone(), ct2.cv[1].clone()], ct2.cur_limbs)
-
-    if rct1.cur_limbs > rct2.cur_limbs:
-        rct1=cipher_level_reduce(rct1, rct1.cur_limbs - rct2.cur_limbs)
-    elif rct1.cur_limbs < rct2.cur_limbs:
-        rct2=cipher_level_reduce(rct2, rct2.cur_limbs - rct1.cur_limbs)
-    return rct1, rct2
 
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
@@ -138,6 +127,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
 
 
 # note: AdjustForMultInPlace in rns-leveledshe.cpp
+# todo: copy void LeveledSHERNS::EvalMultInPlace(Ciphertext<DCRTPoly>& ciphertext, ConstPlaintext plaintext) const in rns-leveledshe.cpp
 def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
 
@@ -152,6 +142,63 @@ def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
 
     return rct1, rct2
 
+
+# AdjustForAddOrSubInPlace in rns-leveledshe.cpp
+def adjust_for_add_or_sub(in0, in1, cryptoContext):
+    rescaleTech = cryptoContext.rescaleTech
+    if rescaleTech == "FIXEDMANUAL":
+        #fixme: adjust_levels needs to support when input has class Plaintext!
+        # or do some modifications here!
+        rct1,rct2 = adjust_levels(in0, in1, cryptoContext)
+        if isinstance(in0, Cipher) and isinstance(in1, Cipher):
+            return rct1, rct2
+
+        scFactor = cryptoContext.GetScalingFactorReal(cryptoContext.L) #openfhe default value is 0, here transfer to the max value of #limb
+        if scFactor == 0.0:
+            raise ValueError("Unsupported scaling factor")
+
+        if isinstance(in0, Plaintext):
+            ptxt = in0.mx
+            ptxtDepth = in0.noise_deg
+            ctxtDepth = in1.noise_deg
+            sizeQl = in1.cur_limbs
+            moduli = cryptoContext.moduliQ[:sizeQl]
+            ptxtIndex = 0
+        elif isinstance(in1, Plaintext):
+            ptxt = in1.mx
+            ptxtDepth = in1.noise_deg
+            ctxtDepth = in0.noise_deg
+            sizeQl = in0.cur_limbs
+            moduli = cryptoContext.moduliQ[:sizeQl]
+            ptxtIndex = 1
+
+        if isinstance(in0, Plaintext) or isinstance(in1, Plaintext):
+            # Bring to same depth if not already same
+            if ptxtDepth < ctxtDepth:
+                diffDepth = ctxtDepth - ptxtDepth
+                intSF = int(scFactor + 0.5) # todo: to check if equivalent to openfhe
+                crtSF = np.full(sizeQl, intSF, dtype=np.uint64)
+                crtPowSF = np.copy(crtSF)
+                for i in range(diffDepth):
+                    crtPowSF = crt_mult(crtPowSF, crtSF, moduli)
+
+                F.cv_mul_scalar(
+                    ptxt, crtPowSF, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, len(moduli)
+                )   #fixme: crtPowSF should be a tensor for F.cv_mul_scalar, refactor crt_mult
+
+                if ptxtIndex == 0:
+                    in0.mx = ptxt # todo: check if correctly assigned
+                    in0.noise_deg = ctxtDepth
+                else:
+                    in1.mx = ptxt # todo: check if correctly assigned
+                    in1.noise_deg = ctxtDepth
+            elif ptxtDepth > ctxtDepth:
+                raise ValueError("plaintext cannot be encoded at a larger depth than that of the ciphertext.")
+
+    else:
+        rct1,rct2 = adjust_levels_and_depth(in0, in1, cryptoContext)
+
+    return rct1, rct2
 
 def cipher_rescale(ct, cryptoContext):  #todo: deprecated, to be removed, as well as inner functions
     res0 = F.cv_rescale(ct.cv[0], cryptoContext, ct.cur_limbs)
@@ -270,16 +317,12 @@ def cipher_neg(in0, cryptoContext):
 
 
 def homo_add(in0, in1, cryptoContext):
-    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
-        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext) #fixme: should be outplace explicitly?
-
+    in0, in1 = adjust_for_add_or_sub(in0, in1, cryptoContext)
     return cipher_add(in0, in1, cryptoContext)
 
 
 def homo_sub(in0, in1, cryptoContext):
-    if in0.cur_limbs != in1.cur_limbs: #fixme: judgement should be changed to use scaling factor and limbs together after including scalingtechnique flexibleauto
-        in0, in1 = cipher_check_and_adjust_level(in0, in1, cryptoContext) #fixme: should be outplace explicitly?
-
+    in0, in1 = adjust_for_add_or_sub(in0, in1, cryptoContext)
     return cipher_sub(in0, in1, cryptoContext)
 
 
@@ -387,8 +430,6 @@ def get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
     return crt_constant
 
 def homo_add_scalar_double(ct, cnst, cryptoContext):
-    #todo: to be continued
-
     tmpr = get_element_for_eval_add_or_sub(ct, math.fabs(cnst), cryptoContext) #tmpr should be a scalar vector, the following cipher function should be changed
     tmpr_tensor = torch.from_numpy(
         np.array(
@@ -410,6 +451,7 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
     return Cipher(res, ct.cur_limbs)
 
     # deprecated version
+# def homo_add_scalar_double(ct, cnst, cryptoContext):
     # tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
     # if cnst < 0:
     #     res = cipher_sub_scalar(ct, tmpr1[0], cryptoContext).cv
@@ -437,6 +479,7 @@ def crt_mult(a, b, mods):
     if len(a) != len(b) or len(a) != len(mods):
         raise ValueError("Input lists 'a', 'b', and 'mods' must have the same length.")
 
+    #fixme: should be a tensor?
     result = np.zeros(len(a), dtype=np.uint64)
     for i in range(len(mods)):
         result[i] = ((int(a[i]) * int(b[i])) % int(mods[i]))

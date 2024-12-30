@@ -1,5 +1,6 @@
 import time, os
 from .Ciphertext import Cipher
+from .Ciphertext import Plaintext as Plaintext
 from .client import client
 from .context import *
 from . import functional as F
@@ -17,70 +18,6 @@ R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be
 m_correctionFactor = (
     0  # correction factor, which we scale the message by to improve precision
 )
-
-# @profile_python_function
-# note: rewrite in homo_ops
-# def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
-#     num_towers = cur_limbs
-#     p = cryptoContext.p
-#     q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
-#
-#     sc_factor = p
-#
-#     # Assuming DoubleInteger is equivalent to Python's int (arbitrary precision)
-#     MAX_BITS_IN_WORD = 126
-#
-#     # Compute approxFactor
-#     log_sf = int(math.ceil(math.log2(math.fabs(sc_factor))))
-#     log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD else MAX_BITS_IN_WORD
-#     log_approx = log_sf - log_valid
-#     approx_factor = pow(2, log_approx)
-#
-#     large = int((constant / approx_factor * sc_factor) + 0.5)
-#     large_abs = abs(large)
-#     bound = 1 << 63
-#
-#     if large_abs > bound:
-#         for i in range(num_towers):
-#             reduced = large % q_vec[i]
-#             factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-#     else:
-#         sc_constant = int(large)
-#         for i in range(num_towers):
-#             reduced = sc_constant % int(q_vec[i])
-#             factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
-#     return factors
-#
-# # note: done!
-# def eval_mult_core_in_place(ciphertext, constant, cryptoContext):
-#     cur_limbs = ciphertext.cur_limbs
-#     factors = np.zeros(cur_limbs, dtype=np.uint64)
-#     factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext) #todo: should be reimplemented
-#     factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
-#     cv = [
-#         F.cv_mul_scalar(
-#             cv_i,
-#             factors,
-#             cryptoContext.moduliQ_cuda,
-#             cryptoContext.q_mu_cuda,
-#             ciphertext.cur_limbs,
-#         )
-#         for cv_i in ciphertext.cv
-#     ]
-#
-#     scFactor = cryptoContext.GetScalingFactorReal(cur_limbs)
-#     return Cipher(cv, ciphertext.cur_limbs, ciphertext.noise_deg+1, ciphertext.scaling_factor*scFactor)
-
-# @profile_python_function
-# # note: done!
-# def eval_mult_in_place(ciphertext, constant, cryptoContext):
-#     if cryptoContext.rescaleTech != "FIXEDMANUAL":
-#         if ciphertext.noise_deg == 2:
-#             ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-#
-#     return eval_mult_core_in_place(ciphertext, constant, cryptoContext)
-
-
 
 # @profile_python_function
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
@@ -119,23 +56,26 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
 # @profile_python_function
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     input_size = len(constants)
-    minLevel = ciphertexts[0].cur_limbs
-    minIdx = 0
+
+    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+        # Check to see if input ciphertexts are of same level
+        # and adjust if needed to the max level among them
+        minLimbs = ciphertexts[0].cur_limbs
+        minIdx = 0
+        for i in range(1, input_size):
+            if (ciphertexts[i].cur_limbs < minLimbs or
+                    (ciphertexts[i].cur_limbs == minLimbs)
+                    and ciphertexts[i].noise_deg ==2):
+                minLimbs = ciphertexts[i].cur_limbs
+                minIdx = i
+        for i in range(minIdx):
+            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx], cryptoContext)
+        for i in range(minIdx + 1, input_size):
+            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx], cryptoContext)
+
+    wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
     for i in range(1, input_size):
-        if ciphertexts[i].cur_limbs < minLevel:
-            minLevel = ciphertexts[i].cur_limbs
-            minIdx = i
-    for i in range(minIdx):
-        if ciphertexts[i].cur_limbs < minLevel:
-            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    for i in range(minIdx + 1, input_size):
-        if ciphertexts[i].cur_limbs < minLevel:
-            ciphertexts[i] = homo_ops.cipher_level_reduce(ciphertexts[i], ciphertexts[i].cur_limbs-minLevel)
-    wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0],
-                              cryptoContext)
-    for i in range(1, input_size):
-        tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i],
-                                 cryptoContext)
+        tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
     wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext)
     return wsum
@@ -1075,25 +1015,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     #     ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
 
     return ctxtDec
-
-
-class Plaintext: #todo: move to Ciphertext
-    def __init__(self, mx, N, slots, l):
-        self.mx = mx
-        self.N = N
-        self.slots = slots
-        self.l = l
-
-    def __eq__(self, other):
-        if not isinstance(other, Plaintext):
-            return True
-        if self.N != other.N:
-            return True
-        if len(self.mx) != len(other.mx):
-            return True
-        if not torch.equal(self.mx, other.mx):
-            return True
-        return True
 
 
 def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
