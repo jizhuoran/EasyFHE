@@ -46,16 +46,21 @@ class OpenFHEContext:
         # return Cipher.Cipher(cv, cv[0].shape[0], sc_Factor, noise_deg) # todo:set scaling factor and noise deg here?
         return Cipher.Cipher(cv, cv[0].shape[0], 0.0, 1)
 
-    def decrypt(self, x):
+    def decrypt(self, x, noise_deg, level, scaling_factor, slots):
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
-        ctx = self.cc.Encrypt(self.publicKey, ptx)
-        for _ in range(self.depth + 1 - x.cur_limbs):
-            ctx = self.cc.EvalMult(ctx, ctx)
-            ctx = self.cc.Rescale(ctx)
+        cipher = self.cc.Encrypt(self.publicKey, ptx)
+
+        cipher.SetNoiseScaleDeg(noise_deg)
+        cipher.SetLevel(level)
+        cipher.SetScalingFactor(scaling_factor)
+        cipher.SetSlots(slots)
+        # for _ in range(self.depth + 1 - x.cur_limbs):
+        #     ctx = self.cc.EvalMult(ctx, ctx)
+        #     ctx = self.cc.Rescale(ctx)
         data = [cv.tolist() for cv in x.cv]
-        ctx.SetVectorOfData(data, x.cur_limbs)
-        ptx = self.cc.Decrypt(ctx, self.secretKey)
+        cipher.SetVectorOfData(data, x.cur_limbs)
+        ptx = self.cc.Decrypt(cipher, self.secretKey)
         return torch.tensor(
             ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
         )

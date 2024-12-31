@@ -1188,7 +1188,7 @@ def BootstrapTest_N65536L26lB44(
             approxModDepth=approxModDepth,
             rotate_index=[],
             secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech="FIXEDMANUAL",
+            rescaleTech="FLEXIBLEAUTO",
         )
 
         utils.save_context(cryptoContext, openfhe_context, save_path)
@@ -1232,8 +1232,7 @@ def BootstrapTest_N65536L26lB44(
     scaling_factor = result.scaling_factor
     slots = cryptoContext.slots #fixme: currently is read from context, should be read from cipher
 
-
-    after_boot = openfhe_context.decrypt(result)
+    after_boot = openfhe_context.decrypt(result, noise_deg, level, scaling_factor, slots)
     after_boot = after_boot.cpu().numpy().reshape(-1)
     x = x.cpu().numpy().reshape(-1)
     if(np.any(np.abs(after_boot - x) > 3e-2)):
