@@ -1119,6 +1119,7 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
     else:
         RHScnt = 0
         precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
+        cnt = 0
         for i in range(0, m_U0hatTPreFFT_dim1):
             j_len = m_U0hatTPreFFT_dim2[i]
             limbs = m_U0hatTPreFFT_limbs[i]
@@ -1135,9 +1136,12 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 m_U0hatTPreFFT = torch.tensor(
                     m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
                 )
-                precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs, 0, 1)#todo: the scaling factor should be read from openfhe which is saved in a vector
+                precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
+                                                        context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
+                cnt+=1
                 # print(i,j)
 
+        cnt=0
         RHScnt = 0
         precom.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
         for i in range(m_U0PreFFT_dim1):
@@ -1153,7 +1157,9 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                         LHScnt += 1
                         RHScnt += 1
                 m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
-                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs, 0, 1) #todo: the scaling factor should be read from openfhe which is saved in a vector
+                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
+                                                    context.m_U0PreFFT_scaling_factor[cnt], 1)
+                cnt+=1
 
 
 

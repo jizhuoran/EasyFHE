@@ -1283,13 +1283,16 @@ class Context:
 
         swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
         swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
-        
+
+        #todo: move to bscontext in the future
         self.m_U0hatTPreFFT_mx = BOOT_KEY['C2S']
         self.m_U0PreFFT_mx = BOOT_KEY['S2C']
         self.m_U0hatTPreFFT_dim = BOOT_KEY['C2S_dim']
         self.m_U0PreFFT_dim = BOOT_KEY['S2C_dim']
         self.m_U0hatTPreFFT_limbs = BOOT_KEY['C2S_limbs']
         self.m_U0PreFFT_limbs = BOOT_KEY['S2C_limbs']
+        self.m_U0hatTPreFFT_scaling_factor = BOOT_KEY['U0hatTPreFFTScalingFactor']
+        self.m_U0PreFFT_scaling_factor = BOOT_KEY['U0PreFFTScalingFactor']
 
         key_map_ax_fixed = torch.tensor(swk_ax, dtype=torch.uint64, device="cuda")
         key_map_bx_fixed = torch.tensor(swk_bx, dtype=torch.uint64, device="cuda")
