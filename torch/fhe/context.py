@@ -1,12 +1,11 @@
-from math import log, pi, cos, sin
-from . import number_theory as nbtheory
+
 import numpy as np
 import math
 import random
 import warnings
 import torch
 import pickle
-from enum import Enum
+import sympy
 
 K_UNIFORM = 512
 
@@ -465,26 +464,26 @@ class Context:
         if moduliQ is None and rootsQ is None:
             while True:
                 prime = (1 << logq0) + bnd * self.M + 1
-                if nbtheory.is_prime(prime):
+                if self.is_prime(prime):
                     self.moduliQ[0] = prime
                     break
                 bnd += 1
             # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
-            self.qRoots[0] = nbtheory.root_of_unity(
+            self.qRoots[0] = self.root_of_unity(
                 order=self.M, modulus=self.moduliQ[0]
             )
             # print("moduliQ[0]", self.moduliQ[0])
             bnd = 1
             while cnt < L:
                 prime1 = (1 << logqi) + bnd * self.M + 1
-                if self.primeTest(prime1):
+                if self.is_prime(prime1):
                     self.moduliQ[cnt] = prime1
                     cnt += 1
                 prime2 = (1 << logqi) - bnd * self.M + 1
-                if self.primeTest(prime2):
+                if self.is_prime(prime2):
                     self.moduliQ[cnt] = prime2
                     # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
-                    self.qRoots[cnt] = nbtheory.root_of_unity(
+                    self.qRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliQ[cnt - 1]
                     )
                     cnt += 1
@@ -505,7 +504,7 @@ class Context:
                 self.qRoots[i] = rootsQ[i]
 
         for i in range(L):
-            self.qRootsInv[i] = nbtheory.mod_inv(self.qRoots[i], int(self.moduliQ[i]))
+            self.qRootsInv[i] = self.invMod(self.qRoots[i], int(self.moduliQ[i]))
             self.qRootPows[i] = [0] * self.N
             self.qRootPowsInv[i] = [0] * self.N
             self.qRootScalePows[i] = [0] * self.N
@@ -579,18 +578,18 @@ class Context:
             cnt = 0
             while cnt < self.K:
                 prime1 = (1 << logp) + bnd * self.M + 1
-                if self.primeTest(prime1):
+                if self.is_prime(prime1):
                     self.moduliP[cnt] = prime1
-                    self.pRoots[cnt] = nbtheory.root_of_unity(
+                    self.pRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliP[cnt]
                     )
                     cnt += 1
                 if cnt == self.K:
                     break
                 prime2 = (1 << logp) - bnd * self.M + 1
-                if self.primeTest(prime2):
+                if self.is_prime(prime2):
                     self.moduliP[cnt] = prime2
-                    self.pRoots[cnt] = nbtheory.root_of_unity(
+                    self.pRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliP[cnt]
                     )
                     cnt += 1
@@ -608,7 +607,7 @@ class Context:
                 self.pRoots[i] = rootsP[i]
 
         for i in range(K):
-            self.pRootsInv[i] = nbtheory.mod_inv(self.pRoots[i], int(self.moduliP[i]))
+            self.pRootsInv[i] = self.invMod(self.pRoots[i], int(self.moduliP[i]))
             self.pInvVec[i] = self.inv(self.moduliP[i])
             self.pRootPows[i] = [0] * self.N
             self.pRootPowsInv[i] = [0] * self.N
@@ -1398,7 +1397,7 @@ class Context:
             return -1
 
     # Miller-Rabin Prime Test #
-    def primeTest(self, p):
+    def is_prime(self, p):
         if p < 2:
             return False
         if p != 2 and p % 2 == 0:
@@ -1419,7 +1418,33 @@ class Context:
                 return False
         return True
 
+    def mod_exp(self, val, exp, modulus):
+        return pow(int(val), int(exp), int(modulus))
 
+    def root_of_unity(self, order, modulus):
+        """Finds a root of unity in the given modulus.
+        Finds a root of unity with the given order in the given prime modulus.
+        Args:
+            order (int): Order n of the root of unity (an nth root of unity).
+            modulus (int): Modulus to find the root of unity in. Note: MUST BE
+                PRIME
+        Returns:
+            A root of unity with the given order in the given modulus.
+        """
+        if ((modulus - 1) % order) != 0:
+            raise ValueError('Must have order q | m - 1, where m is the modulus. \
+                The values m = ' + str(modulus) + ' and q = ' + str(order) + ' do not satisfy this.')
+
+        generator = sympy.ntheory.primitive_root(modulus)
+        if generator is None:
+            raise ValueError('No primitive root of unity mod m = ' + str(modulus))
+
+        result = self.mod_exp(generator, (modulus - 1)//order, modulus)
+
+        if result == 1:
+            return self.root_of_unity(order, modulus)
+
+        return result
     def method(self):  # function to initialize variables
         pass
 
