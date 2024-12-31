@@ -27,18 +27,6 @@ def reduce_rotation(index, slots):
     return (islots + index % islots) % islots
 
 warnings.formatwarning = custom_warning_format
-# class SecretKeyDist(Enum):
-#     GAUSSIAN = 0
-#     UNIFORM_TERNARY = 1
-#     SPARSE_TERNARY = 2
-
-# class ScalingTechnique(Enum):
-#     FIXEDMANUAL = 0
-#     FIXEDAUTO = 1
-#     FLEXIBLEAUTO = 2
-#     FLEXIBLEAUTOEXT = 3
-#     NORESCALE = 4
-#     INVALID_RS_TECHNIQUE = 5
 
 class CKKS_Boot_Params:
     def __init__(self, level_budget, layers_coll, layers_rem, num_rotations, baby_step, giant_step, num_rotations_rem, baby_step_rem, giant_step_rem):
@@ -56,7 +44,7 @@ class CKKS_Boot_Params:
 class BsContext:
     def __init__(self, cryptoContext, levelBudget, dim1, numslots, correctionFactor, rescaleTech, secretKeyDist):
         self.M = cryptoContext.N *2
-        slots = self.M // 4 if numslots == 0 else numslots
+        # slots = self.M // 4 if numslots == 0 else numslots
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None
         self.m_U0hatTPreFFT = None
@@ -69,7 +57,7 @@ class BsContext:
         # precom = scheme.precom
         if correctionFactor == 0:
             if rescaleTech == "FLEXIBLEAUTO" or rescaleTech == "FLEXIBLEAUTOEXT":
-                tmp = round(-0.265 * (2 * math.log2(self.M  / 2) + math.log2(slots)) + 19.1)
+                tmp = round(-0.265 * (2 * math.log2(self.M  / 2) + math.log2(cryptoContext.slots)) + 19.1)
                 if tmp < 7:
                     self.m_correctionFactor = 7
                 elif tmp > 13:
@@ -81,10 +69,10 @@ class BsContext:
         else:
             self.m_correctionFactor = correctionFactor
 
-        self.slots = slots
+        # self.slots = slots
         self.dim1 = dim1[0]
 
-        logSlots = math.log2(slots)
+        logSlots = math.log2(cryptoContext.slots)
         newBudget = [levelBudget[0], levelBudget[1]]
         if levelBudget[0] > logSlots:
             print(f"\nWarning, the level budget for encoding cannot be this large. The budget was changed to {int(logSlots)}")
@@ -102,8 +90,8 @@ class BsContext:
             print(f"\nWarning, the level budget for decoding has to be at least 1. The budget was changed to 1")
             newBudget[1] = 1
 
-        self.paramsEnc = self.GetCollapsedFFTParams(slots, newBudget[0], dim1[0])
-        self.paramsDec = self.GetCollapsedFFTParams(slots, newBudget[1], dim1[1])
+        self.paramsEnc = self.GetCollapsedFFTParams(cryptoContext.slots, newBudget[0], dim1[0])
+        self.paramsDec = self.GetCollapsedFFTParams(cryptoContext.slots, newBudget[1], dim1[1])
 
         coefficientsSparse = np.array([
             0, -0.0190665676962401, 0, -0.0181773905007824, 0, -0.0162862756167401, 0, -0.0131970301188482,
@@ -173,9 +161,9 @@ class BsContext:
             self.QmuplusPmu_map[cur_limbs] = torch.tensor(np.concatenate((cryptoContext.q_mu[0:cur_limbs], cryptoContext.p_mu[:cryptoContext.K])), dtype=torch.uint64, device="cuda")
 
         #compute auto index map
-        cryptoContext.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
-        for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-            cryptoContext.auto_index[(1 << step) * slots] = self.find_auto_index((1 << step) * slots, cryptoContext.N << 1)
+        cryptoContext.auto_index[cryptoContext.slots] = self.find_auto_index(cryptoContext.slots, cryptoContext.N << 1)
+        for step in range(int(math.log2(cryptoContext.N // (2 * cryptoContext.slots)))):
+            cryptoContext.auto_index[(1 << step) * cryptoContext.slots] = self.find_auto_index((1 << step) * cryptoContext.slots, cryptoContext.N << 1)
         for i in self.C2S_rot_in + self.C2S_rot_out + self.S2C_rot_in + self.S2C_rot_out:
             for j in i:
                 if j not in cryptoContext.auto_index:
@@ -243,7 +231,7 @@ class BsContext:
         return torch.from_numpy(np.array(res)).cuda()
 
     def compute_C2S_rot(self, cryptoContext):
-        slots = self.slots
+        slots = cryptoContext.slots
 
         N = cryptoContext.N
         M = cryptoContext.M
@@ -300,7 +288,7 @@ class BsContext:
         self.C2S_rot_out = rot_out
 
     def compute_S2C_rot(self, cryptoContext):
-        slots = self.slots
+        slots = cryptoContext.slots
 
         N = cryptoContext.N
         M = cryptoContext.M
@@ -444,7 +432,7 @@ class Context:
         self.rescaleTech = rescaleTech
         self.BsContext = None
         self.logp = logp
-        self.slots = 1 << logSlots
+        self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
         self.left_rot_key_map = {} #{index: [ax， bx]}
         self.key_map = None
