@@ -607,7 +607,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         limbsExt = cipher0.cur_limbs + cryptoContext.K
         moduli = cryptoContext.BsContext.QplusP_map[cipher0.cur_limbs]
         cv = [
-            F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True)
+            F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True) #fixme: should not be true
             for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
         ]
         return Cipher(cv, cipher0.cur_limbs, cipher0.scaling_factor, cipher0.noise_deg)
@@ -899,7 +899,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
-        ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext)
+        ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext) # fixme: change to homo_sub
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 

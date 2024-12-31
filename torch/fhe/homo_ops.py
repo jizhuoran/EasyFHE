@@ -207,6 +207,7 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 
 #todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
+#todo: 再包一层，叫homo_level_reduce
 def cipher_level_reduce(ct, levels):
     return Cipher(ct.cv, ct.cur_limbs - levels, ct.scaling_factor, ct.noise_deg)
 
