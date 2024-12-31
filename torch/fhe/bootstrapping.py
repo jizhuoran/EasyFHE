@@ -77,7 +77,7 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     for i in range(1, input_size):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
-    wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext)
+    wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else wsum
     return wsum
 
 def is_not_equal_one(val):
@@ -208,7 +208,7 @@ def inner_eval_chebyshev_ps(coefficients,
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
+                cu = homo_ops.homo_rescale(cu, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
             else:
                 cu = T[0]
         else:
@@ -269,7 +269,7 @@ def inner_eval_chebyshev_ps(coefficients,
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
@@ -384,7 +384,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         alpha = 2 / (b - a)
         beta = 2 * a / (b - a)
         T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
-        T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext)
+        T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[0]
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
     # Computes Chebyshev polynomials up to degree k
@@ -395,36 +395,31 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             # compute T_{2i}(y) = 2*T_i(y)^2 - 1
             square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
             T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-            T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
+            T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i - 1]
             T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
         else: # non-power of 2
             if i % 2 == 1:  # i is odd
                 # compute T_{2i+1}(y) = 2*T_i(y)*T_{i+1}(y) - y
                 prod = homo_ops.homo_mul(T[i // 2 - 1], T[i // 2], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(prod, prod, cryptoContext)
-                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
+                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i-1]
                 T[i - 1] = homo_ops.homo_sub(T[i - 1], T[0], cryptoContext)
 
             else:  # i is even but not power of 2
                 # compute T_{2i}(y) = 2*T_i(y)^2 - 1
                 square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
                 T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext)
+                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i-1]
                 T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
 
-    # Adjust levels of T
-    for i in range(1, k):
-        level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-        T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
-
-    # if rescaleTech ==ScalingTechnique.FIXEDMANUAL:
-    #     # brings all powers of x to the same level
-    #     for i in range(1, k):
-    #         level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-    #         T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
-    # # else:
-    # #     for i in range(1, k):
-    # #         AdjustLevelsAndDepthInPlace(T[i - 1], T[k - 1]);
+    if rescaleTech =="FIXEDMANUAL":
+        # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
+        for i in range(1, k):
+            level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
+            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+    else:
+        for i in range(1, k):
+            T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
@@ -433,7 +428,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     for i in range(1, m):
         square = homo_ops.homo_square(T2[i - 1], cryptoContext)
         T2[i] = homo_ops.homo_add(square, square, cryptoContext)
-        T2[i] = homo_ops.homo_rescale(T2[i], 1, cryptoContext)
+        T2[i] = homo_ops.homo_rescale(T2[i], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2[i]
         T2[i] = homo_ops.homo_add_scalar_double(T2[i], -1.0, cryptoContext)
 
     # computes T_{k(2*m - 1)}(y)
@@ -442,7 +437,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
         prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
-        T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
+        T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2km1
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
     # Compute k*2^{m-1}-k because we use it a lot
@@ -482,7 +477,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
+                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
             else:
                 cu = T[0]
         else:
@@ -550,7 +545,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         result = homo_ops.cipher_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
 
@@ -569,7 +564,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     for j in range(1, r + 1):
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
         ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
-        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) #todo:  after support FLEXIBLEAUTO, after new add implemented, should be move to the end
+        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else ciphertext #todo:  after support FLEXIBLEAUTO, after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
     return ciphertext
@@ -904,8 +899,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
-            # ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext) #todo: deprecated, remove
-            # ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext) #todo: deprecated, remove
             while(ctxtEnc.noise_deg>1):
                 ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
                 ctxtEncI = homo_ops.homo_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -972,7 +965,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
-            # ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext) #todo: deprecated, remove
             while ctxtEnc.noise_deg>1:
                 ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
         else:
@@ -1014,13 +1006,14 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
-    # if rescaleTech == ScalingTechnique.FIXEDMANUAL:
-    # fixme: 这一步rescale是我自己加的，
-    #  如果是flexibleauto， 用openfhe解密的话，需要在解密函数里，解密前判断一下自己把最后一次rescale做了，
-    #  因为只传多项式给openfhe（没有传noisedeg scalingfactor那些参数），openfhe没有其它信息不会去多做一次rescale
+    # fixme: 下面这一步rescale是我自己加的，
+    #  如果是flexibleauto， 本来用openfhe解密的话，它在解密前判断一下自动把最后一次rescale做了，
+    #  但是因为目前只传多项式给openfhe（没有传noisedeg scalingfactor那些参数），openfhe没有其它信息可能就不会去多做一次rescale
     #  如果是FIXEDMANUAL，避免在bs之后再接其它计算出问题，这里应该手动的rescale一下
-    #     ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
+    ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
+    # ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
+    # if rescaleTech == ScalingTechnique.FIXEDMANUAL:
+    #     ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
 
     return ctxtDec
 
