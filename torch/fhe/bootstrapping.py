@@ -607,7 +607,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         limbsExt = cipher0.cur_limbs + cryptoContext.K
         moduli = cryptoContext.BsContext.QplusP_map[cipher0.cur_limbs]
         cv = [
-            F.cv_add(cv0, cv1, moduli, limbsExt, inplace=True) #fixme: should not be true
+            F.cv_add(cv0, cv1, moduli, limbsExt)
             for cv0, cv1 in zip(cipher0.cv, cipher1.cv)
         ]
         return Cipher(cv, cipher0.cur_limbs, cipher0.scaling_factor, cipher0.noise_deg)
