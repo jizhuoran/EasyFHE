@@ -3,6 +3,7 @@ from .Ciphertext import Cipher
 from .Ciphertext import Plaintext as Plaintext
 from .client import client
 from .context import *
+from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import hoisting_keyswitch
