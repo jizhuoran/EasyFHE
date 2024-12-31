@@ -1,6 +1,6 @@
-from .Ciphertext import Cipher
+from .ciphertext import Cipher
 from . import functional as F
-from .Ciphertext import Plaintext as Plaintext
+from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch

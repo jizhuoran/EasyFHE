@@ -1,6 +1,6 @@
 import time, os
-from .Ciphertext import Cipher
-from .Ciphertext import Plaintext as Plaintext
+from .ciphertext import Cipher
+from .ciphertext import Plaintext as Plaintext
 from .client import client
 from .context import *
 from .bs_context import *

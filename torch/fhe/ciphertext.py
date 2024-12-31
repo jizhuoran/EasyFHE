@@ -1,7 +1,4 @@
 import torch
-import numpy as np
-import torch
-#todo: rename filename?
 class Cipher:
     def __init__(self, cv0, cv1, cur_limbs, scaling_factor, noise_deg):
         self.cv = [cv0, cv1]

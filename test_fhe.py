@@ -2,7 +2,7 @@ import unittest
 
 import torch
 import numpy as np
-from torch.fhe.Ciphertext import Cipher
+from torch.fhe.ciphertext import Cipher
 from torch.fhe.context import Context
 from torch.fhe import homo_ops
 

@@ -1,5 +1,5 @@
 import numpy as np
-from .Ciphertext import Cipher
+from .ciphertext import Cipher
 from . import functional as F
 
 # @profile_python_function

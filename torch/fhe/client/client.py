@@ -1,6 +1,6 @@
 from . import openfhe as openfhe
 import torch
-from .. import Ciphertext as Cipher
+from .. import ciphertext as Cipher
 from .. import context as Context
 import pickle
 import numpy as np
