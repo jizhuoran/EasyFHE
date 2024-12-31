@@ -452,11 +452,6 @@ class Context:
         self.p = 1 << logqi
 
         self.moduliQ = [0] * L
-        self.qrVec = [0] * L
-        self.qTwok = [0] * L
-        self.qkVec = [0] * L
-        self.qdVec = [0] * L
-        self.qInvVec = [0] * L
         self.qRoots = [0] * L
         self.qRootsInv = [0] * L
         self.qRootPows = [[] for _ in range(L)]
@@ -464,8 +459,6 @@ class Context:
         self.qRootScalePowsOverq = [[] for _ in range(L)]
         self.qRootScalePowsInv = [[] for _ in range(L)]
         self.qRootPowsInv = [[] for _ in range(L)]
-        self.NInvModq = [0] * L
-        self.NScaleInvModq = [0] * L
         self.auto_index = {}
         bnd = 1
         cnt = 1
@@ -512,21 +505,7 @@ class Context:
                 self.qRoots[i] = rootsQ[i]
 
         for i in range(L):
-            # print(i)
-            self.qTwok[i] = 2 * (int(math.log2(self.moduliQ[i])) + 1)
-            self.qrVec[i] = (1 << int(self.qTwok[i])) // int(self.moduliQ[i])
-            self.qkVec[i] = (
-                (nbtheory.mod_inv(1 << 62, int(self.moduliQ[i])) << 62) - 1
-            ) // int(self.moduliQ[i])
             self.qRootsInv[i] = nbtheory.mod_inv(self.qRoots[i], int(self.moduliQ[i]))
-            self.NInvModq[i] = nbtheory.mod_inv(self.N, int(self.moduliQ[i]))
-            self.NScaleInvModq[i] = self.mulMod(
-                int(self.NInvModq[i]), int(1 << 32), int(self.moduliQ[i])
-            )
-            self.NScaleInvModq[i] = self.mulMod(
-                int(self.NScaleInvModq[i]), int(1 << 32), int(self.moduliQ[i])
-            )
-            self.qInvVec[i] = self.inv(self.moduliQ[i])
             self.qRootPows[i] = [0] * self.N
             self.qRootPowsInv[i] = [0] * self.N
             self.qRootScalePows[i] = [0] * self.N
@@ -587,10 +566,6 @@ class Context:
         self.moduliQ_cuda = torch.from_numpy(np.array(self.moduliQ, dtype=np.uint64)).cuda()
 
         self.moduliP = [0] * self.K
-        self.prVec = [0] * self.K
-        self.pTwok = [0] * self.K
-        self.pkVec = [0] * self.K
-        self.pdVec = [0] * self.K
         self.pInvVec = [0] * self.K
         self.pRoots = [0] * self.K
         self.pRootsInv = [0] * self.K
@@ -599,8 +574,6 @@ class Context:
         self.pRootScalePows = [[] for _ in range(self.K)]
         self.pRootScalePowsOverp = [[] for _ in range(self.K)]
         self.pRootScalePowsInv = [[] for _ in range(self.K)]
-        self.NInvModp = [0] * self.K
-        self.NScaleInvModp = [0] * self.K
 
         if moduliP is None and rootsP is None:
             cnt = 0
@@ -635,20 +608,7 @@ class Context:
                 self.pRoots[i] = rootsP[i]
 
         for i in range(K):
-            # print(i)
-            self.pTwok[i] = 2 * (int(math.log2(self.moduliP[i])) + 1)
-            self.prVec[i] = (1 << int(self.pTwok[i])) // int(self.moduliP[i])
-            self.pkVec[i] = (
-                (nbtheory.mod_inv(1 << 62, int(self.moduliP[i])) << 62) - 1
-            ) // int(self.moduliP[i])
             self.pRootsInv[i] = nbtheory.mod_inv(self.pRoots[i], int(self.moduliP[i]))
-            self.NInvModp[i] = nbtheory.mod_inv(self.N, int(self.moduliP[i]))
-            self.NScaleInvModp[i] = self.mulMod(
-                int(self.NInvModp[i]), int(1 << 32), int(self.moduliP[i])
-            )
-            self.NScaleInvModp[i] = self.mulMod(
-                int(self.NScaleInvModp[i]), int(1 << 32), int(self.moduliP[i])
-            )
             self.pInvVec[i] = self.inv(self.moduliP[i])
             self.pRootPows[i] = [0] * self.N
             self.pRootPowsInv[i] = [0] * self.N
@@ -889,28 +849,15 @@ class Context:
             self.mult_swk[1] = MULT_SWK[1]
 
         self.moduliQ = np.array(self.moduliQ, dtype=np.uint64)
-        self.qrVec = np.array(self.qrVec, dtype=np.uint64)
-        self.qTwok = np.array(self.qTwok, dtype=np.uint64)
-        self.qkVec = np.array(self.qkVec, dtype=np.uint64)
-        self.qdVec = np.array(self.qdVec, dtype=np.uint64)
         self.moduliP = np.array(self.moduliP, dtype=np.uint64)
-        self.prVec = np.array(self.prVec, dtype=np.uint64)
-        self.pTwok = np.array(self.pTwok, dtype=np.uint64)
-        self.pkVec = np.array(self.pkVec, dtype=np.uint64)
-        self.pdVec = np.array(self.pdVec, dtype=np.uint64)
         self.qRoots = np.array(self.qRoots, dtype=np.uint64)
         self.pRoots = np.array(self.pRoots, dtype=np.uint64)
 
-        self.qInvVec = np.array(self.qInvVec, dtype=np.uint64)
         self.pInvVec = np.array(self.pInvVec, dtype=np.uint64)
         self.qRootScalePows = np.array(self.qRootScalePows, dtype=np.uint64)
         self.pRootScalePows = np.array(self.pRootScalePows, dtype=np.uint64)
         self.qRootScalePowsInv = np.array(self.qRootScalePowsInv, dtype=np.uint64)
         self.pRootScalePowsInv = np.array(self.pRootScalePowsInv, dtype=np.uint64)
-        self.NInvModq = np.array(self.NInvModq, dtype=np.uint64)
-        self.NInvModp = np.array(self.NInvModp, dtype=np.uint64)
-        self.NScaleInvModq = np.array(self.NScaleInvModq, dtype=np.uint64)
-        self.NScaleInvModp = np.array(self.NScaleInvModp, dtype=np.uint64)
         self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
         self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
@@ -993,10 +940,6 @@ class Context:
 
         # for cuda context
         if torch.cuda.is_available():
-            self.log_degree = logN
-            self.degree = self.N
-            self.level = self.L
-            self.alpha = self.K
             self.max_num_moduli = self.L + self.K
             self.chain_length = self.L
             self.num_special_moduli = self.K
@@ -1039,44 +982,44 @@ class Context:
                 self.mult_swk[1].reshape(-1),dtype=torch.uint64, device="cuda")
             
             # for output & workspace
-            self.beta = (int)(self.level / self.alpha)
+            self.beta = (int)(self.K / self.K)
             self.inner_workspace = torch.tensor(
-                [0] * (4 * self.num_moduli_after_modup * self.degree * self.beta),
+                [0] * (4 * self.num_moduli_after_modup * self.N * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.inner_out = torch.tensor(
-                [0] * (2 * self.num_moduli_after_modup * self.degree),
+                [0] * (2 * self.num_moduli_after_modup * self.N),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.moddown_out_ax = torch.tensor(
-                [0] * (self.num_moduli_after_moddown * self.degree),
+                [0] * (self.num_moduli_after_moddown * self.N),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.moddown_out_bx = torch.tensor(
-                [0] * (self.num_moduli_after_moddown * self.degree),
+                [0] * (self.num_moduli_after_moddown * self.N),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.modup_out = torch.tensor(
-                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                [0] * (self.num_moduli_after_modup * self.N * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.rescale_out = torch.tensor(
-                [0] * ((self.L - 1) * self.degree),
+                [0] * ((self.L - 1) * self.N),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.automorphism_transform_out = torch.tensor(
-                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                [0] * (self.num_moduli_after_modup * self.N * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )
             self.switch_modulus_out = torch.tensor(
-                [0] * (self.num_moduli_after_modup * self.degree * self.beta),
+                [0] * (self.num_moduli_after_modup * self.N * self.beta),
                 dtype=torch.uint64,
                 device="cuda",
             )
