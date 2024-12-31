@@ -113,7 +113,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
                 scf2 = rct2.scaling_factor
                 scf1 = cryptoContext.GetScalingFactorRealBig(cur_limbs = (L-(c1lvl-1)))
                 scf = cryptoContext.GetScalingFactorReal(cur_limbs = c2_cur_limbs)
-                rct2 = eval_mult_core(rct2, scf1 / scf2 / scf)
+                rct2 = eval_mult_core(rct2, scf1 / scf2 / scf, cryptoContext)
                 if c2lvl+1 < c1lvl:
                     rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl - 1)
                 rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)

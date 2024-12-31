@@ -592,7 +592,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         cv1[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                               cryptoContext.q_mu_cuda, curr_limbs)
         return Cipher([cv0, cv1], curr_limbs, cipher.scaling_factor, cipher.noise_deg)
-
+    #todo: it is ct*pt in extent form, refactor?
     def eval_mult_ext(cipher, pt, cryptoContext):
         cur_limbs = cipher.cur_limbs
         moduli = cryptoContext.BsContext.QplusP_map[cur_limbs]
@@ -600,7 +600,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         limbsExt = cur_limbs + cryptoContext.K
         cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
         cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, limbsExt)
-        return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor+pt.scaling_factor, cipher.noise_deg+pt.noise_deg)
+        return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor*pt.scaling_factor, cipher.noise_deg+pt.noise_deg)
 
     def eval_add_ext(cipher0, cipher1, cryptoContext):
         assert cipher0.cur_limbs == cipher1.cur_limbs
