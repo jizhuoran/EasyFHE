@@ -136,7 +136,9 @@ def gen_contexts(
     C2S, S2C = [], []
     C2S_dim, S2C_dim = [], []
     C2S_limbs, S2C_limbs = [], []
-    for slot, C2S_arr, S2C_arr in BOOT_KEY:
+    for slot, C2S_arr, S2C_arr, scfactor_U0hatTPreFFT, scfactor_U0PreFFT in BOOT_KEY:
+        U0hatTPreFFTScalingFactor = scfactor_U0hatTPreFFT
+        U0PreFFTScalingFactor = scfactor_U0PreFFT
         for i in range(len(C2S_arr)):
             C2S_dim.append(len(C2S_arr[i]))
             for j in range(len(C2S_arr[i])):
@@ -158,6 +160,8 @@ def gen_contexts(
         "S2C_dim": S2C_dim,
         "C2S_limbs": C2S_limbs,
         "S2C_limbs": S2C_limbs,
+        "U0hatTPreFFTScalingFactor": U0hatTPreFFTScalingFactor,
+        "U0PreFFTScalingFactor": U0PreFFTScalingFactor,
     }
     ROT_SWK = cc.GetEvalRotateKey()
 
