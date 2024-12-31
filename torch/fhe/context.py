@@ -173,14 +173,13 @@ class BsContext:
             self.QmuplusPmu_map[cur_limbs] = torch.tensor(np.concatenate((cryptoContext.q_mu[0:cur_limbs], cryptoContext.p_mu[:cryptoContext.K])), dtype=torch.uint64, device="cuda")
 
         #compute auto index map
-        self.auto_index = {} # todo: should be saved in global context
-        self.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
+        cryptoContext.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
         for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-            self.auto_index[(1 << step) * slots] = self.find_auto_index((1 << step) * slots, cryptoContext.N << 1)
+            cryptoContext.auto_index[(1 << step) * slots] = self.find_auto_index((1 << step) * slots, cryptoContext.N << 1)
         for i in self.C2S_rot_in + self.C2S_rot_out + self.S2C_rot_in + self.S2C_rot_out:
             for j in i:
-                if j not in self.auto_index:
-                    self.auto_index[j] = self.find_auto_index(j, cryptoContext.N << 1)
+                if j not in cryptoContext.auto_index:
+                    cryptoContext.auto_index[j] = self.find_auto_index(j, cryptoContext.N << 1)
 
     def find_auto_index(self, i, m):
         def inv_mod(a, m):
@@ -479,6 +478,7 @@ class Context:
         self.qRootPowsInv = [[] for _ in range(L)]
         self.NInvModq = [0] * L
         self.NScaleInvModq = [0] * L
+        self.auto_index = {}
         bnd = 1
         cnt = 1
         if moduliQ is None and rootsQ is None:
@@ -1487,6 +1487,7 @@ class Context:
             if mod != p - 1 and temp2 % 2 == 0:
                 return False
         return True
+
 
     def method(self):  # function to initialize variables
         pass

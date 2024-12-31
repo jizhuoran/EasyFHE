@@ -684,7 +684,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 if rot_out[s][i] != 0:
                     inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0],
                                                                        curr_limbs, inner.scaling_factor, inner.noise_deg, cryptoContext)
-                    auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
+                    auto_index = cryptoContext.auto_index[rot_out[s][i]]
 
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
@@ -748,7 +748,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
                                                                        inner.scaling_factor, inner.noise_deg,
                                                                        cryptoContext)
-                    auto_index = cryptoContext.BsContext.auto_index[rot_out[s][i]]
+                    auto_index = cryptoContext.auto_index[rot_out[s][i]]
 
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
@@ -953,7 +953,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Running PartialSum
         # -------------------
         for step in range(int(math.log2(N // (2 * slots)))):
-            auto_index = cryptoContext.BsContext.auto_index[(1 << step) * slots]
+            auto_index = cryptoContext.auto_index[(1 << step) * slots]
             temp = homo_ops.homo_rotate(raised, auto_index, cryptoContext)
             raised = homo_ops.homo_add(raised, temp, cryptoContext)
 
@@ -1007,7 +1007,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
 
-        auto_index = cryptoContext.BsContext.auto_index[slots]
+        auto_index = cryptoContext.auto_index[slots]
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, auto_index, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
