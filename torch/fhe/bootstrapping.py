@@ -74,6 +74,10 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
         for i in range(minIdx + 1, input_size):
             ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx], cryptoContext)
 
+        if ciphertexts[minIdx].noise_deg == 2:
+            for i in range(0, input_size):
+                ciphertexts[i] = homo_ops.homo_rescale(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+
     wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
     for i in range(1, input_size):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
@@ -565,9 +569,10 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     for j in range(1, r + 1):
         ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
         ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
-        ciphertext = homo_ops.homo_rescale(ciphertext, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else ciphertext #todo:  after support FLEXIBLEAUTO, after new add implemented, should be move to the end
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
+        ciphertext = homo_ops.homo_rescale(ciphertext, 1,
+                                           cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else ciphertext
     return ciphertext
 
 
@@ -1220,6 +1225,13 @@ def BootstrapTest_N65536L26lB44(
     cipher.noise_deg = 1
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
+
+    # find me!!!! <(｀^´)>
+    noise_deg = result.noise_deg
+    level = cryptoContext.L - result.cur_limbs
+    scaling_factor = result.scaling_factor
+    slots = cryptoContext.slots #fixme: currently is read from context, should be read from cipher
+
 
     after_boot = openfhe_context.decrypt(result)
     after_boot = after_boot.cpu().numpy().reshape(-1)
