@@ -1184,7 +1184,7 @@ def BootstrapTest_N65536L26lB44(
             approxModDepth=approxModDepth,
             rotate_index=[],
             secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech="FIXEDMANUAL",
+            rescaleTech="FLEXIBLEAUTO",
         )
 
         utils.save_context(cryptoContext, openfhe_context, save_path)

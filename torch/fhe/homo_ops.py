@@ -349,6 +349,7 @@ def homo_mul(in0, in1, cryptoContext):
 
 
 def homo_square(in0, cryptoContext):
+    in0 = in0.clone()
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale(in0, 1, cryptoContext)
     res = cipher_square(in0, cryptoContext)
