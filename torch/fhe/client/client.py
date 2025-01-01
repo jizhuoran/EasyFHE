@@ -39,27 +39,51 @@ class OpenFHEContext:
     def encrypt(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        # sc_Factor = cipher.GetScalingFactor()
-        # noise_deg = cipher.GetNoiseDeg()
+        scaling_factor = cipher.GetScalingFactor()
+        noise_deg = cipher.GetNoiseScaleDeg()
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-        # return Cipher.Cipher(cv, cv[0].shape[0], sc_Factor, noise_deg) # todo:set scaling factor and noise deg here?
-        return Cipher.Cipher(cv, cv[0].shape[0], 0.0, 1)
+        return Cipher.Cipher(cv, cv[0].shape[0], scaling_factor, noise_deg) # todo:set scaling factor and noise deg here?
+        # return Cipher.Cipher(cv, cv[0].shape[0], 0.0, 1)
 
     def decrypt(self, x, noise_deg, level, scaling_factor, slots):
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        for _ in range(self.depth + 1 - x.cur_limbs):
-            cipher = self.cc.EvalMult(cipher, cipher)
-            cipher = self.cc.Rescale(cipher)
+
+        # print("GetNoiseScaleDeg expect:", cipher.GetNoiseScaleDeg(), "get: ", noise_deg)
+        # print("GetScalingFactor expect:", cipher.GetScalingFactor(), "get: ", scaling_factor)
+        # print("GetLevel expect:", cipher.GetLevel(), "get: ", level)
+        # print("GetHopLevel expect:", cipher.GetHopLevel(), "get: ???")
+        # print("GetScalingFactorInt expect:", cipher.GetScalingFactorInt(), "get: ???")
+        # print("GetVectorOfData expect:", len(cipher.GetVectorOfData()[0]), "get: ", x.cur_limbs)
+        # print("GetSlots expect:", cipher.GetSlots(), "get: ", slots)
+
         cipher.SetNoiseScaleDeg(noise_deg)
         cipher.SetLevel(level)
         cipher.SetScalingFactor(scaling_factor)
         cipher.SetSlots(slots)
+
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)
+
+        # print("After BS GetNoiseScaleDeg", cipher.GetNoiseScaleDeg())
+        # print("After BS GetScalingFactor", cipher.GetScalingFactor())
+        # print("After BS GetLevel", cipher.GetLevel())
+        # print("After BS GetHopLevel", cipher.GetHopLevel())
+        # print("After BS GetScalingFactorInt", cipher.GetScalingFactorInt())
+        # print("After BS GetSlots", cipher.GetSlots())
+        # print("After BS GetVectorOfData", len(cipher.GetVectorOfData()[0]))
+
+
+
         ptx = self.cc.Decrypt(cipher, self.secretKey)
+
+        # print("after expect:", cipher.GetNoiseScaleDeg())
+        # print("after expect:", cipher.GetScalingFactor())
+        # print("after expect:", cipher.GetLevel())
+        # print("after expect:", cipher.GetSlots())
+
         return torch.tensor(
             ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
         )

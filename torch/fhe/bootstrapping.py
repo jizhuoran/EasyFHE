@@ -1167,10 +1167,12 @@ def BootstrapTest_N65536L26lB44(
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    save_path="torch/fhe/data/crypto.pkl",
+    save_path="torch/fhe/data/FLEXIBLEAUTO.pkl",
 ):
-    load_from_file = False
+    load_from_file = True
     if load_from_file:
+        # save_path = "torch/fhe/data/FIXEDMANUAL.pkl"
+        save_path = "torch/fhe/data/FLEXIBLEAUTO.pkl"
         cryptoContext, openfhe_context = utils.load_context(save_path)
     else:
         openfhe_context, cryptoContext = client.gen_contexts(
@@ -1184,11 +1186,42 @@ def BootstrapTest_N65536L26lB44(
             approxModDepth=approxModDepth,
             rotate_index=[],
             secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech="FIXEDMANUAL",
+            rescaleTech="FLEXIBLEAUTO",
         )
 
         utils.save_context(cryptoContext, openfhe_context, save_path)
-        cryptoContext, openfhe_context = utils.load_context(save_path)
+        cryptoContext, _ = utils.load_context(save_path)
+        # cryptoContext, openfhe_context = utils.load_context(save_path)
+
+
+    x = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
+    x = openfhe_context.encrypt(torch.tensor(x, device="cuda"))
+    y = homo_ops.homo_mul(x, x, cryptoContext)
+    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    y = homo_ops.homo_mul_scalar_double(y, 2.7, cryptoContext)
+    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    y = homo_ops.homo_mul(y, y, cryptoContext)
+    y = homo_ops.homo_mul_scalar_int(y, 3, cryptoContext)
+    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    y = homo_ops.homo_mul(y, y, cryptoContext)
+    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    y = homo_ops.homo_add_scalar_double(y, 1.1, cryptoContext)
+    y = homo_ops.homo_mul(y, y, cryptoContext)
+    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    x = np.array([1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8])
+    x = x * x
+    x *= 2.7
+    x = x * x
+    x *= 3
+    x = x * x
+    x += 1.1
+    x = x * x
+    print(x)
+    
+    y = openfhe_context.decrypt(y, y.noise_deg, cryptoContext.L - y.cur_limbs, y.scaling_factor, cryptoContext.slots)
+    print(y[:10])
+    exit()
+
 
     dim1 = [0, 0]
     cryptoContext.BsContext = BsContext(
@@ -1218,10 +1251,11 @@ def BootstrapTest_N65536L26lB44(
     # note: do not support FLEXIBLEAUTOEXT　currently,
     # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
     # todo: generalize the setting, or set in encrypt function
-    cipher.scaling_factor = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-    cipher.noise_deg = 1
+    # cipher.scaling_factor = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+    # cipher.noise_deg = 1
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
+    # result = homo_ops.homo_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
     # find me!!!! <(｀^´)>
     noise_deg = result.noise_deg
