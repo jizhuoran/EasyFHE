@@ -577,8 +577,8 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
 
 
 def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
-    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size
-        assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove judgement
+    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size?
+        assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove condition?
         curr_limbs = cipher.cur_limbs
         K = cryptoContext.K
         N = cryptoContext.N
@@ -845,7 +845,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     moduliQ = cryptoContext.moduliQ
     rescaleTech = cryptoContext.rescaleTech
 
-    assert rescaleTech == "FIXEDMANUAL" or rescaleTech == "FLEXIBLEAUTO" #todo: FLEXIBLEAUTOEXT is not implemented yet
+    # note: FLEXIBLEAUTOEXT is not implemented yet
+    assert rescaleTech == "FIXEDMANUAL" or rescaleTech == "FLEXIBLEAUTO"
 
     if (rescaleTech=="FLEXIBLEAUTOEXT"):
         pass
@@ -888,7 +889,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (precom.paramsDec.level_budget == 1) #todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
+    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
+    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (precom.paramsDec.level_budget == 1)
 
     if slots == M // 4: # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
@@ -900,7 +902,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
-        ctxtEncI = homo_ops.cipher_sub(ctxtEnc, conj, cryptoContext) # fixme: change to homo_sub
+        ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
 
@@ -1012,14 +1014,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    # fixme: 下面这一步rescale是我自己加的，
-    #  如果是flexibleauto， 本来用openfhe解密的话，它在解密前判断一下自动把最后一次rescale做了，
-    #  但是因为目前只传多项式给openfhe（没有传noisedeg scalingfactor那些参数），openfhe没有其它信息可能就不会去多做一次rescale
-    #  如果是FIXEDMANUAL，避免在bs之后再接其它计算出问题，这里应该手动的rescale一下
-    ctxtDec = homo_ops.homo_rescale(ctxtDec, 1, cryptoContext)
-    # ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
-    # if rescaleTech == ScalingTechnique.FIXEDMANUAL:
-    #     ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
+    if rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
+        ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
 
     return ctxtDec
 
@@ -1210,7 +1206,8 @@ def BootstrapTest_N65536L26lB44(
     )
 
     # Test the correctness of the bootstrapping
-    x = [(i % 11) / 100 for i in range(cryptoContext.slots)]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range(cryptoContext.slots)])
     x = torch.tensor(x, device="cuda")
     cipher = openfhe_context.encrypt(x)
     cipher.cv[0] = cipher.cv[0][:2]
@@ -1230,10 +1227,11 @@ def BootstrapTest_N65536L26lB44(
     noise_deg = result.noise_deg
     level = cryptoContext.L - result.cur_limbs
     scaling_factor = result.scaling_factor
-    slots = cryptoContext.slots #fixme: currently is read from context, should be read from cipher
+    slots = cryptoContext.slots #fixme: currently it is read from context, should be read from cipher
 
     after_boot = openfhe_context.decrypt(result, noise_deg, level, scaling_factor, slots)
     after_boot = after_boot.cpu().numpy().reshape(-1)
+    print(after_boot[:10])
     x = x.cpu().numpy().reshape(-1)
     if(np.any(np.abs(after_boot - x) > 3e-2)):
         print("Error is too large!")

@@ -52,7 +52,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
                     scf2 = cryptoContext.GetScalingFactorRealBig(cur_limbs = (L-(c2lvl-1)))
                     scf = cryptoContext.GetScalingFactorReal(cur_limbs = (L-c1lvl))
                     q1 = cryptoContext.GetModReduceFactor(sizeQl1 - 1)
-                    rct1 = eval_mult_core(rct1, scf2 / scf * q1 / scf, cryptoContext)
+                    rct1 = eval_mult_core(rct1, scf2 / scf1 * q1 / scf, cryptoContext)
                     rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
                     if (c1lvl+2<c2lvl):
                         rct1 =cipher_level_reduce(rct1, c2lvl - c1lvl - 2)
@@ -127,7 +127,6 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
 
 
 # note: AdjustForMultInPlace in rns-leveledshe.cpp
-# todo: copy void LeveledSHERNS::EvalMultInPlace(Ciphertext<DCRTPoly>& ciphertext, ConstPlaintext plaintext) const in rns-leveledshe.cpp
 def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
 
@@ -147,7 +146,7 @@ def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
 def adjust_for_add_or_sub(in0, in1, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
     if rescaleTech == "FIXEDMANUAL":
-        #fixme: adjust_levels needs to support when input has class Plaintext!
+        #fixme: function `adjust_levels` needs to support when input has class Plaintext!
         # or do some modifications here!
         rct1,rct2 = adjust_levels(in0, in1, cryptoContext)
         if isinstance(in0, Cipher) and isinstance(in1, Cipher):
@@ -172,7 +171,7 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
             moduli = cryptoContext.moduliQ[:sizeQl]
             ptxtIndex = 1
 
-        if isinstance(in0, Plaintext) or isinstance(in1, Plaintext):
+        if isinstance(in0, Plaintext) or isinstance(in1, Plaintext): #todo: this branch is not tested
             # Bring to same depth if not already same
             if ptxtDepth < ctxtDepth:
                 diffDepth = ctxtDepth - ptxtDepth
@@ -184,7 +183,7 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 
                 F.cv_mul_scalar(
                     ptxt, crtPowSF, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, len(moduli)
-                )   #fixme: crtPowSF should be a tensor for F.cv_mul_scalar, refactor crt_mult
+                )   #fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
                 if ptxtIndex == 0:
                     in0.mx = ptxt # todo: check if correctly assigned
@@ -207,7 +206,7 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 
 #todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
-#todo: 再包一层，叫homo_level_reduce
+#todo: write homo_level_reduce
 def cipher_level_reduce(ct, levels):
     return Cipher(ct.cv, ct.cur_limbs - levels, ct.scaling_factor, ct.noise_deg)
 
@@ -302,7 +301,7 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg)
 
 #todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
-#todo: if used for `homo_mul_scalar_double`, therefore the scaling factor and noise_deg should be changed
+#todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 def cipher_mul_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
@@ -442,8 +441,7 @@ def get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
     int_sc_factor = int(sc_factor + 0.5)
     crt_sc_factor = np.full(cur_limbs, int_sc_factor, dtype=np.uint64)
 
-    #fixme: why ciphertext.noise_deg should be set int, else cant use?
-    for i in range(1, int(ciphertext.noise_deg)):  # Adjust the loop range as needed based on noise scale degree
+    for i in range(1, ciphertext.noise_deg):
         crt_constant = crt_mult(crt_constant, crt_sc_factor, moduli)
 
     return crt_constant
@@ -478,8 +476,8 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
     #     res = cipher_add_scalar(ct, tmpr1[0], cryptoContext).cv
     # return Cipher(res, ct.cur_limbs)
 
-#fixme: corresponds to MultByIntegerInPlace in openfhe, the scalar in openfhe is uint64_t
-#fixme: either call `abs` before `cipher_mul_scalar`, or prohibit scalar<0
+#note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
+#fixme: should call `abs` before `cipher_mul_scalar` first, and then `cipher_mul_scalar`; or prohibit scalar<0
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = cipher_mul_scalar(in0, scalar, cryptoContext)
     if scalar < 0:
@@ -531,8 +529,7 @@ def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
     factors = np.zeros(num_towers, dtype=np.uint64) #todo: allocate inside or outside? or remove outside allocation
     if large_abs >= bound:
         for i in range(num_towers):
-            # reduced = large % q_vec[i]
-            reduced = np.mod(large, q_vec[i]) #todo: check if equivalent to openfhe
+            reduced = large % q_vec[i]
             factors[i] = reduced + q_vec[i] if reduced < 0 else reduced
     else:
         sc_constant = int(large)
@@ -558,11 +555,11 @@ def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
     return factors
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
+#todo: should merge this function with cipher_mul_scalar? or redesign interface
 def eval_mult_core(ciphertext, constant, cryptoContext):
     cur_limbs = ciphertext.cur_limbs
     factors = np.zeros(cur_limbs, dtype=np.uint64)
     factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
-    #todo: should merged with cipher_mul_scalar
     factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
     cv = [
         F.cv_mul_scalar(
