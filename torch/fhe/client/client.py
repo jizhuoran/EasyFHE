@@ -50,14 +50,13 @@ class OpenFHEContext:
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-
+        for _ in range(self.depth + 1 - x.cur_limbs):
+            cipher = self.cc.EvalMult(cipher, cipher)
+            cipher = self.cc.Rescale(cipher)
         cipher.SetNoiseScaleDeg(noise_deg)
         cipher.SetLevel(level)
         cipher.SetScalingFactor(scaling_factor)
         cipher.SetSlots(slots)
-        # for _ in range(self.depth + 1 - x.cur_limbs):
-        #     ctx = self.cc.EvalMult(ctx, ctx)
-        #     ctx = self.cc.Rescale(ctx)
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)
         ptx = self.cc.Decrypt(cipher, self.secretKey)
