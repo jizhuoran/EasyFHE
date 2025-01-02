@@ -409,19 +409,19 @@ def get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
     approx_factor = float(pow(2, log_approx))
     sc_constant = int(constant * sc_factor / approx_factor + 0.5)
 
-    crt_constant = np.full(cur_limbs, sc_constant, dtype=np.uint64)
+    crt_constant = torch.tensor(cur_limbs * [sc_constant], dtype=torch.uint64)
 
     # Scale back up by approxFactor within the CRT multiplications.
     if log_approx > 0:
         log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
         int_step = 2 ** log_step
-        crt_approx = np.full(cur_limbs, int_step, dtype=np.uint64)
+        crt_approx = torch.tensor(cur_limbs * [int_step], dtype=torch.uint64)
         log_approx -= log_step
 
         while log_approx > 0:
             log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
             int_step = 2 ** log_step
-            crt_sf = np.full(cur_limbs, int_step, dtype=np.uint64)
+            crt_sf = torch.tensor(cur_limbs * [int_step], dtype=torch.uint64)
             crt_approx = crt_mult(crt_approx, crt_sf, moduli)
             log_approx -= log_step
 
@@ -434,7 +434,7 @@ def get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
 
     # Final scaling factor adjustments
     int_sc_factor = int(sc_factor + 0.5)
-    crt_sc_factor = np.full(cur_limbs, int_sc_factor, dtype=np.uint64)
+    crt_sc_factor = torch.tensor(cur_limbs * [int_sc_factor], dtype=torch.uint64)
 
     for i in range(1, ciphertext.noise_deg):
         crt_constant = crt_mult(crt_constant, crt_sc_factor, moduli)
@@ -529,13 +529,13 @@ def get_element_for_eval_mult(cur_limbs, constant, cryptoContext):
     if log_approx > 0:
         log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
         int_step = 1 << log_step
-        crt_approx = np.full(num_towers, int_step, dtype=np.uint64)
+        crt_approx = torch.tensor(num_towers * [int_step], dtype=torch.uint64)
         log_approx -= log_step
 
         while log_approx > 0:
             log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
             int_step = 1 << log_step
-            crt_sf = np.full(num_towers, int_step, dtype=np.uint64)
+            crt_sf = torch.tensor(num_towers * [int_step], dtype=torch.uint64)
             crt_approx = crt_mult(crt_approx, crt_sf, q_vec)
             log_approx -= log_step
         factors = crt_mult(factors, crt_approx, q_vec)
