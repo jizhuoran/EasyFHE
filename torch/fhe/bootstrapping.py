@@ -577,8 +577,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
 
 
 def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
-    def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size?
-        assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove condition?
+    def key_switch_ext(cipher, add_first, cryptoContext):
         curr_limbs = cipher.cur_limbs
 
         cv0 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
@@ -663,7 +662,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     cv0, digits, result.cur_limbs, result.scaling_factor, result.noise_deg, rot_in[s][j], True, cryptoContext
                 )
             else:
-                fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
+                fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
         
         for i in range(b):
             G = g * i
@@ -726,7 +725,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     result.noise_deg, rot_in[s][j], True, cryptoContext
                 )
             else:
-                fast_rotation_ext[j] = key_switch_ext(result, key_switch_ext_size, True, cryptoContext)
+                fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
         
         for i in range(b_rem):
             G = g_rem * i
