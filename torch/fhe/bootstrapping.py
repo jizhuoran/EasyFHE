@@ -829,8 +829,8 @@ def cipher_mod_raise(cipher, L0, cryptoContext):
 # @profile_python_function
 def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
     l = cipher.cur_limbs
-    cipher.cv[0] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[0], l, monomial_degree)
-    cipher.cv[1] = F.cv_mul_by_monomial(cryptoContext, cipher.cv[1], l, monomial_degree)
+    cipher.cv[0] = F.cv_mul_by_monomial(cipher.cv[0], l, monomial_degree, cryptoContext)
+    cipher.cv[1] = F.cv_mul_by_monomial(cipher.cv[1], l, monomial_degree, cryptoContext)
     return cipher
 
 
@@ -1167,7 +1167,7 @@ def BootstrapTest_N65536L26lB44(
     approxModDepth=9,
     save_path="torch/fhe/data/crypto.pkl",
 ):
-    load_from_file = False
+    load_from_file = True
     if load_from_file:
         cryptoContext, openfhe_context = utils.load_context(save_path)
     else:

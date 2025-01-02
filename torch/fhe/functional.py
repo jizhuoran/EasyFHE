@@ -258,22 +258,22 @@ def iNTT(
 def cv_innerproduct(
     x: Tensor,
     curr_limbs: int,
-    context_cuda: Context,
     swk_bx: Tensor,
     swk_ax: Tensor,
+    context: Context,
     inplace: bool = False,
 ) -> Tensor:
     if inplace:
-        res = torch.innerproduct_(context_cuda.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
-                                  alpha=context_cuda.K, level=context_cuda.L, param_degree=context_cuda.N,
-                                  primes=context_cuda.primes, barret_ratio=context_cuda.barret_ratio,
-                                  barret_k=context_cuda.barret_k, workspace=context_cuda.inner_workspace)
+        res = torch.innerproduct_(context.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
+                                  alpha=context.K, level=context.L, param_degree=context.N,
+                                  primes=context.primes, barret_ratio=context.barret_ratio,
+                                  barret_k=context.barret_k, workspace=context.inner_workspace)
     else:
-        res = torch.innerproduct(context_cuda.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
-                                 alpha=context_cuda.K, level=context_cuda.L, param_degree=context_cuda.N,
-                                 primes=context_cuda.primes, barret_ratio=context_cuda.barret_ratio,
-                                 barret_k=context_cuda.barret_k, workspace=context_cuda.inner_workspace)
-    return res.reshape(2, -1, context_cuda.N)
+        res = torch.innerproduct(context.inner_out, x, bx=swk_bx, ax=swk_ax, curr_limbs=curr_limbs,
+                                 alpha=context.K, level=context.L, param_degree=context.N,
+                                 primes=context.primes, barret_ratio=context.barret_ratio,
+                                 barret_k=context.barret_k, workspace=context.inner_workspace)
+    return res.reshape(2, -1, context.N)
 
 
 def cv_keyswitch(
@@ -281,23 +281,23 @@ def cv_keyswitch(
     cur_limbs: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
-    context_cuda: Context,
+    context: Context,
     inplace: bool = False,
 ) -> Tensor:
-    true_beta = int((cur_limbs + (context_cuda.K - 1)) / context_cuda.K)
-    context_cuda.beta = true_beta
+    true_beta = int((cur_limbs + (context.K - 1)) / context.K)
+    context.beta = true_beta
     modup_res = cv_modup(
         input,
         curr_limbs=cur_limbs,
-        context=context_cuda,
+        context=context,
         inplace=inplace,
     )
     inner_product = cv_innerproduct(
         modup_res.reshape(-1),
         cur_limbs,
-        context_cuda,
         swk_bx,
         swk_ax,
+        context,
         inplace=inplace,
     )
 
@@ -307,14 +307,14 @@ def cv_keyswitch(
     moddown_bx = cv_moddown(
         sumMult_bx,
         curr_limbs=cur_limbs,
-        context=context_cuda,
+        context=context,
         inplace=False,
     )
 
     moddown_ax = cv_moddown(
         sumMult_ax,
         curr_limbs=cur_limbs,
-        context=context_cuda,
+        context=context,
         inplace=False,
     )
 
@@ -323,153 +323,153 @@ def cv_keyswitch(
 
 def cv_drop_last_element_and_scale(
     input: Tensor,
-    context_cuda: Context,
     cur_limbs: int,
     l: int,
+    context: Context,
     inplace: bool = False,
 ) -> Tensor:
     if inplace:
         rescale = torch.drop_last_element_and_scale_(
-            context_cuda.rescale_out,
+            context.rescale_out,
             input,
             curr_limbs=cur_limbs,
             l=l,
-            level=context_cuda.L,
-            param_degree=context_cuda.N,
-            param_primes=context_cuda.primes,
-            param_barret_ratio=context_cuda.barret_ratio,
-            param_barret_k=context_cuda.barret_k,
-            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
-            param_power_of_roots=context_cuda.power_of_roots,
-            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
-            qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
-            qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
-            q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+            level=context.L,
+            param_degree=context.N,
+            param_primes=context.primes,
+            param_barret_ratio=context.barret_ratio,
+            param_barret_k=context.barret_k,
+            param_power_of_roots_shoup=context.power_of_roots_shoup,
+            param_power_of_roots=context.power_of_roots,
+            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+            qlql_inv_mod_ql_div_ql_mod_q=context.qlql_inv_mod_ql_div_ql_mod_q,
+            qlql_inv_mod_ql_div_ql_mod_q_shoup=context.qlql_inv_mod_ql_div_ql_mod_q_shoup,
+            q_inv_mod_q=context.q_inv_mod_q,
+            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
         )
     else:
         rescale = torch.drop_last_element_and_scale(
-            context_cuda.rescale_out,
+            context.rescale_out,
             input,
             curr_limbs=cur_limbs,
             l=l,
-            level=context_cuda.L,
-            param_degree=context_cuda.N,
-            param_primes=context_cuda.primes,
-            param_barret_ratio=context_cuda.barret_ratio,
-            param_barret_k=context_cuda.barret_k,
-            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
-            param_power_of_roots=context_cuda.power_of_roots,
-            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
-            qlql_inv_mod_ql_div_ql_mod_q=context_cuda.qlql_inv_mod_ql_div_ql_mod_q,
-            qlql_inv_mod_ql_div_ql_mod_q_shoup=context_cuda.qlql_inv_mod_ql_div_ql_mod_q_shoup,
-            q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+            level=context.L,
+            param_degree=context.N,
+            param_primes=context.primes,
+            param_barret_ratio=context.barret_ratio,
+            param_barret_k=context.barret_k,
+            param_power_of_roots_shoup=context.power_of_roots_shoup,
+            param_power_of_roots=context.power_of_roots,
+            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+            qlql_inv_mod_ql_div_ql_mod_q=context.qlql_inv_mod_ql_div_ql_mod_q,
+            qlql_inv_mod_ql_div_ql_mod_q_shoup=context.qlql_inv_mod_ql_div_ql_mod_q_shoup,
+            q_inv_mod_q=context.q_inv_mod_q,
+            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
         )
 
-    return rescale.reshape(-1, context_cuda.N)
+    return rescale.reshape(-1, context.N)
 
 
 def cv_rescale( #todo: deprecated, to be removed, as well as inner functions
     input: Tensor,
-    context_cuda: Context,
     cur_limbs: int,
+    context: Context,
     inplace: bool = False,
 ) -> Tensor:
     if inplace:
         rescale = torch.rescale_(
-            context_cuda.rescale_out,
+            context.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            level=context_cuda.L,
-            param_degree=context_cuda.N,
-            param_primes=context_cuda.primes,
-            param_barret_ratio=context_cuda.barret_ratio,
-            param_barret_k=context_cuda.barret_k,
-            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
-            param_power_of_roots=context_cuda.power_of_roots,
-            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
-            q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+            level=context.L,
+            param_degree=context.N,
+            param_primes=context.primes,
+            param_barret_ratio=context.barret_ratio,
+            param_barret_k=context.barret_k,
+            param_power_of_roots_shoup=context.power_of_roots_shoup,
+            param_power_of_roots=context.power_of_roots,
+            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+            q_inv_mod_q=context.q_inv_mod_q,
+            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
         )
     else:
         rescale = torch.rescale(
-            context_cuda.rescale_out,
+            context.rescale_out,
             input,
             curr_limbs=cur_limbs,
-            level=context_cuda.L,
-            param_degree=context_cuda.N,
-            param_primes=context_cuda.primes,
-            param_barret_ratio=context_cuda.barret_ratio,
-            param_barret_k=context_cuda.barret_k,
-            param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
-            param_power_of_roots=context_cuda.power_of_roots,
-            inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
-            q_inv_mod_q=context_cuda.q_inv_mod_q,
-            q_inv_mod_q_shoup=context_cuda.q_inv_mod_q_shoup,
+            level=context.L,
+            param_degree=context.N,
+            param_primes=context.primes,
+            param_barret_ratio=context.barret_ratio,
+            param_barret_k=context.barret_k,
+            param_power_of_roots_shoup=context.power_of_roots_shoup,
+            param_power_of_roots=context.power_of_roots,
+            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+            q_inv_mod_q=context.q_inv_mod_q,
+            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
         )
 
-    return rescale.reshape(-1, context_cuda.N)
+    return rescale.reshape(-1, context.N)
 
 def cv_automorphism_transform(
     input: Tensor,
     l: int,
     i: int,
-    context_cuda: Context
+    context: Context
 ) -> Tensor:
     automorphism_transform = torch.automorphism_transform(
-        context_cuda.automorphism_transform_out,
+        context.automorphism_transform_out,
         input,
         l=int(l),
-        N=context_cuda.N,
+        N=context.N,
         i=int(i),
-        precomp_vec=context_cuda.BsContext.precompute_auto_map[i]
+        precomp_vec=context.BsContext.precompute_auto_map[i]
     )
 
-    return automorphism_transform.reshape(-1, context_cuda.N)
+    return automorphism_transform.reshape(-1, context.N)
 
 def cv_switch_modulus_with_intt_ntt(
     input: Tensor, 
     L0 : int,
-    context_cuda: Context
+    context: Context
     ) -> Tensor:
     switch_modulus = torch.switch_modulus(
-        context_cuda.switch_modulus_out,
+        context.switch_modulus_out,
         input,
-        primes = context_cuda.primes,
-        N = context_cuda.N,
+        primes = context.primes,
+        N = context.N,
         L0 = L0,
-        logN = context_cuda.logN,
-        level = context_cuda.L,
-        inverse_power_of_roots_div_two = context_cuda.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two  = context_cuda.inverse_scaled_power_of_roots_div_two,
-        param_power_of_roots_shoup = context_cuda.power_of_roots_shoup,
-        param_power_of_roots = context_cuda.power_of_roots
+        logN = context.logN,
+        level = context.L,
+        inverse_power_of_roots_div_two = context.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two  = context.inverse_scaled_power_of_roots_div_two,
+        param_power_of_roots_shoup = context.power_of_roots_shoup,
+        param_power_of_roots = context.power_of_roots
     )
-    return switch_modulus.reshape(-1, context_cuda.N)
+    return switch_modulus.reshape(-1, context.N)
 
 
 def cv_mul_by_monomial(
-    context_cuda: Context,
     input: Tensor,
     l: int,
     monomialDeg: int,
+    context: Context,
 ) -> Tensor:
     mul_by_monomial = torch.mul_by_monomial(
         input,
-        primes = context_cuda.primes,
+        primes = context.primes,
         l = l,
-        N = context_cuda.N,
-        M = context_cuda.M,
+        N = context.N,
+        M = context.M,
         monomialDeg=monomialDeg,
-        level=context_cuda.L,
-        inverse_power_of_roots_div_two=context_cuda.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two=context_cuda.inverse_scaled_power_of_roots_div_two,
-        param_power_of_roots_shoup=context_cuda.power_of_roots_shoup,
-        param_power_of_roots=context_cuda.power_of_roots
+        level=context.L,
+        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+        param_power_of_roots_shoup=context.power_of_roots_shoup,
+        param_power_of_roots=context.power_of_roots
     )
-    return mul_by_monomial.reshape(-1, context_cuda.N)
+    return mul_by_monomial.reshape(-1, context.N)

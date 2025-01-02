@@ -373,8 +373,8 @@ def homo_rescale(ct, levels, cryptoContext):
 
     curr_limbs = ct.cur_limbs
     for l in range(levels):
-        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], cryptoContext, curr_limbs, l)
-        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], cryptoContext, curr_limbs, l)
+        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], curr_limbs, l, cryptoContext)
+        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], curr_limbs, l, cryptoContext)
 
     curr_limbs -= levels
     noise_deg = ct.noise_deg-levels
