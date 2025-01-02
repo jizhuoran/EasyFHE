@@ -462,6 +462,9 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
 
     return Cipher(res, ct.cur_limbs, ct.scaling_factor, ct.noise_deg)
 
+def homo_add_scalar(in0, scalar, cryptoContext):
+    return cipher_add_scalar(in0, scalar, cryptoContext)
+
 #note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
 #fixme: should call `abs` before `cipher_mul_scalar` first, and then `cipher_mul_scalar`; or prohibit scalar<0
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
