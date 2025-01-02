@@ -1165,7 +1165,7 @@ def BootstrapTest_N65536L26lB44(
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    rescaleTech = "FIXEDMANUAL"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
     load_from_file = False
     if load_from_file:

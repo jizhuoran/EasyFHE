@@ -3,7 +3,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 import torch.fhe.bootstrapping as bstest
 
 logN_cand = list(range(14, 17))
-logSlots_cand = list(range(5, 17, 3))
+logSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
 maxLevelsRemaining_cand = [3, 5, 7]
 levelBudget_cand = [[2, 2], [4, 4]]
 dnum_cand = [1, 3, 5]
@@ -11,10 +11,11 @@ rescaleTech_cand = ["FLEXIBLEAUTO", "FIXEDMANUAL"]
 
 i = 0
 for logN, logSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in itertools.product(logN_cand, logSlots_cand, maxLevelsRemaining_cand, levelBudget_cand, dnum_cand, rescaleTech_cand):
-    if logSlots >= logN - 2:
+    if logSlots >= logN - 1:
         continue
     try:
         print(i, ": ", logN, logSlots, maxLevelsRemaining, levelBudget, dnum)
+        i += 1
         code_string = """
 import pickle, sys, os
 import numpy as np
