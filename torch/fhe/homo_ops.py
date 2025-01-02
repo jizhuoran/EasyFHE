@@ -84,7 +84,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
                 q2 = cryptoContext.GetModReduceFactor(sizeQl2 - 1)
                 rct2 = eval_mult_core(rct2, scf1 / scf2 * q2 / scf, cryptoContext)
                 rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                if c2lvl+1 <c1lvl:
+                if c2lvl+1 < c1lvl:
                     rct2 = cipher_level_reduce(rct2, c1lvl - c2lvl - 1)
                 rct2.scaling_factor = rct1.scaling_factor
             else:
@@ -176,13 +176,12 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
             if ptxtDepth < ctxtDepth:
                 diffDepth = ctxtDepth - ptxtDepth
                 intSF = int(scFactor + 0.5) # todo: to check if equivalent to openfhe
-                crtSF = np.full(sizeQl, intSF, dtype=np.uint64)
-                crtPowSF = np.copy(crtSF)
+                crtSF = torch.tensor(sizeQl * [intSF], dtype=torch.uint64)
+                crtPowSF = torch.clone(crtSF)
                 for i in range(diffDepth):
                     crtPowSF = crt_mult(crtPowSF, crtSF, moduli)
-
-                F.cv_mul_scalar(
-                    ptxt, crtPowSF, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, len(moduli)
+                ptxt = F.cv_mul_scalar(
+                    ptxt, crtPowSF.cuda(), cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, len(moduli)
                 )   #fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
                 if ptxtIndex == 0:
@@ -483,15 +482,14 @@ def crt_mult(a, b, mods):
     if len(a) != len(b) or len(a) != len(mods):
         raise ValueError("Input lists 'a', 'b', and 'mods' must have the same length.")
 
-    #fixme: should be a tensor?
-    result = np.zeros(len(a), dtype=np.uint64)
+    result = torch.tensor([0] * len(a), dtype=torch.uint64)
     for i in range(len(mods)):
         result[i] = ((int(a[i]) * int(b[i])) % int(mods[i]))
 
     return result
 
 # note: GetElementForEvalMult in ckksrns-leveledshe.cpp
-def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
+def get_element_for_eval_mult(cur_limbs, constant, cryptoContext):
     num_towers = cur_limbs
     q_vec = cryptoContext.moduliQ  # Assuming qVec is a numpy array
     sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
@@ -513,7 +511,7 @@ def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
     large_abs = abs(large)
     bound = 1 << 63
 
-    factors = np.zeros(num_towers, dtype=np.uint64) #todo: allocate inside or outside? or remove outside allocation
+    factors = torch.tensor([0] * num_towers, dtype=torch.uint64)
     if large_abs >= bound:
         for i in range(num_towers):
             reduced = large % q_vec[i]
@@ -539,15 +537,13 @@ def get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext):
             log_approx -= log_step
         factors = crt_mult(factors, crt_approx, q_vec)
 
-    return factors
+    return factors.cuda()
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
 #todo: should merge this function with cipher_mul_scalar? or redesign interface
 def eval_mult_core(ciphertext, constant, cryptoContext):
     cur_limbs = ciphertext.cur_limbs
-    factors = np.zeros(cur_limbs, dtype=np.uint64)
-    factors = get_element_for_eval_mult(factors, cur_limbs, constant, cryptoContext)
-    factors = torch.tensor(factors, dtype=torch.uint64, device="cuda")
+    factors = get_element_for_eval_mult(cur_limbs, constant, cryptoContext)
     cv = [
         F.cv_mul_scalar(
             cv_i,
