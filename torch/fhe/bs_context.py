@@ -215,15 +215,6 @@ class BsContext:
         return torch.from_numpy(np.array(res)).cuda()
 
     def compute_C2S_rot(self, cryptoContext):
-        slots = cryptoContext.slots
-
-        N = cryptoContext.N
-        M = cryptoContext.M
-        K = cryptoContext.K
-        logN = cryptoContext.logN
-        special_limbs = K
-
-        # precom = cryptoContext.BsContext
         level_budget = self.paramsEnc.level_budget
         layers_collapse = self.paramsEnc.layers_coll
         rem_collapse = self.paramsEnc.layers_rem
@@ -256,32 +247,23 @@ class BsContext:
             for j in range(g):
                 rot_in[s][j] = self.reduce_rotation(
                     (j - (num_rotations + 1) // 2 + 1) * (1 << ((s - flag_rem) * layers_collapse + rem_collapse)),
-                    slots)
+                    cryptoContext.slots)
 
             for i in range(b):
                 rot_out[s][i] = self.reduce_rotation((g * i) * (1 << ((s - flag_rem) * layers_collapse + rem_collapse)),
-                                                M // 4)
+                                                     cryptoContext.M // 4)
 
         if flag_rem:
             for j in range(g_rem):
-                rot_in[stop][j] = self.reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1), slots)
+                rot_in[stop][j] = self.reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1), cryptoContext.slots)
 
             for i in range(b_rem):
-                rot_out[stop][i] = self.reduce_rotation((g_rem * i), M // 4)
+                rot_out[stop][i] = self.reduce_rotation((g_rem * i), cryptoContext.M // 4)
 
         self.C2S_rot_in = rot_in
         self.C2S_rot_out = rot_out
 
     def compute_S2C_rot(self, cryptoContext):
-        slots = cryptoContext.slots
-
-        N = cryptoContext.N
-        M = cryptoContext.M
-        K = cryptoContext.K
-        logN = cryptoContext.logN
-        special_limbs = K
-
-        # precom = cryptoContext.BsContext
         level_budget = self.paramsDec.level_budget
         layers_collapse = self.paramsDec.layers_coll
         rem_collapse = self.paramsDec.layers_rem
@@ -309,19 +291,19 @@ class BsContext:
         for s in range(level_budget - flag_rem):
             for j in range(g):
                 rot_in[s][j] = self.reduce_rotation((j - ((num_rotations + 1) / 2) + 1) * (1 << (s * layers_collapse)),
-                                               M // 4)
+                                                    cryptoContext.M // 4)
 
             for i in range(b):
-                rot_out[s][i] = self.reduce_rotation((g * i) * (1 << (s * layers_collapse)), M // 4)
+                rot_out[s][i] = self.reduce_rotation((g * i) * (1 << (s * layers_collapse)), cryptoContext.M // 4)
 
         if flag_rem:
             s = level_budget - flag_rem
             for j in range(g_rem):
                 rot_in[s][j] = self.reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1) * (1 << (s * layers_collapse)),
-                                               M // 4)
+                                                    cryptoContext.M // 4)
 
             for i in range(b_rem):
-                rot_out[s][i] = self.reduce_rotation((g_rem * i) * (1 << (s * layers_collapse)), M // 4)
+                rot_out[s][i] = self.reduce_rotation((g_rem * i) * (1 << (s * layers_collapse)), cryptoContext.M // 4)
 
         self.S2C_rot_in = rot_in
         self.S2C_rot_out = rot_out

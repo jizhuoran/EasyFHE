@@ -13,7 +13,7 @@ class Cipher:
         self.noise_deg = noise_deg
     
     def clone(self):
-        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, 1)
+        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg)
 
     def drop_axax(self):
         assert len(self.cv) == 3

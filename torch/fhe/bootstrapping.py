@@ -580,12 +580,12 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size?
         assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove condition?
         curr_limbs = cipher.cur_limbs
-        K = cryptoContext.K
-        N = cryptoContext.N
-        logN = cryptoContext.logN
+        # K = cryptoContext.K
+        # N = cryptoContext.N
+        # logN = cryptoContext.logN
 
-        cv0 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
-        cv1 = torch.zeros(((curr_limbs + K) << logN), dtype=torch.uint64, device="cuda").reshape(-1, N)
+        cv0 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
+        cv1 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
         if add_first:
             cv0[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                                   cryptoContext.q_mu_cuda, curr_limbs)
@@ -841,7 +841,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     N = cryptoContext.N
     cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
-    bs_ctx = cryptoContext.BsContext
     moduliQ = cryptoContext.moduliQ
     rescaleTech = cryptoContext.rescaleTech
 
@@ -885,7 +884,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # CKKS bootstrapping faster.
     raised = cipher_mod_raise(tmp, L0, cryptoContext)
 
-    constantEvalMult = pre * (1.0 / (bs_ctx.k * N))
+    constantEvalMult = pre * (1.0 / (precom.k * N))
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
@@ -919,8 +918,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Running Approximate Mod Reduction
         # ---------------------------------
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, bs_ctx.coefficients, -1, 1, cryptoContext)
-        ctxtEncI = eval_chebyshev_series_ps(ctxtEncI, bs_ctx.coefficients, -1, 1, cryptoContext)
+        ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
+        ctxtEncI = eval_chebyshev_series_ps(ctxtEncI, precom.coefficients, -1, 1, cryptoContext)
 
 
         if rescaleTech != "FIXEDMANUAL":
@@ -984,7 +983,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, bs_ctx.coefficients, -1, 1, cryptoContext)
+        ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -1134,7 +1133,6 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
                 precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
                                                         context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
                 cnt+=1
-                # print(i,j)
 
         cnt=0
         RHScnt = 0
@@ -1369,17 +1367,6 @@ def run_test_cases():
 
         print("Test case:", context_file.split("/")[-1])
         print("Max error:", max_err, "Average error:", avg_err)
-
-        # if np.any(np.abs(after_boot - x) > 1e-3):
-        #     print("Error is too large!")
-        #     print("Error is too large!")
-        #     print("Error is too large!")
-        # else:
-        #     print("BootstrapTest_N65536L26lB44: Test passed!")
-        #     print("BootstrapTest_N65536L26lB44: Test passed!")
-        #     print("BootstrapTest_N65536L26lB44: Test passed!")
-
-
 
         if np.equal(res_cv0, output[0]).all() and np.equal(res_cv1, output[1]).all():
             print("Test passed!")
