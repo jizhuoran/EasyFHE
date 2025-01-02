@@ -1158,20 +1158,21 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
-    logSlots=13,
+    logSlots=12,
     maxLevelsRemaining=3,
     levelBudget=[4, 4],
     dnum=1,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    save_path="torch/fhe/data/FLEXIBLEAUTO.pkl",
 ):
     load_from_file = True
     if load_from_file:
-        # save_path = "torch/fhe/data/FIXEDMANUAL.pkl"
-        save_path = "torch/fhe/data/FLEXIBLEAUTO.pkl"
+        # rescaleTech = "FIXEDMANUAL"
+        rescaleTech = "FLEXIBLEAUTO"
+        save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
         cryptoContext, openfhe_context = utils.load_context(save_path)
+
     else:
         openfhe_context, cryptoContext = client.gen_contexts(
             logN=logN,
@@ -1187,39 +1188,9 @@ def BootstrapTest_N65536L26lB44(
             rescaleTech="FLEXIBLEAUTO",
         )
 
+        save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
         utils.save_context(cryptoContext, openfhe_context, save_path)
         cryptoContext, _ = utils.load_context(save_path)
-        # cryptoContext, openfhe_context = utils.load_context(save_path)
-
-
-    x = [1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8]
-    x = openfhe_context.encrypt(torch.tensor(x, device="cuda"))
-    y = homo_ops.homo_mul(x, x, cryptoContext)
-    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    y = homo_ops.homo_mul_scalar_double(y, 2.7, cryptoContext)
-    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    y = homo_ops.homo_mul(y, y, cryptoContext)
-    y = homo_ops.homo_mul_scalar_int(y, 3, cryptoContext)
-    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    y = homo_ops.homo_mul(y, y, cryptoContext)
-    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    y = homo_ops.homo_add_scalar_double(y, 1.1, cryptoContext)
-    y = homo_ops.homo_mul(y, y, cryptoContext)
-    y = homo_ops.homo_rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    x = np.array([1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8])
-    x = x * x
-    x *= 2.7
-    x = x * x
-    x *= 3
-    x = x * x
-    x += 1.1
-    x = x * x
-    print(x)
-    
-    y = openfhe_context.decrypt(y, y.noise_deg, cryptoContext.L - y.cur_limbs, y.scaling_factor, cryptoContext.slots)
-    print(y[:10])
-    exit()
-
 
     dim1 = [0, 0]
     cryptoContext.BsContext = BsContext(
@@ -1245,23 +1216,8 @@ def BootstrapTest_N65536L26lB44(
     cipher.cv[1] = cipher.cv[1][:2]
     cipher.cur_limbs = 2
 
-    # print(cryptoContext.moduliQ)
-    # note: do not support FLEXIBLEAUTOEXT　currently,
-    # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
-    # todo: generalize the setting, or set in encrypt function
-    # cipher.scaling_factor = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-    # cipher.noise_deg = 1
-
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
-    # result = homo_ops.homo_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-    # find me!!!! <(｀^´)>
-    noise_deg = result.noise_deg
-    level = cryptoContext.L - result.cur_limbs
-    scaling_factor = result.scaling_factor
-    slots = cryptoContext.slots #fixme: currently it is read from context, should be read from cipher
-
-    after_boot = openfhe_context.decrypt(result, noise_deg, level, scaling_factor, slots)
+    after_boot = openfhe_context.decrypt(result)
     after_boot = after_boot.cpu().numpy().reshape(-1)
     print(after_boot[:10])
     x = x.cpu().numpy().reshape(-1)
@@ -1311,68 +1267,3 @@ def BootstrapTest_N65536L26lB44(
 
 
 
-def run_test_cases():
-    #find all context in the directory
-    all_correct = True
-    path = "torch/fhe/data/"
-    for context_file in os.listdir(path):
-        if context_file.endswith(".pkl") and "context" in context_file:
-            groundtruth_file = context_file.replace("context", "groundtruth")
-        else:
-            continue
-        with open(path+context_file, "rb") as file:
-            cryptoContext_byte, openfhe_byte = pickle.load(file)
-        cryptoContext = Context.Deserialize(cryptoContext_byte)
-        openfhe_context = client.OpenFHEContext.Deserialize(openfhe_byte)
-
-        with open(path+groundtruth_file, "rb") as file:
-            input, output = pickle.load(file)
-
-        dim1 = [0, 0]
-        cryptoContext.BsContext = BsContext(
-            cryptoContext,
-            cryptoContext.levelBudget,
-            dim1,
-            cryptoContext.slots,
-            0,
-            cryptoContext.rescaleTech,
-            cryptoContext.secretKeyDist,
-        )
-
-        eval_bootstrap_setup(
-            cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0
-        )
-
-        # note: do not support FLEXIBLEAUTOEXT　currently,
-        # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
-        # todo: generalize the setting
-        cipher = Cipher([torch.tensor(x, dtype = torch.uint64, device = "cuda") for x in input], 2,
-                        scaling_factor=cryptoContext.GetScalingFactorReal(cryptoContext.L), noise_deg=1)
-
-        result = cipher
-        result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
-
-        res_cv0 = result.cv[0].cpu().numpy().reshape(-1)
-        res_cv1 = result.cv[1].cpu().numpy().reshape(-1)
-        output[0] = np.array(output[0], dtype=np.uint64).reshape(-1)
-        output[1] = np.array(output[1], dtype=np.uint64).reshape(-1)
-
-        x = [(i % 11) / 100 for i in range(cryptoContext.slots)]
-        after_boot = openfhe_context.decrypt(result)
-        after_boot = after_boot.cpu().numpy().reshape(-1)
-        x = np.array(x, dtype=np.float32).reshape(-1)
-
-        max_err = np.max(np.abs(after_boot - x))
-        avg_err = np.mean(np.abs(after_boot - x))
-
-        print("Test case:", context_file.split("/")[-1])
-        print("Max error:", max_err, "Average error:", avg_err)
-
-        if np.equal(res_cv0, output[0]).all() and np.equal(res_cv1, output[1]).all():
-            print("Test passed!")
-        else:
-            all_correct = False
-            print("Test failed!")
-
-    if all_correct:
-        print("All test cases passed!")
