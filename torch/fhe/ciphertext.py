@@ -1,11 +1,5 @@
 import torch
 class Cipher:
-    def __init__(self, cv0, cv1, cur_limbs, scaling_factor, noise_deg):
-        self.cv = [cv0, cv1]
-        self.cur_limbs = cur_limbs
-        self.scaling_factor = scaling_factor
-        self.noise_deg = noise_deg
-
     def __init__(self, cv, cur_limbs, scaling_factor, noise_deg):
         self.cv = cv
         self.cur_limbs = cur_limbs

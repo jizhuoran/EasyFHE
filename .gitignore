@@ -9,6 +9,7 @@
 ## PyTorch
 
 torch/fhe/data
+torch/fhe/example/data
 
 .history
 

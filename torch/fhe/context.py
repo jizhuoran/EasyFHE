@@ -591,7 +591,7 @@ class Context:
                 self.mult_swk[1].reshape(-1),dtype=torch.uint64, device="cuda")
             
             # for output & workspace
-            self.beta = (int)(self.K / self.K)
+            self.beta = (int)(self.L / self.K)
             self.inner_workspace = torch.tensor(
                 [0] * (4 * self.num_moduli_after_modup * self.N * self.beta),
                 dtype=torch.uint64,

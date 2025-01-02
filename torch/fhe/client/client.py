@@ -6,11 +6,12 @@ import pickle
 import numpy as np
 
 class OpenFHEContext:
-    def __init__(self, cc, pk, sk, depth):
+    def __init__(self, cc, pk, sk, depth, slots):
         self.cc = cc
         self.publicKey = pk
         self.secretKey = sk
         self.depth = depth
+        self.slots = slots
 
     def Serialize(self):
         cc_bytes = openfhe.Serialize(self.cc, openfhe.BINARY)
@@ -18,18 +19,19 @@ class OpenFHEContext:
         public_key_bytes = openfhe.Serialize(self.publicKey, openfhe.BINARY)
         secret_key_bytes = openfhe.Serialize(self.secretKey, openfhe.BINARY)
         depth = self.depth
-        return pickle.dumps((cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth))
+        slots = self.slots
+        return pickle.dumps((cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth, slots))
 
     def Deserialize(ser):
         openfhe.ClearEvalMultKeys()
         openfhe.ReleaseAllContexts()
 
-        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth = pickle.loads(ser)
+        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth, slots = pickle.loads(ser)
         cc = openfhe.DeserializeCryptoContextString(cc_bytes, openfhe.BINARY)
         pk = openfhe.DeserializePublicKeyString(public_key_bytes, openfhe.BINARY)
         sk = openfhe.DeserializePrivateKeyString(secret_key_bytes, openfhe.BINARY)
         openfhe.DeserializeEvalMultKeyString(mul_key_bytes, openfhe.BINARY)
-        return OpenFHEContext(cc, pk, sk, depth)
+        return OpenFHEContext(cc, pk, sk, depth, slots)
 
     def encode(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
@@ -39,27 +41,23 @@ class OpenFHEContext:
     def encrypt(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        # sc_Factor = cipher.GetScalingFactor()
-        # noise_deg = cipher.GetNoiseDeg()
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-        # return Cipher.Cipher(cv, cv[0].shape[0], sc_Factor, noise_deg) # todo:set scaling factor and noise deg here?
-        return Cipher.Cipher(cv, cv[0].shape[0], 0.0, 1)
-
-    def decrypt(self, x, noise_deg, level, scaling_factor, slots):
+        return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg())
+    
+    def decrypt(self, x):
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        for _ in range(self.depth + 1 - x.cur_limbs):
-            cipher = self.cc.EvalMult(cipher, cipher)
-            cipher = self.cc.Rescale(cipher)
-        cipher.SetNoiseScaleDeg(noise_deg)
-        cipher.SetLevel(level)
-        cipher.SetScalingFactor(scaling_factor)
-        cipher.SetSlots(slots)
+        cipher.SetNoiseScaleDeg(x.noise_deg)
+        cipher.SetLevel(self.depth + 1 - x.cur_limbs)
+        cipher.SetScalingFactor(x.scaling_factor)
+        cipher.SetSlots(self.slots)
+
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)
         ptx = self.cc.Decrypt(cipher, self.secretKey)
+
         return torch.tensor(
             ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
         )
@@ -169,7 +167,7 @@ def gen_contexts(
     }
     ROT_SWK = cc.GetEvalRotateKey()
 
-    openfhe_context = OpenFHEContext(cc, keys.publicKey, keys.secretKey, depth)
+    openfhe_context = OpenFHEContext(cc, keys.publicKey, keys.secretKey, depth, slots)
     gpufhe_context = Context.Context(
         logN,
         logSlots,
