@@ -1,13 +1,14 @@
 import torch
 class Cipher:
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg):
+    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots):
         self.cv = cv
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
         self.noise_deg = noise_deg
+        self.slots = slots
     
     def clone(self):
-        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg)
+        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
 
     def drop_axax(self):
         assert len(self.cv) == 3
@@ -22,11 +23,14 @@ class Cipher:
         s += f"cur_limbs={self.cur_limbs}\n"
         s += f"scaling_factor={self.scaling_factor}\n"
         s += f"noise_deg={self.noise_deg}\n"
+        s += f"slots={self.slots}\n"
         s += ")"
         return s
     
     def __eq__(self, other):
         if not isinstance(other, Cipher):
+            return False
+        if self.slots != other.slots:
             return False
         if self.noise_deg != other.noise_deg:
             return False

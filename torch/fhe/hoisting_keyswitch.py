@@ -24,7 +24,7 @@ def eval_fast_key_switch_core_ext(d2Tilde, auto_index, beta, curr_limbs, cryptoC
 
 
 # @profile_python_function
-def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, index, add_first, cryptoContext):
+def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, slots, index, add_first, cryptoContext):
     alpha = cryptoContext.K
     K = cryptoContext.K
     beta = int(np.ceil(curr_limbs / alpha))  # Calculate beta as per the original C++ code
@@ -43,10 +43,10 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, in
 
     cv0 = F.cv_automorphism_transform(sumbxmult, expand_limbs, auto_index, cryptoContext)
     cv1 = F.cv_automorphism_transform(sumaxmult, expand_limbs, auto_index, cryptoContext)
-    return Cipher([cv0, cv1], curr_limbs, scaling_factor, noise_deg)
+    return Cipher([cv0, cv1], curr_limbs, scaling_factor, noise_deg, slots)
 
 # @profile_python_function
-def key_switch_down(sumaxmult, sumbxmult, curr_limbs, scaling_factor, noise_deg, cryptoContext):
+def key_switch_down(sumaxmult, sumbxmult, curr_limbs, scaling_factor, noise_deg, slots, cryptoContext):
     res_ax = F.cv_moddown(sumaxmult, curr_limbs, cryptoContext)
     res_bx = F.cv_moddown(sumbxmult, curr_limbs, cryptoContext)
-    return Cipher([res_bx, res_ax], curr_limbs, scaling_factor, noise_deg)
+    return Cipher([res_bx, res_ax], curr_limbs, scaling_factor, noise_deg, slots)

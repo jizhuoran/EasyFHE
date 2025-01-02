@@ -22,16 +22,12 @@ for context_file in os.listdir(path):
         input, output = pickle.load(file)
 
     dim1 = [0, 0]
-    cryptoContext.BsContext = BS.BsContext(
-        cryptoContext,
-        cryptoContext.levelBudget,
-        dim1,
-        cryptoContext.slots,
-        0,
-        cryptoContext.rescaleTech,
-        cryptoContext.secretKeyDist,
-    )
+    # todo: recheck the initialization
+    # todo: cryptoContext.slots is deprecated!
+    cryptoContext.BsContext = BS.BsContext(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0,
+                                           cryptoContext.rescaleTech, cryptoContext.secretKeyDist)
 
+    # todo: cryptoContext.slots is deprecated!
     BS.eval_bootstrap_setup(
         cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0
     )

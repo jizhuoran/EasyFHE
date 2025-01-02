@@ -41,7 +41,7 @@ class Context:
         self.rescaleTech = rescaleTech
         self.BsContext = None
         self.logp = logp
-        self.slots = 1 << logSlots #todo: need move slots to cipher
+        # self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
         self.left_rot_key_map = {}
         self.key_map = None
