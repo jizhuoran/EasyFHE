@@ -199,11 +199,6 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 
     return rct1, rct2
 
-# def cipher_rescale(ct, cryptoContext):  #todo: deprecated, to be removed, as well as inner functions
-#     res0 = F.cv_rescale(ct.cv[0], cryptoContext, ct.cur_limbs)
-#     res1 = F.cv_rescale(ct.cv[1], cryptoContext, ct.cur_limbs)
-#     return Cipher([res0, res1], ct.cur_limbs - 1)
-
 #todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
 #todo: write homo_level_reduce
@@ -468,15 +463,6 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
 
     return Cipher(res, ct.cur_limbs, ct.scaling_factor, ct.noise_deg)
 
-    # deprecated version
-# def homo_add_scalar_double(ct, cnst, cryptoContext):
-    # tmpr = cpp_round(abs(cnst) * (2 ** cryptoContext.logqi))
-    # if cnst < 0:
-    #     res = cipher_sub_scalar(ct, tmpr1[0], cryptoContext).cv
-    # else:
-    #     res = cipher_add_scalar(ct, tmpr1[0], cryptoContext).cv
-    # return Cipher(res, ct.cur_limbs)
-
 #note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
 #fixme: should call `abs` before `cipher_mul_scalar` first, and then `cipher_mul_scalar`; or prohibit scalar<0
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
@@ -582,13 +568,6 @@ def homo_mul_scalar_double(cipher, cnst, cryptoContext):
         if cipher.noise_deg == 2:
             cipher = homo_rescale(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return eval_mult_core(cipher, cnst, cryptoContext)
-
-# def homo_mul_scalar_double(in0, scalar, cryptoContext):
-#     tmpr = cpp_round(abs(scalar) * (2 ** cryptoContext.logqi))
-#     res = cipher_mul_scalar(in0, tmpr, cryptoContext)
-#     if scalar < 0:
-#         res = cipher_neg(res, cryptoContext)
-#     return Cipher(res.cv, in0.cur_limbs)
 
 def homo_rotate(cipher, auto_index, ctx):
     cur_limbs = cipher.cur_limbs

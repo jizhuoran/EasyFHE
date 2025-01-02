@@ -23,7 +23,6 @@ class CKKS_Boot_Params:
 class BsContext:
     def __init__(self, cryptoContext, levelBudget, dim1, numslots, correctionFactor, rescaleTech, secretKeyDist):
         self.M = cryptoContext.N * 2
-        # slots = self.M // 4 if numslots == 0 else numslots
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None
         self.m_U0hatTPreFFT = None
@@ -309,7 +308,6 @@ class BsContext:
         self.S2C_rot_out = rot_out
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
-
     def SelectLayers(self, logSlots, budget):
         layers = math.ceil(logSlots / budget)
         rows = logSlots // layers
@@ -377,7 +375,6 @@ class BsContext:
         islots = int(slots)
         index = int(index)
 
-        # if slots is a power of 2
         if (int(slots) & int(slots - 1)) == 0:
             n = int(math.log2(slots))
             if index >= 0:

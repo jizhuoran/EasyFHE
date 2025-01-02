@@ -580,9 +580,6 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     def key_switch_ext(cipher, cipher_size, add_first, cryptoContext): #todo: remove cipher_size?
         assert cipher_size == 2  # Only 2-dim ciphertexts are supported #todo: remove condition?
         curr_limbs = cipher.cur_limbs
-        # K = cryptoContext.K
-        # N = cryptoContext.N
-        # logN = cryptoContext.logN
 
         cv0 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
         cv1 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
@@ -1167,7 +1164,7 @@ def BootstrapTest_N65536L26lB44(
     approxModDepth=9,
     rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
-    load_from_file = True
+    load_from_file = False
     if load_from_file:
         save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
         cryptoContext, openfhe_context = utils.load_context(save_path)

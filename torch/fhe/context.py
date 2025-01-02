@@ -43,7 +43,7 @@ class Context:
         self.logp = logp
         self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
-        self.left_rot_key_map = {} #{index: [ax， bx]} #todo: delete incorrect comments?
+        self.left_rot_key_map = {}
         self.key_map = None
         self.correctionFactor = 0
 
@@ -78,11 +78,9 @@ class Context:
                     self.moduliQ[0] = prime
                     break
                 bnd += 1
-            # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
             self.qRoots[0] = self.root_of_unity(
                 order=self.M, modulus=self.moduliQ[0]
             )
-            # print("moduliQ[0]", self.moduliQ[0])
             bnd = 1
             while cnt < L:
                 prime1 = (1 << logqi) + bnd * self.M + 1
@@ -92,7 +90,6 @@ class Context:
                 prime2 = (1 << logqi) - bnd * self.M + 1
                 if self.is_prime(prime2):
                     self.moduliQ[cnt] = prime2
-                    # self.qRoots[i] = self.findMthRootOfUnity(self.M, self.moduliQ[i])
                     self.qRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliQ[cnt - 1]
                     )
@@ -125,7 +122,6 @@ class Context:
             for j in range(self.N):
                 jprime = self.bitReverse(j) >> (32 - self.logN)
                 self.qRootPows[i][jprime] = int(power)
-                # tmp = (power << 64)
                 tmp = int(power) << 64
                 self.qRootScalePowsOverq[i][jprime] = int(tmp // int(self.moduliQ[i]))
                 self.qRootScalePows[i][jprime] = int(
@@ -167,8 +163,8 @@ class Context:
         q_mu = []  # for barret mul mod
         for mod in self.moduliQ:
             x = 2**128 // int(mod)
-            low = x & ((1 << 64) - 1)  # 取低64位
-            high = x >> 64  # 取高64位
+            low = x & ((1 << 64) - 1)
+            high = x >> 64
             q_mu.append([low, high])
         self.q_mu = np.array(q_mu, dtype=np.uint64)
         self.q_mu_cuda = torch.from_numpy(np.array(q_mu, dtype=np.uint64)).cuda()
@@ -257,8 +253,8 @@ class Context:
         p_mu = []  # for barret mul mod
         for mod in self.moduliP:
             x = 2**128 // int(mod)
-            low = x & ((1 << 64) - 1)  # 取低64位
-            high = x >> 64  # 取高64位
+            low = x & ((1 << 64) - 1)
+            high = x >> 64
             p_mu.append([low, high])
         self.p_mu = np.array(p_mu, dtype=np.uint64)
 
@@ -286,7 +282,6 @@ class Context:
                     QHatInvModqi = int(self.invMod(QHat, moduli))
                     self.PartQlHatInvModq[k][sizePartQk - l - 1][i] = QHatInvModqi
 
-        # 初始化 PartQlHatModp
         self.PartQlHatModp = [
             [
                 [[0 for _ in range(self.dnum * K)] for _ in range(K)]
@@ -323,7 +318,6 @@ class Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
 
-        # 初始化 PartQlHatModp_pad
         self.PartQlHatModp_pad = [
             [
                 [[0 for _ in range(self.dnum * K)] for _ in range(K)]
@@ -369,8 +363,8 @@ class Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp_pad[l][k][i][offset + j] = QHatModpj
 
-        self.pHatModp = [0] * K  # 初始化 pHatModp 列表
-        self.pHatInvModp = [0] * K  # 初始化 pHatInvModp 列表
+        self.pHatModp = [0] * K
+        self.pHatInvModp = [0] * K
         # 计算 pHatModp
         for k in range(K):
             self.pHatModp[k] = int(1)
@@ -378,13 +372,11 @@ class Context:
                 temp = int(self.moduliP[j] % self.moduliP[k])
                 self.pHatModp[k] = (self.pHatModp[k] * temp) % int(self.moduliP[k])
 
-        # 计算 pHatInvModp # [k] qhat_k^-1 mod q_k
         for k in range(K):
             self.pHatInvModp[k] = int(
                 self.invMod(int(self.pHatModp[k]), self.moduliP[k])
             )
 
-        # 初始化 pHatModq
         self.pHatModq = [[0] * L for _ in range(K)]
         for k in range(K):
             for i in range(L):
@@ -395,7 +387,7 @@ class Context:
                         int(self.pHatModq[k][i]), temp, int(self.moduliQ[i])
                     )
 
-        self.PModq = [0] * L  # 初始化 PModq
+        self.PModq = [0] * L
 
         # 计算 PModq
         for i in range(L):
@@ -406,7 +398,7 @@ class Context:
                     int(self.PModq[i]), int(temp), int(self.moduliQ[i])
                 )
 
-        self.PInvModq = [0] * L  # 初始化 PInvModq
+        self.PInvModq = [0] * L
         # 计算 PInvModq
         for i in range(L):
             self.PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ[i]))
@@ -421,14 +413,10 @@ class Context:
         # rescale param
         # sizeQ in openFHE equals to L here.
         self.QlQlInvModqlDivqlModq = [[0] * (L - 1) for _ in range(L - 1)]
-        # self.QlQlInvModqlDivqlModq = [None] * (L - 1)
         for k in range(L - 1):
             l = L - (k + 1)
-            # self.QlQlInvModqlDivqlModq[k] = [0] * l
-
             for i in range(l):
                 QlInvModql = int(1)
-
                 for j in range(l):
                     temp = self.invMod(self.moduliQ[j], self.moduliQ[l])
                     QlInvModql = self.mulMod(
@@ -961,7 +949,6 @@ class Context:
     def bitReverse(self, n, bit_size=32):
         reversed_bits = 0
         for i in range(bit_size):
-            # 将 n 的最低有效位移到 reversed_bits 的适当位置
             reversed_bits <<= 1
             reversed_bits |= n & 1
             n >>= 1
