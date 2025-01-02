@@ -43,7 +43,7 @@ class Context:
         self.logp = logp
         self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
-        self.left_rot_key_map = {} #{index: [ax， bx]}
+        self.left_rot_key_map = {} #{index: [ax， bx]} #todo: delete incorrect comments?
         self.key_map = None
         self.correctionFactor = 0
 

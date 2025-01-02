@@ -31,7 +31,7 @@ class BsContext:
         self.m_U0PreFFT = None
         self.paramsDec = None
         self.paramsEnc = None
-        self.precompute_auto_map = {}
+        self.precompute_auto_map = {} #todo: move to context, rotation relative params should be put together
 
         # precom = scheme.precom
         if correctionFactor == 0:
