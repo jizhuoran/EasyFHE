@@ -1160,16 +1160,15 @@ def BootstrapTest_N65536L26lB44(
     logN=14,
     logSlots=12,
     maxLevelsRemaining=3,
-    levelBudget=[4, 4],
-    dnum=1,
+    levelBudget=[2, 2],
+    dnum=3,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
+    rescaleTech = "FIXEDMANUAL"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
-    load_from_file = True
+    load_from_file = False
     if load_from_file:
-        # rescaleTech = "FIXEDMANUAL"
-        rescaleTech = "FLEXIBLEAUTO"
         save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
         cryptoContext, openfhe_context = utils.load_context(save_path)
 
@@ -1185,7 +1184,7 @@ def BootstrapTest_N65536L26lB44(
             approxModDepth=approxModDepth,
             rotate_index=[],
             secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech="FLEXIBLEAUTO",
+            rescaleTech=rescaleTech,
         )
 
         save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
