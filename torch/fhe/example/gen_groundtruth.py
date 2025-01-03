@@ -4,7 +4,7 @@ import torch.fhe.bootstrapping as bstest
 
 logN_cand = [17] #list(range(14, 17))
 logSlots_cand = [16] #list(range(5, 14, 3)) + list(range(14, 17))
-maxLevelsRemaining_cand = [3, 5, 7]
+maxLevelsRemaining_cand = [3, 7]
 levelBudget_cand = [[3, 3], [4, 4]]
 dnum_cand = [1, 3, 5]
 rescaleTech_cand = ["FLEXIBLEAUTO", "FIXEDMANUAL"]
