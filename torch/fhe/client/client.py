@@ -74,7 +74,8 @@ def gen_contexts(
     approxModDepth,
     rotate_index,
     secretKeyDist,
-    rescaleTech
+    rescaleTech,
+    dim1
 ):
 
     SecretKeyDist_MAP = {
@@ -185,7 +186,8 @@ def gen_contexts(
         ROT_SWK,
         BOOT_KEY,
         secretKeyDist,
-        rescaleTech
+        rescaleTech,
+        dim1
     )
 
     return openfhe_context, gpufhe_context

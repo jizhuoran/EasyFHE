@@ -1172,6 +1172,7 @@ def BootstrapTest_N65536L26lB44(
     rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
     load_from_file = True
+    dim1 = [0, 0]
     if load_from_file:
         save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
         cryptoContext, openfhe_context = utils.load_context(save_path)
@@ -1189,15 +1190,12 @@ def BootstrapTest_N65536L26lB44(
             rotate_index=[],
             secretKeyDist="UNIFORM_TERNARY",
             rescaleTech=rescaleTech,
+            dim1 = dim1,
         )
 
         save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
         utils.save_context(cryptoContext, openfhe_context, save_path)
         cryptoContext, _ = utils.load_context(save_path)
-
-    dim1 = [0, 0]
-    cryptoContext.BsContext = BsContext(cryptoContext, cryptoContext.levelBudget, dim1, (1 << logSlots), 0,
-                                        cryptoContext.rescaleTech, cryptoContext.secretKeyDist)
 
     eval_bootstrap_setup(
         cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0

@@ -427,7 +427,7 @@ def cv_automorphism_transform(
         l=int(l),
         N=context.N,
         i=int(i),
-        precomp_vec=context.BsContext.precompute_auto_map[i]
+        precomp_vec=context.precompute_auto_map[i]
     )
 
     return automorphism_transform.reshape(-1, context.N)

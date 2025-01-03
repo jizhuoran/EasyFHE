@@ -21,8 +21,9 @@ class CKKS_Boot_Params:
 
 
 class BsContext:
-    def __init__(self, cryptoContext, levelBudget, dim1, slots, correctionFactor, rescaleTech, secretKeyDist):
-        self.M = cryptoContext.N * 2
+    def __init__(self, N, K, moduliQ, moduliP, q_mu, p_mu, levelBudget, dim1, slots, correctionFactor, rescaleTech,
+                 secretKeyDist):
+        self.M = N * 2
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None
         self.m_U0hatTPreFFT = None
@@ -30,7 +31,6 @@ class BsContext:
         self.m_U0PreFFT = None
         self.paramsDec = None
         self.paramsEnc = None
-        self.precompute_auto_map = {} #todo: move to context, rotation relative params should be put together
 
         # precom = scheme.precom
         if correctionFactor == 0:
@@ -127,31 +127,18 @@ class BsContext:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
 
-        self.compute_C2S_rot(cryptoContext, slots)
-        self.compute_S2C_rot(cryptoContext, slots)
-
-        for key, _ in cryptoContext.left_rot_key_map.items():
-            self.precompute_auto_map[int(key)] = self.compute_auto_map(int(key), cryptoContext)
+        self.compute_C2S_rot(slots, self.M)
+        self.compute_S2C_rot(slots, self.M)
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
-        for cur_limbs in range(len(cryptoContext.moduliQ)):
+        for cur_limbs in range(len(moduliQ)):
             self.QplusP_map[cur_limbs] = torch.tensor(
-                np.concatenate((cryptoContext.moduliQ[0:cur_limbs], cryptoContext.moduliP[0:cryptoContext.K])),
+                np.concatenate((moduliQ[0:cur_limbs], moduliP[0:K])),
                 dtype=torch.uint64, device="cuda")
             self.QmuplusPmu_map[cur_limbs] = torch.tensor(
-                np.concatenate((cryptoContext.q_mu[0:cur_limbs], cryptoContext.p_mu[:cryptoContext.K])),
+                np.concatenate((q_mu[0:cur_limbs], p_mu[:K])),
                 dtype=torch.uint64, device="cuda")
-
-        # compute auto index map
-        cryptoContext.auto_index[slots] = self.find_auto_index(slots, cryptoContext.N << 1)
-        for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-            cryptoContext.auto_index[(1 << step) * slots] = self.find_auto_index(
-                (1 << step) * slots, cryptoContext.N << 1)
-        for i in self.C2S_rot_in + self.C2S_rot_out + self.S2C_rot_in + self.S2C_rot_out:
-            for j in i:
-                if j not in cryptoContext.auto_index:
-                    cryptoContext.auto_index[j] = self.find_auto_index(j, cryptoContext.N << 1)
 
     def find_auto_index(self, i, m):
         def inv_mod(a, m):
@@ -188,7 +175,7 @@ class BsContext:
 
         return g
 
-    def compute_auto_map(self, k, cryptoContext):
+    def compute_auto_map(self, k, N):
 
         def reverse_bits(num, num_bits):
             """Reverses the bits of a number."""
@@ -199,7 +186,7 @@ class BsContext:
             return rev
 
         """computes the automorphism map"""
-        n = cryptoContext.N
+        n = N
         m = n << 1  # cyclOrder
         logm = round(np.log2(m))
         logn = round(np.log2(n))
@@ -213,7 +200,7 @@ class BsContext:
 
         return torch.from_numpy(np.array(res)).cuda()
 
-    def compute_C2S_rot(self, cryptoContext, slots):
+    def compute_C2S_rot(self, slots, M):
         level_budget = self.paramsEnc.level_budget
         layers_collapse = self.paramsEnc.layers_coll
         rem_collapse = self.paramsEnc.layers_rem
@@ -250,19 +237,19 @@ class BsContext:
 
             for i in range(b):
                 rot_out[s][i] = self.reduce_rotation((g * i) * (1 << ((s - flag_rem) * layers_collapse + rem_collapse)),
-                                                     cryptoContext.M // 4)
+                                                     M // 4)
 
         if flag_rem:
             for j in range(g_rem):
                 rot_in[stop][j] = self.reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1), slots)
 
             for i in range(b_rem):
-                rot_out[stop][i] = self.reduce_rotation((g_rem * i), cryptoContext.M // 4)
+                rot_out[stop][i] = self.reduce_rotation((g_rem * i), M // 4)
 
         self.C2S_rot_in = rot_in
         self.C2S_rot_out = rot_out
 
-    def compute_S2C_rot(self, cryptoContext, slots):
+    def compute_S2C_rot(self, slots , M):
         level_budget = self.paramsDec.level_budget
         layers_collapse = self.paramsDec.layers_coll
         rem_collapse = self.paramsDec.layers_rem
@@ -290,19 +277,20 @@ class BsContext:
         for s in range(level_budget - flag_rem):
             for j in range(g):
                 rot_in[s][j] = self.reduce_rotation((j - ((num_rotations + 1) / 2) + 1) * (1 << (s * layers_collapse)),
-                                                    cryptoContext.M // 4)
+                                                    M // 4)
 
             for i in range(b):
-                rot_out[s][i] = self.reduce_rotation((g * i) * (1 << (s * layers_collapse)), cryptoContext.M // 4)
+                rot_out[s][i] = self.reduce_rotation((g * i) * (1 << (s * layers_collapse)), M // 4)
 
         if flag_rem:
             s = level_budget - flag_rem
             for j in range(g_rem):
-                rot_in[s][j] = self.reduce_rotation((j - (num_rotations_rem + 1) // 2 + 1) * (1 << (s * layers_collapse)),
-                                                    cryptoContext.M // 4)
+                rot_in[s][j] = self.reduce_rotation(
+                    (j - (num_rotations_rem + 1) // 2 + 1) * (1 << (s * layers_collapse)),
+                    M // 4)
 
             for i in range(b_rem):
-                rot_out[s][i] = self.reduce_rotation((g_rem * i) * (1 << (s * layers_collapse)), cryptoContext.M // 4)
+                rot_out[s][i] = self.reduce_rotation((g_rem * i) * (1 << (s * layers_collapse)), M // 4)
 
         self.S2C_rot_in = rot_in
         self.S2C_rot_out = rot_out

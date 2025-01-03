@@ -6,6 +6,7 @@ import warnings
 import torch
 import pickle
 import sympy
+from .bs_context import *
 
 K_UNIFORM = 512
 
@@ -32,6 +33,7 @@ class Context:
         BOOT_KEY=None,
         secretKeyDist=None,
         rescaleTech=None,
+        dim1 = None,
         h=64,
         sigma=32
     ):
@@ -69,6 +71,7 @@ class Context:
         self.qRootScalePowsInv = [[] for _ in range(L)]
         self.qRootPowsInv = [[] for _ in range(L)]
         self.auto_index = {}
+        self.precompute_auto_map = {}
         bnd = 1
         cnt = 1
         if moduliQ is None and rootsQ is None:
@@ -831,6 +834,24 @@ class Context:
                                                     ,
                                                     torch.tensor(ax, dtype=torch.uint64, device="cuda").reshape(self.dnum, -1, self.N)]
 
+        # init bs_context
+        self.BsContext = BsContext(self.N, self.K, self.moduliQ, self.moduliP, self.q_mu, self.p_mu, self.levelBudget, dim1, (1 << logSlots), 0,
+                                   self.rescaleTech, self.secretKeyDist)
+
+        for key, _ in self.left_rot_key_map.items():
+            self.precompute_auto_map[int(key)] = self.BsContext.compute_auto_map(int(key), self.N)
+
+        # compute auto index map
+        slots = 1 << logSlots
+        self.auto_index[slots] = self.BsContext.find_auto_index(slots, self.N << 1)
+        for step in range(int(math.log2(self.N // (2 * slots)))):
+            self.auto_index[(1 << step) * slots] = self.BsContext.find_auto_index(
+                (1 << step) * slots, self.N << 1)
+        for i in self.BsContext.C2S_rot_in + self.BsContext.C2S_rot_out + self.BsContext.S2C_rot_in + self.BsContext.S2C_rot_out:
+            for j in i:
+                if j not in self.auto_index:
+                    self.auto_index[j] = self.BsContext.find_auto_index(j, self.N << 1)
+
    #  Method to retrieve the scaling factor of level l.
    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
    #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
@@ -1083,6 +1104,13 @@ class Context:
         
         for key, value in self.left_rot_key_map.items():
             self.left_rot_key_map[key] = [v.cpu().numpy() for v in value]
+        for key, value in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = value.cpu().numpy()
+
+        for key, value in self.BsContext.QplusP_map.items():
+            self.BsContext.QplusP_map[key] = value.cpu().numpy()
+        for key, value in self.BsContext.QmuplusPmu_map.items():
+            self.BsContext.QmuplusPmu_map[key] = value.cpu().numpy()
 
         return pickle.dumps(self)
     
@@ -1126,5 +1154,12 @@ class Context:
 
         for key, value in cryptoContext.left_rot_key_map.items():
             cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+        for key, value in cryptoContext.precompute_auto_map.items():
+            cryptoContext.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+
+        for key, value in cryptoContext.BsContext.QplusP_map.items():
+            cryptoContext.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        for key, value in cryptoContext.BsContext.QmuplusPmu_map.items():
+            cryptoContext.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
 
         return cryptoContext
