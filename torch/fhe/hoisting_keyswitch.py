@@ -20,10 +20,11 @@ def eval_fast_key_switch_core_ext(d2Tilde, auto_index, beta, curr_limbs, cryptoC
         swk_bx=swk_bx,
         swk_ax=swk_ax
     )
-    return res[1], res[0]
+    return res[0], res[1]
 
 
 # @profile_python_function
+#todo: use ct instead of bx
 def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, slots, index, add_first, cryptoContext):
     alpha = cryptoContext.K
     K = cryptoContext.K
@@ -34,7 +35,7 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, sl
     auto_index = cryptoContext.find_auto_index(index)
 
     # Inner Product
-    sumaxmult, sumbxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, curr_limbs, cryptoContext)
+    sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, curr_limbs, cryptoContext)
 
     if (add_first):
         cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
@@ -46,7 +47,31 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, sl
     return Cipher([cv0, cv1], curr_limbs, scaling_factor, noise_deg, slots)
 
 # @profile_python_function
-def key_switch_down(sumaxmult, sumbxmult, curr_limbs, scaling_factor, noise_deg, slots, cryptoContext):
-    res_ax = F.cv_moddown(sumaxmult, curr_limbs, cryptoContext)
+def key_switch_down(sumbxmult, sumaxmult, curr_limbs, scaling_factor, noise_deg, slots, cryptoContext):
     res_bx = F.cv_moddown(sumbxmult, curr_limbs, cryptoContext)
+    res_ax = F.cv_moddown(sumaxmult, curr_limbs, cryptoContext)
     return Cipher([res_bx, res_ax], curr_limbs, scaling_factor, noise_deg, slots)
+
+def eval_fast_rotation(ciphertext, index, digits, cryptoContext):
+    if index == 0:
+        return ciphertext.clone()
+
+    cur_limbs = ciphertext.cur_limbs
+    beta = int(np.ceil(cur_limbs / cryptoContext.K))  # Calculate beta as per the original C++ code
+
+    # Find the automorphism index that corresponds to rotation index.
+    auto_index = cryptoContext.find_auto_index(index)
+
+    # EvalFastKeySwitchCore = InnerProduct + ModDown
+    sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, cur_limbs, cryptoContext)
+    result = key_switch_down(sumbxmult, sumaxmult,
+                             cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots,
+                             cryptoContext)
+    # post add after ks
+    result.cv[0] = F.cv_add(ciphertext.cv[0], result.cv[0], cryptoContext.moduliQ_cuda, cur_limbs)
+
+    # Apply the AutomorphismTransform to ax and bx
+    result.cv[0] = F.cv_automorphism_transform(result.cv[0], cur_limbs, auto_index, cryptoContext)
+    result.cv[1] = F.cv_automorphism_transform(result.cv[1], cur_limbs, auto_index, cryptoContext)
+
+    return result

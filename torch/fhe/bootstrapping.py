@@ -685,9 +685,9 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
-                                                                       inner.scaling_factor,
-                                                                       inner.noise_deg, inner.slots, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[0], inner.cv[1], curr_limbs,
+                                                                       inner.scaling_factor, inner.noise_deg,
+                                                                       inner.slots, cryptoContext)
                     auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
@@ -709,7 +709,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, outer.scaling_factor,
+        result = hoisting_keyswitch.key_switch_down(outer.cv[0], outer.cv[1], curr_limbs, outer.scaling_factor,
                                                     outer.noise_deg, outer.slots, cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
@@ -749,9 +749,9 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
-                                                                       inner.scaling_factor,
-                                                                       inner.noise_deg, inner.slots, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[0], inner.cv[1], curr_limbs,
+                                                                       inner.scaling_factor, inner.noise_deg,
+                                                                       inner.slots, cryptoContext)
                     auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
@@ -773,7 +773,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, outer.scaling_factor,
+        result = hoisting_keyswitch.key_switch_down(outer.cv[0], outer.cv[1], curr_limbs, outer.scaling_factor,
                                                     outer.noise_deg, outer.slots, cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
