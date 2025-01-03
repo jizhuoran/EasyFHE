@@ -70,7 +70,7 @@ class Context:
         self.qRootScalePowsOverq = [[] for _ in range(L)]
         self.qRootScalePowsInv = [[] for _ in range(L)]
         self.qRootPowsInv = [[] for _ in range(L)]
-        self.auto_index = {}
+        # self.auto_index = {} #todo: to suppor negative input?
         self.precompute_auto_map = {}
         bnd = 1
         cnt = 1
@@ -842,15 +842,54 @@ class Context:
             self.precompute_auto_map[int(key)] = self.BsContext.compute_auto_map(int(key), self.N)
 
         # compute auto index map
-        slots = 1 << logSlots
-        self.auto_index[slots] = self.BsContext.find_auto_index(slots, self.N << 1)
-        for step in range(int(math.log2(self.N // (2 * slots)))):
-            self.auto_index[(1 << step) * slots] = self.BsContext.find_auto_index(
-                (1 << step) * slots, self.N << 1)
-        for i in self.BsContext.C2S_rot_in + self.BsContext.C2S_rot_out + self.BsContext.S2C_rot_in + self.BsContext.S2C_rot_out:
-            for j in i:
-                if j not in self.auto_index:
-                    self.auto_index[j] = self.BsContext.find_auto_index(j, self.N << 1)
+        # slots = 1 << logSlots
+        # self.auto_index[slots] = self.find_auto_index(slots, self.N << 1)
+        # for step in range(int(math.log2(self.N // (2 * slots)))):
+        #     self.auto_index[(1 << step) * slots] = self.find_auto_index(
+        #         (1 << step) * slots, self.N << 1)
+        # for i in self.BsContext.C2S_rot_in + self.BsContext.C2S_rot_out + self.BsContext.S2C_rot_in + self.BsContext.S2C_rot_out:
+        #     for j in i:
+        #         if j not in self.auto_index:
+        #             self.auto_index[j] = self.find_auto_index(j, self.N << 1)
+
+    def find_auto_index(self, i):
+        def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!
+            m0, x0, x1 = m, 0, 1
+            if m == 1:
+                return 0
+            while a > 1:
+                q = a // m
+                m, a = a % m, m
+                x0, x1 = x1 - q * x0, x0
+            if x1 < 0:
+                x1 += m0
+            return x1
+
+        m = (self.N << 1)
+
+        if i == 0:
+            return 1
+
+        # Conjugation automorphism
+        # if i == m - 1:
+        #     return i
+        if i == - 1:
+            return  m - 1
+
+        # Generator
+        if i < 0:
+            g0 = inv_mod(5, m)
+            g0 = (g0 * 5) % m
+        else:
+            g0 = 5
+
+        i_unsigned = abs(i)
+        g = g0
+
+        for j in range(1, int(i_unsigned)):
+            g = (g * g0) % m
+
+        return g
 
    #  Method to retrieve the scaling factor of level l.
    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus

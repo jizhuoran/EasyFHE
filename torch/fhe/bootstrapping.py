@@ -688,7 +688,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
                                                                        inner.scaling_factor,
                                                                        inner.noise_deg, inner.slots, cryptoContext)
-                    auto_index = cryptoContext.auto_index[rot_out[s][i]]
+                    auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
@@ -752,7 +752,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[1], inner.cv[0], curr_limbs,
                                                                        inner.scaling_factor,
                                                                        inner.noise_deg, inner.slots, cryptoContext)
-                    auto_index = cryptoContext.auto_index[rot_out[s][i]]
+                    auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
@@ -904,7 +904,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
-        conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
+        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
         ctxtEncI = cipher_mult_by_monomial_and_equal(ctxtEncI, 3 * M // 4, cryptoContext)
@@ -957,8 +957,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Running PartialSum
         # -------------------
         for step in range(int(math.log2(N // (2 * slots)))):
-            auto_index = cryptoContext.auto_index[(1 << step) * slots]
-            temp = homo_ops.homo_rotate(raised, auto_index, cryptoContext)
+            temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
             raised = homo_ops.homo_add(raised, temp, cryptoContext)
 
         # ---------------------
@@ -972,7 +971,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
 
-        conj = homo_ops.homo_conjugate(ctxtEnc, 2 * N - 1, cryptoContext)
+        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
@@ -1010,8 +1009,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
 
-        auto_index = cryptoContext.auto_index[slots]
-        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, auto_index, cryptoContext)
+        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     # 64-bit only: scale back the message to its original scale.

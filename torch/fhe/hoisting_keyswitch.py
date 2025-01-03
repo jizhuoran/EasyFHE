@@ -31,7 +31,7 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, sl
     expand_limbs = curr_limbs + K
 
     # Find the automorphism index that corresponds to rotation index.
-    auto_index = cryptoContext.auto_index[index]
+    auto_index = cryptoContext.find_auto_index(index)
 
     # Inner Product
     sumaxmult, sumbxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, curr_limbs, cryptoContext)

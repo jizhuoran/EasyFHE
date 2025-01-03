@@ -585,17 +585,18 @@ def homo_mul_scalar_double(cipher, cnst, cryptoContext):
             cipher = homo_rescale(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return eval_mult_core(cipher, cnst, cryptoContext)
 
-def homo_rotate(cipher, auto_index, ctx):
+def homo_rotate(cipher, index, cryptoContext):
+    auto_index = cryptoContext.find_auto_index(index)
     cur_limbs = cipher.cur_limbs
-    swk = ctx.left_rot_key_map[str(auto_index)]
-    res = F.cv_keyswitch(cipher.cv[1], cur_limbs, swk[0], swk[1], ctx)
-    bxrot = F.cv_add(cipher.cv[0], res[0], ctx.moduliQ_cuda, cur_limbs)
+    swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    res = F.cv_keyswitch(cipher.cv[1], cur_limbs, swk[0], swk[1], cryptoContext)
+    bxrot = F.cv_add(cipher.cv[0], res[0], cryptoContext.moduliQ_cuda, cur_limbs)
 
     # Apply the AutomorphismTransform to ax and bx
-    cv0 = F.cv_automorphism_transform(bxrot, cur_limbs, auto_index, ctx)
-    cv1 = F.cv_automorphism_transform(res[1], cur_limbs, auto_index, ctx)
+    cv0 = F.cv_automorphism_transform(bxrot, cur_limbs, auto_index, cryptoContext)
+    cv1 = F.cv_automorphism_transform(res[1], cur_limbs, auto_index, cryptoContext)
 
     return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor, cipher.noise_deg, cipher.slots)
 
-def homo_conjugate(cipher, auto_index, ctx):
-    return homo_rotate(cipher, auto_index, ctx)
+def homo_conjugate(cipher, cryptoContext):
+    return homo_rotate(cipher, -1, cryptoContext)

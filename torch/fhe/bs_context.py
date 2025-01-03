@@ -140,40 +140,6 @@ class BsContext:
                 np.concatenate((q_mu[0:cur_limbs], p_mu[:K])),
                 dtype=torch.uint64, device="cuda")
 
-    def find_auto_index(self, i, m):
-        def inv_mod(a, m):
-            m0, x0, x1 = m, 0, 1
-            if m == 1:
-                return 0
-            while a > 1:
-                q = a // m
-                m, a = a % m, m
-                x0, x1 = x1 - q * x0, x0
-            if x1 < 0:
-                x1 += m0
-            return x1
-
-        if i == 0:
-            return 1
-
-        # Conjugation automorphism
-        if i == m - 1:
-            return i
-
-        # Generator
-        if i < 0:
-            g0 = inv_mod(5, m)
-            g0 = (g0 * 5) % m
-        else:
-            g0 = 5
-
-        i_unsigned = abs(i)
-        g = g0
-
-        for j in range(1, int(i_unsigned)):
-            g = (g * g0) % m
-
-        return g
 
     def compute_auto_map(self, k, N):
 
