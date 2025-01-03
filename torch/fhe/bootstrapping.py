@@ -663,10 +663,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                cv0 = result.cv[0].reshape(-1, cryptoContext.N) if eval_fast_rotation_reshape else result.cv[0]
-                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
-                    cv0, digits, result.cur_limbs, result.scaling_factor, result.noise_deg, result.slots, rot_in[s][j], True, cryptoContext
-                )
+                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(result, digits, rot_in[s][j], True,
+                                                                                 cryptoContext)
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
         
@@ -698,10 +696,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
-                        None, inner_digits, inner_ks_down.cur_limbs,
-                        inner_ks_down.scaling_factor, inner_ks_down.noise_deg, inner_ks_down.slots, rot_out[s][i], False, cryptoContext
-                    )
+                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, rot_out[s][i],
+                                                                                  False, cryptoContext)
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
@@ -727,10 +723,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         
         for j in range(g_rem):
             if rot_in[s][j] != 0:
-                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
-                    result.cv[0], digits, result.cur_limbs, result.scaling_factor,
-                    result.noise_deg, rot_in[s][j], True, cryptoContext
-                )
+                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(result, digits, True,
+                                                                                 cryptoContext, )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
         
@@ -762,10 +756,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
-                        None, inner_digits, inner_ks_down.cur_limbs,
-                        inner_ks_down.scaling_factor, inner_ks_down.noise_deg,rot_out[s][i], False, cryptoContext
-                    )
+                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, False,
+                                                                                  cryptoContext, )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)

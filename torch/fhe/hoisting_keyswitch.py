@@ -24,8 +24,8 @@ def eval_fast_key_switch_core_ext(d2Tilde, auto_index, beta, curr_limbs, cryptoC
 
 
 # @profile_python_function
-#todo: use ct instead of bx
-def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, slots, index, add_first, cryptoContext):
+def eval_fast_rotation_ext(ciphertext, digits, index, add_first, cryptoContext):
+    curr_limbs = ciphertext.cur_limbs
     alpha = cryptoContext.K
     K = cryptoContext.K
     beta = int(np.ceil(curr_limbs / alpha))  # Calculate beta as per the original C++ code
@@ -38,13 +38,14 @@ def eval_fast_rotation_ext(bx, digits, curr_limbs, scaling_factor, noise_deg, sl
     sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, curr_limbs, cryptoContext)
 
     if (add_first):
+        bx = ciphertext.cv[0]
         cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                 cryptoContext.q_mu_cuda, curr_limbs)
         sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, curr_limbs, inplace=True)
 
     cv0 = F.cv_automorphism_transform(sumbxmult, expand_limbs, auto_index, cryptoContext)
     cv1 = F.cv_automorphism_transform(sumaxmult, expand_limbs, auto_index, cryptoContext)
-    return Cipher([cv0, cv1], curr_limbs, scaling_factor, noise_deg, slots)
+    return Cipher([cv0, cv1], curr_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
 
 # @profile_python_function
 def key_switch_down(sumbxmult, sumaxmult, curr_limbs, scaling_factor, noise_deg, slots, cryptoContext):
