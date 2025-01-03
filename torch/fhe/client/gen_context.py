@@ -20,6 +20,8 @@ def gen_contexts(
     dim1=[0, 0],
 ):
 
+    print("Generating context")
+
     SecretKeyDist_MAP = {
         "GAUSSIAN": openfhe.SecretKeyDist.GAUSSIAN,
         "UNIFORM_TERNARY": openfhe.SecretKeyDist.UNIFORM_TERNARY,

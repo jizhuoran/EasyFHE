@@ -1,13 +1,15 @@
 import time, os
 from .ciphertext import Cipher
 from .ciphertext import Plaintext as Plaintext
-from .client import client
+from .client.gen_context import gen_contexts
 from .context import *
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import hoisting_keyswitch
 from . import utils
+import numpy as np
+
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 
@@ -1160,40 +1162,52 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
-    logSlots=8,
+    logSlots=10,
     maxLevelsRemaining=3,
     levelBudget=[2, 2],
     dnum=3,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO",# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    save_dir="torch/fhe/data/"
+
 ):
-    load_from_file = False
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    force_update_context = False
+    # Force update the context
+    if force_update_context:
+        gen_contexts(
+                logN=logN,
+                logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+                maxLevelsRemaining=maxLevelsRemaining,
+                levelBudget=levelBudget,
+                dnum=dnum,
+                dcrtBits=dcrtBits,
+                firstMod=firstMod,
+                approxModDepth=approxModDepth,
+                rotate_index=[],
+                secretKeyDist="UNIFORM_TERNARY",
+                rescaleTech=rescaleTech,
+                save_dir=save_dir
+            )
+
+    cryptoContext, openfhe_context = utils.try_load_context(logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget,
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            "UNIFORM_TERNARY",
+            rescaleTech,
+            save_dir=save_dir)
+
+
     dim1 = [0, 0]
-    if load_from_file:
-        save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
-        cryptoContext, openfhe_context = utils.load_context(save_path)
-
-    else:
-        openfhe_context, cryptoContext = client.gen_contexts(
-            logN=logN,
-            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
-            maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget=levelBudget,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            approxModDepth=approxModDepth,
-            rotate_index=[],
-            secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech=rescaleTech,
-            dim1 = dim1,
-        )
-
-        save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
-        utils.save_context(cryptoContext, openfhe_context, save_path)
-        cryptoContext, _ = utils.load_context(save_path)
 
     eval_bootstrap_setup(
         cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
