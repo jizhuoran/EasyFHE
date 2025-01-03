@@ -1160,7 +1160,7 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
-    logSlots=12,
+    logSlots=8,
     maxLevelsRemaining=3,
     levelBudget=[2, 2],
     dnum=3,
@@ -1169,7 +1169,7 @@ def BootstrapTest_N65536L26lB44(
     approxModDepth=9,
     rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
-    load_from_file = True
+    load_from_file = False
     dim1 = [0, 0]
     if load_from_file:
         save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)

@@ -1,66 +1,7 @@
 from . import openfhe as openfhe
-import torch
-from .. import ciphertext as Cipher
-from .. import context as Context
+from . import context as Context
 import pickle
 import numpy as np
-
-class OpenFHEContext:
-    def __init__(self, cc, pk, sk, depth, slots):
-        self.cc = cc
-        self.publicKey = pk
-        self.secretKey = sk
-        self.depth = depth
-        self.slots = slots
-
-    def Serialize(self):
-        cc_bytes = openfhe.Serialize(self.cc, openfhe.BINARY)
-        mul_key_bytes = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
-        public_key_bytes = openfhe.Serialize(self.publicKey, openfhe.BINARY)
-        secret_key_bytes = openfhe.Serialize(self.secretKey, openfhe.BINARY)
-        depth = self.depth
-        slots = self.slots
-        return pickle.dumps((cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth, slots))
-
-    def Deserialize(ser):
-        openfhe.ClearEvalMultKeys()
-        openfhe.ReleaseAllContexts()
-
-        cc_bytes, mul_key_bytes, public_key_bytes, secret_key_bytes, depth, slots = pickle.loads(ser)
-        cc = openfhe.DeserializeCryptoContextString(cc_bytes, openfhe.BINARY)
-        pk = openfhe.DeserializePublicKeyString(public_key_bytes, openfhe.BINARY)
-        sk = openfhe.DeserializePrivateKeyString(secret_key_bytes, openfhe.BINARY)
-        openfhe.DeserializeEvalMultKeyString(mul_key_bytes, openfhe.BINARY)
-        return OpenFHEContext(cc, pk, sk, depth, slots)
-
-    def encode(self, x):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-        ptx.Encode()
-        return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
-
-    def encrypt(self, x):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-        cipher = self.cc.Encrypt(self.publicKey, ptx)
-        data = cipher.GetVectorOfData()
-        cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-        return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots())
-    
-    def decrypt(self, x):
-        assert len(x.cv) == 2
-        ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
-        cipher = self.cc.Encrypt(self.publicKey, ptx)
-        cipher.SetNoiseScaleDeg(x.noise_deg)
-        cipher.SetLevel(self.depth + 1 - x.cur_limbs)
-        cipher.SetScalingFactor(x.scaling_factor)
-        cipher.SetSlots(self.slots)
-
-        data = [cv.tolist() for cv in x.cv]
-        cipher.SetVectorOfData(data, x.cur_limbs)
-        ptx = self.cc.Decrypt(cipher, self.secretKey)
-
-        return torch.tensor(
-            ptx.GetRealPackedValue(), device=x.cv[0].device, dtype=torch.float64
-        )
 
 
 def gen_contexts(
@@ -75,7 +16,8 @@ def gen_contexts(
     rotate_index,
     secretKeyDist,
     rescaleTech,
-    dim1
+    save_dir,
+    dim1=[0, 0],
 ):
 
     SecretKeyDist_MAP = {
@@ -168,8 +110,7 @@ def gen_contexts(
     }
     ROT_SWK = cc.GetEvalRotateKey()
 
-    openfhe_context = OpenFHEContext(cc, keys.publicKey, keys.secretKey, depth, slots)
-    gpufhe_context = Context.Context(
+    gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
         logSlots,
         firstMod,
@@ -187,7 +128,54 @@ def gen_contexts(
         BOOT_KEY,
         secretKeyDist,
         rescaleTech,
-        dim1
+        dim1,
+    )
+    save_path = (
+        save_dir
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget[0],
+            levelBudget[1],
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
     )
 
-    return openfhe_context, gpufhe_context
+
+    gpufheMembers = {}
+    for item in dir(gpufhe_context):
+        if (
+            (not callable(getattr(gpufhe_context, item)))
+            and (not item.startswith("__"))
+            and (not item.startswith("BsContext"))
+        ):
+            gpufheMembers[item] = getattr(gpufhe_context, item)
+
+    BsContextMembers = {}
+    for item in dir(gpufhe_context.BsContext):
+        if (
+            not callable(getattr(gpufhe_context.BsContext, item))
+        ) and not item.startswith("__"):
+            BsContextMembers[item] = getattr(gpufhe_context.BsContext, item)
+
+
+    openfheMembers = {}
+    openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
+    openfheMembers["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+    openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
+    openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
+    openfheMembers["depth"] = depth
+    openfheMembers["slots"] = slots
+
+    with open(save_path, "wb") as file:
+        pickle.dump(
+            (gpufheMembers, openfheMembers, BsContextMembers), file
+        )
+
+
