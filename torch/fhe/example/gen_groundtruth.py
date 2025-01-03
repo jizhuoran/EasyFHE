@@ -1,6 +1,4 @@
-import itertools, subprocess, os, sys
-sys.path.append("/".join(os.getcwd().split("/")[:-3]))
-import torch.fhe.bootstrapping as bstest
+import itertools, subprocess, os
 
 logN_cand = [17] #list(range(14, 17))
 logSlots_cand = [16] #list(range(5, 14, 3)) + list(range(14, 17))
@@ -19,8 +17,8 @@ for logN, logSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in iterto
         code_string = """
 import pickle, sys, os
 import numpy as np
-sys.path.append("/".join(os.getcwd().split("/")[:-3]))
-from torch.fhe.client.gen_context import gen_contexts
+sys.path.append("/".join(os.getcwd().split("/")[:-2]))
+from fhe.client.gen_context import gen_contexts
 logN = {0}
 logSlots = {1}
 maxLevelsRemaining = {2}
