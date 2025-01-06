@@ -723,7 +723,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         
         for j in range(g_rem):
             if rot_in[s][j] != 0:
-                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(result, digits, True,
+                fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(result, digits, rot_in[s][j],True,
                                                                                  cryptoContext, )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
@@ -756,8 +756,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, False,
-                                                                                  cryptoContext, )
+                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, rot_out[s][i], False,
+                                                                                  cryptoContext)
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
@@ -1161,7 +1161,7 @@ def BootstrapTest_N65536L26lB44(
     approxModDepth=9,
     rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
 ):
-    load_from_file = True
+    load_from_file = False
     dim1 = [0, 0]
     if load_from_file:
         save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
