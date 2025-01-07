@@ -599,4 +599,4 @@ def homo_rotate(cipher, index, cryptoContext):
     return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor, cipher.noise_deg, cipher.slots)
 
 def homo_conjugate(cipher, cryptoContext):
-    return homo_rotate(cipher, -1, cryptoContext)
+    return homo_rotate(cipher, 2*cryptoContext.N-1, cryptoContext)

@@ -871,10 +871,8 @@ class Context:
             return 1
 
         # Conjugation automorphism
-        # if i == m - 1:
-        #     return i
-        if i == - 1:
-            return  m - 1
+        if i == m - 1:
+            return i
 
         # Generator
         if i < 0:
