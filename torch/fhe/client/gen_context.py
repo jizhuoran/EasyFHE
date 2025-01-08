@@ -63,16 +63,19 @@ def gen_contexts(
     parameters.SetSecurityLevel(openfhe.SecurityLevel.HEStd_NotSet)
     parameters.SetKeySwitchTechnique(openfhe.KeySwitchTechnique.HYBRID)
 
+
     cc = openfhe.GenCryptoContext(parameters)
     cc.Enable(openfhe.PKESchemeFeature.PKE)
     cc.Enable(openfhe.PKESchemeFeature.KEYSWITCH)
     cc.Enable(openfhe.PKESchemeFeature.LEVELEDSHE)
     cc.Enable(openfhe.PKESchemeFeature.ADVANCEDSHE)
     cc.Enable(openfhe.PKESchemeFeature.FHE)
+    cc.Enable(openfhe.PKESchemeFeature.PRE)
 
     cc.EvalBootstrapSetup(levelBudget, [0, 0], slots)
     keys = cc.KeyGen()
 
+    evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
     cc.EvalBootstrapKeyGen(keys.secretKey, slots)
     cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
@@ -117,7 +120,7 @@ def gen_contexts(
         logSlots,
         firstMod,
         dcrtBits,
-        60,  # openfhe is 60 bits
+        59,  # openfhe is 59 bits
         L,
         K,
         levelBudget,
@@ -169,11 +172,14 @@ def gen_contexts(
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
+    openfheMembers["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
     openfheMembers["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+    openfheMembers["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
     openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
     openfheMembers["slots"] = slots
+    openfheMembers["level_budget"] = levelBudget
 
     with open(save_path, "wb") as file:
         pickle.dump(

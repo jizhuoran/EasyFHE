@@ -1,3 +1,5 @@
+
+
 from . import openfhe as openfhe
 import torch
 from .. import ciphertext as Cipher
@@ -13,24 +15,30 @@ class OpenFHEContext:
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
         self.slots = content_map["slots"]
+        self.cc.EvalBootstrapSetup(content_map["level_budget"], [0, 0], self.slots)
+        openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
         openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
     def encode(self, x):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
         ptx.Encode()
         return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
 
-    def encrypt(self, x):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
+    def encrypt(self, x, scale_deg = 1, level = 0):
+        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
-        return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots())
+        return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots()), cipher
     
     def decrypt(self, x):
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
+        # for _ in range(self.depth + 1 - x.cur_limbs):
+        #     cipher = self.cc.EvalMult(cipher, cipher)
+        #     cipher = self.cc.Rescale(cipher)
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)

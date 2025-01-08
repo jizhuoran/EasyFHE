@@ -1,4 +1,5 @@
 import time, os
+import warnings
 from .ciphertext import Cipher
 from .ciphertext import Plaintext as Plaintext
 from .client.gen_context import gen_contexts
@@ -427,7 +428,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+        
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     T2 = [0 for _ in range(m)]
@@ -446,7 +447,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2km1
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-
+    
     # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
 
@@ -496,6 +497,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
 
+    print("!!!!!!!!!!!")
+    print(cu.cv[0].cpu().numpy()[0][:10])
+    print("!!!!!!!!!!!")
+    
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     qu = None
     if degree(divqr_q) > k:
@@ -730,8 +735,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
         for j in range(g_rem):
             if rot_in[s][j] != 0:
                 fast_rotation_ext[j] = hoisting_keyswitch.eval_fast_rotation_ext(
-                    result.cv[0], digits, result.cur_limbs, result.scaling_factor,
-                    result.noise_deg, rot_in[s][j], True, cryptoContext
+                    result.cv[0], digits, result.cur_limbs, result.scaling_factor, 
+                    result.noise_deg, result.slots, rot_in[s][j], True, cryptoContext
                 )
             else:
                 fast_rotation_ext[j] = key_switch_ext(result, True, cryptoContext)
@@ -766,7 +771,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     
                     inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(
                         None, inner_digits, inner_ks_down.cur_limbs,
-                        inner_ks_down.scaling_factor, inner_ks_down.noise_deg,rot_out[s][i], False, cryptoContext
+                        inner_ks_down.scaling_factor, result.slots, inner_ks_down.noise_deg,rot_out[s][i], False, cryptoContext
                     )
                     outer = eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:
@@ -840,6 +845,15 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
+def round_half_away_from_zero(number, ndigits=0):
+    multiplier = 10 ** ndigits
+    if number > 0:
+        return math.floor(number * multiplier + 0.5) / multiplier
+    elif number < 0:
+        return math.ceil(number * multiplier - 0.5) / multiplier
+    else:
+        return 0.0
+    
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
@@ -864,7 +878,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
     p = cryptoContext.logp  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
-    deg = round(math.log2(q_double / powP))
+    deg = round_half_away_from_zero(math.log2(q_double / powP))
 
     correction = (
         cryptoContext.correctionFactor - deg
@@ -1162,14 +1176,14 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
-    logSlots=10,
+    logSlots=6,
     maxLevelsRemaining=3,
-    levelBudget=[2, 2],
+    levelBudget=[4, 4],
     dnum=3,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    rescaleTech = "FLEXIBLEAUTO",# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     save_dir="torch/fhe/data/"
 
 ):
@@ -1217,10 +1231,8 @@ def BootstrapTest_N65536L26lB44(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x)
-    cipher.cv[0] = cipher.cv[0][:2]
-    cipher.cv[1] = cipher.cv[1][:2]
-    cipher.cur_limbs = 2
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
+    print("shape", cipher.cv[0].shape)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
     after_boot = openfhe_context.decrypt(result)
@@ -1235,6 +1247,13 @@ def BootstrapTest_N65536L26lB44(
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
+
+    print("Before openfhe bootstrapping")
+    openfhe_boot1 = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+    print("After openfhe bootstrapping")
+    after_boot_openfhe = openfhe_context.cc.Decrypt(openfhe_boot1, openfhe_context.secretKey)
+    
+    exit()
 
     measure_execution_time = True
     if measure_execution_time:
