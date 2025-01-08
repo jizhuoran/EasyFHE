@@ -227,7 +227,7 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
+        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -253,6 +253,8 @@ def inner_eval_chebyshev_ps(coefficients,
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
 
+
+
     # Evaluate s2 at u
     if degree(s2) > k:
         su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
@@ -269,15 +271,19 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        su = homo_ops.cipher_level_reduce(su, 1)
+        su = homo_ops.cipher_level_reduce(su, 1) if cryptoContext.rescaleTech == "FIXEDMANUAL" else su
+
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
     else:
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
+
+
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
+
     result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
@@ -424,7 +430,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
             level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i - 1]
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
@@ -497,10 +503,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
 
-    print("!!!!!!!!!!!")
-    print(cu.cv[0].cpu().numpy()[0][:10])
-    print("!!!!!!!!!!!")
-    
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     qu = None
     if degree(divqr_q) > k:
@@ -1004,6 +1006,10 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
+
+
+
+
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
@@ -1028,12 +1034,18 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
+
+
+
+
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    if rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-        ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
 
+    print("!!!!!after result!!!!!!")
+    print(ctxtDec.cv[0].cpu().numpy()[0][:10])
+    print("!!!!!!!!!!!")
+    
     return ctxtDec
 
 
@@ -1175,8 +1187,8 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 
 def BootstrapTest_N65536L26lB44(
-    logN=14,
-    logSlots=6,
+    logN=16,
+    logSlots=15,
     maxLevelsRemaining=3,
     levelBudget=[4, 4],
     dnum=3,
