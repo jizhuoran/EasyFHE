@@ -238,7 +238,7 @@ def convbn2(input,layer,n,scale,cryptoContext):
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), -img_width, cryptoContext))
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
-    c_rotations.append(input)#这里旋转什么的都只需要对cv1吗？
+    c_rotations.append(input)#这里旋转什么的都只需要对cv1吗？#todo: remove this comment if solved
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext))
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),img_width,cryptoContext))
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
@@ -517,7 +517,7 @@ def initial_layer(input,cryptoContext):
 def layer1(input,cryptoContext):
     scale=1.00
     res1=convbn(input,1,1,scale,cryptoContext)
-    #Todo：这里不太确定slots
+    #fixme: [!!!]这里不太确定slots
     res1=eval_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scale)
 
