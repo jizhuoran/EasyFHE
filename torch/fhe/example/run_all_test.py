@@ -11,69 +11,48 @@ all_correct = True
 path = "data/"
 for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and "GPU-FHE-CONTEXT" in context_file:
-        groundtruth_file = context_file.replace("GPU-FHE-CONTEXT", "groundtruth")
-    else:
-        continue
+        context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
+        logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
 
-    context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
-    logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
+        logN = int(logN)
+        logSlots = int(logSlots)
+        maxLevelsRemaining = int(maxLevelsRemaining)
+        levelBudget0 = int(levelBudget0)
+        levelBudget1 = int(levelBudget1)
+        dnum = int(dnum)
+        dcrtBits = int(dcrtBits)
+        firstMod = int(firstMod)
+        approxModDepth = int(approxModDepth)
+        
+        cryptoContext, openfhe_context = utils.try_load_context(
+            int(logN),
+            int(logSlots),
+            int(maxLevelsRemaining),
+            [int(levelBudget0), int(levelBudget1)],
+            int(dnum),
+            int(dcrtBits),
+            int(firstMod),
+            int(approxModDepth),
+            "UNIFORM_TERNARY",
+            rescaleTech,
+            save_dir=path)
 
-    cryptoContext, openfhe_context = utils.try_load_context(
-        int(logN),
-        int(logSlots),
-        int(maxLevelsRemaining),
-        [int(levelBudget0), int(levelBudget1)],
-        int(dnum),
-        int(dcrtBits),
-        int(firstMod),
-        int(approxModDepth),
-        "UNIFORM_TERNARY",
-        rescaleTech,
-        save_dir=path)
-    
+        # Test the correctness of the bootstrapping
+        values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+        x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
+        x = torch.tensor(x, device="cuda")
+        cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
 
-    # with open(path+groundtruth_file, "rb") as file:
-    #     input, output = pickle.load(file)
+        result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+        openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+        data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
+        if np.equal(np.concatenate([result.cv[0].cpu().numpy(), result.cv[1].cpu().numpy()]).reshape(-1), data.reshape(-1)).all():
+            print("Test passed!")
+        else:
+            print("Test failed!")
+            print("result", result.cv[0].cpu().numpy()[0][:10])
+            print("data", data.reshape(-1)[:10])
+            all_correct = False
 
-    dim1 = [0, 0]
-    # todo: recheck the initialization
-    # todo: cryptoContext.slots is deprecated!
-    cryptoContext.BsContext = BS.BsContext(cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0,
-                                           cryptoContext.rescaleTech, cryptoContext.secretKeyDist)
-
-    # todo: cryptoContext.slots is deprecated!
-    BS.eval_bootstrap_setup(
-        cryptoContext, cryptoContext.levelBudget, dim1, cryptoContext.slots, 0
-    )
-
-    # note: do not support FLEXIBLEAUTOEXT　currently,
-    # noise_deg=1 for "FLEXIBLEAUTO" and "FIXEDMANUAL", noise_deg=2 for "FLEXIBLEAUTOEXT"
-    # todo: generalize the setting
-    input.cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in input.cv]
-    result = BS.eval_bootstrap(input, L0=cryptoContext.L, slots=cryptoContext.slots, cryptoContext=cryptoContext)
-
-    res_cv0 = result.cv[0].cpu().numpy().reshape(-1)
-    res_cv1 = result.cv[1].cpu().numpy().reshape(-1)
-    groundtruth0 = np.array(output.cv[0], dtype=np.uint64).reshape(-1)
-    groundtruth1 = np.array(output.cv[1], dtype=np.uint64).reshape(-1)
-
-    x = np.array([0.111111111 * (i & 0xFF) for i in range(cryptoContext.slots)])
-    after_boot = openfhe_context.decrypt(result)
-    after_boot = after_boot.cpu().numpy().reshape(-1)
-    x = np.array(x, dtype=np.float32).reshape(-1)
-
-    max_err = np.max(np.abs(after_boot - x))
-    avg_err = np.mean(np.abs(after_boot - x))
-
-    print("Test case:", context_file.split("/")[-1])
-    print("Max error:", max_err, "Average error:", avg_err)
-
-    if np.equal(res_cv0, groundtruth0).all() and np.equal(res_cv1, groundtruth1).all():
-        print("Test passed!")
-    else:
-        all_correct = False
-        print("Test failed!")
-
-    exit(0)
 if all_correct:
     print("All test cases passed!")
