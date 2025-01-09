@@ -6,8 +6,31 @@ from torch.fhe.bootstrapping import eval_bootstrap
 from torch.fhe.ciphertext import Cipher
 from torch.onnx.symbolic_opset9 import clone
 import numpy as np
-
+import os
 global_num_slots=4096
+
+def read_values_from_file(filename, scale=1.0):
+    values = []
+
+    if not os.path.isfile(filename):
+        print(f"无法打开文件: {filename}")
+        return values
+
+    try:
+        # 打开文件并逐行读取
+        with open(filename, 'r') as file:
+            for row in file:
+                # 按行解析
+                for value in row.strip().split(','):
+                    try:
+                        num = float(value)
+                        values.append(num * scale)
+                    except ValueError:
+                        print(f"unconvert:: {value}")
+    except IOError as e:
+        print(f"error: {e}")
+
+    return values
 
 def rotsum(input,slots,cryptoContext):
     result=input.clone()
@@ -34,10 +57,36 @@ def mask_mod(n,cur_limbs,custom_val,cryptoContext):
             vec.append(custom_val)
         else:
             vec.append(0)
-
     return
     #Todo:encode
     #return encode(vec, level, global_num_slots);
+
+
+def mask_scecond_n(n,cur_limbs,cryptoContext):
+    mask=[]
+    level=cryptoContext.L-cur_limbs
+    for i in range(global_num_slots):
+        if i >=n :
+            mask.append(1)
+        else:
+            mask.append(0)
+#Todo:encode
+    #return encode(vec, level, global_num_slots);
+    return
+
+def mask_first_n(n,cur_limbs,cryptoContext):
+    mask=[]
+    level=cryptoContext.L-cur_limbs
+    for i in range(global_num_slots):
+        if i < n:
+            mask.append(1)
+        else:
+            mask.append(0)
+#Todo:encode
+    #return encode(vec, level, global_num_slots);
+    return
+
+
 
 def mask_from_to(from_,to,cur_limbs,cryptoContext):
     vec=[]
@@ -52,6 +101,131 @@ def mask_from_to(from_,to,cur_limbs,cryptoContext):
     #Todo:encode
     #return encode(vec, level, global_num_slots);
 
+def gen_mask(n,cur_limbs,cryptoContext):
+    level = cryptoContext.L - cur_limbs
+    mask=[]
+    copy_interval=n
+    for i in range(global_num_slots):
+        if copy_interval>0:
+            mask.append(1)
+        else:
+            mask.append(0)
+        copy_interval-=1
+        if copy_interval<= -n:
+            copy_interval=n
+    return
+    # Todo:encode
+    # return encode(vec, level, global_num_slots);
+
+def mask_first_n_mod(n,padding,pos,cur_limbs,cryptoContext):
+    mask=[]
+    level = cryptoContext.L - cur_limbs
+    for i in range(32):
+        for j in range(pos*n):
+            mask.append(0)
+        for j in range(n):
+            mask.append(1)
+        for j in range(padding-n-(pos*n)):
+            mask.append(0)
+    return
+            # Todo:encode
+            # return encode(mask, level, 16384 * 2);
+
+def mask_first_n_mod2(n,padding,pos,cur_limbs,cryptoContext):
+    mask=[]
+    level = cryptoContext.L - cur_limbs
+    for i in range(64):
+        for j in range(pos*n):
+            mask.append(0)
+        for j in range(n):
+            mask.append(1)
+        for j in range(padding-n-(pos*n)):
+            mask.append(0)
+    return
+            # Todo:encode
+            # return encode(mask, level, 8192 * 2);
+
+
+def mask_channel(n,cur_limbs,cryptoContext):
+    mask=[]
+    level = cryptoContext.L - cur_limbs
+    for i in range(n):
+        for j in range(1024):
+            mask.append(0)
+
+    for i in range(256):
+        mask.append(1)
+
+    for i in range(1024-256):
+        mask.append(0)
+    for i in range(31-n):
+        for j in range(1024):
+            mask.append(0)
+    return
+            # Todo:encode
+            # return encode(mask, level, 16384 * 2);
+
+def mask_channel2(n,cur_limbs,cryptoContext):
+    mask=[]
+    level = cryptoContext.L - cur_limbs
+    for i in range(n):
+        for j in range(256):
+            mask.append(0)
+
+    for i in range(64):
+        mask.append(1)
+
+    for i in range(256-64):
+        mask.append(0)
+    for i in range(63-n):
+        for j in range(256):
+            mask.append(0)
+    return
+            # Todo:encode
+            # return encode(mask, level, 8192 * 2);
+
+
+def downsample1024to256(c1,c2,cryptoContext):
+    #Todo: SetSlots()
+    # c1->SetSlots(32768);
+    # c2->SetSlots(32768);
+    num_slots = 16384 * 2
+    #Todo:这里加法和乘法为明文还是密文？
+
+    fullpack=homo_ops.homo_add(homo_ops.homo_mul(c1,mask_first_n(16384,c1.cur_limbs,cryptoContext),cryptoContext),homo_ops.homo_mul(c2,mask_scecond_n(16384,c2.cur_limbs,cryptoContext),cryptoContext),cryptoContext)
+    #Todo:这里有密文乘明文
+    fullpack=homo_ops.homo_mul(homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,1,cryptoContext),cryptoContext),gen_mask(2,fullpack.cur_limbs,cryptoContext),cryptoContext)
+    fullpack = homo_ops.homo_mul(
+        homo_ops.homo_add(fullpack, homo_ops.homo_rotate(homo_ops.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
+        gen_mask(4, fullpack.cur_limbs, cryptoContext), cryptoContext)
+    fullpack=homo_ops.homo_mul(homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,4,cryptoContext),cryptoContext),gen_mask(8,fullpack.cur_limbs,cryptoContext),cryptoContext)
+    fullpack=homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,8,cryptoContext),cryptoContext)
+
+
+#  Todo:Ctxt downsampledrows = encrypt({0});
+    downsampledrows=0
+    for i in range(16):
+        #Todo明密文乘法
+        masked=homo_ops.homo_mul(fullpack,mask_first_n_mod(16,1024,i,fullpack.cur_limbs,cryptoContext),cryptoContext)
+        downsampledrows=homo_ops.homo_add(downsampledrows,masked,cryptoContext)
+        if i<15:
+            fullpack=homo_ops.homo_rotate(fullpack,64-16,cryptoContext)
+    #Todo:Ctxt downsampledchannels = encrypt({0});
+    downsampledchannels=0
+    for i in range(32):
+        #Todo 明密文乘
+        masked=homo_ops.homo_mul(downsampledrows,mask_channel(i,downsampledrows.cur_limbs,cryptoContext),cryptoContext)
+        downsampledchannels=homo_ops.homo_add(downsampledchannels,masked,cryptoContext)
+        downsampledchannels=homo_ops.homo_rotate(downsampledchannels,-(1024-256),cryptoContext)
+
+    downsampledchannels=homo_ops.homo_rotate(downsampledchannels,(1024-256)*32,cryptoContext)
+    downsampledchannels=homo_ops.homo_add(downsampledchannels,homo_ops.homo_rotate(downsampledchannels,-8192,cryptoContext),cryptoContext)
+    downsampledchannels = homo_ops.homo_add(downsampledchannels,
+                                            homo_ops.homo_rotate(homo_ops.homo_rotate(downsampledchannels,-8192,cryptoContext), -8192, cryptoContext),
+                                            cryptoContext)
+    #Todo:    downsampledchannels->SetSlots(8192);
+
+    return downsampledchannels
 
 def decrypt_tovector(input,slots,cryptoContext):
     if slots==0:
@@ -115,7 +289,7 @@ def convbn3(input,layer,n,scale,cryptoContext):
     #Todo encode相关问题
     #Ptxt bias = encode(read_values_from_file("../weights/layer" + to_string(layer) + "-conv" + to_string(n) + "bn" + to_string(n) + "-bias.bin", scale), circuit_depth-2, 8192);
 
-    for j in range(32):
+    for j in range(64):
         k_rows=[]
         # Todo encode相关问题
         #for k in range(9):
