@@ -867,7 +867,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     q = moduliQ[0]
     q_double = float(q)
 
-    p = cryptoContext.logp  # Equivalent to dcrbits in OpenFHE
+    p = cryptoContext.logqi  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
     deg = round_half_away_from_zero(math.log2(q_double / powP))
 

@@ -120,7 +120,7 @@ def gen_contexts(
         logSlots,
         firstMod,
         dcrtBits,
-        59,  # openfhe is 59 bits
+        60,  # auxModSize of openfhe is 60 bits in default
         L,
         K,
         levelBudget,
