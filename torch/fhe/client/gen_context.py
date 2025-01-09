@@ -52,9 +52,9 @@ def gen_contexts(
     parameters = openfhe.CCParamsCKKSRNS()
 
     parameters.SetMultiplicativeDepth(depth)
-    parameters.SetScalingModSize(dcrtBits)  #  logqi GPU-FHE
+    parameters.SetScalingModSize(dcrtBits)  #  dcrtBits GPU-FHE
     parameters.SetFirstModSize(firstMod)  # logq0 GPU-FHE
-    # parameters.SetAuxModSize(AuxModSize) #  logp (yhh added) GPU-FHE
+    # parameters.SetAuxModSize(AuxModSize) #  auxModSize (yhh added) GPU-FHE
     parameters.SetScalingTechnique(openfhe_rescaleTech)
     parameters.SetSecretKeyDist(openfhe_secretKeyDist)
     parameters.SetNumLargeDigits(dnum)  # dnum GPU-FHE

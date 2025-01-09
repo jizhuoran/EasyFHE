@@ -11,9 +11,9 @@ class __FOR_SAVE_ONLY_Context:
         self,
         logN,
         logSlots,
-        logq0,  # todo: rename to firstMod
-        logqi,  # todo: rename to dcrtBits
-        logp,  # todo: rename to specialMod
+        firstMod,
+        dcrtBits,
+        auxModSize,
         L,
         K,
         levelBudget,
@@ -35,7 +35,7 @@ class __FOR_SAVE_ONLY_Context:
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
         self.BsContext = None
-        self.logp = logp
+        self.auxModSize = auxModSize
         # self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
         self.left_rot_key_map = {}
@@ -43,7 +43,7 @@ class __FOR_SAVE_ONLY_Context:
         self.correctionFactor = 0
 
         self.logN = logN
-        self.logqi = logqi
+        self.dcrtBits = dcrtBits
         self.L = int(L)
         self.K = int(K)
         self.dnum = math.ceil(L / K)
@@ -53,7 +53,7 @@ class __FOR_SAVE_ONLY_Context:
         self.M = self.N << 1
         self.logNh = logN - 1
         self.Nh = self.N >> 1
-        self.p = 1 << logqi
+        # self.p = 1 << dcrtBits #todo: to be removed?
 
         self.moduliQ = [0] * L
         self.qRoots = [0] * L
@@ -69,7 +69,7 @@ class __FOR_SAVE_ONLY_Context:
         cnt = 1
         if moduliQ is None and rootsQ is None:
             while True:
-                prime = (1 << logq0) + bnd * self.M + 1
+                prime = (1 << firstMod) + bnd * self.M + 1
                 if self.is_prime(prime):
                     self.moduliQ[0] = prime
                     break
@@ -77,11 +77,11 @@ class __FOR_SAVE_ONLY_Context:
             self.qRoots[0] = self.root_of_unity(order=self.M, modulus=self.moduliQ[0])
             bnd = 1
             while cnt < L:
-                prime1 = (1 << logqi) + bnd * self.M + 1
+                prime1 = (1 << dcrtBits) + bnd * self.M + 1
                 if self.is_prime(prime1):
                     self.moduliQ[cnt] = prime1
                     cnt += 1
-                prime2 = (1 << logqi) - bnd * self.M + 1
+                prime2 = (1 << dcrtBits) - bnd * self.M + 1
                 if self.is_prime(prime2):
                     self.moduliQ[cnt] = prime2
                     self.qRoots[cnt] = self.root_of_unity(
@@ -90,9 +90,9 @@ class __FOR_SAVE_ONLY_Context:
                     cnt += 1
                 bnd += 1
 
-            if logqi - logN - 1 - math.ceil(math.log2(bnd)) < 10:
+            if dcrtBits - logN - 1 - math.ceil(math.log2(bnd)) < 10:
                 print("ERROR: too small number of precision")
-                print("TRY to use larger logqi or smaller depth")
+                print("TRY to use larger dcrtBits or smaller depth")
         else:
             if moduliQ is None:
                 print("moduliQ needs to be set!")
@@ -177,7 +177,7 @@ class __FOR_SAVE_ONLY_Context:
         if moduliP is None and rootsP is None:
             cnt = 0
             while cnt < self.K:
-                prime1 = (1 << logp) + bnd * self.M + 1
+                prime1 = (1 << auxModSize) + bnd * self.M + 1
                 if self.is_prime(prime1):
                     self.moduliP[cnt] = prime1
                     self.pRoots[cnt] = self.root_of_unity(
@@ -186,7 +186,7 @@ class __FOR_SAVE_ONLY_Context:
                     cnt += 1
                 if cnt == self.K:
                     break
-                prime2 = (1 << logp) - bnd * self.M + 1
+                prime2 = (1 << auxModSize) - bnd * self.M + 1
                 if self.is_prime(prime2):
                     self.moduliP[cnt] = prime2
                     self.pRoots[cnt] = self.root_of_unity(
@@ -480,13 +480,13 @@ class __FOR_SAVE_ONLY_Context:
                 # mult depth = 0 and FLEXIBLEAUTO
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
-                self.scalingFactorsReal[0] = 2**self.logqi
+                self.scalingFactorsReal[0] = 2**self.dcrtBits
             elif self.L == 2 and extraBits > 0:
                 # mult depth = 0 and FLEXIBLEAUTOEXT
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
                 self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
-                self.scalingFactorsReal[1] = 2**self.logqi
+                self.scalingFactorsReal[1] = 2**self.dcrtBits
             else:
                 self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
                 if extraBits > 0:
@@ -529,7 +529,7 @@ class __FOR_SAVE_ONLY_Context:
             for i in range(self.L):
                 self.dmoduliQ[i] = float(self.moduliQ[i])
         else:
-            self.approxSF = 2**self.logqi
+            self.approxSF = 2**self.dcrtBits
 
         # for cuda context
         if True:

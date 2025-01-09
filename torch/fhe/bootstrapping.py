@@ -858,7 +858,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     q = moduliQ[0]
     q_double = float(q)
 
-    p = cryptoContext.logqi  # Equivalent to dcrbits in OpenFHE
+    p = cryptoContext.dcrtBits  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
@@ -1021,8 +1021,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-
-
     
     return ctxtDec
 
