@@ -1,4 +1,5 @@
 import time, os, pickle
+import numpy as np
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
@@ -95,3 +96,8 @@ def try_load_context(logN,
     cryptoContext = Context(BsContextMembers, gpufheMembers)
 
     return cryptoContext, openfhe_context
+
+def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
+    gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
+    openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
+    return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)

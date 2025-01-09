@@ -431,7 +431,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+        
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     T2 = [0 for _ in range(m)]
@@ -450,7 +450,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2km1
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-
+    
     # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
 
@@ -844,7 +844,7 @@ def round_half_away_from_zero(number, ndigits=0):
         return math.ceil(number * multiplier - 0.5) / multiplier
     else:
         return 0.0
-
+    
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
@@ -995,6 +995,10 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
+
+
+
+
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
@@ -1019,10 +1023,18 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
+
+
+
+
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
 
+    print("!!!!!after result!!!!!!")
+    print(ctxtDec.cv[0].cpu().numpy()[0][:10])
+    print("!!!!!!!!!!!")
+    
     return ctxtDec
 
 
@@ -1221,26 +1233,20 @@ def BootstrapTest_N65536L26lB44(
     x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
-    print("shape", cipher.cv[0].shape)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
-    after_boot = openfhe_context.decrypt(result)
-    after_boot = after_boot.cpu().numpy().reshape(-1)
-    print(after_boot[:10])
-    x = x.cpu().numpy().reshape(-1)
-    if(np.any(np.abs(after_boot - x) > 3e-2)):
-        print("Error is too large!")
-        print("Error is too large!")
-        print("Error is too large!")
-    else:
+    openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
 
-    print("Before openfhe bootstrapping")
-    openfhe_boot1 = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
-    print("After openfhe bootstrapping")
-    after_boot_openfhe = openfhe_context.cc.Decrypt(openfhe_boot1, openfhe_context.secretKey)
+    else:
+        print("BootstrapTest_N65536L26lB44: Test failed!")
+        print("BootstrapTest_N65536L26lB44: Test failed!")
+        print("BootstrapTest_N65536L26lB44: Test failed!")
 
     exit()
 
