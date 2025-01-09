@@ -16,8 +16,28 @@ class CKKS_Boot_Params:
 
 class BsContext:
     def __init__(self, content_map):
-        for name, value in content_map.items():
-            setattr(self, name, value)
+        self.C2S_rot_in = content_map["C2S_rot_in"]
+        self.C2S_rot_out = content_map["C2S_rot_out"]
+        self.M = content_map["M"]
+        self.QmuplusPmu_map = content_map["QmuplusPmu_map"]
+        self.QplusP_map = content_map["QplusP_map"]
+        self.S2C_rot_in = content_map["S2C_rot_in"]
+        self.S2C_rot_out = content_map["S2C_rot_out"]
+        self.coefficients = content_map["coefficients"]
+        self.correctionFactor = content_map["correctionFactor"]
+        self.dim1 = content_map["dim1"]
+        self.k = content_map["k"]
+        self.m_U0Pre = content_map["m_U0Pre"]
+        self.m_U0PreFFT = content_map["m_U0PreFFT"]
+        self.m_U0hatTPre = content_map["m_U0hatTPre"]
+        self.m_U0hatTPreFFT = content_map["m_U0hatTPreFFT"]
+        self.m_correctionFactor = content_map["m_correctionFactor"]
+        self.m_dim1 = content_map["m_dim1"]
+        self.m_params_dec = content_map["m_params_dec"]
+        self.m_params_enc = content_map["m_params_enc"]
+        self.m_slots = content_map["m_slots"]
+        self.paramsDec = content_map["paramsDec"]
+        self.paramsEnc = content_map["paramsEnc"]
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
     def SelectLayers(self, logSlots, budget):
