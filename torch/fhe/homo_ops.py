@@ -262,7 +262,7 @@ def cipher_mul(in0, in1, cryptoContext):
         in0.cv[1], in1.cv[1], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg+1, in0.slots)
+    return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg+in1.noise_deg, in0.slots)
 
 
 def cipher_square(in0, cryptoContext):
@@ -283,7 +283,7 @@ def cipher_square(in0, cryptoContext):
     )
 
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg + 1, in0.slots)
+    return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg + in0.noise_deg, in0.slots)
 
 
 def cipher_add_scalar(in0, scalar, cryptoContext):
@@ -379,21 +379,22 @@ def homo_square(in0, cryptoContext):
     return cipher_add(res, tmp, cryptoContext)
 
 def homo_rescale(ct, levels, cryptoContext):
-    if levels == 0: return Cipher(ct.cv, ct.cur_limbs, ct.scaling_factor, ct.noise_deg, ct.slots)
+    ct1 = ct.clone()
+    if levels == 0: return ct1.clone()
 
-    curr_limbs = ct.cur_limbs
+    curr_limbs = ct1.cur_limbs
     for l in range(levels):
-        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], curr_limbs, l, cryptoContext)
-        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], curr_limbs, l, cryptoContext)
+        res0 = F.cv_drop_last_element_and_scale(ct1.cv[0], curr_limbs, l, cryptoContext)
+        res1 = F.cv_drop_last_element_and_scale(ct1.cv[1], curr_limbs, l, cryptoContext)
 
     curr_limbs -= levels
-    noise_deg = ct.noise_deg-levels
-    scFactor = ct.scaling_factor
+    noise_deg = ct1.noise_deg-levels
+    scFactor = ct1.scaling_factor
     for l in range(levels):
-        modReduceFactor = float(cryptoContext.GetModReduceFactor(ct.cur_limbs-1-l)) # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
+        modReduceFactor = float(cryptoContext.GetModReduceFactor(ct1.cur_limbs-1-l)) # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct1
         scFactor = scFactor/modReduceFactor
 
-    return Cipher([res0, res1], curr_limbs, scFactor, noise_deg, ct.slots)
+    return Cipher([res0, res1], curr_limbs, scFactor, noise_deg, ct1.slots)
 
 def cpp_round(_float, _len=0):
     i = int(_float)

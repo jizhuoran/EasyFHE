@@ -1,13 +1,16 @@
 import time, os
+import warnings
 from .ciphertext import Cipher
 from .ciphertext import Plaintext as Plaintext
-from .client import client
+from .client.gen_context import gen_contexts
 from .context import *
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import hoisting_keyswitch
 from . import utils
+import numpy as np
+
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 
@@ -224,7 +227,7 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
+        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -250,6 +253,8 @@ def inner_eval_chebyshev_ps(coefficients,
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
 
+
+
     # Evaluate s2 at u
     if degree(s2) > k:
         su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
@@ -266,7 +271,8 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        su = homo_ops.cipher_level_reduce(su, 1)
+        su = homo_ops.cipher_level_reduce(su, 1) if cryptoContext.rescaleTech == "FIXEDMANUAL" else su
+
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -421,7 +427,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
             level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i - 1]
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
@@ -830,6 +836,15 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
+def round_half_away_from_zero(number, ndigits=0):
+    multiplier = 10 ** ndigits
+    if number > 0:
+        return math.floor(number * multiplier + 0.5) / multiplier
+    elif number < 0:
+        return math.ceil(number * multiplier - 0.5) / multiplier
+    else:
+        return 0.0
+
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
@@ -854,7 +869,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
     p = cryptoContext.logp  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
-    deg = round(math.log2(q_double / powP))
+    deg = round_half_away_from_zero(math.log2(q_double / powP))
 
     correction = (
         cryptoContext.correctionFactor - deg
@@ -1007,8 +1022,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    if rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-        ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
 
     return ctxtDec
 
@@ -1151,41 +1164,53 @@ def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_facto
 
 
 def BootstrapTest_N65536L26lB44(
-    logN=14,
-    logSlots=12,
+    logN=16,
+    logSlots=15,
     maxLevelsRemaining=3,
-    levelBudget=[2, 2],
+    levelBudget=[4, 4],
     dnum=3,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    save_dir="torch/fhe/data/"
+
 ):
-    load_from_file = False
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    force_update_context = False
+    # Force update the context
+    if force_update_context:
+        gen_contexts(
+                logN=logN,
+                logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+                maxLevelsRemaining=maxLevelsRemaining,
+                levelBudget=levelBudget,
+                dnum=dnum,
+                dcrtBits=dcrtBits,
+                firstMod=firstMod,
+                approxModDepth=approxModDepth,
+                rotate_index=[],
+                secretKeyDist="UNIFORM_TERNARY",
+                rescaleTech=rescaleTech,
+                save_dir=save_dir
+            )
+
+    cryptoContext, openfhe_context = utils.try_load_context(logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget,
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            "UNIFORM_TERNARY",
+            rescaleTech,
+            save_dir=save_dir)
+
+
     dim1 = [0, 0]
-    if load_from_file:
-        save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
-        cryptoContext, openfhe_context = utils.load_context(save_path)
-
-    else:
-        openfhe_context, cryptoContext = client.gen_contexts(
-            logN=logN,
-            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
-            maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget=levelBudget,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            approxModDepth=approxModDepth,
-            rotate_index=[],
-            secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech=rescaleTech,
-            dim1 = dim1,
-        )
-
-        save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
-        utils.save_context(cryptoContext, openfhe_context, save_path)
-        cryptoContext, _ = utils.load_context(save_path)
 
     eval_bootstrap_setup(
         cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
@@ -1195,10 +1220,8 @@ def BootstrapTest_N65536L26lB44(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x)
-    cipher.cv[0] = cipher.cv[0][:2]
-    cipher.cv[1] = cipher.cv[1][:2]
-    cipher.cur_limbs = 2
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
+    print("shape", cipher.cv[0].shape)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
     after_boot = openfhe_context.decrypt(result)
@@ -1213,6 +1236,13 @@ def BootstrapTest_N65536L26lB44(
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
         print("BootstrapTest_N65536L26lB44: Test passed!")
+
+    print("Before openfhe bootstrapping")
+    openfhe_boot1 = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+    print("After openfhe bootstrapping")
+    after_boot_openfhe = openfhe_context.cc.Decrypt(openfhe_boot1, openfhe_context.secretKey)
+
+    exit()
 
     measure_execution_time = True
     if measure_execution_time:

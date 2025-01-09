@@ -1,5 +1,6 @@
-import time
+import time, os, pickle
 from .client import client as client
+from .client.gen_context import gen_contexts
 from .context import *
 
 # Global dictionary to accumulate execution time for each function
@@ -41,14 +42,56 @@ def profile_pytorch_function(func):
     return wrapper
 
 
-def save_context(cryptoContext, openfhe_context, path):
-    with open(path, 'wb') as file:
-        pickle.dump((cryptoContext.Serialize(), openfhe_context.Serialize()), file)
+def try_load_context(logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget,
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+            save_dir):
+
+    load_path = (
+        save_dir
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget[0],
+            levelBudget[1],
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
+
+    if not os.path.exists(load_path):
+        gen_contexts(
+            logN=logN,
+            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+            maxLevelsRemaining=maxLevelsRemaining,
+            levelBudget=levelBudget,
+            dnum=dnum,
+            dcrtBits=dcrtBits,
+            firstMod=firstMod,
+            approxModDepth=approxModDepth,
+            rotate_index=[],
+            secretKeyDist="UNIFORM_TERNARY",
+            rescaleTech=rescaleTech,
+            save_dir=save_dir
+        )
+
+    with open(load_path, 'rb') as file:
+        gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
 
-def load_context(path):
-    with open(path, 'rb') as file:
-        cryptoContext_byte, openfhe_context_byte = pickle.load(file)
-    openfhe_context = client.OpenFHEContext.Deserialize(openfhe_context_byte)
-    cryptoContext = Context.Deserialize(cryptoContext_byte)
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    cryptoContext = Context(BsContextMembers, gpufheMembers)
+
     return cryptoContext, openfhe_context
