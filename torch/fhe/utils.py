@@ -41,6 +41,14 @@ def profile_pytorch_function(func):
 
     return wrapper
 
+def round_half_away_from_zero(number, ndigits=0):
+    multiplier = 10 ** ndigits
+    if number > 0:
+        return math.floor(number * multiplier + 0.5) / multiplier
+    elif number < 0:
+        return math.ceil(number * multiplier - 0.5) / multiplier
+    else:
+        return 0.0
 
 def try_load_context(logN,
             logSlots,

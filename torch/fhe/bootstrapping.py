@@ -847,15 +847,6 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
-def round_half_away_from_zero(number, ndigits=0):
-    multiplier = 10 ** ndigits
-    if number > 0:
-        return math.floor(number * multiplier + 0.5) / multiplier
-    elif number < 0:
-        return math.ceil(number * multiplier - 0.5) / multiplier
-    else:
-        return 0.0
-    
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
@@ -880,7 +871,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
     p = cryptoContext.logp  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
-    deg = round_half_away_from_zero(math.log2(q_double / powP))
+    deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
     correction = (
         cryptoContext.correctionFactor - deg
@@ -1042,147 +1033,149 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
 
-    print("!!!!!after result!!!!!!")
-    print(ctxtDec.cv[0].cpu().numpy()[0][:10])
-    print("!!!!!!!!!!!")
+
     
     return ctxtDec
 
 
-def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
+# def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
 
-    m_U0hatTPreFFT_dim1 = len(context.m_U0hatTPreFFT_dim)
-    m_U0hatTPreFFT_dim2 = context.m_U0hatTPreFFT_dim
-    m_U0hatTPreFFT_limbs = context.m_U0hatTPreFFT_limbs
-    mx_len = context.N
-    mx_slots = numslots
-    m_U0PreFFT_dim1 = len(context.m_U0PreFFT_dim)
-    m_U0PreFFT_dim2 = context.m_U0PreFFT_dim
-    m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
+#     m_U0hatTPreFFT_dim1 = len(context.m_U0hatTPreFFT_dim)
+#     m_U0hatTPreFFT_dim2 = context.m_U0hatTPreFFT_dim
+#     m_U0hatTPreFFT_limbs = context.m_U0hatTPreFFT_limbs
+#     mx_len = context.N
+#     mx_slots = numslots
+#     m_U0PreFFT_dim1 = len(context.m_U0PreFFT_dim)
+#     m_U0PreFFT_dim2 = context.m_U0PreFFT_dim
+#     m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
 
-    M = context.M
-    slots = M // 4 if numslots == 0 else numslots
-    rescale_tech = context.rescaleTech
-    precom = context.BsContext
+#     M = context.M
+#     slots = M // 4 if numslots == 0 else numslots
+#     rescale_tech = context.rescaleTech
+#     precom = context.BsContext
 
-    # 设置 correction_factor
-    if correction_factor == 0:
-        if (
-            rescale_tech == "FLEXIBLEAUTO"
-            or rescale_tech == "FLEXIBLEAUTOEXT"
-        ):
-            # 实验结果得出的最佳精度对应的默认 correction factors
-            tmp = round(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
-            if tmp < 7:
-                context.correctionFactor = 7
-            elif tmp > 13:
-                context.correctionFactor = 13
-            else:
-                context.correctionFactor = int(tmp)
-        else:
-            context.correctionFactor = 9
-    else:
-        context.correctionFactor = correction_factor
+#     # 设置 correction_factor
+#     if correction_factor == 0:
+#         if (
+#             rescale_tech == "FLEXIBLEAUTO"
+#             or rescale_tech == "FLEXIBLEAUTOEXT"
+#         ):
+#             # 实验结果得出的最佳精度对应的默认 correction factors
+#             tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+#             print("inner 2 * math.log2(M / 2)", 2 * math.log2(M / 2))
+#             print("inner 2 * math.log2(M / 2) + math.log2(slots)", 2 * math.log2(M / 2) + math.log2(slots))
+#             print("inner -0.265 * (2 * math.log2(M / 2) + math.log2(slots))", -0.265 * (2 * math.log2(M / 2) + math.log2(slots)))
+#             print("inner -0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1", -0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+#             if tmp < 7:
+#                 context.correctionFactor = 7
+#             elif tmp > 13:
+#                 context.correctionFactor = 13
+#             else:
+#                 context.correctionFactor = int(tmp)
+#         else:
+#             context.correctionFactor = 9
+#     else:
+#         context.correctionFactor = correction_factor
 
-    precom.m_slots = slots
-    precom.m_dim1 = dim1[0]
+#     precom.m_slots = slots
+#     precom.m_dim1 = dim1[0]
 
-    log_slots = math.log2(slots)
+#     log_slots = math.log2(slots)
 
-    # 检查 level budget 并计算参数
-    new_budget = [level_budget[0], level_budget[1]]
+#     # 检查 level budget 并计算参数
+#     new_budget = [level_budget[0], level_budget[1]]
 
-    if level_budget[0] > log_slots:
-        print(
-            f"\nWarning, the level budget for encoding cannot be this large. "
-            f"The budget was changed to {int(log_slots)}"
-        )
-        new_budget[0] = int(log_slots)
-    if level_budget[0] < 1:
-        print(
-            f"\nWarning, the level budget for encoding has to be at least 1. "
-            f"The budget was changed to 1"
-        )
-        new_budget[0] = 1
+#     if level_budget[0] > log_slots:
+#         print(
+#             f"\nWarning, the level budget for encoding cannot be this large. "
+#             f"The budget was changed to {int(log_slots)}"
+#         )
+#         new_budget[0] = int(log_slots)
+#     if level_budget[0] < 1:
+#         print(
+#             f"\nWarning, the level budget for encoding has to be at least 1. "
+#             f"The budget was changed to 1"
+#         )
+#         new_budget[0] = 1
 
-    if level_budget[1] > log_slots:
-        print(
-            f"\nWarning, the level budget for decoding cannot be this large. "
-            f"The budget was changed to {int(log_slots)}"
-        )
-        new_budget[1] = int(log_slots)
-    if level_budget[1] < 1:
-        print(
-            f"\nWarning, the level budget for decoding has to be at least 1. "
-            f"The budget was changed to 1"
-        )
-        new_budget[1] = 1
+#     if level_budget[1] > log_slots:
+#         print(
+#             f"\nWarning, the level budget for decoding cannot be this large. "
+#             f"The budget was changed to {int(log_slots)}"
+#         )
+#         new_budget[1] = int(log_slots)
+#     if level_budget[1] < 1:
+#         print(
+#             f"\nWarning, the level budget for decoding has to be at least 1. "
+#             f"The budget was changed to 1"
+#         )
+#         new_budget[1] = 1
 
-    precom.m_params_enc = context.BsContext.GetCollapsedFFTParams(
-        slots, new_budget[0], dim1[0]
-    )
-    precom.m_params_dec = context.BsContext.GetCollapsedFFTParams(
-        slots, new_budget[1], dim1[1]
-    )
+#     precom.m_params_enc = context.BsContext.GetCollapsedFFTParams(
+#         slots, new_budget[0], dim1[0]
+#     )
+#     precom.m_params_dec = context.BsContext.GetCollapsedFFTParams(
+#         slots, new_budget[1], dim1[1]
+#     )
 
-    if level_budget[0] == 1 and level_budget[1] == 1:
-        pass
-        # # todo: to be implemented, need to get from openfhe
-        # precom.m_U0Pre = [None] * LTMatrix_Row
-        # precom.m_U0hatTPre = [None] * LTMatrix_Row
-        # for i in range(LTMatrix_Row):
-        #     # precom.m_U0hatTPre
-        #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
-        #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
-        #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
-        #
-        #     # precom.m_U0Pre
-        #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
-        #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
-        #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
-    else:
-        RHScnt = 0
-        precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
-        cnt = 0
-        for i in range(0, m_U0hatTPreFFT_dim1):
-            j_len = m_U0hatTPreFFT_dim2[i]
-            limbs = m_U0hatTPreFFT_limbs[i]
-            m_U0hatTPreFFT_len = mx_len * limbs
-            for j in range(j_len):
-                m_U0hatTPreFFT = np.zeros(m_U0hatTPreFFT_len, dtype=np.uint64)
-                LHScnt = 0
-                for k in range(limbs):
-                    for l in range(mx_len):
-                        m_U0hatTPreFFT[LHScnt] = context.m_U0hatTPreFFT_mx[RHScnt]
-                        LHScnt += 1
-                        RHScnt += 1
+#     if level_budget[0] == 1 and level_budget[1] == 1:
+#         pass
+#         # # todo: to be implemented, need to get from openfhe
+#         # precom.m_U0Pre = [None] * LTMatrix_Row
+#         # precom.m_U0hatTPre = [None] * LTMatrix_Row
+#         # for i in range(LTMatrix_Row):
+#         #     # precom.m_U0hatTPre
+#         #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
+#         #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
+#         #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
+#         #
+#         #     # precom.m_U0Pre
+#         #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
+#         #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
+#         #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
+#     else:
+#         RHScnt = 0
+#         precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
+#         cnt = 0
+#         for i in range(0, m_U0hatTPreFFT_dim1):
+#             j_len = m_U0hatTPreFFT_dim2[i]
+#             limbs = m_U0hatTPreFFT_limbs[i]
+#             m_U0hatTPreFFT_len = mx_len * limbs
+#             for j in range(j_len):
+#                 m_U0hatTPreFFT = np.zeros(m_U0hatTPreFFT_len, dtype=np.uint64)
+#                 LHScnt = 0
+#                 for k in range(limbs):
+#                     for l in range(mx_len):
+#                         m_U0hatTPreFFT[LHScnt] = context.m_U0hatTPreFFT_mx[RHScnt]
+#                         LHScnt += 1
+#                         RHScnt += 1
 
-                m_U0hatTPreFFT = torch.tensor(
-                    m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
-                )
-                precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
-                                                        context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
-                cnt+=1
+#                 m_U0hatTPreFFT = torch.tensor(
+#                     m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
+#                 )
+#                 precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
+#                                                         context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
+#                 cnt+=1
 
-        cnt=0
-        RHScnt = 0
-        precom.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
-        for i in range(m_U0PreFFT_dim1):
-            j_len = m_U0PreFFT_dim2[i]
-            limbs = m_U0PreFFT_limbs[i]
-            m_U0PreFFT_len = mx_len * limbs
-            for j in range(j_len):
-                m_U0PreFFT = np.zeros(m_U0PreFFT_len, dtype=np.uint64)
-                LHScnt = 0
-                for k in range(limbs):
-                    for l in range(mx_len):
-                        m_U0PreFFT[LHScnt] = context.m_U0PreFFT_mx[RHScnt]
-                        LHScnt += 1
-                        RHScnt += 1
-                m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
-                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
-                                                    context.m_U0PreFFT_scaling_factor[cnt], 1)
-                cnt+=1
+#         cnt=0
+#         RHScnt = 0
+#         precom.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
+#         for i in range(m_U0PreFFT_dim1):
+#             j_len = m_U0PreFFT_dim2[i]
+#             limbs = m_U0PreFFT_limbs[i]
+#             m_U0PreFFT_len = mx_len * limbs
+#             for j in range(j_len):
+#                 m_U0PreFFT = np.zeros(m_U0PreFFT_len, dtype=np.uint64)
+#                 LHScnt = 0
+#                 for k in range(limbs):
+#                     for l in range(mx_len):
+#                         m_U0PreFFT[LHScnt] = context.m_U0PreFFT_mx[RHScnt]
+#                         LHScnt += 1
+#                         RHScnt += 1
+#                 m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
+#                 precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
+#                                                     context.m_U0PreFFT_scaling_factor[cnt], 1)
+#                 cnt+=1
 
 
 
@@ -1235,9 +1228,9 @@ def BootstrapTest_N65536L26lB44(
 
     dim1 = [0, 0]
 
-    eval_bootstrap_setup(
-        cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
-    )
+    # eval_bootstrap_setup(
+    #     cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
+    # )
 
     # Test the correctness of the bootstrapping
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]

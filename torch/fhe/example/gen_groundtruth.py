@@ -3,7 +3,7 @@ import itertools, subprocess, os
 logN_cand = list(range(14, 17))
 logSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
 maxLevelsRemaining_cand = [3, 7]
-levelBudget_cand = [[3, 3],[3, 3]]
+levelBudget_cand = [[3, 3],[4, 4]]
 dnum_cand = [1, 3, 5]
 rescaleTech_cand = ["FLEXIBLEAUTO", "FIXEDMANUAL"]
 

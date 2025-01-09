@@ -135,6 +135,11 @@ def gen_contexts(
         rescaleTech,
         dim1,
     )
+
+    Context.eval_bootstrap_setup(
+        gpufhe_context, gpufhe_context.levelBudget, dim1, (1<<logSlots), 0
+    )
+
     save_path = (
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
