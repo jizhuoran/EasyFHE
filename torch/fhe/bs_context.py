@@ -1,5 +1,10 @@
 import math
 
+def get_item(item_name, content_map):
+    if item_name in content_map:
+        return content_map[item_name]
+    return None
+    
 class CKKS_Boot_Params:
     def __init__(self, level_budget, layers_coll, layers_rem, num_rotations, baby_step, giant_step, num_rotations_rem,
                  baby_step_rem, giant_step_rem):
@@ -16,28 +21,28 @@ class CKKS_Boot_Params:
 
 class BsContext:
     def __init__(self, content_map):
-        self.C2S_rot_in = content_map["C2S_rot_in"]
-        self.C2S_rot_out = content_map["C2S_rot_out"]
-        self.M = content_map["M"]
-        self.QmuplusPmu_map = content_map["QmuplusPmu_map"]
-        self.QplusP_map = content_map["QplusP_map"]
-        self.S2C_rot_in = content_map["S2C_rot_in"]
-        self.S2C_rot_out = content_map["S2C_rot_out"]
-        self.coefficients = content_map["coefficients"]
-        self.correctionFactor = content_map["correctionFactor"]
-        self.dim1 = content_map["dim1"]
-        self.k = content_map["k"]
-        self.m_U0Pre = content_map["m_U0Pre"]
-        self.m_U0PreFFT = content_map["m_U0PreFFT"]
-        self.m_U0hatTPre = content_map["m_U0hatTPre"]
-        self.m_U0hatTPreFFT = content_map["m_U0hatTPreFFT"]
-        self.m_correctionFactor = content_map["m_correctionFactor"]
-        self.m_dim1 = content_map["m_dim1"]
-        self.m_params_dec = content_map["m_params_dec"]
-        self.m_params_enc = content_map["m_params_enc"]
-        self.m_slots = content_map["m_slots"]
-        self.paramsDec = content_map["paramsDec"]
-        self.paramsEnc = content_map["paramsEnc"]
+        self.C2S_rot_in = get_item("C2S_rot_in", content_map)
+        self.C2S_rot_out = get_item("C2S_rot_out", content_map)
+        self.M = get_item("M", content_map)
+        self.QmuplusPmu_map = get_item("QmuplusPmu_map", content_map)
+        self.QplusP_map = get_item("QplusP_map", content_map)
+        self.S2C_rot_in = get_item("S2C_rot_in", content_map)
+        self.S2C_rot_out = get_item("S2C_rot_out", content_map)
+        self.coefficients = get_item("coefficients", content_map)
+        self.correctionFactor = get_item("correctionFactor", content_map)
+        self.dim1 = get_item("dim1", content_map)
+        self.k = get_item("k", content_map)
+        self.m_U0Pre = get_item("m_U0Pre", content_map)
+        self.m_U0PreFFT = get_item("m_U0PreFFT", content_map)
+        self.m_U0hatTPre = get_item("m_U0hatTPre", content_map)
+        self.m_U0hatTPreFFT = get_item("m_U0hatTPreFFT", content_map)
+        self.m_correctionFactor = get_item("m_correctionFactor", content_map)
+        self.m_dim1 = get_item("m_dim1", content_map)
+        self.m_params_dec = get_item("m_params_dec", content_map)
+        self.m_params_enc = get_item("m_params_enc", content_map)
+        self.m_slots = get_item("m_slots", content_map)
+        self.paramsDec = get_item("paramsDec", content_map)
+        self.paramsEnc = get_item("paramsEnc", content_map)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
     def SelectLayers(self, logSlots, budget):
