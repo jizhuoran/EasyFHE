@@ -603,20 +603,6 @@ def homo_rotate(cipher, index, cryptoContext):
 def homo_conjugate(cipher, cryptoContext):
     return homo_rotate(cipher, 2*cryptoContext.N-1, cryptoContext)
 
-def homo_bootstrap(cipher, L0, slots, cryptoContext):
-    if slots != cipher.slots:
-        cp_slots = cipher.slots
-        cipher.slots = slots #todo: see if we can remove this
-        result = eval_bootstrap(cipher, L0, slots, cryptoContext)
-        cipher.slots = cp_slots
-    else:
-        result = eval_bootstrap(cipher, L0, cipher.slots, cryptoContext)
-
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-        result = homo_rescale(result, result.noise_deg-1, cryptoContext)
-
-    return result
-
 def homo_mul_pt(cipher, pt, cryptoContext):
     cur_limbs = cipher.cur_limbs
     if cipher.slots != pt.slots:
