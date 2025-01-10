@@ -3,12 +3,12 @@ import pickle, sys, os
 import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from fhe.client.gen_context import gen_contexts
-logN = 14
+logN = 16
 logSlots = 11
 maxLevelsRemaining = 3
 levelBudget = [3, 3]
 dnum = 4
-rescaleTech = "FIXEDMANUAL"
+rescaleTech = "FLEXIBLEAUTO"
 dcrtBits=59
 firstMod=60
 approxModDepth=9
