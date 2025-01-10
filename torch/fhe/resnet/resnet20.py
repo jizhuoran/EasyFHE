@@ -191,7 +191,7 @@ def downsample1024to256(c1,c2,cryptoContext):
     # c2->SetSlots(32768);
     num_slots = 16384 * 2
     #Todo:这里加法和乘法为明文还是密文？
-
+    #todo: yhh：里面的是分别明密文乘法，然后是密密文加法
     fullpack=homo_ops.homo_add(homo_ops.homo_mul(c1,mask_first_n(16384,c1.cur_limbs,cryptoContext),cryptoContext),homo_ops.homo_mul(c2,mask_scecond_n(16384,c2.cur_limbs,cryptoContext),cryptoContext),cryptoContext)
     #Todo:这里有密文乘明文
     fullpack=homo_ops.homo_mul(homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,1,cryptoContext),cryptoContext),gen_mask(2,fullpack.cur_limbs,cryptoContext),cryptoContext)
@@ -692,6 +692,9 @@ def layer1(input,cryptoContext):
     scale=1.00
     res1=convbn(input,1,1,scale,cryptoContext)
     #fixme: [!!!]这里不太确定slots
+    #todo: yhh: 不确定slots的，可以看一下原始代码里，下面一行if(verbose>2) 中下面prt中slots的输入值，来推测上面prt的值
+    #todo: 这里传slots=(1<<14)就行
+    #todo：确认一下，不应该传log值
     res1=eval_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scale)
 
