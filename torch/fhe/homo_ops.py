@@ -616,3 +616,17 @@ def homo_bootstrap(cipher, L0, slots, cryptoContext):
         result = homo_rescale(result, result.noise_deg-1, cryptoContext)
 
     return result
+
+def homo_mul_pt(cipher, pt, cryptoContext):
+    cur_limbs = cipher.cur_limbs
+    if cipher.slots != pt.slots:
+        warnings.warn(f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
+                      Warning)
+    if cipher.cur_limbs != pt.l:
+        warnings.warn(f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
+                      Warning)
+    moduli = cryptoContext.moduliQ_cuda
+    mu = cryptoContext.q_mu_cuda,
+    cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs)
+    cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs)
+    return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor*pt.scaling_factor, cipher.noise_deg+pt.noise_deg, cipher.slots)
