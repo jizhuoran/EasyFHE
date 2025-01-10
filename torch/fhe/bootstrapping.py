@@ -1,13 +1,16 @@
 import time, os
+import warnings
 from .ciphertext import Cipher
 from .ciphertext import Plaintext as Plaintext
-from .client import client
+from .client.gen_context import gen_contexts
 from .context import *
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import hoisting_keyswitch
 from . import utils
+import numpy as np
+
 import torch.profiler
 from torch.profiler import ProfilerActivity, tensorboard_trace_handler
 
@@ -224,7 +227,7 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
+        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[m - 1].cur_limbs) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -250,6 +253,8 @@ def inner_eval_chebyshev_ps(coefficients,
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
 
+
+
     # Evaluate s2 at u
     if degree(s2) > k:
         su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
@@ -266,7 +271,8 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        su = homo_ops.cipher_level_reduce(su, 1)
+        su = homo_ops.cipher_level_reduce(su, 1) if cryptoContext.rescaleTech == "FIXEDMANUAL" else su
+
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -421,11 +427,11 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
             level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff)
+            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1], level_diff) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i - 1]
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+        
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     T2 = [0 for _ in range(m)]
@@ -444,7 +450,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2km1
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-
+    
     # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
 
@@ -683,9 +689,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[0], inner.cv[1], curr_limbs,
-                                                                       inner.scaling_factor, inner.noise_deg,
-                                                                       inner.slots, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner, cryptoContext)
                     auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
@@ -705,8 +709,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[0], outer.cv[1], curr_limbs, outer.scaling_factor,
-                                                    outer.noise_deg, outer.slots, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer, cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     if flag_rem:
@@ -743,9 +746,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner.cv[0], inner.cv[1], curr_limbs,
-                                                                       inner.scaling_factor, inner.noise_deg,
-                                                                       inner.slots, cryptoContext)
+                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner, cryptoContext)
                     auto_index = cryptoContext.find_auto_index(rot_out[s][i])
 
                     first_current = F.cv_automorphism_transform(
@@ -765,8 +766,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                     F.cv_set_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer.cv[0], outer.cv[1], curr_limbs, outer.scaling_factor,
-                                                    outer.noise_deg, outer.slots, cryptoContext)
+        result = hoisting_keyswitch.key_switch_down(outer, cryptoContext)
         result.cv[0] = cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
     
     return result
@@ -852,9 +852,9 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     q = moduliQ[0]
     q_double = float(q)
 
-    p = cryptoContext.logp  # Equivalent to dcrbits in OpenFHE
+    p = cryptoContext.dcrtBits  # Equivalent to dcrbits in OpenFHE
     powP = 2**p
-    deg = round(math.log2(q_double / powP))
+    deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
     correction = (
         cryptoContext.correctionFactor - deg
@@ -980,6 +980,10 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
+
+
+
+
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
@@ -1004,215 +1008,232 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
+
+
+
+
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-    if rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-        ctxtDec = homo_ops.homo_rescale(ctxtDec, ctxtDec.noise_deg-1, cryptoContext)
-
+    
     return ctxtDec
 
 
-def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
+# def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
 
-    m_U0hatTPreFFT_dim1 = len(context.m_U0hatTPreFFT_dim)
-    m_U0hatTPreFFT_dim2 = context.m_U0hatTPreFFT_dim
-    m_U0hatTPreFFT_limbs = context.m_U0hatTPreFFT_limbs
-    mx_len = context.N
-    mx_slots = numslots
-    m_U0PreFFT_dim1 = len(context.m_U0PreFFT_dim)
-    m_U0PreFFT_dim2 = context.m_U0PreFFT_dim
-    m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
+#     m_U0hatTPreFFT_dim1 = len(context.m_U0hatTPreFFT_dim)
+#     m_U0hatTPreFFT_dim2 = context.m_U0hatTPreFFT_dim
+#     m_U0hatTPreFFT_limbs = context.m_U0hatTPreFFT_limbs
+#     mx_len = context.N
+#     mx_slots = numslots
+#     m_U0PreFFT_dim1 = len(context.m_U0PreFFT_dim)
+#     m_U0PreFFT_dim2 = context.m_U0PreFFT_dim
+#     m_U0PreFFT_limbs = context.m_U0PreFFT_limbs
 
-    M = context.M
-    slots = M // 4 if numslots == 0 else numslots
-    rescale_tech = context.rescaleTech
-    precom = context.BsContext
+#     M = context.M
+#     slots = M // 4 if numslots == 0 else numslots
+#     rescale_tech = context.rescaleTech
+#     precom = context.BsContext
 
-    # 设置 correction_factor
-    if correction_factor == 0:
-        if (
-            rescale_tech == "FLEXIBLEAUTO"
-            or rescale_tech == "FLEXIBLEAUTOEXT"
-        ):
-            # 实验结果得出的最佳精度对应的默认 correction factors
-            tmp = round(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
-            if tmp < 7:
-                context.correctionFactor = 7
-            elif tmp > 13:
-                context.correctionFactor = 13
-            else:
-                context.correctionFactor = int(tmp)
-        else:
-            context.correctionFactor = 9
-    else:
-        context.correctionFactor = correction_factor
+#     # 设置 correction_factor
+#     if correction_factor == 0:
+#         if (
+#             rescale_tech == "FLEXIBLEAUTO"
+#             or rescale_tech == "FLEXIBLEAUTOEXT"
+#         ):
+#             # 实验结果得出的最佳精度对应的默认 correction factors
+#             tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+#             print("inner 2 * math.log2(M / 2)", 2 * math.log2(M / 2))
+#             print("inner 2 * math.log2(M / 2) + math.log2(slots)", 2 * math.log2(M / 2) + math.log2(slots))
+#             print("inner -0.265 * (2 * math.log2(M / 2) + math.log2(slots))", -0.265 * (2 * math.log2(M / 2) + math.log2(slots)))
+#             print("inner -0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1", -0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+#             if tmp < 7:
+#                 context.correctionFactor = 7
+#             elif tmp > 13:
+#                 context.correctionFactor = 13
+#             else:
+#                 context.correctionFactor = int(tmp)
+#         else:
+#             context.correctionFactor = 9
+#     else:
+#         context.correctionFactor = correction_factor
 
-    precom.m_slots = slots
-    precom.m_dim1 = dim1[0]
+#     precom.m_slots = slots
+#     precom.m_dim1 = dim1[0]
 
-    log_slots = math.log2(slots)
+#     log_slots = math.log2(slots)
 
-    # 检查 level budget 并计算参数
-    new_budget = [level_budget[0], level_budget[1]]
+#     # 检查 level budget 并计算参数
+#     new_budget = [level_budget[0], level_budget[1]]
 
-    if level_budget[0] > log_slots:
-        print(
-            f"\nWarning, the level budget for encoding cannot be this large. "
-            f"The budget was changed to {int(log_slots)}"
-        )
-        new_budget[0] = int(log_slots)
-    if level_budget[0] < 1:
-        print(
-            f"\nWarning, the level budget for encoding has to be at least 1. "
-            f"The budget was changed to 1"
-        )
-        new_budget[0] = 1
+#     if level_budget[0] > log_slots:
+#         print(
+#             f"\nWarning, the level budget for encoding cannot be this large. "
+#             f"The budget was changed to {int(log_slots)}"
+#         )
+#         new_budget[0] = int(log_slots)
+#     if level_budget[0] < 1:
+#         print(
+#             f"\nWarning, the level budget for encoding has to be at least 1. "
+#             f"The budget was changed to 1"
+#         )
+#         new_budget[0] = 1
 
-    if level_budget[1] > log_slots:
-        print(
-            f"\nWarning, the level budget for decoding cannot be this large. "
-            f"The budget was changed to {int(log_slots)}"
-        )
-        new_budget[1] = int(log_slots)
-    if level_budget[1] < 1:
-        print(
-            f"\nWarning, the level budget for decoding has to be at least 1. "
-            f"The budget was changed to 1"
-        )
-        new_budget[1] = 1
+#     if level_budget[1] > log_slots:
+#         print(
+#             f"\nWarning, the level budget for decoding cannot be this large. "
+#             f"The budget was changed to {int(log_slots)}"
+#         )
+#         new_budget[1] = int(log_slots)
+#     if level_budget[1] < 1:
+#         print(
+#             f"\nWarning, the level budget for decoding has to be at least 1. "
+#             f"The budget was changed to 1"
+#         )
+#         new_budget[1] = 1
 
-    precom.m_params_enc = context.BsContext.GetCollapsedFFTParams(
-        slots, new_budget[0], dim1[0]
-    )
-    precom.m_params_dec = context.BsContext.GetCollapsedFFTParams(
-        slots, new_budget[1], dim1[1]
-    )
+#     precom.m_params_enc = context.BsContext.GetCollapsedFFTParams(
+#         slots, new_budget[0], dim1[0]
+#     )
+#     precom.m_params_dec = context.BsContext.GetCollapsedFFTParams(
+#         slots, new_budget[1], dim1[1]
+#     )
 
-    if level_budget[0] == 1 and level_budget[1] == 1:
-        pass
-        # # todo: to be implemented, need to get from openfhe
-        # precom.m_U0Pre = [None] * LTMatrix_Row
-        # precom.m_U0hatTPre = [None] * LTMatrix_Row
-        # for i in range(LTMatrix_Row):
-        #     # precom.m_U0hatTPre
-        #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
-        #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
-        #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
-        #
-        #     # precom.m_U0Pre
-        #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
-        #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
-        #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
-    else:
-        RHScnt = 0
-        precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
-        cnt = 0
-        for i in range(0, m_U0hatTPreFFT_dim1):
-            j_len = m_U0hatTPreFFT_dim2[i]
-            limbs = m_U0hatTPreFFT_limbs[i]
-            m_U0hatTPreFFT_len = mx_len * limbs
-            for j in range(j_len):
-                m_U0hatTPreFFT = np.zeros(m_U0hatTPreFFT_len, dtype=np.uint64)
-                LHScnt = 0
-                for k in range(limbs):
-                    for l in range(mx_len):
-                        m_U0hatTPreFFT[LHScnt] = context.m_U0hatTPreFFT_mx[RHScnt]
-                        LHScnt += 1
-                        RHScnt += 1
+#     if level_budget[0] == 1 and level_budget[1] == 1:
+#         pass
+#         # # todo: to be implemented, need to get from openfhe
+#         # precom.m_U0Pre = [None] * LTMatrix_Row
+#         # precom.m_U0hatTPre = [None] * LTMatrix_Row
+#         # for i in range(LTMatrix_Row):
+#         #     # precom.m_U0hatTPre
+#         #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
+#         #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
+#         #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
+#         #
+#         #     # precom.m_U0Pre
+#         #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
+#         #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
+#         #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
+#     else:
+#         RHScnt = 0
+#         precom.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
+#         cnt = 0
+#         for i in range(0, m_U0hatTPreFFT_dim1):
+#             j_len = m_U0hatTPreFFT_dim2[i]
+#             limbs = m_U0hatTPreFFT_limbs[i]
+#             m_U0hatTPreFFT_len = mx_len * limbs
+#             for j in range(j_len):
+#                 m_U0hatTPreFFT = np.zeros(m_U0hatTPreFFT_len, dtype=np.uint64)
+#                 LHScnt = 0
+#                 for k in range(limbs):
+#                     for l in range(mx_len):
+#                         m_U0hatTPreFFT[LHScnt] = context.m_U0hatTPreFFT_mx[RHScnt]
+#                         LHScnt += 1
+#                         RHScnt += 1
 
-                m_U0hatTPreFFT = torch.tensor(
-                    m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
-                )
-                precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
-                                                        context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
-                cnt+=1
+#                 m_U0hatTPreFFT = torch.tensor(
+#                     m_U0hatTPreFFT, dtype=torch.uint64, device="cuda"
+#                 )
+#                 precom.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
+#                                                         context.m_U0hatTPreFFT_scaling_factor[cnt], 1)
+#                 cnt+=1
 
-        cnt=0
-        RHScnt = 0
-        precom.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
-        for i in range(m_U0PreFFT_dim1):
-            j_len = m_U0PreFFT_dim2[i]
-            limbs = m_U0PreFFT_limbs[i]
-            m_U0PreFFT_len = mx_len * limbs
-            for j in range(j_len):
-                m_U0PreFFT = np.zeros(m_U0PreFFT_len, dtype=np.uint64)
-                LHScnt = 0
-                for k in range(limbs):
-                    for l in range(mx_len):
-                        m_U0PreFFT[LHScnt] = context.m_U0PreFFT_mx[RHScnt]
-                        LHScnt += 1
-                        RHScnt += 1
-                m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
-                precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
-                                                    context.m_U0PreFFT_scaling_factor[cnt], 1)
-                cnt+=1
+#         cnt=0
+#         RHScnt = 0
+#         precom.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
+#         for i in range(m_U0PreFFT_dim1):
+#             j_len = m_U0PreFFT_dim2[i]
+#             limbs = m_U0PreFFT_limbs[i]
+#             m_U0PreFFT_len = mx_len * limbs
+#             for j in range(j_len):
+#                 m_U0PreFFT = np.zeros(m_U0PreFFT_len, dtype=np.uint64)
+#                 LHScnt = 0
+#                 for k in range(limbs):
+#                     for l in range(mx_len):
+#                         m_U0PreFFT[LHScnt] = context.m_U0PreFFT_mx[RHScnt]
+#                         LHScnt += 1
+#                         RHScnt += 1
+#                 m_U0PreFFT = torch.tensor(m_U0PreFFT, dtype=torch.uint64, device="cuda")
+#                 precom.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
+#                                                     context.m_U0PreFFT_scaling_factor[cnt], 1)
+#                 cnt+=1
 
 
 
 def BootstrapTest_N65536L26lB44(
-    logN=14,
-    logSlots=12,
+    logN=16,
+    logSlots=15,
     maxLevelsRemaining=3,
-    levelBudget=[2, 2],
+    levelBudget=[4, 4],
     dnum=3,
     dcrtBits=59,
     firstMod=60,
     approxModDepth=9,
-    rescaleTech = "FLEXIBLEAUTO"# "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    save_dir="torch/fhe/data/"
+
 ):
-    load_from_file = False
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    force_update_context = False
+    # Force update the context
+    if force_update_context:
+        gen_contexts(
+                logN=logN,
+                logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+                maxLevelsRemaining=maxLevelsRemaining,
+                levelBudget=levelBudget,
+                dnum=dnum,
+                dcrtBits=dcrtBits,
+                firstMod=firstMod,
+                approxModDepth=approxModDepth,
+                rotate_index=[],
+                secretKeyDist="UNIFORM_TERNARY",
+                rescaleTech=rescaleTech,
+                save_dir=save_dir
+            )
+
+    cryptoContext, openfhe_context = utils.try_load_context(logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget,
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            "UNIFORM_TERNARY",
+            rescaleTech,
+            save_dir=save_dir)
+
+
     dim1 = [0, 0]
-    if load_from_file:
-        save_path = "torch/fhe/data/{}.pkl".format(rescaleTech)
-        cryptoContext, openfhe_context = utils.load_context(save_path)
 
-    else:
-        openfhe_context, cryptoContext = client.gen_contexts(
-            logN=logN,
-            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
-            maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget=levelBudget,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            approxModDepth=approxModDepth,
-            rotate_index=[],
-            secretKeyDist="UNIFORM_TERNARY",
-            rescaleTech=rescaleTech,
-            dim1 = dim1,
-        )
-
-        save_path="torch/fhe/data/{}.pkl".format(cryptoContext.rescaleTech)
-        utils.save_context(cryptoContext, openfhe_context, save_path)
-        cryptoContext, _ = utils.load_context(save_path)
-
-    eval_bootstrap_setup(
-        cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
-    )
+    # eval_bootstrap_setup(
+    #     cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
+    # )
 
     # Test the correctness of the bootstrapping
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x)
-    cipher.cv[0] = cipher.cv[0][:2]
-    cipher.cv[1] = cipher.cv[1][:2]
-    cipher.cur_limbs = 2
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
-    after_boot = openfhe_context.decrypt(result)
-    after_boot = after_boot.cpu().numpy().reshape(-1)
-    print(after_boot[:10])
-    x = x.cpu().numpy().reshape(-1)
-    if(np.any(np.abs(after_boot - x) > 3e-2)):
-        print("Error is too large!")
-        print("Error is too large!")
-        print("Error is too large!")
+    openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
+        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_N65536L26lB44: Test passed!")
+
     else:
-        print("BootstrapTest_N65536L26lB44: Test passed!")
-        print("BootstrapTest_N65536L26lB44: Test passed!")
-        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_N65536L26lB44: Test failed!")
+        print("BootstrapTest_N65536L26lB44: Test failed!")
+        print("BootstrapTest_N65536L26lB44: Test failed!")
+
+    exit()
 
     measure_execution_time = True
     if measure_execution_time:

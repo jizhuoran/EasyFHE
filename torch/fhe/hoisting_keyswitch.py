@@ -48,10 +48,10 @@ def eval_fast_rotation_ext(ciphertext, digits, index, add_first, cryptoContext):
     return Cipher([cv0, cv1], curr_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
 
 # @profile_python_function
-def key_switch_down(sumbxmult, sumaxmult, curr_limbs, scaling_factor, noise_deg, slots, cryptoContext):
-    res_bx = F.cv_moddown(sumbxmult, curr_limbs, cryptoContext)
-    res_ax = F.cv_moddown(sumaxmult, curr_limbs, cryptoContext)
-    return Cipher([res_bx, res_ax], curr_limbs, scaling_factor, noise_deg, slots)
+def key_switch_down(ciphertext, cryptoContext):
+    res_bx = F.cv_moddown(ciphertext.cv[0], ciphertext.cur_limbs, cryptoContext)
+    res_ax = F.cv_moddown(ciphertext.cv[1], ciphertext.cur_limbs, cryptoContext)
+    return Cipher([res_bx, res_ax], ciphertext.cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
 
 def eval_fast_rotation(ciphertext, index, digits, cryptoContext):
     if index == 0:
@@ -65,9 +65,8 @@ def eval_fast_rotation(ciphertext, index, digits, cryptoContext):
 
     # EvalFastKeySwitchCore = InnerProduct + ModDown
     sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, cur_limbs, cryptoContext)
-    result = key_switch_down(sumbxmult, sumaxmult,
-                             cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots,
-                             cryptoContext)
+    sumMult = Cipher([sumbxmult, sumaxmult], ciphertext.cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
+    result = key_switch_down(sumMult, cryptoContext)
     # post add after ks
     result.cv[0] = F.cv_add(ciphertext.cv[0], result.cv[0], cryptoContext.moduliQ_cuda, cur_limbs)
 

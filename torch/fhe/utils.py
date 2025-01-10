@@ -1,5 +1,7 @@
-import time
+import time, os, pickle
+import numpy as np
 from .client import client as client
+from .client.gen_context import gen_contexts
 from .context import *
 
 # Global dictionary to accumulate execution time for each function
@@ -40,15 +42,70 @@ def profile_pytorch_function(func):
 
     return wrapper
 
+def round_half_away_from_zero(number, ndigits=0):
+    multiplier = 10 ** ndigits
+    if number > 0:
+        return math.floor(number * multiplier + 0.5) / multiplier
+    elif number < 0:
+        return math.ceil(number * multiplier - 0.5) / multiplier
+    else:
+        return 0.0
 
-def save_context(cryptoContext, openfhe_context, path):
-    with open(path, 'wb') as file:
-        pickle.dump((cryptoContext.Serialize(), openfhe_context.Serialize()), file)
+def try_load_context(logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget,
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+            save_dir):
+
+    load_path = (
+        save_dir
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            logSlots,
+            maxLevelsRemaining,
+            levelBudget[0],
+            levelBudget[1],
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
+
+    if not os.path.exists(load_path):
+        gen_contexts(
+            logN=logN,
+            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+            maxLevelsRemaining=maxLevelsRemaining,
+            levelBudget=levelBudget,
+            dnum=dnum,
+            dcrtBits=dcrtBits,
+            firstMod=firstMod,
+            approxModDepth=approxModDepth,
+            rotate_index=[],
+            secretKeyDist="UNIFORM_TERNARY",
+            rescaleTech=rescaleTech,
+            save_dir=save_dir
+        )
+
+    with open(load_path, 'rb') as file:
+        gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
 
-def load_context(path):
-    with open(path, 'rb') as file:
-        cryptoContext_byte, openfhe_context_byte = pickle.load(file)
-    openfhe_context = client.OpenFHEContext.Deserialize(openfhe_context_byte)
-    cryptoContext = Context.Deserialize(cryptoContext_byte)
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    cryptoContext = Context(BsContextMembers, gpufheMembers)
+
     return cryptoContext, openfhe_context
+
+def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
+    gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
+    openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
+    return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
