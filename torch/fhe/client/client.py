@@ -1,5 +1,3 @@
-
-
 from . import openfhe as openfhe
 import torch
 from .. import ciphertext as Cipher
@@ -42,13 +40,18 @@ class OpenFHEContext:
             ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
             ptx.SetLength(slots)
             data = ptx.GetVectorOfData()
-            cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data]
+            cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
             # return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg, ptx.GetSlots()) #todo: can be used after refactor Plaintext in ciphertext.py
             return Plaintext(cv, cv[0].shape[1], ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
 
 
-    def encrypt(self, x, scale_deg = 1, level = 0):
+    def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
+        if slots is not None:
+            ptx.SetLength(slots)
+        else: #todo: if input slots > len(x), do we need to fill with zeros
+            slots = len(x)
+            ptx.SetLength(slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
