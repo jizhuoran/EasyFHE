@@ -1018,6 +1018,19 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     
     return ctxtDec
 
+def homo_bootstrap(cipher, L0, slots, cryptoContext):
+    if slots != cipher.slots:
+        cp_slots = cipher.slots
+        cipher.slots = slots #todo: see if we can remove this
+        result = eval_bootstrap(cipher, L0, slots, cryptoContext)
+        cipher.slots = cp_slots
+    else:
+        result = eval_bootstrap(cipher, L0, cipher.slots, cryptoContext)
+
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
+        result = homo_ops.homo_rescale(result, result.noise_deg-1, cryptoContext)
+
+    return result
 
 # def eval_bootstrap_setup(context, level_budget, dim1, numslots, correction_factor):
 
