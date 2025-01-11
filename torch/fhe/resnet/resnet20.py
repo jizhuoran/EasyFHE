@@ -2,8 +2,9 @@ from ensurepip import bootstrap
 
 from torch.fhe import homo_ops
 from torch.fhe import hoisting_keyswitch
-from torch.fhe.bootstrapping import eval_bootstrap
+from torch.fhe.bootstrapping import homo_bootstrap
 from torch.fhe.ciphertext import Cipher
+from torch.fhe.example.run_test import openfhe_context
 from torch.onnx.symbolic_opset9 import clone
 import numpy as np
 import os
@@ -59,7 +60,8 @@ def mask_mod(n,cur_limbs,custom_val,cryptoContext):
             vec.append(0)
     return
     #Todo:encode
-    #return encode(vec, level, global_num_slots);
+    return encode(vec, level, global_num_slots);
+    return openfhe_context.encode()
 
 
 def mask_scecond_n(n,cur_limbs,cryptoContext):
@@ -695,35 +697,35 @@ def layer1(input,cryptoContext):
     #todo: yhh: 不确定slots的，可以看一下原始代码里，下面一行if(verbose>2) 中下面prt中slots的输入值，来推测上面prt的值
     #todo: 这里传slots=(1<<14)就行
     #todo：确认一下，不应该传log值
-    res1=eval_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res1=homo_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scale)
 
     scale=0.52
     res1=convbn(res1,1,2,scale,cryptoContext)
     res1=homo_ops.homo_add(res1,homo_ops.homo_mul_scalar_double(input,scale,cryptoContext),cryptoContext)
-    res1=eval_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res1=homo_bootstrap(res1,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scale)
 
     scale=0.55
     res2 = convbn(res1, 2, 1, scale, cryptoContext)
-    res2 = eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2 = relu(res2, scale)
 
     scale=0.36
     res2 = convbn(res2, 2, 2, scale, cryptoContext)
     res2=homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
-    res2 = eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2 = relu(res2, scale)
 
     scale=0.63
     res3 = convbn(res2, 3, 1, scale, cryptoContext)
-    res3 = eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3 = relu(res3, scale)
 
     scale = 0.42
     res3 = convbn(res2, 3, 2, scale, cryptoContext)
     res3 = homo_ops.homo_add(res3, homo_ops.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext)
-    res3 = eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3 = relu(res3, scale)
 
     return res3
@@ -731,7 +733,7 @@ def layer1(input,cryptoContext):
 def layer2(input,cryptoContext):
     scaleSx=0.57
     scaleDx=0.40
-    boot_in=eval_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    boot_in=homo_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1sx=convbn1632sx(boot_in,4,1,scaleSx,cryptoContext)
     res1dx=convbn1632dx(boot_in,4,1,scaleDx,cryptoContext)
 
@@ -749,35 +751,35 @@ def layer2(input,cryptoContext):
     #Todo:    controller.clear_rotation_keys();
     #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
     global_num_slots=8192
-    #fullpackSx=eval_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    #fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     #fullpackSx=relu(fullpackSx,scaleSx)
     fullpackSx=convbn2(fullpackSx,4,2,scaleDx,cryptoContext)
     res1=homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
-    res1=eval_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res1=homo_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scaleDx)
 
 
 
     scale=0.76
     res2=convbn2(res1,5,1,scale,cryptoContext)
-    res2=eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2=homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2=relu(res2,scale)
 
     scale=0.37
     res2=convbn2(res2,5,2,scale,cryptoContext)
     res2=homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
-    res2 = eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2 = relu(res2, scale)
 
     scale=0.63
     res3=convbn2(res2,6,1,scale,cryptoContext)
-    res3=eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3=homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3=relu(res3,scale)
 
     scale=0.25
     res3=convbn2(res3,6,2,scale,cryptoContext)
     res3=homo_ops.homo_add(res3,homo_ops.homo_mul_scalar_double(res2,scale,cryptoContext),cryptoContext)
-    res3 = eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3 = relu(res3, scale)
 
     return res3
@@ -786,7 +788,7 @@ def layer2(input,cryptoContext):
 def layer3(input,cryptoContext):
     scaleSx=0.63
     scaleDx=0.40
-    boot_in=eval_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    boot_in=homo_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1sx=convbn3264sx(boot_in,7,1,scaleSx,cryptoContext)
     res1dx=convbn3264dx(boot_in,7,1,scaleDx,cryptoContext)
 
@@ -804,37 +806,37 @@ def layer3(input,cryptoContext):
     #Todo:    controller.clear_rotation_keys();
     #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
     global_num_slots=4096
-    fullpackSx=eval_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     fullpackSx=relu(fullpackSx,scaleSx)
     fullpackSx=convbn3(fullpackSx,7,2,scaleDx,cryptoContext)
     res1=homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
-    res1=eval_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res1=homo_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res1=relu(res1,scaleDx)
 
 
 
     scale=0.57
     res2=convbn3(res1,8,1,scale,cryptoContext)
-    res2=eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2=homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2=relu(res2,scale)
 
     scale=0.33
     res2=convbn3(res2,8,2,scale,cryptoContext)
     res2=homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
-    res2 = eval_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res2 = relu(res2, scale)
 
     scale=0.69
     res3=convbn3(res2,9,1,scale,cryptoContext)
-    res3=eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3=homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3=relu(res3,scale)
 
     scale=0.1
     res3=convbn3(res3,9,2,scale,cryptoContext)
     res3=homo_ops.homo_add(res3,homo_ops.homo_mul_scalar_double(res2,scale,cryptoContext),cryptoContext)
-    res3 = eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     res3 = relu(res3, scale)
-    res3 = eval_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     return res3
 
 
