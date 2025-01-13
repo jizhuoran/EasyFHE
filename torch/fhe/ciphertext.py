@@ -46,6 +46,9 @@ class Cipher:
         return True
 
 #todo: remove default values of noise_deg and scaling_factor, should be set after encoding
+#todo: remove N
+#todo: rename l to cur_limbs
+#todo: put `slots` to the end
 class Plaintext:
     def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
         self.mx = mx

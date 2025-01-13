@@ -1,9 +1,10 @@
-
-
 from . import openfhe as openfhe
 import torch
 from .. import ciphertext as Cipher
 import numpy as np
+
+from ..ciphertext import Plaintext
+
 
 class OpenFHEContext:
     def __init__(self, content_map):
@@ -20,13 +21,37 @@ class OpenFHEContext:
         openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
         openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
-    def encode(self, x):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-        ptx.Encode() #todo: check if this is necessary
-        return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
+    def encode(self, x, level=None, scale_deg=None, slots=None):
+        if not ((scale_deg is None and level is None and slots is None) or
+                (scale_deg is not None and level is not None and slots is not None)):
+            # 输出警告
+            print("Warning: scale_deg, level, and slots must either all be None or all not None.")
 
-    def encrypt(self, x, scale_deg = 1, level = 0):
+        if level is None and scale_deg is None and slots is None:
+            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
+            ptx.Encode()
+            return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
+        else:
+            # example
+            # x = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0]
+            # encoded_length = len(x)
+            # ptxt = cryptocontext.MakeCKKSPackedPlaintext(x,1,depth-1)
+            # ptxt.SetLength(encoded_length)
+            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
+            ptx.SetLength(slots)
+            data = ptx.GetVectorOfData()
+            cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
+            # return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg, ptx.GetSlots()) #todo: can be used after refactor Plaintext in ciphertext.py
+            return Plaintext(cv, cv[0].shape[1], ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
+
+
+    def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
+        if slots is not None:
+            ptx.SetLength(slots)
+        else: #todo: if input slots > len(x), do we need to fill with zeros
+            slots = len(x)
+            ptx.SetLength(slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]

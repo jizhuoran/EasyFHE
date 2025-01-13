@@ -6,6 +6,7 @@ from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
+from .client.bs_context import eval_bootstrap_setup
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
 
@@ -144,36 +145,35 @@ def adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
     return rct1, rct2
 
 
-# AdjustForAddOrSubInPlace in rns-leveledshe.cpp
+# AdjustForAddOrSubInPlace in rns-leveledshe.cpp #todo: to check!!
 def adjust_for_add_or_sub(in0, in1, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
     if rescaleTech == "FIXEDMANUAL":
-        #fixme: function `adjust_levels` needs to support when input has class Plaintext!
-        # or do some modifications here!
-        rct1,rct2 = adjust_levels(in0, in1, cryptoContext)
-        if isinstance(in0, Cipher) and isinstance(in1, Cipher):
-            return rct1, rct2
+        # function `adjust_levels` doesnt change memory, therefore its fine with a ciphertext morphed form plaintext
+        in0, in1 = adjust_levels(in0, in1, cryptoContext)
+        if len(in0.cv) == len(in1.cv):
+            return in0, in1
 
         scFactor = cryptoContext.GetScalingFactorReal(cryptoContext.L) #openfhe default value is 0, here transfer to the max value of #limb
         if scFactor == 0.0:
             raise ValueError("Unsupported scaling factor")
 
-        if isinstance(in0, Plaintext):
-            ptxt = in0.mx
+        if len(in0.cv)==1:
+            ptxt = in0.cv[0]
             ptxtDepth = in0.noise_deg
             ctxtDepth = in1.noise_deg
             sizeQl = in1.cur_limbs
             moduli = cryptoContext.moduliQ[:sizeQl]
             ptxtIndex = 0
-        elif isinstance(in1, Plaintext):
-            ptxt = in1.mx
+        elif len(in1.cv)==1:
+            ptxt = in1.cv[0]
             ptxtDepth = in1.noise_deg
             ctxtDepth = in0.noise_deg
             sizeQl = in0.cur_limbs
             moduli = cryptoContext.moduliQ[:sizeQl]
             ptxtIndex = 1
 
-        if isinstance(in0, Plaintext) or isinstance(in1, Plaintext): #todo: this branch is not tested
+        if len(in0.cv)==1 or len(in1.cv)==1: #todo: this branch is not tested
             # Bring to same depth if not already same
             if ptxtDepth < ctxtDepth:
                 diffDepth = ctxtDepth - ptxtDepth
@@ -187,18 +187,18 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
                 )   #fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
                 if ptxtIndex == 0:
-                    in0.mx = ptxt # todo: check if correctly assigned
+                    in0.cv[0] = ptxt # todo: check if correctly assigned
                     in0.noise_deg = ctxtDepth
                 else:
-                    in1.mx = ptxt # todo: check if correctly assigned
+                    in1.cv[0] = ptxt # todo: check if correctly assigned
                     in1.noise_deg = ctxtDepth
             elif ptxtDepth > ctxtDepth:
                 raise ValueError("plaintext cannot be encoded at a larger depth than that of the ciphertext.")
 
     else:
-        rct1,rct2 = adjust_levels_and_depth(in0, in1, cryptoContext)
+        in0, in1 = adjust_levels_and_depth(in0, in1, cryptoContext)
 
-    return rct1, rct2
+    return in0, in1
 
 #todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
@@ -601,3 +601,23 @@ def homo_rotate(cipher, index, cryptoContext):
 
 def homo_conjugate(cipher, cryptoContext):
     return homo_rotate(cipher, 2*cryptoContext.N-1, cryptoContext)
+
+def homo_mul_pt(cipher, pt, cryptoContext):
+    cur_limbs = cipher.cur_limbs
+    if cipher.slots != pt.slots:
+        warnings.warn(f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
+                      Warning)
+    if cipher.cur_limbs != pt.l:
+        warnings.warn(f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
+                      Warning)
+    moduli = cryptoContext.moduliQ_cuda
+    mu = cryptoContext.q_mu_cuda,
+    cv0 = F.cv_mul(cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs)
+    cv1 = F.cv_mul(cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs)
+    return Cipher([cv0, cv1], cur_limbs, cipher.scaling_factor*pt.scaling_factor, cipher.noise_deg+pt.noise_deg, cipher.slots)
+
+def homo_add_pt(cipher, pt, cryptoContext):
+    ctmorphed = Cipher([pt.mx.reshape(-1, cryptoContext.N)], pt.l, pt.scaling_factor, pt.noise_deg, pt.slots) #MorphPlaintext in openfhe
+    res0, res1 = adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
+    res0.cv[0] = F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, cipher.cur_limbs)
+    return res0, res1
