@@ -15,7 +15,7 @@ dnum = 3
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
-rescaleTech = "FIXEDMANUAL"
+rescaleTech = "FLEXIBLEAUTO"
 path = "data/"
 
 cryptoContext, openfhe_context = utils.try_load_context(
