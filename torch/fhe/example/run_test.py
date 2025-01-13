@@ -7,7 +7,7 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
 logN = 14
-logSlots = 6
+logSlots = 13
 maxLevelsRemaining = 3
 levelBudget0 = 4
 levelBudget1 = 4
