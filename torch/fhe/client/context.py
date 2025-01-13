@@ -10,7 +10,7 @@ class __FOR_SAVE_ONLY_Context:
     def __init__(
         self,
         logN,
-        logSlots,
+        logSlots_list,
         logq0,  # todo: rename to firstMod
         logqi,  # todo: rename to dcrtBits
         logp,  # todo: rename to specialMod
@@ -22,8 +22,8 @@ class __FOR_SAVE_ONLY_Context:
         rootsQ=None,
         rootsP=None,
         MULT_SWK=None,
-        ROT_SWK=None,
-        BOOT_KEY=None,
+        rot_swk_map=None,
+        boot_key_map=None,
         secretKeyDist=None,
         rescaleTech=None,
         dim1=None,
@@ -31,14 +31,16 @@ class __FOR_SAVE_ONLY_Context:
         sigma=32,
     ):
         self.levelBudget = levelBudget
-        self.logSlots = logSlots
+        self.logSlots_list = logSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
-        self.BsContext = None
+        # self.BsContext = None
+        self.BsContext_map = {}
         self.logp = logp
         # self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
-        self.left_rot_key_map = {}
+        # self.left_rot_key_map = {}
+        self.slots_left_rot_key_map = {}
         self.key_map = None
         self.correctionFactor = 0
 
@@ -64,7 +66,7 @@ class __FOR_SAVE_ONLY_Context:
         self.qRootScalePowsInv = [[] for _ in range(L)]
         self.qRootPowsInv = [[] for _ in range(L)]
         # self.auto_index = {} #todo: to suppor negative input?
-        self.precompute_auto_map = {}
+        self.slots_precompute_auto_map = {}
         bnd = 1
         cnt = 1
         if moduliQ is None and rootsQ is None:
@@ -779,46 +781,41 @@ class __FOR_SAVE_ONLY_Context:
 
         swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
         swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
-
-        # todo: move to bscontext in the future
-        self.m_U0hatTPreFFT_mx = BOOT_KEY["C2S"]
-        self.m_U0PreFFT_mx = BOOT_KEY["S2C"]
-        self.m_U0hatTPreFFT_dim = BOOT_KEY["C2S_dim"]
-        self.m_U0PreFFT_dim = BOOT_KEY["S2C_dim"]
-        self.m_U0hatTPreFFT_limbs = BOOT_KEY["C2S_limbs"]
-        self.m_U0PreFFT_limbs = BOOT_KEY["S2C_limbs"]
-        self.m_U0hatTPreFFT_scaling_factor = BOOT_KEY["U0hatTPreFFTScalingFactor"]
-        self.m_U0PreFFT_scaling_factor = BOOT_KEY["U0PreFFTScalingFactor"]
-
         key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
         key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
         self.key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
-        for i, bx, ax in ROT_SWK:
-            self.left_rot_key_map[str(i)] = [
-                np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
-                np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
-            ]
+        for log_slots, ROT_SWK in rot_swk_map.items():
+            left_rot_key_map = {}
+            precompute_auto_map = {}
+            for i, bx, ax in ROT_SWK:
+                left_rot_key_map[str(i)] = [
+                    np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
+                    np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
+                ]
+            for key, _ in left_rot_key_map.items():
+                precompute_auto_map[int(key)] = self.compute_auto_map(
+                    int(key), self.N
+                )
+            self.slots_left_rot_key_map[log_slots] = left_rot_key_map
+            self.slots_precompute_auto_map[log_slots] = precompute_auto_map
 
         # init bs_context
-        self.BsContext = BsContext(
-            self.N,
-            self.K,
-            self.moduliQ,
-            self.moduliP,
-            self.q_mu,
-            self.p_mu,
-            self.levelBudget,
-            dim1,
-            (1 << logSlots),
-            0,
-            self.rescaleTech,
-            self.secretKeyDist,
-        )
-
-        for key, _ in self.left_rot_key_map.items():
-            self.precompute_auto_map[int(key)] = self.BsContext.compute_auto_map(
-                int(key), self.N
+        for logSlots in self.logSlots_list:
+            self.BsContext_map[str(logSlots)] = BsContext(
+                self.N,
+                self.K,
+                self.moduliQ,
+                self.moduliP,
+                self.q_mu,
+                self.p_mu,
+                self.levelBudget,
+                dim1,
+                (1 << logSlots),
+                0,
+                self.rescaleTech,
+                self.secretKeyDist,
+                boot_key_map[str(logSlots)]
             )
 
         # compute auto index map
@@ -831,6 +828,30 @@ class __FOR_SAVE_ONLY_Context:
         #     for j in i:
         #         if j not in self.auto_index:
         #             self.auto_index[j] = self.find_auto_index(j, self.N << 1)
+
+    def compute_auto_map(self, k, N):
+        def reverse_bits(num, num_bits):
+            """Reverses the bits of a number."""
+            rev = 0
+            for i in range(num_bits):
+                rev = (rev << 1) | (num & 1)
+                num >>= 1
+            return rev
+
+        """computes the automorphism map"""
+        n = N
+        m = n << 1  # cyclOrder
+        logm = round(np.log2(m))
+        logn = round(np.log2(n))
+        res = np.zeros(n, dtype=np.int32)
+        for j in range(n):
+            j_tmp = (j << 1) + 1
+            idx = ((j_tmp * k) - (((j_tmp * k) >> logm) << logm)) >> 1
+            j_rev = reverse_bits(j, logn)
+            idx_rev = reverse_bits(idx, logn)
+            res[j_rev] = idx_rev
+
+        return np.array(res)
 
     def find_auto_index(self, i):
         def inv_mod(

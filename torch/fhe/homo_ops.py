@@ -6,7 +6,7 @@ from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
-from .client.bs_context import eval_bootstrap_setup
+# from .client.bs_context import eval_bootstrap_setup
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
 

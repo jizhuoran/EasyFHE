@@ -41,22 +41,22 @@ class Context:
         self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
         self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
         self.key_map = get_item("key_map", gpufhe_content_map)
-        self.left_rot_key_map = get_item("left_rot_key_map", gpufhe_content_map)
+        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
-        self.logSlots = get_item("logSlots", gpufhe_content_map)
+        self.logSlots_list = get_item("logSlots_list", gpufhe_content_map)
         self.auxModSize = get_item("logp", gpufhe_content_map)
         self.dcrtBits = get_item("logqi", gpufhe_content_map)
         #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
-        self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
-        self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
-        self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
-        self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
-        self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
-        self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
-        self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
-        self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
+        # self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
+        # self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
+        # self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
+        # self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
         self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
         self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
@@ -85,7 +85,7 @@ class Context:
         self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
         self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
-        self.precompute_auto_map = get_item("precompute_auto_map", gpufhe_content_map)
+        self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
         self.prod_inv_shoup_moddown = get_item("prod_inv_shoup_moddown", gpufhe_content_map)
@@ -115,10 +115,14 @@ class Context:
         self.switch_modulus_out = get_item("switch_modulus_out", gpufhe_content_map)
         self.swk_ax_cuda = get_item("swk_ax_cuda", gpufhe_content_map)
         self.swk_bx_cuda = get_item("swk_bx_cuda", gpufhe_content_map)
-        
-        _BsContext = BsContext(BsContext_content_map)
-        self.BsContext = _BsContext
+        self.BsContext_map = {}
+        for logSlots in self.logSlots_list:
+            _BsContext = BsContext(BsContext_content_map[str(logSlots)])
+            self.BsContext_map[str(logSlots)] = _BsContext
         self.to_cuda()
+        self.BsContext = None
+        self.left_rot_key_map = {}
+        self.precompute_auto_map = {}
 
 
     def to_cuda(self):
@@ -157,24 +161,24 @@ class Context:
 
         self.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in self.key_map]
 
-        for key, value in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-        for key, value in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+        # for key, value in self.left_rot_key_map.items():
+        #     self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+        # for key, value in self.precompute_auto_map.items():
+        #     self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
 
-        for key, value in self.BsContext.QplusP_map.items():
-            self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-        for key, value in self.BsContext.QmuplusPmu_map.items():
-            self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        # for key, value in self.BsContext.QplusP_map.items():
+        #     self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        # for key, value in self.BsContext.QmuplusPmu_map.items():
+        #     self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
 
         
-        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
-            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
-                self.BsContext.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
-
-        for i in range(len(self.BsContext.m_U0PreFFT)):
-            for j in range(len(self.BsContext.m_U0PreFFT[i])):
-                self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")            
+        # for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+        #     for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+        #         self.BsContext.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+        #
+        # for i in range(len(self.BsContext.m_U0PreFFT)):
+        #     for j in range(len(self.BsContext.m_U0PreFFT[i])):
+        #         self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!

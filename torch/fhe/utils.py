@@ -52,7 +52,7 @@ def round_half_away_from_zero(number, ndigits=0):
         return 0.0
 
 def try_load_context(logN,
-            logSlots,
+            logSlots_list,
             maxLevelsRemaining,
             levelBudget,
             dnum,
@@ -67,7 +67,7 @@ def try_load_context(logN,
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
-            logSlots,
+            logSlots_list,
             maxLevelsRemaining,
             levelBudget[0],
             levelBudget[1],
@@ -83,7 +83,7 @@ def try_load_context(logN,
     if not os.path.exists(load_path):
         gen_contexts(
             logN=logN,
-            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+            logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
             maxLevelsRemaining=maxLevelsRemaining,
             levelBudget=levelBudget,
             dnum=dnum,
@@ -109,3 +109,9 @@ def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
+
+def load_rotation_keys(context, logSlots):
+    for key, value in context.slots_left_rot_key_map[str(logSlots)].items():
+        context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+    for key, value in context.slots_precompute_auto_map[str(logSlots)].items():
+        context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")

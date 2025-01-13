@@ -324,9 +324,10 @@ def cipher_mult_by_monomial_and_equal(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
+def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
+    slots = 1<<logslots
     # cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
     moduliQ = cryptoContext.moduliQ
@@ -349,7 +350,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
     correction = (
-        cryptoContext.correctionFactor - deg
+            precom.correctionFactor - deg
     )  # fixme: originally a uint32_t in OpenFHE
     post = 2**deg
     pre = 1.0 / post
@@ -472,10 +473,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
-
-
-
-
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
@@ -499,10 +496,6 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
-
-
-
-
 
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
@@ -666,8 +659,8 @@ def homo_bootstrap(cipher, L0, slots, cryptoContext):
 
 
 def BootstrapTest_N65536L26lB44(
-    logN=16,
-    logSlots=15,
+    logN=14,
+    logSlots_list=[11],
     maxLevelsRemaining=3,
     levelBudget=[4, 4],
     dnum=3,
@@ -686,7 +679,7 @@ def BootstrapTest_N65536L26lB44(
     if force_update_context:
         gen_contexts(
                 logN=logN,
-                logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+                logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
                 maxLevelsRemaining=maxLevelsRemaining,
                 levelBudget=levelBudget,
                 dnum=dnum,
@@ -700,7 +693,7 @@ def BootstrapTest_N65536L26lB44(
             )
 
     cryptoContext, openfhe_context = utils.try_load_context(logN,
-            logSlots,
+            logSlots_list,
             maxLevelsRemaining,
             levelBudget,
             dnum,
@@ -711,6 +704,8 @@ def BootstrapTest_N65536L26lB44(
             rescaleTech,
             save_dir=save_dir)
 
+    #choose
+
 
     dim1 = [0, 0]
 
@@ -720,11 +715,14 @@ def BootstrapTest_N65536L26lB44(
 
     # Test the correctness of the bootstrapping
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
+    x = np.array([values[i % len(values)] for i in range((1<<logSlots_list[0]))])
     x = torch.tensor(x, device="cuda")
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
 
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots_list[0])]
+    cryptoContext.BsContext.to_cuda()
+    utils.load_rotation_keys(cryptoContext, logSlots_list[0])
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
     openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
 
     is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
@@ -743,7 +741,7 @@ def BootstrapTest_N65536L26lB44(
     measure_execution_time = True
     if measure_execution_time:
         start = time.time()
-        result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+        result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
         end = time.time()
         print("time", end - start)
 
@@ -766,7 +764,7 @@ def BootstrapTest_N65536L26lB44(
                 with_stack=True,
             ) as profiler:
                 # Start profiling specific functions with torch.profiler.record_function()
-                result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots),
+                result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots_list[0]),
                                         cryptoContext=cryptoContext)
 
             # Get the profiling results
@@ -774,6 +772,3 @@ def BootstrapTest_N65536L26lB44(
 
             # Print the profiling summary in a table format
             print(profiler_results.table(sort_by="self_cpu_time_total"))
-
-
-
