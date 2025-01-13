@@ -6,7 +6,7 @@ from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
-from .client.bs_context import eval_bootstrap_setup
+from .utils import check_meta_equal, check_cipher_len
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
 
@@ -54,12 +54,8 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
             rct2 = eval_mult_core(rct2, 1.0, cryptoContext)
     return rct1, rct2
 
-
-
-
-
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp #todo: to check!!
-def adjust_for_add_or_sub(in0, in1, cryptoContext):
+def _adjust_for_add_or_sub(in0, in1, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
     if rescaleTech == "FIXEDMANUAL":
         # function `_adjust_levels` doesnt change memory, therefore its fine with a ciphertext morphed form plaintext
@@ -117,24 +113,16 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
 #todo: write homo_level_reduce
 
-
-def cipher_add(in0, in1, cryptoContext):
-    assert in0.cur_limbs == in1.cur_limbs
-    if in0.slots != in1.slots:
-        warnings.warn(f"slots unequal! in0.slots = {in0.slots}, in1.slots = {in1.slots}",
-                      Warning)
+@check_meta_equal
+def _cipher_add(in0, in1, cryptoContext):
     cv = [
         F.cv_add(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
     ]
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
-
-def cipher_sub(in0, in1, cryptoContext):
-    assert in0.cur_limbs == in1.cur_limbs
-    if in0.slots != in1.slots:
-        warnings.warn(f"slots unequal! in0.slots = {in0.slots}, in1.slots = {in1.slots}",
-                      Warning)
+@check_meta_equal
+def _cipher_sub(in0, in1, cryptoContext):
     cv = [
         F.cv_sub(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
@@ -142,12 +130,8 @@ def cipher_sub(in0, in1, cryptoContext):
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
 
-def cipher_mul(in0, in1, cryptoContext):
-    assert len(in0.cv) == 2 and len(in1.cv) == 2
-    assert in0.cur_limbs == in1.cur_limbs
-    if in0.slots != in1.slots:
-        warnings.warn(f"slots unequal! in0.slots = {in0.slots}, in1.slots = {in1.slots}",
-                      Warning)
+@check_meta_equal
+def _cipher_mul(in0, in1, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0], in1.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
@@ -175,9 +159,8 @@ def cipher_mul(in0, in1, cryptoContext):
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
     return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg+in1.noise_deg, in0.slots)
 
-
-def cipher_square(in0, cryptoContext):
-    assert len(in0.cv) == 2
+@check_cipher_len
+def _cipher_square(in0, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0], in0.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
     )
@@ -195,9 +178,8 @@ def cipher_square(in0, cryptoContext):
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
     return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg + in0.noise_deg, in0.slots)
 
-
-def cipher_add_scalar(in0, scalar, cryptoContext):
-    assert len(in0.cv) == 2
+@check_cipher_len
+def _cipher_add_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
@@ -205,9 +187,8 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
     ]
     return Cipher(cv, in0.cur_limbs,in0.scaling_factor, in0.noise_deg, in0.slots)
 
-
-def cipher_sub_scalar(in0, scalar, cryptoContext):
-    assert len(in0.cv) == 2
+@check_cipher_len
+def _cipher_sub_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
@@ -217,8 +198,8 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
 
 #todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
 #todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
-def cipher_mul_scalar(in0, scalar, cryptoContext):
-    assert len(in0.cv) == 2
+@check_cipher_len
+def _cipher_mul_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
@@ -228,21 +209,18 @@ def cipher_mul_scalar(in0, scalar, cryptoContext):
     ]
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
-
-def cipher_neg(in0, cryptoContext):
+@check_cipher_len
+def _cipher_neg(in0, cryptoContext):
     cv = [F.cv_neg(cv0, cryptoContext.moduliQ_cuda, in0.cur_limbs) for cv0 in in0.cv]
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
-
 def homo_add(in0, in1, cryptoContext):
-    in0, in1 = adjust_for_add_or_sub(in0, in1, cryptoContext)
-    return cipher_add(in0, in1, cryptoContext)
-
+    in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
+    return _cipher_add(in0, in1, cryptoContext)
 
 def homo_sub(in0, in1, cryptoContext):
-    in0, in1 = adjust_for_add_or_sub(in0, in1, cryptoContext)
-    return cipher_sub(in0, in1, cryptoContext)
-
+    in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
+    return _cipher_sub(in0, in1, cryptoContext)
 
 def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
@@ -261,7 +239,7 @@ def homo_mul(in0, in1, cryptoContext):
     if in0.slots != in1.slots:
         warnings.warn(f"slots unequal! in0.slots = {in0.slots}, in1.slots = {in1.slots}",
                       Warning)
-    res = cipher_mul(in0, in1, cryptoContext)
+    res = _cipher_mul(in0, in1, cryptoContext)
     tmp = Cipher(
         F.cv_keyswitch(
             res.cv[2],
@@ -270,20 +248,20 @@ def homo_mul(in0, in1, cryptoContext):
             cryptoContext.swk_ax_cuda,
             cryptoContext,
         ),
-        cur_limbs=in0.cur_limbs,
-        scaling_factor=in0.scaling_factor*in1.scaling_factor,
-        noise_deg=in0.noise_deg+in1.noise_deg,
-        slots=in0.slots
+        cur_limbs=res.cur_limbs,
+        scaling_factor=res.scaling_factor,
+        noise_deg=res.noise_deg,
+        slots=res.slots
     )
     res.cv = res.cv[:2]
-    return cipher_add(res, tmp, cryptoContext)
+    return _cipher_add(res, tmp, cryptoContext)
 
 
 def homo_square(in0, cryptoContext):
     in0 = in0.clone()
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale(in0, 1, cryptoContext)
-    res = cipher_square(in0, cryptoContext)
+    res = _cipher_square(in0, cryptoContext)
     tmp = Cipher(
         F.cv_keyswitch(
             res.cv[2],
@@ -292,31 +270,30 @@ def homo_square(in0, cryptoContext):
             cryptoContext.swk_ax_cuda,
             cryptoContext,
         ),
-        cur_limbs=in0.cur_limbs,
-        scaling_factor=in0.scaling_factor * in0.scaling_factor,
-        noise_deg=in0.noise_deg*2,
-        slots=in0.slots
+        cur_limbs=res.cur_limbs,
+        scaling_factor=res.scaling_factor,
+        noise_deg=res.noise_deg,
+        slots=res.slots
     )
     res.cv = res.cv[:2]
-    return cipher_add(res, tmp, cryptoContext)
+    return _cipher_add(res, tmp, cryptoContext)
 
 def homo_rescale(ct, levels, cryptoContext):
-    ct1 = ct.clone()
-    if levels == 0: return ct1.clone()
+    assert levels == 1 or levels == 0 and "Only support these two cases"
+    if levels == 0: return ct.deep_copy()
 
-    curr_limbs = ct1.cur_limbs
-    for l in range(levels):
-        res0 = F.cv_drop_last_element_and_scale(ct1.cv[0], curr_limbs, l, cryptoContext)
-        res1 = F.cv_drop_last_element_and_scale(ct1.cv[1], curr_limbs, l, cryptoContext)
+    # ct1 = ct.clone()
 
-    curr_limbs -= levels
-    noise_deg = ct1.noise_deg-levels
-    scFactor = ct1.scaling_factor
     for l in range(levels):
-        modReduceFactor = float(cryptoContext.GetModReduceFactor(ct1.cur_limbs-1-l)) # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct1
+        res0 = F.cv_drop_last_element_and_scale(ct.cv[0], ct.cur_limbs, l, cryptoContext)
+        res1 = F.cv_drop_last_element_and_scale(ct.cv[1], ct.cur_limbs, l, cryptoContext)
+
+    scFactor = ct.scaling_factor
+    for l in range(levels):
+        modReduceFactor = cryptoContext.GetModReduceFactor(ct.cur_limbs-1-l) # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
         scFactor = scFactor/modReduceFactor
 
-    return Cipher([res0, res1], curr_limbs, scFactor, noise_deg, ct1.slots)
+    return Cipher([res0, res1], ct.cur_limbs-levels, scFactor, ct.noise_deg-levels, ct.slots)
 
 def cpp_round(_float, _len=0):
     i = int(_float)
@@ -402,15 +379,15 @@ def homo_add_scalar_double(ct, cnst, cryptoContext):
     return Cipher(res, ct.cur_limbs, ct.scaling_factor, ct.noise_deg, ct.slots)
 
 def homo_add_scalar(in0, scalar, cryptoContext):
-    return cipher_add_scalar(in0, scalar, cryptoContext)
+    return _cipher_add_scalar(in0, scalar, cryptoContext)
 
 #note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
 #fixme: do we accept scalar<0?
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     abs_scalar = abs(scalar)
-    res = cipher_mul_scalar(in0, abs_scalar, cryptoContext)
+    res = _cipher_mul_scalar(in0, abs_scalar, cryptoContext)
     if scalar < 0:
-        res = cipher_neg(res, cryptoContext)
+        res = _cipher_neg(res, cryptoContext)
     return res
 
 
@@ -483,7 +460,7 @@ def _get_element_for_eval_mult(cur_limbs, constant, cryptoContext):
     return factors.cuda()
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
-#todo: should merge this function with cipher_mul_scalar? or redesign interface
+#todo: should merge this function with _cipher_mul_scalar? or redesign interface
 def eval_mult_core(ciphertext, constant, cryptoContext):
     cur_limbs = ciphertext.cur_limbs
     factors = _get_element_for_eval_mult(cur_limbs, constant, cryptoContext)
@@ -540,6 +517,6 @@ def homo_mul_pt(cipher, pt, cryptoContext):
 
 def homo_add_pt(cipher, pt, cryptoContext):
     ctmorphed = Cipher([pt.mx.reshape(-1, cryptoContext.N)], pt.l, pt.scaling_factor, pt.noise_deg, pt.slots) #MorphPlaintext in openfhe
-    res0, res1 = adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
+    res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
     res0.cv[0] = F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, cipher.cur_limbs)
     return res0, res1
