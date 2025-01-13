@@ -295,13 +295,6 @@ def homo_rescale(ct, levels, cryptoContext):
 
     return Cipher([res0, res1], ct.cur_limbs-levels, scFactor, ct.noise_deg-levels, ct.slots)
 
-def cpp_round(_float, _len=0):
-    i = int(_float)
-    if isinstance(_float, float):
-        return i if ((_float - i) < 0.5) else i + 1
-    else:
-        return round(_float, _len)
-
 #todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
 def _get_element_for_eval_add_or_sub(ciphertext, constant, cryptoContext):
     cur_limbs = ciphertext.cur_limbs

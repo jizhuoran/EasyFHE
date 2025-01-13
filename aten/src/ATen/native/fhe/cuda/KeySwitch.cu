@@ -1797,11 +1797,12 @@ Tensor drop_last_element_scale_cuda(
     const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
-  auto res = to.clone();
+  auto res = at::empty_like(to);
+//   to.clone();
   res.resize_({(curr_limbs - 1) * param_degree});
 
   drop_last_element_scale_template(
-      from,
+      from.clone(),
       curr_limbs,
       l,
       level,
