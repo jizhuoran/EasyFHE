@@ -10,10 +10,8 @@ class Cipher:
     def clone(self):
         return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
 
-    def drop_axax(self):
-        assert len(self.cv) == 3
-        res, self.cv = self.cv[-1], self.cv[:-1]
-        return res
+    def drop_last_elements(self, num_levels):
+        self.cur_limbs -= num_levels
 
     def __repr__(self):
 
