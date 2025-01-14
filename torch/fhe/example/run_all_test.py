@@ -1,10 +1,6 @@
-import pickle, sys, os
-import numpy as np
+import sys, os
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-import torch
-import torch.fhe.bootstrapping as BS
-import torch.fhe.utils as utils
 import time, subprocess
 
 with open("result.txt", "w") as f:
@@ -12,7 +8,7 @@ with open("result.txt", "w") as f:
 
 start_time = time.time()
 #find all context in the directory
-path = "data/"
+path = "/home/public_data/openfhe_data/"
 for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and "GPU-FHE-CONTEXT" in context_file:
         print("Testing", context_file)
@@ -40,7 +36,7 @@ dcrtBits = int({})
 firstMod = int({})
 approxModDepth = int({})
 rescaleTech = "{}"
-path = "data/"
+path = "{}"
 cryptoContext, openfhe_context = utils.try_load_context(
     int(logN),
     int(logSlots),
@@ -54,27 +50,31 @@ cryptoContext, openfhe_context = utils.try_load_context(
     rescaleTech,
     save_dir=path)
 
+with open("result.txt", "a") as f:
+    print(context_file, file=f)
+
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
 x = torch.tensor(x, device="cuda")
 cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
-
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+start_time = time.time()
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+end_time = time.time()
 openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 with open("result.txt", "a") as f:
-    print(context_file, file=f)
+    print("Time taken:", end_time - start_time, file=f)
     if np.equal(np.concatenate([result.cv[0].cpu().numpy(), result.cv[1].cpu().numpy()]).reshape(-1), data.reshape(-1)).all():
         print("Test passed!", file=f)
     else:
         print("Test failed!", file=f)
         print("result", result.cv[0].cpu().numpy()[0][:10], file=f)
         print("data", data.reshape(-1)[:10], file=f)
-""".format(context_file, logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech)
+""".format(context_file, logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech, path)
 
-
-                    # Create a temporary file to store the code
+            # Create a temporary file to store the code
             with open("temp_file.py", "w") as temp_file:
                 print(code_string, file=temp_file)
 

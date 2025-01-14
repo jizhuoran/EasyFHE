@@ -91,7 +91,7 @@ def coeffs_slots_conversion(A, ctxt, direction, cryptoContext):
     for s in loop_range:
         if not s == loop_range[0]:
             result = homo_ops.homo_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        if s == loop_range[-1]:
+        if s == loop_range[-1] and params.layers_rem:
             g = params.giant_step_rem
             b = params.baby_step_rem
             num_rotations = params.num_rotations_rem
@@ -306,6 +306,7 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
+
 
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
