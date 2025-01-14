@@ -83,11 +83,16 @@ def gen_contexts(
         cc.EvalBootstrapSetup(levelBudget, [0, 0], 1<<logslots)
         cc.EvalBootstrapKeyGen(keys.secretKey, 1<<logslots)
         cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
-        BOOT_KEY = cc.GetEvalBootstrapKey()
+
+    BOOT_KEY = cc.GetEvalBootstrapKey()
+    for idx, logslots in enumerate(logSlots_list):
         C2S, S2C = [], []
         C2S_dim, S2C_dim = [], []
         C2S_limbs, S2C_limbs = [], []
-        for slot, C2S_arr, S2C_arr, scfactor_U0hatTPreFFT, scfactor_U0PreFFT in BOOT_KEY:
+        for slot, C2S_arr, S2C_arr, scfactor_U0hatTPreFFT, scfactor_U0PreFFT in [BOOT_KEY[idx]]:
+            if(slot != 1<<logslots):
+                print("Error: BOOT_KEY order not match logSlots_list order")
+                break
             U0hatTPreFFTScalingFactor = scfactor_U0hatTPreFFT
             U0PreFFTScalingFactor = scfactor_U0PreFFT
             for i in range(len(C2S_arr)):
@@ -104,7 +109,7 @@ def gen_contexts(
                         S2C_limbs.append(len(S2C_arr[i][j]))
                     for k in range(len(S2C_arr[i][j])):
                         S2C += S2C_arr[i][j][k]
-        BOOT_KEY = {
+        boot_key = {
             "C2S": C2S,
             "S2C": S2C,
             "C2S_dim": C2S_dim,
@@ -115,7 +120,7 @@ def gen_contexts(
             "U0PreFFTScalingFactor": U0PreFFTScalingFactor,
         }
         ROT_SWK = cc.GetEvalRotateKey()
-        boot_key_map[str(logslots)] = BOOT_KEY
+        boot_key_map[str(logslots)] = boot_key
         rot_swk_map[str(logslots)] = ROT_SWK
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(

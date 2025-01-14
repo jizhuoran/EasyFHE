@@ -660,7 +660,7 @@ def homo_bootstrap(cipher, L0, slots, cryptoContext):
 
 def BootstrapTest_N65536L26lB44(
     logN=14,
-    logSlots_list=[11],
+    logSlots_list=[11, 12],
     maxLevelsRemaining=3,
     levelBudget=[4, 4],
     dnum=3,
@@ -714,15 +714,16 @@ def BootstrapTest_N65536L26lB44(
     # )
 
     # Test the correctness of the bootstrapping
+    logSlots = logSlots_list[0]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range((1<<logSlots_list[0]))])
+    x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1<<logSlots)
 
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots_list[0])]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, logSlots_list[0])
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
+    utils.load_rotation_keys(cryptoContext, logSlots)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
     openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
 
     is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
@@ -741,7 +742,7 @@ def BootstrapTest_N65536L26lB44(
     measure_execution_time = True
     if measure_execution_time:
         start = time.time()
-        result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
+        result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
         end = time.time()
         print("time", end - start)
 
@@ -764,7 +765,7 @@ def BootstrapTest_N65536L26lB44(
                 with_stack=True,
             ) as profiler:
                 # Start profiling specific functions with torch.profiler.record_function()
-                result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots_list[0]),
+                result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots,
                                         cryptoContext=cryptoContext)
 
             # Get the profiling results
