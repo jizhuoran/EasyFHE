@@ -160,10 +160,11 @@ GENERATE_FUNCTION(neg, 0)
 #undef BARRET_ARGS_1
 #undef GENERATE_FUNCTION
 
-Tensor set_zero_cuda(const Tensor& self, int64_t N) {                                                
-  auto ptr = self.data_ptr<uint64_t>();
+Tensor set_zero_cuda(const Tensor& self, int64_t N) {
+  auto res = self.clone();                                                
+  auto ptr = res.data_ptr<uint64_t>();
   cudaMemset(ptr, 0, N * sizeof(uint64_t));
-  return self;
+  return res;
 }   
 
 

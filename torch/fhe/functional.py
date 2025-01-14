@@ -4,58 +4,64 @@ import numpy as np
 
 Tensor = torch.Tensor
 
-# def cpp_cuda_adaptor(func):
-#     def wrapper(*args, **kwargs):
-#         args_new = []
-#         for i in range(len(args)):
-#             if isinstance(args[i], torch.Tensor):
-#                 args_new.append(args[i].cpu())
-#             elif isinstance(args[i], Context):
-#                 args_new.append(args[i])
-#                 args_new[-1].cpu()
-#             else:
-#                 args_new.append(args[i])
-#         result = func(*args_new, **kwargs)
-#         for i in range(len(args_new)):
-#             if isinstance(args_new[i], Context):
-#                 args_new[i].cuda()
-#         if isinstance(result, list):
-#             return [r.cuda() for r in result]
-#         elif isinstance(result, torch.Tensor):
-#             result = result.cuda()
-#         return result
-#     return wrapper
+def cpp_cuda_adaptor(func):
+    def wrapper(*args, **kwargs):
+        args_new = []
+        for i in range(len(args)):
+            if isinstance(args[i], torch.Tensor):
+                args_new.append(args[i].cpu())
+            elif isinstance(args[i], Context):
+                args_new.append(args[i])
+                args_new[-1].cpu()
+            else:
+                args_new.append(args[i])
+        result = func(*args_new, **kwargs)
+        for i in range(len(args_new)):
+            if isinstance(args_new[i], Context):
+                args_new[i].cuda()
+        
+        if isinstance(result, list):
+            # for r in result:
+            #     if isinstance(r, torch.Tensor):
+            #         print("device of r: ", r.device)
+            #         assert r.device == torch.device("cpu")
+            return [r.cuda() for r in result]
+        elif isinstance(result, torch.Tensor):
+            assert result.device == torch.device("cpu")
+            result = result.cuda()
+        return result
+    return wrapper
 
-# def cpp_cuda_compare(func):
-#     def wrapper(*args, **kwargs):
-#         args_new = []
-#         for i in range(len(args)):
-#             print("type of args[i]: ", type(args[i]))
-#             if isinstance(args[i], torch.Tensor):
-#                 args_new.append(args[i].clone().cpu())
-#             elif isinstance(args[i], Context):
-#                 args_new.append(args[i])
-#                 args_new[-1].cpu()
-#             else:
-#                 print("type of args[i]: ", type(args[i]))
-#                 args_new.append(args[i])
-#         result = func(*args_new, **kwargs)
-#         result_gt = func(*args, **kwargs)
-#         for i in range(len(args_new)):
-#             if isinstance(args_new[i], Context):
-#                 args_new[i].cuda()
+def cpp_cuda_compare(func):
+    def wrapper(*args, **kwargs):
+        args_new = []
+        for i in range(len(args)):
+            print("type of args[i]: ", type(args[i]))
+            if isinstance(args[i], torch.Tensor):
+                args_new.append(args[i].clone().cpu())
+            elif isinstance(args[i], Context):
+                args_new.append(args[i])
+                args_new[-1].cpu()
+            else:
+                print("type of args[i]: ", type(args[i]))
+                args_new.append(args[i])
+        result = func(*args_new, **kwargs)
+        result_gt = func(*args, **kwargs)
+        for i in range(len(args_new)):
+            if isinstance(args_new[i], Context):
+                args_new[i].cuda()
 
-#         print("device of result: ", result.device)
-#         print("device of result_gt: ", result_gt.device)
-#         if not torch.allclose(result_gt.cpu(), result):
-#             print("Test Failed")
-#             print("Expected: ", result_gt)
-#             print("Got: ", result)
-#             exit(1)
-#         else:
-#             print("Test Passed")
-#         return result_gt
-#     return wrapper
+        print("device of result: ", result.device)
+        print("device of result_gt: ", result_gt.device)
+        if not torch.allclose(result_gt.cpu(), result):
+            print("Test Failed")
+            print("Expected: ", result_gt)
+            print("Got: ", result)
+            exit(1)
+        else:
+            print("Test Passed")
+        return result_gt
+    return wrapper
 
 
 
@@ -80,7 +86,8 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
     )
 
 # does not copy back when CPU and GPU
-def cv_set_zero(x, length):
+# @cpp_cuda_adaptor
+def cv_mask_with_zero(x, length, inplace=False):
     return torch.set_zero(x, length)
 
 # @cpp_cuda_adaptor
@@ -113,6 +120,7 @@ def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
 
 # @cpp_cuda_adaptor
 def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
+    scalar = scalar.to(x.device)
     if inplace:
         return torch.add_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
     else:
@@ -120,6 +128,7 @@ def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
 
 # @cpp_cuda_adaptor
 def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
+    scalar = scalar.to(x.device)
     if inplace:
         return torch.sub_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
     else:
@@ -127,6 +136,7 @@ def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
 
 # @cpp_cuda_adaptor
 def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
+    scalar = scalar.to(x.device)
     if inplace:
         return torch.mul_scalar_mod_(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
     else:
@@ -330,6 +340,7 @@ def cv_innerproduct(
                                  barret_k=context.barret_k, workspace=context.inner_workspace)
     return res.reshape(2, -1, context.N)
 
+# @cpp_cuda_adaptor
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
@@ -464,7 +475,7 @@ def cv_switch_modulus_with_intt_ntt(
     )
     return switch_modulus.reshape(-1, context.N)
 
-# @cpp_cuda_compare
+# @cpp_cuda_adaptor
 def cv_mul_by_monomial(
     input: Tensor,
     l: int,

@@ -160,9 +160,10 @@ GENERATE_FUNCTION(neg, 0)
 #undef GENERATE_FUNCTION
 
 Tensor set_zero_cpu(const Tensor& self, int64_t N) {
-  auto ptr = self.data_ptr<uint64_t>();
+  auto res = self.clone();
+  auto ptr = res.data_ptr<uint64_t>();
   memset(ptr, 0, N * sizeof(uint64_t));
-  return self;
+  return res;
 }
 
 } // namespace at::native

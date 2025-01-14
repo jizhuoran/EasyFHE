@@ -690,7 +690,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
             
             if i == 0:
                 first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                F.cv_set_zero(inner.cv[0], len_ext)
+                inner.cv[0] = F.cv_mask_with_zero(inner.cv[0], len_ext)
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
@@ -715,7 +715,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
                     first = cv_add_ext(first, tmp_first, curr_limbs, cryptoContext)
-                    F.cv_set_zero(inner.cv[0], len_ext)
+                    inner.cv[0] = F.cv_mask_with_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
         result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, outer.scaling_factor,
@@ -754,7 +754,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
             
             if i == 0:
                 first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                F.cv_set_zero(inner.cv[0], len_ext)
+                inner.cv[0] = F.cv_mask_with_zero(inner.cv[0], len_ext)
                 outer = inner
             else:
                 if rot_out[s][i] != 0:
@@ -779,7 +779,7 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
                 else:
                     tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
                     first = cv_add_ext(first, tmp_first, curr_limbs, cryptoContext)
-                    F.cv_set_zero(inner.cv[0], len_ext)
+                    inner.cv[0] = F.cv_mask_with_zero(inner.cv[0], len_ext)
                     outer = eval_add_ext(outer, inner, cryptoContext)
         
         result = hoisting_keyswitch.key_switch_down(outer.cv[1], outer.cv[0], curr_limbs, outer.scaling_factor,
@@ -1273,7 +1273,7 @@ def BootstrapTest_N65536L26lB44(
         # for func_name, total_time in sorted_execution_times:
         #     print(f"{func_name}: {total_time:.6f} seconds")
 
-        pytorch_profiling = False
+        pytorch_profiling = True
         if pytorch_profiling:
             # Set up the profiler
             with torch.profiler.profile(
