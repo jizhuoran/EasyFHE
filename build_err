@@ -1,0 +1,629 @@
+[1/12] Regenerating version file...
+[2/12] Building CXX object caffe2/CMakeFiles/torch_cpu.dir/__/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp.o
+In file included from /home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:3,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:11:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h: In function ‘uint64_t fhe::barret_reduction_128_64(uint128_t, uint64_t, uint64_t, uint64_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:60:12: warning: unused variable ‘_temp1_lo’ [-Wunused-variable]
+   60 |   uint64_t _temp1_lo = (uint64_t)(temp1 & 0xFFFFFFFFFFFFFFFF);
+      |            ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Intt8PointPerThreadPhase2OoP(uint64_t*, int, int, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:61:19: warning: unused variable ‘out_addr’ [-Wunused-variable]
+   61 |         uint64_t* out_addr = out + np_idx * N;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:63:18: warning: unused variable ‘prime’ [-Wunused-variable]
+   63 |         uint64_t prime = prime_table[prime_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:88:19: warning: unused variable ‘in_addr’ [-Wunused-variable]
+   88 |         uint64_t* in_addr = in + np_idx * N;
+      |                   ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:89:19: warning: unused variable ‘out_addr’ [-Wunused-variable]
+   89 |         uint64_t* out_addr = out + np_idx * N;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:92:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+   92 |         int N_init = 2 * m_idx * t + t_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:147:19: warning: unused variable ‘in_addr’ [-Wunused-variable]
+  147 |         uint64_t* in_addr = in + np_idx * N;
+      |                   ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:148:19: warning: unused variable ‘out_addr’ [-Wunused-variable]
+  148 |         uint64_t* out_addr = out + np_idx * N;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:150:18: warning: unused variable ‘prime’ [-Wunused-variable]
+  150 |         uint64_t prime = prime_table[prime_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:151:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+  151 |         int N_init = 2 * m_idx * t + t_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:178:21: warning: unused variable ‘in_addr’ [-Wunused-variable]
+  178 |           uint64_t* in_addr = in + np_idx * N;
+      |                     ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:179:21: warning: unused variable ‘out_addr’ [-Wunused-variable]
+  179 |           uint64_t* out_addr = out + np_idx * N;
+      |                     ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:182:15: warning: unused variable ‘N_init’ [-Wunused-variable]
+  182 |           int N_init = 2 * m_idx * t + t_idx;
+      |               ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:251:19: warning: unused variable ‘in_addr’ [-Wunused-variable]
+  251 |         uint64_t* in_addr = in + np_idx * N;
+      |                   ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Intt8PointPerThreadPhase1OoP(uint64_t*, int, int, int, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:341:19: warning: unused variable ‘out_addr’ [-Wunused-variable]
+  341 |         uint64_t* out_addr = out + np_idx * N;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:403:27: warning: unused variable ‘in_addr’ [-Wunused-variable]
+  403 |           const uint64_t* in_addr = in + np_idx * N;
+      |                           ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:404:21: warning: unused variable ‘out_addr’ [-Wunused-variable]
+  404 |           uint64_t* out_addr = out + np_idx * N;
+      |                     ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:409:15: warning: unused variable ‘N_init’ [-Wunused-variable]
+  409 |           int N_init =
+      |               ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:475:25: warning: unused variable ‘in_addr’ [-Wunused-variable]
+  475 |         const uint64_t* in_addr = in + np_idx * N;
+      |                         ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Ntt8PointPerThreadPhase1(uint64_t*, int, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:583:25: warning: unused variable ‘W’ [-Wunused-variable]
+  583 |         const uint64_t* W = base_inv + N * np_idx;
+      |                         ^
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:584:25: warning: unused variable ‘W_’ [-Wunused-variable]
+  584 |         const uint64_t* W_ = base_inv_ + N * np_idx;
+      |                         ^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:585:18: warning: unused variable ‘prime’ [-Wunused-variable]
+  585 |         uint64_t prime = prime_table[np_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:608:19: warning: unused variable ‘a_np’ [-Wunused-variable]
+  608 |         uint64_t* a_np = op + np_idx * N;
+      |                   ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:613:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+  613 |         int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:664:21: warning: unused variable ‘a_np’ [-Wunused-variable]
+  664 |           uint64_t* a_np = op + np_idx * N;
+      |                     ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:669:15: warning: unused variable ‘N_init’ [-Wunused-variable]
+  669 |           int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |               ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:735:19: warning: unused variable ‘a_np’ [-Wunused-variable]
+  735 |         uint64_t* a_np = op + np_idx * N;
+      |                   ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:740:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+  740 |         int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:805:25: warning: unused variable ‘W’ [-Wunused-variable]
+  805 |         const uint64_t* W = base_inv + N * np_idx;
+      |                         ^
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:806:25: warning: unused variable ‘W_’ [-Wunused-variable]
+  806 |         const uint64_t* W_ = base_inv_ + N * np_idx;
+      |                         ^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:807:18: warning: unused variable ‘prime’ [-Wunused-variable]
+  807 |         uint64_t prime = prime_table[np_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:812:13: warning: unused variable ‘tw_idx’ [-Wunused-variable]
+  812 |         int tw_idx = m + m_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Ntt8PointPerThreadPhase2(uint64_t*, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1056:13: warning: unused variable ‘tw_idx’ [-Wunused-variable]
+ 1056 |         int tw_idx = m + m_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1057:25: warning: unused variable ‘W’ [-Wunused-variable]
+ 1057 |         const uint64_t* W = base_inv + N * np_idx;
+      |                         ^
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1058:25: warning: unused variable ‘W_’ [-Wunused-variable]
+ 1058 |         const uint64_t* W_ = base_inv_ + N * np_idx;
+      |                         ^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange(uint64_t*, int, int, int, int, int, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1119:25: warning: unused variable ‘W’ [-Wunused-variable]
+ 1119 |         const uint64_t* W = base_inv + N * prime_idx;
+      |                         ^
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1120:25: warning: unused variable ‘W_’ [-Wunused-variable]
+ 1120 |         const uint64_t* W_ = base_inv_ + N * prime_idx;
+      |                         ^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1121:18: warning: unused variable ‘prime’ [-Wunused-variable]
+ 1121 |         uint64_t prime = prime_table[prime_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1147:19: warning: unused variable ‘a_np’ [-Wunused-variable]
+ 1147 |         uint64_t* a_np = op + np_idx * N;
+      |                   ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1152:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+ 1152 |         int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1207:21: warning: unused variable ‘a_np’ [-Wunused-variable]
+ 1207 |           uint64_t* a_np = op + np_idx * N;
+      |                     ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1212:15: warning: unused variable ‘N_init’ [-Wunused-variable]
+ 1212 |           int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |               ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1281:19: warning: unused variable ‘a_np’ [-Wunused-variable]
+ 1281 |         uint64_t* a_np = op + np_idx * N;
+      |                   ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1286:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+ 1286 |         int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1354:25: warning: unused variable ‘W’ [-Wunused-variable]
+ 1354 |         const uint64_t* W = base_inv + N * prime_idx;
+      |                         ^
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1355:25: warning: unused variable ‘W_’ [-Wunused-variable]
+ 1355 |         const uint64_t* W_ = base_inv_ + N * prime_idx;
+      |                         ^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1356:18: warning: unused variable ‘prime’ [-Wunused-variable]
+ 1356 |         uint64_t prime = prime_table[prime_idx];
+      |                  ^~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1361:13: warning: unused variable ‘tw_idx’ [-Wunused-variable]
+ 1361 |         int tw_idx = m + m_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h: In function ‘void fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange(uint64_t*, int, int, int, int, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, size_t, size_t, size_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1473:21: warning: unused variable ‘a_np’ [-Wunused-variable]
+ 1473 |           uint64_t* a_np = op + np_idx * N;
+      |                     ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1476:15: warning: unused variable ‘N_init’ [-Wunused-variable]
+ 1476 |           int N_init = 2 * m_idx * t + t_idx;
+      |               ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1544:19: warning: unused variable ‘a_np’ [-Wunused-variable]
+ 1544 |         uint64_t* a_np = op + np_idx * N;
+      |                   ^~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/NttImpl.h:1547:13: warning: unused variable ‘N_init’ [-Wunused-variable]
+ 1547 |         int N_init = 2 * m_idx * t + t_idx;
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::const_mult_batch(size_t, const uint64_t*, uint64_t*, const uint64_t*, const uint64_t*, int, int, int, int, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:28:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+   28 |   STRIDED_LOOP_START(degree * batch, i);
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::modup_step_two_kernel(const uint64_t*, int, int, int, int, int, const uint64_t*, const uint64_t*, const uint64_t*, const uint64_t*, int, uint64_t, uint64_t, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long unsigned int’ [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:118:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  118 |   STRIDED_LOOP_START(
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:129:18: warning: comparison of integer expressions of different signedness: ‘const int’ and ‘long unsigned int’ [-Wsign-compare]
+  129 |         (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
+      |          ~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::moddown_kernel(int, uint64_t*, uint64_t*, uint64_t*, int, const uint64_t*, const uint64_t*, int, uint64_t, uint64_t, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long unsigned int’ [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:196:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  196 |   STRIDED_LOOP_START(
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::negateInplace_(size_t, size_t, size_t, const uint64_t*, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:230:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  230 |   STRIDED_LOOP_START(batch * degree, i);
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::subInplace_(size_t, size_t, const uint64_t*, uint64_t*, const uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:244:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  244 |   STRIDED_LOOP_START(batch * degree, i)
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::vec_add_mod_batch_(int, uint64_t*, uint64_t*, uint64_t*, const uint64_t*, const uint64_t*, uint64_t, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long unsigned int’ [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:264:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  264 |   STRIDED_LOOP_START((degree_ * batch), i);
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::vec_mod_batch_(int, uint64_t*, uint64_t*, uint64_t*, const uint64_t*, uint64_t, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘long unsigned int’ [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:284:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  284 |   STRIDED_LOOP_START((degree_ * batch), i);
+      |   ^~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void fhe::switch_modulus_(size_t, size_t, size_t, const uint64_t*, const uint64_t*, uint64_t*)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/Utils.h:5:52: warning: comparison of integer expressions of different signedness: ‘int’ and ‘size_t’ {aka ‘long unsigned int’} [-Wsign-compare]
+    5 | #define STRIDED_LOOP_START(N, i) for (int i = 0; i < N; i++) {
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:302:3: note: in expansion of macro ‘STRIDED_LOOP_START’
+  302 |   STRIDED_LOOP_START(batch * degree, i)
+      |   ^~~~~~~~~~~~~~~~~~
+In file included from /home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:1,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:562:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+  562 |         const int grid_dim = param_degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:552:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+  552 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:555:7: note: in expansion of macro ‘AT_WRAP’
+  555 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void at::native::modup_matmul_(uint64_t*, int64_t, uint64_t*, const at::Tensor&, const at::Tensor&, const at::Tensor&, int64_t, int64_t, const at::Tensor&, int64_t, int64_t)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:596:7: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+  596 |   int grid_dim{(int)param_degree_ * end_length / 256 / unroll_factor};
+      |       ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:597:7: warning: unused variable ‘block_dim’ [-Wunused-variable]
+  597 |   int block_dim{256};
+      |       ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void at::native::modup_impl_(uint64_t*, uint64_t*, int, int, int, const at::Tensor&, const at::Tensor&, int64_t, int64_t, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:651:51: warning: comparison of integer expressions of different signedness: ‘long unsigned int’ and ‘int’ [-Wsign-compare]
+  651 |   size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void at::native::modup_core_impl_(uint64_t*, uint64_t*, int, int, int, const at::Tensor&, const at::Tensor&, int64_t, int64_t, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:904:51: warning: comparison of integer expressions of different signedness: ‘long unsigned int’ and ‘int’ [-Wsign-compare]
+  904 |   size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      |                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:902:7: warning: unused variable ‘num_moduli_after_modup’ [-Wunused-variable]
+  902 |   int num_moduli_after_modup = curr_limbs + param_alpha_;
+      |       ^~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1096:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1096 |         const int grid_dim = param_degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1091:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1091 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1094:7: note: in expansion of macro ‘AT_WRAP’
+ 1094 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1116:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1116 |         const int grid_dim = param_degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1111:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1111 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1114:7: note: in expansion of macro ‘AT_WRAP’
+ 1114 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1143:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1143 |         const int grid_dim = param_degree * end_length / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1138:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1138 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1141:7: note: in expansion of macro ‘AT_WRAP’
+ 1141 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In function ‘void at::native::moddown_core_template(const at::Tensor&, int64_t, int64_t, int64_t, int64_t, int64_t, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, at::Tensor&)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1185:13: warning: unused variable ‘start_length’ [-Wunused-variable]
+ 1185 |   const int start_length = level + alpha - curr_limbs; // tempK len
+      |             ^~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1601:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1601 |         const int grid_dim = degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1590:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1590 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1593:7: note: in expansion of macro ‘AT_WRAP’
+ 1593 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1634:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1634 |         const int grid_dim = degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1623:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1623 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1626:7: note: in expansion of macro ‘AT_WRAP’
+ 1626 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp: In lambda function:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1661:19: warning: unused variable ‘grid_dim’ [-Wunused-variable]
+ 1661 |         const int grid_dim = degree * batch / block_dim;
+      |                   ^~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:202:7: note: in definition of macro ‘AT_DISPATCH_SWITCH’
+  202 |       __VA_ARGS__                                                           \
+      |       ^~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:3: note: in expansion of macro ‘AT_EXPAND’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |   ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch.h:73:3: note: in expansion of macro ‘AT_PRIVATE_CASE_TYPE_USING_HINT’
+   73 |   AT_PRIVATE_CASE_TYPE_USING_HINT(enum_type, scalar_t, __VA_ARGS__)
+      |   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:140:23: note: in expansion of macro ‘AT_DISPATCH_CASE’
+  140 | #define AT_AP1(N, _1) AT_DISPATCH_CASE(_1, N)
+      |                       ^~~~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:110:29: note: in expansion of macro ‘AT_AP1’
+  110 | #define AT_CONCAT_AUX(a, b) a##b
+      |                             ^
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:108:56: note: in expansion of macro ‘AT_WRAP’
+  108 |   AT_EXPAND(AT_CONCAT(AT_AP, AT_NUM_ARGS(__VA_ARGS__))(AT_WRAP(N), __VA_ARGS__))
+      |                                                        ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:34: note: in expansion of macro ‘AT_AP_VAR’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                  ^~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/Dispatch_v2.h:81:44: note: in expansion of macro ‘AT_WRAP’
+   81 |   AT_DISPATCH_SWITCH(TYPE, NAME, AT_AP_VAR(AT_WRAP(BODY), TYPE, __VA_ARGS__))
+      |                                            ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1654:3: note: in expansion of macro ‘AT_DISPATCH_V2’
+ 1654 |   AT_DISPATCH_V2(
+      |   ^~~~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cpu/KeySwitch.cpp:1657:7: note: in expansion of macro ‘AT_WRAP’
+ 1657 |       AT_WRAP([&]() {
+      |       ^~~~~~~
+[3/12] Linking CXX shared library lib/libtorch_cpu.so
+[4/12] Linking CXX shared library lib/libshm.so
+Warning: Unused direct dependencies:
+	/lib/x86_64-linux-gnu/libm.so.6
+[5/12] Linking CXX executable bin/torch_shm_manager
+Warning: Unused direct dependencies:
+	/home/zrji/pytorch/build/lib/libshm.so
+	/lib/x86_64-linux-gnu/libm.so.6
+[6/12] Building CUDA object caffe2/CMakeFiles/torch_cuda.dir/__/aten/src/ATen/native/fhe/cuda/KeySwitch.cu.o
+In file included from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/Utils.cuh:4,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/NttImpl.cuh:3,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu:13:
+/usr/local/cuda/include/crt/device_functions.h:54:2: warning: #warning "crt/device_functions.h is an internal header file and must not be used directly.  Please use cuda_runtime_api.h or cuda_runtime.h instead." [-Wcpp]
+   54 | #warning "crt/device_functions.h is an internal header file and must not be used directly.  Please use cuda_runtime_api.h or cuda_runtime.h instead."
+      |  ^~~~~~~
+In file included from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/Utils.cuh:4,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/NttImpl.cuh:3,
+                 from /home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu:13:
+/usr/local/cuda/include/crt/device_functions.h:54:2: warning: #warning "crt/device_functions.h is an internal header file and must not be used directly.  Please use cuda_runtime_api.h or cuda_runtime.h instead." [-Wcpp]
+   54 | #warning "crt/device_functions.h is an internal header file and must not be used directly.  Please use cuda_runtime_api.h or cuda_runtime.h instead."
+      |  ^~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu(914): warning #177-D: variable "num_moduli_after_modup" was declared but never referenced
+    int num_moduli_after_modup = curr_limbs + param_alpha_;
+        ^
+
+Remark: The warnings can be suppressed with "-diag-suppress <warning-number>"
+
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu(1212): warning #177-D: variable "start_length" was declared but never referenced
+    const int start_length = level + alpha - curr_limbs;
+              ^
+
+/home/zrji/pytorch/aten/src/ATen/core/IListRef_inl.h: In static member function ‘static c10::detail::IListRefConstRef<at::OptionalTensorRef> c10::detail::IListRefTagImpl<c10::IListRefTag::Boxed, at::OptionalTensorRef>::iterator_get(const c10::List<std::optional<at::Tensor> >::const_iterator&)’:
+/home/zrji/pytorch/aten/src/ATen/core/IListRef_inl.h:171:13: warning: possibly dangling reference to a temporary [-Wdangling-reference]
+  171 |     const auto& ivalue = (*it).get();
+      |             ^~~~~~
+/home/zrji/pytorch/aten/src/ATen/core/IListRef_inl.h:171:33: note: the temporary was destroyed at the end of the full expression ‘(& it)->c10::impl::ListIterator<std::optional<at::Tensor>, __gnu_cxx::__normal_iterator<c10::IValue*, std::vector<c10::IValue> > >::operator*().c10::impl::ListElementReference<std::optional<at::Tensor>, __gnu_cxx::__normal_iterator<c10::IValue*, std::vector<c10::IValue> > >::get()’
+  171 |     const auto& ivalue = (*it).get();
+      |                      ~~~~~~~~~~~^~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu: In function ‘void at::native::modup_impl_(uint64_t*, uint64_t*, int, int, int, const at::Tensor&, const at::Tensor&, int64_t, int64_t, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu:658:49: warning: comparison of integer expressions of different signedness: ‘long unsigned int’ and ‘int’ [-Wsign-compare]
+  658 |   size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu: In function ‘void at::native::modup_core_impl_(uint64_t*, uint64_t*, int, int, int, const at::Tensor&, const at::Tensor&, int64_t, int64_t, const at::Tensor&, const at::Tensor&, const at::Tensor&, const at::Tensor&)’:
+/home/zrji/pytorch/aten/src/ATen/native/fhe/cuda/KeySwitch.cu:916:49: warning: comparison of integer expressions of different signedness: ‘long unsigned int’ and ‘int’ [-Wsign-compare]
+  916 |   size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
+      |                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~
+[7/12] Linking CXX shared library lib/libtorch_cuda.so
+Warning: Unused direct dependencies:
+	/usr/local/cuda/lib64/libcurand.so.10
+[8/12] Linking CXX shared library lib/libtorch_cuda_linalg.so
+Warning: Unused direct dependencies:
+	/usr/local/cuda/lib64/libcudart.so.12
+[9/12] Linking CXX shared library lib/libtorch_python.so
+Warning: Unused direct dependencies:
+	/home/zrji/pytorch/build/lib/libtorch.so
+[10/12] Linking CXX shared module functorch/functorch.so
+Warning: Unused direct dependencies:
+	/home/zrji/pytorch/build/lib/libtorch_python.so
+	/home/zrji/pytorch/build/lib/libtorch.so
+	/home/zrji/pytorch/build/lib/libtorch_cpu.so
+	/home/zrji/pytorch/build/lib/libtorch_cuda.so
+[11/12] Linking CXX shared library lib/libnnapi_backend.so
+Warning: Unused direct dependencies:
+	/home/zrji/pytorch/build/lib/libtorch.so
+	/home/zrji/pytorch/build/lib/libtorch_cuda.so
+[11/12] Install the project...
+-- Install configuration: "Release"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/lib/libtorch_cuda_linalg.so" to "$ORIGIN:/usr/local/cuda/lib64"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/lib/libshm.so" to "$ORIGIN"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/bin/torch_shm_manager" to "$ORIGIN/../lib"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/lib/libtorch_python.so" to "$ORIGIN:/usr/local/cuda/lib64"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/lib/libtorch_cpu.so" to "$ORIGIN:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/lib64"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/torch/lib/libtorch_cuda.so" to "$ORIGIN:/usr/local/cuda/lib64"
+-- Set non-toolchain portion of runtime path of "/home/zrji/pytorch/functorch/functorch.so" to "$ORIGIN/../torch/lib:/usr/local/cuda/lib64"
+Building wheel torch-2.6.0a0+gitd8d058d
+-- Building version 2.6.0a0+gitd8d058d
+cmake --build . --target install --config Release
+running develop
+Checking .pth file support in /home/zrji/torch/
+/home/zrji/.venv/bin/python3 -E -c pass
+running egg_info
+writing torch.egg-info/PKG-INFO
+writing dependency_links to torch.egg-info/dependency_links.txt
+writing entry points to torch.egg-info/entry_points.txt
+writing requirements to torch.egg-info/requires.txt
+writing top-level names to torch.egg-info/top_level.txt
+reading manifest file 'torch.egg-info/SOURCES.txt'
+reading manifest template 'MANIFEST.in'
+adding license file 'LICENSE'
+adding license file 'NOTICE'
+writing manifest file 'torch.egg-info/SOURCES.txt'
+running build_ext
+-- Building with NumPy bindings
+-- Not using cuDNN
+-- Detected CUDA at /usr/local/cuda
+-- Not using XPU
+-- Not using MKLDNN
+-- Building NCCL library
+-- Building without distributed package
+-- Building Executorch
+-- Using ITT
+Copying functorch._C from functorch/functorch.so to /home/zrji/pytorch/build/lib.linux-x86_64-cpython-312/functorch/_C.cpython-312-x86_64-linux-gnu.so
+copying functorch/functorch.so -> /home/zrji/pytorch/build/lib.linux-x86_64-cpython-312/functorch/_C.cpython-312-x86_64-linux-gnu.so
+copying build/lib.linux-x86_64-cpython-312/torch/_C.cpython-312-x86_64-linux-gnu.so -> torch
+copying build/lib.linux-x86_64-cpython-312/functorch/_C.cpython-312-x86_64-linux-gnu.so -> functorch
+Creating /home/zrji/torch/torch.egg-link (link to .)
+Installing torchrun script to /home/zrji/torch/
+
+Installed /home/zrji/pytorch
+Processing dependencies for torch==2.6.0a0+gitd8d058d
+Searching for sympy==1.13.1
+Best match: sympy 1.13.1
+Processing sympy-1.13.1-py3.12.egg
+Installing isympy script to /home/zrji/torch/
+
+Using /home/zrji/torch/sympy-1.13.1-py3.12.egg
+Searching for setuptools==75.6.0
+Best match: setuptools 75.6.0
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for fsspec==2024.12.0
+Best match: fsspec 2024.12.0
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for jinja2==3.1.5
+Best match: jinja2 3.1.5
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for networkx==3.4.2
+Best match: networkx 3.4.2
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for typing-extensions==4.12.2
+Best match: typing-extensions 4.12.2
+
+Using /home/zrji/.venv/lib/python3.12/site-packages/setuptools/_vendor
+Searching for filelock==3.16.1
+Best match: filelock 3.16.1
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for mpmath==1.3.0
+Best match: mpmath 1.3.0
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Searching for MarkupSafe==3.0.2
+Best match: MarkupSafe 3.0.2
+
+Using /home/zrji/.venv/lib/python3.12/site-packages
+Finished processing dependencies for torch==2.6.0a0+gitd8d058d

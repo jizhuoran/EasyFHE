@@ -589,8 +589,8 @@ def merged_function(A, ctxt, cryptoContext, flag_rem, rot_in, rot_out, config):
     def key_switch_ext(cipher, add_first, cryptoContext):
         curr_limbs = cipher.cur_limbs
 
-        cv0 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
-        cv1 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
+        cv0 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device=cipher.cv[0].device).reshape(-1, cryptoContext.N)
+        cv1 = torch.zeros(((curr_limbs + cryptoContext.K) << cryptoContext.logN), dtype=torch.uint64, device=cipher.cv[0].device).reshape(-1, cryptoContext.N)
         if add_first:
             cv0[:curr_limbs, :] = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
                                                   cryptoContext.q_mu_cuda, curr_limbs)

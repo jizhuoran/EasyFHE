@@ -15,11 +15,12 @@ def eval_fast_key_switch_core_ext(d2Tilde, auto_index, beta, curr_limbs, cryptoC
 
     res = F.cv_innerproduct(
         d2Tilde.reshape(-1),
-        curr_limbs=curr_limbs,
-        context=cryptoContext,
-        swk_bx=swk_bx,
-        swk_ax=swk_ax
+        curr_limbs,
+        swk_bx,
+        swk_ax,
+        cryptoContext
     )
+
     return res[1], res[0]
 
 

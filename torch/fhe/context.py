@@ -165,7 +165,6 @@ class Context:
             self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
         for key, value in self.BsContext.QmuplusPmu_map.items():
             self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-
         
         for i in range(len(self.BsContext.m_U0hatTPreFFT)):
             for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
@@ -173,7 +172,116 @@ class Context:
 
         for i in range(len(self.BsContext.m_U0PreFFT)):
             for j in range(len(self.BsContext.m_U0PreFFT[i])):
-                self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")            
+                self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")   
+
+
+    def cpu(self):
+        self.q_mu_cuda = self.q_mu_cuda.cpu()
+        self.moduliQ_cuda = self.moduliQ_cuda.cpu()
+        self.primes = self.primes.cpu()
+        self.power_of_roots = self.power_of_roots.cpu()
+        self.power_of_roots_shoup = self.power_of_roots_shoup.cpu()
+        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu()
+        self.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cpu()
+        self.barret_k = self.barret_k.cpu()
+        self.barret_ratio = self.barret_ratio.cpu()
+        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu()
+        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu()
+        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu()
+        self.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cpu()
+        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu()
+        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu()
+        self.prod_inv_moddown = self.prod_inv_moddown.cpu()
+        self.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cpu()
+        self.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cpu()
+        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu()
+        self.q_inv_mod_q = self.q_inv_mod_q.cpu()
+        self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cpu()
+        self.swk_bx_cuda = self.swk_bx_cuda.cpu()
+        self.swk_ax_cuda = self.swk_ax_cuda.cpu()
+        self.inner_workspace = self.inner_workspace.cpu()
+        self.inner_out = self.inner_out.cpu()
+        self.moddown_out_ax = self.moddown_out_ax.cpu()
+        self.moddown_out_bx = self.moddown_out_bx.cpu()
+        self.modup_out = self.modup_out.cpu()
+        self.rescale_out = self.rescale_out.cpu()
+        self.automorphism_transform_out = self.automorphism_transform_out.cpu()
+        self.switch_modulus_out = self.switch_modulus_out.cpu()
+        self.PModq_cuda = self.PModq_cuda.cpu()
+
+        self.key_map = [v.cpu() for v in self.key_map]
+
+        for key, value in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [v.cpu() for v in value]
+        for key, value in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = value.cpu()
+
+        for key, value in self.BsContext.QplusP_map.items():
+            self.BsContext.QplusP_map[key] = value.cpu()
+        for key, value in self.BsContext.QmuplusPmu_map.items():
+            self.BsContext.QmuplusPmu_map[key] = value.cpu()
+        
+        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+                self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cpu()
+
+        for i in range(len(self.BsContext.m_U0PreFFT)):
+            for j in range(len(self.BsContext.m_U0PreFFT[i])):
+                self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cpu() 
+
+    def cuda(self):
+        self.q_mu_cuda = self.q_mu_cuda.cuda()
+        self.moduliQ_cuda = self.moduliQ_cuda.cuda()
+        self.primes = self.primes.cuda()
+        self.power_of_roots = self.power_of_roots.cuda()
+        self.power_of_roots_shoup = self.power_of_roots_shoup.cuda()
+        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cuda()
+        self.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cuda()
+        self.barret_k = self.barret_k.cuda()
+        self.barret_ratio = self.barret_ratio.cuda()
+        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cuda()
+        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cuda()
+        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cuda()
+        self.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cuda()
+        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cuda()
+        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cuda()
+        self.prod_inv_moddown = self.prod_inv_moddown.cuda()
+        self.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cuda()
+        self.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cuda()
+        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cuda()
+        self.q_inv_mod_q = self.q_inv_mod_q.cuda()
+        self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cuda()
+        self.swk_bx_cuda = self.swk_bx_cuda.cuda()
+        self.swk_ax_cuda = self.swk_ax_cuda.cuda()
+        self.inner_workspace = self.inner_workspace.cuda()
+        self.inner_out = self.inner_out.cuda()
+        self.moddown_out_ax = self.moddown_out_ax.cuda()
+        self.moddown_out_bx = self.moddown_out_bx.cuda()
+        self.modup_out = self.modup_out.cuda()
+        self.rescale_out = self.rescale_out.cuda()
+        self.automorphism_transform_out = self.automorphism_transform_out.cuda()
+        self.switch_modulus_out = self.switch_modulus_out.cuda()
+        self.PModq_cuda = self.PModq_cuda.cuda()
+
+        self.key_map = [v.cuda() for v in self.key_map]
+
+        for key, value in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [v.cuda() for v in value]
+        for key, value in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = value.cuda()
+
+        for key, value in self.BsContext.QplusP_map.items():
+            self.BsContext.QplusP_map[key] = value.cuda()
+        for key, value in self.BsContext.QmuplusPmu_map.items():
+            self.BsContext.QmuplusPmu_map[key] = value.cuda()
+        
+        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+                self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cuda()
+
+        for i in range(len(self.BsContext.m_U0PreFFT)):
+            for j in range(len(self.BsContext.m_U0PreFFT[i])):
+                self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cuda()            
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!

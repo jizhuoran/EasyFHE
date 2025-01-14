@@ -175,6 +175,7 @@ def adjust_for_add_or_sub(in0, in1, cryptoContext):
 
         if isinstance(in0, Plaintext) or isinstance(in1, Plaintext): #todo: this branch is not tested
             # Bring to same depth if not already same
+            raise ValueError("Plaintexts are not supported in this version of the library.")
             if ptxtDepth < ctxtDepth:
                 diffDepth = ctxtDepth - ptxtDepth
                 intSF = int(scFactor + 0.5) # todo: to check if equivalent to openfhe
@@ -288,7 +289,7 @@ def cipher_square(in0, cryptoContext):
 
 def cipher_add_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs).to(in0.cv[0].device)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
         in0.cv[1],
@@ -298,7 +299,7 @@ def cipher_add_scalar(in0, scalar, cryptoContext):
 
 def cipher_sub_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs).to(in0.cv[0].device)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs),
         in0.cv[1],
@@ -309,7 +310,7 @@ def cipher_sub_scalar(in0, scalar, cryptoContext):
 #todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 def cipher_mul_scalar(in0, scalar, cryptoContext):
     assert len(in0.cv) == 2
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_cuda, in0.cur_limbs).to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0, scalar_mod, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs

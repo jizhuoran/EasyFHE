@@ -4,6 +4,60 @@ import numpy as np
 
 Tensor = torch.Tensor
 
+# def cpp_cuda_adaptor(func):
+#     def wrapper(*args, **kwargs):
+#         args_new = []
+#         for i in range(len(args)):
+#             if isinstance(args[i], torch.Tensor):
+#                 args_new.append(args[i].cpu())
+#             elif isinstance(args[i], Context):
+#                 args_new.append(args[i])
+#                 args_new[-1].cpu()
+#             else:
+#                 args_new.append(args[i])
+#         result = func(*args_new, **kwargs)
+#         for i in range(len(args_new)):
+#             if isinstance(args_new[i], Context):
+#                 args_new[i].cuda()
+#         if isinstance(result, list):
+#             return [r.cuda() for r in result]
+#         elif isinstance(result, torch.Tensor):
+#             result = result.cuda()
+#         return result
+#     return wrapper
+
+# def cpp_cuda_compare(func):
+#     def wrapper(*args, **kwargs):
+#         args_new = []
+#         for i in range(len(args)):
+#             print("type of args[i]: ", type(args[i]))
+#             if isinstance(args[i], torch.Tensor):
+#                 args_new.append(args[i].clone().cpu())
+#             elif isinstance(args[i], Context):
+#                 args_new.append(args[i])
+#                 args_new[-1].cpu()
+#             else:
+#                 print("type of args[i]: ", type(args[i]))
+#                 args_new.append(args[i])
+#         result = func(*args_new, **kwargs)
+#         result_gt = func(*args, **kwargs)
+#         for i in range(len(args_new)):
+#             if isinstance(args_new[i], Context):
+#                 args_new[i].cuda()
+
+#         print("device of result: ", result.device)
+#         print("device of result_gt: ", result_gt.device)
+#         if not torch.allclose(result_gt.cpu(), result):
+#             print("Test Failed")
+#             print("Expected: ", result_gt)
+#             print("Got: ", result)
+#             exit(1)
+#         else:
+#             print("Test Passed")
+#         return result_gt
+#     return wrapper
+
+
 
 def cv_check(x, modulus, cur_limbs):
     if isinstance(x, torch.Tensor):
@@ -17,67 +71,68 @@ def cv_check(x, modulus, cur_limbs):
                 print(l, i, x[l][i], modulus[l])
                 # assert False
 
-
 def gen_scalar_tensor(scalar, modulus, cur_limbs):
     return torch.from_numpy(
         np.array(
             [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)],
             dtype=np.uint64,
         )
-    ).cuda()
+    )
 
+# does not copy back when CPU and GPU
 def cv_set_zero(x, length):
-    torch.set_zero(x, length)
+    return torch.set_zero(x, length)
 
+# @cpp_cuda_adaptor
 def cv_neg(x, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.neg_mod_(x, x, modulus, cur_limbs=cur_limbs)
     else:
         return torch.neg_mod(x, x, modulus, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_add(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_mod_(x, y, modulus, cur_limbs=cur_limbs)
     else:
         return torch.add_mod(x, y, modulus, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_sub(x, y, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_mod_(x, y, modulus, cur_limbs=cur_limbs)
     else:
         return torch.sub_mod(x, y, modulus, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_mod_(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
     else:
         return torch.mul_mod(x, y, modulus, barret_mu, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.add_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
     else:
         return torch.add_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
     if inplace:
         return torch.sub_scalar_mod_(x, scalar, modulus, cur_limbs=cur_limbs)
     else:
         return torch.sub_scalar_mod(x, scalar, modulus, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
     if inplace:
         return torch.mul_scalar_mod_(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
     else:
         return torch.mul_scalar_mod(x, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
 
-
+# @cpp_cuda_adaptor
 def cv_modup(
     x: Tensor,
     curr_limbs: int,
@@ -128,7 +183,7 @@ def cv_modup(
 
     return res.reshape(-1, context.N)
 
-
+# @cpp_cuda_adaptor
 def cv_moddown(
     x: Tensor,
     curr_limbs: int,
@@ -182,7 +237,7 @@ def cv_moddown(
 
     return res.reshape(-1, context.N)
 
-
+# @cpp_cuda_adaptor
 def NTT(
     x: Tensor,
     start_prime_idx: int,
@@ -215,7 +270,7 @@ def NTT(
         )
     return res
 
-
+# @cpp_cuda_adaptor
 def iNTT(
     x: Tensor,
     curr_limbs: int,
@@ -254,7 +309,7 @@ def iNTT(
         )
     return res
 
-
+# @cpp_cuda_adaptor
 def cv_innerproduct(
     x: Tensor,
     curr_limbs: int,
@@ -275,7 +330,6 @@ def cv_innerproduct(
                                  barret_k=context.barret_k, workspace=context.inner_workspace)
     return res.reshape(2, -1, context.N)
 
-
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
@@ -288,9 +342,9 @@ def cv_keyswitch(
     context.beta = true_beta
     modup_res = cv_modup(
         input,
-        curr_limbs=cur_limbs,
-        context=context,
-        inplace=inplace,
+        cur_limbs,
+        context,
+        inplace,
     )
     inner_product = cv_innerproduct(
         modup_res.reshape(-1),
@@ -298,7 +352,7 @@ def cv_keyswitch(
         swk_bx,
         swk_ax,
         context,
-        inplace=inplace,
+        inplace,
     )
 
     sumMult_bx = inner_product[0]
@@ -306,21 +360,21 @@ def cv_keyswitch(
 
     moddown_bx = cv_moddown(
         sumMult_bx,
-        curr_limbs=cur_limbs,
-        context=context,
-        inplace=False,
+        cur_limbs,
+        context,
+        False,
     )
 
     moddown_ax = cv_moddown(
         sumMult_ax,
-        curr_limbs=cur_limbs,
-        context=context,
-        inplace=False,
+        cur_limbs,
+        context,
+        False,
     )
 
     return [moddown_bx, moddown_ax]
 
-
+# @cpp_cuda_adaptor
 def cv_drop_last_element_and_scale(
     input: Tensor,
     cur_limbs: int,
@@ -371,50 +425,7 @@ def cv_drop_last_element_and_scale(
 
     return rescale.reshape(-1, context.N)
 
-
-def cv_rescale( #todo: deprecated, to be removed, as well as inner functions
-    input: Tensor,
-    cur_limbs: int,
-    context: Context,
-    inplace: bool = False,
-) -> Tensor:
-    if inplace:
-        rescale = torch.rescale_(
-            context.rescale_out,
-            input,
-            curr_limbs=cur_limbs,
-            level=context.L,
-            param_degree=context.N,
-            param_primes=context.primes,
-            param_barret_ratio=context.barret_ratio,
-            param_barret_k=context.barret_k,
-            param_power_of_roots_shoup=context.power_of_roots_shoup,
-            param_power_of_roots=context.power_of_roots,
-            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-            q_inv_mod_q=context.q_inv_mod_q,
-            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
-        )
-    else:
-        rescale = torch.rescale(
-            context.rescale_out,
-            input,
-            curr_limbs=cur_limbs,
-            level=context.L,
-            param_degree=context.N,
-            param_primes=context.primes,
-            param_barret_ratio=context.barret_ratio,
-            param_barret_k=context.barret_k,
-            param_power_of_roots_shoup=context.power_of_roots_shoup,
-            param_power_of_roots=context.power_of_roots,
-            inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-            q_inv_mod_q=context.q_inv_mod_q,
-            q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
-        )
-
-    return rescale.reshape(-1, context.N)
-
+# @cpp_cuda_adaptor
 def cv_automorphism_transform(
     input: Tensor,
     l: int,
@@ -432,6 +443,7 @@ def cv_automorphism_transform(
 
     return automorphism_transform.reshape(-1, context.N)
 
+# @cpp_cuda_adaptor
 def cv_switch_modulus_with_intt_ntt(
     input: Tensor, 
     L0 : int,
@@ -452,7 +464,7 @@ def cv_switch_modulus_with_intt_ntt(
     )
     return switch_modulus.reshape(-1, context.N)
 
-
+# @cpp_cuda_compare
 def cv_mul_by_monomial(
     input: Tensor,
     l: int,

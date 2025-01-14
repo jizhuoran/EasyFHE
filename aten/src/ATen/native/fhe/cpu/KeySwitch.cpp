@@ -3,49 +3,18 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/core/TensorBody.h>
 #include <ATen/core/interned_strings.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/native/cuda/thread_constants.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-
-#include "ATen/native/fhe/cuda/KeySwitch.h"
-#include "ATen/native/fhe/cuda/NttImpl.cuh"
+#include <immintrin.h>
+#include "ATen/native/fhe/cpu/KeySwitch.h"
+#include "ATen/native/fhe/cpu/NttImpl.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
 
-__global__ void modup_step_two_simple(
-    const uint64_t* ptr_after_intt,
-    const uint64_t* ptr_before_intt,
-    const int in_prime_idx,
-    const int degree,
-    const uint64_t* primes,
-    const uint64_t* barrett_ratios,
-    const uint64_t* barrett_Ks,
-    const uint64_t end_length,
-    uint64_t* to) {
-  STRIDED_LOOP_START(degree * end_length, i);
-  const int out_prime_idx = i / degree;
-  const int degree_idx = i % degree;
-  const auto barret_ratio = barrett_ratios[out_prime_idx];
-  const auto barret_k = barrett_Ks[out_prime_idx];
-  if (out_prime_idx != in_prime_idx) {
-    const auto in = ptr_after_intt[degree_idx];
-    if (primes[in_prime_idx] > primes[out_prime_idx]) {
-      barret_reduction_64_64(
-          in, to[i], primes[out_prime_idx], barret_ratio, barret_k);
-    } else {
-      to[i] = in;
-    }
-  } else {
-    to[i] = ptr_before_intt[degree_idx];
-  }
-  STRIDED_LOOP_END;
-}
-
-__global__ void const_mult_batch(
+void const_mult_batch(
     size_t degree,
     const uint64_t* primes,
     uint64_t* op1,
@@ -70,7 +39,7 @@ __global__ void const_mult_batch(
   STRIDED_LOOP_END;
 }
 
-__device__ uint128_t4 accumulate_in_modup(
+uint128_t4 accumulate_in_modup(
     const uint64_t* ptr,
     const int degree,
     const uint64_t* hat_mod_end,
@@ -82,30 +51,42 @@ __device__ uint128_t4 accumulate_in_modup(
     const uint64_t op2 = hat_mod_end[hat_mod_end_idx * start_length + i];
     uint128_t4 out;
     uint64_t op1_x, op1_y, op1_z, op1_w;
-    asm("{\n\t"
-        "ld.global.v2.u64 {%0, %1}, [%2];\n\t"
-        "}"
-        : "=l"(op1_x), "=l"(op1_y)
-        : "l"(ptr + i * degree + degree_idx));
+
+    op1_x = ptr[i * degree + degree_idx];
+    op1_y = ptr[i * degree + degree_idx + 1];
+    op1_z = ptr[i * degree + degree_idx + 2];
+    op1_w = ptr[i * degree + degree_idx + 3];
 
     out.x = mult_64_64_128(op1_x, op2);
     inplace_add_128_128(out.x, accum.x);
     out.y = mult_64_64_128(op1_y, op2);
     inplace_add_128_128(out.y, accum.y);
-    asm("{\n\t"
-        "ld.global.v2.u64 {%0, %1}, [%2];\n\t"
-        "}"
-        : "=l"(op1_z), "=l"(op1_w)
-        : "l"(ptr + i * degree + degree_idx + 2));
     out.z = mult_64_64_128(op1_z, op2);
     inplace_add_128_128(out.z, accum.z);
     out.w = mult_64_64_128(op1_w, op2);
     inplace_add_128_128(out.w, accum.w);
+
+
+    // // Calculate the address for op1_z and op1_w
+    // const uint64_t* addr2 = ptr + i * degree + degree_idx + 2;
+
+    // op1_z = addr2[0];
+    // op1_w = addr2[1];
+    // // Inline assembly to load op1_z and op1_w
+    // asm volatile (
+    //     "movq (%1), %0\n\t"      // Load op1_z from [addr2]
+    //     "movq 8(%1), %2\n\t"     // Load op1_w from [addr2 + 8]
+    //     : "=r" (op1_z), "=r" (op1_w) // Output operands
+    //     : "r" (addr2)                  // Input operand
+    //     : "memory"                     // Clobbered register
+    // );
+
+
   }
   return accum;
 }
 
-__global__ void modup_step_two_kernel(
+void modup_step_two_kernel(
     const uint64_t* ptr,
     const int begin_idx,
     const int degree,
@@ -121,8 +102,9 @@ __global__ void modup_step_two_kernel(
     const uint64_t end_length,
     uint64_t* to) {
   constexpr const int unroll_number = 4;
-  extern __shared__ uint64_t s_hat_mod_end[];
-  for (int i = threadIdx.x; i < hat_mod_end_size; i += blockDim.x) {
+  std::vector<uint64_t> s_hat_mod_end_vec(hat_mod_end_size);
+  uint64_t* s_hat_mod_end = s_hat_mod_end_vec.data();
+  for (int i = 0; i < hat_mod_end_size; ++i) {
     s_hat_mod_end[i] = hat_mod_end[i];
   }
   __syncthreads();
@@ -144,29 +126,48 @@ __global__ void modup_step_two_kernel(
   const auto barret_ratio = barrett_ratios[prime_idx];
   const auto barret_k = barrett_Ks[prime_idx];
   {
-    uint64_t out =
-        barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_idx * degree + degree_idx),
-        "l"(out),
-        "l"(out2));
+        // First store operation
+        uint64_t out1 = barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
+        uint64_t out2 = barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
+
+        to[out_idx * degree + degree_idx] = out1;
+        to[out_idx * degree + degree_idx + 1] = out2;
+        // // Inline Assembly for storing out1 and out2
+        // __asm__ __volatile__(
+        //     "mov %[val1], %%rax\n\t"
+        //     "mov %[val2], %%rbx\n\t"
+        //     "mov %%rax, (%[addr])\n\t"
+        //     "mov %%rbx, 8(%[addr])\n\t"
+        //     :
+        //     : [val1] "r" (out1),
+        //       [val2] "r" (out2),
+        //       [addr] "r" (to + out_idx * degree + degree_idx)
+        //     : "rax", "rbx", "memory"
+        // );
   }
   {
-    uint64_t out =
-        barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_idx * degree + degree_idx + 2),
-        "l"(out),
-        "l"(out2));
+        // Second store operation
+        uint64_t out3 = barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
+        uint64_t out4 = barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
+        to[out_idx * degree + degree_idx + 2] = out3;
+        to[out_idx * degree + degree_idx + 3] = out4;
+        // // Inline Assembly for storing out3 and out4
+        // __asm__ __volatile__(
+        //     "mov %[val3], %%rax\n\t"
+        //     "mov %[val4], %%rbx\n\t"
+        //     "mov %%rax, 16(%[addr])\n\t" // +2 * 8 bytes = +16 bytes
+        //     "mov %%rbx, 24(%[addr])\n\t"
+        //     :
+        //     : [val3] "r" (out3),
+        //       [val4] "r" (out4),
+        //       [addr] "r" (to + out_idx * degree + degree_idx)
+        //     : "rax", "rbx", "memory"
+        // );
   }
   STRIDED_LOOP_END;
 }
 
-__global__ void moddown_kernel(
+void moddown_kernel(
     int degree_,
     uint64_t* d_primes,
     uint64_t* d_barret_ratio,
@@ -179,8 +180,9 @@ __global__ void moddown_kernel(
     const uint64_t end_length,
     uint64_t* to) {
   constexpr const int unroll_number = 4;
-  extern __shared__ uint64_t s_hat_mod_end[];
-  for (int i = threadIdx.x; i < hat_mod_end_size; i += blockDim.x) {
+  std::vector<uint64_t> s_hat_mod_end_vec(hat_mod_end_size);
+  uint64_t* s_hat_mod_end = s_hat_mod_end_vec.data();
+  for (int i = 0; i < hat_mod_end_size; ++i) {
     s_hat_mod_end[i] = hat_mod_end[i];
   }
   __syncthreads();
@@ -198,25 +200,21 @@ __global__ void moddown_kernel(
         barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
     uint64_t out2 =
         barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_prime_idx * degree_ + degree_idx),
-        "l"(out),
-        "l"(out2));
+    to[out_prime_idx * degree_ + degree_idx] = out;
+    to[out_prime_idx * degree_ + degree_idx + 1] = out2;
   }
   {
-    uint64_t out =
+    uint64_t out3 =
         barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    uint64_t out2 =
+    uint64_t out4 =
         barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_prime_idx * degree_ + degree_idx + 2),
-        "l"(out),
-        "l"(out2));
+    to[out_prime_idx * degree_ + degree_idx + 2] = out3;
+    to[out_prime_idx * degree_ + degree_idx + 3] = out4;
   }
   STRIDED_LOOP_END;
 }
 
-__global__ void negateInplace_(
+void negateInplace_(
     size_t degree,
     size_t log_degree,
     size_t batch,
@@ -230,7 +228,7 @@ __global__ void negateInplace_(
   STRIDED_LOOP_END;
 }
 
-__global__ void subInplace_(
+void subInplace_(
     size_t degree,
     size_t batch,
     const uint64_t* primes,
@@ -247,7 +245,7 @@ __global__ void subInplace_(
   STRIDED_LOOP_END;
 }
 
-__global__ void vec_add_mod_batch_(
+void vec_add_mod_batch_(
     int degree_,
     uint64_t* d_primes,
     uint64_t* d_barret_ratio,
@@ -268,7 +266,7 @@ __global__ void vec_add_mod_batch_(
   STRIDED_LOOP_END;
 }
 
-__global__ void vec_mod_batch_(
+void vec_mod_batch_(
     int degree_,
     uint64_t* d_primes,
     uint64_t* d_barret_ratio,
@@ -287,7 +285,7 @@ __global__ void vec_mod_batch_(
   STRIDED_LOOP_END;
 }
 
-__global__ void switch_modulus_(
+void switch_modulus_(
     size_t degree,
     size_t batch,
     const size_t old_prime_idx,
@@ -320,7 +318,7 @@ __global__ void switch_modulus_(
 
 namespace at::native {
 
-Tensor iNTT_cuda(
+Tensor iNTT_cpu(
     const Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -346,7 +344,7 @@ Tensor iNTT_cuda(
   return res;
 }
 
-Tensor& iNTT_cuda_(
+Tensor& iNTT_cpu_(
     Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -371,7 +369,7 @@ Tensor& iNTT_cuda_(
   return op;
 }
 
-Tensor& iNTT_cuda_out(
+Tensor& iNTT_cpu_out(
     const Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -397,7 +395,7 @@ Tensor& iNTT_cuda_out(
   return res;
 }
 
-Tensor NTT_cuda(
+Tensor NTT_cpu(
     const Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -419,7 +417,7 @@ Tensor NTT_cuda(
   return res;
 }
 
-Tensor& NTT_cuda_(
+Tensor& NTT_cpu_(
     Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -440,7 +438,7 @@ Tensor& NTT_cuda_(
   return op;
 }
 
-Tensor& NTT_cuda_out(
+Tensor& NTT_cpu_out(
     const Tensor& op,
     int64_t start_prime_idx,
     int64_t batch,
@@ -475,14 +473,14 @@ static void NTT_except_some_range_impl(
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
   auto excluded_range_end = excluded_range_start + excluded_range_size;
-  dim3 grid(2048);
-  dim3 block(256);
+  size_t grid(2048);
+  size_t block(256);
   const int per_thread_ntt_size = 8;
   const int first_stage_radix_size = 256;
   const int second_radix_size = param_degree / first_stage_radix_size;
   const int pad = 4;
   const int per_thread_storage =
-      block.x * per_thread_ntt_size * sizeof(uint64_t);
+      block * per_thread_ntt_size * sizeof(uint64_t);
   AT_DISPATCH_V2(
       kUInt64,
       "NTT_except_some_range_impl",
@@ -494,12 +492,7 @@ static void NTT_except_some_range_impl(
         auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
             param_power_of_roots.data_ptr<uint64_t>());
         int gap = level - curr_limbs;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange<<<
-            grid,
-            (first_stage_radix_size / 8) * pad,
-            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
-            stream>>>(
+        fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange(
             op_ptr,
             1,
             batch,
@@ -513,12 +506,11 @@ static void NTT_except_some_range_impl(
             first_stage_radix_size / per_thread_ntt_size,
             param_power_of_roots_ptr,
             param_power_of_roots_shoup_ptr,
-            param_primes_ptr);
-        fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange<<<
-            grid,
-            block.x,
-            per_thread_storage,
-            stream>>>(
+            param_primes_ptr,
+             grid,
+            (first_stage_radix_size / 8) * pad,
+            (first_stage_radix_size + pad + 1) * pad);
+        fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange(
             op_ptr,
             first_stage_radix_size,
             batch,
@@ -531,8 +523,10 @@ static void NTT_except_some_range_impl(
             second_radix_size / per_thread_ntt_size,
             param_power_of_roots_ptr,
             param_power_of_roots_shoup_ptr,
-            param_primes_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
+            param_primes_ptr,
+            grid,
+            block,
+            per_thread_storage / sizeof(uint64_t));
       }),
       kUInt64);
 }
@@ -559,8 +553,7 @@ void const_mult_batch_(
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = param_degree * batch / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::const_mult_batch<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::const_mult_batch(
             (int)param_degree,
             primes_ptr,
             op1_ptr,
@@ -571,7 +564,6 @@ void const_mult_batch_(
             (int)start_op1_idx,
             (int)start_op2_idx,
             res_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -610,12 +602,7 @@ static void modup_matmul_(
             reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
         auto prod_q_i_mod_q_j_ptr =
             reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::modup_step_two_kernel<<<
-            grid_dim,
-            block_dim,
-            prod_q_i_mod_q_j.size(-1) * sizeof(uint64_t),
-            stream>>>(
+        fhe::modup_step_two_kernel(
             ptr,
             begin_idx,
             param_degree_,
@@ -630,7 +617,6 @@ static void modup_matmul_(
             start_length,
             end_length,
             to_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -664,13 +650,10 @@ static void modup_impl_(
   auto hat_inverse_vec_psinv =
       hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
 
-  auto stream = at::cuda::getCurrentCUDAStream();
-  cudaMemcpyAsync(
+  memcpy(
       to_ptr + (param_degree_ * begin_idx),
       from_ptr,
-      8 * in_C_L_len * param_degree_,
-      cudaMemcpyDeviceToDevice,
-      stream);
+      8 * in_C_L_len * param_degree_);
 
   iNTT_impl(
       to_ptr,
@@ -720,13 +703,11 @@ static void modup_impl_(
       param_power_of_roots_shoup,
       param_primes__,
       param_power_of_roots);
-
-  cudaMemcpyAsync(
-      to_ptr + param_degree_ * begin_idx,
+  
+    memcpy(
+      to_ptr + (param_degree_ * begin_idx),
       from_ptr,
-      8 * in_C_L_len * param_degree_,
-      cudaMemcpyDeviceToDevice,
-      stream);
+      8 * in_C_L_len * param_degree_);
 }
 
 static void modup(
@@ -770,7 +751,7 @@ static void modup(
   }
 }
 
-Tensor modup_cuda(
+Tensor modup_cpu(
     const Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -812,7 +793,7 @@ Tensor modup_cuda(
       out_ptr);
   return res;
 }
-Tensor& modup_cuda_(
+Tensor& modup_cpu_(
     Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -854,7 +835,7 @@ Tensor& modup_cuda_(
   return out;
 }
 
-Tensor& modup_cuda_out(
+Tensor& modup_cpu_out(
     const Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -921,13 +902,10 @@ static void modup_core_impl_(
   auto hat_inverse_vec_psinv =
       hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
 
-  auto stream = at::cuda::getCurrentCUDAStream();
-  cudaMemcpyAsync(
+  memcpy(
       to_ptr + (param_degree_ * begin_idx),
       from_ptr,
-      8 * in_C_L_len * param_degree_,
-      cudaMemcpyDeviceToDevice,
-      stream);
+      8 * in_C_L_len * param_degree_);
 
   const_mult_batch_(
       to_ptr,
@@ -953,13 +931,11 @@ static void modup_core_impl_(
       prod_q_i_mod_q_j__,
       curr_limbs,
       level);
-
-  cudaMemcpyAsync(
-      to_ptr + param_degree_ * begin_idx,
+  
+  memcpy(
       from_ptr,
-      8 * in_C_L_len * param_degree_,
-      cudaMemcpyDeviceToDevice,
-      stream);
+      to_ptr + (param_degree_ * begin_idx),
+      8 * in_C_L_len * param_degree_);
 }
 
 static void modup_core(
@@ -995,7 +971,7 @@ static void modup_core(
   }
 }
 
-Tensor modup_core_cuda(
+Tensor modup_core_cpu(
     const Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -1030,7 +1006,7 @@ Tensor modup_core_cuda(
   return res;
 }
 
-Tensor& modup_core_cuda_(
+Tensor& modup_core_cpu_(
     Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -1064,7 +1040,7 @@ Tensor& modup_core_cuda_(
   return out;
 }
 
-Tensor& modup_core_cuda_out(
+Tensor& modup_core_cpu_out(
     const Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
@@ -1113,10 +1089,8 @@ static void NegateInplace(
         const int grid_dim = param_degree * batch / block_dim;
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::negateInplace_<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::negateInplace_(
             param_degree, param_log_degree, batch, primes_ptr, op1);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1135,10 +1109,8 @@ void SubInplace(
         const int grid_dim = param_degree * batch / block_dim;
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::subInplace_<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::subInplace_(
             param_degree, batch, primes_ptr, op1, op2);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1171,12 +1143,7 @@ static void moddown_impl(
             reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
         auto prod_q_i_mod_q_j_ptr =
             reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::moddown_kernel<<<
-            grid_dim,
-            block_dim,
-            prod_q_i_mod_q_j.size(-1) * sizeof(uint64_t),
-            stream>>>(
+        fhe::moddown_kernel(
             param_degree,
             primes_ptr,
             param_barret_ratio_ptr,
@@ -1188,7 +1155,6 @@ static void moddown_impl(
             param_alpha_,
             end_length,
             to_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1264,7 +1230,7 @@ static void moddown_core_template(
       param_primes);
 }
 
-Tensor moddown_core_cuda(
+Tensor moddown_core_cpu(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1301,7 +1267,7 @@ Tensor moddown_core_cuda(
   return res;
 }
 
-Tensor& moddown_core_cuda_(
+Tensor& moddown_core_cpu_(
     Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1337,7 +1303,7 @@ Tensor& moddown_core_cuda_(
   return to;
 }
 
-Tensor& moddown_core_cuda_out(
+Tensor& moddown_core_cpu_out(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1374,7 +1340,7 @@ Tensor& moddown_core_cuda_out(
   return res;
 }
 
-static void moddown_cuda_template(
+static void moddown_cpu_template(
     const Tensor& from,
     int64_t curr_limbs,
     int64_t level,
@@ -1425,7 +1391,7 @@ static void moddown_cuda_template(
       param_degree,
       from_ptr,
       param_primes);
-
+    
   moddown_impl(
       from_ptr,
       param_degree,
@@ -1469,7 +1435,7 @@ static void moddown_cuda_template(
       param_primes);
 }
 
-Tensor moddown_cuda(
+Tensor moddown_cpu(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1489,10 +1455,10 @@ Tensor moddown_cuda(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-    auto from_ = from.clone();
-    auto res = at::empty({curr_limbs * param_degree}, from.options());
-  moddown_cuda_template(
-      from,
+  auto from_ = from.clone();
+  auto res = at::empty({curr_limbs * param_degree}, from.options());
+  moddown_cpu_template(
+      from_,
       curr_limbs,
       level,
       alpha,
@@ -1514,7 +1480,7 @@ Tensor moddown_cuda(
   return res;
 }
 
-Tensor& moddown_cuda_(
+Tensor& moddown_cpu_(
     Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1535,7 +1501,7 @@ Tensor& moddown_cuda_(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   to.resize_({curr_limbs * param_degree});
-  moddown_cuda_template(
+  moddown_cpu_template(
       from,
       curr_limbs,
       level,
@@ -1557,7 +1523,7 @@ Tensor& moddown_cuda_(
       to);
   return to;
 }
-Tensor& moddown_cuda_out(
+Tensor& moddown_cpu_out(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1579,7 +1545,7 @@ Tensor& moddown_cuda_out(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     Tensor& res) {
   res.resize_({curr_limbs * param_degree});
-  moddown_cuda_template(
+  moddown_cpu_template(
       from,
       curr_limbs,
       level,
@@ -1623,8 +1589,7 @@ void vec_add_mod_batch(
             reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = degree * batch / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::vec_add_mod_batch_<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::vec_add_mod_batch_(
             (int)degree,
             primes_ptr,
             barret_ratio_ptr,
@@ -1633,7 +1598,6 @@ void vec_add_mod_batch(
             op2_ptr,
             (int)batch,
             res_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1658,8 +1622,7 @@ void vec_mod_batch(
             reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = degree * batch / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::vec_mod_batch_<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::vec_mod_batch_(
             (int)degree,
             primes_ptr,
             barret_ratio_ptr,
@@ -1667,7 +1630,6 @@ void vec_mod_batch(
             op1_ptr,
             (int)batch,
             res_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1687,10 +1649,8 @@ void switch_modulus(
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = degree * batch / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::switch_modulus_<<<grid_dim, block_dim, 0, stream>>>(
+        fhe::switch_modulus_(
             (int)degree, batch, old_prime_index, primes_ptr, ptr, res_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
 }
@@ -1779,7 +1739,7 @@ static void drop_last_element_scale_template(
       to_ptr);
 }
 
-Tensor drop_last_element_scale_cuda(
+Tensor drop_last_element_scale_cpu(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1822,7 +1782,7 @@ Tensor drop_last_element_scale_cuda(
   return res;
 }
 
-Tensor& drop_last_element_scale_cuda_(
+Tensor& drop_last_element_scale_cpu_(
     Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1864,7 +1824,7 @@ Tensor& drop_last_element_scale_cuda_(
   return to;
 }
 
-Tensor& drop_last_element_scale_cuda_out(
+Tensor& drop_last_element_scale_cpu_out(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -1972,7 +1932,7 @@ static void rescale_template(
       param_primes);
 }
 
-Tensor rescale_cuda(
+Tensor rescale_cpu(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -2009,7 +1969,7 @@ Tensor rescale_cuda(
   return res;
 }
 
-Tensor& rescale_cuda_(
+Tensor& rescale_cpu_(
     Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
@@ -2045,7 +2005,7 @@ Tensor& rescale_cuda_(
   return to;
 }
 
-Tensor& rescale_cuda_out(
+Tensor& rescale_cpu_out(
     const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
