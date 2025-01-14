@@ -48,7 +48,7 @@ def gen_contexts(
 
     L = depth + 1  # GPUFHE: L
     K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
-    specify_slots = logSlots_list[0]
+    specify_slots = logSlots_list[0] #todo: to be removed?
 
     parameters = openfhe.CCParamsCKKSRNS()
 
@@ -60,7 +60,7 @@ def gen_contexts(
     parameters.SetSecretKeyDist(openfhe_secretKeyDist)
     parameters.SetNumLargeDigits(dnum)  # dnum GPU-FHE
     parameters.SetRingDim(N)
-    parameters.SetBatchSize(1<<specify_slots)  # ZRJI: slots
+    # parameters.SetBatchSize(slots)  # ZRJI: slots #todo: to be removed
     parameters.SetSecurityLevel(openfhe.SecurityLevel.HEStd_NotSet)
     parameters.SetKeySwitchTechnique(openfhe.KeySwitchTechnique.HYBRID)
 
@@ -196,7 +196,7 @@ def gen_contexts(
     openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
-    openfheMembers["slots"] = 1<<specify_slots
+    openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
     openfheMembers["level_budget"] = levelBudget
 
     with open(save_path, "wb") as file:

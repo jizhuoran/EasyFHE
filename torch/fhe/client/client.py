@@ -32,13 +32,9 @@ class OpenFHEContext:
             ptx.Encode()
             return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
         else:
-            # example
-            # x = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0]
-            # encoded_length = len(x)
-            # ptxt = cryptocontext.MakeCKKSPackedPlaintext(x,1,depth-1)
-            # ptxt.SetLength(encoded_length)
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
-            ptx.SetLength(slots)
+            if slots is None:
+                slots = len(x)
+            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
             data = ptx.GetVectorOfData()
             cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
             # return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg, ptx.GetSlots()) #todo: can be used after refactor Plaintext in ciphertext.py
@@ -46,12 +42,9 @@ class OpenFHEContext:
 
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
-        if slots is not None:
-            ptx.SetLength(slots)
-        else: #todo: if input slots > len(x), do we need to fill with zeros
+        if slots is None:
             slots = len(x)
-            ptx.SetLength(slots)
+        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]

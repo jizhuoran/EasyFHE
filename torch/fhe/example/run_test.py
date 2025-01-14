@@ -35,7 +35,7 @@ cryptoContext, openfhe_context = utils.try_load_context(
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
 x = torch.tensor(x, device="cuda")
-cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
+cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1<<logSlots)) #specify the slots value explicitly
 
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
 openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
