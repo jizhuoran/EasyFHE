@@ -100,13 +100,13 @@ def coeffs_slots_conversion(A, ctxt, direction, cryptoContext):
         limbs_ext = curr_limbs + cryptoContext.K
         len_ext = limbs_ext << cryptoContext.logN
 
-        digits = hoisting_keyswitch.eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
+        digits = hoisting_keyswitch.eval_rotation_ext_precompute(result.cv[1], result.cur_limbs, cryptoContext)
 
         fast_rotation_ext = []
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(hoisting_keyswitch.eval_fast_rotation_ext(result, digits, rot_in[s][j], True,
+                fast_rotation_ext.append(hoisting_keyswitch.eval_rotation_ext(result, digits, rot_in[s][j], True,
                                                                                  cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, True, cryptoContext))
@@ -132,11 +132,11 @@ def coeffs_slots_conversion(A, ctxt, direction, cryptoContext):
                         inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
                     first = hoisting_keyswitch.cv_add_ext(first, first_current, curr_limbs, cryptoContext)
                     
-                    inner_digits = hoisting_keyswitch.eval_fast_rotation_precompute(
+                    inner_digits = hoisting_keyswitch.eval_rotation_ext_precompute(
                         inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
                     )
                     
-                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, rot_out[s][i],
+                    inner_ks_down_ext = hoisting_keyswitch.eval_rotation_ext(inner_ks_down, inner_digits, rot_out[s][i],
                                                                                   False, cryptoContext)
                     outer = hoisting_keyswitch.eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
                 else:

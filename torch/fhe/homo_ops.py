@@ -6,7 +6,7 @@ from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
-from .utils import check_meta_equal, check_cipher_len
+from .utils import check_meta_equal, check_cipher_len, call_counter
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed?
 
@@ -242,6 +242,7 @@ def _eval_mult_core(cipher, constant, cryptoContext):
 #todo: write homo_level_reduce
 
 @check_meta_equal
+@call_counter
 def _cipher_add(in0, in1, cryptoContext):
     cv = [
         F.cv_add(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
@@ -250,6 +251,7 @@ def _cipher_add(in0, in1, cryptoContext):
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
 @check_meta_equal
+@call_counter
 def _cipher_sub(in0, in1, cryptoContext):
     cv = [
         F.cv_sub(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
@@ -259,6 +261,7 @@ def _cipher_sub(in0, in1, cryptoContext):
 
 
 @check_meta_equal
+@call_counter
 def _cipher_mul(in0, in1, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0], in1.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
@@ -288,6 +291,7 @@ def _cipher_mul(in0, in1, cryptoContext):
     return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg+in1.noise_deg, in0.slots)
 
 @check_cipher_len
+@call_counter
 def _cipher_square(in0, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0], in0.cv[0], cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, in0.cur_limbs
@@ -307,6 +311,7 @@ def _cipher_square(in0, cryptoContext):
     return Cipher([bx, ax, axax], in0.cur_limbs, in0.scaling_factor*scFactor, in0.noise_deg + in0.noise_deg, in0.slots)
 
 @check_cipher_len
+@call_counter
 def _cipher_add_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
@@ -316,6 +321,7 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
     return Cipher(cv, in0.cur_limbs,in0.scaling_factor, in0.noise_deg, in0.slots)
 
 @check_cipher_len
+@call_counter
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
@@ -327,6 +333,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 #todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
 #todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 @check_cipher_len
+@call_counter
 def _cipher_mul_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
@@ -343,14 +350,17 @@ def _cipher_neg(in0, cryptoContext):
     cv = [F.cv_neg(cv0, cryptoContext.moduliQ_cuda, in0.cur_limbs) for cv0 in in0.cv]
     return Cipher(cv, in0.cur_limbs, in0.scaling_factor, in0.noise_deg, in0.slots)
 
+@call_counter
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_add(in0, in1, cryptoContext)
 
+@call_counter
 def homo_sub(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_sub(in0, in1, cryptoContext)
 
+@call_counter
 def homo_rescale(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0: return ct.deep_copy()
@@ -366,6 +376,7 @@ def homo_rescale(ct, levels, cryptoContext):
 
     return Cipher([res0, res1], ct.cur_limbs-levels, scFactor, ct.noise_deg-levels, ct.slots)
 
+@call_counter
 def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
     in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
@@ -386,7 +397,7 @@ def homo_mul(in0, in1, cryptoContext):
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)
 
-
+@call_counter
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale(in0, 1, cryptoContext)

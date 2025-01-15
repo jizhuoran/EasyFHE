@@ -46,6 +46,8 @@ def gen_contexts(
         approxModDepth, levelBudget, openfhe_secretKeyDist
     )
 
+    print("depth", depth)
+
     L = depth + 1  # GPUFHE: L
     K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
 
