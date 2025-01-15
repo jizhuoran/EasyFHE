@@ -179,8 +179,8 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        cu = homo_ops.cipher_level_reduce(cu, cu.cur_limbs - T2[
-            m - 1].cur_limbs) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            cu.drop_last_elements(cu.cur_limbs - T2[m - 1].cur_limbs)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -222,7 +222,8 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        su = homo_ops.cipher_level_reduce(su, 1) if cryptoContext.rescaleTech == "FIXEDMANUAL" else su
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            su.drop_last_elements(1)
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -384,10 +385,8 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if rescaleTech == "FIXEDMANUAL":
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
-            level_diff = T[i - 1].cur_limbs - T[k - 1].cur_limbs
-            T[i - 1] = homo_ops.cipher_level_reduce(T[i - 1],
-                                                    level_diff) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[
-                i - 1]
+            if cryptoContext.rescaleTech == "FIXEDMANUAL":
+                T[i - 1].drop_last_elements(T[i - 1].cur_limbs - T[k - 1].cur_limbs)
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)

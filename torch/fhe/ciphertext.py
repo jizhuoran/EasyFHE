@@ -7,13 +7,22 @@ class Cipher:
         self.noise_deg = noise_deg
         self.slots = slots
     
+    def deep_copy(self):
+        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
+
+    def shallow_copy(self):
+        return Cipher(self.cv, self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
+
     def clone(self):
         return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
 
-    def drop_axax(self):
-        assert len(self.cv) == 3
-        res, self.cv = self.cv[-1], self.cv[:-1]
-        return res
+    def drop_last_elements(self, num_levels):
+        assert num_levels <= self.cur_limbs and num_levels >= 0
+        self.cur_limbs -= num_levels
+
+    def try_drop_last_elements(self, num_levels):
+        if num_levels > 0:
+            self.drop_last_elements(num_levels)
 
     def __repr__(self):
 

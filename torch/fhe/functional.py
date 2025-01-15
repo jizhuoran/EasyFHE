@@ -19,12 +19,11 @@ def cv_check(x, modulus, cur_limbs):
 
 
 def gen_scalar_tensor(scalar, modulus, cur_limbs):
-    return torch.from_numpy(
-        np.array(
-            [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)],
-            dtype=np.uint64,
-        )
-    ).cuda()
+    if isinstance(scalar, int):
+        scalar_list = [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)]
+    else:
+        scalar_list = [int(int(scalar[l]) % int(modulus[l])) for l in range(cur_limbs)]
+    return torch.from_numpy(np.array(scalar_list, dtype=np.uint64)).cuda()
 
 def cv_set_zero(x, length):
     torch.set_zero(x, length)
@@ -34,7 +33,6 @@ def cv_neg(x, modulus, cur_limbs, inplace=False):
         return torch.neg_mod_(x, x, modulus, cur_limbs=cur_limbs)
     else:
         return torch.neg_mod(x, x, modulus, cur_limbs=cur_limbs)
-
 
 def cv_add(x, y, modulus, cur_limbs, inplace=False):
     if inplace:

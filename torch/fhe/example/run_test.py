@@ -6,17 +6,36 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-logN = 14
-logSlots = 6
+logN = 16
+logSlots = 8
 maxLevelsRemaining = 3
 levelBudget0 = 4
 levelBudget1 = 4
-dnum = 3
+dnum = 4
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
 rescaleTech = "FIXEDMANUAL"
 path = "data/"
+
+# logN = 15
+# logSlots = 8
+# maxLevelsRemaining = 3
+# levelBudget0 = 4
+# levelBudget1 = 4
+# dnum = 1
+# dcrtBits = 59
+# firstMod = 60
+
+# logN = 14
+# logSlots = 11
+# maxLevelsRemaining = 3
+# levelBudget0 = 3
+# levelBudget1 = 3
+# dnum = 1
+# dcrtBits = 59
+# firstMod = 60
+
 
 cryptoContext, openfhe_context = utils.try_load_context(
     int(logN),
