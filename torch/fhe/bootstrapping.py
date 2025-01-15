@@ -349,6 +349,10 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
     powP = 2**p
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
+    if deg > int(precom.correctionFactor):
+        print("Warning: Degree [" , deg ,"] must be less than or equal to the correction factor[",
+              precom.correctionFactor, "]." )
+
     correction = (
             precom.correctionFactor - deg
     )  # fixme: originally a uint32_t in OpenFHE
