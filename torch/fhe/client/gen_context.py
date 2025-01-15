@@ -83,14 +83,15 @@ def gen_contexts(
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
-    boot_key_map = {}
-    rot_swk_map = {}
+    cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
         cc.EvalBootstrapSetup(level_budget, [0, 0], 1<<logslots)
         cc.EvalBootstrapKeyGen(keys.secretKey, 1<<logslots)
-        cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
 
     BOOT_KEY = cc.GetEvalBootstrapKey()
+    boot_key_map = {}
+    rot_swk_map = {}
     for idx, logslots in enumerate(logSlots_list):
         C2S, S2C = [], []
         C2S_dim, S2C_dim = [], []
