@@ -205,13 +205,12 @@ class Context:
         # Generator
         if i < 0:
             g0 = inv_mod(5, m)
-            g0 = (g0 * 5) % m
         else:
             g0 = 5
 
         i_unsigned = abs(i)
-        g = g0
 
+        g = g0
         for j in range(1, int(i_unsigned)):
             g = (g * g0) % m
 
