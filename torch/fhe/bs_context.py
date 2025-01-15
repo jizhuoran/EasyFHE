@@ -118,12 +118,10 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
         for key, value in self.QmuplusPmu_map.items():
             self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):

@@ -54,7 +54,7 @@ def round_half_away_from_zero(number, ndigits=0):
 def try_load_context(logN,
             logSlots_list,
             maxLevelsRemaining,
-            levelBudget,
+            levelBudget_list,
             dnum,
             dcrtBits,
             firstMod,
@@ -65,12 +65,11 @@ def try_load_context(logN,
 
     load_path = (
         save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
             logSlots_list,
             maxLevelsRemaining,
-            levelBudget[0],
-            levelBudget[1],
+            levelBudget_list,
             dnum,
             dcrtBits,
             firstMod,
@@ -85,7 +84,7 @@ def try_load_context(logN,
             logN=logN,
             logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
             maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget=levelBudget,
+            levelBudget_list=levelBudget_list,
             dnum=dnum,
             dcrtBits=dcrtBits,
             firstMod=firstMod,
@@ -100,8 +99,8 @@ def try_load_context(logN,
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
     openfhe_context_dict = {}
-    for logSlots in logSlots_list:
-        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots)
+    for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
+        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
     cryptoContext = Context(BsContextMembers, gpufheMembers)
 
     return cryptoContext, openfhe_context_dict

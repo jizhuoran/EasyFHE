@@ -1,3 +1,4 @@
+from os import utime
 from . import openfhe as openfhe
 from . import context as Context
 import pickle
@@ -8,7 +9,7 @@ def gen_contexts(
     logN,
     logSlots_list,
     maxLevelsRemaining,
-    levelBudget,
+    levelBudget_list,
     dnum,
     dcrtBits,
     firstMod,
@@ -38,12 +39,16 @@ def gen_contexts(
 
     N = int(2**logN)
     # slots_list = [int(2**logSlots) for logSlots in logSlots_list]
+    max_level_budget = max(levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1])
+    # for level_budget in levelBudget_list:
+    #      if ((level_budget[0] + level_budget[1]) > (max_level_budget[0] + max_level_budget[0])) :
+    #          max_level_budget = level_budget
 
     openfhe_secretKeyDist = SecretKeyDist_MAP[secretKeyDist]
     openfhe_rescaleTech = ScalingTechnique_MAP[rescaleTech]
 
     depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
-        approxModDepth, levelBudget, openfhe_secretKeyDist
+        approxModDepth, max_level_budget, openfhe_secretKeyDist
     )
 
     L = depth + 1  # GPUFHE: L
@@ -80,8 +85,8 @@ def gen_contexts(
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
     boot_key_map = {}
     rot_swk_map = {}
-    for logslots in logSlots_list:
-        cc.EvalBootstrapSetup(levelBudget, [0, 0], 1<<logslots)
+    for logslots, level_budget in zip(logSlots_list, levelBudget_list):
+        cc.EvalBootstrapSetup(level_budget, [0, 0], 1<<logslots)
         cc.EvalBootstrapKeyGen(keys.secretKey, 1<<logslots)
         cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
 
@@ -132,7 +137,7 @@ def gen_contexts(
         60,  # auxModSize of openfhe is 60 bits in default
         L,
         K,
-        levelBudget,
+        levelBudget_list,
         moduliQ,
         moduliP,
         rootsQ,
@@ -144,19 +149,18 @@ def gen_contexts(
         rescaleTech,
         dim1,
     )
-    for logslots in logSlots_list:
+    for logslots, level_budget in zip(logSlots_list, levelBudget_list):
         gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
-            gpufhe_context, gpufhe_context.levelBudget, dim1, (1<<logslots), 0
+            gpufhe_context, level_budget, dim1, (1<<logslots), 0
         )
 
     save_path = (
         save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
             logSlots_list,
             maxLevelsRemaining,
-            levelBudget[0],
-            levelBudget[1],
+            levelBudget_list,
             dnum,
             dcrtBits,
             firstMod,
@@ -196,7 +200,7 @@ def gen_contexts(
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
     # openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
-    openfheMembers["level_budget"] = levelBudget
+    # openfheMembers["level_budget"] = levelBudget
 
     with open(save_path, "wb") as file:
         pickle.dump(

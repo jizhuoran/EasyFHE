@@ -16,7 +16,7 @@ class __FOR_SAVE_ONLY_Context:
         logp,  # todo: rename to specialMod
         L,
         K,
-        levelBudget,
+        levelBudget_list,
         moduliQ=None,
         moduliP=None,
         rootsQ=None,
@@ -30,7 +30,7 @@ class __FOR_SAVE_ONLY_Context:
         h=64,
         sigma=32,
     ):
-        self.levelBudget = levelBudget
+        self.levelBudget_list = levelBudget_list
         self.logSlots_list = logSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
@@ -801,7 +801,7 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_precompute_auto_map[log_slots] = precompute_auto_map
 
         # init bs_context
-        for logSlots in self.logSlots_list:
+        for logSlots, levelBudget in zip(self.logSlots_list, self.levelBudget_list):
             self.BsContext_map[str(logSlots)] = BsContext(
                 self.N,
                 self.K,
@@ -809,7 +809,7 @@ class __FOR_SAVE_ONLY_Context:
                 self.moduliP,
                 self.q_mu,
                 self.p_mu,
-                self.levelBudget,
+                levelBudget,
                 dim1,
                 (1 << logSlots),
                 0,
