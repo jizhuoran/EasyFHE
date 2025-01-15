@@ -48,7 +48,7 @@ def gen_contexts(
 
     L = depth + 1  # GPUFHE: L
     K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
-    specify_slots = logSlots_list[0] #todo: to be removed?
+    # specify_slots = logSlots_list[0] #todo: to be removed?
 
     parameters = openfhe.CCParamsCKKSRNS()
 
@@ -187,7 +187,6 @@ def gen_contexts(
         BsContextMembers_dict[str(logSlots)] = BsContextMembers
 
 
-    # only support one slots, it's not correct for slots_list
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
     openfheMembers["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
@@ -196,7 +195,7 @@ def gen_contexts(
     openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
-    openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
+    # openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
     openfheMembers["level_budget"] = levelBudget
 
     with open(save_path, "wb") as file:

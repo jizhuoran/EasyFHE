@@ -686,7 +686,7 @@ def BootstrapTest_N65536L26lB44(
                 save_dir=save_dir
             )
 
-    cryptoContext, openfhe_context = utils.try_load_context(logN,
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
             logSlots_list,
             maxLevelsRemaining,
             levelBudget,
@@ -698,9 +698,7 @@ def BootstrapTest_N65536L26lB44(
             rescaleTech,
             save_dir=save_dir)
 
-    #choose
-
-
+    openfhe_context = openfhe_context_dict[str(logSlots_list[0])]
     dim1 = [0, 0]
 
     # eval_bootstrap_setup(
@@ -785,22 +783,7 @@ def BootstrapTest_slots_list_example(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    gen_contexts(
-        logN=logN,
-        logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
-        maxLevelsRemaining=maxLevelsRemaining,
-        levelBudget=levelBudget,
-        dnum=dnum,
-        dcrtBits=dcrtBits,
-        firstMod=firstMod,
-        approxModDepth=approxModDepth,
-        rotate_index=[],
-        secretKeyDist="UNIFORM_TERNARY",
-        rescaleTech=rescaleTech,
-        save_dir=save_dir
-    )
-
-    cryptoContext, openfhe_context = utils.try_load_context(logN,
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
                                                             logSlots_list,
                                                             maxLevelsRemaining,
                                                             levelBudget,
@@ -814,8 +797,9 @@ def BootstrapTest_slots_list_example(
 
     dim1 = [0, 0]
 
-    # Test the correctness of the bootstrapping
+    # logslots = 11
     specify_slots = logSlots_list[0]
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
     x = torch.tensor(x, device="cuda")
@@ -826,10 +810,31 @@ def BootstrapTest_slots_list_example(
     utils.load_rotation_keys(cryptoContext, specify_slots)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
-    #test
+    #test correctness
     openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
     is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
     if is_euqal:
-        print("BootstrapTest_N65536L26lB44: Test passed!")
+        print("BootstrapTest_logslots11: Test passed!")
     else:
-        print("BootstrapTest_N65536L26lB44: Test failed!")
+        print("BootstrapTest_logslots11: Test failed!")
+
+    # logslots = 12
+    specify_slots = logSlots_list[1]
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1<<specify_slots)
+
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext.to_cuda()
+    utils.load_rotation_keys(cryptoContext, specify_slots)
+
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    #test correctness
+    openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
+        print("BootstrapTest_logslots12: Test passed!")
+    else:
+        print("BootstrapTest_logslots12: Test failed!")

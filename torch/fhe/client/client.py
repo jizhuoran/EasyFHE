@@ -7,7 +7,7 @@ from ..ciphertext import Plaintext
 
 
 class OpenFHEContext:
-    def __init__(self, content_map):
+    def __init__(self, content_map, slots):
         openfhe.ClearEvalMultKeys()
         openfhe.ReleaseAllContexts()
 
@@ -15,7 +15,8 @@ class OpenFHEContext:
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
-        self.slots = content_map["slots"]
+        # self.slots = content_map["slots"]
+        self.slots = slots
         self.cc.EvalBootstrapSetup(content_map["level_budget"], [0, 0], self.slots)
         openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
         openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)

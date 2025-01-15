@@ -99,11 +99,12 @@ def try_load_context(logN,
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
-
-    openfhe_context = client.OpenFHEContext(openfheMembers)
+    openfhe_context_dict = {}
+    for logSlots in logSlots_list:
+        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots)
     cryptoContext = Context(BsContextMembers, gpufheMembers)
 
-    return cryptoContext, openfhe_context
+    return cryptoContext, openfhe_context_dict
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
