@@ -411,6 +411,7 @@ def BootstrapTest_N65536L26lB44(
             dcrtBits,
             firstMod,
             approxModDepth,
+            [],
             "UNIFORM_TERNARY",
             rescaleTech,
             save_dir=save_dir)
@@ -508,6 +509,7 @@ def BootstrapTest_slots_list_example(
                                                             dcrtBits,
                                                             firstMod,
                                                             approxModDepth,
+                                                            [],
                                                             "UNIFORM_TERNARY",
                                                             rescaleTech,
                                                             save_dir=save_dir)
@@ -525,6 +527,7 @@ def BootstrapTest_slots_list_example(
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, "app")
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
     #test correctness
@@ -555,3 +558,65 @@ def BootstrapTest_slots_list_example(
         print("BootstrapTest_logslots12: Test passed!")
     else:
         print("BootstrapTest_logslots12: Test failed!")
+
+
+def BootstrapTest_test_case(
+        logN=14,
+        logSlots_list=[11, 12],
+        maxLevelsRemaining=3,
+        levelBudget_list=[[3, 3], [4, 4]],
+        dnum=3,
+        dcrtBits=59,
+        firstMod=60,
+        approxModDepth=9,
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir="torch/fhe/data/"
+
+):
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
+                                                                 logSlots_list,
+                                                                 maxLevelsRemaining,
+                                                                 levelBudget_list,
+                                                                 dnum,
+                                                                 dcrtBits,
+                                                                 firstMod,
+                                                                 approxModDepth,
+                                                                 [1,2],
+                                                                 "UNIFORM_TERNARY",
+                                                                 rescaleTech,
+                                                                 save_dir=save_dir)
+
+    dim1 = [0, 0]
+
+    # logslots = 11
+    specify_slots = logSlots_list[0]
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1<<specify_slots)
+
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext.to_cuda()
+    utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, "app")
+
+    cipher = homo_ops.homo_rotate(cipher, 1, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
+
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+
+
+    #test correctness
+    cipher_openfhe1 = openfhe_context.cc.EvalRotate(cipher_openfhe, 1)
+    cipher_openfhe2 = openfhe_context.cc.EvalRotate(cipher_openfhe1,2)
+    openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe2)
+
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
+        print("BootstrapTest_logslots11: Test passed!")
+    else:
+        print("BootstrapTest_logslots11: Test failed!")

@@ -83,15 +83,23 @@ def gen_contexts(
     cc.EvalMultKeyGen(keys.secretKey)
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
+    rot_swk_map = {}
     cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+    if rotate_index:
+        APP_ROT_SWK = cc.GetEvalRotateKey()
+        rot_swk_map["app"] = APP_ROT_SWK
+        # cc.ClearEvalAutomorphismKeys()
 
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
         cc.EvalBootstrapSetup(level_budget, [0, 0], 1<<logslots)
         cc.EvalBootstrapKeyGen(keys.secretKey, 1<<logslots)
+        ROT_SWK = cc.GetEvalRotateKey()
+        rot_swk_map[str(logslots)] = ROT_SWK
+        # cc.ClearEvalAutomorphismKeys()
 
     BOOT_KEY = cc.GetEvalBootstrapKey()
     boot_key_map = {}
-    rot_swk_map = {}
+
     for idx, logslots in enumerate(logSlots_list):
         C2S, S2C = [], []
         C2S_dim, S2C_dim = [], []
@@ -126,9 +134,8 @@ def gen_contexts(
             "U0hatTPreFFTScalingFactor": U0hatTPreFFTScalingFactor,
             "U0PreFFTScalingFactor": U0PreFFTScalingFactor,
         }
-        ROT_SWK = cc.GetEvalRotateKey()
         boot_key_map[str(logslots)] = boot_key
-        rot_swk_map[str(logslots)] = ROT_SWK
+
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
