@@ -637,6 +637,7 @@ def BootstrapTest_test_case(
     utils.load_rotation_keys(cryptoContext, specify_slots)
     result = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
     # compute golden answer
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
     openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
     openfhe_boot = openfhe_context.cc.EvalBootstrap(openfhe_boot)
 
