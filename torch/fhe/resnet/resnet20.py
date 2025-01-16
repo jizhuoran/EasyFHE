@@ -2,6 +2,7 @@ from ensurepip import bootstrap
 
 from torch.fhe import homo_ops
 from torch.fhe import hoisting_keyswitch
+from torch.fhe import utils
 from torch.fhe import approx
 from torch.fhe.bootstrapping import homo_bootstrap
 from torch.fhe.ciphertext import Cipher
@@ -265,9 +266,9 @@ def mask_channel2(n,cur_limbs,cryptoContext):
     return openfhe_context.encode(mask, level, 1, 8192*2)
 
 def downsample1024to256(c1,c2,cryptoContext):
-    #Todo: SetSlots()
-    # c1->SetSlots(32768);
-    # c2->SetSlots(32768);
+
+    c1.slots=32768
+    c2.slots=32768
     num_slots = 16384 * 2
     fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,mask_first_n(16384,c1.cur_limbs,cryptoContext),cryptoContext),homo_ops.homo_mul_pt(c2,mask_scecond_n(16384,c2.cur_limbs,cryptoContext),cryptoContext),cryptoContext)
 
@@ -280,8 +281,7 @@ def downsample1024to256(c1,c2,cryptoContext):
 
     masked = homo_ops.homo_mul(fullpack, mask_first_n_mod(16, 1024, 0, fullpack.cur_limbs, cryptoContext),
                                cryptoContext)
-#  Todo:Ctxt slots参数为0？
-    #  Todo:这里只传入一个只有0的列表足够吗？ and level值采取默认值还是与之相加的level
+    #  Todo:level值采取默认值还是与之相加的level
     # todo: check limb setting, omit + 1?   input长度小于slot的值是否会自动填充
     temp=[0]*global_num_slots
     downsampledrows=openfhe_context.encrypt(temp,1,cryptoContext.L-masked.cur_limbs,global_num_slots)
@@ -307,17 +307,16 @@ def downsample1024to256(c1,c2,cryptoContext):
     downsampledchannels = homo_ops.homo_add(downsampledchannels,
                                             homo_ops.homo_rotate(homo_ops.homo_rotate(downsampledchannels,-8192,cryptoContext), -8192, cryptoContext),
                                             cryptoContext)
-    #Todo:    downsampledchannels->SetSlots(8192);
+    downsampledchannels.slots=8192
 
     return downsampledchannels
 
 
 def downsample256to64(c1,c2,cryptoContext):
-    #Todo: SetSlots()
-    # c1->SetSlots(16384);
-    # c2->SetSlots(16384);
-    num_slots = 8192 * 2
 
+    num_slots = 8192 * 2
+    c1.slots=16384
+    c2.slots=16384
     fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,mask_first_n(8192,c1.cur_limbs,cryptoContext),cryptoContext),homo_ops.homo_mul_pt(c2,mask_scecond_n(8192,c2.cur_limbs,cryptoContext),cryptoContext),cryptoContext)
 
     fullpack=homo_ops.homo_mul_pt(homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,1,cryptoContext),cryptoContext),gen_mask(2,fullpack.cur_limbs,cryptoContext),cryptoContext)
@@ -351,7 +350,7 @@ def downsample256to64(c1,c2,cryptoContext):
     downsampledchannels = homo_ops.homo_add(downsampledchannels,
                                             homo_ops.homo_rotate(homo_ops.homo_rotate(downsampledchannels,-4096,cryptoContext), -4096, cryptoContext),
                                             cryptoContext)
-    #Todo:    downsampledchannels->SetSlots(4096);
+    downsampledchannels.slotes=4096
 
     return downsampledchannels
 
@@ -361,6 +360,7 @@ def decrypt_tovector(input,slots,cryptoContext):
         slots=global_num_slots
     #Todo:   context->Decrypt(key_pair.secretKey, c, &p);
     # p->SetSlots(slots);
+    # p.slots=slots
     # p->SetLength(slots);
     # vector<double> vec = p->GetRealPackedValue();
     vec=[]
@@ -431,8 +431,7 @@ def get_relu_depth(degree,cryptoContext):
 def convbn3(input,layer,n,scale,cryptoContext):
     img_width=8
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
-    #使用list代替vector
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
@@ -447,13 +446,13 @@ def convbn3(input,layer,n,scale,cryptoContext):
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
     #Ptxt bias = encode(read_values_from_file("../weights/layer" + to_string(layer) + "-conv" + to_string(n) + "bn" + to_string(n) + "-bias.bin", scale), circuit_depth-2, 8192);
-    bias=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-c_rotations[0].cur_limbs,4096)
+    bias=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,4096)
 
     for j in range(64):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-c_rotations[0].cur_limbs,4096)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,4096)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
         sum=eval_add_many(k_rows,cryptoContext)
         if(j==0):
@@ -470,7 +469,7 @@ def convbn3(input,layer,n,scale,cryptoContext):
 def convbn_initial(input,scale,cryptoContext):
     img_width=32
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
     #使用list代替vector
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
@@ -518,7 +517,7 @@ def convbn_initial(input,scale,cryptoContext):
 def convbn(input,layer,n,scale,cryptoContext):
     img_width=32
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
     #使用list代替vector
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
@@ -556,7 +555,7 @@ def convbn(input,layer,n,scale,cryptoContext):
 def convbn2(input,layer,n,scale,cryptoContext):
     img_width=16
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
@@ -570,13 +569,13 @@ def convbn2(input,layer,n,scale,cryptoContext):
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
-    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-3,8192)
+    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.curr_limbs,8192)
 
     for j in range(32):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-3,8192)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.curr_limbs,8192)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
 
 
@@ -596,7 +595,7 @@ def convbn2(input,layer,n,scale,cryptoContext):
 def convbn1632sx(input,layer,n,scale,cryptoContext):
     img_width=32
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-(img_width),digits,cryptoContext),-padding,cryptoContext))
@@ -693,8 +692,8 @@ def convbn1632dx(input,layer,n,scale,cryptoContext):
 def convbn3264sx(input,layer,n,scale,cryptoContext):
     img_width=16
     padding=1
-    digits = hoisting_keyswitch.eval_fast_rotation_precompute(input.cv[1],input.curr_limbs,cryptoContext)
-    #使用list代替vector
+    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-(img_width),digits,cryptoContext),-padding,cryptoContext))
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
@@ -837,6 +836,14 @@ def layer1(input,cryptoContext):
     res3 = homo_relu(res3, scale, global_relu_degree, cryptoContext)
 
     return res3
+#Todo：uncertain
+def load_bootstrapping_and_rotation_keys(filename,specify_slots,cryptoContext):
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext.to_cuda()
+    utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, filename)
+
+
 
 def layer2(input,cryptoContext):
     scaleSx=normalized_deltas[2][0]
@@ -847,6 +854,7 @@ def layer2(input,cryptoContext):
 
     #Todo:        controller.clear_bootstrapping_and_rotation_keys(16384);
     #Todo：       controller.load_rotation_keys("rotations-layer2-downsample.bin", timing);
+    utils.load_rotation_keys(cryptoContext, "app")
 
     fullpackSx = downsample1024to256(res1sx[0], res1sx[1], cryptoContext)
     fullpackDx = downsample1024to256(res1dx[0], res1dx[1], cryptoContext)
@@ -855,6 +863,8 @@ def layer2(input,cryptoContext):
     # Todo:res1dx.clear();
     #Todo:    controller.clear_rotation_keys();
     #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
+    load_bootstrapping_and_rotation_keys("app",8192,cryptoContext)
+
     global_num_slots=8192
     fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     fullpackSx=homo_relu(fullpackSx,scaleSx,global_relu_degree, cryptoContext)
@@ -900,13 +910,15 @@ def layer3(input,cryptoContext):
 
     #Todo:        controller.clear_bootstrapping_and_rotation_keys(16384);
     #Todo：       controller.load_rotation_keys("rotations-layer2-downsample.bin", timing);
-
+    utils.load_rotation_keys(cryptoContext, "app")
     fullpackSx = downsample256to64(res1sx[0], res1sx[1], cryptoContext)
     fullpackDx = downsample256to64(res1dx[0], res1dx[1], cryptoContext)
     # Todo:res1sx.clear();
     # Todo:res1dx.clear();
     #Todo:    controller.clear_rotation_keys();
     #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
+    load_bootstrapping_and_rotation_keys("app",4096,cryptoContext)
+
     global_num_slots=4096
     fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
     fullpackSx= homo_relu(fullpackSx, scaleSx, global_relu_degree, cryptoContext)
@@ -946,6 +958,8 @@ def final_layer(input,cryptoContext):
 #Todo:encode 未定义函数：clear_bootstrapping_and_rotation_keys   load_rotation_keys
     # controller.clear_bootstrapping_and_rotation_keys(4096);
     # controller.load_rotation_keys("rotations-finallayer.bin", false);
+    utils.load_rotation_keys(cryptoContext, "app")
+
     global_num_slots=4096
 
     weight=openfhe_context.encode(read_fc_weight("../weights/fc.bin"),cryptoContext.L-input.cur_limbs,global_num_slots)
@@ -986,6 +1000,7 @@ def executeResNet20(cryptoContext):
     input_image=read_image(input_cnt,input_filename)
     input=openfhe_context.encode(input_image,cryptoContext.L-5-get_relu_depth(global_relu_degree,cryptoContext))
     #Todo:    controller.load_bootstrapping_and_rotation_keys("rotations-layer1.bin", 16384, verbose > 1);
+    load_bootstrapping_and_rotation_keys("app",16384,cryptoContext)
 
 
     firstLayer=initial_layer(input, cryptoContext)
