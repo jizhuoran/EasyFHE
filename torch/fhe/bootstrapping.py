@@ -69,7 +69,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
                                            cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else ciphertext
     return ciphertext
 
-def coeffs_slots_conversion(A, ctxt, direction, cryptoContext):
+def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
 
     if direction == "C2S":
         params = cryptoContext.BsContext.paramsEnc
@@ -100,53 +100,52 @@ def coeffs_slots_conversion(A, ctxt, direction, cryptoContext):
         limbs_ext = curr_limbs + cryptoContext.K
         len_ext = limbs_ext << cryptoContext.logN
 
-        digits = hoisting_keyswitch.eval_fast_rotation_precompute(result.cv[1], result.cur_limbs, cryptoContext)
+        digits_ext = hoisting_keyswitch.modup_to_ext(result.cipher_like([result.cv[1]]), cryptoContext)
 
         fast_rotation_ext = []
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(hoisting_keyswitch.eval_fast_rotation_ext(result, digits, rot_in[s][j], True,
+                fast_rotation_ext.append(hoisting_keyswitch.fused_rotation_add_ext(digits_ext, result, rot_in[s][j],
                                                                                  cryptoContext))
             else:
-                fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, True, cryptoContext))
+                fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
         
         for i in range(b):
             G = g * i
-            inner = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[0], A[s][G], cryptoContext)
+            inner_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[0], A_Ext[s][G], cryptoContext)
             for j in range(1, g):
                 if (G + j) != num_rotations:
-                    tmp_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[j], A[s][G + j], cryptoContext)
-                    inner = hoisting_keyswitch.eval_add_ext(inner, tmp_ext, cryptoContext)
+                    tmp_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[j], A_Ext[s][G + j], cryptoContext)
+                    inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
             
             if i == 0:
-                first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                F.cv_set_zero(inner.cv[0], len_ext)
-                outer = inner
+                inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]])
+                first_acc = hoisting_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
+                outer_ext = inner_ext.cipher_like([torch.zeros_like(inner_ext.cv[0]), inner_ext.cv[1]])
             else:
                 if rot_out[s][i] != 0:
-                    inner_ks_down = hoisting_keyswitch.key_switch_down(inner, cryptoContext)
-                    auto_index = cryptoContext.find_auto_index(rot_out[s][i])
+                    inner = hoisting_keyswitch.moddown_from_ext(inner_ext, cryptoContext)
+                    inner_cv0 = inner.cipher_like([inner.cv[0]])
+                    inner_cv1 = inner.cipher_like([inner.cv[1]])
 
-                    first_current = F.cv_automorphism_transform(
-                        inner_ks_down.cv[0], curr_limbs, auto_index, cryptoContext)
-                    first = hoisting_keyswitch.cv_add_ext(first, first_current, curr_limbs, cryptoContext)
+                    first = hoisting_keyswitch.eval_automorphism(inner_cv0, rot_out[s][i], cryptoContext)
+                    first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
                     
-                    inner_digits = hoisting_keyswitch.eval_fast_rotation_precompute(
-                        inner_ks_down.cv[1], inner_ks_down.cur_limbs, cryptoContext
-                    )
-                    
-                    inner_ks_down_ext = hoisting_keyswitch.eval_fast_rotation_ext(inner_ks_down, inner_digits, rot_out[s][i],
-                                                                                  False, cryptoContext)
-                    outer = hoisting_keyswitch.eval_add_ext(outer, inner_ks_down_ext, cryptoContext)
+                    inner_digits = hoisting_keyswitch.modup_to_ext(inner_cv1, cryptoContext)
+                    inner_ext = homo_ops.homo_rotate(inner_digits, rot_out[s][i], cryptoContext)
+                    outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
                 else:
-                    tmp_first = F.cv_moddown(inner.cv[0], curr_limbs, cryptoContext)
-                    first = hoisting_keyswitch.cv_add_ext(first, tmp_first, curr_limbs, cryptoContext)
-                    F.cv_set_zero(inner.cv[0], len_ext)
-                    outer = hoisting_keyswitch.eval_add_ext(outer, inner, cryptoContext)
+                    inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]])
+                    first = hoisting_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
+                    first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
+                    inner_ext.cv[0] = torch.zeros_like(inner_ext.cv[0])
+                    outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
         
-        result = hoisting_keyswitch.key_switch_down(outer, cryptoContext)
-        result.cv[0] = hoisting_keyswitch.cv_add_ext(result.cv[0], first, curr_limbs, cryptoContext)
+        outer = hoisting_keyswitch.moddown_from_ext(outer_ext, cryptoContext)
+        first_full_cv = first_acc.cipher_like([first_acc.cv[0], torch.zeros_like(first_acc.cv[0])])
+        result = homo_ops.homo_add(outer, first_full_cv, cryptoContext)
+
     
     return result
 
@@ -167,13 +166,13 @@ def eval_linear_transform(A, ct, scheme):
 def mod_raise(cipher, L0, cryptoContext):
     cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
     cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
-    return Cipher([cv0, cv1], L0, cipher.scaling_factor, cipher.noise_deg, cipher.slots)
+    return Cipher([cv0, cv1], L0, cipher.scaling_factor, cipher.noise_deg, cipher.slots, cipher.is_ext)
 
 # @profile_python_function
 def mult_by_monomial(cipher, monomial_degree, cryptoContext):
     cv0 = F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     cv1 = F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
-    return Cipher([cv0, cv1], cipher.cur_limbs, cipher.scaling_factor, cipher.noise_deg, cipher.slots)
+    return cipher.cipher_like([cv0, cv1])
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
@@ -307,6 +306,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         # ---------------------
         raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
+
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
@@ -331,12 +331,15 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
+
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
 
+
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
+
 
         # --------------------
         # Running SlotToCoeff

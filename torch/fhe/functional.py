@@ -82,6 +82,7 @@ def cv_modup(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
+    x = x.clone() #TODO remove this line
     beta = (curr_limbs + context.K - 1) // context.K
     if inplace:
         res = torch.modup_(
@@ -133,6 +134,7 @@ def cv_moddown(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
+    x = x.clone() #TODO remove this line
     if inplace:
         res = torch.moddown_(
             context.moddown_out_ax,

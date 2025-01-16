@@ -51,6 +51,8 @@ def gen_contexts(
         approxModDepth, max_level_budget, openfhe_secretKeyDist
     )
 
+    print("depth", depth)
+
     L = depth + 1  # GPUFHE: L
     K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
     # specify_slots = logSlots_list[0] #todo: to be removed?

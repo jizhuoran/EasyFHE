@@ -1,5 +1,7 @@
 import time, os, pickle
 import numpy as np
+import functools
+import atexit
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
@@ -7,6 +9,25 @@ from .context import *
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
 
+# Registry to keep track of function call counts
+call_registry = {}
+
+def call_counter(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        wrapper.count += 1  # Increment the call count
+        return func(*args, **kwargs)
+    
+    wrapper.count = 0  # Initialize the call count
+    call_registry[func.__name__] = wrapper  # Register the function
+    return wrapper
+
+
+# @atexit.register
+def print_call_counts():
+    print("\nFunction Call Counts:")
+    for func_name, wrapper in call_registry.items():
+        print(f"Function '{func_name}' was called {wrapper.count} times.")
 
 def check_meta_equal(func):
     def wrapper(*args, **kwargs):
@@ -15,6 +36,7 @@ def check_meta_equal(func):
         assert in0.cur_limbs == in1.cur_limbs
         assert in0.scaling_factor == in1.scaling_factor
         assert in0.noise_deg == in1.noise_deg
+        assert in0.is_ext == in1.is_ext
         # assert in0.slots == in1.slots
         return func(*args, **kwargs)
     return wrapper
