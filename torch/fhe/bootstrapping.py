@@ -617,7 +617,6 @@ def BootstrapTest_test_case(
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
-    print("result.noise_deg",result.noise_deg)
     # compute golden answer
     cipher_openfhe.SetSlots((1<<specify_slots))
     openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
@@ -630,23 +629,19 @@ def BootstrapTest_test_case(
     # #####################################
     # # ..., omit some homomorphic computation
     # #####################################
-    #
-    #
-    # # bootstrapping, logSlots = 12
-    # specify_slots = logSlots_list[1]
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
-    # cryptoContext.BsContext.to_cuda()
-    # utils.load_rotation_keys(cryptoContext, specify_slots)
-    # # result = homo_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
-    # print("result.noise_deg",result.noise_deg)
-    # result = homo_rescale(result, 1, cryptoContext)
-    # print("result.noise_deg",result.noise_deg)
-    # result = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
-    # # compute golden answer
-    # cipher_openfhe.SetSlots((1 << specify_slots))
-    # openfhe_boot = openfhe_context.cc.EvalBootstrap(openfhe_boot)
-    # is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
-    # if is_euqal:
-    #     print("BootstrapTest_logslots12: Test passed!")
-    # else:
-    #     print("BootstrapTest_logslots12: Test failed!")
+
+    # bootstrapping, logSlots = 12
+    specify_slots = logSlots_list[1]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext.to_cuda()
+    utils.load_rotation_keys(cryptoContext, specify_slots)
+    result = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    # compute golden answer
+    openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
+    openfhe_boot = openfhe_context.cc.EvalBootstrap(openfhe_boot)
+
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
+        print("BootstrapTest_logslots12: Test passed!")
+    else:
+        print("BootstrapTest_logslots12: Test failed!")
