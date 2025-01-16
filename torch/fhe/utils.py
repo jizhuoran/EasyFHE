@@ -23,7 +23,7 @@ def call_counter(func):
     return wrapper
 
 
-@atexit.register
+# @atexit.register
 def print_call_counts():
     print("\nFunction Call Counts:")
     for func_name, wrapper in call_registry.items():
@@ -36,6 +36,7 @@ def check_meta_equal(func):
         assert in0.cur_limbs == in1.cur_limbs
         assert in0.scaling_factor == in1.scaling_factor
         assert in0.noise_deg == in1.noise_deg
+        assert in0.is_ext == in1.is_ext
         # assert in0.slots == in1.slots
         return func(*args, **kwargs)
     return wrapper

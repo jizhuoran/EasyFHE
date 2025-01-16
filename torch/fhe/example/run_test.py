@@ -6,12 +6,12 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-logN = 16
-logSlots = 15
-maxLevelsRemaining = 12
-levelBudget0 = 4
-levelBudget1 = 4
-dnum = 3
+# logN = 16
+# logSlots = 15
+# maxLevelsRemaining = 12
+# levelBudget0 = 4
+# levelBudget1 = 4
+# dnum = 3
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
@@ -27,14 +27,14 @@ path = "data/"
 # dcrtBits = 59
 # firstMod = 60
 
-# logN = 14
-# logSlots = 11
-# maxLevelsRemaining = 3
-# levelBudget0 = 3
-# levelBudget1 = 3
-# dnum = 1
-# dcrtBits = 59
-# firstMod = 60
+logN = 14
+logSlots = 6
+maxLevelsRemaining = 3
+levelBudget0 = 3
+levelBudget1 = 3
+dnum = 1
+dcrtBits = 59
+firstMod = 60
 
 
 cryptoContext, openfhe_context = utils.try_load_context(
@@ -78,7 +78,6 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
-
 
 start_time = time.time()
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
