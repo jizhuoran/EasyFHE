@@ -1,11 +1,52 @@
 import time, os, pickle
 import numpy as np
+import functools
+import atexit
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
 
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
+
+# Registry to keep track of function call counts
+call_registry = {}
+
+def call_counter(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        wrapper.count += 1  # Increment the call count
+        return func(*args, **kwargs)
+    
+    wrapper.count = 0  # Initialize the call count
+    call_registry[func.__name__] = wrapper  # Register the function
+    return wrapper
+
+
+# @atexit.register
+def print_call_counts():
+    print("\nFunction Call Counts:")
+    for func_name, wrapper in call_registry.items():
+        print(f"Function '{func_name}' was called {wrapper.count} times.")
+
+def check_meta_equal(func):
+    def wrapper(*args, **kwargs):
+        in0, in1 = args[0], args[1]
+        assert len(in0.cv) == len(in1.cv)
+        assert in0.cur_limbs == in1.cur_limbs
+        assert in0.scaling_factor == in1.scaling_factor
+        assert in0.noise_deg == in1.noise_deg
+        assert in0.is_ext == in1.is_ext
+        # assert in0.slots == in1.slots
+        return func(*args, **kwargs)
+    return wrapper
+
+def check_cipher_len(func):
+    def wrapper(*args, **kwargs):
+        assert len(args[0].cv) == 2
+        return func(*args, **kwargs)
+    return wrapper
+
 
 def profile_python_function(func):
     def wrapper(*args, **kwargs):
@@ -52,25 +93,25 @@ def round_half_away_from_zero(number, ndigits=0):
         return 0.0
 
 def try_load_context(logN,
-            logSlots,
+            logSlots_list,
             maxLevelsRemaining,
-            levelBudget,
+            levelBudget_list,
             dnum,
             dcrtBits,
             firstMod,
             approxModDepth,
+            rotate_index,
             secretKeyDist,
             rescaleTech,
             save_dir):
 
     load_path = (
         save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
-            logSlots,
+            logSlots_list,
             maxLevelsRemaining,
-            levelBudget[0],
-            levelBudget[1],
+            levelBudget_list,
             dnum,
             dcrtBits,
             firstMod,
@@ -83,14 +124,14 @@ def try_load_context(logN,
     if not os.path.exists(load_path):
         gen_contexts(
             logN=logN,
-            logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+            logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
             maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget=levelBudget,
+            levelBudget_list=levelBudget_list,
             dnum=dnum,
             dcrtBits=dcrtBits,
             firstMod=firstMod,
             approxModDepth=approxModDepth,
-            rotate_index=[],
+            rotate_index = rotate_index,
             secretKeyDist="UNIFORM_TERNARY",
             rescaleTech=rescaleTech,
             save_dir=save_dir
@@ -99,13 +140,23 @@ def try_load_context(logN,
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
-
-    openfhe_context = client.OpenFHEContext(openfheMembers)
+    openfhe_context_dict = {}
+    for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
+        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
     cryptoContext = Context(BsContextMembers, gpufheMembers)
 
-    return cryptoContext, openfhe_context
+    return cryptoContext, openfhe_context_dict
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
+
+def load_rotation_keys(context, key_name):
+    if (str(key_name) not in context.slots_left_rot_key_map) or (not context.slots_left_rot_key_map[str(key_name)]):
+        print("Warning: slots_left_rot_key_map[", key_name,"] is None")
+        return
+    for key, value in context.slots_left_rot_key_map[str(key_name)].items():
+        context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+    for key, value in context.slots_precompute_auto_map[str(key_name)].items():
+        context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")

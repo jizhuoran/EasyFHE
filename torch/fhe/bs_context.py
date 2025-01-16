@@ -1,4 +1,5 @@
 import math
+import torch
 
 def get_item(item_name, content_map):
     if item_name in content_map:
@@ -32,6 +33,14 @@ class BsContext:
         self.correctionFactor = get_item("correctionFactor", content_map)
         self.dim1 = get_item("dim1", content_map)
         self.k = get_item("k", content_map)
+        self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", content_map)
+        self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", content_map)
+        self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", content_map)
+        self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", content_map)
+        self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", content_map)
+        self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", content_map)
+        self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", content_map)
+        self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", content_map)
         self.m_U0Pre = get_item("m_U0Pre", content_map)
         self.m_U0PreFFT = get_item("m_U0PreFFT", content_map)
         self.m_U0hatTPre = get_item("m_U0hatTPre", content_map)
@@ -107,4 +116,20 @@ class BsContext:
         # If this return statement changes then CKKS_BOOT_PARAMS should be altered as well
         return CKKS_Boot_Params(int(levelBudget), layersCollapse, remCollapse, int(numRotations), b, g,
                                 int(numRotationsRem), bRem, gRem)
+
+    def to_cuda(self):
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+
+        for i in range(len(self.m_U0hatTPreFFT)):
+            for j in range(len(self.m_U0hatTPreFFT[i])):
+                self.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+
+        for i in range(len(self.m_U0PreFFT)):
+            for j in range(len(self.m_U0PreFFT[i])):
+                self.m_U0PreFFT[i][j].mx = torch.tensor(self.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+
+
 

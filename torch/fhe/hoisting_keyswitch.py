@@ -1,77 +1,76 @@
 import numpy as np
 from .ciphertext import Cipher
 from . import functional as F
-
-# @profile_python_function
-def eval_fast_rotation_precompute(input, curr_limbs, cryptoContext):
-    res = F.cv_modup(input, curr_limbs, cryptoContext)
-    return res.clone()
-
-# @profile_python_function
-def eval_fast_key_switch_core_ext(d2Tilde, auto_index, beta, curr_limbs, cryptoContext):
-    swk = cryptoContext.left_rot_key_map[str(auto_index)]
-    swk_bx = swk[0][:beta, :, :]
-    swk_ax = swk[1][:beta, :, :]
-
-    res = F.cv_innerproduct(
-        d2Tilde.reshape(-1),
-        curr_limbs=curr_limbs,
-        context=cryptoContext,
-        swk_bx=swk_bx,
-        swk_ax=swk_ax
-    )
-    return res[0], res[1]
+from .utils import check_meta_equal
+import torch
 
 
-# @profile_python_function
-def eval_fast_rotation_ext(ciphertext, digits, index, add_first, cryptoContext):
-    curr_limbs = ciphertext.cur_limbs
-    alpha = cryptoContext.K
-    K = cryptoContext.K
-    beta = int(np.ceil(curr_limbs / alpha))  # Calculate beta as per the original C++ code
-    expand_limbs = curr_limbs + K
+#todo: it is ct*pt in extent form, refactor?
+def eval_mult_ext(cipher, pt, cryptoContext):
+    moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
+    mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
+    cv0 = F.cv_mul(cipher.cv[0], pt.mx, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+    cv1 = F.cv_mul(cipher.cv[1], pt.mx, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+    return cipher.cipher_like([cv0, cv1], scaling_factor=cipher.scaling_factor*pt.scaling_factor, noise_deg=cipher.noise_deg+pt.noise_deg)
+
+def key_switch_ext(cipher, cryptoContext):
+    assert cipher.is_ext == False
+
+    cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, cipher.cur_limbs)
+    cv1 = F.cv_mul_scalar(cipher.cv[1], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda, cryptoContext.q_mu_cuda, cipher.cur_limbs)
+
+    cv0 = torch.cat((cv0, torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)), dim=0)
+    cv1 = torch.cat((cv1, torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)), dim=0)
+
+    return cipher.cipher_like([cv0, cv1], is_ext=True)
+
+def modup_to_ext(cipher, cryptoContext):
+    assert cipher.is_ext == False
+    cv = [
+        F.cv_modup(cv, cipher.cur_limbs, cryptoContext)
+        for cv in cipher.cv
+    ]
+    return cipher.cipher_like(cv, is_ext = True)
+
+def moddown_from_ext(cipher, cryptoContext):
+    assert cipher.is_ext == True
+    cv = [
+        F.cv_moddown(cv, cipher.cur_limbs, cryptoContext)
+        for cv in cipher.cv
+    ]
+    return cipher.cipher_like(cv, is_ext=False)
+
+def eval_automorphism(cipher, index, cryptoContext):
+    assert cipher.is_ext == False
+    auto_index = cryptoContext.find_auto_index(index)
+    cv = [
+        F.cv_automorphism_transform(cv, cipher.cur_limbs, auto_index, cryptoContext)
+        for cv in cipher.cv
+    ]
+    return cipher.cipher_like(cv)
+
+def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
+
+    assert digits.is_ext == True
+    assert cipher.is_ext == False
 
     # Find the automorphism index that corresponds to rotation index.
     auto_index = cryptoContext.find_auto_index(index)
-
+    
     # Inner Product
-    sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, curr_limbs, cryptoContext)
+    swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext, swk_bx=swk[0], swk_ax=swk[1])
+    sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
 
-    if (add_first):
-        bx = ciphertext.cv[0]
-        cMult = F.cv_mul_scalar(bx, cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                                cryptoContext.q_mu_cuda, curr_limbs)
-        sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, curr_limbs, inplace=True)
+    cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                            cryptoContext.q_mu_cuda, cipher.cur_limbs)
+    sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, cipher.cur_limbs, inplace=True)
 
-    cv0 = F.cv_automorphism_transform(sumbxmult, expand_limbs, auto_index, cryptoContext)
-    cv1 = F.cv_automorphism_transform(sumaxmult, expand_limbs, auto_index, cryptoContext)
-    return Cipher([cv0, cv1], curr_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
+    cv0 = F.cv_automorphism_transform(sumbxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
+    cv1 = F.cv_automorphism_transform(sumaxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
+    return digits.cipher_like([cv0, cv1], is_ext=True)
 
-# @profile_python_function
-def key_switch_down(ciphertext, cryptoContext):
-    res_bx = F.cv_moddown(ciphertext.cv[0], ciphertext.cur_limbs, cryptoContext)
-    res_ax = F.cv_moddown(ciphertext.cv[1], ciphertext.cur_limbs, cryptoContext)
-    return Cipher([res_bx, res_ax], ciphertext.cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
 
-def eval_fast_rotation(ciphertext, index, digits, cryptoContext):
-    if index == 0:
-        return ciphertext.clone()
 
-    cur_limbs = ciphertext.cur_limbs
-    beta = int(np.ceil(cur_limbs / cryptoContext.K))  # Calculate beta as per the original C++ code
 
-    # Find the automorphism index that corresponds to rotation index.
-    auto_index = cryptoContext.find_auto_index(index)
 
-    # EvalFastKeySwitchCore = InnerProduct + ModDown
-    sumbxmult, sumaxmult = eval_fast_key_switch_core_ext(digits, auto_index, beta, cur_limbs, cryptoContext)
-    sumMult = Cipher([sumbxmult, sumaxmult], ciphertext.cur_limbs, ciphertext.scaling_factor, ciphertext.noise_deg, ciphertext.slots)
-    result = key_switch_down(sumMult, cryptoContext)
-    # post add after ks
-    result.cv[0] = F.cv_add(ciphertext.cv[0], result.cv[0], cryptoContext.moduliQ_cuda, cur_limbs)
-
-    # Apply the AutomorphismTransform to ax and bx
-    result.cv[0] = F.cv_automorphism_transform(result.cv[0], cur_limbs, auto_index, cryptoContext)
-    result.cv[1] = F.cv_automorphism_transform(result.cv[1], cur_limbs, auto_index, cryptoContext)
-
-    return result
