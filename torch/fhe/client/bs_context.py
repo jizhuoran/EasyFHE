@@ -86,23 +86,23 @@ class BsContext:
         self.m_U0PreFFT_scaling_factor = BOOT_KEY["U0PreFFTScalingFactor"]
 
         # precom = scheme.precom
-        if correctionFactor == 0:
-            if rescaleTech == "FLEXIBLEAUTO" or rescaleTech == "FLEXIBLEAUTOEXT":
-                tmp = round_half_away_from_zero(
-                    -0.265 * (2 * math.log2(self.M / 2) + math.log2(slots)) + 19.1
-                )
-                if tmp < 7:
-                    self.m_correctionFactor = 7
-                elif tmp > 13:
-                    self.m_correctionFactor = 13
-                else:
-                    self.m_correctionFactor = int(tmp)
-            else:
-                self.m_correctionFactor = 9
-        else:
-            self.m_correctionFactor = correctionFactor
+        # if correctionFactor == 0:
+        #     if rescaleTech == "FLEXIBLEAUTO" or rescaleTech == "FLEXIBLEAUTOEXT":
+        #         tmp = round_half_away_from_zero(
+        #             -0.265 * (2 * math.log2(self.M / 2) + math.log2(slots)) + 19.1
+        #         )
+        #         if tmp < 7:
+        #             self.m_correctionFactor = 7
+        #         elif tmp > 13:
+        #             self.m_correctionFactor = 13
+        #         else:
+        #             self.m_correctionFactor = int(tmp)
+        #     else:
+        #         self.m_correctionFactor = 9
+        # else:
+        #     self.m_correctionFactor = correctionFactor
 
-        # self.slots = slots
+        self.slots = slots
         self.dim1 = dim1[0]
 
         logSlots = math.log2(slots)
