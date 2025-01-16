@@ -18,23 +18,23 @@ approxModDepth = 9
 rescaleTech = "FIXEDMANUAL"
 path = "data/"
 
-# logN = 15
-# logSlots = 8
-# maxLevelsRemaining = 3
-# levelBudget0 = 4
-# levelBudget1 = 4
-# dnum = 1
-# dcrtBits = 59
-# firstMod = 60
-
-logN = 14
-logSlots = 6
+logN = 15
+logSlots = 8
 maxLevelsRemaining = 3
-levelBudget0 = 3
-levelBudget1 = 3
+levelBudget0 = 4
+levelBudget1 = 4
 dnum = 1
 dcrtBits = 59
 firstMod = 60
+
+# logN = 14
+# logSlots = 6
+# maxLevelsRemaining = 3
+# levelBudget0 = 3
+# levelBudget1 = 3
+# dnum = 1
+# dcrtBits = 59
+# firstMod = 60
 
 
 cryptoContext, openfhe_context = utils.try_load_context(

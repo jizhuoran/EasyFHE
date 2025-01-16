@@ -39,23 +39,10 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     return wsum
 
 
-def is_not_equal_one(val):
-    PREC = math.pow(2, -20)
-    return val <= 1 - PREC or val >= 1 + PREC
-
-
-def degree(coefficients):
-    coefficients_size = len(coefficients)
-    indx = coefficients_size
-    # indx becomes negative (-1) only when all coefficients are zeroes. in this case we return 0
-    while True:
-        indx -= 1
-        if indx < 0:
-            return 0
-        if coefficients[indx] != 0:
-            break
-    return indx
-
+def degree(lst):
+    for i in range(len(lst) - 1, -1, -1):
+        if lst[i] != 0: return i
+    return 0  # All elements are zero
 
 # f and g are vectors of Chebyshev interpolation coefficients of the two polynomials.
 # We assume their dominant coefficient is not zero. LongDivisionChebyshev returns the
@@ -64,13 +51,9 @@ def degree(coefficients):
 # quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
 # the same format.
 def long_division_chebyshev(f, g):
-    n = degree(f)
-    k = degree(g)
-
-    if n != len(f) - 1:
-        raise Exception("LongDivisionChebyshev: The dominant coefficient of the dividend is zero.")
-    if k != len(g) - 1:
-        raise Exception("LongDivisionChebyshev: The dominant coefficient of the divisor is zero.")
+    assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
+    n, k = len(f) - 1, len(g) - 1
+    
     if n < k:
         return np.array([1.0]), np.array(f)
 
@@ -79,12 +62,8 @@ def long_division_chebyshev(f, g):
     d = np.zeros(len(g) + n)
 
     while n > k:
-        d.resize(n + 1, refcheck=False)
-        d.fill(0)  # 替换 '@' 为 0
-        q[n - k] = 2 * r[-1]
-        if is_not_equal_one(g[k]):
-            q[n - k] /= g[-1]
-
+        q[n - k] = 2 * r[-1] / g[-1]
+        d = np.zeros(n + 1)
         if k == (n - k):
             d[0] = 2 * g[n - k]
             for i in range(1, 2 * k + 1):
@@ -102,29 +81,14 @@ def long_division_chebyshev(f, g):
                     if i != n - k:
                         d[i] = g[abs(i - n + k)]
 
-        if is_not_equal_one(r[-1]):
-            # d *= f[n]
-            d *= r[-1]
-        if is_not_equal_one(g[-1]):
-            # d /= g[k]
-            d /= g[-1]
-
-        # f -= d
-        r = r - d
+        r = r - d * r[-1] / g[-1]
         if len(r) > 1:
             n = degree(r)
             r.resize(n + 1, refcheck=False)
 
     if n == k:
-        d = np.copy(g)
-        q[0] = r[-1]
-        if is_not_equal_one(g[-1]):
-            q[0] /= g[-1]
-        if is_not_equal_one(r[-1]):
-            d *= r[-1]
-        if is_not_equal_one(g[-1]):
-            d /= g[-1]
-        r = r - d
+        q[0] = r[-1] / g[-1]
+        r = r - g * q[0]
         if len(r) > 1:
             n = degree(r)
             r.resize(n + 1, refcheck=False)
@@ -339,77 +303,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     k = degs[0]
     m = degs[1]
 
-    # computes linear transformation y = -1 + 2 (x-a)/(b-a)
-    # consumes one level when a <> -1 && b <> 1
-    T = [0 for _ in range(k)]
-    if (a - round(a) < 1e-10) and (b - round(b) < 1e-10) and \
-            (round(a) == -1) and (round(b) == 1):
-        T[0] = x
-    else:
-        alpha = 2 / (b - a)
-        beta = 2 * a / (b - a)
-        T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
-        T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[0]
-        T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
-
-    # Computes Chebyshev polynomials up to degree k
-    # for y: T_1(y) = y, T_2(y), ... , T_k(y)
-    # uses binary tree multiplication
-    for i in range(2, k + 1):
-        if i & (i - 1) == 0:  # i is a power of 2
-            # compute T_{2i}(y) = 2*T_i(y)^2 - 1
-            square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
-            T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-            T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1,
-                                             cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[i - 1]
-            T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
-        else:  # non-power of 2
-            if i % 2 == 1:  # i is odd
-                # compute T_{2i+1}(y) = 2*T_i(y)*T_{i+1}(y) - y
-                prod = homo_ops.homo_mul(T[i // 2 - 1], T[i // 2], cryptoContext)
-                T[i - 1] = homo_ops.homo_add(prod, prod, cryptoContext)
-                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1,
-                                                 cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[
-                    i - 1]
-                T[i - 1] = homo_ops.homo_sub(T[i - 1], T[0], cryptoContext)
-
-            else:  # i is even but not power of 2
-                # compute T_{2i}(y) = 2*T_i(y)^2 - 1
-                square = homo_ops.homo_square(T[i // 2 - 1], cryptoContext)
-                T[i - 1] = homo_ops.homo_add(square, square, cryptoContext)
-                T[i - 1] = homo_ops.homo_rescale(T[i - 1], 1,
-                                                 cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T[
-                    i - 1]
-                T[i - 1] = homo_ops.homo_add_scalar_double(T[i - 1], -1.0, cryptoContext)
-
-    if rescaleTech == "FIXEDMANUAL":
-        # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
-        for i in range(1, k):
-            if cryptoContext.rescaleTech == "FIXEDMANUAL":
-                T[i - 1].drop_last_elements(T[i - 1].cur_limbs - T[k - 1].cur_limbs)
-    else:
-        for i in range(1, k):
-            T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
-    # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
-    # T2[0] is used as a placeholder
-    T2 = [0 for _ in range(m)]
-    T2[0] = T[-1]
-    for i in range(1, m):
-        square = homo_ops.homo_square(T2[i - 1], cryptoContext)
-        T2[i] = homo_ops.homo_add(square, square, cryptoContext)
-        T2[i] = homo_ops.homo_rescale(T2[i], 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2[i]
-        T2[i] = homo_ops.homo_add_scalar_double(T2[i], -1.0, cryptoContext)
-
-    # computes T_{k(2*m - 1)}(y)
-    T2km1 = T2[0]
-    for i in range(1, m):
-        # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
-        prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
-        T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
-        T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else T2km1
-        T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-
     # Compute k*2^{m-1}-k because we use it a lot
     k2m2k = k * (1 << (m - 1)) - k
 
@@ -443,11 +336,70 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     dc = degree(divcs_q)
     flag_c = False
 
+    # computes linear transformation y = -1 + 2 (x-a)/(b-a)
+    # consumes one level when a <> -1 && b <> 1
+
+    T = [x]
+    alpha = 2 / (b - a)
+    if not math.isclose(alpha, 1.0):
+        T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
+        T[0] = (
+            homo_ops.homo_rescale(T[0], 1, cryptoContext)
+            if cryptoContext.rescaleTech == "FIXEDMANUAL"
+            else T[0]
+        )
+    beta = 2 * a / (b - a)
+    if not math.isclose(beta, -1.0):
+        T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
+
+    for i in range(2, k + 1):
+        prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
+        tmp = homo_ops.homo_add(prod, prod, cryptoContext)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+
+        if i & 1 == 1:  # i is odd
+            tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
+        else:
+            tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
+        T.append(tmp)
+
+
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
+        for i in range(1, k):
+            T[i - 1].drop_last_elements(T[i - 1].cur_limbs - T[k - 1].cur_limbs)
+    else:
+        for i in range(1, k):
+            T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
+
+    # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
+    # T2[0] is used as a placeholder
+    T2 = [T[-1]]
+    for i in range(1, m):
+        tmp = homo_ops.homo_square(T2[i - 1], cryptoContext)
+        tmp = homo_ops.homo_add(tmp, tmp, cryptoContext)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL": 
+            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+        tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
+        T2.append(tmp)
+
+    # computes T_{k(2*m - 1)}(y)
+    T2km1 = T2[0]
+    for i in range(1, m):
+        # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
+        prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
+        T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
+        T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
+
     if dc >= 1:
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.homo_rescale(cu, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
+                if cryptoContext.rescaleTech == "FIXEDMANUAL": 
+                    cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
         else:
@@ -545,4 +497,3 @@ def eval_chebyshev_coefficients(func, a, b, degree):
         coefficients[i] *= mult_factor
 
     return coefficients
-
