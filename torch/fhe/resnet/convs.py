@@ -1,7 +1,9 @@
 from torch.fhe import hoisting_keyswitch
 from torch.fhe import homo_ops
+from ..ciphertext import Cipher
+# from torch.fhe.resnet.resnet20 import global_num_slots
 from torch.fhe.resnet.utils import *
-from torch.fhe.example.run_test import openfhe_context # fixme: to be removed, not correct
+
 
 
 #     /**
@@ -18,7 +20,7 @@ def eval_add_many(ciphertexts, cryptoContext):
         raise ValueError("Input ciphertext vector size should be 1 or more")
 
     lim = inSize * 2 - 2
-    ciphertextSumVec = [None] * (inSize - 1)
+    ciphertextSumVec = [] * (inSize - 1)
     ctrIndex = 0
 
     # see if all the ciphertexts are of the same cur_limbs
@@ -36,7 +38,7 @@ def eval_add_many(ciphertexts, cryptoContext):
     return ciphertextSumVec[-1]
 
 
-def convbn_initial(input,scale,cryptoContext):
+def convbn_initial(input, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
     img_width=32
     padding=1
     digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
@@ -53,21 +55,23 @@ def convbn_initial(input,scale,cryptoContext):
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
+    cur_num_slots = he_res20_ctx.cur_num_slots
+    openfhe_context = openfhe_context_dict[str( cur_num_slots)]
     bias=openfhe_context.encode(read_values_from_file("../weights/conv1bn1-bias.bin",scale),cryptoContext.L-input.cur_limbs,16384)
-    #Todo:generate_rotation_keys({1024});
+
     for j in range(16):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/conv1bn1-ch{j}-k{k+1}.bin",scale)
             encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,16384)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+
         sum=eval_add_many(k_rows,cryptoContext)
-        sum=eval_add_many(k_rows,cryptoContext)
-        res=sum.clone()
+        res=sum.deep_copy()
         res=homo_ops.homo_add(res,homo_ops.homo_rotate(sum,1024,cryptoContext),cryptoContext)
         res = homo_ops.homo_add(res, homo_ops.homo_rotate(homo_ops.homo_rotate(sum,1024,cryptoContext), 1024, cryptoContext), cryptoContext)
 
-        res=homo_ops.homo_mul_pt(res,mask_from_to(0,1024,res.cur_limbs,cryptoContext),cryptoContext)
+        res=homo_ops.homo_mul_pt(res,mask_from_to(0,1024,res.cur_limbs, cryptoContext, openfhe_context),cryptoContext)
 
         if (j == 0):
             finalsum = res.clone()
@@ -80,11 +84,12 @@ def convbn_initial(input,scale,cryptoContext):
     return finalsum
 
 
-def convbn(input,layer,n,scale,cryptoContext):
+def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
     img_width=32
     padding=1
+
     digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
-    #使用list代替vector
+
     c_rotations=[]
     c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
     c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
@@ -98,6 +103,7 @@ def convbn(input,layer,n,scale,cryptoContext):
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
+    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
     bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,16384)
 
     for j in range(16):
@@ -108,7 +114,7 @@ def convbn(input,layer,n,scale,cryptoContext):
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
         sum=eval_add_many(k_rows,cryptoContext)
         if(j==0):
-            finalsum=sum.clone()
+            finalsum=sum.deep_copy()
             finalsum=homo_ops.homo_rotate(finalsum,-1024,cryptoContext)
         else:
             finalsum=homo_ops.homo_add(finalsum,sum,cryptoContext)

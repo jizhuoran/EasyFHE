@@ -41,7 +41,7 @@ def read_image(file_cnt=None):
 
     if file_cnt is None:
         random.seed(int(time.time()))
-    else: 
+    else:
         random.seed(file_cnt)
     index=0
     pic_index=0
@@ -167,16 +167,16 @@ def mask_first_n(n,cur_limbs,cryptoContext):
     return openfhe_context.encode(mask, level, 1, global_num_slots)
 
 
-def mask_from_to(from_,to,cur_limbs,cryptoContext):
+def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
     vec=[]
     level=cryptoContext.L-cur_limbs
-    for i in range(global_num_slots):
+    for i in range(he_res20_ctx.cur_num_slots):
         if i>=from_ and i<to:
             vec.append(1)
         else:
             vec.append(0)
 
-    return openfhe_context.encode(vec,level,1,global_num_slots)
+    return openfhe_context.encode(vec,level,1,he_res20_ctx.cur_num_slots)
 
 
 def gen_mask(n,cur_limbs,cryptoContext):
