@@ -85,55 +85,6 @@ class BsContext:
         self.m_U0hatTPreFFT_scaling_factor = BOOT_KEY["U0hatTPreFFTScalingFactor"]
         self.m_U0PreFFT_scaling_factor = BOOT_KEY["U0PreFFTScalingFactor"]
 
-        # precom = scheme.precom
-        # if correctionFactor == 0:
-        #     if rescaleTech == "FLEXIBLEAUTO" or rescaleTech == "FLEXIBLEAUTOEXT":
-        #         tmp = round_half_away_from_zero(
-        #             -0.265 * (2 * math.log2(self.M / 2) + math.log2(slots)) + 19.1
-        #         )
-        #         if tmp < 7:
-        #             self.m_correctionFactor = 7
-        #         elif tmp > 13:
-        #             self.m_correctionFactor = 13
-        #         else:
-        #             self.m_correctionFactor = int(tmp)
-        #     else:
-        #         self.m_correctionFactor = 9
-        # else:
-        #     self.m_correctionFactor = correctionFactor
-
-        self.slots = slots
-        self.dim1 = dim1[0]
-
-        logSlots = math.log2(slots)
-        newBudget = [levelBudget[0], levelBudget[1]]
-        if levelBudget[0] > logSlots:
-            print(
-                f"\nWarning, the level budget for encoding cannot be this large. The budget was changed to {int(logSlots)}"
-            )
-            newBudget[0] = int(logSlots)
-
-        if levelBudget[0] < 1:
-            print(
-                f"\nWarning, the level budget for encoding has to be at least 1. The budget was changed to 1"
-            )
-            newBudget[0] = 1
-
-        if levelBudget[1] > logSlots:
-            print(
-                f"\nWarning, the level budget for decoding cannot be this large. The budget was changed to {int(logSlots)}"
-            )
-            newBudget[1] = int(logSlots)
-
-        if levelBudget[1] < 1:
-            print(
-                f"\nWarning, the level budget for decoding has to be at least 1. The budget was changed to 1"
-            )
-            newBudget[1] = 1
-
-        self.paramsEnc = self.GetCollapsedFFTParams(slots, newBudget[0], dim1[0])
-        self.paramsDec = self.GetCollapsedFFTParams(slots, newBudget[1], dim1[1])
-
         coefficientsSparse = np.array(
             [
                 0,
@@ -379,9 +330,6 @@ class BsContext:
         else:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
-
-        self.compute_C2S_rot(slots, self.M)
-        self.compute_S2C_rot(slots, self.M)
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
@@ -657,12 +605,15 @@ class BsContext:
             )
             new_budget[1] = 1
 
-        self.m_params_enc = self.GetCollapsedFFTParams(
+        self.paramsEnc = self.GetCollapsedFFTParams(
             slots, new_budget[0], dim1[0]
         )
-        self.m_params_dec =self.GetCollapsedFFTParams(
+        self.paramsDec =self.GetCollapsedFFTParams(
             slots, new_budget[1], dim1[1]
         )
+
+        self.compute_C2S_rot(slots, self.M)
+        self.compute_S2C_rot(slots, self.M)
 
         if level_budget[0] == 1 and level_budget[1] == 1:
             pass
