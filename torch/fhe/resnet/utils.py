@@ -3,6 +3,7 @@ import os
 import random
 import time
 import numpy as np
+from .. import utils as fhe_utils
 
 IMAGE_SIZE = 3072
 LABEL_SIZE = 1
@@ -126,11 +127,11 @@ def read_fc_weight(filename):
 
 
 #Todo：uncertain
-def load_bootstrapping_and_rotation_keys(filename,specify_slots,cryptoContext):
+def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_slots) # fixme: what utils?
-    utils.load_rotation_keys(cryptoContext, filename) #fixme: import utils?
+    fhe_utils.load_rotation_keys(cryptoContext, specify_slots)
+
 
 def mask_mod(n,cur_limbs,custom_val,cryptoContext):
     level = cryptoContext.L-cur_limbs
@@ -144,27 +145,27 @@ def mask_mod(n,cur_limbs,custom_val,cryptoContext):
     return openfhe_context.encode(vec,level,1,global_num_slots)
 
 
-def mask_scecond_n(n,cur_limbs,cryptoContext):
+def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
     mask=[]
     level=cryptoContext.L-cur_limbs
-    for i in range(global_num_slots):
+    for i in range(he_res20_ctx.cur_num_slots):
         if i >=n :
             mask.append(1)
         else:
             mask.append(0)
-    return openfhe_context.encode(mask, level, 1, global_num_slots)
+    return openfhe_context.encode(mask, level, 1, he_res20_ctx.cur_num_slots)
 
 
-def mask_first_n(n,cur_limbs,cryptoContext):
+def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
     mask=[]
     level=cryptoContext.L-cur_limbs
-    for i in range(global_num_slots):
+    for i in range(he_res20_ctx.cur_num_slots):
         if i < n:
             mask.append(1)
         else:
             mask.append(0)
 
-    return openfhe_context.encode(mask, level, 1, global_num_slots)
+    return openfhe_context.encode(mask, level, 1, he_res20_ctx.cur_num_slots)
 
 
 def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
@@ -179,11 +180,11 @@ def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_cont
     return openfhe_context.encode(vec,level,1,he_res20_ctx.cur_num_slots)
 
 
-def gen_mask(n,cur_limbs,cryptoContext):
+def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
     level = cryptoContext.L - cur_limbs
     mask=[]
     copy_interval=n
-    for i in range(global_num_slots):
+    for i in range(he_res20_ctx.cur_num_slots):
         if copy_interval>0:
             mask.append(1)
         else:
@@ -191,10 +192,10 @@ def gen_mask(n,cur_limbs,cryptoContext):
         copy_interval-=1
         if copy_interval<= -n:
             copy_interval=n
-    return openfhe_context.encode(mask,level,1,global_num_slots)
+    return openfhe_context.encode(mask,level,1, he_res20_ctx.cur_num_slots)
 
 
-def mask_first_n_mod(n,padding,pos,cur_limbs,cryptoContext):
+def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(32):
@@ -208,7 +209,7 @@ def mask_first_n_mod(n,padding,pos,cur_limbs,cryptoContext):
     return openfhe_context.encode(mask, level, 1, 16384*2)
 
 
-def mask_first_n_mod2(n,padding,pos,cur_limbs,cryptoContext):
+def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(64):
@@ -221,7 +222,7 @@ def mask_first_n_mod2(n,padding,pos,cur_limbs,cryptoContext):
     return openfhe_context.encode(mask, level, 1, 8192*2)
 
 
-def mask_channel(n,cur_limbs,cryptoContext):
+def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(n):
@@ -239,7 +240,7 @@ def mask_channel(n,cur_limbs,cryptoContext):
     return openfhe_context.encode(mask, level, 1, 16384*2)
 
 
-def mask_channel2(n,cur_limbs,cryptoContext):
+def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(n):

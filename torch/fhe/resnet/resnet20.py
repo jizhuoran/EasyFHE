@@ -1,16 +1,10 @@
 import torch
-
 from torch.fhe import utils
 from torch.fhe import approx
 from torch.fhe.bootstrapping import homo_bootstrap
 from torch.fhe.resnet.convs import *
 
-# global input_cnt
-# global_num_slots=4096 #todo: should not put in global
-# he_res20_ctx.relu_degree=59 #todo: should not put in global
-# input_filename = ""
-
-class he_res20_ctx:
+class he_res20_context:
     def __init__(self, cur_num_slots, relu_degree):
         self.cur_num_slots = cur_num_slots
         self.relu_degree = relu_degree
@@ -101,112 +95,99 @@ def layer1(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     return res3
 
 
-def layer2(input,cryptoContext):
-    scaleSx=normalized_deltas[2][0]
-    scaleDx=normalized_deltas[2][1]
-    boot_in=homo_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res1sx=convbn1632sx(boot_in,4,1,scaleSx,cryptoContext)
-    res1dx=convbn1632dx(boot_in,4,1,scaleDx,cryptoContext)
+def layer2(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
+    scaleSx =normalized_deltas[2][0]
+    scaleDx =normalized_deltas[2][1]
+    boot_in =homo_bootstrap(input, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res1sx  = convbn1632sx(boot_in,4,1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1dx  = convbn1632dx(boot_in,4,1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
 
-    #Todo:        controller.clear_bootstrapping_and_rotation_keys(16384);
-    #Todo：       controller.load_rotation_keys("rotations-layer2-downsample.bin", timing);
-    utils.load_rotation_keys(cryptoContext, "app")
-
-    fullpackSx = downsample1024to256(res1sx[0], res1sx[1], cryptoContext)
-    fullpackDx = downsample1024to256(res1dx[0], res1dx[1], cryptoContext)
-
-    # Todo:res1sx.clear();
-    # Todo:res1dx.clear();
-    #Todo:    controller.clear_rotation_keys();
-    #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
-    load_bootstrapping_and_rotation_keys("app",8192,cryptoContext)
-
-    global_num_slots=8192
-    fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    fullpackSx=homo_relu(fullpackSx,scaleSx,he_res20_ctx.relu_degree, cryptoContext)
-    fullpackSx=convbn2(fullpackSx,4,2,scaleDx,cryptoContext)
-    res1=homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
-    res1=homo_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res1= homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
+    fullpackSx = downsample1024to256(res1sx[0], res1sx[1],he_res20_ctx, cryptoContext, openfhe_context_dict)
+    fullpackDx = downsample1024to256(res1dx[0], res1dx[1],he_res20_ctx, cryptoContext, openfhe_context_dict)
 
 
+    he_res20_ctx.cur_num_slots=8192
+    load_bootstrapping_and_rotation_keys(he_res20_ctx.cur_num_slots, cryptoContext)
+
+    fullpackSx = homo_bootstrap(fullpackSx,L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    fullpackSx = homo_relu(fullpackSx,scaleSx,he_res20_ctx.relu_degree, cryptoContext)
+    fullpackSx = convbn2(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1 = homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
+    res1 = homo_bootstrap(res1, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][2]
-    res2=convbn2(res1,5,1,scale,cryptoContext)
-    res2=homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res2= homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res2  = convbn2(res1, 5, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res2  = homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res2  = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][3]
-    res2=convbn2(res2,5,2,scale,cryptoContext)
-    res2=homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
-    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res2  = convbn2(res2, 5, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res2  = homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
+    res2  = homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res2  = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][4]
-    res3=convbn2(res2,6,1,scale,cryptoContext)
-    res3=homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res3= homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res3  = convbn2(res2, 6, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res3  = homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res3  = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][5]
-    res3=convbn2(res3,6,2,scale,cryptoContext)
-    res3=homo_ops.homo_add(res3,homo_ops.homo_mul_scalar_double(res2,scale,cryptoContext),cryptoContext)
-    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res3  = convbn2(res3, 6, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res3  = homo_ops.homo_add(res3,homo_ops.homo_mul_scalar_double(res2,scale,cryptoContext),cryptoContext)
+    res3  = homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res3  = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     return res3
 
 
-def layer3(input,cryptoContext):
+def layer3(input,he_res20_ctx, cryptoContext, openfhe_context_dict):
     scaleSx=normalized_deltas[3][0]
     scaleDx=normalized_deltas[3][1]
-    boot_in=homo_bootstrap(input, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res1sx=convbn3264sx(boot_in,7,1,scaleSx,cryptoContext)
-    res1dx=convbn3264dx(boot_in,7,1,scaleDx,cryptoContext)
+
+    boot_in=homo_bootstrap(input, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+
+    res1sx= convbn3264sx(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1dx= convbn3264dx(boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+
+    fullpackSx = downsample256to64(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
+    fullpackDx = downsample256to64(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
+
+    he_res20_ctx.cur_num_slots = 4096
+    load_bootstrapping_and_rotation_keys(he_res20_ctx.cur_num_slots, cryptoContext)
 
 
-    #Todo:        controller.clear_bootstrapping_and_rotation_keys(16384);
-    #Todo：       controller.load_rotation_keys("rotations-layer2-downsample.bin", timing);
-    utils.load_rotation_keys(cryptoContext, "app")
-    fullpackSx = downsample256to64(res1sx[0], res1sx[1], cryptoContext)
-    fullpackDx = downsample256to64(res1dx[0], res1dx[1], cryptoContext)
-    # Todo:res1sx.clear();
-    # Todo:res1dx.clear();
-    #Todo:    controller.clear_rotation_keys();
-    #Todo:controller.load_bootstrapping_and_rotation_keys("rotations-layer2.bin", 8192, verbose > 1);
-    load_bootstrapping_and_rotation_keys("app",4096,cryptoContext)
-
-    global_num_slots=4096
-    fullpackSx=homo_bootstrap(fullpackSx,L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    fullpackSx= homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
-    fullpackSx=convbn3(fullpackSx,7,2,scaleDx,cryptoContext)
-    res1=homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
-    res1=homo_bootstrap(res1, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
-    res1= homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
+    fullpackSx = homo_bootstrap(fullpackSx,L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
+    fullpackSx = convbn3(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1 = homo_ops.homo_add(fullpackSx,fullpackDx,cryptoContext)
+    res1 = homo_bootstrap(res1, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
+    res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
 
 
     scale = normalized_deltas[3][2]
-    res2=convbn3(res1,8,1,scale,cryptoContext)
-    res2=homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2= convbn3(res1, 8, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res2=homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res2= homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][3]
-    res2=convbn3(res2,8,2,scale,cryptoContext)
+    res2= convbn3(res2, 8, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
     res2=homo_ops.homo_add(res2,homo_ops.homo_mul_scalar_double(res1,scale,cryptoContext),cryptoContext)
-    res2 = homo_bootstrap(res2, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res2 = homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][4]
-    res3=convbn3(res2,9,1,scale,cryptoContext)
-    res3=homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3= convbn3(res2, 9, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res3=homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res3= homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][5]
-    res3=convbn3(res3,9,2,scale,cryptoContext)
+    res3= convbn3(res3, 9, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
     res3=homo_ops.homo_add(res3,homo_ops.homo_mul_scalar_double(res2,scale,cryptoContext),cryptoContext)
-    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
-    res3 = homo_bootstrap(res3, L0=cryptoContext.L, slots=14, cryptoContext=cryptoContext)
+    res3 = homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     return res3
 
 
@@ -256,27 +237,27 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     utils.load_rotation_keys(cryptoContext, "app")
 
     firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    resLayer1=layer1(firstLayer,he_res20_ctx, cryptoContext, openfhe_context_dict)
-    resLayer2=layer2(resLayer1,cryptoContext)
-    resLayer3=layer3(resLayer2,cryptoContext)
-    finalRes=final_layer(resLayer3,cryptoContext) #todo: deal with result
+    resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    resLayer2 = layer2(resLayer1,  he_res20_ctx, cryptoContext, openfhe_context_dict)
+    resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    finalRes = final_layer(resLayer3,cryptoContext) #todo: deal with result
 
 
 def resnet20( ):
-    logN = 16,
-    logSlots_list = [14, 13, 12],
-    levelBudget_list = [[4, 4], [4, 4], [4, 4]],
-    dnum = 3,
-    dcrtBits = 59,
-    firstMod = 60,
-    max_relu_degree = 59,
-    secretKeyDist = "UNIFORM_TERNARY",
-    rescaleTech = "FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    logN = 16
+    logSlots_list = [14, 13, 12]
+    levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+    dnum = 3
+    dcrtBits = 59
+    firstMod = 60
+    max_relu_degree = 59
+    secretKeyDist = "UNIFORM_TERNARY"
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     save_dir = "torch/fhe/data/"
 
     # generate context
-    approxModDepth = 9,
-    maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3,
+    approxModDepth = 9
+    maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
     if max_relu_degree < 59:
         diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
         maxLevelsRemaining +=diff
@@ -287,7 +268,7 @@ def resnet20( ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    he_res20_ctx((1<<14),max_relu_degree) # ini app ctx--he resnet ctx
+    he_res20_context_ = he_res20_context((1<<14),max_relu_degree) # ini app ctx--he resnet ctx
 
     cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
                                                                  logSlots_list,
@@ -302,7 +283,7 @@ def resnet20( ):
                                                                  rescaleTech,
                                                                  save_dir=save_dir)
 
-    executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict)
+    executeResNet20(he_res20_context_, cryptoContext, openfhe_context_dict)
 
     # specify_slots = logSlots_list[0] # logslots = 11
     # openfhe_context = openfhe_context_dict[str(specify_slots)]
