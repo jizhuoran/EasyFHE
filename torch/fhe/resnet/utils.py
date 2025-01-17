@@ -126,23 +126,22 @@ def read_fc_weight(filename):
     return weight_corrected
 
 
-#Todo：uncertain
 def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     fhe_utils.load_rotation_keys(cryptoContext, specify_slots)
 
 
-def mask_mod(n,cur_limbs,custom_val,cryptoContext):
+def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
     level = cryptoContext.L-cur_limbs
     vec=[]
-    for i in range(global_num_slots):
+    for i in range(he_res20_ctx.cur_num_slots):
         if i%n==0:
             vec.append(custom_val)
         else:
             vec.append(0)
 
-    return openfhe_context.encode(vec,level,1,global_num_slots)
+    return openfhe_context.encode(vec,level,1,he_res20_ctx.cur_num_slots)
 
 
 def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
