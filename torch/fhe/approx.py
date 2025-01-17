@@ -481,7 +481,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
                 qu = homo_ops.homo_add(qu, T[k - 1], cryptoContext)
 
         # adds the free term (at x^0)
-        qu = homo_ops.homo_add_scalar(qu, divqr_q[0] / 2, cryptoContext)
+        qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
         # The number of levels of qu is the same as the number of levels of T[k-1] + 1.
         # Will only get here when m = 2, so the number of levels of qu and T2[m-1] will be the same.
 
@@ -504,14 +504,14 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         else:
             su = T[k - 1]
         # adds the free term (at x^0)
-        su = homo_ops.homo_add_scalar(su, s2[0] / 2, cryptoContext)
+        su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         # The number of levels of su is the same as the number of levels of T[k-1] + 1.
         # Will only get here when m = 2, so need to reduce the number of levels by 1.
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
     else:
-        result = homo_ops.homo_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
+        result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result

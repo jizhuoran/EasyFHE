@@ -29,7 +29,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
             raise Exception("Error: cryptoContext.L != L0")
         target_sf = cryptoContext.GetScalingFactorReal(cur_limbs = (L0 - lvl))
         source_sf = ciphertext.scaling_factor
-        num_towers = len(ciphertext.cv)
+        num_towers = ciphertext.cur_limbs
         mod_to_drop = float(cryptoContext.moduliQ[num_towers - 1])
         # in the case of FLEXIBLEAUTO, we need to bring the ciphertext to the right scale using a
         # a scaling multiplication. Note the at currently FLEXIBLEAUTO is only supported for NATIVEINT = 64.
@@ -632,15 +632,17 @@ def BootstrapTest_test_case(
 
     # bootstrapping, logSlots = 12
     specify_slots = logSlots_list[1]
+    openfhe_context1 = openfhe_context_dict[str(specify_slots)]
+
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
-    result = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+
     # compute golden answer
     openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
-    openfhe_boot = openfhe_context.cc.EvalBootstrap(openfhe_boot)
-
-    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    openfhe_boot1 = openfhe_context1.cc.EvalBootstrap(openfhe_boot)
+    is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
     if is_euqal:
         print("BootstrapTest_logslots12: Test passed!")
     else:
