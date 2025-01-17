@@ -5,7 +5,7 @@ from torch.fhe import approx
 from torch.fhe.bootstrapping import homo_bootstrap
 from torch.fhe.resnet.convs import *
 
-class he_res20_context:
+class HE_res20_context:
     def __init__(self, cur_num_slots, relu_degree):
         self.cur_num_slots = cur_num_slots
         self.relu_degree = relu_degree
@@ -188,7 +188,7 @@ def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     he_res20_ctx.cur_num_slots=4096
     openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    weight=openfhe_context.encode(read_fc_weight("../weights/fc.bin"),cryptoContext.L-input.cur_limbs,he_res20_ctx.cur_num_slots)
+    weight=openfhe_context.encode(read_fc_weight(), cryptoContext.L - input.cur_limbs, he_res20_ctx.cur_num_slots)
     res = rotsum(input, 64,cryptoContext)
     res = homo_ops.homo_mul_pt(res,
                                mask_mod(64, res.cur_limbs, 1.0/64.0, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
@@ -253,7 +253,7 @@ def resnet20( ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    he_res20_context_ = he_res20_context(None,max_relu_degree) # ini app ctx--he resnet ctx
+    he_res20_context_ = HE_res20_context(None, max_relu_degree) # ini app ctx--he resnet ctx
 
     cryptoContext, openfhe_context_dict = (
         utils.try_load_context(logN,

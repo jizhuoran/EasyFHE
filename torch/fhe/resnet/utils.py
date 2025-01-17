@@ -115,7 +115,7 @@ def read_values_from_file(filename, scale=1.0):
 
 
 
-def read_fc_weight(filename):
+def read_fc_weight():
     weight=read_values_from_file(f"../weights/fc.bin")
     weight_corrected=[]
     for i in range(64):
