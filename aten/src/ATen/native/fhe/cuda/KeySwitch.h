@@ -4,7 +4,8 @@
 
 namespace at::native {
 void iNTT_impl(
-    uint64_t* op_ptr,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t curr_limbs,
@@ -15,7 +16,8 @@ void iNTT_impl(
     const Tensor& inverse_scaled_power_of_roots_div_two);
 
 void NTT_impl(
-    uint64_t* op_ptr,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,

@@ -6,26 +6,28 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-# logN = 16
-# logSlots = 15
-# maxLevelsRemaining = 12
-# levelBudget0 = 4
-# levelBudget1 = 4
-# dnum = 3
+logN = 16
+logSlots = 14
+maxLevelsRemaining = 12
+levelBudget0 = 4
+levelBudget1 = 4
+dnum = 3
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
 rescaleTech = "FIXEDMANUAL"
 path = "data/"
 
-logN = 15
-logSlots = 8
-maxLevelsRemaining = 3
-levelBudget0 = 4
-levelBudget1 = 4
-dnum = 1
-dcrtBits = 59
-firstMod = 60
+# sudo mount -t tmpfs -o size=100G tmpfs /mnt/ram
+
+# logN = 15
+# logSlots = 8
+# maxLevelsRemaining = 3
+# levelBudget0 = 4
+# levelBudget1 = 4
+# dnum = 1
+# dcrtBits = 59
+# firstMod = 60
 
 # logN = 14
 # logSlots = 6
@@ -69,12 +71,9 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 #         # Start profiling specific functions with torch.profiler.record_function()
 #         result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots),
 #                                 cryptoContext=cryptoContext)
-        # profiler.step()
+#         profiler.step()
 
-# Get the profiling results
 # profiler_results = profiler.key_averages()
-
-# Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)

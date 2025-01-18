@@ -538,10 +538,13 @@ def homo_square(in0, cryptoContext):
     return _cipher_add(res, tmp, cryptoContext)
 
 
-def homo_add_scalar_double(in0, cnst, cryptoContext):
-    tmpr = _get_element_for_eval_add_or_sub(
-        math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext
-    )
+def homo_add_scalar_double(in0, cnst, cryptoContext, precomp = None):
+    if precomp:
+        tmpr = precomp
+    else:
+        tmpr = _get_element_for_eval_add_or_sub(
+            math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext
+        )
     if cnst < 0:
         return _cipher_sub_scalar(in0, tmpr, cryptoContext)
     else:

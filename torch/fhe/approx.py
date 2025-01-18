@@ -1,11 +1,13 @@
+import time
 from .context import *
 from .bs_context import *
 from . import homo_ops
 import numpy as np
+from .utils import profile_python_function, profile_pytorch_function
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
-# @profile_python_function
+@profile_python_function
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     input_size = len(constants)
 
@@ -50,6 +52,7 @@ def degree(lst):
 # division f/g. longDiv is a struct that contains the vectors of coefficients for the
 # quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
 # the same format.
+@profile_python_function
 def long_division_chebyshev(f, g):
     assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
     n, k = len(f) - 1, len(g) - 1
@@ -96,8 +99,6 @@ def long_division_chebyshev(f, g):
     q[0] *= 2
     return q, r
 
-
-# @profile_python_function
 def inner_eval_chebyshev_ps(coefficients,
                             k, m, T, T2, cryptoContext: Context):
     # Compute k * 2^(m-1) - k
@@ -159,13 +160,16 @@ def inner_eval_chebyshev_ps(coefficients,
             weights = divqr_q[1:deg_qcopy + 1]
             qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
             sum = T[k - 1]
-            for i in range(int(math.log2(divqr_q[-1]))):
-                sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            divqr_q[-1] += 1.1
+            sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
+            # for i in range(int(math.log2(divqr_q[-1]))):
+                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = homo_ops.homo_add(qu, sum, cryptoContext)
         else:
             sum = T[k - 1]
-            for i in range(int(math.log2(divqr_q[- 1]))):
-                sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
+            # for i in range(int(math.log2(divqr_q[-1]))):
+                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = sum
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
@@ -291,6 +295,7 @@ def ComputeDegreesPS(n):
 
 # @profile_python_function
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
+# @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
     n = degree(coefficients)
@@ -333,12 +338,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
     # Evaluate c at u
     cu = None
-    dc = degree(divcs_q)
-    flag_c = False
 
     # computes linear transformation y = -1 + 2 (x-a)/(b-a)
     # consumes one level when a <> -1 && b <> 1
-
+    time0 = time.time()
     T = [x]
     alpha = 2 / (b - a)
     if not math.isclose(alpha, 1.0):
@@ -352,6 +355,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if not math.isclose(beta, -1.0):
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
+    time1 = time.time()
+    print("part1: ", time1 - time0)
+
+    print("k", k)
     for i in range(2, k + 1):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
@@ -364,7 +371,9 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
-
+    time2 = time.time()
+    print("part2: ", time2 - time1)
+    
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
@@ -372,6 +381,9 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
+
+    time3 = time.time()
+    print("part3: ", time3 - time2)
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
@@ -384,6 +396,9 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T2.append(tmp)
 
+    time4 = time.time()
+    print("part4: ", time4 - time3)
+
     # computes T_{k(2*m - 1)}(y)
     T2km1 = T2[0]
     for i in range(1, m):
@@ -394,6 +409,11 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
+    time5 = time.time()
+    print("part5: ", time5 - time4)
+
+    dc = degree(divcs_q)
+    flag_c = False
     if dc >= 1:
         if dc == 1:
             if divcs_q[1] != 1:
@@ -410,9 +430,11 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
+    
+    time6 = time.time()
+    print("part6: ", time6 - time5)
 
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
-    qu = None
     if degree(divqr_q) > k:
         qu = inner_eval_chebyshev_ps(divqr_q, k, m - 1, T, T2, cryptoContext)
     else:
@@ -438,7 +460,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # Will only get here when m = 2, so the number of levels of qu and T2[m-1] will be the same.
 
     # Evaluate s2 at u
-    su = None
     deg_s2 = degree(s2)
     if deg_s2 > k:
         su = inner_eval_chebyshev_ps(s2, k, m - 1, T, T2, cryptoContext)
@@ -465,9 +486,14 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         result = homo_ops.homo_add_scalar(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
+    time7 = time.time()
+    print("part7: ", time7 - time6)
+
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
+
+
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
 
     return result

@@ -1,8 +1,69 @@
 import torch
+from enum import Enum
 from .bs_context import *
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
+
+# CRTMult in ckkspackedencoding.cpp
+def crt_mult(xs, ys, mods):
+    return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
+
+class LargeScalingFactorConstants(Enum):
+    MAX_BITS_IN_WORD = 61
+    MAX_LOG_STEP = 60
+
+# todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
+def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoContext):
+
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
+        sc_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    else:
+        sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+    # Compute approxFactor to avoid overflow issues
+    log_approx = 0
+    res = math.fabs(constant * sc_factor)
+    if res > 0:
+        log_sf = int(math.ceil(math.log2(res)))
+        log_valid = min(log_sf, LargeScalingFactorConstants.MAX_BITS_IN_WORD.value)
+        log_approx = log_sf - log_valid
+
+    approx_factor = float(pow(2, log_approx))
+    sc_constant = int(constant * sc_factor / approx_factor + 0.5)
+
+    crt_constant = cur_limbs * [sc_constant]
+
+    # Scale back up by approxFactor within the CRT multiplications.
+    if log_approx > 0:
+        log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+        int_step = 2**log_step
+        crt_approx = cur_limbs * [int_step]
+        log_approx -= log_step
+
+        while log_approx > 0:
+            log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+            int_step = 2**log_step
+            crt_sf = cur_limbs * [int_step]
+            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            log_approx -= log_step
+
+        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ)
+
+    # Handle FLEXIBLEAUTOEXT mode at level 0, we don't use the depth to calculate the scaling factor,
+    # so we return the value before taking the depth into account.
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
+        return crt_constant
+
+    # Final scaling factor adjustments
+    int_sc_factor = int(sc_factor + 0.5)
+    crt_sc_factor = cur_limbs * [int_sc_factor]
+
+    for i in range(1, noise_deg):
+        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ)
+
+    return crt_constant
+
 
 class Context:
     def __init__(self, BsContext_content_map, gpufhe_content_map):
@@ -118,6 +179,9 @@ class Context:
         
         _BsContext = BsContext(BsContext_content_map)
         self.BsContext = _BsContext
+
+        self.constant_minus_one = _get_element_for_eval_add_or_sub(-1)
+
         self.to_cuda()
 
 
@@ -175,6 +239,10 @@ class Context:
         for i in range(len(self.BsContext.m_U0PreFFT)):
             for j in range(len(self.BsContext.m_U0PreFFT[i])):
                 self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")            
+
+        self.constant_minus_one = torch.tensor(self.constant_minus_one, dtype = torch.uint64, device = "cuda")
+
+
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!
