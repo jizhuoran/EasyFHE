@@ -21,9 +21,9 @@ import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from fhe.client.gen_context import gen_contexts
 logN = {0}
-logSlots = {1}
+logSlots_list = [{1}]
 maxLevelsRemaining = {2}
-levelBudget = [{3}, {4}]
+levelBudget_list = [[{3}, {4}]]
 dnum = {5}
 rescaleTech = "{6}"
 dcrtBits=59
@@ -32,9 +32,9 @@ approxModDepth=9
 
 gen_contexts(
     logN=logN,
-    logSlots=logSlots, # possible slots value of runtime ciphertext #todo: should be a list?
+    logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
     maxLevelsRemaining=maxLevelsRemaining,
-    levelBudget=levelBudget,
+    levelBudget_list=levelBudget_list,
     dnum=dnum,
     dcrtBits=dcrtBits,
     firstMod=firstMod,
