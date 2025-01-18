@@ -8,14 +8,17 @@ with open("result.txt", "w") as f:
 
 start_time = time.time()
 #find all context in the directory
-path = "/home/public_data/openfhe_data/"
+path = "data/"
 for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and "GPU-FHE-CONTEXT" in context_file:
         print("Testing", context_file)
         context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
-        logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
+        logN, logSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
         try:
-
+            logSlots_list = [int(logSlots) for logSlots in logSlots_str.split("-")]
+            levelBudgets_list = []
+            for levelBudgets in range(len(levelBudgets_str.split("-")) // 2):
+                levelBudgets_list.append([int(levelBudgets_str.split("-")[2 * levelBudgets]), int(levelBudgets_str.split("-")[2 * levelBudgets + 1])])
             code_string = """
 import pickle, sys, os
 import numpy as np
@@ -27,40 +30,45 @@ import torch.fhe.utils as utils
 import time
 context_file = "{}"
 logN = int({})
-logSlots = int({})
+logSlots_list = {}
 maxLevelsRemaining = int({})
-levelBudget0 = int({})
-levelBudget1 = int({})
+levelBudgets_list = {}
 dnum = int({})
 dcrtBits = int({})
 firstMod = int({})
 approxModDepth = int({})
 rescaleTech = "{}"
 path = "{}"
-cryptoContext, openfhe_context = utils.try_load_context(
+cryptoContext, openfhe_contexts = utils.try_load_context(
     int(logN),
-    int(logSlots),
+    logSlots_list,
     int(maxLevelsRemaining),
-    [int(levelBudget0), int(levelBudget1)],
+    levelBudgets_list,
     int(dnum),
     int(dcrtBits),
     int(firstMod),
     int(approxModDepth),
+    [],
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path)
+
+cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots_list[0])]
+cryptoContext.BsContext.to_cuda()
+utils.load_rotation_keys(cryptoContext, logSlots_list[0])
 
 with open("result.txt", "a") as f:
     print(context_file, file=f)
 
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
+x = np.array([values[i % len(values)] for i in range((1<<logSlots_list[0]))])
 x = torch.tensor(x, device="cuda")
+openfhe_context = openfhe_contexts[str(logSlots_list[0])]
 cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
 start_time = time.time()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
 end_time = time.time()
 openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
@@ -72,7 +80,7 @@ with open("result.txt", "a") as f:
         print("Test failed!", file=f)
         print("result", result.cv[0].cpu().numpy()[0][:10], file=f)
         print("data", data.reshape(-1)[:10], file=f)
-""".format(context_file, logN, logSlots, maxLevelsRemaining, levelBudget0, levelBudget1, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech, path)
+""".format(context_file, logN, logSlots_list, maxLevelsRemaining, levelBudgets_list, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech, path)
 
             # Create a temporary file to store the code
             with open("temp_file.py", "w") as temp_file:

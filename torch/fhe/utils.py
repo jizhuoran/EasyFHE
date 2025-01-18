@@ -109,9 +109,9 @@ def try_load_context(logN,
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
-            logSlots_list,
+            '-'.join(map(str, logSlots_list)),
             maxLevelsRemaining,
-            levelBudget_list,
+            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
             dnum,
             dcrtBits,
             firstMod,
