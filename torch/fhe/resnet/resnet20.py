@@ -244,7 +244,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     clear_result = clear_result.cpu().numpy().reshape(-1)
     print(clear_result[:10]) # should be of len 10
 
-    max_element_idx = clear_result.index(max(clear_result))
+    max_element_idx = np.argmax(clear_result)
     print(max_element_idx)
 
 

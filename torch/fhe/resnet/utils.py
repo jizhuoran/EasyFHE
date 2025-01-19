@@ -260,14 +260,14 @@ def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
 
 def rotsum(input,slots,cryptoContext):
     result=input.deep_copy()
-    for i in range(np.log2(slots)):
+    for i in range(log2_int(slots)):
         result=homo_ops.homo_add(result,homo_ops.homo_rotate(result,pow(2,i),cryptoContext),cryptoContext)
     return result
 
 
 def rotsum_padded(input,slots,cryptoContext):
     result=input.deep_copy()
-    for i in range(np.log2(slots)):
+    for i in range(log2_int(slots)):
         result=homo_ops.homo_add(result,homo_ops.homo_rotate(result,slots*pow(2,i),cryptoContext),cryptoContext)
     return result
 
