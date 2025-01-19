@@ -35,11 +35,14 @@ class OpenFHEContext:
         else:
             if slots is None:
                 slots = len(x)
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
+            if isinstance(x, (np.ndarray, torch.Tensor)):
+                ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
+            else:
+                ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+            ptx.Encode()
             data = ptx.GetVectorOfData()
             cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
-            # return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg, ptx.GetSlots()) #todo: can be used after refactor Plaintext in ciphertext.py
-            return Plaintext(cv, cv[0].shape[1], ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
+            return Plaintext(cv, len(cv[0]), ptx.GetSlots(), len(cv), ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
 
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
