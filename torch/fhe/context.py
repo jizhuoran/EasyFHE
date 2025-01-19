@@ -1,6 +1,7 @@
 import torch
 from enum import Enum
 from .bs_context import *
+import itertools
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
@@ -180,7 +181,9 @@ class Context:
         _BsContext = BsContext(BsContext_content_map)
         self.BsContext = _BsContext
 
-        self.constant_minus_one = _get_element_for_eval_add_or_sub(-1)
+        # self.constant_minus_one = {}
+        # for cur_libm, noise_deg in itertools.product(range(self.L), [1, 2]):
+        #     self.constant_minus_one[(cur_libm, noise_deg)] = _get_element_for_eval_add_or_sub(math.fabs(-1.0), cur_libm, noise_deg, self)
 
         self.to_cuda()
 
@@ -240,8 +243,8 @@ class Context:
             for j in range(len(self.BsContext.m_U0PreFFT[i])):
                 self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")            
 
-        self.constant_minus_one = torch.tensor(self.constant_minus_one, dtype = torch.uint64, device = "cuda")
-
+        # for cur_libm, noise_deg in itertools.product(range(self.L), [1, 2]):
+        #     self.constant_minus_one[(cur_libm, noise_deg)] = torch.tensor(self.constant_minus_one[(cur_libm, noise_deg)], dtype = torch.uint64, device = "cuda")
 
 
     def find_auto_index(self, i):

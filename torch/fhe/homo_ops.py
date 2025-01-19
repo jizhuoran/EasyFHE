@@ -6,7 +6,7 @@ from .ciphertext import Plaintext as Plaintext
 import math
 import numpy as np
 import torch
-from .utils import check_meta_equal, check_cipher_len, call_counter
+from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
@@ -539,7 +539,7 @@ def homo_square(in0, cryptoContext):
 
 
 def homo_add_scalar_double(in0, cnst, cryptoContext, precomp = None):
-    if precomp:
+    if precomp is not None:
         tmpr = precomp
     else:
         tmpr = _get_element_for_eval_add_or_sub(
@@ -565,6 +565,8 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 
 
 # note: EvalMultInPlace in ckksrns-leveledshe.cpp
+@profile_python_function
+@call_counter
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
         in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)

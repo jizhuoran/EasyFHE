@@ -6,28 +6,28 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-logN = 16
-logSlots = 14
-maxLevelsRemaining = 12
-levelBudget0 = 4
-levelBudget1 = 4
-dnum = 3
-dcrtBits = 59
-firstMod = 60
+# logN = 16
+# logSlots = 14
+# maxLevelsRemaining = 12
+# levelBudget0 = 4
+# levelBudget1 = 4
+# dnum = 3
+# dcrtBits = 59
+# firstMod = 60
 approxModDepth = 9
 rescaleTech = "FIXEDMANUAL"
 path = "data/"
 
 # sudo mount -t tmpfs -o size=100G tmpfs /mnt/ram
 
-# logN = 15
-# logSlots = 8
-# maxLevelsRemaining = 3
-# levelBudget0 = 4
-# levelBudget1 = 4
-# dnum = 1
-# dcrtBits = 59
-# firstMod = 60
+logN = 15
+logSlots = 8
+maxLevelsRemaining = 3
+levelBudget0 = 4
+levelBudget1 = 4
+dnum = 1
+dcrtBits = 59
+firstMod = 60
 
 # logN = 14
 # logSlots = 6

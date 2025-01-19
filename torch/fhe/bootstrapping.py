@@ -292,6 +292,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # -------------------
         # Running PartialSum
         # -------------------
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time1 = time.time()
         for step in range(int(math.log2(N // (2 * slots)))):
             temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
@@ -302,6 +304,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # ---------------------
         raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time2 = time.time()
         print("start: ", time2 - time1)
 
@@ -310,6 +314,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time3 = time.time()
         print("eval_coeffs_to_slots: ", time3 - time2)
 
@@ -323,7 +329,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
             if ctxtEnc.noise_deg ==2 :
                 ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
 
-
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time4 = time.time()
         print("internal: ", time4 - time3)
 
@@ -334,7 +341,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
-
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time5 = time.time()
         print("eval_chebyshev_series_ps: ", time5 - time4)
 
@@ -347,7 +355,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
 
-
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time6 = time.time()
         print("apply_double_angle_iterations: ", time6 - time5)
 
@@ -365,7 +374,8 @@ def eval_bootstrap(ciphertext, L0, slots, cryptoContext):
         else:
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
-
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
         time7 = time.time()
         print("eval_slots_to_coeffs: ", time7 - time6)
 
@@ -396,8 +406,8 @@ def homo_bootstrap(cipher, L0, slots, cryptoContext):
     return result
 
 def BootstrapTest_N65536L26lB44(
-    logN=16,
-    logSlots=15,
+    logN=14,
+    logSlots=6,
     maxLevelsRemaining=3,
     levelBudget=[4, 4],
     dnum=3,
@@ -452,6 +462,10 @@ def BootstrapTest_N65536L26lB44(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
     x = torch.tensor(x, device="cuda")
+
+    y = openfhe_context.encode(x)
+    print(y)
+
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)

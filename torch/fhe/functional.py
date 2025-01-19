@@ -209,6 +209,9 @@ def cv_innerproduct(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
+    print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
+    x.reshape(-1)
+    
     if inplace:
         res = torch.innerproduct_(
             context.inner_out,
@@ -225,7 +228,7 @@ def cv_innerproduct(
             workspace=context.inner_workspace,
         )
     else:
-        res = torch.innerproduct(
+        res = torch.innerproduct( 
             context.inner_out,
             x,
             bx=swk_bx,
