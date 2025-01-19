@@ -1,3 +1,4 @@
+import datetime
 import torch
 from torch.fhe import utils
 from torch.fhe import approx
@@ -209,11 +210,30 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     utils.load_rotation_keys(cryptoContext, "app")
 
-    firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    # print("resnet computation start")
+    # firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    # resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    # resLayer2 = layer2(resLayer1,  he_res20_ctx, cryptoContext, openfhe_context_dict)
+    # resLayer3 = layer3(resLayer2,  he_res20_ctx, cryptoContext, openfhe_context_dict)
+    # finalRes = final_layer(resLayer3,he_res20_ctx, cryptoContext, openfhe_context_dict)
+
+
+    print("resnet computation start")
+    firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print("after initial layer")
+    print("current time: ", datetime.datetime.now())
     resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    resLayer2 = layer2(resLayer1,  he_res20_ctx, cryptoContext, openfhe_context_dict)
-    resLayer3 = layer3(resLayer2,  he_res20_ctx, cryptoContext, openfhe_context_dict)
-    finalRes = final_layer(resLayer3,he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print("after layer1")
+    print("current time: ", datetime.datetime.now())
+    resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print("after layer2")
+    print("current time: ", datetime.datetime.now())
+    resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print("after layer3")
+    print("current time: ", datetime.datetime.now())
+    finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print("after final layer")
+    print("current time: ", datetime.datetime.now())
 
     finalRes.slots = 10
     clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
@@ -265,4 +285,7 @@ def resnet20( ):
                              rescaleTech,
                              save_dir=save_dir))
 
+    print("start executeResNet20")
+    #print all the key of openfhe_context_dict
+    # print("key of openfhe_context_dict ", openfhe_context_dict.keys())
     executeResNet20(he_res20_context_, cryptoContext, openfhe_context_dict)

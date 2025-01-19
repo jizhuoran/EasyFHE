@@ -1,3 +1,4 @@
+from datetime import datetime
 from os import utime
 from . import openfhe as openfhe
 from . import context as Context
@@ -97,9 +98,12 @@ def gen_contexts(
         rot_swk_map[str(logslots)] = ROT_SWK
         # cc.ClearEvalAutomorphismKeys()
 
+    print("start Get BOOT_KEY")
     BOOT_KEY = cc.GetEvalBootstrapKey()
     boot_key_map = {}
 
+    print("done Get BOOT_KEY")
+    print("current time: ", datetime.now())
     for idx, logslots in enumerate(logSlots_list):
         C2S, S2C = [], []
         C2S_dim, S2C_dim = [], []
@@ -136,6 +140,8 @@ def gen_contexts(
         }
         boot_key_map[str(logslots)] = boot_key
 
+    print("done set BOOT_KEY")
+    print("current time: ", datetime.now())
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -157,10 +163,15 @@ def gen_contexts(
         rescaleTech,
         dim1,
     )
+    print("done __FOR_SAVE_ONLY_Context")
+    print("current time: ", datetime.now())
+
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
         gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
             gpufhe_context, level_budget, dim1, (1<<logslots), 0
         )
+    print("done BsContext_map")
+    print("current time: ", datetime.now())
 
     save_path = (
         save_dir
@@ -177,6 +188,8 @@ def gen_contexts(
             rescaleTech,
         )
     )
+    print("done save_path")
+    print("current time: ", datetime.now())
 
 
     gpufheMembers = {}
@@ -210,9 +223,14 @@ def gen_contexts(
     # openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
     # openfheMembers["level_budget"] = levelBudget
 
+    print("done openfheMembers")
+    print("current time: ", datetime.now())
+
     with open(save_path, "wb") as file:
         pickle.dump(
             (gpufheMembers, openfheMembers, BsContextMembers_dict), file
         )
 
+    print("done save pickle")
+    print("current time: ", datetime.now())
 
