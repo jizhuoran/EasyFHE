@@ -84,9 +84,11 @@ def convbn_initial(input, scale, he_res20_ctx, cryptoContext, openfhe_context_di
         if j == 0:
             finalsum = res.deep_copy()
             finalsum = homo_ops.homo_rotate(finalsum, 1024, cryptoContext)
+
         else:
             finalsum = homo_ops.homo_add(finalsum, res, cryptoContext)
             finalsum = homo_ops.homo_rotate(finalsum, 1024, cryptoContext)
+
     finalsum=homo_ops.homo_add_pt(finalsum,bias,cryptoContext)
 
     return finalsum
@@ -410,7 +412,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dic
     c1.slots=32768
     c2.slots=32768
     he_res20_ctx.cur_num_slots = 16384 * 2
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    openfhe_context = openfhe_context_dict[str(14)] #todo: check, 14 is filled in randomly
     fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,mask_first_n(  16384, c1.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),
                                homo_ops.homo_mul_pt(c2,mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),cryptoContext)
 

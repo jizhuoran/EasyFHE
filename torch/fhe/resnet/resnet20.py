@@ -219,6 +219,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
 
     print("resnet computation start")
+    print("current time: ", datetime.datetime.now())
     firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
     print("after initial layer")
     print("current time: ", datetime.datetime.now())
