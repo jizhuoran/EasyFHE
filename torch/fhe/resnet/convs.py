@@ -11,27 +11,40 @@ from torch.fhe.resnet.utils import *
 #    */
 # func: EvalAddMany in cryptocontext.h, implemented in base-advancedshe.cpp
 def eval_add_many(ciphertexts, cryptoContext):
+    # plain implementation of EvalAddMany
     inSize = len(ciphertexts)
     if inSize < 1:
         raise ValueError("Input ciphertext vector size should be 1 or more")
+    sum = ciphertexts[0].deep_copy()
+    for i in range(1,inSize):
+        sum = homo_ops.homo_add(sum, ciphertexts[i], cryptoContext)
 
-    lim = inSize * 2 - 2
-    ciphertextSumVec = [] * (inSize - 1)
-    ctrIndex = 0
+    return sum
 
-    # see if all the ciphertexts are of the same cur_limbs
-    # if not, raise an error
-    cur_limbs = ciphertexts[0].cur_limbs
-    for i in range(1, inSize):
-        if cur_limbs != ciphertexts[i].cur_limbs:
-            raise ValueError("All ciphertexts should have the same cur_limbs")
-    for i in range(0, lim, 2):
-        ciphertextSumVec[ctrIndex] = homo_ops.homo_add(ciphertexts[i] if i < inSize else ciphertextSumVec[i - inSize],
-                                              ciphertexts[i + 1] if i + 1 < inSize else ciphertextSumVec[i + 1 - inSize],
-                                              cryptoContext)
-        ctrIndex += 1
+    # [there is bug in the following implementation]
+    # openfhe version: It computes the addition in a binary tree manner.
 
-    return ciphertextSumVec[-1]
+    # inSize = len(ciphertexts)
+    # if inSize < 1:
+    #     raise ValueError("Input ciphertext vector size should be 1 or more")
+    #
+    # lim = inSize * 2 - 2
+    # ciphertextSumVec = [] * (inSize - 1)
+    # ctrIndex = 0
+    #
+    # # see if all the ciphertexts are of the same cur_limbs
+    # # if not, raise an error
+    # cur_limbs = ciphertexts[0].cur_limbs
+    # for i in range(1, inSize):
+    #     if cur_limbs != ciphertexts[i].cur_limbs:
+    #         raise ValueError("All ciphertexts should have the same cur_limbs")
+    # for i in range(0, lim, 2):
+    #     ciphertextSumVec[ctrIndex] = homo_ops.homo_add(ciphertexts[i] if i < inSize else ciphertextSumVec[i - inSize],
+    #                                           ciphertexts[i + 1] if i + 1 < inSize else ciphertextSumVec[i + 1 - inSize],
+    #                                           cryptoContext)
+    #     ctrIndex += 1
+    #
+    # return ciphertextSumVec[-1]
 
 
 def convbn_initial(input, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):

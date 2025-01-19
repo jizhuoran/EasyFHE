@@ -158,9 +158,6 @@ def try_load_context(logN,
     print("after load in GPU-FHE")
     print("current time: ", datetime.now())
 
-    print("after load in openfhe")
-    print("current time: ", datetime.now())
-
     return cryptoContext, openfhe_context_dict
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
