@@ -153,13 +153,13 @@ def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_di
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
-    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.curr_limbs,1,8192)
+    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,1,8192)
 
     for j in range(32):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-input.curr_limbs,1,8192)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,1,8192)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
 
         sum=eval_add_many(k_rows,cryptoContext)
@@ -430,7 +430,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dic
     fullpack=homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,8,cryptoContext),cryptoContext)
 
     zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    downsampledrows,_=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
     for i in range(16):
         masked=homo_ops.homo_mul_pt(fullpack,
                                     mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
@@ -440,7 +440,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dic
 
 
     zeros=[0]*he_res20_ctx.cur_num_slots
-    downsampledchannels=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    downsampledchannels,_=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
     for i in range(32):
         masked=homo_ops.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
         downsampledchannels=homo_ops.homo_add(downsampledchannels,masked,cryptoContext)
@@ -479,7 +479,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dict)
                                homo_ops.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
 
     zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
+    downsampledrows,_ = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
 
     for i in range(32):
         masked=homo_ops.homo_mul_pt(fullpack,
@@ -489,7 +489,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dict)
             fullpack = homo_ops.homo_rotate(fullpack, 32-8, cryptoContext)
 
     zeros = [0] * he_res20_ctx.cur_num_slots
-    downsampledchannels = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
+    downsampledchannels,_ = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
 
     for i in range(64):
         masked=homo_ops.homo_mul_pt(downsampledrows,

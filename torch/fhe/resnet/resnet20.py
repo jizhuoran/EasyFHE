@@ -89,11 +89,13 @@ def layer2(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     scaleSx =normalized_deltas[2][0]
     scaleDx =normalized_deltas[2][1]
     boot_in =homo_bootstrap(input, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
-    res1sx  = convbn1632sx(boot_in,4,1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    res1dx  = convbn1632dx(boot_in,4,1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1sx=[None, None]
+    res1dx=[None, None]
+    res1sx[0], res1sx[1]  = convbn1632sx(boot_in,4,1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1dx[0], res1dx[1]  = convbn1632dx(boot_in,4,1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
 
-    fullpackSx = downsample1024to256(res1sx[0], res1sx[1],he_res20_ctx, cryptoContext, openfhe_context_dict)
-    fullpackDx = downsample1024to256(res1dx[0], res1dx[1],he_res20_ctx, cryptoContext, openfhe_context_dict)
+    fullpackSx = downsample1024to256(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
+    fullpackDx = downsample1024to256(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
 
 
     he_res20_ctx.cur_num_slots = 8192
@@ -136,9 +138,10 @@ def layer3(input,he_res20_ctx, cryptoContext, openfhe_context_dict):
     scaleDx=normalized_deltas[3][1]
 
     boot_in=homo_bootstrap(input, L0=cryptoContext.L, logSlots=13, cryptoContext=cryptoContext)
-
-    res1sx= convbn3264sx(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    res1dx= convbn3264dx(boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1sx=[None, None]
+    res1dx=[None, None]
+    res1sx[0], res1sx[1]= convbn3264sx(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    res1dx[0], res1dx[1]= convbn3264dx(boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, openfhe_context_dict)
 
     fullpackSx = downsample256to64(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
     fullpackDx = downsample256to64(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext, openfhe_context_dict)
