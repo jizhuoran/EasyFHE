@@ -30,6 +30,11 @@ normalized_deltas = [
 ]
 import pickle
 
+
+def log2_int(x):
+    import math
+    return int(math.log2(x))
+
 def SerializeToFile(file_path, obj):
     with open(file_path, "wb") as file:
         pickle.dump(obj, file)
@@ -44,7 +49,7 @@ def read_image(file_cnt=None):
         random.seed(int(time.time()))
     else:
         random.seed(file_cnt)
-    index=0
+
     pic_index=0
     ratio=15
     if file_cnt%ratio==1:
@@ -60,15 +65,13 @@ def read_image(file_cnt=None):
         with open(filePath, "rb") as file:
             file.seek(index*RECORD_SIZE)
             label=file.read(LABEL_SIZE)
-            if len(label)!=LABEL_SIZE:
-                print("Fail to read label")
-                return None
+            if not label:
+                raise ValueError("Failed to read label.")
+            label = int.from_bytes(label, byteorder='big')
             print(f"Label: {label}")
             image_data = file.read(IMAGE_SIZE)
-            if len(label) != LABEL_SIZE:
-                print("Fail to read image data")
-                return None
-            print(f"Label: {label}")
+            if not image_data or len(image_data) != 3072:
+                raise ValueError("Failed to read image data.")
         imageVector=[]
         for channel in range(3):
             for i in range(1024):
@@ -85,9 +88,7 @@ def read_image(file_cnt=None):
         return imageVector
 
     except FileNotFoundError:
-        print(f"Failed to open the file.{filePath}")
-
-
+        print(f"Failed to open the file: {filePath}")
 
 
 def read_values_from_file(filename, scale=1.0):
@@ -127,7 +128,7 @@ def read_fc_weight():
 
 
 def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(log2_int(specify_slots))]
     cryptoContext.BsContext.to_cuda()
     fhe_utils.load_rotation_keys(cryptoContext, specify_slots)
 

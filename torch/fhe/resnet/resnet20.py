@@ -1,18 +1,14 @@
 import torch
-import math
 from torch.fhe import utils
 from torch.fhe import approx
 from torch.fhe.bootstrapping import homo_bootstrap
 from torch.fhe.resnet.convs import *
+from torch.fhe.resnet.utils import *
 
 class HE_res20_context:
     def __init__(self, cur_num_slots, relu_degree):
         self.cur_num_slots = cur_num_slots
         self.relu_degree = relu_degree
-
-def log2_int(x):
-    return int(math.log2(x))
-
 
 def get_relu_depth(degree):
     ranges = [
@@ -187,8 +183,8 @@ def layer3(input,he_res20_ctx, cryptoContext, openfhe_context_dict):
 def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     he_res20_ctx.cur_num_slots=4096
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    weight=openfhe_context.encode(read_fc_weight(), cryptoContext.L - input.cur_limbs, he_res20_ctx.cur_num_slots)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    weight=openfhe_context.encode(read_fc_weight(), cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
     res = rotsum(input, 64,cryptoContext)
     res = homo_ops.homo_mul_pt(res,
                                mask_mod(64, res.cur_limbs, 1.0/64.0, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
@@ -203,7 +199,7 @@ def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
 def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     he_res20_ctx.cur_num_slots = (1<<14)
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
 
     image_vector = read_image(0)
     image_vector = torch.tensor(image_vector, device="cuda")
@@ -230,7 +226,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
 def resnet20( ):
     logN = 16
-    logSlots_list = [14, 13, 12]
+    logSlots_list = [12, 13, 14]
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     dnum = 3
     dcrtBits = 59

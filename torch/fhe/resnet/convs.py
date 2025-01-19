@@ -2,7 +2,6 @@ from torch.fhe import hoisting_keyswitch
 from torch.fhe.resnet.utils import *
 
 
-
 #     /**
 #    * EvalAddMany - Evaluate addition on a vector of ciphertexts.
 #    * It computes the addition in a binary tree manner.
@@ -52,15 +51,14 @@ def convbn_initial(input, scale, he_res20_ctx, cryptoContext, openfhe_context_di
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
-    cur_num_slots = he_res20_ctx.cur_num_slots
-    openfhe_context = openfhe_context_dict[str( cur_num_slots)]
-    bias=openfhe_context.encode(read_values_from_file("../weights/conv1bn1-bias.bin",scale),cryptoContext.L-input.cur_limbs,16384)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    bias=openfhe_context.encode(read_values_from_file("../weights/conv1bn1-bias.bin",scale),cryptoContext.L-input.cur_limbs, 1, 16384)
 
     for j in range(16):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/conv1bn1-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,16384)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,1,16384)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
 
         sum=eval_add_many(k_rows,cryptoContext)
@@ -100,14 +98,14 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,16384)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,1,16384)
 
     for j in range(16):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,16384)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,1,16384)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
         sum=eval_add_many(k_rows,cryptoContext)
         if j==0:
@@ -139,14 +137,14 @@ def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_di
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.curr_limbs,8192)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    bias=openfhe_context.encode(read_values_from_file( f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.curr_limbs,1,8192)
 
     for j in range(32):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-input.curr_limbs,8192)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.curr_limbs,1,8192)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
 
         sum=eval_add_many(k_rows,cryptoContext)
@@ -178,14 +176,14 @@ def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_di
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    bias=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,4096)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    bias=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias.bin",scale),cryptoContext.L-input.cur_limbs,1,4096)
 
     for j in range(64):
         k_rows=[]
         for k in range(9):
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,4096)
+            encoded=openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,1,4096)
             k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
         sum=eval_add_many(k_rows,cryptoContext)
         if j==0:
@@ -217,9 +215,9 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
     c_rotations.append(
         homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, img_width, digits, cryptoContext), padding, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
-    bias1=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias1.bin",scale),cryptoContext.L-input.cur_limbs,16384)
-    bias2=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias2.bin",scale),cryptoContext.L-input.cur_limbs,16384)
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    bias1=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias1.bin",scale),cryptoContext.L-input.cur_limbs,1,16384)
+    bias2=openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias2.bin",scale),cryptoContext.L-input.cur_limbs,1,16384)
 
 
     for j in range(16):
@@ -228,10 +226,10 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
         for k in range(9):
             values=[]
             values=read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin",scale)
-            k_rows016.append(homo_ops.homo_mul_pt(c_rotations[k],openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,16384),cryptoContext))
+            k_rows016.append(homo_ops.homo_mul_pt(c_rotations[k],openfhe_context.encode(values,cryptoContext.L-input.cur_limbs,1,16384),cryptoContext))
             values = read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j+16}-k{k+1}.bin", scale)
             k_rows1632.append(homo_ops.homo_mul_pt(c_rotations[k],
-                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,1,
                                                                          16384), cryptoContext))
 
         sum016  = eval_add_many(k_rows016,cryptoContext)
@@ -255,13 +253,13 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
 
 
 def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
 
 
     bias1 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-bias1.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 16384)
+                                   cryptoContext.L - input.cur_limbs,1, 16384)
     bias2 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-bias2.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 16384)
+                                   cryptoContext.L - input.cur_limbs,1, 16384)
 
     for j in range(16):
         k_rows016 = []
@@ -270,11 +268,11 @@ def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
         values = []
         values = read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-ch{j}-k1.bin", scale)
         k_rows016.append(homo_ops.homo_mul_pt(input,
-                                              openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                              openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,1,
                                                                     he_res20_ctx.cur_num_slots), cryptoContext))
         values = read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-ch{j+16}-k1.bin", scale)
         k_rows1632.append(homo_ops.homo_mul_pt(input,
-                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,1,
                                                                     he_res20_ctx.cur_num_slots), cryptoContext))
         sum016  = eval_add_many(k_rows016,cryptoContext)
         sum1632 = eval_add_many(k_rows1632,cryptoContext)
@@ -316,9 +314,9 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
 
     openfhe_context = openfhe_context_dict[he_res20_ctx.cur_num_slots]
     bias1 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias1.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 8192)
+                                   cryptoContext.L - input.cur_limbs, 1, 8192)
     bias2 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-bias2.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 8192)
+                                   cryptoContext.L - input.cur_limbs, 1, 8192)
     for j in range(32):
         k_rows032=[]
         k_rows3264 = []
@@ -326,11 +324,11 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
             values = []
             values = read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}.bin", scale)
             k_rows032.append(homo_ops.homo_mul_pt(c_rotations[k],
-                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs, 1,
                                                                          8192), cryptoContext))
             values = read_values_from_file(f"../weights/layer{layer}-conv{n}bn{n}-ch{j+32}-k{k+1}.bin", scale)
             k_rows3264.append(homo_ops.homo_mul_pt(c_rotations[k],
-                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs, 1,
                                                                         8192), cryptoContext))
 
 
@@ -358,9 +356,9 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
 def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
     openfhe_context = openfhe_context_dict[he_res20_ctx.cur_num_slots]
     bias1 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-bias1.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 8192)
+                                   cryptoContext.L - input.cur_limbs, 1, 8192)
     bias2 = openfhe_context.encode(read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-bias2.bin", scale),
-                                   cryptoContext.L - input.cur_limbs, 8192)
+                                   cryptoContext.L - input.cur_limbs, 1, 8192)
     for j in range(32):
         k_rows032 = []
         k_rows3264 = []
@@ -368,11 +366,11 @@ def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
         values = []
         values = read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-ch{j}-k1.bin", scale)
         k_rows032.append(homo_ops.homo_mul_pt(input,
-                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                  openfhe_context.encode(values, cryptoContext.L - input.cur_limbs, 1,
                                                                          8192), cryptoContext))
         values = read_values_from_file(f"../weights/layer{layer}dx-conv{n}bn{n}-ch{j+32}-k1.bin", scale)
         k_rows3264.append(homo_ops.homo_mul_pt(input,
-                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs,
+                                                   openfhe_context.encode(values, cryptoContext.L - input.cur_limbs, 1,
                                                                           8192), cryptoContext))
         sum032=eval_add_many(k_rows032,cryptoContext)
         sum3264 = eval_add_many(k_rows3264,cryptoContext)
@@ -399,7 +397,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dic
     c1.slots=32768
     c2.slots=32768
     he_res20_ctx.cur_num_slots = 16384 * 2
-    openfhe_context = openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,mask_first_n(  16384, c1.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),
                                homo_ops.homo_mul_pt(c2,mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),cryptoContext)
 
@@ -449,7 +447,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dict)
     c1.slots=16384
     c2.slots=16384
     he_res20_ctx.cur_num_slots = 8192 * 2
-    openfhe_context=openfhe_context_dict[str(he_res20_ctx.cur_num_slots)]
+    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,
                                                     mask_first_n(8192,c1.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),
                                homo_ops.homo_mul_pt(c2,mask_scecond_n(8192,c2.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),cryptoContext)
