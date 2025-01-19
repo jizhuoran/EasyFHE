@@ -41,9 +41,8 @@ class OpenFHEContext:
                 ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
             ptx.Encode()
             data = ptx.GetVectorOfData()
-            cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
-            return Plaintext(cv, len(cv[0]), ptx.GetSlots(), len(cv), ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
-
+            cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)]
+            return Plaintext(cv, None, ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg())
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         if slots is None:

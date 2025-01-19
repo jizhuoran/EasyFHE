@@ -608,18 +608,20 @@ def homo_conjugate(in0, cryptoContext):
 
 
 def homo_add_pt(in0, pt, cryptoContext):
+    res0 = in0.deep_copy()
     ctmorphed = Cipher(
-        [pt.mx.reshape(-1, cryptoContext.N)],
+        pt.mx,
         pt.l,
         pt.scaling_factor,
         pt.noise_deg,
         pt.slots,
+        False,
     )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_add_or_sub(in0, ctmorphed, cryptoContext)
+    res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
     res0.cv[0] = F.cv_add(
-        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, in0.cur_limbs
+        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
     )
-    return res0, res1
+    return res0
 
 
 def homo_mul_pt(cipher, pt, cryptoContext):
@@ -635,12 +637,12 @@ def homo_mul_pt(cipher, pt, cryptoContext):
             Warning,
         )
     moduli = cryptoContext.moduliQ_cuda
-    mu = (cryptoContext.q_mu_cuda,)
+    mu = cryptoContext.q_mu_cuda
     cv0 = F.cv_mul(
-        cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs
+        cipher.cv[0], pt.mx[0], moduli, mu, cur_limbs
     )
     cv1 = F.cv_mul(
-        cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs
+        cipher.cv[1], pt.mx[0], moduli, mu, cur_limbs
     )
     return cipher.cipher_like(
         [cv0, cv1],

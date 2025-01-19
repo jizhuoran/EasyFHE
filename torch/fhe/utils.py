@@ -1,3 +1,4 @@
+from datetime import datetime
 import time, os, pickle
 import numpy as np
 import functools
@@ -120,6 +121,8 @@ def try_load_context(logN,
             rescaleTech,
         )
     )
+    print("gen load_path")
+    print("current time: ", datetime.now())
 
     if not os.path.exists(load_path):
         gen_contexts(
@@ -136,14 +139,24 @@ def try_load_context(logN,
             rescaleTech=rescaleTech,
             save_dir=save_dir
         )
+    print("gen_context")
+    print("current time: ", datetime.now())
 
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
+    print("after load in pickle")
+    print("current time: ", datetime.now())
+
     openfhe_context_dict = {}
     for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
         openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
+    print("after load in openfhe")
+    print("current time: ", datetime.now())
+
     cryptoContext = Context(BsContextMembers, gpufheMembers)
+    print("after load in GPU-FHE")
+    print("current time: ", datetime.now())
 
     return cryptoContext, openfhe_context_dict
 
