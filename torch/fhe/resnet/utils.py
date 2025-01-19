@@ -130,7 +130,7 @@ def read_fc_weight():
 def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log2_int(specify_slots))]
     cryptoContext.BsContext.to_cuda()
-    fhe_utils.load_rotation_keys(cryptoContext, specify_slots)
+    fhe_utils.load_rotation_keys(cryptoContext, str(log2_int(specify_slots)))
 
 
 def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
