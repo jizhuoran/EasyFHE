@@ -151,7 +151,12 @@ def try_load_context(logN,
     openfhe_context_dict = {}
     for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
         openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
+    print("after load in openfhe")
+    print("current time: ", datetime.now())
+
     cryptoContext = Context(BsContextMembers, gpufheMembers)
+    print("after load in GPU-FHE")
+    print("current time: ", datetime.now())
 
     print("after load in openfhe")
     print("current time: ", datetime.now())
