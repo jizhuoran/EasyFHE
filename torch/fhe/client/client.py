@@ -44,26 +44,26 @@ class OpenFHEContext:
         self.depth = content_map["depth"]
         # self.slots = content_map["slots"]
         self.slots = slots
-        self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
-        openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
+        # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
+        # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
     def encode(self, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
-        # print("encode", "level", level, "scale_deg", scale_deg, "slots", slots)
+        print("encode", "level", level, "scale_deg", scale_deg, "slots", slots)
         if not ((scale_deg is None and level is None and slots is None) or
                 (scale_deg is not None and level is not None and slots is not None)):
             # 输出警告
             print("Warning: scale_deg, level, and slots must either all be None or all not None.")
 
         if level is None and scale_deg is None and slots is None:
-            # return np.ones((cur_limbs, 2**16), dtype=np.uint64)
+            return np.ones((cur_limbs, 2**16), dtype=np.uint64)
             ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
             ptx.Encode()
             return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
         else:
             cur_limbs = self.depth
-            # return Plaintext([torch.ones((cur_limbs, 2**16), dtype=torch.uint64, device="cuda")], None, len(x), cur_limbs, self.cc.GetScalingFactorReal(cur_limbs), 1) 
+            return Plaintext([torch.ones((cur_limbs, 2**16), dtype=torch.uint64, device="cuda")], None, len(x), cur_limbs, self.cc.GetScalingFactorReal(cur_limbs), 1) 
             if slots is None:
                 slots = len(x)
             if isinstance(x, (np.ndarray, torch.Tensor)):

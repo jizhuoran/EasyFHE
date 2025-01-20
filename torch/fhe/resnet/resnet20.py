@@ -188,7 +188,7 @@ def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     he_res20_ctx.cur_num_slots=4096
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
-    weight=openfhe_context.encode(read_fc_weight(cryptoContext), cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
+    weight=read_fc_weight(cryptoContext, cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
     res = rotsum(input, 64,cryptoContext)
     res = homo_ops.homo_mul_pt(res,
                                mask_mod(64, res.cur_limbs, 1.0/64.0, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
@@ -217,6 +217,12 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     with open('torch/fhe/resnet/weights.pkl', 'rb') as f:
         weight_map = pickle.load(f)
     cryptoContext.weight_map = weight_map
+
+    with open('torch/fhe/resnet/encode_val.pkl', 'rb') as f:
+        weight_map = pickle.load(f)
+    for key, _ in weight_map.items():
+        weight_map[key].mx = [torch.tensor(weight_map[key].mx, device="cuda")]
+    cryptoContext.pre_encoded = weight_map    
 
     # print("resnet computation start")
     # firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -263,7 +269,7 @@ def resnet20( ):
     max_relu_degree = 59
     secretKeyDist = "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-    save_dir = "/home/yhh/GPU-FHE/torch/fhe/data/"
+    save_dir = "/data/yhh/data/"
 
     # generate context
     approxModDepth = 9

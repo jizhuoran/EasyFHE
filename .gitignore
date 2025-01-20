@@ -148,7 +148,6 @@ torchgen/packaged/*
 # Editor temporaries
 
 *.pkl
-
 *.swa
 *.swb
 *.swc

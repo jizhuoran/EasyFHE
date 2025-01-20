@@ -190,7 +190,7 @@ def get_relu_depth(degree):
 def pre_encode(val, openfhe_context, level, scale_deg, slots):
     encode_val = openfhe_context.encode(val, level, scale_deg, slots)
     assert isinstance(encode_val, Plaintext)
-    encode_val.mx = encode_val.mx[0].cpu().numpy()
+    encode_val.mx = [encode_val.mx[0].cpu().numpy()]
     return encode_val
 
 #glob file in weights
@@ -206,7 +206,7 @@ firstMod = 60
 max_relu_degree = 59
 secretKeyDist = "UNIFORM_TERNARY"
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-save_dir = "/home/yhh/GPU-FHE/torch/fhe/data/"
+save_dir = "/data/yhh/data/"
 
     # generate context
 approxModDepth = 9
