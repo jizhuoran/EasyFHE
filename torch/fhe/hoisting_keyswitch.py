@@ -73,7 +73,7 @@ def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
 
 def eval_fast_rotation(ciphertext, index, digits, cryptoContext):
     if index == 0:
-        return ciphertext.clone()
+        return ciphertext.deep_copy()
 
     cur_limbs = ciphertext.cur_limbs
 
