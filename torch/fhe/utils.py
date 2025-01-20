@@ -30,6 +30,12 @@ def print_call_counts():
     for func_name, wrapper in call_registry.items():
         print(f"Function '{func_name}' was called {wrapper.count} times.")
 
+@atexit.register
+def print_execution_times():
+    print("\nFunction Execution Times:")
+    for func_name, exec_time in execution_times.items():
+        print(f"Function '{func_name}' took {exec_time:.6f} seconds to finish.")
+
 def check_meta_equal(func):
     def wrapper(*args, **kwargs):
         in0, in1 = args[0], args[1]
@@ -149,8 +155,11 @@ def try_load_context(logN,
     print("current time: ", datetime.now())
 
     openfhe_context_dict = {}
-    for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
+    
+    openfhe_context_dict[str(logSlots_list[0])] = client.OpenFHEContext(openfheMembers, 1<<logSlots_list[0], levelBudget_list[0])
+    for logSlots, _ in zip(logSlots_list, levelBudget_list):
+        openfhe_context_dict[str(logSlots)] = openfhe_context_dict[str(logSlots_list[0])]
+
     print("after load in openfhe")
     print("current time: ", datetime.now())
 

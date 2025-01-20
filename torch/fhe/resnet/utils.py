@@ -91,7 +91,9 @@ def read_image(file_cnt=None):
         print(f"Failed to open the file: {filePath}")
 
 
-def read_values_from_file(filename, scale=1.0):
+def read_values_from_file(cryptoContext, filename, scale=1.0):
+    print(filename)
+    return cryptoContext.weight_map[filename] * scale
     values = []
 
     if not os.path.isfile(filename):
@@ -116,8 +118,8 @@ def read_values_from_file(filename, scale=1.0):
 
 
 
-def read_fc_weight():
-    weight=read_values_from_file(f"../weights/fc.bin")
+def read_fc_weight(cryptoContext):
+    weight=read_values_from_file(cryptoContext, f"fc")
     weight_corrected=[]
     for i in range(64):
         for j in range(10):
@@ -134,6 +136,7 @@ def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
 
 
 def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
+    print("mask_mod", "n", n, "cur_limbs", cur_limbs, "custom_val", custom_val, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
     level = cryptoContext.L-cur_limbs
     vec=[]
     for i in range(he_res20_ctx.cur_num_slots):
@@ -146,6 +149,7 @@ def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_contex
 
 
 def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+    print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
     mask=[]
     level=cryptoContext.L-cur_limbs
     for i in range(he_res20_ctx.cur_num_slots):
@@ -157,6 +161,7 @@ def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
 
 
 def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+    print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
     mask=[]
     level=cryptoContext.L-cur_limbs
     for i in range(he_res20_ctx.cur_num_slots):
@@ -169,6 +174,7 @@ def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
 
 
 def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+    print("mask_from_to", "from_", from_, "to", to, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
     vec=[]
     level=cryptoContext.L-cur_limbs
     for i in range(he_res20_ctx.cur_num_slots):
@@ -181,6 +187,7 @@ def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_cont
 
 
 def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+    print("gen_mask", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
     level = cryptoContext.L - cur_limbs
     mask=[]
     copy_interval=n
@@ -196,6 +203,7 @@ def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
 
 
 def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+    print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(32):
@@ -210,6 +218,7 @@ def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
 
 
 def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+    print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(64):
@@ -223,6 +232,7 @@ def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
 
 
 def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
+    print("mask_channel", "n", n, "cur_limbs", cur_limbs)
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(n):
@@ -241,6 +251,7 @@ def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
 
 
 def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
+    print("mask_channel2", "n", n, "cur_limbs", cur_limbs)
     mask=[]
     level = cryptoContext.L - cur_limbs
     for i in range(n):

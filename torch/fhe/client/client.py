@@ -1,3 +1,4 @@
+import time, atexit
 from . import openfhe as openfhe
 import torch
 from .. import ciphertext as Cipher
@@ -5,6 +6,32 @@ import numpy as np
 
 from ..ciphertext import Plaintext
 
+execution_times = {}
+
+def profile_python_function(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+
+        # Calculate the execution time for this call
+        exec_time = end_time - start_time
+
+        # Update the global dictionary with the accumulated time for this function
+        if func.__name__ not in execution_times:
+            execution_times[func.__name__] = 0
+        execution_times[func.__name__] += exec_time
+
+        # print(f"Function {func.__name__} executed in {exec_time:.6f} seconds")
+        return result
+
+    return wrapper
+
+@atexit.register
+def print_execution_times():
+    print("\nFunction Execution Times:")
+    for func_name, exec_time in execution_times.items():
+        print(f"Function '{func_name}' took {exec_time:.6f} seconds to finish.")
 
 class OpenFHEContext:
     def __init__(self, content_map, slots, level_budget):
@@ -23,16 +50,20 @@ class OpenFHEContext:
         openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
     def encode(self, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
+        # print("encode", "level", level, "scale_deg", scale_deg, "slots", slots)
         if not ((scale_deg is None and level is None and slots is None) or
                 (scale_deg is not None and level is not None and slots is not None)):
             # 输出警告
             print("Warning: scale_deg, level, and slots must either all be None or all not None.")
 
         if level is None and scale_deg is None and slots is None:
+            # return np.ones((cur_limbs, 2**16), dtype=np.uint64)
             ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
             ptx.Encode()
             return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
         else:
+            cur_limbs = self.depth
+            # return Plaintext([torch.ones((cur_limbs, 2**16), dtype=torch.uint64, device="cuda")], None, len(x), cur_limbs, self.cc.GetScalingFactorReal(cur_limbs), 1) 
             if slots is None:
                 slots = len(x)
             if isinstance(x, (np.ndarray, torch.Tensor)):
