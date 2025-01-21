@@ -106,6 +106,11 @@ def try_load_context(logN,
             rescaleTech,
             save_dir):
 
+    sorted_pairs = sorted(zip(logSlots_list, levelBudget_list), key=lambda x: x[0])
+    logSlots_list, levelBudget_list = zip(*sorted_pairs)
+    logSlots_list = list(logSlots_list)
+    levelBudget_list = list(levelBudget_list)
+
     load_path = (
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
