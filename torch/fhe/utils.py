@@ -18,7 +18,7 @@ def call_counter(func):
     def wrapper(*args, **kwargs):
         wrapper.count += 1  # Increment the call count
         return func(*args, **kwargs)
-    
+
     wrapper.count = 0  # Initialize the call count
     call_registry[func.__name__] = wrapper  # Register the function
     return wrapper
@@ -104,7 +104,8 @@ def try_load_context(logN,
             rotate_index,
             secretKeyDist,
             rescaleTech,
-            save_dir):
+            save_dir,
+            mode):
 
     sorted_pairs = sorted(zip(logSlots_list, levelBudget_list), key=lambda x: x[0])
     logSlots_list, levelBudget_list = zip(*sorted_pairs)
@@ -126,10 +127,25 @@ def try_load_context(logN,
             rescaleTech,
         )
     )
+    debug_load_path = (
+            save_dir
+            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            '-'.join(map(str, logSlots_list)),
+            maxLevelsRemaining,
+            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
     print("gen load_path")
     print("current time: ", datetime.now())
 
-    if not os.path.exists(load_path):
+    if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
         gen_contexts(
             logN=logN,
             logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
@@ -142,7 +158,8 @@ def try_load_context(logN,
             rotate_index = rotate_index,
             secretKeyDist="UNIFORM_TERNARY",
             rescaleTech=rescaleTech,
-            save_dir=save_dir
+            save_dir=save_dir,
+            mode = mode
         )
     print("gen_context")
     print("current time: ", datetime.now())
@@ -150,12 +167,24 @@ def try_load_context(logN,
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
+    if mode == "debug":
+        if not os.path.exists(debug_load_path):
+            print("ERROR: There is no debug context file! Please regenerate context!")
+        with open(debug_load_path, 'rb') as file:
+            debug_keys = pickle.load(file)
+
     print("after load in pickle")
     print("current time: ", datetime.now())
 
     openfhe_context_dict = {}
-    for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-        openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers, 1<<logSlots, level_budget)
+    if mode == "debug":
+        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
+            openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
+            openfhe_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1<<logSlots, level_budget)
+    else:
+        openfhe_context = client.OpenFHEContext(openfheMembers)
+        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
+            openfhe_context_dict[str(logSlots)] = openfhe_context
     print("after load in openfhe")
     print("current time: ", datetime.now())
 

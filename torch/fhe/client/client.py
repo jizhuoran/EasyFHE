@@ -7,7 +7,7 @@ from ..ciphertext import Plaintext
 
 
 class OpenFHEContext:
-    def __init__(self, content_map, slots, level_budget):
+    def __init__(self, content_map):
         openfhe.ClearEvalMultKeys()
         openfhe.ReleaseAllContexts()
 
@@ -16,11 +16,17 @@ class OpenFHEContext:
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
         # self.slots = content_map["slots"]
-        self.slots = slots
-        self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
-        openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
+        # self.slots = slots
+        # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
+        # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
+
+    def setup_for_debug(self, debug_keys, slots, level_budget):
+        self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
+        openfhe.DeserializeEvalKeyString(debug_keys["eval_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
     def encode(self, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
         if not ((scale_deg is None and level is None and slots is None) or

@@ -18,6 +18,7 @@ def gen_contexts(
     secretKeyDist,
     rescaleTech,
     save_dir,
+    mode,
     dim1=[0, 0],
 ):
 
@@ -177,6 +178,21 @@ def gen_contexts(
             rescaleTech,
         )
     )
+    debug_save_path = (
+            save_dir
+            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            '-'.join(map(str, logSlots_list)),
+            maxLevelsRemaining,
+            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
 
 
     gpufheMembers = {}
@@ -201,9 +217,9 @@ def gen_contexts(
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
-    openfheMembers["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
-    openfheMembers["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
-    openfheMembers["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
+    # openfheMembers["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
+    # openfheMembers["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+    # openfheMembers["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
     openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
@@ -214,5 +230,14 @@ def gen_contexts(
         pickle.dump(
             (gpufheMembers, openfheMembers, BsContextMembers_dict), file
         )
+    if mode == "debug":
+        debugKeys = {}
+        debugKeys["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
+        debugKeys["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+        debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
+        with open(debug_save_path, "wb") as file:
+            pickle.dump(
+                debugKeys, file
+            )
 
 
