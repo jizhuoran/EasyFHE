@@ -4,6 +4,8 @@ import random
 import time
 import numpy as np
 from .. import utils as fhe_utils
+from ..ciphertext import Plaintext
+import torch
 
 IMAGE_SIZE = 3072
 LABEL_SIZE = 1
@@ -91,62 +93,328 @@ def read_image(file_cnt=None):
         print(f"Failed to open the file: {filePath}")
 
 
-def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
-    print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
-    return cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
-
-def read_fc_weight(cryptoContext, level, scale_deg, slots):
-    print("fc", "level", level, "scale_deg", scale_deg, "slots", slots)
-    return cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
-
 def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log2_int(specify_slots))]
     cryptoContext.BsContext.to_cuda()
     fhe_utils.load_rotation_keys(cryptoContext, str(log2_int(specify_slots)))
 
 
-def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
-    print("mask_mod", "n", n, "cur_limbs", cur_limbs, "custom_val", custom_val, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    return cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+def check_encoded_equal(ptx1, ptx2, name):
+    if np.equal(ptx1.mx[0].cpu().numpy().reshape(-1), ptx2.mx[0].cpu().numpy().reshape(-1)).all():
+        return
+        # print("Equal")
+    else:
+        print("Not Equal")
+        print(name)
+        print(ptx1.mx[0].cpu().numpy().reshape(-1)[:10])
+        print(ptx2.mx[0].cpu().numpy().reshape(-1)[:10])
+
+NEW_VERSION = True
+
+if NEW_VERSION:
+    def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
+        ptx = cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
+
+    def read_fc_weight(cryptoContext, level, scale_deg, slots):
+        ptx = cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
+
+    def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
+
+    def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
+
+    def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-    print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    return cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
-
-def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-    print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    return cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+    def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-    print("mask_from_to", "from_", from_, "to", to, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    return cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
+    def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-    print("gen_mask", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    return cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+    def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
-    print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
-    return cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+    def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
+
+    def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
-    print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
-    return cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
-
-def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
-    print("mask_channel", "n", n, "cur_limbs", cur_limbs)
-    return cryptoContext.pre_encoded["mask_channel_{}_{}".format(n, cur_limbs)]
+    def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
+        ptx = cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)]
+        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
+        return ptx
 
 
-def mask_channel2(n,cur_limbs,cryptoContext):
-    print("mask_channel2", "n", n, "cur_limbs", cur_limbs)
-    return cryptoContext.pre_encoded["mask_channel2_{}_{}".format(n, cur_limbs)]
+else:
 
+    def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
+        # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
+        values = []
+        val_name = filename
+        filename = '/home/zrji/GPU-FHE/torch/fhe/resnet/weights/' + filename + '.bin'
+        if not os.path.isfile(filename):
+            print(f"无法打开文件: {filename}")
+            return values
+
+        try:
+            # 打开文件并逐行读取
+            with open(filename, 'r') as file:
+                for row in file:
+                    # 按行解析
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num * scale)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        encoded = cryptoContext.openfhe_context.encode(values, level, scale_deg, slots)
+        encoded.mx[0].cpu().numpy()
+        key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+
+        return encoded
+
+
+
+    def read_fc_weight(cryptoContext, level, scale_deg, slots):
+        # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
+        values = []
+        filename = '/home/zrji/GPU-FHE/torch/fhe/resnet/weights/fc.bin'
+        if not os.path.isfile(filename):
+            print(f"无法打开文件: {filename}")
+            return values
+
+        try:
+            # 打开文件并逐行读取
+            with open(filename, 'r') as file:
+                for row in file:
+                    # 按行解析
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        weight = values
+
+        weight_corrected=[]
+        for i in range(64):
+            for j in range(10):
+                weight_corrected.append(weight[(10 * i) + j])
+            for j in range(64 - 10):
+                weight_corrected.append(0)
+
+        encoded = cryptoContext.openfhe_context.encode(weight_corrected, level, scale_deg, slots)
+        key = "fc_{}_{}_{}".format(level, scale_deg, slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
+        # print("mask_mod", "n", n, "cur_limbs", cur_limbs, "custom_val", custom_val, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+        level = cryptoContext.L-cur_limbs
+        vec=[]
+        for i in range(he_res20_ctx.cur_num_slots):
+            if i%n==0:
+                vec.append(custom_val)
+            else:
+                vec.append(0)
+
+        encoded = openfhe_context.encode(vec,level,1,he_res20_ctx.cur_num_slots)
+        key = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        # print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+        mask=[]
+        level=cryptoContext.L-cur_limbs
+        for i in range(he_res20_ctx.cur_num_slots):
+            if i >=n :
+                mask.append(1)
+            else:
+                mask.append(0)
+        encoded = openfhe_context.encode(mask, level, 1, he_res20_ctx.cur_num_slots)
+        key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        # print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+        mask=[]
+        level=cryptoContext.L-cur_limbs
+        for i in range(he_res20_ctx.cur_num_slots):
+            if i < n:
+                mask.append(1)
+            else:
+                mask.append(0)
+
+        encoded = openfhe_context.encode(mask, level, 1, he_res20_ctx.cur_num_slots)
+        key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        # print("mask_from_to", "from_", from_, "to", to, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+        vec=[]
+        level=cryptoContext.L-cur_limbs
+        for i in range(he_res20_ctx.cur_num_slots):
+            if i>=from_ and i<to:
+                vec.append(1)
+            else:
+                vec.append(0)
+
+        encoded = openfhe_context.encode(vec,level,1,he_res20_ctx.cur_num_slots)
+        key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
+        # print("gen_mask", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+        level = cryptoContext.L - cur_limbs
+        mask=[]
+        copy_interval=n
+        for i in range(he_res20_ctx.cur_num_slots):
+            if copy_interval>0:
+                mask.append(1)
+            else:
+                mask.append(0)
+            copy_interval-=1
+            if copy_interval<= -n:
+                copy_interval=n
+        encoded = openfhe_context.encode(mask,level,1, he_res20_ctx.cur_num_slots)
+        key = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+        # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
+        mask=[]
+        level = cryptoContext.L - cur_limbs
+        for i in range(32):
+            for j in range(pos*n):
+                mask.append(0)
+            for j in range(n):
+                mask.append(1)
+            for j in range(padding-n-(pos*n)):
+                mask.append(0)
+
+        encoded = openfhe_context.encode(mask, level, 1, 16384*2)
+        key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
+        # print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
+        mask=[]
+        level = cryptoContext.L - cur_limbs
+        for i in range(64):
+            for j in range(pos*n):
+                mask.append(0)
+            for j in range(n):
+                mask.append(1)
+            for j in range(padding-n-(pos*n)):
+                mask.append(0)
+        encoded = openfhe_context.encode(mask, level, 1, 8192*2)
+        key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
+        # print("mask_channel", "n", n, "cur_limbs", cur_limbs)
+        mask=[]
+        level = cryptoContext.L - cur_limbs
+        for i in range(n):
+            for j in range(1024):
+                mask.append(0)
+
+        for i in range(256):
+            mask.append(1)
+
+        for i in range(1024-256):
+            mask.append(0)
+        for i in range(31-n):
+            for j in range(1024):
+                mask.append(0)
+        encoded = openfhe_context.encode(mask, level, 1, 16384*2)
+        key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
+        # print("mask_channel2", "n", n, "cur_limbs", cur_limbs)
+        mask=[]
+        level = cryptoContext.L - cur_limbs
+        for i in range(n):
+            for j in range(256):
+                mask.append(0)
+
+        for i in range(64):
+            mask.append(1)
+
+        for i in range(256-64):
+            mask.append(0)
+        for i in range(63-n):
+            for j in range(256):
+                mask.append(0)
+        encoded = openfhe_context.encode(mask, level, 1, 8192*2)
+        key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
+        ptx = cryptoContext.pre_encoded[key]
+        check_encoded_equal(encoded, ptx, key)
+        return encoded
+    
 
 def rotsum(input,slots,cryptoContext):
     result=input.deep_copy()

@@ -88,6 +88,9 @@ class Plaintext:
         self.noise_deg = noise_deg
         self.scaling_factor = scaling_factor
 
+    def shallow_copy(self):
+        return Plaintext(self.mx, self.N, self.slots, self.l, self.scaling_factor, self.noise_deg)
+
     def __eq__(self, other):
         if not isinstance(other, Plaintext):
             return False

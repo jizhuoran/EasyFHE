@@ -54,16 +54,19 @@ def layer1(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     res1=homo_bootstrap(res1,L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res1= homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
+
     scale = normalized_deltas[1][1]
     res1= convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
     res1=homo_ops.homo_add(res1, homo_ops.homo_mul_scalar_double(input,scale,cryptoContext),cryptoContext)
     res1=homo_bootstrap(res1,L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res1= homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
+
     scale = normalized_deltas[1][2]
     res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
     res2 = homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
+
 
     scale = normalized_deltas[1][3]
     res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -71,10 +74,13 @@ def layer1(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     res2 = homo_bootstrap(res2, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
+
     scale = normalized_deltas[1][4]
     res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
     res3 = homo_bootstrap(res3, L0=cryptoContext.L, logSlots=14, cryptoContext=cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
+
+
 
     scale = normalized_deltas[1][5]
     res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -189,6 +195,7 @@ def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     he_res20_ctx.cur_num_slots=4096
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     weight=read_fc_weight(cryptoContext, cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
+    print(cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
     res = rotsum(input, 64,cryptoContext)
     res = homo_ops.homo_mul_pt(res,
                                mask_mod(64, res.cur_limbs, 1.0/64.0, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
@@ -204,8 +211,11 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
     he_res20_ctx.cur_num_slots = (1<<14)
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+    cryptoContext.openfhe_context = openfhe_context
 
     image_vector = read_image(0)
+    image_vector = np.array(image_vector)
+    print(image_vector)
     image_vector = torch.tensor(image_vector, device="cuda")
     in_ct, in_ct_openfhe = openfhe_context.encrypt(image_vector, 1, cryptoContext.L - 5 - get_relu_depth(he_res20_ctx.relu_degree), he_res20_ctx.cur_num_slots) # note: initial level is aligned with the original open source codes
 
@@ -214,15 +224,15 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     utils.load_rotation_keys(cryptoContext, "app")
 
 
-    with open('torch/fhe/resnet/weights.pkl', 'rb') as f:
-        weight_map = pickle.load(f)
-    cryptoContext.weight_map = weight_map
+    with open('/data/yhh/data/encode_val.pkl', 'rb') as f:
+        pre_encoded = pickle.load(f)
+    for key, _ in pre_encoded.items():
+        pre_encoded[key].mx = [torch.tensor(pre_encoded[key].mx[0], dtype=torch.uint64, device="cuda")]
+    cryptoContext.pre_encoded = pre_encoded    
 
-    with open('torch/fhe/resnet/encode_val.pkl', 'rb') as f:
-        weight_map = pickle.load(f)
-    for key, _ in weight_map.items():
-        weight_map[key].mx = [torch.tensor(weight_map[key].mx, device="cuda")]
-    cryptoContext.pre_encoded = weight_map    
+    cryptoContext.zero_32K, _ = openfhe_context.encrypt(np.zeros(16384 * 2), 1, 0, 16384 * 2)
+    cryptoContext.zero_16K, _ = openfhe_context.encrypt(np.zeros(16384), 1, 0, 16384)
+
 
     # print("resnet computation start")
     # firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -238,6 +248,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     print("after initial layer")
     print("current time: ", datetime.datetime.now())
     resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
+    print(resLayer1.cv[0].cpu().reshape(-1)[:10])
     print("after layer1")
     print("current time: ", datetime.datetime.now())
     resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext, openfhe_context_dict)

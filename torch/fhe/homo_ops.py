@@ -1,4 +1,4 @@
-import warnings
+import warnings, traceback
 
 from .ciphertext import Cipher
 from . import functional as F
@@ -635,6 +635,8 @@ def homo_mul_pt(cipher, pt, cryptoContext):
             f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
             Warning,
         )
+        # raise ValueError
+
     res0 = cipher.deep_copy()
     ctmorphed = Cipher(
         pt.mx,
