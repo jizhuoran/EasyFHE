@@ -79,13 +79,22 @@ def profile_pytorch_function(func):
     def wrapper(*args, **kwargs):
         # Set up the profiler
         with torch.profiler.profile(
-                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
                 on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
                 record_shapes=True,
                 profile_memory=True,
                 with_stack=True
         ) as profiler:
             result = func(*args, **kwargs)
+            profiler.step()
+
+        profiler_results = profiler.key_averages()
+        print(profiler_results.table(sort_by="self_cuda_time_total"))
+        print("//////////////////////")
+        print("//////////////////////")
+        print("//////////////////////")
+        print(profiler_results.table(sort_by="self_cpu_time_total"))
+
         return result
 
     return wrapper

@@ -71,10 +71,7 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 #                                 cryptoContext=cryptoContext)
         # profiler.step()
 
-# Get the profiling results
 # profiler_results = profiler.key_averages()
-
-# Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, slots=(1<<logSlots), cryptoContext=cryptoContext)

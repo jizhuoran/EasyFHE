@@ -195,279 +195,258 @@ def pre_encode(val, openfhe_context, level, scale_deg, slots):
 
 #glob file in weights
 
-weight_map = {}
+def gen_pre_encode_file(cryptoContext, openfhe_context):
 
-logN = 16
-logSlots_list = [12, 13, 14]
-levelBudget_list = [[4, 4], [4, 4], [4, 4]]
-dnum = 3
-dcrtBits = 59
-firstMod = 60
-max_relu_degree = 59
-secretKeyDist = "UNIFORM_TERNARY"
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-save_dir = "/data/yhh/data/"
+    if cryptoContext is None and openfhe_context is None:
 
-    # generate context
-approxModDepth = 9
-maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
-if max_relu_degree < 59:
-    diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
-    maxLevelsRemaining +=diff
+        logN = 16
+        logSlots_list = [12, 13, 14]
+        levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+        dnum = 3
+        dcrtBits = 59
+        firstMod = 60
+        max_relu_degree = 59
+        secretKeyDist = "UNIFORM_TERNARY"
+        rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir = "/data/yhh/data/"
 
-
-rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
-                         1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+            # generate context
+        approxModDepth = 9
+        maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
+        if max_relu_degree < 59:
+            diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
+            maxLevelsRemaining +=diff
 
 
-# path = "weights/"
-# for weight_file in os.listdir(path):
-#     assert weight_file.endswith(".bin")
-#     weight_name = weight_file.split('.')[0]
-#     if weight_name == "fc":
-#         print("run this")
-#         print("run this")
-#         print("run this")
-#         value = read_fc_weight(path + weight_file)
-#     else:
-#         value = read_values_from_file(path + weight_file)
-#     weight_map[weight_name] = np.array(value)
-
-# with open("weights.pkl", "wb") as f:
-#     pickle.dump(weight_map, f)
-
-with open("weights.pkl", "rb") as f:
-    weight_map = pickle.load(f)
-
-encode_val = {}
-
-with open("exec_log", 'r') as f:
-    commands = f.readlines()
-
-print("exec_log loaded")
-
-cryptoContext, openfhe_context_dict = (
-    utils.try_load_context(logN,
-                            logSlots_list,
-                            maxLevelsRemaining,
-                            levelBudget_list,
-                            dnum,
-                            dcrtBits,
-                            firstMod,
-                            approxModDepth,
-                            rotate_index_list,
-                            secretKeyDist,
-                            rescaleTech,
-                            save_dir=save_dir))
+        rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
+                                1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+        
+        cryptoContext, openfhe_context_dict = (
+            utils.try_load_context(logN,
+                                    logSlots_list,
+                                    maxLevelsRemaining,
+                                    levelBudget_list,
+                                    dnum,
+                                    dcrtBits,
+                                    firstMod,
+                                    approxModDepth,
+                                    rotate_index_list,
+                                    secretKeyDist,
+                                    rescaleTech,
+                                    save_dir=save_dir))
 
 
-openfhe_context = openfhe_context_dict[str(14)]
+        openfhe_context = openfhe_context_dict[str(14)]
+        cryptoContext.weight_dir = "/data/yhh/data/"
 
 
-for i in range(0, len(commands), 2):
-    command = commands[i][:-1]
-    encode_command = commands[i+1][:-1]
-    # print(command)
-    # print(encode_command)
-
-
-    if "mask_mod" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        custom_val = float(command.split(" ")[6])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_mod(n, cur_limbs, custom_val, slots, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_mod_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_mod_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-
-    elif "mask_scecond_n" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_scecond_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-
-    elif "mask_first_n n" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_first_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_first_n_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-    
-    elif "mask_from_to" in command:
-        from_ = int(command.split(" ")[2])
-        to = int(command.split(" ")[4])
-        cur_limbs = int(command.split(" ")[6])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_from_to(from_, to, cur_limbs, slots, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, slots)] = encoded
-    
-    elif "gen_mask" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        val = gen_mask(n, cur_limbs, slots, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "gen_mask_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["gen_mask_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-    
-    elif "mask_first_n_mod n" in command:
-        n = int(command.split(" ")[2])
-        padding = int(command.split(" ")[4])
-        pos = int(command.split(" ")[6])
-        cur_limbs = int(command.split(" ")[8])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)] = encoded
-    
-    elif "mask_first_n_mod2 n" in command:
-        n = int(command.split(" ")[2])
-        padding = int(command.split(" ")[4])
-        pos = int(command.split(" ")[6])
-        cur_limbs = int(command.split(" ")[8])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)] = encoded
-    
-    elif "mask_channel n" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_channel(n, cur_limbs, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_channel_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-    
-    elif "mask_channel2 n" in command:
-        n = int(command.split(" ")[2])
-        cur_limbs = int(command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        val = mask_channel2(n, cur_limbs, cryptoContext, openfhe_context)
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, slots)
-        # if key in encode_val:
-            # print("Already encoded")
-            # print(key)
-            # print(command)
-            # print(encode_command)
-            # continue
-        encode_val["mask_channel2_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
-    
-    elif "read_values_from_file" in command:
-        val = weight_map[command.split(" ")[1]]
-        if command.split(" ")[1] == "fc":
-            print("I am fc")
-            print("I am fc")
-            print("I am fc")
-            val = val
+    weight_map = {}
+    path = cryptoContext.weight_dir + "/weights/"
+    for weight_file in os.listdir(path):
+        assert weight_file.endswith(".bin")
+        weight_name = weight_file.split('.')[0]
+        if weight_name == "fc":
+            value = read_fc_weight(path + weight_file)
         else:
-            scale = float(command.split(" ")[-1])
-            val = val * scale
-        level = int(encode_command.split(" ")[2])
-        scale_deg = int(encode_command.split(" ")[4])
-        slots = int(encode_command.split(" ")[-1])
-        encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-        encode_val[command.split(" ")[1]+"_{}_{}_{}".format(level, scale_deg, slots)] = encoded
-    
-    # elif "fc level" in command:
-    #     val = weight_map['fc']
-    #     level = int(encode_command.split(" ")[2])
-    #     scale_deg = int(encode_command.split(" ")[4])
-    #     slots = int(encode_command.split(" ")[-1])
-    #     encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
-    #     encode_val["fc_{}_{}_{}".format(level, scale_deg, slots)] = encoded
-    else:
-        print("Invalid command")
-        break
+            value = read_values_from_file(path + weight_file)
+        weight_map[weight_name] = np.array(value)
+
+    encode_val = {}
+
+    with open(cryptoContext.weight_dir + "exec_log.txt", 'r') as f:
+        commands = f.readlines()
+
+    print("exec_log loaded")
+
+    for i in range(0, len(commands), 2):
+        command = commands[i][:-1]
+        encode_command = commands[i+1][:-1]
+        # print(command)
+        # print(encode_command)
+
+        if "mask_mod" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            custom_val = float(command.split(" ")[6])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_mod(n, cur_limbs, custom_val, slots, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_mod_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_mod_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
+
+        elif "mask_scecond_n" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_scecond_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
+
+        elif "mask_first_n n" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_first_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_first_n_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
         
+        elif "mask_from_to" in command:
+            from_ = int(command.split(" ")[2])
+            to = int(command.split(" ")[4])
+            cur_limbs = int(command.split(" ")[6])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_from_to(from_, to, cur_limbs, slots, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, slots)] = encoded
         
-    
-with open("encode_val.pkl", "wb") as f:
-    pickle.dump(encode_val, f)
-
-
-
-
-
-
-
+        elif "gen_mask" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            val = gen_mask(n, cur_limbs, slots, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "gen_mask_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["gen_mask_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
+        
+        elif "mask_first_n_mod n" in command:
+            n = int(command.split(" ")[2])
+            padding = int(command.split(" ")[4])
+            pos = int(command.split(" ")[6])
+            cur_limbs = int(command.split(" ")[8])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)] = encoded
+        
+        elif "mask_first_n_mod2 n" in command:
+            n = int(command.split(" ")[2])
+            padding = int(command.split(" ")[4])
+            pos = int(command.split(" ")[6])
+            cur_limbs = int(command.split(" ")[8])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)] = encoded
+        
+        elif "mask_channel n" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_channel(n, cur_limbs, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_channel_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
+        
+        elif "mask_channel2 n" in command:
+            n = int(command.split(" ")[2])
+            cur_limbs = int(command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            val = mask_channel2(n, cur_limbs, cryptoContext, openfhe_context)
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, slots)
+            # if key in encode_val:
+                # print("Already encoded")
+                # print(key)
+                # print(command)
+                # print(encode_command)
+                # continue
+            encode_val["mask_channel2_{}_{}_{}".format(n, cur_limbs, slots)] = encoded
+        
+        elif "read_values_from_file" in command:
+            val = weight_map[command.split(" ")[1]]
+            if command.split(" ")[1] == "fc":
+                print("I am fc")
+                print("I am fc")
+                print("I am fc")
+                val = val
+            else:
+                scale = float(command.split(" ")[-1])
+                val = val * scale
+            level = int(encode_command.split(" ")[2])
+            scale_deg = int(encode_command.split(" ")[4])
+            slots = int(encode_command.split(" ")[-1])
+            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encode_val[command.split(" ")[1]+"_{}_{}_{}".format(level, scale_deg, slots)] = encoded
+        
+        else:
+            print("Invalid command")
+            break
+            
+            
+        
+    with open(cryptoContext.weight_dir + "/encode_val.pkl", "wb") as f:
+        pickle.dump(encode_val, f)
 
 
     # if weight_file.endswith(".bin") and "GPU-FHE-CONTEXT" in weight_file:
@@ -480,3 +459,7 @@ with open("encode_val.pkl", "wb") as f:
     #         for levelBudgets in range(len(levelBudgets_str.split("-")) // 2):
     #             levelBudgets_list.append([int(levelBudgets_str.split("-")[2 * levelBudgets]), int(levelBudgets_str.split("-")[2 * levelBudgets + 1])])
     #         code_string = """
+
+
+if __name__ == "__main__":
+    gen_pre_encode_file(None, None)

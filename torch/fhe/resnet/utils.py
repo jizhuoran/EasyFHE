@@ -92,12 +92,14 @@ def read_image(file_cnt=None):
     except FileNotFoundError:
         print(f"Failed to open the file: {filePath}")
 
+# @fhe_utils.profile_python_function
+def load_bootstrapping_and_rotation_keys(log_slots,cryptoContext):
+    cryptoContext.BsContext_map[str(log_slots)].to_cuda()
+    fhe_utils.load_rotation_keys(cryptoContext, str(log_slots))
 
-def load_bootstrapping_and_rotation_keys(specify_slots,cryptoContext):
+
+def set_bootstrapping_keys(specify_slots,cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log2_int(specify_slots))]
-    cryptoContext.BsContext.to_cuda()
-    fhe_utils.load_rotation_keys(cryptoContext, str(log2_int(specify_slots)))
-
 
 def check_encoded_equal(ptx1, ptx2, name):
     if np.equal(ptx1.mx[0].cpu().numpy().reshape(-1), ptx2.mx[0].cpu().numpy().reshape(-1)).all():
@@ -113,64 +115,107 @@ NEW_VERSION = True
 
 if NEW_VERSION:
     def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
-        ptx = cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"read_values_from_file {filename} level {level} scale_deg {scale_deg} slots {slots} scale {scale}\n")
+                f.write(f"encode level {level} scale_deg {scale_deg} slots {slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
 
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
-        ptx = cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"read_values_from_file fc level {level} scale_deg {scale_deg} slots {slots}\n")
+                f.write(f"encode level {level} scale_deg {scale_deg} slots {slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
 
     def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_mod n {n} cur_limbs {cur_limbs} custom_val {custom_val} he_res20_ctx.cur_num_slots {he_res20_ctx.cur_num_slots}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
 
     def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_scecond_n n {n} cur_limbs {cur_limbs} he_res20_ctx.cur_num_slots {he_res20_ctx.cur_num_slots}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
 
     def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_first_n n {n} cur_limbs {cur_limbs} he_res20_ctx.cur_num_slots {he_res20_ctx.cur_num_slots}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
 
 
     def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_from_to from_ {from_} to {to} cur_limbs {cur_limbs} he_res20_ctx.cur_num_slots {he_res20_ctx.cur_num_slots}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
 
 
     def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
-
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"gen_mask n {n} cur_limbs {cur_limbs} he_res20_ctx.cur_num_slots {he_res20_ctx.cur_num_slots}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
 
     def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_first_n_mod n {n} padding {padding} pos {pos} cur_limbs {cur_limbs}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {16384*2}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
 
 
     def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_first_n_mod2 n {n} padding {padding} pos {pos} cur_limbs {cur_limbs}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {8192*2}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
 
     def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_channel n {n} cur_limbs {cur_limbs}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {16384*2}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)]
 
 
     def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
-        ptx = cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)]
-        # ptx.mx = [torch.tensor(ptx.mx[0], device="cuda")]
-        return ptx
+        if cryptoContext.GEN_PRECOMPUTATION:
+            with open(cryptoContext.weight_dir + '/exec_log.txt', 'a') as f:
+                f.write(f"mask_channel2 n {n} cur_limbs {cur_limbs}\n")
+                f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {8192*2}\n")
+            return cryptoContext.pre_encoded[14]
+        else:
+            return cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)]
 
 
 else:
