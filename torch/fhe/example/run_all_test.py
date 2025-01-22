@@ -10,7 +10,7 @@ start_time = time.time()
 #find all context in the directory
 path = "data/"
 for context_file in os.listdir(path):
-    if context_file.endswith(".pkl") and "GPU-FHE-CONTEXT" in context_file:
+    if context_file.endswith(".pkl") and context_file.startswith("GPU-FHE-CONTEXT"):
         print("Testing", context_file)
         context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
         logN, logSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
@@ -51,7 +51,8 @@ cryptoContext, openfhe_contexts = utils.try_load_context(
     [],
     "UNIFORM_TERNARY",
     rescaleTech,
-    save_dir=path)
+    save_dir=path,
+    mode = "debug")
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots_list[0])]
 cryptoContext.BsContext.to_cuda()

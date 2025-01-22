@@ -42,7 +42,8 @@ gen_contexts(
     rotate_index=[],
     secretKeyDist="UNIFORM_TERNARY",
     rescaleTech=rescaleTech,
-    save_dir="data"
+    save_dir="data",
+    mode = "debug"
 )
 """.format(logN, logSlots, maxLevelsRemaining, levelBudget[0], levelBudget[1], dnum, rescaleTech)
         
