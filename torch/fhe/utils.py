@@ -156,7 +156,7 @@ def try_load_context(logN,
             firstMod=firstMod,
             approxModDepth=approxModDepth,
             rotate_index = rotate_index,
-            secretKeyDist="UNIFORM_TERNARY",
+            secretKeyDist=secretKeyDist,
             rescaleTech=rescaleTech,
             save_dir=save_dir,
             mode = mode

@@ -72,7 +72,7 @@ class OpenFHEContext:
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)
-        cipher.SetSlots(self.slots)
+        cipher.SetSlots(x.slots)
 
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)

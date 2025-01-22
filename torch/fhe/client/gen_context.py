@@ -1,7 +1,7 @@
 from os import utime
 from . import openfhe as openfhe
 from . import context as Context
-import pickle
+import pickle, time
 import numpy as np
 
 
@@ -79,6 +79,7 @@ def gen_contexts(
     cc.Enable(openfhe.PKESchemeFeature.FHE)
     cc.Enable(openfhe.PKESchemeFeature.PRE)
 
+    time0 = time.time()
     keys = cc.KeyGen()
     evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
@@ -97,9 +98,14 @@ def gen_contexts(
         ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map[str(logslots)] = ROT_SWK
         # cc.ClearEvalAutomorphismKeys()
+    time1 = time.time()
+    print("KeyGen time: ", time1 - time0)
 
     BOOT_KEY = cc.GetEvalBootstrapKey()
     boot_key_map = {}
+
+    time2 = time.time()
+    print("BOOT_KEY time: ", time2 - time1)
 
     for idx, logslots in enumerate(logSlots_list):
         C2S, S2C = [], []
@@ -136,7 +142,8 @@ def gen_contexts(
             "U0PreFFTScalingFactor": U0PreFFTScalingFactor,
         }
         boot_key_map[str(logslots)] = boot_key
-
+    time3 = time.time()
+    print("BOOT_KEY python time: ", time3 - time2)
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -162,6 +169,8 @@ def gen_contexts(
         gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
             gpufhe_context, level_budget, dim1, (1<<logslots), 0
         )
+    time4 = time.time()
+    print("gpufhe_context time: ", time4 - time3)
 
     save_path = (
         save_dir
@@ -240,4 +249,5 @@ def gen_contexts(
                 debugKeys, file
             )
 
-
+    time5 = time.time()
+    print("Save time: ", time5 - time4)
