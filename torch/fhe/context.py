@@ -46,8 +46,8 @@ class Context:
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
         self.logSlots_list = get_item("logSlots_list", gpufhe_content_map)
-        self.auxModSize = get_item("logp", gpufhe_content_map)
-        self.dcrtBits = get_item("logqi", gpufhe_content_map)
+        self.auxModSize = get_item("specialMod", gpufhe_content_map)
+        self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
         #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
         # self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
         # self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
