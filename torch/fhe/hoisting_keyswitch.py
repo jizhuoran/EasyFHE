@@ -9,8 +9,8 @@ import torch
 def eval_mult_ext(cipher, pt, cryptoContext):
     moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
     mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
-    cv0 = F.cv_mul(cipher.cv[0], pt.mx, moduli, mu, cipher.cur_limbs + cryptoContext.K)
-    cv1 = F.cv_mul(cipher.cv[1], pt.mx, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+    cv0 = F.cv_mul(cipher.cv[0], pt.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+    cv1 = F.cv_mul(cipher.cv[1], pt.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
     return cipher.cipher_like([cv0, cv1], scaling_factor=cipher.scaling_factor*pt.scaling_factor, noise_deg=cipher.noise_deg+pt.noise_deg)
 
 def key_switch_ext(cipher, cryptoContext):

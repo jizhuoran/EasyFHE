@@ -48,7 +48,8 @@ cryptoContext, openfhe_context = utils.try_load_context(
     int(approxModDepth),
     "UNIFORM_TERNARY",
     rescaleTech,
-    save_dir=path)
+    save_dir=path,
+    mode = "debug")
 
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]

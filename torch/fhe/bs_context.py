@@ -121,11 +121,11 @@ class BsContext:
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+                self.m_U0hatTPreFFT[i][j].mv = torch.tensor(self.m_U0hatTPreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mx = torch.tensor(self.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+                self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
 
 
 
