@@ -36,8 +36,6 @@ class Context:
         self.hat_inverse_vec_shoup_modup = get_item("hat_inverse_vec_shoup_modup", gpufhe_content_map)
         self.inner_out = get_item("inner_out", gpufhe_content_map)
         self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
-        self.inv_power_of_roots_shoup_vec = get_item("inv_power_of_roots_shoup_vec", gpufhe_content_map)
-        self.inv_power_of_roots_vec = get_item("inv_power_of_roots_vec", gpufhe_content_map)
         self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
         self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
         self.key_map = get_item("key_map", gpufhe_content_map)
@@ -48,15 +46,6 @@ class Context:
         self.logSlots_list = get_item("logSlots_list", gpufhe_content_map)
         self.auxModSize = get_item("logp", gpufhe_content_map)
         self.dcrtBits = get_item("logqi", gpufhe_content_map)
-        #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
-        # self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
-        # self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
-        # self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
-        # self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
         self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
         self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
@@ -72,14 +61,6 @@ class Context:
         self.pHatInvModp = get_item("pHatInvModp", gpufhe_content_map)
         self.pHatModp = get_item("pHatModp", gpufhe_content_map)
         self.pHatModq = get_item("pHatModq", gpufhe_content_map)
-        self.pInvVec = get_item("pInvVec", gpufhe_content_map)
-        self.pRootPows = get_item("pRootPows", gpufhe_content_map)
-        self.pRootPowsInv = get_item("pRootPowsInv", gpufhe_content_map)
-        self.pRootScalePows = get_item("pRootScalePows", gpufhe_content_map)
-        self.pRootScalePowsInv = get_item("pRootScalePowsInv", gpufhe_content_map)
-        self.pRootScalePowsOverp = get_item("pRootScalePowsOverp", gpufhe_content_map)
-        self.pRoots = get_item("pRoots", gpufhe_content_map)
-        self.pRootsInv = get_item("pRootsInv", gpufhe_content_map)
         self.p_mu = get_item("p_mu", gpufhe_content_map)
         self.power_of_roots = get_item("power_of_roots", gpufhe_content_map)
         self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
@@ -91,14 +72,6 @@ class Context:
         self.prod_inv_shoup_moddown = get_item("prod_inv_shoup_moddown", gpufhe_content_map)
         self.prod_q_i_mod_q_j_moddown = get_item("prod_q_i_mod_q_j_moddown", gpufhe_content_map)
         self.prod_q_i_mod_q_j_modup = get_item("prod_q_i_mod_q_j_modup", gpufhe_content_map)
-        self.qInvModq = get_item("qInvModq", gpufhe_content_map)
-        self.qRootPows = get_item("qRootPows", gpufhe_content_map)
-        self.qRootPowsInv = get_item("qRootPowsInv", gpufhe_content_map)
-        self.qRootScalePows = get_item("qRootScalePows", gpufhe_content_map)
-        self.qRootScalePowsInv = get_item("qRootScalePowsInv", gpufhe_content_map)
-        self.qRootScalePowsOverq = get_item("qRootScalePowsOverq", gpufhe_content_map)
-        self.qRoots = get_item("qRoots", gpufhe_content_map)
-        self.qRootsInv = get_item("qRootsInv", gpufhe_content_map)
         self.qVec = get_item("qVec", gpufhe_content_map)
         self.q_inv_mod_q = get_item("q_inv_mod_q", gpufhe_content_map)
         self.q_inv_mod_q_shoup = get_item("q_inv_mod_q_shoup", gpufhe_content_map)
@@ -123,7 +96,6 @@ class Context:
         self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
-
 
     def to_cuda(self):
         self.q_mu_cuda = torch.tensor(self.q_mu_cuda, dtype = torch.uint64, device = "cuda")

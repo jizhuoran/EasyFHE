@@ -3,6 +3,7 @@ from . import openfhe as openfhe
 from . import context as Context
 import pickle, time
 import numpy as np
+import psutil, os
 
 
 def gen_contexts(
@@ -24,6 +25,25 @@ def gen_contexts(
 
     print("Generating context")
 
+
+    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        logN,
+        "-".join(map(str, logSlots_list)),
+        maxLevelsRemaining,
+        "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+        dnum,
+        dcrtBits,
+        firstMod,
+        approxModDepth,
+        secretKeyDist,
+        rescaleTech,
+    )
+
+    GPUFHE_path = save_dir + "/GPU-FHE-CONTEXT" + save_path_meta
+    debug_save_path = save_dir + "/DEBUG-GPU-FHE-CONTEXT" + save_path_meta
+    OPENFHE_path = save_dir + "/OPEN-FHE-CONTEXT" + save_path_meta
+
+
     SecretKeyDist_MAP = {
         "GAUSSIAN": openfhe.SecretKeyDist.GAUSSIAN,
         "UNIFORM_TERNARY": openfhe.SecretKeyDist.UNIFORM_TERNARY,
@@ -40,7 +60,9 @@ def gen_contexts(
 
     N = int(2**logN)
     # slots_list = [int(2**logSlots) for logSlots in logSlots_list]
-    max_level_budget = max(levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1])
+    max_level_budget = max(
+        levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1]
+    )
     # for level_budget in levelBudget_list:
     #      if ((level_budget[0] + level_budget[1]) > (max_level_budget[0] + max_level_budget[0])) :
     #          max_level_budget = level_budget
@@ -70,7 +92,6 @@ def gen_contexts(
     parameters.SetSecurityLevel(openfhe.SecurityLevel.HEStd_NotSet)
     parameters.SetKeySwitchTechnique(openfhe.KeySwitchTechnique.HYBRID)
 
-
     cc = openfhe.GenCryptoContext(parameters)
     cc.Enable(openfhe.PKESchemeFeature.PKE)
     cc.Enable(openfhe.PKESchemeFeature.KEYSWITCH)
@@ -79,58 +100,86 @@ def gen_contexts(
     cc.Enable(openfhe.PKESchemeFeature.FHE)
     cc.Enable(openfhe.PKESchemeFeature.PRE)
 
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
     time0 = time.time()
     keys = cc.KeyGen()
     evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
-    MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
     rot_swk_map = {}
-    cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+
+    time1 = time.time()
+    print("KeyGen time: ", time1 - time0)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
+
+    MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
     if rotate_index:
+        cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
         # cc.ClearEvalAutomorphismKeys()
 
+    time11 = time.time()
+    print("KEY GET time: ", time11 - time1)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
+
+    boot_gen_time = 0
+    rot_get_time = 0
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
-        cc.EvalBootstrapSetup(level_budget, [0, 0], 1<<logslots)
-        cc.EvalBootstrapKeyGen(keys.secretKey, 1<<logslots)
+        timei1 = time.time()
+        cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logslots)
+        cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logslots)
+        timei2 = time.time()
         ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map[str(logslots)] = ROT_SWK
-        # cc.ClearEvalAutomorphismKeys()
-    time1 = time.time()
-    print("KeyGen time: ", time1 - time0)
+        timei3 = time.time()
+        boot_gen_time += timei2 - timei1
+        rot_get_time += timei3 - timei2
+    time12 = time.time()
+    print("BOOT KEY GEN time: ", boot_gen_time)
+    print("ROT KEY GET time: ", rot_get_time)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
+
 
     BOOT_KEY = cc.GetEvalBootstrapKey()
+
+    time13 = time.time()
+    print("BOOT KEY GET time: ", time13 - time12)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
+
+    openfheMembers = {}
+    openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
+    openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
+    openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
+    openfheMembers["depth"] = depth
+    with open(OPENFHE_path, "wb") as file:
+        pickle.dump(openfheMembers, file)
+    del openfheMembers
+
+
+    if mode == "debug":
+        debugKeys = {}
+        debugKeys["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
+        debugKeys["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
+        debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
+            openfhe.BINARY
+        )
+        with open(debug_save_path, "wb") as file:
+            pickle.dump(debugKeys, file)
+        del debugKeys
+
+    openfhe.ClearEvalMultKeys()
+    cc.ClearEvalAutomorphismKeys()
+    openfhe.ReleaseAllContexts()
+
     boot_key_map = {}
 
     time2 = time.time()
-    print("BOOT_KEY time: ", time2 - time1)
-
+    print("OPENFHE SAVE time: ", time2 - time13)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
     for idx, logslots in enumerate(logSlots_list):
-        C2S, S2C = [], []
-        C2S_dim, S2C_dim = [], []
-        C2S_limbs, S2C_limbs = [], []
-        for slot, C2S_arr, S2C_arr, scfactor_U0hatTPreFFT, scfactor_U0PreFFT in [BOOT_KEY[idx]]:
-            if(slot != 1<<logslots):
-                print("Error: BOOT_KEY order not match logSlots_list order")
-                break
-            U0hatTPreFFTScalingFactor = scfactor_U0hatTPreFFT
-            U0PreFFTScalingFactor = scfactor_U0PreFFT
-            for i in range(len(C2S_arr)):
-                C2S_dim.append(len(C2S_arr[i]))
-                for j in range(len(C2S_arr[i])):
-                    if j == 0:
-                        C2S_limbs.append(len(C2S_arr[i][j]))
-                    for k in range(len(C2S_arr[i][j])):
-                        C2S += C2S_arr[i][j][k]
-            for i in range(len(S2C_arr)):
-                S2C_dim.append(len(S2C_arr[i]))
-                for j in range(len(S2C_arr[i])):
-                    if j == 0:
-                        S2C_limbs.append(len(S2C_arr[i][j]))
-                    for k in range(len(S2C_arr[i][j])):
-                        S2C += S2C_arr[i][j][k]
+        slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
+        assert slot == 1 << logslots
         boot_key = {
             "C2S": C2S,
             "S2C": S2C,
@@ -138,12 +187,13 @@ def gen_contexts(
             "S2C_dim": S2C_dim,
             "C2S_limbs": C2S_limbs,
             "S2C_limbs": S2C_limbs,
-            "U0hatTPreFFTScalingFactor": U0hatTPreFFTScalingFactor,
-            "U0PreFFTScalingFactor": U0PreFFTScalingFactor,
+            "U0hatTPreFFTScalingFactor": C2S_FC,
+            "U0PreFFTScalingFactor": S2C_FC,
         }
         boot_key_map[str(logslots)] = boot_key
     time3 = time.time()
     print("BOOT_KEY python time: ", time3 - time2)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -165,44 +215,19 @@ def gen_contexts(
         rescaleTech,
         dim1,
     )
+    time41 = time.time()
+    print("gpufhe_context time: ", time41 - time3)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
+
+
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
+        print("BsContext_map: ", logslots)
         gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
-            gpufhe_context, level_budget, dim1, (1<<logslots), 0
+            gpufhe_context, level_budget, dim1, (1 << logslots), 0
         )
     time4 = time.time()
-    print("gpufhe_context time: ", time4 - time3)
-
-    save_path = (
-        save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
-            '-'.join(map(str, logSlots_list)),
-            maxLevelsRemaining,
-            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            dnum,
-            dcrtBits,
-            firstMod,
-            approxModDepth,
-            secretKeyDist,
-            rescaleTech,
-        )
-    )
-    debug_save_path = (
-            save_dir
-            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
-            '-'.join(map(str, logSlots_list)),
-            maxLevelsRemaining,
-            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            dnum,
-            dcrtBits,
-            firstMod,
-            approxModDepth,
-            secretKeyDist,
-            rescaleTech,
-        )
-    )
-
+    print("BsContext time: ", time4 - time41)
+    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -220,34 +245,17 @@ def gen_contexts(
             if (
                 not callable(getattr(gpufhe_context.BsContext_map[str(logSlots)], item))
             ) and not item.startswith("__"):
-                BsContextMembers[item] = getattr(gpufhe_context.BsContext_map[str(logSlots)], item)
+                BsContextMembers[item] = getattr(
+                    gpufhe_context.BsContext_map[str(logSlots)], item
+                )
         BsContextMembers_dict[str(logSlots)] = BsContextMembers
 
+    with open(OPENFHE_path, "rb") as file:
+        openfheMembers = pickle.load(file)
+    with open(GPUFHE_path, "wb") as file:
+        pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)
 
-    openfheMembers = {}
-    openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
-    # openfheMembers["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
-    # openfheMembers["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
-    # openfheMembers["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
-    openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
-    openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
-    openfheMembers["depth"] = depth
-    # openfheMembers["slots"] = 1<<specify_slots #todo: to be removed?
-    # openfheMembers["level_budget"] = levelBudget
 
-    with open(save_path, "wb") as file:
-        pickle.dump(
-            (gpufheMembers, openfheMembers, BsContextMembers_dict), file
-        )
-    if mode == "debug":
-        debugKeys = {}
-        debugKeys["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
-        debugKeys["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
-        debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(openfhe.BINARY)
-        with open(debug_save_path, "wb") as file:
-            pickle.dump(
-                debugKeys, file
-            )
 
     time5 = time.time()
     print("Save time: ", time5 - time4)

@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import random
+import time
 import warnings
 import pickle
 import sympy
@@ -30,13 +31,13 @@ class __FOR_SAVE_ONLY_Context:
         h=64,
         sigma=32,
     ):
-        self.levelBudget_list = levelBudget_list
+        # levelBudget_list = levelBudget_list
         self.logSlots_list = logSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
         # self.BsContext = None
         self.BsContext_map = {}
-        self.logp = logp
+        # self.logp = logp
         # self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
         # self.left_rot_key_map = {}
@@ -58,13 +59,13 @@ class __FOR_SAVE_ONLY_Context:
         self.p = 1 << logqi #todo: to be removed?
 
         self.moduliQ = [0] * L
-        self.qRoots = [0] * L
-        self.qRootsInv = [0] * L
-        self.qRootPows = [[] for _ in range(L)]
-        self.qRootScalePows = [[] for _ in range(L)]
-        self.qRootScalePowsOverq = [[] for _ in range(L)]
-        self.qRootScalePowsInv = [[] for _ in range(L)]
-        self.qRootPowsInv = [[] for _ in range(L)]
+        qRoots = [0] * L
+        qRootsInv = [0] * L
+        qRootPows = [[] for _ in range(L)]
+        # self.qRootScalePows = [[] for _ in range(L)]
+        # self.qRootScalePowsOverq = [[] for _ in range(L)]
+        # self.qRootScalePowsInv = [[] for _ in range(L)]
+        qRootPowsInv = [[] for _ in range(L)]
         # self.auto_index = {} #todo: to suppor negative input?
         self.slots_precompute_auto_map = {}
         bnd = 1
@@ -76,7 +77,7 @@ class __FOR_SAVE_ONLY_Context:
                     self.moduliQ[0] = prime
                     break
                 bnd += 1
-            self.qRoots[0] = self.root_of_unity(order=self.M, modulus=self.moduliQ[0])
+            qRoots[0] = self.root_of_unity(order=self.M, modulus=self.moduliQ[0])
             bnd = 1
             while cnt < L:
                 prime1 = (1 << logqi) + bnd * self.M + 1
@@ -86,7 +87,7 @@ class __FOR_SAVE_ONLY_Context:
                 prime2 = (1 << logqi) - bnd * self.M + 1
                 if self.is_prime(prime2):
                     self.moduliQ[cnt] = prime2
-                    self.qRoots[cnt] = self.root_of_unity(
+                    qRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliQ[cnt - 1]
                     )
                     cnt += 1
@@ -104,59 +105,31 @@ class __FOR_SAVE_ONLY_Context:
                 return
             for i in range(L):
                 self.moduliQ[i] = moduliQ[i]
-                self.qRoots[i] = rootsQ[i]
+                qRoots[i] = rootsQ[i]
 
+        time0 = time.time()
         for i in range(L):
-            self.qRootsInv[i] = self.invMod(self.qRoots[i], int(self.moduliQ[i]))
-            self.qRootPows[i] = [0] * self.N
-            self.qRootPowsInv[i] = [0] * self.N
-            self.qRootScalePows[i] = [0] * self.N
-            self.qRootScalePowsOverq[i] = [0] * self.N
-            self.qRootScalePowsInv[i] = [0] * self.N
+            qRootsInv[i] = self.invMod(qRoots[i], int(self.moduliQ[i]))
+            qRootPows[i] = [0] * self.N
+            qRootPowsInv[i] = [0] * self.N
             power = int(1)
             powerInv = int(1)
             for j in range(self.N):
                 jprime = self.bitReverse(j) >> (32 - self.logN)
-                self.qRootPows[i][jprime] = int(power)
-                tmp = int(power) << 64
-                self.qRootScalePowsOverq[i][jprime] = int(tmp // int(self.moduliQ[i]))
-                self.qRootScalePows[i][jprime] = int(
-                    self.mulMod(
-                        int(self.qRootPows[i][jprime]),
-                        int(1 << 32),
-                        int(self.moduliQ[i]),
-                    )
-                )
-                self.qRootScalePows[i][jprime] = int(
-                    self.mulMod(
-                        int(self.qRootScalePows[i][jprime]),
-                        int(1 << 32),
-                        int(self.moduliQ[i]),
-                    )
-                )
-                self.qRootPowsInv[i][jprime] = int(powerInv)
-                self.qRootScalePowsInv[i][jprime] = int(
-                    self.mulMod(
-                        int(self.qRootPowsInv[i][jprime]),
-                        int(1 << 32),
-                        int(self.moduliQ[i]),
-                    )
-                )
-                self.qRootScalePowsInv[i][jprime] = int(
-                    self.mulMod(
-                        int(self.qRootScalePowsInv[i][jprime]),
-                        int(1 << 32),
-                        int(self.moduliQ[i]),
-                    )
-                )
+                qRootPows[i][jprime] = int(power)
+                qRootPowsInv[i][jprime] = int(powerInv)
                 if j < self.N - 1:
                     power = self.mulMod(
-                        int(power), int(self.qRoots[i]), int(self.moduliQ[i])
+                        int(power), int(qRoots[i]), int(self.moduliQ[i])
                     )
                     powerInv = self.mulMod(
-                        powerInv, int(self.qRootsInv[i]), int(self.moduliQ[i])
+                        powerInv, int(qRootsInv[i]), int(self.moduliQ[i])
                     )
         q_mu = []  # for barret mul mod
+        
+        time1 = time.time()
+        print("Inner time1: ", time1 - time0)
+
         for mod in self.moduliQ:
             x = 2**128 // int(mod)
             low = x & ((1 << 64) - 1)
@@ -167,14 +140,14 @@ class __FOR_SAVE_ONLY_Context:
         self.moduliQ_cuda = np.array(self.moduliQ, dtype=np.uint64)
 
         self.moduliP = [0] * self.K
-        self.pInvVec = [0] * self.K
-        self.pRoots = [0] * self.K
-        self.pRootsInv = [0] * self.K
-        self.pRootPows = [[] for _ in range(self.K)]
-        self.pRootPowsInv = [[] for _ in range(self.K)]
-        self.pRootScalePows = [[] for _ in range(self.K)]
-        self.pRootScalePowsOverp = [[] for _ in range(self.K)]
-        self.pRootScalePowsInv = [[] for _ in range(self.K)]
+        # self.pInvVec = [0] * self.K
+        pRoots = [0] * self.K
+        pRootsInv = [0] * self.K
+        pRootPows = [[] for _ in range(self.K)]
+        pRootPowsInv = [[] for _ in range(self.K)]
+        # pRootScalePows = [[] for _ in range(self.K)]
+        # self.pRootScalePowsOverp = [[] for _ in range(self.K)]
+        # self.pRootScalePowsInv = [[] for _ in range(self.K)]
 
         if moduliP is None and rootsP is None:
             cnt = 0
@@ -182,7 +155,7 @@ class __FOR_SAVE_ONLY_Context:
                 prime1 = (1 << logp) + bnd * self.M + 1
                 if self.is_prime(prime1):
                     self.moduliP[cnt] = prime1
-                    self.pRoots[cnt] = self.root_of_unity(
+                    pRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliP[cnt]
                     )
                     cnt += 1
@@ -191,7 +164,7 @@ class __FOR_SAVE_ONLY_Context:
                 prime2 = (1 << logp) - bnd * self.M + 1
                 if self.is_prime(prime2):
                     self.moduliP[cnt] = prime2
-                    self.pRoots[cnt] = self.root_of_unity(
+                    pRoots[cnt] = self.root_of_unity(
                         order=self.M, modulus=self.moduliP[cnt]
                     )
                     cnt += 1
@@ -206,45 +179,48 @@ class __FOR_SAVE_ONLY_Context:
                 return
             for i in range(K):
                 self.moduliP[i] = moduliP[i]
-                self.pRoots[i] = rootsP[i]
+                pRoots[i] = rootsP[i]
 
         for i in range(K):
-            self.pRootsInv[i] = self.invMod(self.pRoots[i], int(self.moduliP[i]))
-            self.pInvVec[i] = self.inv(self.moduliP[i])
-            self.pRootPows[i] = [0] * self.N
-            self.pRootPowsInv[i] = [0] * self.N
-            self.pRootScalePows[i] = [0] * self.N
-            self.pRootScalePowsOverp[i] = [0] * self.N
-            self.pRootScalePowsInv[i] = [0] * self.N
+            pRootsInv[i] = self.invMod(pRoots[i], int(self.moduliP[i]))
+            # self.pInvVec[i] = self.inv(self.moduliP[i])
+            pRootPows[i] = [0] * self.N
+            pRootPowsInv[i] = [0] * self.N
+            # self.pRootScalePows[i] = [0] * self.N
+            # self.pRootScalePowsOverp[i] = [0] * self.N
+            # self.pRootScalePowsInv[i] = [0] * self.N
             power = int(1)
             powerInv = int(1)
             for j in range(self.N):
                 jprime = self.bitReverse(j) >> (32 - self.logN)
-                self.pRootPows[i][jprime] = int(power)
+                pRootPows[i][jprime] = int(power)
                 tmp = int(power) << 64
-                self.pRootScalePowsOverp[i][jprime] = tmp // int(self.moduliP[i])
-                self.pRootScalePows[i][jprime] = self.mulMod(
-                    self.pRootPows[i][jprime], int(1 << 32), int(self.moduliP[i])
-                )
-                self.pRootScalePows[i][jprime] = self.mulMod(
-                    self.pRootScalePows[i][jprime], int(1 << 32), int(self.moduliP[i])
-                )
-                self.pRootPowsInv[i][jprime] = powerInv
-                self.pRootScalePowsInv[i][jprime] = self.mulMod(
-                    self.pRootPowsInv[i][jprime], int(1 << 32), int(self.moduliP[i])
-                )
-                self.pRootScalePowsInv[i][jprime] = self.mulMod(
-                    self.pRootScalePowsInv[i][jprime],
-                    int(1 << 32),
-                    int(self.moduliP[i]),
-                )
+                # self.pRootScalePowsOverp[i][jprime] = tmp // int(self.moduliP[i])
+                # self.pRootScalePows[i][jprime] = self.mulMod(
+                #     pRootPows[i][jprime], int(1 << 32), int(self.moduliP[i])
+                # )
+                # self.pRootScalePows[i][jprime] = self.mulMod(
+                #     self.pRootScalePows[i][jprime], int(1 << 32), int(self.moduliP[i])
+                # )
+                pRootPowsInv[i][jprime] = powerInv
+                # self.pRootScalePowsInv[i][jprime] = self.mulMod(
+                #     pRootPowsInv[i][jprime], int(1 << 32), int(self.moduliP[i])
+                # )
+                # self.pRootScalePowsInv[i][jprime] = self.mulMod(
+                #     self.pRootScalePowsInv[i][jprime],
+                #     int(1 << 32),
+                #     int(self.moduliP[i]),
+                # )
                 if j < self.N - 1:
                     power = self.mulMod(
-                        power, int(self.pRoots[i]), int(self.moduliP[i])
+                        power, int(pRoots[i]), int(self.moduliP[i])
                     )
                     powerInv = self.mulMod(
-                        powerInv, int(self.pRootsInv[i]), int(self.moduliP[i])
+                        powerInv, int(pRootsInv[i]), int(self.moduliP[i])
                     )
+
+        time2 = time.time()
+        print("Inner time2: ", time2 - time1)
 
         p_mu = []  # for barret mul mod
         for mod in self.moduliP:
@@ -278,6 +254,8 @@ class __FOR_SAVE_ONLY_Context:
                     QHatInvModqi = int(self.invMod(QHat, moduli))
                     self.PartQlHatInvModq[k][sizePartQk - l - 1][i] = QHatInvModqi
 
+        time3 = time.time()
+        print("Inner time3: ", time3 - time2)
         self.PartQlHatModp = [
             [
                 [[0 for _ in range(self.dnum * K)] for _ in range(K)]
@@ -359,6 +337,8 @@ class __FOR_SAVE_ONLY_Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp_pad[l][k][i][offset + j] = QHatModpj
 
+        time4 = time.time()
+        print("Inner time4: ", time4 - time3)
         self.pHatModp = [0] * K
         self.pHatInvModp = [0] * K
         # 计算 pHatModp
@@ -399,10 +379,12 @@ class __FOR_SAVE_ONLY_Context:
         for i in range(L):
             self.PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ[i]))
 
-        self.qInvModq = [[0 for _ in range(L)] for _ in range(L)]
+        time5 = time.time()
+        print("Inner time5: ", time5 - time4)
+        qInvModq = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
             for j in list(range(i)) + list(range(i + 1, L)):
-                self.qInvModq[i][j] = self.invMod(
+                qInvModq[i][j] = self.invMod(
                     int(self.moduliQ[i]), int(self.moduliQ[j])
                 )
 
@@ -441,16 +423,19 @@ class __FOR_SAVE_ONLY_Context:
             self.mult_swk[0] = MULT_SWK[0]
             self.mult_swk[1] = MULT_SWK[1]
 
+        time6 = time.time()
+        print("Inner time6: ", time6 - time5)
+
         self.moduliQ = np.array(self.moduliQ, dtype=np.uint64)
         self.moduliP = np.array(self.moduliP, dtype=np.uint64)
-        self.qRoots = np.array(self.qRoots, dtype=np.uint64)
-        self.pRoots = np.array(self.pRoots, dtype=np.uint64)
+        qRoots = np.array(qRoots, dtype=np.uint64)
+        pRoots = np.array(pRoots, dtype=np.uint64)
 
-        self.pInvVec = np.array(self.pInvVec, dtype=np.uint64)
-        self.qRootScalePows = np.array(self.qRootScalePows, dtype=np.uint64)
-        self.pRootScalePows = np.array(self.pRootScalePows, dtype=np.uint64)
-        self.qRootScalePowsInv = np.array(self.qRootScalePowsInv, dtype=np.uint64)
-        self.pRootScalePowsInv = np.array(self.pRootScalePowsInv, dtype=np.uint64)
+        # # self.pInvVec = np.array(self.pInvVec, dtype=np.uint64)
+        # # self.qRootScalePows = np.array(self.qRootScalePows, dtype=np.uint64)
+        # self.pRootScalePows = np.array(self.pRootScalePows, dtype=np.uint64)
+        # self.qRootScalePowsInv = np.array(self.qRootScalePowsInv, dtype=np.uint64)
+        # self.pRootScalePowsInv = np.array(self.pRootScalePowsInv, dtype=np.uint64)
         self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
         self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
@@ -463,7 +448,7 @@ class __FOR_SAVE_ONLY_Context:
         self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
         self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
         self.PModq = np.array(self.PModq, dtype=np.uint64)
-        self.qInvModq = np.array(self.qInvModq, dtype=np.uint64)
+        qInvModq = np.array(qInvModq, dtype=np.uint64)
         self.QlQlInvModqlDivqlModq = np.array(
             self.QlQlInvModqlDivqlModq, dtype=np.uint64
         )
@@ -482,13 +467,13 @@ class __FOR_SAVE_ONLY_Context:
                 # mult depth = 0 and FLEXIBLEAUTO
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
-                self.scalingFactorsReal[0] = 2**self.logqi
+                self.scalingFactorsReal[0] = 2**logqi
             elif self.L == 2 and extraBits > 0:
                 # mult depth = 0 and FLEXIBLEAUTOEXT
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
                 self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
-                self.scalingFactorsReal[1] = 2**self.logqi
+                self.scalingFactorsReal[1] = 2**logqi
             else:
                 self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
                 if extraBits > 0:
@@ -531,8 +516,10 @@ class __FOR_SAVE_ONLY_Context:
             for i in range(self.L):
                 self.dmoduliQ[i] = float(self.moduliQ[i])
         else:
-            self.approxSF = 2**self.logqi
+            self.approxSF = 2**logqi
 
+        time7 = time.time()
+        print("Inner time7: ", time7 - time6)
         # for cuda context
         if True:
             self.max_num_moduli = self.L + self.K
@@ -546,8 +533,8 @@ class __FOR_SAVE_ONLY_Context:
             self.inverse_scaled_power_of_roots_div_two = None
             self.power_of_roots_vec = []
             self.power_of_roots_shoup_vec = []
-            self.inv_power_of_roots_vec = []
-            self.inv_power_of_roots_shoup_vec = []
+            inv_power_of_roots_vec = []
+            inv_power_of_roots_shoup_vec = []
             self.barret_k = []
             self.barret_ratio = []
 
@@ -609,8 +596,8 @@ class __FOR_SAVE_ONLY_Context:
                 dtype=np.uint64,
             )
 
-            power_of_roots = self.qRootPows + self.pRootPows
-            inverse_power_of_roots = self.qRootPowsInv + self.pRootPowsInv
+            power_of_roots = qRootPows + pRootPows
+            inverse_power_of_roots = qRootPowsInv + pRootPowsInv
             # cal basic param
             for i, prime in enumerate(self.primes):
                 barret = math.floor(math.log2(prime)) + 63
@@ -629,8 +616,8 @@ class __FOR_SAVE_ONLY_Context:
 
                 self.power_of_roots_vec.extend(power_of_roots[i])
                 self.power_of_roots_shoup_vec.extend(power_of_roots_shoup)
-                self.inv_power_of_roots_vec.extend(inv_power_of_roots_div_two)
-                self.inv_power_of_roots_shoup_vec.extend(inv_power_of_roots_shoup)
+                inv_power_of_roots_vec.extend(inv_power_of_roots_div_two)
+                inv_power_of_roots_shoup_vec.extend(inv_power_of_roots_shoup)
 
             self.barret_k = np.array(self.barret_k, dtype=np.uint64)
             self.barret_ratio = np.array(self.barret_ratio, dtype=np.uint64)
@@ -640,10 +627,10 @@ class __FOR_SAVE_ONLY_Context:
                 self.power_of_roots_shoup_vec, dtype=np.uint64
             )
             self.inverse_power_of_roots_div_two = np.array(
-                self.inv_power_of_roots_vec, dtype=np.uint64
+                inv_power_of_roots_vec, dtype=np.uint64
             )
             self.inverse_scaled_power_of_roots_div_two = np.array(
-                self.inv_power_of_roots_shoup_vec, dtype=np.uint64
+                inv_power_of_roots_shoup_vec, dtype=np.uint64
             )
 
             # cal modup param
@@ -757,7 +744,7 @@ class __FOR_SAVE_ONLY_Context:
                 dtype=np.uint64,
             )
 
-            qInvModq = self.qInvModq.reshape(-1)
+            qInvModq = qInvModq.reshape(-1)
             qInvModq_vec = []
             qInvModq_shoup_vec = []
             for i in range(self.L):
@@ -778,6 +765,9 @@ class __FOR_SAVE_ONLY_Context:
             self.PModq_cuda = np.array(self.PModq, dtype=np.uint64)
 
             self.primes = np.array(self.primes, dtype=np.uint64)
+
+        time8 = time.time()
+        print("Inner time8: ", time8 - time7)
 
         swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
         swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
@@ -801,7 +791,7 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_precompute_auto_map[log_slots] = precompute_auto_map
 
         # init bs_context
-        for logSlots, levelBudget in zip(self.logSlots_list, self.levelBudget_list):
+        for logSlots, levelBudget in zip(self.logSlots_list, levelBudget_list):
             self.BsContext_map[str(logSlots)] = BsContext(
                 self.N,
                 self.K,
@@ -818,6 +808,8 @@ class __FOR_SAVE_ONLY_Context:
                 boot_key_map[str(logSlots)]
             )
 
+        time9 = time.time()
+        print("Inner time9: ", time9 - time8)
         # compute auto index map
         # slots = 1 << logSlots
         # self.auto_index[slots] = self.find_auto_index(slots, self.N << 1)
