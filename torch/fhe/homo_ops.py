@@ -625,17 +625,17 @@ def homo_add_pt(in0, pt, cryptoContext):
 
 def homo_mul_pt(cipher, pt, cryptoContext):
     assert len(cipher.cv) == 2
-    if cipher.slots != pt.slots:
-        warnings.warn(
-            f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
-            Warning,
-        )
-    if cipher.cur_limbs != pt.l:
-        warnings.warn(
-            f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
-            Warning,
-        )
-        # raise ValueError
+    # if cipher.slots != pt.slots:
+    #     warnings.warn(
+    #         f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
+    #         Warning,
+    #     )
+    # if cipher.cur_limbs != pt.l:
+    #     warnings.warn(
+    #         f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
+    #         Warning,
+    #     )
+    #     raise ValueError
 
     res0 = cipher.deep_copy()
     ctmorphed = Cipher(

@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import torch
 from torch.fhe import utils
@@ -194,7 +195,7 @@ def final_layer(input, he_res20_ctx, cryptoContext, openfhe_context_dict):
     he_res20_ctx.cur_num_slots=4096
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     weight=read_fc_weight(cryptoContext, cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
-    print(cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
+    # print(cryptoContext.L - input.cur_limbs, 1, he_res20_ctx.cur_num_slots)
     res = rotsum(input, 64,cryptoContext)
     res = homo_ops.homo_mul_pt(res,
                                mask_mod(64, res.cur_limbs, 1.0/64.0, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
@@ -212,38 +213,27 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     cryptoContext.openfhe_context = openfhe_context
 
-    image_vector = read_image(0)
-    image_vector = np.array(image_vector)
-    print(image_vector)
-    image_vector = torch.tensor(image_vector, device="cuda")
-    in_ct, in_ct_openfhe = openfhe_context.encrypt(image_vector, 1, cryptoContext.L - 5 - get_relu_depth(he_res20_ctx.relu_degree), he_res20_ctx.cur_num_slots) # note: initial level is aligned with the original open source codes
-
     for _logslot in [12, 13, 14]:
         load_bootstrapping_and_rotation_keys(_logslot, cryptoContext)
     utils.load_rotation_keys(cryptoContext, "app")
 
-    cryptoContext.GEN_PRECOMPUTATION = he_res20_ctx.GEN_PRECOMPUTATION# TODO poor workaround
-
+    set_bootstrapping_keys(he_res20_ctx.cur_num_slots, cryptoContext)
+    cryptoContext.GEN_PRECOMPUTATION = he_res20_ctx.GEN_PRECOMPUTATION  # TODO poor workaround
     if he_res20_ctx.GEN_PRECOMPUTATION:
         pre_encoded = {}
         for _logslot in [12, 13, 14]:
-            pre_encoded[_logslot] = openfhe_context.encode(torch.zeros(1 << _logslot, dtype=torch.float32), 1, 1, 1 << _logslot)
+            pre_encoded[_logslot] = openfhe_context.encode(torch.zeros(1 << _logslot, dtype=torch.float32), 1, 1,
+                                                           1 << _logslot)
         cryptoContext.pre_encoded = pre_encoded
-        cryptoContext.weight_dir = he_res20_ctx.weight_dir # TODO poor workaround
-        with open(he_res20_ctx.weight_dir + '/exec_log.txt', 'w') as f:
+        cryptoContext.weight_dir = he_res20_ctx.weight_dir  # TODO poor workaround
+        with open(he_res20_ctx.weight_dir + '/yhh_exec_log.txt', 'w') as f:
             pass
     else:
         with open(he_res20_ctx.weight_dir + '/encode_val.pkl', 'rb') as f:
             pre_encoded = pickle.load(f)
         for key, _ in pre_encoded.items():
             pre_encoded[key].mx = [torch.tensor(pre_encoded[key].mx[0], dtype=torch.uint64, device="cuda")]
-        cryptoContext.pre_encoded = pre_encoded    
-
-    cryptoContext.zero_32K, _ = openfhe_context.encrypt(np.zeros(2 ** 15), 1, 0, 2 ** 15)
-    cryptoContext.zero_16K, _ = openfhe_context.encrypt(np.zeros(2 ** 14), 1, 0, 2 ** 14)
-
-    set_bootstrapping_keys(he_res20_ctx.cur_num_slots, cryptoContext)
-
+        cryptoContext.pre_encoded = pre_encoded
 
     # print("resnet computation start")
     # firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -252,39 +242,76 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     # resLayer3 = layer3(resLayer2,  he_res20_ctx, cryptoContext, openfhe_context_dict)
     # finalRes = final_layer(resLayer3,he_res20_ctx, cryptoContext, openfhe_context_dict)
 
+    for j in range(35,60,2):
+        # 创建日志文件
+        log_filename = f'torch/fhe/resnet/logs/relu_deg_{j}.txt'
+        he_res20_ctx.relu_degree = j
+        with open(log_filename, 'a') as log_file:
+            with contextlib.redirect_stdout(log_file):
+                for i in range(200):
+                    he_res20_ctx.cur_num_slots = (1 << 14)
+                    cryptoContext.zero_32K, _ = openfhe_context.encrypt(np.zeros(2 ** 15), 1, 0, 2 ** 15)
+                    cryptoContext.zero_16K, _ = openfhe_context.encrypt(np.zeros(2 ** 14), 1, 0, 2 ** 14)
+                    if he_res20_ctx.GEN_PRECOMPUTATION:
+                        pre_encoded = {}
+                        for _logslot in [12, 13, 14]:
+                            pre_encoded[_logslot] = openfhe_context.encode(
+                                torch.zeros(1 << _logslot, dtype=torch.float32), 1, 1,
+                                1 << _logslot)
+                        cryptoContext.pre_encoded = pre_encoded
+                        cryptoContext.weight_dir = he_res20_ctx.weight_dir  # TODO poor workaround
+                        with open(he_res20_ctx.weight_dir + '/yhh_exec_log.txt', 'w') as f:
+                            pass
+                    else:
+                        with open(he_res20_ctx.weight_dir + '/encode_val.pkl', 'rb') as f:
+                            pre_encoded = pickle.load(f)
+                        for key, _ in pre_encoded.items():
+                            pre_encoded[key].mx = [
+                                torch.tensor(pre_encoded[key].mx[0], dtype=torch.uint64, device="cuda")]
+                        cryptoContext.pre_encoded = pre_encoded
 
-    print("resnet computation start")
-    print("current time: ", datetime.datetime.now())
-    firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    print("after initial layer")
-    print("current time: ", datetime.datetime.now())
-    resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    print(resLayer1.cv[0].cpu().reshape(-1)[:10])
-    print("after layer1")
-    print("current time: ", datetime.datetime.now())
-    resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    print("after layer2")
-    print("current time: ", datetime.datetime.now())
-    resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    print("after layer3")
-    print("current time: ", datetime.datetime.now())
-    finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext, openfhe_context_dict)
-    print("after final layer")
-    print("current time: ", datetime.datetime.now())
+                    image_vector, label = read_image(0)
+                    image_vector = np.array(image_vector)
+                    # print(image_vector)
+                    image_vector = torch.tensor(image_vector, device="cuda")
+                    in_ct, in_ct_openfhe = openfhe_context.encrypt(image_vector, 1,
+                                                                   cryptoContext.L - 5 - get_relu_depth(he_res20_ctx.relu_degree),
+                                                                   he_res20_ctx.cur_num_slots)  # note: initial level is aligned with the original open source codes
 
-    if he_res20_ctx.GEN_PRECOMPUTATION:
-        from .compact_weight import gen_pre_encode_file
-        gen_pre_encode_file(cryptoContext, openfhe_context)
-        print("pre-encoded file generated, please change GEN_PRECOMPUTATION to False and run again")
-        print("Good Luck! LOL")
+                    print("resnet computation start")
+                    print("current time: ", datetime.datetime.now())
+                    firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
+                    # print("after initial layer")
+                    # print("current time: ", datetime.datetime.now())
+                    resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
+                    # print(resLayer1.cv[0].cpu().reshape(-1)[:10])
+                    # print("after layer1")
+                    # print("current time: ", datetime.datetime.now())
+                    resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext, openfhe_context_dict)
+                    # print("after layer2")
+                    # print("current time: ", datetime.datetime.now())
+                    resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext, openfhe_context_dict)
+                    # print("after layer3")
+                    # print("current time: ", datetime.datetime.now())
+                    finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext, openfhe_context_dict)
+                    print("after final layer")
+                    print("current time: ", datetime.datetime.now())
 
-    finalRes.slots = 10
-    clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
-    clear_result = clear_result.cpu().numpy().reshape(-1)
-    print(clear_result[:10]) # should be of len 10
+                    if he_res20_ctx.GEN_PRECOMPUTATION:
+                        from .compact_weight import gen_pre_encode_file
+                        gen_pre_encode_file(cryptoContext, openfhe_context)
+                        print("pre-encoded file generated, please change GEN_PRECOMPUTATION to False and run again")
+                        print("Good Luck! LOL")
 
-    max_element_idx = np.argmax(clear_result)
-    print(max_element_idx)
+                    finalRes.slots = 10
+                    clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
+                    clear_result = clear_result.cpu().numpy().reshape(-1)
+                    print(clear_result[:10]) # should be of len 10
+
+                    max_element_idx = np.argmax(clear_result[:10])
+                    print(max_element_idx)
+                    print("end")
+
 
 
 def resnet20( ):
@@ -314,7 +341,7 @@ def resnet20( ):
 
     he_res20_context_ = HE_res20_context(None, max_relu_degree) # ini app ctx--he resnet ctx
     he_res20_context_.GEN_PRECOMPUTATION = False
-    he_res20_context_.weight_dir = "/data/yhh/data/"
+    he_res20_context_.weight_dir = "/data/yhh/data"
 
     cryptoContext, openfhe_context_dict = (
         utils.try_load_context(logN,

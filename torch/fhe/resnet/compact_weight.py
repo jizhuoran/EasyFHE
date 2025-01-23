@@ -253,7 +253,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
 
     encode_val = {}
 
-    with open(cryptoContext.weight_dir + "exec_log.txt", 'r') as f:
+    with open(cryptoContext.weight_dir + "/yhh_exec_log.txt", 'r') as f:
         commands = f.readlines()
 
     print("exec_log loaded")
