@@ -364,7 +364,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
     
     return ctxtDec
 
-@utils.profile_python_function
+# @utils.profile_python_function
 def homo_bootstrap(cipher, L0, logSlots, cryptoContext):
     result = eval_bootstrap(cipher, L0, logSlots, cryptoContext)
 
