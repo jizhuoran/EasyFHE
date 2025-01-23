@@ -48,7 +48,7 @@ class OpenFHEContext:
             ptx.Encode()
             data = ptx.GetVectorOfData()
             cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
-            return Plaintext(cv, None, ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg())
+            return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(),False)
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         if slots is None:

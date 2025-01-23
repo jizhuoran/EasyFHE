@@ -82,7 +82,7 @@ def gen_contexts(
 
     parameters.SetMultiplicativeDepth(depth)
     parameters.SetScalingModSize(dcrtBits)  #  dcrtBits GPU-FHE
-    parameters.SetFirstModSize(firstMod)  # logq0 GPU-FHE
+    parameters.SetFirstModSize(firstMod)  # firstMod GPU-FHE
     # parameters.SetAuxModSize(AuxModSize) #  auxModSize (yhh added) GPU-FHE
     parameters.SetScalingTechnique(openfhe_rescaleTech)
     parameters.SetSecretKeyDist(openfhe_secretKeyDist)

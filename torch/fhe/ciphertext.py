@@ -80,29 +80,29 @@ class Cipher:
 
 
 class Plaintext:
-    def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
-        self.mx = mx
-        self.N = N
-        self.slots = slots
-        self.l = l
+    def __init__(self, mv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
+        self.mv = mv
+        self.cur_limbs = cur_limbs
         self.noise_deg = noise_deg
         self.scaling_factor = scaling_factor
+        self.slots = slots
+        self.is_ext = is_ext
 
     def __eq__(self, other):
         if not isinstance(other, Plaintext):
             return False
-        if self.N != other.N:
+        if len(self.mv) != len(other.mv):
             return False
-        if len(self.mx) != len(other.mx):
-            return False
-        if not torch.equal(self.mx, other.mx):
+        if not torch.equal(self.mv, other.mv):
             return False
         if self.slots != other.slots:
             return False
-        if self.l != other.l:
+        if self.cur_limbs != other.cur_limbs:
             return False
         if self.noise_deg != other.noise_deg:
             return False
         if self.scaling_factor != other.scaling_factor:
+            return False
+        if self.is_ext != other.is_ext:
             return False
         return True

@@ -1,16 +1,17 @@
 import numpy as np
 import math
+from ..ciphertext import Plaintext
 
 K_UNIFORM = 512
 
-class Plaintext:
-    def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
-        self.mx = mx
-        self.N = N
-        self.slots = slots
-        self.l = l
-        self.noise_deg = noise_deg
-        self.scaling_factor = scaling_factor
+# class Plaintext:
+#     def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
+#         self.mx = mx
+#         self.N = N
+#         self.slots = slots
+#         self.l = l
+#         self.noise_deg = noise_deg
+#         self.scaling_factor = scaling_factor
 
 class CKKS_Boot_Params:
     def __init__(
@@ -632,11 +633,11 @@ class BsContext:
                 RHScnt += m_U0hatTPreFFT_len
                 self.m_U0hatTPreFFT[i][j] = Plaintext(
                     m_U0hatTPreFFT,
-                    mx_len,
-                    mx_slots,
                     limbs,
                     self.m_U0hatTPreFFT_scaling_factor[cnt],
                     1,
+                    mx_slots,
+                    True
                 )
                 cnt += 1
         self.m_U0hatTPreFFT_mx = None
@@ -653,11 +654,11 @@ class BsContext:
                 RHScnt += m_U0PreFFT_len
                 self.m_U0PreFFT[i][j] = Plaintext(
                     m_U0PreFFT,
-                    mx_len,
-                    mx_slots,
                     limbs,
                     self.m_U0PreFFT_scaling_factor[cnt],
                     1,
+                    mx_slots,
+                    True
                 )
                 cnt += 1
         self.m_U0PreFFT_mx = None

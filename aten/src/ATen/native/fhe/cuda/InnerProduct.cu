@@ -125,15 +125,15 @@ static void innerproduct_template(
     const Tensor& barret_k,
     const Tensor& workspace,
     Tensor& res) {
-  const int total_length = modup_out.size(-1) / param_degree;
-  const int beta = total_length / (curr_limbs + alpha);
+//  const int total_length = modup_out.size(-1) / param_degree;
+  const int beta = int((curr_limbs + alpha -1)/alpha);
   const int length = (curr_limbs + alpha);
   const int mult_length = (level + alpha);
   int gap = level - curr_limbs;
 
-  fhe::uint128_t* accum_bx_ptr =
-      reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
-  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
+//  fhe::uint128_t* accum_bx_ptr =
+//      reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
+//  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
 
   AT_DISPATCH_V2(
       ax.scalar_type(),
@@ -156,8 +156,8 @@ static void innerproduct_template(
         const int gridDim = 1024;
         const int blockDim = 256;
         auto stream = at::cuda::getCurrentCUDAStream();
-        auto is_innerproduct_fused = true;
-        if (is_innerproduct_fused) {
+//        auto is_innerproduct_fused = true;
+//        if (is_innerproduct_fused) {
           fhe::sumAndReduceFused<<<gridDim, blockDim, 0, stream>>>(
               modup_out_ptr,
               param_degree,
@@ -173,53 +173,51 @@ static void innerproduct_template(
               res_bx_ptr,
               curr_limbs,
               gap);
-        } else {
-          fhe::mult_<false><<<gridDim, blockDim, 0, stream>>>(
-              modup_out_ptr,
-              ax_ptr,
-              bx_ptr,
-              param_degree,
-              length,
-              accum_ax_ptr,
-              accum_bx_ptr,
-              curr_limbs,
-              gap);
-          for (int i = 1; i < beta; i++) {
-            auto d2_ptr = modup_out_ptr + i * param_degree * length;
-            auto d_ax_ptr = ax_ptr + i * param_degree * mult_length;
-            auto d_bx_ptr = bx_ptr + i * param_degree * mult_length;
-            fhe::mult_<true><<<gridDim, blockDim, 0, stream>>>(
-                d2_ptr,
-                d_ax_ptr,
-                d_bx_ptr,
-                param_degree,
-                length,
-                accum_ax_ptr,
-                accum_bx_ptr,
-                curr_limbs,
-                gap);
-          }
-          fhe::Reduce<<<gridDim, blockDim, 0, stream>>>(
-              accum_ax_ptr,
-              param_degree,
-              length,
-              curr_limbs,
-              gap,
-              primes_ptr,
-              barret_k_ptr,
-              barret_ratio_ptr,
-              res_ax_ptr);
-          fhe::Reduce<<<gridDim, blockDim, 0, stream>>>(
-              accum_bx_ptr,
-              param_degree,
-              length,
-              curr_limbs,
-              gap,
-              primes_ptr,
-              barret_k_ptr,
-              barret_ratio_ptr,
-              res_bx_ptr);
-        }
+//          fhe::mult_<false><<<gridDim, blockDim, 0, stream>>>(
+//              modup_out_ptr,
+//              ax_ptr,
+//              bx_ptr,
+//              param_degree,
+//              length,
+//              accum_ax_ptr,
+//              accum_bx_ptr,
+//              curr_limbs,
+//              gap);
+//          for (int i = 1; i < beta; i++) {
+//            auto d2_ptr = modup_out_ptr + i * param_degree * length;
+//            auto d_ax_ptr = ax_ptr + i * param_degree * mult_length;
+//            auto d_bx_ptr = bx_ptr + i * param_degree * mult_length;
+//            fhe::mult_<true><<<gridDim, blockDim, 0, stream>>>(
+//                d2_ptr,
+//                d_ax_ptr,
+//                d_bx_ptr,
+//                param_degree,
+//                length,
+//                accum_ax_ptr,
+//                accum_bx_ptr,
+//                curr_limbs,
+//                gap);
+//          }
+//          fhe::Reduce<<<gridDim, blockDim, 0, stream>>>(
+//              accum_ax_ptr,
+//              param_degree,
+//              length,
+//              curr_limbs,
+//              gap,
+//              primes_ptr,
+//              barret_k_ptr,
+//              barret_ratio_ptr,
+//              res_ax_ptr);
+//          fhe::Reduce<<<gridDim, blockDim, 0, stream>>>(
+//              accum_bx_ptr,
+//              param_degree,
+//              length,
+//              curr_limbs,
+//              gap,
+//              primes_ptr,
+//              barret_k_ptr,
+//              barret_ratio_ptr,
+//              res_bx_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
