@@ -25,7 +25,6 @@ def gen_contexts(
 
     print("Generating context")
 
-
     save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         logN,
         "-".join(map(str, logSlots_list)),
@@ -100,17 +99,11 @@ def gen_contexts(
     cc.Enable(openfhe.PKESchemeFeature.FHE)
     cc.Enable(openfhe.PKESchemeFeature.PRE)
 
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
-    time0 = time.time()
     keys = cc.KeyGen()
     evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
     rot_swk_map = {}
-
-    time1 = time.time()
-    print("KeyGen time: ", time1 - time0)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
     if rotate_index:
@@ -118,10 +111,6 @@ def gen_contexts(
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
         # cc.ClearEvalAutomorphismKeys()
-
-    time11 = time.time()
-    print("KEY GET time: ", time11 - time1)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     boot_gen_time = 0
     rot_get_time = 0
@@ -135,17 +124,8 @@ def gen_contexts(
         timei3 = time.time()
         boot_gen_time += timei2 - timei1
         rot_get_time += timei3 - timei2
-    time12 = time.time()
-    print("BOOT KEY GEN time: ", boot_gen_time)
-    print("ROT KEY GET time: ", rot_get_time)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
-
 
     BOOT_KEY = cc.GetEvalBootstrapKey()
-
-    time13 = time.time()
-    print("BOOT KEY GET time: ", time13 - time12)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
@@ -174,9 +154,6 @@ def gen_contexts(
 
     boot_key_map = {}
 
-    time2 = time.time()
-    print("OPENFHE SAVE time: ", time2 - time13)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
     for idx, logslots in enumerate(logSlots_list):
         slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
         assert slot == 1 << logslots
@@ -191,9 +168,6 @@ def gen_contexts(
             "U0PreFFTScalingFactor": S2C_FC,
         }
         boot_key_map[str(logslots)] = boot_key
-    time3 = time.time()
-    print("BOOT_KEY python time: ", time3 - time2)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -215,19 +189,12 @@ def gen_contexts(
         rescaleTech,
         dim1,
     )
-    time41 = time.time()
-    print("gpufhe_context time: ", time41 - time3)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
-
 
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
         print("BsContext_map: ", logslots)
         gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
             gpufhe_context, level_budget, dim1, (1 << logslots), 0
         )
-    time4 = time.time()
-    print("BsContext time: ", time4 - time41)
-    print("current usage", psutil.Process(os.getpid()).memory_info().rss / 1024**3)
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -254,8 +221,3 @@ def gen_contexts(
         openfheMembers = pickle.load(file)
     with open(GPUFHE_path, "wb") as file:
         pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)
-
-
-
-    time5 = time.time()
-    print("Save time: ", time5 - time4)

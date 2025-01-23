@@ -142,8 +142,6 @@ def try_load_context(logN,
             rescaleTech,
         )
     )
-    print("gen load_path")
-    print("current time: ", datetime.now())
 
     if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
         gen_contexts(
@@ -161,8 +159,6 @@ def try_load_context(logN,
             save_dir=save_dir,
             mode = mode
         )
-    print("gen_context")
-    print("current time: ", datetime.now())
 
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
@@ -173,9 +169,6 @@ def try_load_context(logN,
         with open(debug_load_path, 'rb') as file:
             debug_keys = pickle.load(file)
 
-    print("after load in pickle")
-    print("current time: ", datetime.now())
-
     openfhe_context_dict = {}
     if mode == "debug":
         for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
@@ -185,12 +178,8 @@ def try_load_context(logN,
         openfhe_context = client.OpenFHEContext(openfheMembers)
         for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
             openfhe_context_dict[str(logSlots)] = openfhe_context
-    print("after load in openfhe")
-    print("current time: ", datetime.now())
 
     cryptoContext = Context(BsContextMembers, gpufheMembers)
-    print("after load in GPU-FHE")
-    print("current time: ", datetime.now())
 
     return cryptoContext, openfhe_context_dict
 

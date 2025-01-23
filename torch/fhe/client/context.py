@@ -127,9 +127,6 @@ class __FOR_SAVE_ONLY_Context:
                     )
         q_mu = []  # for barret mul mod
         
-        time1 = time.time()
-        print("Inner time1: ", time1 - time0)
-
         for mod in self.moduliQ:
             x = 2**128 // int(mod)
             low = x & ((1 << 64) - 1)
@@ -219,8 +216,6 @@ class __FOR_SAVE_ONLY_Context:
                         powerInv, int(pRootsInv[i]), int(self.moduliP[i])
                     )
 
-        time2 = time.time()
-        print("Inner time2: ", time2 - time1)
 
         p_mu = []  # for barret mul mod
         for mod in self.moduliP:
@@ -254,8 +249,6 @@ class __FOR_SAVE_ONLY_Context:
                     QHatInvModqi = int(self.invMod(QHat, moduli))
                     self.PartQlHatInvModq[k][sizePartQk - l - 1][i] = QHatInvModqi
 
-        time3 = time.time()
-        print("Inner time3: ", time3 - time2)
         self.PartQlHatModp = [
             [
                 [[0 for _ in range(self.dnum * K)] for _ in range(K)]
@@ -337,8 +330,6 @@ class __FOR_SAVE_ONLY_Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp_pad[l][k][i][offset + j] = QHatModpj
 
-        time4 = time.time()
-        print("Inner time4: ", time4 - time3)
         self.pHatModp = [0] * K
         self.pHatInvModp = [0] * K
         # 计算 pHatModp
@@ -379,8 +370,6 @@ class __FOR_SAVE_ONLY_Context:
         for i in range(L):
             self.PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ[i]))
 
-        time5 = time.time()
-        print("Inner time5: ", time5 - time4)
         qInvModq = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
             for j in list(range(i)) + list(range(i + 1, L)):
@@ -423,8 +412,6 @@ class __FOR_SAVE_ONLY_Context:
             self.mult_swk[0] = MULT_SWK[0]
             self.mult_swk[1] = MULT_SWK[1]
 
-        time6 = time.time()
-        print("Inner time6: ", time6 - time5)
 
         self.moduliQ = np.array(self.moduliQ, dtype=np.uint64)
         self.moduliP = np.array(self.moduliP, dtype=np.uint64)
@@ -518,8 +505,6 @@ class __FOR_SAVE_ONLY_Context:
         else:
             self.approxSF = 2**self.dcrtBits
 
-        time7 = time.time()
-        print("Inner time7: ", time7 - time6)
         # for cuda context
         if True:
             self.max_num_moduli = self.L + self.K
@@ -766,8 +751,6 @@ class __FOR_SAVE_ONLY_Context:
 
             self.primes = np.array(self.primes, dtype=np.uint64)
 
-        time8 = time.time()
-        print("Inner time8: ", time8 - time7)
 
         swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
         swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
@@ -808,8 +791,6 @@ class __FOR_SAVE_ONLY_Context:
                 boot_key_map[str(logSlots)]
             )
 
-        time9 = time.time()
-        print("Inner time9: ", time9 - time8)
         # compute auto index map
         # slots = 1 << logSlots
         # self.auto_index[slots] = self.find_auto_index(slots, self.N << 1)
