@@ -607,13 +607,20 @@ def homo_conjugate(in0, cryptoContext):
 
 
 def homo_add_pt(in0, pt, cryptoContext):
-    res0 = in0.deep_copy()
+    if (isinstance(in0, Cipher) and isinstance(pt, Plaintext)) :
+        in_ct, in_pt = in0, pt
+    elif (isinstance(in0, Plaintext) and isinstance(pt, Cipher)):
+        in_ct, in_pt = pt, in0
+    else:
+        raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
+
+    res0 = in_ct.deep_copy()
     ctmorphed = Cipher(
-        pt.mx,
-        pt.l,
-        pt.scaling_factor,
-        pt.noise_deg,
-        pt.slots,
+        in_pt.mv,
+        in_pt.cur_limbs,
+        in_pt.scaling_factor,
+        in_pt.noise_deg,
+        in_pt.slots,
         False,
     )  # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
@@ -624,24 +631,30 @@ def homo_add_pt(in0, pt, cryptoContext):
 
 
 def homo_mul_pt(cipher, pt, cryptoContext):
-    assert len(cipher.cv) == 2
-    if cipher.slots != pt.slots:
+    if (isinstance(cipher, Cipher) and isinstance(pt, Plaintext)) :
+        in_ct, in_pt = cipher, pt
+    elif (isinstance(cipher, Plaintext) and isinstance(pt, Cipher)):
+        in_ct, in_pt = pt, cipher
+    else:
+        raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
+    assert len(in_ct.cv) == 2
+    if in_ct.slots != pt.slots:
         warnings.warn(
-            f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
+            f"slots unequal! cipher.slots = {in_ct.slots}, pt.slots = {in_pt.slots}",
             Warning,
         )
-    if cipher.cur_limbs != pt.l:
+    if in_ct.cur_limbs != in_pt.cur_limbs:
         warnings.warn(
-            f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
+            f"limbs unequal! cipher.cur_limbs = {in_ct.cur_limbs}, pt.l = {in_pt.cur_limbs}, call adjust limbs function",
             Warning,
         )
-    res0 = cipher.deep_copy()
+    res0 = in_ct.deep_copy()
     ctmorphed = Cipher(
-        pt.mx,
-        pt.l,
-        pt.scaling_factor,
-        pt.noise_deg,
-        pt.slots,
+        in_pt.mv,
+        in_pt.cur_limbs,
+        in_pt.scaling_factor,
+        in_pt.noise_deg,
+        in_pt.slots,
         False,
     )  # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_mult(res0, ctmorphed, cryptoContext)
