@@ -145,7 +145,7 @@ def try_load_context(logN,
     print("gen load_path")
     print("current time: ", datetime.now())
 
-    if True or (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
+    if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
         gen_contexts(
             logN=logN,
             logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?

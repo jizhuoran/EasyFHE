@@ -15,7 +15,7 @@ dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
 rescaleTech = "FLEXIBLEAUTO"
-path = "data/"
+path = "/mnt/public_data/"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
@@ -35,8 +35,8 @@ secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 # dcrtBits = 59
 # firstMod = 60
 
-logN = 14
-logSlots_list = [11, 12, 13]
+logN = 17
+logSlots_list = [12, 13, 14]
 levelBudget_list = [[4, 4], [4, 4], [4, 4]]
 dnum = 3
 dcrtBits = 59
