@@ -199,7 +199,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
 
     if cryptoContext is None and openfhe_context is None:
 
-        logN = 16
+        logN = 17
         logSlots_list = [12, 13, 14]
         levelBudget_list = [[4, 4], [4, 4], [4, 4]]
         dnum = 3
@@ -445,9 +445,28 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             print("Invalid command")
             break
             
+
+
+    encode_weight_path = (
+        cryptoContext.weight_dir
+        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            '-'.join(map(str, logSlots_list)),
+            maxLevelsRemaining,
+            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
+        
+
             
         
-    with open(cryptoContext.weight_dir + "/encode_val.pkl", "wb") as f:
+    with open(encode_weight_path, "wb") as f:
         pickle.dump(encode_val, f)
 
 

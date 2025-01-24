@@ -220,14 +220,6 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
         load_bootstrapping_and_rotation_keys(_logslot, cryptoContext)
     utils.load_rotation_keys(cryptoContext, "app")
 
-    with open(he_res20_ctx.weight_dir + '/encode_val.pkl', 'rb') as f:
-        pre_encoded = pickle.load(f)
-    if cryptoContext.PRELOAD_ALL:
-        for key, _ in pre_encoded.items():
-            pre_encoded[key].mv = [torch.tensor(pre_encoded[key].mv[0], dtype=torch.uint64, device="cuda")]
-    cryptoContext.pre_encoded = pre_encoded
-
-
     # print("resnet computation start")
     # firstLayer= initial_layer(in_ct, he_res20_ctx, cryptoContext, openfhe_context_dict)
     # resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -291,7 +283,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
 
 
 def resnet20( ):
-    logN = 16
+    logN = 17
     logSlots_list = [12, 13, 14]
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     dnum = 3
@@ -336,6 +328,30 @@ def resnet20( ):
     cryptoContext.GEN_PRECOMPUTATION = False # poor workaround, should be fixed in the future, need to be set to False now
     cryptoContext.PRELOAD_ALL = False # poor workaround, should be fixed in the future, need to be set to False/True now
     print("start executeResNet20")
+
+    encode_weight_path = (
+        he_res20_context_.weight_dir
+        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            logN,
+            '-'.join(map(str, logSlots_list)),
+            maxLevelsRemaining,
+            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            dnum,
+            dcrtBits,
+            firstMod,
+            approxModDepth,
+            secretKeyDist,
+            rescaleTech,
+        )
+    )
+
+    with open(encode_weight_path, 'rb') as f:
+        pre_encoded = pickle.load(f)
+    if cryptoContext.PRELOAD_ALL:
+        for key, _ in pre_encoded.items():
+            pre_encoded[key].mv = [torch.tensor(pre_encoded[key].mv[0], dtype=torch.uint64, device="cuda")]
+    cryptoContext.pre_encoded = pre_encoded
+
     #print all the key of openfhe_context_dict
     # print("key of openfhe_context_dict ", openfhe_context_dict.keys())
     executeResNet20(he_res20_context_, cryptoContext, openfhe_context_dict)
