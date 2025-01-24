@@ -1,16 +1,17 @@
 import numpy as np
 import math
+from ..ciphertext import Plaintext
 
 K_UNIFORM = 512
 
-class Plaintext:
-    def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
-        self.mx = mx
-        self.N = N
-        self.slots = slots
-        self.l = l
-        self.noise_deg = noise_deg
-        self.scaling_factor = scaling_factor
+# class Plaintext:
+#     def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
+#         self.mx = mx
+#         self.N = N
+#         self.slots = slots
+#         self.l = l
+#         self.noise_deg = noise_deg
+#         self.scaling_factor = scaling_factor
 
 class CKKS_Boot_Params:
     def __init__(
@@ -49,7 +50,7 @@ def round_half_away_from_zero(number, ndigits=0):
         return math.ceil(number * multiplier - 0.5) / multiplier
     else:
         return 0.0
-    
+
 class BsContext:
     def __init__(
         self,
@@ -535,7 +536,6 @@ class BsContext:
 
         return (islots + index % islots) % islots
 
-
     def eval_bootstrap_setup(self, context, level_budget, dim1, numslots, correction_factor):
 
         m_U0hatTPreFFT_dim1 = len(self.m_U0hatTPreFFT_dim)
@@ -615,57 +615,50 @@ class BsContext:
         self.compute_C2S_rot(slots, self.M)
         self.compute_S2C_rot(slots, self.M)
 
-        if level_budget[0] == 1 and level_budget[1] == 1:
-            pass
-            # # todo: to be implemented, need to get from openfhe
-            # precom.m_U0Pre = [None] * LTMatrix_Row
-            # precom.m_U0hatTPre = [None] * LTMatrix_Row
-            # for i in range(LTMatrix_Row):
-            #     # precom.m_U0hatTPre
-            #     m_U0hatTPre_len = LTMatrix_mx_len * m_U0hatTPre_limbs
-            #     m_U0hatTPre = [m_U0hatTPre_mx[i * m_U0hatTPre_len + j] for j in range(m_U0hatTPre_len)]
-            #     precom.m_U0hatTPre[i] = Plaintext(m_U0hatTPre, LTMatrix_mx_len, LTMatrix_Column, m_U0hatTPre_limbs)
-            #
-            #     # precom.m_U0Pre
-            #     m_U0Pre_len = LTMatrix_mx_len * m_U0Pre_limbs
-            #     m_U0Pre = [m_U0Pre_mx[i * m_U0Pre_len + j] for j in range(m_U0Pre_len)]
-            #     precom.m_U0Pre[i] = Plaintext(m_U0Pre, LTMatrix_mx_len, LTMatrix_Column, m_U0Pre_limbs)
-        else:
-            RHScnt = 0
-            self.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
-            cnt = 0
-            for i in range(0, m_U0hatTPreFFT_dim1):
-                j_len = m_U0hatTPreFFT_dim2[i]
-                limbs = m_U0hatTPreFFT_limbs[i]
-                m_U0hatTPreFFT_len = mx_len * limbs
-                for j in range(j_len):
-                    m_U0hatTPreFFT = np.zeros(m_U0hatTPreFFT_len, dtype=np.uint64)
-                    LHScnt = 0
-                    for k in range(limbs):
-                        for l in range(mx_len):
-                            m_U0hatTPreFFT[LHScnt] = self.m_U0hatTPreFFT_mx[RHScnt]
-                            LHScnt += 1
-                            RHScnt += 1
+        assert not (m_U0hatTPreFFT_dim1 == 1 and m_U0PreFFT_dim1 == 1) and "Not Implemented"
 
-                    self.m_U0hatTPreFFT[i][j] = Plaintext(m_U0hatTPreFFT, mx_len, mx_slots, limbs,
-                                                            self.m_U0hatTPreFFT_scaling_factor[cnt], 1)
-                    cnt+=1
+        RHScnt = 0
+        cnt = 0
+        self.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
+        for i in range(0, m_U0hatTPreFFT_dim1):
+            j_len = m_U0hatTPreFFT_dim2[i]
+            limbs = m_U0hatTPreFFT_limbs[i]
+            m_U0hatTPreFFT_len = mx_len * limbs
+            # print("m_U0hatTPreFFT_len", m_U0hatTPreFFT_len)
+            # print("m_U0hatTPreFFT_scaling_factor", len()
+            for j in range(j_len):
+                m_U0hatTPreFFT = self.m_U0hatTPreFFT_mx[
+                    RHScnt : RHScnt + m_U0hatTPreFFT_len
+                ].copy()
+                RHScnt += m_U0hatTPreFFT_len
+                self.m_U0hatTPreFFT[i][j] = Plaintext(
+                    m_U0hatTPreFFT,
+                    limbs,
+                    self.m_U0hatTPreFFT_scaling_factor[cnt],
+                    1,
+                    mx_slots,
+                    True
+                )
+                cnt += 1
+        self.m_U0hatTPreFFT_mx = None
 
-            cnt=0
-            RHScnt = 0
-            self.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
-            for i in range(m_U0PreFFT_dim1):
-                j_len = m_U0PreFFT_dim2[i]
-                limbs = m_U0PreFFT_limbs[i]
-                m_U0PreFFT_len = mx_len * limbs
-                for j in range(j_len):
-                    m_U0PreFFT = np.zeros(m_U0PreFFT_len, dtype=np.uint64)
-                    LHScnt = 0
-                    for k in range(limbs):
-                        for l in range(mx_len):
-                            m_U0PreFFT[LHScnt] = self.m_U0PreFFT_mx[RHScnt]
-                            LHScnt += 1
-                            RHScnt += 1
-                    self.m_U0PreFFT[i][j] = Plaintext(m_U0PreFFT, mx_len, mx_slots, limbs,
-                                                        self.m_U0PreFFT_scaling_factor[cnt], 1)
-                    cnt+=1
+        RHScnt = 0
+        cnt = 0
+        self.m_U0PreFFT = [[0] * i for i in m_U0PreFFT_dim2]
+        for i in range(m_U0PreFFT_dim1):
+            j_len = m_U0PreFFT_dim2[i]
+            limbs = m_U0PreFFT_limbs[i]
+            m_U0PreFFT_len = mx_len * limbs
+            for j in range(j_len):
+                m_U0PreFFT = self.m_U0PreFFT_mx[RHScnt : RHScnt + m_U0PreFFT_len].copy()
+                RHScnt += m_U0PreFFT_len
+                self.m_U0PreFFT[i][j] = Plaintext(
+                    m_U0PreFFT,
+                    limbs,
+                    self.m_U0PreFFT_scaling_factor[cnt],
+                    1,
+                    mx_slots,
+                    True
+                )
+                cnt += 1
+        self.m_U0PreFFT_mx = None

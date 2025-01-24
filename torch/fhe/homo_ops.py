@@ -430,6 +430,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
         cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1
     )
 
+
 @check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
@@ -477,12 +478,12 @@ def homo_rescale(ct, levels, cryptoContext):
     if levels == 0:
         return ct.deep_copy()
 
-    res_cv=[]
-    for l in range(levels):
-        for i in range(len(ct.cv)):
-            res_cv.append(F.cv_drop_last_element_and_scale( #fixme: append is incorrect
-                ct.cv[i], ct.cur_limbs, l, cryptoContext
-            ))
+    def rescale_n_times(cv, levels):
+        for l in range(levels):
+            cv = F.cv_drop_last_element_and_scale(cv, ct.cur_limbs, l, cryptoContext)
+        return cv
+    
+    res_cv = [rescale_n_times(_cv, levels) for _cv in ct.cv]
 
     scFactor = ct.scaling_factor
     for l in range(levels):
@@ -574,11 +575,7 @@ def homo_rotate(in0, index, cryptoContext):
 
     if in0.is_ext:
         sum_mult = F.cv_innerproduct(
-            in0.cv[0].reshape(-1),
-            in0.cur_limbs,
-            swk[0],
-            swk[1],
-            cryptoContext
+            in0.cv[0].reshape(-1), in0.cur_limbs, swk[0], swk[1], cryptoContext
         )
         sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
 
@@ -606,14 +603,14 @@ def homo_conjugate(in0, cryptoContext):
     return homo_rotate(in0, 2 * cryptoContext.N - 1, cryptoContext)
 
 
-def homo_add_pt(in0, pt, cryptoContext):
-    res0 = in0.deep_copy()
+def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    res0 = cipher.deep_copy()
     ctmorphed = Cipher(
-        pt.mx,
-        pt.l,
-        pt.scaling_factor,
-        pt.noise_deg,
-        pt.slots,
+        plaintext.mv,
+        plaintext.cur_limbs,
+        plaintext.scaling_factor,
+        plaintext.noise_deg,
+        plaintext.slots,
         False,
     )  # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
@@ -623,39 +620,41 @@ def homo_add_pt(in0, pt, cryptoContext):
     return res0
 
 
-def homo_mul_pt(cipher, pt, cryptoContext):
-    assert len(cipher.cv) == 2
-    # if cipher.slots != pt.slots:
-    #     warnings.warn(
-    #         f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
-    #         Warning,
-    #     )
-    # if cipher.cur_limbs != pt.l:
-    #     warnings.warn(
-    #         f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
-    #         Warning,
-    #     )
-    #     raise ValueError
+def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    # if (isinstance(cipher, Cipher) and isinstance(plaintext, Plaintext)) :
+    #     in_ct, in_pt = cipher, plaintext
+    # elif (isinstance(cipher, Plaintext) and isinstance(plaintext, Cipher)):
+    #     in_ct, in_pt = plaintext, cipher
+    # else:
+    #     raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
 
+    assert len(cipher.cv) == 2
+
+    if cipher.slots != plaintext.slots:
+        warnings.warn(
+            f"slots unequal! cipher.slots = {cipher.slots}, plaintext.slots = {plaintext.slots}",
+            Warning,
+        )
+    if cipher.cur_limbs != plaintext.cur_limbs:
+        warnings.warn(
+            f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
+            Warning,
+        )
     res0 = cipher.deep_copy()
     ctmorphed = Cipher(
-        pt.mx,
-        pt.l,
-        pt.scaling_factor,
-        pt.noise_deg,
-        pt.slots,
+        plaintext.mv,
+        plaintext.cur_limbs,
+        plaintext.scaling_factor,
+        plaintext.noise_deg,
+        plaintext.slots,
         False,
     )  # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_mult(res0, ctmorphed, cryptoContext)
 
     moduli = cryptoContext.moduliQ_cuda
     mu = cryptoContext.q_mu_cuda
-    cv0 = F.cv_mul(
-        res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs
-    )
-    cv1 = F.cv_mul(
-        res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs
-    )
+    cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
+    cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
 
     return res0.cipher_like(
         [cv0, cv1],

@@ -574,7 +574,8 @@ def BootstrapTest_test_case(
         firstMod=60,
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/"
+        save_dir="torch/fhe/data/",
+        mode = "debug" # "debug" or "release"
 
 ):
     if not os.path.exists(save_dir):
@@ -591,7 +592,8 @@ def BootstrapTest_test_case(
                                                                  [-1,2],
                                                                  "UNIFORM_TERNARY",
                                                                  rescaleTech,
-                                                                 save_dir=save_dir)
+                                                                 save_dir=save_dir,
+                                                                 mode = mode)
 
     specify_slots = logSlots_list[0] # logslots = 11
     openfhe_context = openfhe_context_dict[str(specify_slots)]
@@ -604,28 +606,32 @@ def BootstrapTest_test_case(
     utils.load_rotation_keys(cryptoContext, "app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
+    print("gpu bootstrapp done!")
     # compute golden answer
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
-    if is_euqal:
-        print("homo_rotate: Test passed!")
-    else:
-        print("homo_rotate: Test failed!")
+    if mode == "debug":
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
+        is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+        if is_euqal:
+            print("homo_rotate: Test passed!")
+        else:
+            print("homo_rotate: Test failed!")
 
     # bootstrapping, logSlots = 11
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    print("gpu bootstrapp done!")
     # compute golden answer
-    cipher_openfhe.SetSlots((1<<specify_slots))
-    openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
-    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
-    if is_euqal:
-        print("BootstrapTest_logslots11: Test passed!")
-    else:
-        print("BootstrapTest_logslots11: Test failed!")
+    if mode == "debug":
+        cipher_openfhe.SetSlots((1<<specify_slots))
+        openfhe_boot = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+        is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+        if is_euqal:
+            print("BootstrapTest_logslots11: Test passed!")
+        else:
+            print("BootstrapTest_logslots11: Test failed!")
 
     # #####################################
     # # ..., omit some homomorphic computation
@@ -639,12 +645,13 @@ def BootstrapTest_test_case(
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
-
+    print("gpu bootstrapp done!")
     # compute golden answer
-    openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
-    openfhe_boot1 = openfhe_context1.cc.EvalBootstrap(openfhe_boot)
-    is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
-    if is_euqal:
-        print("BootstrapTest_logslots12: Test passed!")
-    else:
-        print("BootstrapTest_logslots12: Test failed!")
+    if mode == "debug":
+        openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
+        openfhe_boot1 = openfhe_context1.cc.EvalBootstrap(openfhe_boot)
+        is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
+        if is_euqal:
+            print("BootstrapTest_logslots12: Test passed!")
+        else:
+            print("BootstrapTest_logslots12: Test failed!")

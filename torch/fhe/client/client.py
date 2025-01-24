@@ -34,7 +34,7 @@ def print_execution_times():
         print(f"Function '{func_name}' took {exec_time:.6f} seconds to finish.")
 
 class OpenFHEContext:
-    def __init__(self, content_map, slots, level_budget):
+    def __init__(self, content_map):
         openfhe.ClearEvalMultKeys()
         openfhe.ReleaseAllContexts()
 
@@ -43,11 +43,17 @@ class OpenFHEContext:
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
         # self.slots = content_map["slots"]
-        self.slots = slots
+        # self.slots = slots
         # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
         # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
         # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
         # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
+
+    def setup_for_debug(self, debug_keys, slots, level_budget):
+        self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
+        openfhe.DeserializeEvalKeyString(debug_keys["eval_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
     def encode(self, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
         # print("encode", "level", level, "scale_deg", scale_deg, "slots", slots)
@@ -71,7 +77,7 @@ class OpenFHEContext:
             ptx.Encode()
             data = ptx.GetVectorOfData()
             cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
-            return Plaintext(cv, None, ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg())
+            return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(),False)
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         if slots is None:
@@ -95,7 +101,7 @@ class OpenFHEContext:
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)
-        cipher.SetSlots(self.slots)
+        cipher.SetSlots(x.slots)
 
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)
