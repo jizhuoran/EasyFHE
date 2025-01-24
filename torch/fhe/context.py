@@ -47,14 +47,6 @@ class Context:
         self.auxModSize = get_item("specialMod", gpufhe_content_map)
         self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
         #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
-        # self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
-        # self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
-        # self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
-        # self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
-        # self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
         self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
         self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
@@ -139,27 +131,7 @@ class Context:
         self.automorphism_transform_out = torch.tensor(self.automorphism_transform_out, dtype = torch.uint64, device = "cuda")
         self.switch_modulus_out = torch.tensor(self.switch_modulus_out, dtype = torch.uint64, device = "cuda")
         self.PModq_cuda = torch.tensor(self.PModq_cuda, dtype = torch.uint64, device = "cuda")
-
         self.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in self.key_map]
-
-        # for key, value in self.left_rot_key_map.items():
-        #     self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-        # for key, value in self.precompute_auto_map.items():
-        #     self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
-
-        # for key, value in self.BsContext.QplusP_map.items():
-        #     self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-        # for key, value in self.BsContext.QmuplusPmu_map.items():
-        #     self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-
-        
-        # for i in range(len(self.BsContext.m_U0hatTPreFFT)):
-        #     for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
-        #         self.BsContext.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
-        #
-        # for i in range(len(self.BsContext.m_U0PreFFT)):
-        #     for j in range(len(self.BsContext.m_U0PreFFT[i])):
-        #         self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!
@@ -231,7 +203,6 @@ class Context:
     def GetModReduceFactor(self, cur_limbs = None):
         if cur_limbs is None:
             cur_limbs = 0
-        # l = self.L - cur_limbs #todo: check the meaning of input in openfhe
         l = cur_limbs
         if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
             return self.dmoduliQ[l]

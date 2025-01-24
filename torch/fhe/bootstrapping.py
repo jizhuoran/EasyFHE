@@ -422,10 +422,6 @@ def BootstrapTest_N65536L26lB44(
     openfhe_context = openfhe_context_dict[str(logSlots_list[0])]
     dim1 = [0, 0]
 
-    # eval_bootstrap_setup(
-    #     cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
-    # )
-
     # Test the correctness of the bootstrapping
     logSlots = logSlots_list[0]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -530,7 +526,6 @@ def BootstrapTest_slots_list_example(
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
-    # utils.load_rotation_keys(cryptoContext, "app") #fixme: deal with "app" is None?
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
     #test correctness

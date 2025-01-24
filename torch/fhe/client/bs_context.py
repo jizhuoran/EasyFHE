@@ -4,15 +4,6 @@ from ..ciphertext import Plaintext
 
 K_UNIFORM = 512
 
-# class Plaintext:
-#     def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
-#         self.mx = mx
-#         self.N = N
-#         self.slots = slots
-#         self.l = l
-#         self.noise_deg = noise_deg
-#         self.scaling_factor = scaling_factor
-
 class CKKS_Boot_Params:
     def __init__(
         self,
@@ -550,7 +541,6 @@ class BsContext:
         M = context.M
         slots = M // 4 if numslots == 0 else numslots
         rescale_tech = context.rescaleTech
-        # precom = context.BsContext
 
         # 设置 correction_factor
         if correction_factor == 0:

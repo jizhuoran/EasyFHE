@@ -58,13 +58,9 @@ def gen_contexts(
     }
 
     N = int(2**logN)
-    # slots_list = [int(2**logSlots) for logSlots in logSlots_list]
     max_level_budget = max(
         levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1]
     )
-    # for level_budget in levelBudget_list:
-    #      if ((level_budget[0] + level_budget[1]) > (max_level_budget[0] + max_level_budget[0])) :
-    #          max_level_budget = level_budget
 
     openfhe_secretKeyDist = SecretKeyDist_MAP[secretKeyDist]
     openfhe_rescaleTech = ScalingTechnique_MAP[rescaleTech]
@@ -75,7 +71,6 @@ def gen_contexts(
 
     L = depth + 1  # GPUFHE: L
     K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
-    # specify_slots = logSlots_list[0] #todo: to be removed?
 
     parameters = openfhe.CCParamsCKKSRNS()
 
@@ -87,7 +82,6 @@ def gen_contexts(
     parameters.SetSecretKeyDist(openfhe_secretKeyDist)
     parameters.SetNumLargeDigits(dnum)  # dnum GPU-FHE
     parameters.SetRingDim(N)
-    # parameters.SetBatchSize(slots)  # ZRJI: slots #todo: to be removed
     parameters.SetSecurityLevel(openfhe.SecurityLevel.HEStd_NotSet)
     parameters.SetKeySwitchTechnique(openfhe.KeySwitchTechnique.HYBRID)
 
@@ -110,7 +104,6 @@ def gen_contexts(
         cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
-        # cc.ClearEvalAutomorphismKeys()
 
     boot_gen_time = 0
     rot_get_time = 0

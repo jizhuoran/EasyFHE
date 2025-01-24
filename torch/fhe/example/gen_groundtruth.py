@@ -6,7 +6,6 @@ maxLevelsRemaining_cand = [3, 6]
 levelBudget_cand = [[3, 3],[4, 4]]
 dnum_cand = [1, 3, 4]
 rescaleTech_cand = ["FLEXIBLEAUTO", "FIXEDMANUAL"]
-# rescaleTech_cand = ["FIXEDMANUAL"]
 
 i = 0
 for logN, logSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in itertools.product(logN_cand, logSlots_cand, maxLevelsRemaining_cand, levelBudget_cand, dnum_cand, rescaleTech_cand):

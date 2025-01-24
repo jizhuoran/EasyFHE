@@ -15,12 +15,6 @@ class OpenFHEContext:
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
-        # self.slots = content_map["slots"]
-        # self.slots = slots
-        # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
-        # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
-        # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
-        # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
     def setup_for_debug(self, debug_keys, slots, level_budget):
         self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
@@ -66,9 +60,6 @@ class OpenFHEContext:
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        # for _ in range(self.depth + 1 - x.cur_limbs):
-        #     cipher = self.cc.EvalMult(cipher, cipher)
-        #     cipher = self.cc.Rescale(cipher)
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)

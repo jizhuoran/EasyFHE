@@ -1,7 +1,4 @@
-import numpy as np
-import math
 import random
-import time
 import warnings
 import pickle
 import sympy
@@ -12,9 +9,9 @@ class __FOR_SAVE_ONLY_Context:
         self,
         logN,
         logSlots_list,
-        firstMod,  # todo: rename to firstMod
-        dcrtBits,  # todo: rename to dcrtBits
-        specialMod,  # todo: rename to specialMod
+        firstMod,
+        dcrtBits,
+        specialMod,
         L,
         K,
         levelBudget_list,
@@ -31,16 +28,12 @@ class __FOR_SAVE_ONLY_Context:
         h=64,
         sigma=32,
     ):
-        # levelBudget_list = levelBudget_list
         self.logSlots_list = logSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
-        # self.BsContext = None
         self.BsContext_map = {}
         self.specialMod = specialMod
-        # self.slots = 1 << logSlots #todo: need move slots to cipher
         self.qVec = None
-        # self.left_rot_key_map = {}
         self.slots_left_rot_key_map = {}
         self.key_map = None
         self.correctionFactor = 0
@@ -62,11 +55,7 @@ class __FOR_SAVE_ONLY_Context:
         qRoots = [0] * L
         qRootsInv = [0] * L
         qRootPows = [[] for _ in range(L)]
-        # self.qRootScalePows = [[] for _ in range(L)]
-        # self.qRootScalePowsOverq = [[] for _ in range(L)]
-        # self.qRootScalePowsInv = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
-        # self.auto_index = {} #todo: to suppor negative input?
         self.slots_precompute_auto_map = {}
         bnd = 1
         cnt = 1
@@ -107,7 +96,6 @@ class __FOR_SAVE_ONLY_Context:
                 self.moduliQ[i] = moduliQ[i]
                 qRoots[i] = rootsQ[i]
 
-        time0 = time.time()
         for i in range(L):
             qRootsInv[i] = self.invMod(qRoots[i], int(self.moduliQ[i]))
             qRootPows[i] = [0] * self.N
@@ -137,14 +125,10 @@ class __FOR_SAVE_ONLY_Context:
         self.moduliQ_cuda = np.array(self.moduliQ, dtype=np.uint64)
 
         self.moduliP = [0] * self.K
-        # self.pInvVec = [0] * self.K
         pRoots = [0] * self.K
         pRootsInv = [0] * self.K
         pRootPows = [[] for _ in range(self.K)]
         pRootPowsInv = [[] for _ in range(self.K)]
-        # pRootScalePows = [[] for _ in range(self.K)]
-        # self.pRootScalePowsOverp = [[] for _ in range(self.K)]
-        # self.pRootScalePowsInv = [[] for _ in range(self.K)]
 
         if moduliP is None and rootsP is None:
             cnt = 0
@@ -183,31 +167,13 @@ class __FOR_SAVE_ONLY_Context:
             # self.pInvVec[i] = self.inv(self.moduliP[i])
             pRootPows[i] = [0] * self.N
             pRootPowsInv[i] = [0] * self.N
-            # self.pRootScalePows[i] = [0] * self.N
-            # self.pRootScalePowsOverp[i] = [0] * self.N
-            # self.pRootScalePowsInv[i] = [0] * self.N
             power = int(1)
             powerInv = int(1)
             for j in range(self.N):
                 jprime = self.bitReverse(j) >> (32 - self.logN)
                 pRootPows[i][jprime] = int(power)
                 tmp = int(power) << 64
-                # self.pRootScalePowsOverp[i][jprime] = tmp // int(self.moduliP[i])
-                # self.pRootScalePows[i][jprime] = self.mulMod(
-                #     pRootPows[i][jprime], int(1 << 32), int(self.moduliP[i])
-                # )
-                # self.pRootScalePows[i][jprime] = self.mulMod(
-                #     self.pRootScalePows[i][jprime], int(1 << 32), int(self.moduliP[i])
-                # )
                 pRootPowsInv[i][jprime] = powerInv
-                # self.pRootScalePowsInv[i][jprime] = self.mulMod(
-                #     pRootPowsInv[i][jprime], int(1 << 32), int(self.moduliP[i])
-                # )
-                # self.pRootScalePowsInv[i][jprime] = self.mulMod(
-                #     self.pRootScalePowsInv[i][jprime],
-                #     int(1 << 32),
-                #     int(self.moduliP[i]),
-                # )
                 if j < self.N - 1:
                     power = self.mulMod(
                         power, int(pRoots[i]), int(self.moduliP[i])
@@ -418,11 +384,6 @@ class __FOR_SAVE_ONLY_Context:
         qRoots = np.array(qRoots, dtype=np.uint64)
         pRoots = np.array(pRoots, dtype=np.uint64)
 
-        # # self.pInvVec = np.array(self.pInvVec, dtype=np.uint64)
-        # # self.qRootScalePows = np.array(self.qRootScalePows, dtype=np.uint64)
-        # self.pRootScalePows = np.array(self.pRootScalePows, dtype=np.uint64)
-        # self.qRootScalePowsInv = np.array(self.qRootScalePowsInv, dtype=np.uint64)
-        # self.pRootScalePowsInv = np.array(self.pRootScalePowsInv, dtype=np.uint64)
         self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
         self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
@@ -451,12 +412,10 @@ class __FOR_SAVE_ONLY_Context:
         if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
             self.scalingFactorsReal = [0.0] * self.L
             if self.L == 1 and extraBits == 0:
-                # mult depth = 0 and FLEXIBLEAUTO
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
                 self.scalingFactorsReal[0] = 2**self.dcrtBits
             elif self.L == 2 and extraBits > 0:
-                # mult depth = 0 and FLEXIBLEAUTOEXT
                 # when multiplicative depth = 0, we use the scaling mod size instead of modulus size
                 # Plaintext modulus is used in EncodingParamsImpl to store the exponent p of the scaling factor
                 self.scalingFactorsReal[0] = float(self.moduliQ[self.L - 1])
@@ -791,17 +750,6 @@ class __FOR_SAVE_ONLY_Context:
                 boot_key_map[str(logSlots)]
             )
 
-        # compute auto index map
-        # slots = 1 << logSlots
-        # self.auto_index[slots] = self.find_auto_index(slots, self.N << 1)
-        # for step in range(int(math.log2(self.N // (2 * slots)))):
-        #     self.auto_index[(1 << step) * slots] = self.find_auto_index(
-        #         (1 << step) * slots, self.N << 1)
-        # for i in self.BsContext.C2S_rot_in + self.BsContext.C2S_rot_out + self.BsContext.S2C_rot_in + self.BsContext.S2C_rot_out:
-        #     for j in i:
-        #         if j not in self.auto_index:
-        #             self.auto_index[j] = self.find_auto_index(j, self.N << 1)
-
     def compute_auto_map(self, k, N):
         def reverse_bits(num, num_bits):
             """Reverses the bits of a number."""
@@ -847,8 +795,6 @@ class __FOR_SAVE_ONLY_Context:
             return 1
 
         # Conjugation automorphism
-        # if i == m - 1:
-        #     return i
         if i == -1:
             return m - 1
 
@@ -1095,49 +1041,5 @@ class __FOR_SAVE_ONLY_Context:
 
     def Deserialize(ctx_bytes):
         cryptoContext = pickle.loads(ctx_bytes)
-        # cryptoContext.q_mu_cuda = np.array(cryptoContext.q_mu_cuda, dtype = np.uint64, device = "cuda")
-        # cryptoContext.moduliQ_cuda = np.array(cryptoContext.moduliQ_cuda, dtype = np.uint64, device = "cuda")
-        # cryptoContext.primes = np.array(cryptoContext.primes, dtype = np.uint64, device = "cuda")
-        # cryptoContext.power_of_roots = np.array(cryptoContext.power_of_roots, dtype = np.uint64, device = "cuda")
-        # cryptoContext.power_of_roots_shoup = np.array(cryptoContext.power_of_roots_shoup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.inverse_power_of_roots_div_two = np.array(cryptoContext.inverse_power_of_roots_div_two, dtype = np.uint64, device = "cuda")
-        # cryptoContext.inverse_scaled_power_of_roots_div_two = np.array(cryptoContext.inverse_scaled_power_of_roots_div_two, dtype = np.uint64, device = "cuda")
-        # cryptoContext.barret_k = np.array(cryptoContext.barret_k, dtype = np.uint64, device = "cuda")
-        # cryptoContext.barret_ratio = np.array(cryptoContext.barret_ratio, dtype = np.uint64, device = "cuda")
-        # cryptoContext.hat_inverse_vec_modup = np.array(cryptoContext.hat_inverse_vec_modup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.hat_inverse_vec_shoup_modup = np.array(cryptoContext.hat_inverse_vec_shoup_modup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.prod_q_i_mod_q_j_modup = np.array(cryptoContext.prod_q_i_mod_q_j_modup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.hat_inverse_vec_moddown = np.array(cryptoContext.hat_inverse_vec_moddown, dtype = np.uint64, device = "cuda")
-        # cryptoContext.hat_inverse_vec_shoup_moddown = np.array(cryptoContext.hat_inverse_vec_shoup_moddown, dtype = np.uint64, device = "cuda")
-        # cryptoContext.prod_q_i_mod_q_j_moddown = np.array(cryptoContext.prod_q_i_mod_q_j_moddown, dtype = np.uint64, device = "cuda")
-        # cryptoContext.prod_inv_moddown = np.array(cryptoContext.prod_inv_moddown, dtype = np.uint64, device = "cuda")
-        # cryptoContext.prod_inv_shoup_moddown = np.array(cryptoContext.prod_inv_shoup_moddown, dtype = np.uint64, device = "cuda")
-        # cryptoContext.qlql_inv_mod_ql_div_ql_mod_q = np.array(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q, dtype = np.uint64, device = "cuda")
-        # cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup = np.array(cryptoContext.qlql_inv_mod_ql_div_ql_mod_q_shoup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.q_inv_mod_q = np.array(cryptoContext.q_inv_mod_q, dtype = np.uint64, device = "cuda")
-        # cryptoContext.q_inv_mod_q_shoup = np.array(cryptoContext.q_inv_mod_q_shoup, dtype = np.uint64, device = "cuda")
-        # cryptoContext.swk_bx_cuda = np.array(cryptoContext.swk_bx_cuda, dtype = np.uint64, device = "cuda")
-        # cryptoContext.swk_ax_cuda = np.array(cryptoContext.swk_ax_cuda, dtype = np.uint64, device = "cuda")
-        # cryptoContext.inner_workspace = np.array(cryptoContext.inner_workspace, dtype = np.uint64, device = "cuda")
-        # cryptoContext.inner_out = np.array(cryptoContext.inner_out, dtype = np.uint64, device = "cuda")
-        # cryptoContext.moddown_out_ax = np.array(cryptoContext.moddown_out_ax, dtype = np.uint64, device = "cuda")
-        # cryptoContext.moddown_out_bx = np.array(cryptoContext.moddown_out_bx, dtype = np.uint64, device = "cuda")
-        # cryptoContext.modup_out = np.array(cryptoContext.modup_out, dtype = np.uint64, device = "cuda")
-        # cryptoContext.rescale_out = np.array(cryptoContext.rescale_out, dtype = np.uint64, device = "cuda")
-        # cryptoContext.automorphism_transform_out = np.array(cryptoContext.automorphism_transform_out, dtype = np.uint64, device = "cuda")
-        # cryptoContext.switch_modulus_out = np.array(cryptoContext.switch_modulus_out, dtype = np.uint64, device = "cuda")
-        # cryptoContext.PModq_cuda = np.array(cryptoContext.PModq_cuda, dtype = np.uint64, device = "cuda")
-
-        # cryptoContext.key_map = [np.array(v, dtype = np.uint64, device = "cuda") for v in cryptoContext.key_map]
-
-        # for key, value in cryptoContext.left_rot_key_map.items():
-        #     cryptoContext.left_rot_key_map[key] = [np.array(v, dtype = np.uint64, device = "cuda") for v in value]
-        # for key, value in cryptoContext.precompute_auto_map.items():
-        #     cryptoContext.precompute_auto_map[key] = np.array(value, dtype = torch.int32, device = "cuda")
-
-        # for key, value in cryptoContext.BsContext.QplusP_map.items():
-        #     cryptoContext.BsContext.QplusP_map[key] = np.array(value, dtype = np.uint64, device = "cuda")
-        # for key, value in cryptoContext.BsContext.QmuplusPmu_map.items():
-        #     cryptoContext.BsContext.QmuplusPmu_map[key] = np.array(value, dtype = np.uint64, device = "cuda")
 
         return cryptoContext
