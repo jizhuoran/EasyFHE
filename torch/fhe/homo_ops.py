@@ -412,7 +412,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 
 # todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
-@check_cipher_len
+# @check_cipher_len #fixme: comment it to support call from homo_mul_pt
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
     cv = [
@@ -429,6 +429,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     return in0.cipher_like(
         cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1
     )
+
 
 @check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
@@ -477,13 +478,12 @@ def homo_rescale(ct, levels, cryptoContext):
     if levels == 0:
         return ct.deep_copy()
 
-    for l in range(levels):
-        res0 = F.cv_drop_last_element_and_scale(
-            ct.cv[0], ct.cur_limbs, l, cryptoContext
-        )
-        res1 = F.cv_drop_last_element_and_scale(
-            ct.cv[1], ct.cur_limbs, l, cryptoContext
-        )
+    def rescale_n_times(cv, levels):
+        for l in range(levels):
+            cv = F.cv_drop_last_element_and_scale(cv, ct.cur_limbs, l, cryptoContext)
+        return cv
+    
+    res_cv = [rescale_n_times(_cv, levels) for _cv in ct.cv]
 
     scFactor = ct.scaling_factor
     for l in range(levels):
@@ -493,7 +493,7 @@ def homo_rescale(ct, levels, cryptoContext):
         scFactor = scFactor / modReduceFactor
 
     return Cipher(
-        [res0, res1],
+        res_cv,
         ct.cur_limbs - levels,
         scFactor,
         ct.noise_deg - levels,
@@ -580,11 +580,7 @@ def homo_rotate(in0, index, cryptoContext):
 
     if in0.is_ext:
         sum_mult = F.cv_innerproduct(
-            in0.cv[0].reshape(-1),
-            in0.cur_limbs,
-            swk[0],
-            swk[1],
-            cryptoContext
+            in0.cv[0].reshape(-1), in0.cur_limbs, swk[0], swk[1], cryptoContext
         )
         sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
 
@@ -612,43 +608,61 @@ def homo_conjugate(in0, cryptoContext):
     return homo_rotate(in0, 2 * cryptoContext.N - 1, cryptoContext)
 
 
-def homo_add_pt(in0, pt, cryptoContext):
+def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    res0 = cipher.deep_copy()
     ctmorphed = Cipher(
-        [pt.mx.reshape(-1, cryptoContext.N)],
-        pt.l,
-        pt.scaling_factor,
-        pt.noise_deg,
-        pt.slots,
+        plaintext.mv,
+        plaintext.cur_limbs,
+        plaintext.scaling_factor,
+        plaintext.noise_deg,
+        plaintext.slots,
+        False,
     )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_add_or_sub(in0, ctmorphed, cryptoContext)
+    res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
     res0.cv[0] = F.cv_add(
-        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, in0.cur_limbs
+        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
     )
-    return res0, res1
+    return res0
 
 
-def homo_mul_pt(cipher, pt, cryptoContext):
-    cur_limbs = cipher.cur_limbs
-    if cipher.slots != pt.slots:
+def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    # if (isinstance(cipher, Cipher) and isinstance(plaintext, Plaintext)) :
+    #     in_ct, in_pt = cipher, plaintext
+    # elif (isinstance(cipher, Plaintext) and isinstance(plaintext, Cipher)):
+    #     in_ct, in_pt = plaintext, cipher
+    # else:
+    #     raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
+
+    assert len(cipher.cv) == 2
+
+    if cipher.slots != plaintext.slots:
         warnings.warn(
-            f"slots unequal! cipher.slots = {cipher.slots}, pt.slots = {pt.slots}",
+            f"slots unequal! cipher.slots = {cipher.slots}, plaintext.slots = {plaintext.slots}",
             Warning,
         )
-    if cipher.cur_limbs != pt.l:
+    if cipher.cur_limbs != plaintext.cur_limbs:
         warnings.warn(
-            f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, pt.l = {pt.l}, call adjust limbs function",
+            f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
             Warning,
         )
+    res0 = cipher.deep_copy()
+    ctmorphed = Cipher(
+        plaintext.mv,
+        plaintext.cur_limbs,
+        plaintext.scaling_factor,
+        plaintext.noise_deg,
+        plaintext.slots,
+        False,
+    )  # MorphPlaintext in openfhe
+    res0, res1 = _adjust_for_mult(res0, ctmorphed, cryptoContext)
+
     moduli = cryptoContext.moduliQ_cuda
-    mu = (cryptoContext.q_mu_cuda,)
-    cv0 = F.cv_mul(
-        cipher.cv[0], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs
-    )
-    cv1 = F.cv_mul(
-        cipher.cv[1], pt.mx.reshape(-1, cryptoContext.N), moduli, mu, cur_limbs
-    )
-    return cipher.cipher_like(
+    mu = cryptoContext.q_mu_cuda
+    cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
+    cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
+
+    return res0.cipher_like(
         [cv0, cv1],
-        scaling_factor=cipher.scaling_factor * pt.scaling_factor,
-        noise_deg=cipher.noise_deg + pt.noise_deg,
+        scaling_factor=res0.scaling_factor * res1.scaling_factor,
+        noise_deg=res0.noise_deg + res1.noise_deg,
     )

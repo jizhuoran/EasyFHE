@@ -15,13 +15,20 @@ class OpenFHEContext:
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
-        self.slots = content_map["slots"]
-        self.cc.EvalBootstrapSetup(content_map["level_budget"], [0, 0], self.slots)
-        openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
-        openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
+        # self.slots = content_map["slots"]
+        # self.slots = slots
+        # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
+        # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
+        # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
-    def encode(self, x, level=None, scale_deg=None, slots=None):
+    def setup_for_debug(self, debug_keys, slots, level_budget):
+        self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
+        openfhe.DeserializeEvalKeyString(debug_keys["eval_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
+        openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
+
+    def encode(self, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
         if not ((scale_deg is None and level is None and slots is None) or
                 (scale_deg is not None and level is not None and slots is not None)):
             # 输出警告
@@ -33,29 +40,27 @@ class OpenFHEContext:
             print(ptx.GetVectorOfData())
             return np.array(ptx.GetCKKSPackedValue(), dtype=np.uint64)
         else:
-            # example
-            # x = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0]
-            # encoded_length = len(x)
-            # ptxt = cryptocontext.MakeCKKSPackedPlaintext(x,1,depth-1)
-            # ptxt.SetLength(encoded_length)
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
-            ptx.SetLength(slots)
+            if slots is None:
+                slots = len(x)
+            if isinstance(x, (np.ndarray, torch.Tensor)):
+                ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
+            else:
+                ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+            ptx.Encode()
             data = ptx.GetVectorOfData()
-            cv = [torch.tensor(elem, device=torch.device('cuda'), dtype=torch.uint64) for elem in data] #todo: do we need to use "device=x.device" instead
-            # return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg, ptx.GetSlots()) #todo: can be used after refactor Plaintext in ciphertext.py
-            return Plaintext(cv, cv[0].shape[1], ptx.GetSlots(), cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg)
-
+            cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+            return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(),False)
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
-        ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level)
-        if slots is not None:
-            ptx.SetLength(slots)
-        else: #todo: if input slots > len(x), do we need to fill with zeros
+        if slots is None:
             slots = len(x)
-            ptx.SetLength(slots)
+        if isinstance(x, (np.ndarray, torch.Tensor)):
+            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
+        else:
+            ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
-        cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
+        cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
         return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
     
     def decrypt(self, x):
@@ -68,7 +73,7 @@ class OpenFHEContext:
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)
-        cipher.SetSlots(self.slots)
+        cipher.SetSlots(x.slots)
 
         data = [cv.tolist() for cv in x.cv]
         cipher.SetVectorOfData(data, x.cur_limbs)

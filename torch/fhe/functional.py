@@ -209,7 +209,7 @@ def cv_innerproduct(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
-    print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
+    # print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
     x.reshape(-1)
     
     if inplace:
