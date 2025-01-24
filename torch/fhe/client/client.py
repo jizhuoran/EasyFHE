@@ -95,9 +95,6 @@ class OpenFHEContext:
         assert len(x.cv) == 2
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
-        # for _ in range(self.depth + 1 - x.cur_limbs):
-        #     cipher = self.cc.EvalMult(cipher, cipher)
-        #     cipher = self.cc.Rescale(cipher)
         cipher.SetNoiseScaleDeg(x.noise_deg)
         cipher.SetLevel(self.depth + 1 - x.cur_limbs)
         cipher.SetScalingFactor(x.scaling_factor)

@@ -89,7 +89,7 @@ class Plaintext:
         self.is_ext = is_ext
 
     def shallow_copy(self):
-        return Plaintext(self.mx, self.N, self.slots, self.l, self.scaling_factor, self.noise_deg)
+        return Plaintext(self.mv, self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots, self.is_ext)
 
     def __eq__(self, other):
         if not isinstance(other, Plaintext):

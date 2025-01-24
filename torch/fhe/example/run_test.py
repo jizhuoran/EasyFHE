@@ -6,15 +6,15 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-logN = 14
-logSlots_list = [12]
+logN = 16
+logSlots_list = [15]
 maxLevelsRemaining = 11
 levelBudget_list = [[4, 4]]
 dnum = 3
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
-rescaleTech = "FLEXIBLEAUTO"
+rescaleTech = "FIXEDMANUAL"
 path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -44,6 +44,11 @@ secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 # max_relu_degree = 59
 # secretKeyDist = "UNIFORM_TERNARY"
 # rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+# path = "/data/yhh/data/"
+
+# generate context
+approxModDepth = 9
+maxLevelsRemaining = 9
 
 cryptoContext, openfhe_contexts = utils.try_load_context(
     int(logN),
@@ -58,7 +63,7 @@ cryptoContext, openfhe_contexts = utils.try_load_context(
     secretKeyDist,
     rescaleTech,
     save_dir=path,
-    mode = "debug")
+    mode = "release")
 
 logSlots = logSlots_list[0]
 openfhe_context = openfhe_contexts[str(logSlots)]
@@ -90,6 +95,7 @@ utils.load_rotation_keys(cryptoContext, logSlots)
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+print(openfhe_context.decrypt(result).cpu().numpy()[:10])
 
 start_time = time.time()
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)

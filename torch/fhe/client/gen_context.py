@@ -113,21 +113,14 @@ def gen_contexts(
         rot_swk_map["app"] = APP_ROT_SWK
         # cc.ClearEvalAutomorphismKeys()
 
-    boot_gen_time = 0
-    rot_get_time = 0
     for logslots, level_budget in zip(logSlots_list, levelBudget_list):
-        timei1 = time.time()
         cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logslots)
         cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logslots)
-        timei2 = time.time()
         ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map[str(logslots)] = ROT_SWK
-        timei3 = time.time()
-        boot_gen_time += timei2 - timei1
-        rot_get_time += timei3 - timei2
 
-    print("start Get BOOT_KEY")
     BOOT_KEY = cc.GetEvalBootstrapKey()
+    print("After bootstrapping key generation")
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
@@ -156,8 +149,6 @@ def gen_contexts(
 
     boot_key_map = {}
 
-    print("done Get BOOT_KEY")
-    print("current time: ", datetime.now())
     for idx, logslots in enumerate(logSlots_list):
         slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
         assert slot == 1 << logslots
@@ -172,6 +163,8 @@ def gen_contexts(
             "U0PreFFTScalingFactor": S2C_FC,
         }
         boot_key_map[str(logslots)] = boot_key
+
+    print("After openfhe key serialization")
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -200,22 +193,7 @@ def gen_contexts(
             gpufhe_context, level_budget, dim1, (1 << logslots), 0
         )
 
-    save_path = (
-        save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
-            '-'.join(map(str, logSlots_list)),
-            maxLevelsRemaining,
-            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            dnum,
-            dcrtBits,
-            firstMod,
-            approxModDepth,
-            secretKeyDist,
-            rescaleTech,
-        )
-    )
-
+    print("After GPUFHE key generation")
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -237,6 +215,8 @@ def gen_contexts(
                     gpufhe_context.BsContext_map[str(logSlots)], item
                 )
         BsContextMembers_dict[str(logSlots)] = BsContextMembers
+
+    print("Before saving GPUFHE context")
 
     with open(OPENFHE_path, "rb") as file:
         openfheMembers = pickle.load(file)

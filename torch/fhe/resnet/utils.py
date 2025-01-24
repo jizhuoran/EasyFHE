@@ -121,7 +121,12 @@ if NEW_VERSION:
                 f.write(f"encode level {level} scale_deg {scale_deg} slots {slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["{}_{}_{}_{}".format(filename, level, scale_deg, slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -130,7 +135,12 @@ if NEW_VERSION:
                 f.write(f"encode level {level} scale_deg {scale_deg} slots {slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["fc_{}_{}_{}".format(level, scale_deg, slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext, openfhe_context):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -139,7 +149,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -148,7 +163,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -157,7 +177,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
 
     def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
@@ -167,7 +192,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
 
     def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext, openfhe_context):
@@ -177,7 +207,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {he_res20_ctx.cur_num_slots}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)]
+            else:
+                ptx = cryptoContext.pre_encoded["gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -186,7 +221,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {16384*2}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
 
     def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext, openfhe_context):
@@ -196,7 +236,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {8192*2}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
     def mask_channel(n,cur_limbs,cryptoContext, openfhe_context):
         if cryptoContext.GEN_PRECOMPUTATION:
@@ -205,7 +250,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {16384*2}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
 
     def mask_channel2(n,cur_limbs,cryptoContext, openfhe_context):
@@ -215,7 +265,12 @@ if NEW_VERSION:
                 f.write(f"encode level {cryptoContext.L-cur_limbs} scale_deg {1} slots {8192*2}\n")
             return cryptoContext.pre_encoded[14]
         else:
-            return cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)]
+            if cryptoContext.PRELOAD_ALL:
+                return cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)]
+            else:
+                ptx = cryptoContext.pre_encoded["mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)].shallow_copy()
+                ptx.mv = [torch.tensor(ptx.mv[0], dtype=torch.uint64, device="cuda")]
+                return ptx
 
 
 else:

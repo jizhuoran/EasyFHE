@@ -220,22 +220,12 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
         load_bootstrapping_and_rotation_keys(_logslot, cryptoContext)
     utils.load_rotation_keys(cryptoContext, "app")
 
-    cryptoContext.GEN_PRECOMPUTATION = he_res20_ctx.GEN_PRECOMPUTATION  # TODO poor workaround
-    if he_res20_ctx.GEN_PRECOMPUTATION:
-        pre_encoded = {}
-        for _logslot in [12, 13, 14]:
-            pre_encoded[_logslot] = openfhe_context.encode(torch.zeros(1 << _logslot, dtype=torch.float32), 1, 1,
-                                                           1 << _logslot)
-        cryptoContext.pre_encoded = pre_encoded
-        cryptoContext.weight_dir = he_res20_ctx.weight_dir  # TODO poor workaround
-        with open(he_res20_ctx.weight_dir + '/yhh_exec_log.txt', 'w') as f:
-            pass
-    else:
-        with open(he_res20_ctx.weight_dir + '/encode_val.pkl', 'rb') as f:
-            pre_encoded = pickle.load(f)
+    with open(he_res20_ctx.weight_dir + '/encode_val.pkl', 'rb') as f:
+        pre_encoded = pickle.load(f)
+    if cryptoContext.PRELOAD_ALL:
         for key, _ in pre_encoded.items():
-            pre_encoded[key].mx = [torch.tensor(pre_encoded[key].mx[0], dtype=torch.uint64, device="cuda")]
-        cryptoContext.pre_encoded = pre_encoded
+            pre_encoded[key].mv = [torch.tensor(pre_encoded[key].mv[0], dtype=torch.uint64, device="cuda")]
+    cryptoContext.pre_encoded = pre_encoded
 
 
     # print("resnet computation start")
@@ -272,7 +262,6 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
                 # print("after initial layer")
                 # print("current time: ", datetime.datetime.now())
                 resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext, openfhe_context_dict)
-                # print(resLayer1.cv[0].cpu().reshape(-1)[:10])
                 # print("after layer1")
                 # print("current time: ", datetime.datetime.now())
                 resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext, openfhe_context_dict)
@@ -284,13 +273,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
                 finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext, openfhe_context_dict)
                 print("after processing image ", i, "time: ", datetime.datetime.now())
 
-                # if he_res20_ctx.GEN_PRECOMPUTATION:
-                #     from .compact_weight import gen_pre_encode_file
-                #     gen_pre_encode_file(cryptoContext, openfhe_context)
-                #     print("pre-encoded file generated, please change GEN_PRECOMPUTATION to False and run again")
-                #     print("Good Luck! LOL")
-
-                finalRes.slots = 10
+                # finalRes.slots = 10
                 clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
                 clear_result = clear_result.cpu().numpy().reshape(-1)
                 max_element_idx = np.argmax(clear_result[:10])
@@ -333,7 +316,6 @@ def resnet20( ):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
     he_res20_context_ = HE_res20_context(None, max_relu_degree) # ini app ctx--he resnet ctx
-    he_res20_context_.GEN_PRECOMPUTATION = False
     he_res20_context_.weight_dir = "/data/yhh/data"
 
     cryptoContext, openfhe_context_dict = (
@@ -348,8 +330,11 @@ def resnet20( ):
                              rotate_index_list,
                              secretKeyDist,
                              rescaleTech,
-                             save_dir=save_dir))
+                             save_dir=save_dir,
+                             mode="release"))
 
+    cryptoContext.GEN_PRECOMPUTATION = False # poor workaround, should be fixed in the future, need to be set to False now
+    cryptoContext.PRELOAD_ALL = False # poor workaround, should be fixed in the future, need to be set to False/True now
     print("start executeResNet20")
     #print all the key of openfhe_context_dict
     # print("key of openfhe_context_dict ", openfhe_context_dict.keys())

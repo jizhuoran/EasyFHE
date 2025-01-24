@@ -190,7 +190,7 @@ def get_relu_depth(degree):
 def pre_encode(val, openfhe_context, level, scale_deg, slots):
     encode_val = openfhe_context.encode(val, level, scale_deg, slots)
     assert isinstance(encode_val, Plaintext)
-    encode_val.mx = [encode_val.mx[0].cpu().numpy()]
+    encode_val.mv = [encode_val.mv[0].cpu().numpy()]
     return encode_val
 
 #glob file in weights
@@ -209,6 +209,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
         secretKeyDist = "UNIFORM_TERNARY"
         rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir = "/data/yhh/data/"
+
 
             # generate context
         approxModDepth = 9
@@ -233,7 +234,8 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
                                     rotate_index_list,
                                     secretKeyDist,
                                     rescaleTech,
-                                    save_dir=save_dir))
+                                    save_dir=save_dir,
+                                    mode="release"))
 
 
         openfhe_context = openfhe_context_dict[str(14)]
