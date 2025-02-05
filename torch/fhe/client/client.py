@@ -30,8 +30,9 @@ class OpenFHEContext:
 
         if level is None and scale_deg is None and slots is None:
             ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-            ptx.Encode()
-            return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
+            print(ptx.Encode())
+            print(ptx.GetVectorOfData())
+            return np.array(ptx.GetCKKSPackedValue(), dtype=np.uint64)
         else:
             if slots is None:
                 slots = len(x)

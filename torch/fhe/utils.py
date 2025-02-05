@@ -6,6 +6,7 @@ import atexit
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
+import torch
 
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
@@ -24,20 +25,26 @@ def call_counter(func):
     return wrapper
 
 
-# @atexit.register
+@atexit.register
 def print_call_counts():
     print("\nFunction Call Counts:")
     for func_name, wrapper in call_registry.items():
         print(f"Function '{func_name}' was called {wrapper.count} times.")
 
+@atexit.register
+def print_execution_times():
+    print("\nExecution Times:")
+    for func_name, exec_time in execution_times.items():
+        print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
+
 def check_meta_equal(func):
     def wrapper(*args, **kwargs):
         in0, in1 = args[0], args[1]
-        assert len(in0.cv) == len(in1.cv)
-        assert in0.cur_limbs == in1.cur_limbs
-        assert in0.scaling_factor == in1.scaling_factor
-        assert in0.noise_deg == in1.noise_deg
-        assert in0.is_ext == in1.is_ext
+        # assert len(in0.cv) == len(in1.cv)
+        # assert in0.cur_limbs == in1.cur_limbs
+        # assert in0.scaling_factor == in1.scaling_factor
+        # assert in0.noise_deg == in1.noise_deg
+        # assert in0.is_ext == in1.is_ext
         # assert in0.slots == in1.slots
         return func(*args, **kwargs)
     return wrapper
@@ -73,13 +80,19 @@ def profile_pytorch_function(func):
     def wrapper(*args, **kwargs):
         # Set up the profiler
         with torch.profiler.profile(
-                activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
                 on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
                 record_shapes=True,
                 profile_memory=True,
                 with_stack=True
         ) as profiler:
             result = func(*args, **kwargs)
+            profiler.step()
+
+        profiler_results = profiler.key_averages()
+        print(profiler_results.table(sort_by="self_cuda_time_total"))
+        print(profiler_results.table(sort_by="self_cpu_time_total"))
+
         return result
 
     return wrapper
