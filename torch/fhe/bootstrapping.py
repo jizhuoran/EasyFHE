@@ -596,8 +596,8 @@ def BootstrapTest_test_case(
         maxLevelsRemaining=3,
         levelBudget_list=[[3, 3], [4, 4]],
         dnum=3,
-        dcrtBits=59,
-        firstMod=60,
+        dcrtBits=52,
+        firstMod=56,
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",

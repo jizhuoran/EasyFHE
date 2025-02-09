@@ -287,6 +287,7 @@ __global__ void vec_mod_batch_(
   STRIDED_LOOP_END;
 }
 
+//note: SwitchModulus in mubintvecnat.cpp (align with update in openFHE commit: 64fd8426, 07/14/23)
 __global__ void switch_modulus_(
     size_t degree,
     size_t batch,
@@ -298,20 +299,25 @@ __global__ void switch_modulus_(
   auto old_modulus_by_two = primes[old_prime_idx] >> 1;
   auto old_modulus = primes[old_prime_idx];
   auto new_modulus_idx = i / degree;
-  auto diff = (old_modulus > primes[new_modulus_idx])
-      ? (old_modulus - primes[new_modulus_idx])
-      : (primes[new_modulus_idx] - old_modulus);
+  auto new_modulus = primes[new_modulus_idx];
+  auto diff = (old_modulus > new_modulus)
+      ? (new_modulus- (old_modulus%new_modulus)) //fixme: remove the `%`, note that in mod_raise case, the quotient of om/nm may be >=2
+      : (new_modulus - old_modulus);
   int input_idx = i % degree;
   auto tmp = (ptr[input_idx] > old_modulus_by_two) ? diff : 0;
-  if (primes[new_modulus_idx] >= old_modulus) {
+
+  if (new_modulus >= old_modulus) {
     to[i] = tmp + ptr[input_idx];
-  } else {
-    if (ptr[input_idx] >= tmp) {
-      to[i] = ptr[input_idx] - tmp;
-    } else {
-      to[i] = primes[new_modulus_idx] - (tmp - ptr[input_idx]);
-    }
-    // to[i] = to[i] % primes[new_modulus_idx];
+  } else { //old_modulus > new_modulus
+  // deprecated
+//     if (ptr[input_idx] >= tmp) {
+//       to[i] = ptr[input_idx] - tmp;
+//     } else {
+//       to[i] = new_modulus - (tmp - ptr[input_idx]);
+//     }
+    to[i] = tmp + ptr[input_idx];
+    if (to[i]>=new_modulus)
+        to[i] = to[i] % new_modulus; // fixme: note that quotient>=1, can not replaced with sub trivially
   }
   STRIDED_LOOP_END;
 }

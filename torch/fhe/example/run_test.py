@@ -6,13 +6,13 @@ import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
-logN = 16
+logN = 14
 logSlots_list = [12]
-maxLevelsRemaining = 11
+maxLevelsRemaining = 10
 levelBudget_list = [[4, 4]]
 dnum = 3
-dcrtBits = 59
-firstMod = 60
+dcrtBits = 52
+firstMod = 56
 approxModDepth = 9
 rescaleTech = "FLEXIBLEAUTO"
 path = "data"
