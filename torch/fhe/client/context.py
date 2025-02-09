@@ -12,8 +12,7 @@ class __FOR_SAVE_ONLY_Context:
         firstMod,
         dcrtBits,
         specialMod,
-        L,
-        K,
+        dnum,
         levelBudget_list,
         moduliQ=None,
         moduliP=None,
@@ -28,6 +27,9 @@ class __FOR_SAVE_ONLY_Context:
         h=64,
         sigma=32,
     ):
+        L = len(moduliQ)
+        K = len(moduliP)
+        alpha = int((L+dnum-1)//dnum)
         self.logSlots_list = logSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
@@ -42,7 +44,8 @@ class __FOR_SAVE_ONLY_Context:
         self.dcrtBits = dcrtBits
         self.L = int(L)
         self.K = int(K)
-        self.dnum = math.ceil(L / K)
+        self.dnum = dnum
+        self.alpha = alpha
         self.h = h
         self.sigma = sigma
         self.N = int(1 << logN)
@@ -194,52 +197,52 @@ class __FOR_SAVE_ONLY_Context:
         moduliPartQ = [0] * self.dnum
         for j in range(self.dnum):
             moduliPartQ[j] = int(1)
-            for i in range(K * j, K * (j + 1)):
+            for i in range(alpha * j, alpha * (j + 1)):
                 if i < L:
                     moduliPartQ[j] *= int(self.moduliQ[i])
 
         self.PartQlHatInvModq = [
-            [[0 for _ in range(K)] for _ in range(K)] for _ in range(self.dnum)
+            [[0 for _ in range(alpha)] for _ in range(alpha)] for _ in range(self.dnum)
         ]
         for k in range(self.dnum):
-            sizePartQk = (L - (k * K)) if (k == self.dnum - 1) else K
+            sizePartQk = (L - (k * alpha)) if (k == self.dnum - 1) else alpha
             modulusPartQ = moduliPartQ[k]
             for l in range(sizePartQk):
                 if l > 0:
                     modulusPartQ = int(
-                        int(modulusPartQ) // int(self.moduliQ[k * K + sizePartQk - l])
+                        int(modulusPartQ) // int(self.moduliQ[k * alpha + sizePartQk - l])
                     )
                 for i in range(sizePartQk - l):
-                    moduli = int(self.moduliQ[k * K + i])
+                    moduli = int(self.moduliQ[k * alpha + i])
                     QHat = modulusPartQ // moduli
                     QHatInvModqi = int(self.invMod(QHat, moduli))
                     self.PartQlHatInvModq[k][sizePartQk - l - 1][i] = QHatInvModqi
 
-        self.PartQlHatModp = [
-            [
-                [[0 for _ in range(self.dnum * K)] for _ in range(K)]
+        self.PartQlHatModp = [[[
+                    [0 for _ in range(L+K)] for _ in range(alpha)]
                 for _ in range(self.dnum)
             ]
             for _ in range(L)
         ]
+
         for l in range(L):
-            beta = math.ceil((l + 1) / K)
+            beta = math.ceil((l + 1) / alpha)
             for k in range(beta):
                 partQ_size = (
-                    (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
+                    (L - (beta - 1) * alpha) if (beta == self.dnum and k == beta - 1) else alpha
                 )
-                digitSize = K
+                digitSize = partQ_size
                 modulusPartQ = int(moduliPartQ[k])
 
                 if k == beta - 1:
-                    digitSize = l + 1 - k * K
+                    digitSize = l + 1 - k * alpha
                     for idx in range(digitSize, partQ_size):
-                        modulusPartQ //= int(self.moduliQ[K * k + idx])
+                        modulusPartQ //= int(self.moduliQ[alpha * k + idx])
 
                 for i in range(digitSize):
-                    partQHat = modulusPartQ // int(self.moduliQ[K * k + i])
+                    partQHat = modulusPartQ // int(self.moduliQ[alpha * k + i])
 
-                    start_idx = k * K
+                    start_idx = k * alpha
                     end_idx = start_idx + digitSize
                     complBasis_vec = (
                         self.moduliQ[:start_idx]
@@ -250,51 +253,6 @@ class __FOR_SAVE_ONLY_Context:
                     for j, mod in enumerate(complBasis_vec):
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
-
-        self.PartQlHatModp_pad = [
-            [
-                [[0 for _ in range(self.dnum * K)] for _ in range(K)]
-                for _ in range(self.dnum)
-            ]
-            for _ in range(L)
-        ]
-        for l in range(L):
-            beta = math.ceil((l + 1) / K)
-            ceil_curr_limbs = beta * K
-            for k in range(beta):
-                partQ_size = (
-                    (L - (beta - 1) * K) if (beta == self.dnum and k == beta - 1) else K
-                )
-                digitSize = K
-                modulusPartQ = int(moduliPartQ[k])
-
-                if k == beta - 1:
-                    digitSize = l + 1 - k * K
-                    for idx in range(digitSize, partQ_size):
-                        modulusPartQ //= int(self.moduliQ[K * k + idx])
-
-                for i in range(digitSize):
-                    partQHat = modulusPartQ // int(self.moduliQ[K * k + i])
-
-                    start_idx = k * K
-                    end_idx = start_idx + digitSize
-                    complBasis_vec = (
-                        self.moduliQ[:start_idx] + self.moduliQ[end_idx : l + 1]
-                    )
-                    offset = len(complBasis_vec)
-                    for j, mod in enumerate(complBasis_vec):
-                        QHatModpj = int(partQHat) % int(mod)
-                        self.PartQlHatModp_pad[l][k][i][j] = QHatModpj
-
-                    complBasis_vec = self.moduliQ[l + 1 : ceil_curr_limbs]
-                    for j, mod in enumerate(complBasis_vec):
-                        self.PartQlHatModp_pad[l][k][i][offset + j] = 0
-
-                    complBasis_vec = self.moduliP
-                    offset = ceil_curr_limbs - K
-                    for j, mod in enumerate(complBasis_vec):
-                        QHatModpj = int(partQHat) % int(mod)
-                        self.PartQlHatModp_pad[l][k][i][offset + j] = QHatModpj
 
         self.pHatModp = [0] * K
         self.pHatInvModp = [0] * K
@@ -381,13 +339,15 @@ class __FOR_SAVE_ONLY_Context:
 
         self.moduliQ = np.array(self.moduliQ, dtype=np.uint64)
         self.moduliP = np.array(self.moduliP, dtype=np.uint64)
-        qRoots = np.array(qRoots, dtype=np.uint64)
-        pRoots = np.array(pRoots, dtype=np.uint64)
+        qRoots = np.array(qRoots, dtype=np.uint64) #todo: remove unused var?
+        pRoots = np.array(pRoots, dtype=np.uint64) #todo: remove unused var?
 
-        self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
-        self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
-        self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
-        self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
+        #todo: remove duplicated variables?
+        # self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
+        # self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
+        # self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
+        # self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
+
         self.PInvModq = np.array(self.PInvModq, dtype=np.uint64)
 
         self.PartQlHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
@@ -506,7 +466,7 @@ class __FOR_SAVE_ONLY_Context:
             self.swk_ax_cuda = np.array(self.mult_swk[1].reshape(-1), dtype=np.uint64)
 
             # for output & workspace
-            self.beta = (int)(self.L / self.K)
+            self.beta = (int)((self.L+self.alpha-1) / self.alpha)
             self.inner_workspace = np.array(
                 [0] * (4 * self.num_moduli_after_modup * self.N * self.beta),
                 dtype=np.uint64,
@@ -594,12 +554,12 @@ class __FOR_SAVE_ONLY_Context:
             hat_inverse_vec_modup = []
             hat_inverse_vec_shoup_modup = []
             for dnum_idx in range(self.dnum):
-                for k in range(self.K):
+                for k in range(self.alpha):
                     hat_inv_shoup = []
                     hat_inverse_vec = self.PartQlHatInvModq[dnum_idx][k]
                     hat_inverse_vec_modup.append(hat_inverse_vec)
-                    for k_idx in range(self.K):
-                        prime_idx = dnum_idx * self.K + k_idx
+                    for k_idx in range(self.alpha):
+                        prime_idx = dnum_idx * self.alpha + k_idx
                         prime = self.primes[prime_idx]
                         shoup = self.shoup(int(hat_inverse_vec[k_idx]), prime)
                         hat_inv_shoup.append(shoup)
@@ -736,16 +696,11 @@ class __FOR_SAVE_ONLY_Context:
         for logSlots, levelBudget in zip(self.logSlots_list, levelBudget_list):
             self.BsContext_map[str(logSlots)] = BsContext(
                 self.N,
-                self.K,
                 self.moduliQ,
                 self.moduliP,
                 self.q_mu,
                 self.p_mu,
-                levelBudget,
-                dim1,
-                (1 << logSlots),
                 0,
-                self.rescaleTech,
                 self.secretKeyDist,
                 boot_key_map[str(logSlots)]
             )

@@ -46,19 +46,15 @@ class BsContext:
     def __init__(
         self,
         N,
-        K,
         moduliQ,
         moduliP,
         q_mu,
         p_mu,
-        levelBudget,
-        dim1,
-        slots,
         correctionFactor,
-        rescaleTech,
         secretKeyDist,
         BOOT_KEY
     ):
+        K = len(moduliP)
         self.M = N * 2
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None

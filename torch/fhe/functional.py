@@ -80,7 +80,7 @@ def cv_modup(
     curr_limbs: int,
     context: Context,
 ) -> Tensor:
-    beta = (curr_limbs + context.K - 1) // context.K
+    beta = (curr_limbs + context.alpha - 1) // context.alpha
     return torch.modup(
         x,
         curr_limbs=curr_limbs,
@@ -93,7 +93,7 @@ def cv_modup(
         barret_k=context.barret_k,
         beta=beta,
         degree=context.N,
-        alpha=context.K,
+        alpha=context.alpha,
         param_power_of_roots_shoup=context.power_of_roots_shoup,
         param_power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
@@ -111,7 +111,7 @@ def cv_moddown(
         x,
         curr_limbs=curr_limbs,
         level=context.L,
-        alpha=context.K,
+        alpha=context.K, #fixme: rename the variable to "K" or sizeP for clarity
         param_degree=context.N,
         param_log_degree=context.logN,
         hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
@@ -219,7 +219,7 @@ def cv_innerproduct(
             bx=swk_bx,
             ax=swk_ax,
             curr_limbs=curr_limbs,
-            alpha=context.K,
+            alpha= context.alpha,
             level=context.L,
             param_degree=context.N,
             primes=context.primes,
@@ -234,7 +234,7 @@ def cv_innerproduct(
             bx=swk_bx,
             ax=swk_ax,
             curr_limbs=curr_limbs,
-            alpha=context.K,
+            alpha= context.alpha,
             level=context.L,
             param_degree=context.N,
             primes=context.primes,
@@ -253,8 +253,8 @@ def cv_keyswitch(
     context: Context,
     inplace: bool = False,
 ) -> Tensor:
-    true_beta = int((cur_limbs + (context.K - 1)) / context.K)
-    context.beta = true_beta
+    true_beta = int((cur_limbs + (context.alpha - 1)) / context.alpha) # todo: remove unused variables?
+    context.beta = true_beta #fixme: why set context.beta?
     modup_res = cv_modup(
         input,
         curr_limbs=cur_limbs,
@@ -268,8 +268,8 @@ def cv_keyswitch(
         context
     )
 
-    sumMult_bx = inner_product[0]
-    sumMult_ax = inner_product[1]
+    sumMult_bx = inner_product[0] # todo: omit this shallow copy?
+    sumMult_ax = inner_product[1] # todo: omit this shallow copy?
 
     moddown_bx = cv_moddown(
         sumMult_bx,

@@ -69,8 +69,10 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
 
 class Context:
     def __init__(self, BsContext_content_map, gpufhe_content_map):
-        self.K = get_item("K", gpufhe_content_map)
         self.L = get_item("L", gpufhe_content_map)
+        self.dnum = get_item("dnum", gpufhe_content_map)
+        self.alpha = get_item("alpha", gpufhe_content_map)
+        self.K = get_item("K", gpufhe_content_map)
         self.M = get_item("M", gpufhe_content_map)
         self.N = get_item("N", gpufhe_content_map)
         self.Nh = get_item("Nh", gpufhe_content_map)
@@ -80,8 +82,8 @@ class Context:
         self.PartQlHatInvModq = get_item("PartQlHatInvModq", gpufhe_content_map)
         self.PartQlHatModp = get_item("PartQlHatModp", gpufhe_content_map)
         self.PartQlHatModp_pad = get_item("PartQlHatModp_pad", gpufhe_content_map)
-        self.QHatInvModq = get_item("QHatInvModq", gpufhe_content_map)
-        self.QHatModp = get_item("QHatModp", gpufhe_content_map)
+        # self.QHatInvModq = get_item("QHatInvModq", gpufhe_content_map)
+        # self.QHatModp = get_item("QHatModp", gpufhe_content_map)
         self.QlQlInvModqlDivqlModq = get_item("QlQlInvModqlDivqlModq", gpufhe_content_map)
         self.approxSF = get_item("approxSF", gpufhe_content_map)
         self.automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
@@ -91,7 +93,6 @@ class Context:
         self.chain_length = get_item("chain_length", gpufhe_content_map)
         self.correctionFactor = get_item("correctionFactor", gpufhe_content_map)
         self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
-        self.dnum = get_item("dnum", gpufhe_content_map)
         self.h = get_item("h", gpufhe_content_map)
         self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
         self.hat_inverse_vec_modup = get_item("hat_inverse_vec_modup", gpufhe_content_map)

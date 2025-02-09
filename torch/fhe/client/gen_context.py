@@ -69,9 +69,6 @@ def gen_contexts(
         approxModDepth, max_level_budget, openfhe_secretKeyDist
     )
 
-    L = depth + 1  # GPUFHE: L
-    K = (L + dnum - 1) // dnum  # GPUFHE: K = ceil(L/dnum)
-
     parameters = openfhe.CCParamsCKKSRNS()
 
     parameters.SetMultiplicativeDepth(depth)
@@ -118,7 +115,7 @@ def gen_contexts(
         boot_gen_time += timei2 - timei1
         rot_get_time += timei3 - timei2
 
-    BOOT_KEY = cc.GetEvalBootstrapKey()
+    BOOT_KEY = cc.GetEvalBootstrapKey() # get matirx saved in boot_key
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
@@ -168,8 +165,7 @@ def gen_contexts(
         firstMod,
         dcrtBits,
         60,  # auxModSize of openfhe is 60 bits in default
-        L,
-        K,
+        dnum,
         levelBudget_list,
         moduliQ,
         moduliP,
