@@ -751,3 +751,40 @@ def Keyswitch_test_case(
             print("Key switch: Test passed!")
         else:
             print("Key switch: Test failed!")
+
+def encode_test_case(
+        logN=14,
+        logSlots_list=[11, 12],
+        maxLevelsRemaining=3,
+        levelBudget_list=[[3, 3], [4, 4]],
+        dnum=3,
+        dcrtBits=59,
+        firstMod=60,
+        approxModDepth=9,
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir="torch/fhe/data/",
+        mode = "debug" # "debug" or "release"
+
+):
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
+                                                                 logSlots_list,
+                                                                 maxLevelsRemaining,
+                                                                 levelBudget_list,
+                                                                 dnum,
+                                                                 dcrtBits,
+                                                                 firstMod,
+                                                                 approxModDepth,
+                                                                 [-1,2],
+                                                                 "UNIFORM_TERNARY",
+                                                                 rescaleTech,
+                                                                 save_dir=save_dir,
+                                                                 mode = mode)
+
+    specify_slots = logSlots_list[0] # logslots = 11
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
+    cipher = openfhe_context.encode(cryptoContext, x)
+    print("done")
