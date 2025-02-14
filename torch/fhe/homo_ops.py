@@ -609,7 +609,7 @@ def homo_conjugate(in0, cryptoContext):
 
 
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    res0 = cipher.deep_copy()
+    # res0 = cipher.deep_copy()
     ctmorphed = Cipher(
         plaintext.mv,
         plaintext.cur_limbs,
@@ -618,10 +618,14 @@ def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         plaintext.slots,
         False,
     )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
-    res0.cv[0] = F.cv_add(
-        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
-    )
+    res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
+    res0.cv = [
+        F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs),
+        res0.cv[1],
+    ]
+    # res0.cv[0] = F.cv_add(
+    #     res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
+    # )
     return res0
 
 
@@ -645,7 +649,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
             Warning,
         )
-    res0 = cipher.deep_copy()
+    # res0 = cipher.deep_copy()
     ctmorphed = Cipher(
         plaintext.mv,
         plaintext.cur_limbs,
@@ -654,7 +658,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         plaintext.slots,
         False,
     )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_mult(res0, ctmorphed, cryptoContext)
+    res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
     moduli = cryptoContext.moduliQ_cuda
     mu = cryptoContext.q_mu_cuda
