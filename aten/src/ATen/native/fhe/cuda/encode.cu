@@ -334,13 +334,6 @@ static void encode_template(
             temp_ptr,
             d_log_approx);
 
-        std::vector<int64_t> temp_test(slots * 2, 0);
-        cudaMemcpy(
-            temp_test.data(),
-            temp_ptr,
-            sizeof(int64_t) * slots * 2,
-            cudaMemcpyDeviceToHost);
-
         auto elements_ptr =
             reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
         auto primes_ptr =
