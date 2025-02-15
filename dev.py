@@ -1,11 +1,9 @@
-import torch.fhe.bootstrapping as bstest
+import torch.fhe.example.dev_test as dev_test
 
-# bstest.run_test_cases()
-# bstest.BootstrapTest_N65536L26lB44()
+# dev_test.BootstrapTest_N65536L26lB44()
+# dev_test.BootstrapTest_slots_list_example()
+# dev_test.BootstrapTest_test_case(mode="debug")
+# dev_test.Keyswitch_test_case(mode="debug")
 
-# bstest.BootstrapTest_slots_list_example()
-# bstest.BootstrapTest_test_case(mode="debug")
-
-# bstest.Keyswitch_test_case(mode="debug")
-bstest.encode_test_case(mode="debug")
+dev_test.encode_test_case(mode="debug")
 
