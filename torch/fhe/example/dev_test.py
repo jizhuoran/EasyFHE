@@ -420,3 +420,79 @@ def encode_test_case(
         print("all_correct for this test")
 
     print("done")
+
+def ct_pt_test_case(
+        logN=14,
+        logSlots_list=[8],
+        maxLevelsRemaining=3,
+        levelBudget_list=[[4, 4]],
+        dnum=3,
+        dcrtBits=59,
+        firstMod=60,
+        approxModDepth=9,
+        # rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        rescaleTech = "FIXEDMANUAL", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir="torch/fhe/data/",
+        mode = "debug" # "debug" or "release"
+
+):
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
+                                                                 logSlots_list,
+                                                                 maxLevelsRemaining,
+                                                                 levelBudget_list,
+                                                                 dnum,
+                                                                 dcrtBits,
+                                                                 firstMod,
+                                                                 approxModDepth,
+                                                                 [],
+                                                                 "UNIFORM_TERNARY",
+                                                                 rescaleTech,
+                                                                 save_dir=save_dir,
+                                                                 mode = mode)
+
+    specify_slots = logSlots_list[0] # logslots = 11
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range((1 << specify_slots))])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0,
+                                                     (1 << specify_slots))
+    encoded = openfhe_context.encode(values, 1, 0,
+                                     (1 << specify_slots))
+
+    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(values) + np.array(values)
+    if np.allclose(clear_result, ground_truth):
+        print("homo_add_pt Test passed!")
+    else:
+        print("homo_add_pt Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
+
+
+    result = homo_ops.homo_mul_pt(cipher, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(values) * np.array(values)
+    if np.allclose(clear_result,ground_truth):
+        print("homo_mul_pt Test passed!")
+    else:
+        print("homo_mul_pt Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
+
+    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(values) + np.array(values)
+    if np.allclose(clear_result, ground_truth):
+        print("homo_add_pt second Test passed!")
+    else:
+        print("homo_add_pt second Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
