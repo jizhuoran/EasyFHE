@@ -87,7 +87,7 @@ class Plaintext:
             return False
         if len(self.mv) != len(other.mv):
             return False
-        if not torch.equal(self.mv, other.mv):
+        if not torch.equal(self.mv[0], other.mv[0]):
             return False
         if self.slots != other.slots:
             return False

@@ -786,5 +786,36 @@ def encode_test_case(
     specify_slots = logSlots_list[0] # logslots = 11
     openfhe_context = openfhe_context_dict[str(specify_slots)]
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
-    cipher = openfhe_context.encode(cryptoContext, x)
+    plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
+    plaintext_golden = openfhe_context.encode(x)
+
+    encoded_data = plaintext.mv[0]
+    encoded_data = encoded_data.cpu().numpy()
+    encode_data_golden = plaintext_golden.mv[0]
+    encode_data_golden = encode_data_golden.cpu().numpy()
+    all_correct = True
+    for i in range(len(encode_data_golden)):
+        diff_indices = np.where(encode_data_golden[i] != encoded_data[i])
+        if len(diff_indices[0]) > 0:
+            print("diff_indices: ", diff_indices[0][:10])
+            print("len(diff_indices): ", len(diff_indices[0]))
+            all_correct = False
+            if i == 0:  # prt a wrong case
+                print(encode_data_golden[0][:10])
+                print(encoded_data[0][:10])
+
+    if (plaintext==plaintext_golden) != True:
+        all_correct = False
+        print("ground_truth: ")
+        print(plaintext_golden.cur_limbs)
+        print(plaintext_golden.noise_deg)
+        print(plaintext_golden.scaling_factor)
+        print("result: ")
+        print(plaintext.cur_limbs)
+        print(plaintext.noise_deg)
+        print(plaintext.scaling_factor)
+
+    if all_correct:
+        print("all_correct for this test")
+
     print("done")

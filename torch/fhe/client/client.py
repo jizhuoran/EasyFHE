@@ -51,59 +51,66 @@ class OpenFHEContext:
         openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
-    def encode(self, cryptocontext, x, level=None, scale_deg=None, slots=None): # todo: align the input order wtih the encrypt function
+    def encode_gpu_fhe(self, cryptocontext, x, scale_deg=None, level=None, slots=None): # todo: rename to `encode` after testing
         if not ((scale_deg is None and level is None and slots is None) or
                 (scale_deg is not None and level is not None and slots is not None)):
-            # 输出警告
-            print("Warning: scale_deg, level, and slots must either all be None or all not None.")
+            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
 
+        # todo: after support arbitrary level, refactor the following if-else
         if level is None and scale_deg is None and slots is None:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-            # print(ptx.Encode())
-            # print(ptx.GetVectorOfData())
-            ptx.Encode()
-            encode_data = ptx.GetVectorOfData()
-
             scFact = 0.0
             if cryptocontext.rescaleTech == "FLEXIBLEAUTOEXT" :
                 scFact = cryptocontext.GetScalingFactorRealBig(cryptocontext.L)
-                noiseScaleDeg = 1
+                # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
+                # in our encoding function, so we set it to 1 to make sure it
+                # has no effect on the encoding.
+                scale_deg = 1
             else:
                 scFact = cryptocontext.GetScalingFactorReal(cryptocontext.L)
+            slots = cryptocontext.Nh # note: default slots is N/2, which is Nh
+            scale_deg = 1 # note: default scale_deg is 1
+            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact)
 
-            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, cryptocontext.Nh, 'IsDCRTPoly', scFact)
-            encoded_vector_dcrt_elements_test = encoded_vector_dcrt_elements_cuda.cpu().numpy()
-
-            # note that default #slot for openfhe is Nh, therefore here we set cryptocontext.Nh explicitly
-            encoded_vector_dcrt_elements = self.ptx_encode_without_ntt(x, cryptocontext.N, cryptocontext.Nh, 'IsDCRTPoly', scFact, cryptocontext.moduliQ, cryptocontext.L, cryptocontext.M, cryptocontext.Nh)
-
-            #compare with golden answer, to be moved to outside
-            all_correct = True
-            for i in range(len(encode_data)):
-                diff_indices = np.where(encode_data[i] != encoded_vector_dcrt_elements_test[i])
-                if len(diff_indices[0]) > 0:
-                    print("diff_indices: ", diff_indices[0][:10])
-                    print("len(diff_indices): ", len(diff_indices[0]))
-                    all_correct = False
-                    if i ==0: # prt a wrong case
-                        print(encode_data[0][:10])
-                        print(encoded_vector_dcrt_elements_test[0][:10])
-
-            if all_correct:
-                print("all_correct for this test")
-
-            return np.array(encode_data, dtype=np.uint64)
+            mv = [encoded_vector_dcrt_elements_cuda]
+            return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
         else:
-            if slots is None:
-                slots = len(x)
+            scFact = 0.0
+            if cryptocontext.rescaleTech == "FLEXIBLEAUTOEXT":
+                scFact = cryptocontext.GetScalingFactorRealBig(cryptocontext.L-level)
+                # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
+                # in our encoding function, so we set it to 1 to make sure it
+                # has no effect on the encoding.
+                scale_deg = 1
+            else:
+                scFact = cryptocontext.GetScalingFactorReal(cryptocontext.L-level)
+
+            # fixme: input should consider scale_deg, and level, it is definitely not correct now
+            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact)
+
+            mv = [encoded_vector_dcrt_elements_cuda]
+            return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+
+    def encode(self, x, scale_deg=None, level=None, slots=None):
+        if not ((scale_deg is None and level is None and slots is None) or
+                (scale_deg is not None and level is not None and slots is not None)):
+            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+
+        if level is None and scale_deg is None and slots is None:
+            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
+            ptx.Encode()
+            data = ptx.GetVectorOfData()
+            mv = [
+                torch.tensor(data, device="cuda", dtype=torch.uint64)]  # fixme: shall we set device = "cuda" directly?
+            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
+        else:
             if isinstance(x, (np.ndarray, torch.Tensor)):
                 ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
             else:
                 ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
             ptx.Encode()
             data = ptx.GetVectorOfData()
-            cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly? #fixme: change cv to mv
-            return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(),False) #fixme: change cv to mv
+            mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
         if slots is None:
@@ -378,10 +385,9 @@ class OpenFHEContext:
         else:
             print("Only DCRTPoly is supported for CKKS.")
 
-        return encoded_vector_dcrt_elements #fixme: should be remove if we have a correct intt!!!!!
-
         is_encoded = True
         return encoded_vector_dcrt_elements
+
     def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor,  noise_scale_deg=1, is_encoded = False):
         ring_dim = cryptocontext.N
         inverse = x
