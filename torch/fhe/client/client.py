@@ -42,12 +42,6 @@ class OpenFHEContext:
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
         self.depth = content_map["depth"]
-        # self.slots = content_map["slots"]
-        # self.slots = slots
-        # self.cc.EvalBootstrapSetup(level_budget, [0, 0], self.slots)
-        # openfhe.DeserializeEvalKeyString(content_map["eval_key"], openfhe.BINARY)
-        # openfhe.DeserializeEvalMultKeyString(content_map["mul_key"], openfhe.BINARY)
-        # openfhe.DeserializeEvalAutomorphismKeyString(content_map["rot_key"], openfhe.BINARY)
 
     def setup_for_debug(self, debug_keys, slots, level_budget):
         self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
@@ -64,8 +58,9 @@ class OpenFHEContext:
 
         if level is None and scale_deg is None and slots is None:
             ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-            ptx.Encode()
-            return np.array(ptx.GetVectorOfData(), dtype=np.uint64)
+            print(ptx.Encode())
+            print(ptx.GetVectorOfData())
+            return np.array(ptx.GetCKKSPackedValue(), dtype=np.uint64)
         else:
             cur_limbs = self.depth
             if slots is None:

@@ -110,7 +110,8 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                                                                                  cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
-        
+
+        # print("times: ", b * g,  b * 2)        
         for i in range(b):
             G = g * i
             inner_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[0], A_Ext[s][G], cryptoContext)
@@ -169,10 +170,9 @@ def mod_raise(cipher, L0, cryptoContext):
     return Cipher([cv0, cv1], L0, cipher.scaling_factor, cipher.noise_deg, cipher.slots, cipher.is_ext)
 
 # @profile_python_function
-def mult_by_monomial(cipher, monomial_degree, cryptoContext):
-    cv0 = F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
-    cv1 = F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
-    return cipher.cipher_like([cv0, cv1])
+def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
+    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
+    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
@@ -248,7 +248,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-        ctxtEncI = mult_by_monomial(ctxtEncI, 3 * M // 4, cryptoContext)
+        mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
             while(ctxtEnc.noise_deg>1):
@@ -273,7 +273,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
         ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
 
-        ctxtEncI = mult_by_monomial(ctxtEncI, M // 4, cryptoContext)
+        mult_by_monomial_inplace(ctxtEncI, M // 4, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
 
         # scale the message back up after Chebyshev interpolation
@@ -297,6 +297,9 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         # -------------------
         # Running PartialSum
         # -------------------
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time1 = time.time()
         for step in range(int(math.log2(N // (2 * slots)))):
             temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
             raised = homo_ops.homo_add(raised, temp, cryptoContext)
@@ -306,13 +309,20 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         # ---------------------
         raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time2 = time.time()
+        print("start: ", time2 - time1)
 
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
-
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time3 = time.time()
+        print("eval_coeffs_to_slots: ", time3 - time2)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
@@ -324,12 +334,22 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
             if ctxtEnc.noise_deg ==2 :
                 ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
 
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time4 = time.time()
+        print("internal: ", time4 - time3)
+
         # ---------------------------------
         # Running Approximate Mod Reduction
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
+
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time5 = time.time()
+        print("eval_chebyshev_series_ps: ", time5 - time4)
 
 
         if rescaleTech != "FIXEDMANUAL":
@@ -339,6 +359,11 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
 
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
+
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time6 = time.time()
+        print("apply_double_angle_iterations: ", time6 - time5)
 
 
         # --------------------
@@ -354,9 +379,16 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         else:
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
+        torch.cuda.synchronize()
+        torch.cpu.synchronize()
+        time7 = time.time()
+        print("eval_slots_to_coeffs: ", time7 - time6)
+
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
+    time8 = time.time()
+    print("total_time: ", time8 - time1)
 
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
@@ -422,10 +454,6 @@ def BootstrapTest_N65536L26lB44(
 
     openfhe_context = openfhe_context_dict[str(logSlots_list[0])]
     dim1 = [0, 0]
-
-    # eval_bootstrap_setup(
-    #     cryptoContext, cryptoContext.levelBudget, dim1, (1<<logSlots), 0
-    # )
 
     # Test the correctness of the bootstrapping
     logSlots = logSlots_list[0]
@@ -531,7 +559,6 @@ def BootstrapTest_slots_list_example(
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
-    # utils.load_rotation_keys(cryptoContext, "app") #fixme: deal with "app" is None?
 
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
     #test correctness
@@ -570,8 +597,8 @@ def BootstrapTest_test_case(
         maxLevelsRemaining=3,
         levelBudget_list=[[3, 3], [4, 4]],
         dnum=3,
-        dcrtBits=59,
-        firstMod=60,
+        dcrtBits=52,
+        firstMod=56,
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
@@ -655,3 +682,73 @@ def BootstrapTest_test_case(
             print("BootstrapTest_logslots12: Test passed!")
         else:
             print("BootstrapTest_logslots12: Test failed!")
+
+
+def Keyswitch_test_case(
+        logN=14,
+        logSlots_list=[11],
+        maxLevelsRemaining=2,
+        levelBudget_list=[[4, 4]],
+        dnum=3,
+        dcrtBits=50,
+        firstMod=54,
+        approxModDepth=9,
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir="torch/fhe/data/",
+        mode = "debug" # "debug" or "release"
+
+):
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
+                                                                 logSlots_list,
+                                                                 maxLevelsRemaining,
+                                                                 levelBudget_list,
+                                                                 dnum,
+                                                                 dcrtBits,
+                                                                 firstMod,
+                                                                 approxModDepth,
+                                                                 [-1,2],
+                                                                 "UNIFORM_TERNARY",
+                                                                 rescaleTech,
+                                                                 save_dir=save_dir,
+                                                                 mode = mode)
+
+    specify_slots = logSlots_list[0] # logslots = 11
+    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, 1<<specify_slots)
+
+    # do the application computation
+    utils.load_rotation_keys(cryptoContext, "app")
+    print("L ", cryptoContext.L)
+    print("K ", cryptoContext.K)
+    print("alpha ", cryptoContext.alpha)
+    cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    cipher = homo_ops.homo_square(cipher, cryptoContext)
+    print("2rot, 6sqr")
+    print("gpu bootstrapp done!")
+    # compute golden answer
+    if mode == "debug":
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, 2)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        cipher_openfhe = openfhe_context.cc.EvalSquare(cipher_openfhe)
+        is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+        if is_euqal:
+            print("Key switch: Test passed!")
+        else:
+            print("Key switch: Test failed!")

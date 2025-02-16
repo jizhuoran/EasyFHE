@@ -6,6 +6,7 @@ import atexit
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
+import torch
 
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
@@ -32,9 +33,9 @@ def print_call_counts():
 
 @atexit.register
 def print_execution_times():
-    print("\nFunction Execution Times:")
+    print("\nExecution Times:")
     for func_name, exec_time in execution_times.items():
-        print(f"Function '{func_name}' took {exec_time:.6f} seconds to finish.")
+        print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
 
 def check_meta_equal(func):
     def wrapper(*args, **kwargs):
@@ -90,9 +91,6 @@ def profile_pytorch_function(func):
 
         profiler_results = profiler.key_averages()
         print(profiler_results.table(sort_by="self_cuda_time_total"))
-        print("//////////////////////")
-        print("//////////////////////")
-        print("//////////////////////")
         print(profiler_results.table(sort_by="self_cpu_time_total"))
 
         return result

@@ -1,7 +1,6 @@
 import torch.fhe.bootstrapping as bstest
 import torch.fhe.resnet.resnet20 as res
-import pickle
-import numpy as np
+
 # bstest.run_test_cases()
 # bstest.BootstrapTest_N65536L26lB44()
 

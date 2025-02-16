@@ -31,7 +31,8 @@ static void switch_modulus_template(
   auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
-      op_ptr,
+    op_ptr,
+    op_ptr,
       0,
       1,
       1,
@@ -44,6 +45,7 @@ static void switch_modulus_template(
   switch_modulus(op_ptr, res_ptr, moduliQ, 0, L0, N);
 
   NTT_impl(
+      res_ptr,
       res_ptr,
       0,
       L0,

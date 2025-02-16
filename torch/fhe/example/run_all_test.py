@@ -8,7 +8,7 @@ with open("result.txt", "w") as f:
 
 start_time = time.time()
 #find all context in the directory
-path = "data/"
+path = "/mnt/public_data/data/"
 for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and context_file.startswith("GPU-FHE-CONTEXT"):
         print("Testing", context_file)
