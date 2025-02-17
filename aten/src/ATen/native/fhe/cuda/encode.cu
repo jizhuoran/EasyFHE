@@ -270,12 +270,12 @@ void fit_to_native_vector(
     uint64_t* native_modulus,
     int dslots,
     int gap,
-    int level,
+    int cur_limbs,
     int N) {
   auto stream = at::cuda::getCurrentCUDAStream();
   const int blockSize = 256;
   const int gridSize = (dslots + blockSize - 1) / blockSize;
-  for (int i = 0; i < level; i++) {
+  for (int i = 0; i < cur_limbs; i++) {
     fhe::fit_to_native_vector_kernel<<<gridSize, blockSize, 0, stream>>>(
         d_vec, big_bound, d_native_vec, native_modulus, i, dslots, gap);
     d_native_vec += N;
@@ -286,12 +286,12 @@ void scale_noise_degree_vector(
     uint64_t* elements_ptr,
     uint64_t* primes_ptr,
     std::vector<uint64_t>& moduli,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t N,
     int64_t noise_scale_deg,
     DTYPE scaling_factor) {
   DTYPE pow_p = scaling_factor;
-  std::vector<uint64_t> crt_pow_p(level, llround(pow_p));
+  std::vector<uint64_t> crt_pow_p(cur_limbs, llround(pow_p));
   auto curr_pow_p = crt_pow_p;
   for (int i = 2; i < noise_scale_deg; i++) {
     curr_pow_p = crt_mult(curr_pow_p, crt_pow_p, moduli);
@@ -305,7 +305,7 @@ void scale_noise_degree_vector(
       cudaMemcpyHostToDevice);
   auto stream = at::cuda::getCurrentCUDAStream();
   int threadsPerBlock = 256;
-  int blocksPerGrid = (level * N + threadsPerBlock - 1) / threadsPerBlock;
+  int blocksPerGrid = (cur_limbs * N + threadsPerBlock - 1) / threadsPerBlock;
   fhe::mul_mod_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
       elements_ptr, d_curr_pow_p, primes_ptr, N);
 }
@@ -315,20 +315,20 @@ void scale_log_approx_vector(
     uint64_t* primes_ptr,
     std::vector<uint64_t>& moduli,
     int log_approx,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t N) {
   int MAX_LOG_STEP = 60;
   int log_step = std::min(log_approx, MAX_LOG_STEP);
   int int_step = 1 << log_step;
 
-  std::vector<uint64_t> crt_approx(level, int_step);
+  std::vector<uint64_t> crt_approx(cur_limbs, int_step);
   log_approx -= log_step;
 
   while (log_approx > 0) {
     log_step = std::min(log_approx, MAX_LOG_STEP);
     int_step = 1 << log_step;
 
-    std::vector<uint64_t> crt_sf(level, int_step);
+    std::vector<uint64_t> crt_sf(cur_limbs, int_step);
     crt_approx = crt_mult(crt_approx, crt_sf, moduli);
     log_approx -= log_step;
   }
@@ -341,7 +341,7 @@ void scale_log_approx_vector(
       cudaMemcpyHostToDevice);
   auto stream = at::cuda::getCurrentCUDAStream();
   int threadsPerBlock = 256;
-  int blocksPerGrid = (level * N + threadsPerBlock - 1) / threadsPerBlock;
+  int blocksPerGrid = (cur_limbs * N + threadsPerBlock - 1) / threadsPerBlock;
 
   fhe::mul_mod_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
       elements_ptr, d_crt_approx_ptr, primes_ptr, N);
@@ -357,7 +357,7 @@ static void encode_template(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t slots,
     int64_t noise_scale_deg,
     DTYPE scaling_factor,
@@ -418,18 +418,18 @@ static void encode_template(
             primes_ptr,
             temp_size,
             gap,
-            level,
+            cur_limbs,
             N);
 
         int* h_log_approx = new int[1];
         cudaMemcpy(
             h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
         int log_approx = h_log_approx[0];
-        std::vector<uint64_t> moduli(level, 0);
+        std::vector<uint64_t> moduli(cur_limbs, 0);
         cudaMemcpy(
             moduli.data(),
             primes_ptr,
-            sizeof(uint64_t) * level,
+            sizeof(uint64_t) * cur_limbs,
             cudaMemcpyDeviceToHost);
 
         if (noise_scale_deg > 1) {
@@ -437,7 +437,7 @@ static void encode_template(
               elements_ptr,
               primes_ptr,
               moduli,
-              level,
+              cur_limbs,
               N,
               noise_scale_deg,
               scaling_factor);
@@ -445,14 +445,14 @@ static void encode_template(
 
         if (log_approx > 0) {
           scale_log_approx_vector(
-              elements_ptr, primes_ptr, moduli, log_approx, level, N);
+              elements_ptr, primes_ptr, moduli, log_approx, cur_limbs, N);
         }
 
         NTT_impl(
             elements_ptr,
             elements_ptr,
             0,
-            level,
+            cur_limbs,
             N,
             power_of_roots_shoup,
             primes,
@@ -474,7 +474,7 @@ Tensor encode_cuda(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t slots,
     int64_t noise_scale_deg,
     DTYPE scaling_factor,
@@ -482,7 +482,7 @@ Tensor encode_cuda(
     const Tensor& power_of_roots,
     bool use_fft) {
   Tensor out = at::empty_like(res);
-  out.resize_({level, N});
+  out.resize_({cur_limbs, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -493,7 +493,7 @@ Tensor encode_cuda(
       precompute_ksipows_imag,
       M,
       N,
-      level,
+      cur_limbs,
       slots,
       noise_scale_deg,
       scaling_factor,
@@ -515,14 +515,14 @@ Tensor encode_cuda_(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t slots,
     int64_t noise_scale_deg,
     DTYPE scaling_factor,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
     bool use_fft) {
-  res.resize_({level, N});
+  res.resize_({cur_limbs, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -533,7 +533,7 @@ Tensor encode_cuda_(
       precompute_ksipows_imag,
       M,
       N,
-      level,
+      cur_limbs,
       slots,
       noise_scale_deg,
       scaling_factor,
@@ -555,7 +555,7 @@ Tensor encode_cuda_out(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t level,
+    int64_t cur_limbs,
     int64_t slots,
     int64_t noise_scale_deg,
     DTYPE scaling_factor,
@@ -563,7 +563,7 @@ Tensor encode_cuda_out(
     const Tensor& power_of_roots,
     bool use_fft,
     Tensor& out) {
-  out.resize_({level, N});
+  out.resize_({cur_limbs, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -574,7 +574,7 @@ Tensor encode_cuda_out(
       precompute_ksipows_imag,
       M,
       N,
-      level,
+      cur_limbs,
       slots,
       noise_scale_deg,
       scaling_factor,

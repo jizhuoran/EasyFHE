@@ -85,7 +85,7 @@ class OpenFHEContext:
                 scFact = cryptocontext.GetScalingFactorReal(cryptocontext.L-level)
 
             # fixme: input should consider scale_deg, and level, it is definitely not correct now
-            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact, level, scale_deg)
+            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact, (cryptocontext.L-level), scale_deg)
 
             mv = [encoded_vector_dcrt_elements_cuda]
             return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
@@ -387,7 +387,7 @@ class OpenFHEContext:
         is_encoded = True
         return encoded_vector_dcrt_elements
 
-    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, level, noise_scale_deg=1, use_fft = False, is_encoded = False):
+    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, cur_limbs, noise_scale_deg=1, use_fft = False, is_encoded = False):
         inverse = x
         pt_encode = []
 
@@ -419,7 +419,7 @@ class OpenFHEContext:
                                      precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
                                      M=cryptocontext.M,
                                      N=cryptocontext.N,
-                                     level=level,
+                                     cur_limbs=cur_limbs,
                                      slots=slots,
                                      noise_scale_deg = noise_scale_deg,
                                      scaling_factor=scaling_factor,
