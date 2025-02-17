@@ -241,7 +241,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
                 he_res20_ctx.cur_num_slots = (1<<14)
                 set_bootstrapping_keys(he_res20_ctx.cur_num_slots, cryptoContext)
 
-                image_vector, label = read_image(i)
+                image_vector, label, index = read_image(i)
                 image_vector = np.array(image_vector)
                 image_vector = torch.tensor(image_vector, device="cuda")
                 in_ct, in_ct_openfhe = openfhe_context.encrypt(image_vector, 1,
@@ -275,7 +275,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
                 print("ground truth: ", label, "prediction: ", max_element_idx)
 
                 # print to log file
-                print("For image ", i, file=log_file)
+                print("For image ", i, "index: ", index, file=log_file)
                 print(clear_result[:10], file=log_file) # should be of len 10
                 print("ground truth: ", label, "prediction: ", max_element_idx, file=log_file)
                 log_file.flush()

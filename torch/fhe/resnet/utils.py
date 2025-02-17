@@ -87,7 +87,7 @@ def read_image(file_cnt=None):
                     pixel = (pixel - 0.4465) / 0.2010
                 imageVector.append(pixel)
 
-        return imageVector,label
+        return imageVector,label,index
 
     except FileNotFoundError:
         print(f"Failed to open the file: {filePath}")
