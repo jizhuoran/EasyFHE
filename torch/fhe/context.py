@@ -157,6 +157,13 @@ class Context:
         for logSlots in self.logSlots_list:
             _BsContext = BsContext(BsContext_content_map[str(logSlots)])
             self.BsContext_map[str(logSlots)] = _BsContext
+        self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
+        self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
+        self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)
+        self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
+        self.encode_params_rotGroup_cuda = get_item("encode_params_rotGroup_cuda", gpufhe_content_map)
+        self.encode_temp = get_item("encode_temp", gpufhe_content_map)
+        self.encode_out = get_item("encode_out", gpufhe_content_map)
 
         # self.constant_minus_one = {}
         # for cur_libm, noise_deg in itertools.product(range(self.L), [1, 2]):
@@ -201,6 +208,12 @@ class Context:
         self.switch_modulus_out = torch.tensor(self.switch_modulus_out, dtype = torch.uint64, device = "cuda")
         self.PModq_cuda = torch.tensor(self.PModq_cuda, dtype = torch.uint64, device = "cuda")
         self.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in self.key_map]
+        self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double, device = "cuda")
+        self.encode_params_ksiPows_imag = torch.tensor(self.encode_params_ksiPows_imag, dtype = torch.double, device = "cuda")
+        self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64, device = "cuda")
+        self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
+        self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64, device = "cuda")
+        self.encode_out = torch.tensor(self.encode_out, dtype = torch.uint64, device = "cuda")
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!

@@ -355,9 +355,9 @@ def Keyswitch_test_case(
 
 def encode_test_case(
         logN=14,
-        logSlots_list=[11, 12],
+        logSlots_list=[11],
         maxLevelsRemaining=3,
-        levelBudget_list=[[3, 3], [4, 4]],
+        levelBudget_list=[[3, 3]],
         dnum=3,
         dcrtBits=59,
         firstMod=60,

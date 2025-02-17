@@ -155,28 +155,27 @@ class OpenFHEContext:
                 vals[i], vals[j] = vals[j], vals[i]  # 交换复数
         return vals
 
-    def fft_special_inv(self, vals, precomputed_values):
+    def fft_special_inv(self, vals, M, rotGroup, ksiPows):
 
         # # 检查是否已为给定的cyclotomic order预计算了旋转因子
         # if cycl_order not in precomputed_values:
         #     raise ValueError(f"DiscreteFourierTransform::Initialize() must be called for cyclOrder = {cycl_order}")
 
         vals_size = len(vals)
-        precomputed = precomputed_values
 
         # FFT特定的操作
         len_size = vals_size
         while len_size >= 1:
             len_h = len_size >> 1
             len_q = len_size << 2
-            gap = precomputed.m_M // len_q  # 根据给定的m_M进行计算
+            gap = M // len_q  # 根据给定的m_M进行计算
 
             for i in range(0, vals_size, len_size):
                 for j in range(len_h):
-                    idx = (len_q - (precomputed.m_rotGroup[j] % len_q)) * gap
+                    idx = (len_q - (rotGroup[j] % len_q)) * gap
                     u = vals[i + j] + vals[i + j + len_h]
                     v = vals[i + j] - vals[i + j + len_h]
-                    v *= precomputed.m_ksiPows[idx]  # 乘以预先计算的旋转因子
+                    v *= ksiPows[idx]  # 乘以预先计算的旋转因子
                     vals[i + j] = u
                     vals[i + j + len_h] = v
             len_size >>= 1
@@ -264,7 +263,7 @@ class OpenFHEContext:
         precomputed_values = PrecomputedValues(M, Nh)
 
         if type_flag == 'IsDCRTPoly':
-            inverse = self.fft_special_inv(inverse, precomputed_values)
+            inverse = self.fft_special_inv(inverse, M, precomputed_values.m_rotGroup, precomputed_values.m_ksiPows)
 
             pow_p = scaling_factor
             logc = 0
@@ -388,7 +387,7 @@ class OpenFHEContext:
         is_encoded = True
         return encoded_vector_dcrt_elements
 
-    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor,  noise_scale_deg=1, is_encoded = False):
+    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, noise_scale_deg=1, is_encoded = False):
         ring_dim = cryptocontext.N
         inverse = x
 
@@ -402,29 +401,21 @@ class OpenFHEContext:
         # Resize the inverse to fit the slot size.
         # note that default: slots value should be greater than size of input data list x
         inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
-        precomputed_values = PrecomputedValues(cryptocontext.M, cryptocontext.Nh)
 
-        inverse = self.fft_special_inv(inverse, precomputed_values)
+        inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup, cryptocontext.encode_params_ksiPows)
 
         #move precompute&inverse to cuda
         inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
         inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
-        precompute_ksipows = np.array(precomputed_values.m_ksiPows, dtype=np.complex128)
-        precompute_ksipows_real = torch.tensor(precompute_ksipows.real.astype(np.double) ,device="cuda") # 转换为 float32
-        precompute_ksipows_imag = torch.tensor(precompute_ksipows.imag.astype(np.double), device="cuda")
-        precompute_rotgroups = torch.tensor(np.array(precomputed_values.m_rotGroup), device = "cuda")
-        # 创建temp， encode——out
-        temp =  torch.tensor(np.zeros(2 * slots, dtype=int),device="cuda")
-        encode_out = torch.tensor(np.zeros(cryptocontext.L *cryptocontext.N, dtype=np.uint64),device="cuda")
 
-        pt_encode = torch.encode(encode_out,
+        pt_encode = torch.encode(cryptocontext.encode_out,
                                  inverse_real=inverse_real,
                                  inverse_imag=inverse_imag,
-                                 temp=temp,
+                                 temp=cryptocontext.encode_temp,
                                  primes=cryptocontext.primes,
-                                 precompute_rotgroups=precompute_rotgroups,
-                                 precompute_ksipows_real=precompute_ksipows_real,
-                                 precompute_ksipows_imag=precompute_ksipows_imag,
+                                 precompute_rotgroups=cryptocontext.encode_params_rotGroup_cuda,
+                                 precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
+                                 precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
                                  M=cryptocontext.M,
                                  N=cryptocontext.N,
                                  L=cryptocontext.L,

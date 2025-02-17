@@ -2,6 +2,7 @@ import random
 import warnings
 import pickle
 import sympy
+import cmath
 from .bs_context import *
 
 class __FOR_SAVE_ONLY_Context:
@@ -423,6 +424,26 @@ class __FOR_SAVE_ONLY_Context:
                 self.dmoduliQ[i] = float(self.moduliQ[i])
         else:
             self.approxSF = 2**self.dcrtBits
+        # compute encode params
+        M_PI = 3.14159265358979323846
+        fivePows = 1
+        self.encode_params_ksiPows = []
+        self.encode_params_rotGroup = []
+        for i in range(self.Nh):
+            self.encode_params_rotGroup.append(fivePows)
+            fivePows = (fivePows * 5) % self.M
+
+        # m_ksiPows stores the complex roots of unity
+        for j in range(self.M):
+            angle = 2.0 * M_PI * j / self.M
+            self.encode_params_ksiPows.append(cmath.exp(1j * angle))
+        self.encode_params_ksiPows.append(self.encode_params_ksiPows[0])
+
+        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128)
+        self.encode_params_ksiPows_real = self.encode_params_ksiPows.real.astype(np.double)
+        self.encode_params_ksiPows_imag = self.encode_params_ksiPows.imag.astype(np.double)
+        self.encode_params_rotGroup_cuda = np.array(self.encode_params_rotGroup)
+
 
         # for cuda context
         if True:
@@ -499,6 +520,14 @@ class __FOR_SAVE_ONLY_Context:
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
             )
+            self.encode_temp = np.array(
+                [0] * (2 * self.Nh),
+                dtype=np.int64,
+                )
+            self.encode_out = np.array(
+                [0] * (self.L * self.N),
+                dtype=np.uint64,
+                )
 
             power_of_roots = qRootPows + pRootPows
             inverse_power_of_roots = qRootPowsInv + pRootPowsInv

@@ -324,6 +324,7 @@ static void encode_template(
         const int blockDim2 = 256;
         const int gridDim2 = (inverse_size + blockDim2 - 1) / blockDim2;
         auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
+        const int temp_size = 2 * slots;
         int64_t* d_log_approx;
         cudaMalloc(&d_log_approx, sizeof(int64_t));
         fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
@@ -338,13 +339,13 @@ static void encode_template(
             reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        int gap = N / temp.numel();
+        int gap = N / temp_size;
         launch_fit_to_native_vector(
             temp_ptr,
             MAX_64BIT_VALUE,
             elements_ptr,
             primes_ptr,
-            temp.numel(),
+            temp_size,
             gap,
             L,
             N);
