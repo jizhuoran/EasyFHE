@@ -69,7 +69,7 @@ class OpenFHEContext:
                 scFact = cryptocontext.GetScalingFactorReal(cryptocontext.L)
             slots = cryptocontext.Nh # note: default slots is N/2, which is Nh
             scale_deg = 1 # note: default scale_deg is 1
-            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact)
+            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact, cryptocontext.L)
 
             mv = [encoded_vector_dcrt_elements_cuda]
             return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
@@ -85,7 +85,7 @@ class OpenFHEContext:
                 scFact = cryptocontext.GetScalingFactorReal(cryptocontext.L-level)
 
             # fixme: input should consider scale_deg, and level, it is definitely not correct now
-            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact)
+            encoded_vector_dcrt_elements_cuda = self.ptx_encode_cuda(x, cryptocontext, slots, 'IsDCRTPoly', scFact, level, scale_deg)
 
             mv = [encoded_vector_dcrt_elements_cuda]
             return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
@@ -387,9 +387,9 @@ class OpenFHEContext:
         is_encoded = True
         return encoded_vector_dcrt_elements
 
-    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, noise_scale_deg=1, is_encoded = False):
-        ring_dim = cryptocontext.N
+    def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, level, noise_scale_deg=1, use_fft = False, is_encoded = False):
         inverse = x
+        pt_encode = []
 
         if is_encoded:
             return
@@ -401,28 +401,33 @@ class OpenFHEContext:
         # Resize the inverse to fit the slot size.
         # note that default: slots value should be greater than size of input data list x
         inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
+        if type_flag == 'IsDCRTPoly':
+            if not use_fft:
+                inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup, cryptocontext.encode_params_ksiPows)
 
-        inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup, cryptocontext.encode_params_ksiPows)
+            #move precompute&inverse to cuda
+            inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
+            inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
 
-        #move precompute&inverse to cuda
-        inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
-        inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
-
-        pt_encode = torch.encode(cryptocontext.encode_out,
-                                 inverse_real=inverse_real,
-                                 inverse_imag=inverse_imag,
-                                 temp=cryptocontext.encode_temp,
-                                 primes=cryptocontext.primes,
-                                 precompute_rotgroups=cryptocontext.encode_params_rotGroup_cuda,
-                                 precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
-                                 precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
-                                 M=cryptocontext.M,
-                                 N=cryptocontext.N,
-                                 L=cryptocontext.L,
-                                 slots=slots,
-                                 scaling_factor=scaling_factor,
-                                 power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-                                 power_of_roots=cryptocontext.power_of_roots)
+            pt_encode = torch.encode(cryptocontext.encode_out,
+                                     inverse_real=inverse_real,
+                                     inverse_imag=inverse_imag,
+                                     temp=cryptocontext.encode_temp,
+                                     primes=cryptocontext.primes,
+                                     precompute_rotgroups=cryptocontext.encode_params_rotGroup_cuda,
+                                     precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
+                                     precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
+                                     M=cryptocontext.M,
+                                     N=cryptocontext.N,
+                                     level=level,
+                                     slots=slots,
+                                     noise_scale_deg = noise_scale_deg,
+                                     scaling_factor=scaling_factor,
+                                     power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+                                     power_of_roots=cryptocontext.power_of_roots,
+                                     use_fft=use_fft)
+        else:
+            print("Only DCRTPoly is supported for CKKS.")
         return pt_encode
 
 

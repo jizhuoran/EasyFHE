@@ -16,24 +16,27 @@
 
 #define MAX_64BIT_VALUE 9223372036854775295
 #define MAX_BITS_IN_WORD 61
+#define DTYPE double
+#define DTYPE2 double2
+#define MAKE_DTYPE2 make_double2
 
 namespace fhe {
 
-__device__ double2
-complex_mul(double a_real, double a_imag, double b_real, double b_imag) {
-  return make_double2(
+__device__ DTYPE2
+complex_mul(DTYPE a_real, DTYPE a_imag, DTYPE b_real, DTYPE b_imag) {
+  return MAKE_DTYPE2(
       a_real * b_real - a_imag * b_imag, a_real * b_imag + a_imag * b_real);
 }
 
 __global__ void fft_stage_kernel(
-    double* vals_real,
-    double* vals_imag,
+    DTYPE* vals_real,
+    DTYPE* vals_imag,
     int len_size,
     int vals_size,
     int m_M,
     int64_t* m_rotGroup,
-    double* m_ksiPows_real,
-    double* m_ksiPows_imag) {
+    DTYPE* m_ksiPows_real,
+    DTYPE* m_ksiPows_imag) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   int total_threads = vals_size / 2;
 
@@ -52,17 +55,17 @@ __global__ void fft_stage_kernel(
     int rot = m_rotGroup[j] % len_q;
     int idx = (len_q - rot) * gap;
 
-    double val_low_real = vals_real[i + j];
-    double val_low_imag = vals_imag[i + j];
-    double val_high_real = vals_real[i + j + len_h];
-    double val_high_imag = vals_imag[i + j + len_h];
+    DTYPE val_low_real = vals_real[i + j];
+    DTYPE val_low_imag = vals_imag[i + j];
+    DTYPE val_high_real = vals_real[i + j + len_h];
+    DTYPE val_high_imag = vals_imag[i + j + len_h];
 
-    double u_real = val_low_real + val_high_real;
-    double u_imag = val_low_imag + val_high_imag;
-    double v_real = val_low_real - val_high_real;
-    double v_imag = val_low_imag - val_high_imag;
+    DTYPE u_real = val_low_real + val_high_real;
+    DTYPE u_imag = val_low_imag + val_high_imag;
+    DTYPE v_real = val_low_real - val_high_real;
+    DTYPE v_imag = val_low_imag - val_high_imag;
 
-    double2 temp =
+    DTYPE2 temp =
         complex_mul(v_real, v_imag, m_ksiPows_real[idx], m_ksiPows_imag[idx]);
     v_real = temp.x;
     v_imag = temp.y;
@@ -75,8 +78,8 @@ __global__ void fft_stage_kernel(
 }
 
 __global__ void bit_reverse_kernel(
-    double* vals_real,
-    double* vals_imag,
+    DTYPE* vals_real,
+    DTYPE* vals_imag,
     int n) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
@@ -90,8 +93,8 @@ __global__ void bit_reverse_kernel(
   }
 
   if (reversed > tid) {
-    double temp_real = vals_real[tid];
-    double temp_imag = vals_imag[tid];
+    DTYPE temp_real = vals_real[tid];
+    DTYPE temp_imag = vals_imag[tid];
     vals_real[tid] = vals_real[reversed];
     vals_imag[tid] = vals_imag[reversed];
     vals_real[reversed] = temp_real;
@@ -100,10 +103,10 @@ __global__ void bit_reverse_kernel(
 }
 
 __global__ void normalize_kernel(
-    double* vals_real,
-    double* vals_imag,
+    DTYPE* vals_real,
+    DTYPE* vals_imag,
     int n,
-    double factor) {
+    DTYPE factor) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
     return;
@@ -113,10 +116,10 @@ __global__ void normalize_kernel(
 }
 
 __global__ void scaleAndCheckOverflow(
-    double* inverse_real,
-    double* inverse_imag,
+    DTYPE* inverse_real,
+    DTYPE* inverse_imag,
     int slots,
-    double scaling_factor,
+    DTYPE scaling_factor,
     int64_t* temp,
     int64_t* log_approx_out) {
   /*
@@ -131,8 +134,8 @@ __global__ void scaleAndCheckOverflow(
   inverse_real[i] *= scaling_factor; // real part
   inverse_imag[i] *= scaling_factor; // imag part
 
-  double abs_real = fabs(inverse_real[i]);
-  double abs_imag = fabs(inverse_imag[i]);
+  DTYPE abs_real = fabs(inverse_real[i]);
+  DTYPE abs_imag = fabs(inverse_imag[i]);
 
   int logc = 0;
   if (abs_real > 0)
@@ -148,8 +151,8 @@ __global__ void scaleAndCheckOverflow(
   int log_approx = logc - log_valid;
   log_approx_out[0] = log_approx;
   int approx_factor = 1 << log_approx;
-  double dre = inverse_real[i] / approx_factor;
-  double dim = inverse_imag[i] / approx_factor;
+  DTYPE dre = inverse_real[i] / approx_factor;
+  DTYPE dim = inverse_imag[i] / approx_factor;
 
   if (abs(dre) > MAX_64BIT_VALUE || abs(dim) > MAX_64BIT_VALUE) {
     printf(
@@ -211,7 +214,7 @@ namespace at::native {
 
 static std::vector<uint64_t> crt_mult(
     const std::vector<uint64_t>& a,
-    const std::vector<int>& b,
+    const std::vector<uint64_t>& b,
     const std::vector<uint64_t>& moduli) {
   std::vector<uint64_t> result(a.size());
   for (size_t i = 0; i < a.size(); i++) {
@@ -221,11 +224,11 @@ static std::vector<uint64_t> crt_mult(
 }
 
 static void fft_special_inv_cuda(
-    double* inverse_real,
-    double* inverse_imag,
+    DTYPE* inverse_real,
+    DTYPE* inverse_imag,
     int64_t* precompute_rotgroups,
-    double* precompute_ksipows_real,
-    double* precompute_ksipows_imag,
+    DTYPE* precompute_ksipows_real,
+    DTYPE* precompute_ksipows_imag,
     int64_t M,
     int vals_size) {
   int len_size = vals_size;
@@ -254,29 +257,94 @@ static void fft_special_inv_cuda(
 
   cudaDeviceSynchronize();
 
-  double factor = 1.0f / vals_size;
+  DTYPE factor = 1.0f / vals_size;
   fhe::normalize_kernel<<<grid_br, block, 0, stream>>>(
       inverse_real, inverse_imag, vals_size, factor);
   cudaDeviceSynchronize();
 }
 
-void launch_fit_to_native_vector(
+void fit_to_native_vector(
     int64_t* d_vec,
     int64_t big_bound,
     uint64_t* d_native_vec,
     uint64_t* native_modulus,
     int dslots,
     int gap,
-    int L,
+    int level,
     int N) {
   auto stream = at::cuda::getCurrentCUDAStream();
   const int blockSize = 256;
   const int gridSize = (dslots + blockSize - 1) / blockSize;
-  for (int i = 0; i < L; i++) {
+  for (int i = 0; i < level; i++) {
     fhe::fit_to_native_vector_kernel<<<gridSize, blockSize, 0, stream>>>(
         d_vec, big_bound, d_native_vec, native_modulus, i, dslots, gap);
     d_native_vec += N;
   }
+}
+
+void scale_noise_degree_vector(
+    uint64_t* elements_ptr,
+    uint64_t* primes_ptr,
+    std::vector<uint64_t>& moduli,
+    int64_t level,
+    int64_t N,
+    int64_t noise_scale_deg,
+    DTYPE scaling_factor) {
+  DTYPE pow_p = scaling_factor;
+  std::vector<uint64_t> crt_pow_p(level, llround(pow_p));
+  auto curr_pow_p = crt_pow_p;
+  for (int i = 2; i < noise_scale_deg; i++) {
+    curr_pow_p = crt_mult(curr_pow_p, crt_pow_p, moduli);
+  }
+  uint64_t* d_curr_pow_p;
+  cudaMalloc(&d_curr_pow_p, sizeof(uint64_t) * curr_pow_p.size());
+  cudaMemcpy(
+      curr_pow_p.data(),
+      d_curr_pow_p,
+      sizeof(uint64_t) * curr_pow_p.size(),
+      cudaMemcpyHostToDevice);
+  auto stream = at::cuda::getCurrentCUDAStream();
+  int threadsPerBlock = 256;
+  int blocksPerGrid = (level * N + threadsPerBlock - 1) / threadsPerBlock;
+  fhe::mul_mod_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+      elements_ptr, d_curr_pow_p, primes_ptr, N);
+}
+
+void scale_log_approx_vector(
+    uint64_t* elements_ptr,
+    uint64_t* primes_ptr,
+    std::vector<uint64_t>& moduli,
+    int log_approx,
+    int64_t level,
+    int64_t N) {
+  int MAX_LOG_STEP = 60;
+  int log_step = std::min(log_approx, MAX_LOG_STEP);
+  int int_step = 1 << log_step;
+
+  std::vector<uint64_t> crt_approx(level, int_step);
+  log_approx -= log_step;
+
+  while (log_approx > 0) {
+    log_step = std::min(log_approx, MAX_LOG_STEP);
+    int_step = 1 << log_step;
+
+    std::vector<uint64_t> crt_sf(level, int_step);
+    crt_approx = crt_mult(crt_approx, crt_sf, moduli);
+    log_approx -= log_step;
+  }
+  uint64_t* d_crt_approx_ptr;
+  cudaMalloc(&d_crt_approx_ptr, sizeof(uint64_t) * crt_approx.size());
+  cudaMemcpy(
+      crt_approx.data(),
+      d_crt_approx_ptr,
+      sizeof(uint64_t) * crt_approx.size(),
+      cudaMemcpyHostToDevice);
+  auto stream = at::cuda::getCurrentCUDAStream();
+  int threadsPerBlock = 256;
+  int blocksPerGrid = (level * N + threadsPerBlock - 1) / threadsPerBlock;
+
+  fhe::mul_mod_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
+      elements_ptr, d_crt_approx_ptr, primes_ptr, N);
 }
 
 static void encode_template(
@@ -289,11 +357,13 @@ static void encode_template(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t L,
+    int64_t level,
     int64_t slots,
-    double scaling_factor,
+    int64_t noise_scale_deg,
+    DTYPE scaling_factor,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
+    bool use_fft,
     Tensor& res) {
   AT_DISPATCH_V2(
       res.scalar_type(),
@@ -301,24 +371,29 @@ static void encode_template(
       AT_WRAP([&]() {
         int inverse_size = inverse_real.numel();
         auto inverse_real_ptr =
-            reinterpret_cast<double*>(inverse_real.data_ptr<double>());
+            reinterpret_cast<DTYPE*>(inverse_real.data_ptr<DTYPE>());
         auto inverse_imag_ptr =
-            reinterpret_cast<double*>(inverse_imag.data_ptr<double>());
-        auto precompute_ksipows_real_ptr = reinterpret_cast<double*>(
-            precompute_ksipows_real.data_ptr<double>());
-        auto precompute_ksipows_imag_ptr = reinterpret_cast<double*>(
-            precompute_ksipows_imag.data_ptr<double>());
+            reinterpret_cast<DTYPE*>(inverse_imag.data_ptr<DTYPE>());
+        auto precompute_ksipows_real_ptr = reinterpret_cast<DTYPE*>(
+            precompute_ksipows_real.data_ptr<DTYPE>());
+        auto precompute_ksipows_imag_ptr = reinterpret_cast<DTYPE*>(
+            precompute_ksipows_imag.data_ptr<DTYPE>());
         auto rotGroups = reinterpret_cast<int64_t*>(
             precompute_rotgroups.data_ptr<int64_t>());
-
-        //        fft_special_inv_cuda(
-        //            inverse_real_ptr,
-        //            inverse_imag_ptr,
-        //            rotGroups,
-        //            precompute_ksipows_real_ptr,
-        //            precompute_ksipows_imag_ptr,
-        //            M,
-        //            inverse_size);
+        auto elements_ptr =
+            reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+        auto primes_ptr =
+            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+        if (use_fft) {
+          fft_special_inv_cuda(
+              inverse_real_ptr,
+              inverse_imag_ptr,
+              rotGroups,
+              precompute_ksipows_real_ptr,
+              precompute_ksipows_imag_ptr,
+              M,
+              inverse_size);
+        }
 
         auto stream = at::cuda::getCurrentCUDAStream();
         const int blockDim2 = 256;
@@ -335,67 +410,49 @@ static void encode_template(
             temp_ptr,
             d_log_approx);
 
-        auto elements_ptr =
-            reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         int gap = N / temp_size;
-        launch_fit_to_native_vector(
+        fit_to_native_vector(
             temp_ptr,
             MAX_64BIT_VALUE,
             elements_ptr,
             primes_ptr,
             temp_size,
             gap,
-            L,
+            level,
             N);
 
         int* h_log_approx = new int[1];
         cudaMemcpy(
             h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
         int log_approx = h_log_approx[0];
+        std::vector<uint64_t> moduli(level, 0);
+        cudaMemcpy(
+            moduli.data(),
+            primes_ptr,
+            sizeof(uint64_t) * level,
+            cudaMemcpyDeviceToHost);
+
+        if (noise_scale_deg > 1) {
+          scale_noise_degree_vector(
+              elements_ptr,
+              primes_ptr,
+              moduli,
+              level,
+              N,
+              noise_scale_deg,
+              scaling_factor);
+        }
+
         if (log_approx > 0) {
-          int num_towers = L;
-          int MAX_LOG_STEP = 60;
-          int log_step = std::min(log_approx, MAX_LOG_STEP);
-          int int_step = 1 << log_step;
-
-          std::vector<uint64_t> crt_approx(num_towers, int_step);
-          log_approx -= log_step;
-
-          while (log_approx > 0) {
-            log_step = std::min(log_approx, MAX_LOG_STEP);
-            int_step = 1 << log_step;
-            std::vector<uint64_t> moduli(num_towers, 0);
-            cudaMemcpy(
-                moduli.data(),
-                primes_ptr,
-                sizeof(uint64_t) * num_towers,
-                cudaMemcpyDeviceToHost);
-
-            std::vector<int> crt_sf(num_towers, int_step);
-            crt_approx = crt_mult(crt_approx, crt_sf, moduli);
-            log_approx -= log_step;
-          }
-          uint64_t* d_crt_approx_ptr;
-          cudaMalloc(&d_crt_approx_ptr, sizeof(uint64_t) * crt_approx.size());
-          cudaMemcpy(
-              crt_approx.data(),
-              d_crt_approx_ptr,
-              sizeof(uint64_t) * crt_approx.size(),
-              cudaMemcpyHostToDevice);
-          int threadsPerBlock = 256;
-          int blocksPerGrid = (L * N + threadsPerBlock - 1) / threadsPerBlock;
-
-          fhe::mul_mod_kernel<<<blocksPerGrid, threadsPerBlock, 0, stream>>>(
-              elements_ptr, d_crt_approx_ptr, primes_ptr, N);
+          scale_log_approx_vector(
+              elements_ptr, primes_ptr, moduli, log_approx, level, N);
         }
 
         NTT_impl(
             elements_ptr,
             elements_ptr,
             0,
-            L,
+            level,
             N,
             power_of_roots_shoup,
             primes,
@@ -417,13 +474,15 @@ Tensor encode_cuda(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t L,
+    int64_t level,
     int64_t slots,
-    double scaling_factor,
+    int64_t noise_scale_deg,
+    DTYPE scaling_factor,
     const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots) {
+    const Tensor& power_of_roots,
+    bool use_fft) {
   Tensor out = at::empty_like(res);
-  out.resize_({L, N});
+  out.resize_({level, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -434,11 +493,13 @@ Tensor encode_cuda(
       precompute_ksipows_imag,
       M,
       N,
-      L,
+      level,
       slots,
+      noise_scale_deg,
       scaling_factor,
       power_of_roots_shoup,
       power_of_roots,
+      use_fft,
       out);
   return out;
 }
@@ -454,12 +515,14 @@ Tensor encode_cuda_(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t L,
+    int64_t level,
     int64_t slots,
-    double scaling_factor,
+    int64_t noise_scale_deg,
+    DTYPE scaling_factor,
     const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots) {
-  res.resize_({L, N});
+    const Tensor& power_of_roots,
+    bool use_fft) {
+  res.resize_({level, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -470,11 +533,13 @@ Tensor encode_cuda_(
       precompute_ksipows_imag,
       M,
       N,
-      L,
+      level,
       slots,
+      noise_scale_deg,
       scaling_factor,
       power_of_roots_shoup,
       power_of_roots,
+      use_fft,
       res);
   return res;
 }
@@ -490,13 +555,15 @@ Tensor encode_cuda_out(
     const Tensor& precompute_ksipows_imag,
     int64_t M,
     int64_t N,
-    int64_t L,
+    int64_t level,
     int64_t slots,
-    double scaling_factor,
+    int64_t noise_scale_deg,
+    DTYPE scaling_factor,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
+    bool use_fft,
     Tensor& out) {
-  out.resize_({L, N});
+  out.resize_({level, N});
   encode_template(
       inverse_real,
       inverse_imag,
@@ -507,11 +574,13 @@ Tensor encode_cuda_out(
       precompute_ksipows_imag,
       M,
       N,
-      L,
+      level,
       slots,
+      noise_scale_deg,
       scaling_factor,
       power_of_roots_shoup,
       power_of_roots,
+      use_fft,
       out);
   return out;
 }
