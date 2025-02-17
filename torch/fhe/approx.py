@@ -363,10 +363,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time1 = time.time()
-    print("part1: ", time1 - time0)
+    # print("part1: ", time1 - time0)
     time_count = time1 - time0
 
-    print("k", k)
+    # print("k", k)
     for i in range(2, k + 1):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
@@ -384,7 +384,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time2 = time.time()
-    print("part2: ", time2 - time1)
+    # print("part2: ", time2 - time1)
     time_count += time2 - time1
     
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
@@ -398,10 +398,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time3 = time.time()
-    print("part3: ", time3 - time2)
+    # print("part3: ", time3 - time2)
     time_count += time3 - time2
 
-    print('m', m)
+    # print('m', m)
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     T2 = [T[-1]]
@@ -416,7 +416,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time4 = time.time()
-    print("part4: ", time4 - time3)
+    # print("part4: ", time4 - time3)
     time_count += time4 - time3
 
     # computes T_{k(2*m - 1)}(y)
@@ -432,7 +432,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time5 = time.time()
-    print("part5: ", time5 - time4)
+    # print("part5: ", time5 - time4)
     time_count += time5 - time4
 
     dc = degree(divcs_q)
@@ -457,7 +457,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time6 = time.time()
-    print("part6: ", time6 - time5)
+    # print("part6: ", time6 - time5)
     time_count += time6 - time5
 
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
@@ -515,7 +515,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time7 = time.time()
-    print("part7: ", time7 - time6)
+    # print("part7: ", time7 - time6)
     time_count += time7 - time6
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
@@ -529,11 +529,11 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     torch.cuda.synchronize()
     torch.cpu.synchronize()
     time8 = time.time()
-    print("part8: ", time8 - time7)
+    # print("part8: ", time8 - time7)
     time_count += time8 - time7
 
-    print("inner chebyshev count", time_count)
-    print("inner chebyshev total", time8 - time0)
+    # print("inner chebyshev count", time_count)
+    # print("inner chebyshev total", time8 - time0)
 
     return result
 

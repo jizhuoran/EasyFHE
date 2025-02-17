@@ -312,7 +312,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time2 = time.time()
-        print("start: ", time2 - time1)
+        # print("start: ", time2 - time1)
 
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
@@ -322,7 +322,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time3 = time.time()
-        print("eval_coeffs_to_slots: ", time3 - time2)
+        # print("eval_coeffs_to_slots: ", time3 - time2)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
@@ -337,7 +337,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time4 = time.time()
-        print("internal: ", time4 - time3)
+        # print("internal: ", time4 - time3)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -349,7 +349,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time5 = time.time()
-        print("eval_chebyshev_series_ps: ", time5 - time4)
+        # print("eval_chebyshev_series_ps: ", time5 - time4)
 
 
         if rescaleTech != "FIXEDMANUAL":
@@ -363,7 +363,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time6 = time.time()
-        print("apply_double_angle_iterations: ", time6 - time5)
+        # print("apply_double_angle_iterations: ", time6 - time5)
 
 
         # --------------------
@@ -382,13 +382,13 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         torch.cuda.synchronize()
         torch.cpu.synchronize()
         time7 = time.time()
-        print("eval_slots_to_coeffs: ", time7 - time6)
+        # print("eval_slots_to_coeffs: ", time7 - time6)
 
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
     time8 = time.time()
-    print("total_time: ", time8 - time1)
+    # print("total_time: ", time8 - time1)
 
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
