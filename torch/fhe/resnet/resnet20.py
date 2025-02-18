@@ -331,12 +331,11 @@ def resnet20( ):
 
     encode_weight_path = (
         he_res20_context_.weight_dir
-        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
             '-'.join(map(str, logSlots_list)),
             maxLevelsRemaining,
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            dnum,
             dcrtBits,
             firstMod,
             approxModDepth,

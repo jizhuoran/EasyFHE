@@ -449,12 +449,11 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
 
     encode_weight_path = (
         cryptoContext.weight_dir
-        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
             '-'.join(map(str, logSlots_list)),
             maxLevelsRemaining,
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            dnum,
             dcrtBits,
             firstMod,
             approxModDepth,
