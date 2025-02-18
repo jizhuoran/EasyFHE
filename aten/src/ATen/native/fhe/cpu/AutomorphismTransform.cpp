@@ -66,40 +66,32 @@ static void automorphism_transform_template(
 }
 
 Tensor automorphism_transform_cpu(
-    const Tensor& ra,
-    const Tensor& a,
-    int64_t l,
-    int64_t N,
-    int64_t i,
-    const Tensor& precomp_vec) {
-  Tensor out = at::empty_like(a);
-  automorphism_transform_template(out, a, l, N, i, precomp_vec);
-  return out;
+  const Tensor& a,
+  int64_t l,
+  int64_t N,
+  const Tensor& precomp_vec) {
+Tensor out = at::empty_like(a);
+automorphism_transform_template(out, a, l, N, precomp_vec);
+return out;
 }
 
 Tensor& automorphism_transform_cpu_(
-    Tensor& ra,
-    const Tensor& a,
-    int64_t l,
-    int64_t N,
-    int64_t i,
-    const Tensor& precomp_vec) {
-  ra.resize_({l * N});
-  automorphism_transform_template(ra, a, l, N, i, precomp_vec);
-  return ra;
+  Tensor& a,
+  int64_t l,
+  int64_t N,
+  const Tensor& precomp_vec) {
+automorphism_transform_template(a, a, l, N, precomp_vec);
+return a;
 }
 
 Tensor& automorphism_transform_cpu_out(
-    const Tensor& ra,
-    const Tensor& a,
-    int64_t l,
-    int64_t N,
-    int64_t i,
-    const Tensor& precomp_vec,
-    Tensor& out) {
-  ra.resize_({l * N});
-  automorphism_transform_template(out, a, l, N, i, precomp_vec);
-  return out;
+  const Tensor& a,
+  int64_t l,
+  int64_t N,
+  const Tensor& precomp_vec,
+  Tensor& out) {
+automorphism_transform_template(out, a, l, N, precomp_vec);
+return out;
 }
 
 } // namespace at::native
