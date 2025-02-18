@@ -1,19 +1,46 @@
 import torch
+
+
 class Cipher:
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots):
+    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
         self.cv = cv
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
         self.noise_deg = noise_deg
         self.slots = slots
-    
-    def clone(self):
-        return Cipher([x.clone() for x in self.cv], self.cur_limbs, self.scaling_factor, self.noise_deg, self.slots)
+        self.is_ext = is_ext
 
-    def drop_axax(self):
-        assert len(self.cv) == 3
-        res, self.cv = self.cv[-1], self.cv[:-1]
-        return res
+    def cipher_like(
+        self,
+        cv,
+        cur_limbs=None,
+        scaling_factor=None,
+        noise_deg=None,
+        slots=None,
+        is_ext=None,
+    ):
+        return Cipher(
+            cv,
+            self.cur_limbs if cur_limbs == None else cur_limbs,
+            self.scaling_factor if scaling_factor == None else scaling_factor,
+            self.noise_deg if noise_deg == None else noise_deg,
+            self.slots if slots == None else slots,
+            self.is_ext if is_ext == None else is_ext,
+        )
+
+    def deep_copy(self):
+        return self.cipher_like([x.clone() for x in self.cv])
+
+    def shallow_copy(self):
+        return self.cipher_like(self.cv)
+
+    def drop_last_elements(self, num_levels):
+        assert num_levels <= self.cur_limbs and num_levels >= 0
+        self.cur_limbs -= num_levels
+
+    def try_drop_last_elements(self, num_levels):
+        if num_levels > 0:
+            self.drop_last_elements(num_levels)
 
     def __repr__(self):
 
@@ -26,7 +53,7 @@ class Cipher:
         s += f"slots={self.slots}\n"
         s += ")"
         return s
-    
+
     def __eq__(self, other):
         if not isinstance(other, Cipher):
             return False
@@ -45,32 +72,37 @@ class Cipher:
                 return False
         return True
 
-#todo: remove default values of noise_deg and scaling_factor, should be set after encoding
+
+# todo: remove default values of noise_deg and scaling_factor, should be set after encoding
+# todo: remove N
+# todo: rename l to cur_limbs
+# todo: put `slots` to the end
+
+
 class Plaintext:
-    def __init__(self, mx, N, slots, l, scaling_factor, noise_deg):
-        self.mx = mx
-        self.N = N
-        self.slots = slots
-        self.l = l
+    def __init__(self, mv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
+        self.mv = mv
+        self.cur_limbs = cur_limbs
         self.noise_deg = noise_deg
         self.scaling_factor = scaling_factor
-
+        self.slots = slots
+        self.is_ext = is_ext
 
     def __eq__(self, other):
         if not isinstance(other, Plaintext):
             return False
-        if self.N != other.N:
+        if len(self.mv) != len(other.mv):
             return False
-        if len(self.mx) != len(other.mx):
-            return False
-        if not torch.equal(self.mx, other.mx):
+        if not torch.equal(self.mv, other.mv):
             return False
         if self.slots != other.slots:
             return False
-        if self.l != other.l:
+        if self.cur_limbs != other.cur_limbs:
             return False
         if self.noise_deg != other.noise_deg:
             return False
         if self.scaling_factor != other.scaling_factor:
+            return False
+        if self.is_ext != other.is_ext:
             return False
         return True

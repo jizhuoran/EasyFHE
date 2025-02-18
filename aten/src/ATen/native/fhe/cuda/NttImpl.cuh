@@ -363,7 +363,8 @@ __device__ __inline__ void butt_ntt_local(
 }
 
 __global__ void Ntt8PointPerThreadPhase1(
-    uint64_t* op,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     const int m,
     const int num_prime,
     const int N,
@@ -389,7 +390,8 @@ __global__ void Ntt8PointPerThreadPhase1(
     int m_idx = N_idx / (t / 4);
     int t_idx = N_idx % (t / 4);
     // base address
-    uint64_t* a_np = op + np_idx * N;
+    uint64_t* a_np = in_ptr + np_idx * N;
+    uint64_t* a_np_out = out_ptr + np_idx * N;
     const uint64_t* prime_table = primes;
     const uint64_t* W = base_inv + N * np_idx;
     const uint64_t* W_ = base_inv_ + N * np_idx;
@@ -523,13 +525,14 @@ __global__ void Ntt8PointPerThreadPhase1(
       local[j] = temp[Warp_t * (eradix + pad) + WarpID + radix * j];
     }
     for (int j = 0; j < 8; j++) {
-      *(a_np + N_init + t / 4 * j) = local[j];
+      *(a_np_out + N_init + t / 4 * j) = local[j];
     }
   }
 }
 
 __global__ void Ntt8PointPerThreadPhase2(
-    uint64_t* op,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     const int m,
     const int num_prime,
     const int N,
@@ -553,7 +556,8 @@ __global__ void Ntt8PointPerThreadPhase2(
     int m_idx = N_idx / (t / 4);
     int t_idx = N_idx % (t / 4);
     // base address
-    uint64_t* a_np = op + np_idx * N;
+    uint64_t* a_np = in_ptr + np_idx * N;
+    uint64_t* a_np_out = out_ptr + np_idx * N;
     const uint64_t* prime_table = primes;
     uint64_t prime = prime_table[np_idx];
     int N_init = 2 * m_idx * t + t_idx;
@@ -686,7 +690,7 @@ __global__ void Ntt8PointPerThreadPhase2(
       }
     }
     for (int j = 0; j < 8; j++) {
-      *(a_np + N_init + t / 4 * j) = local[j];
+      *(a_np_out + N_init + t / 4 * j) = local[j];
     }
   }
 }
@@ -1039,7 +1043,8 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
 namespace at::native {
 
 void iNTT_impl(
-    uint64_t* op_ptr,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t curr_limbs,
@@ -1075,7 +1080,7 @@ void iNTT_impl(
             blockDim,
             per_thread_storage,
             stream>>>(
-            op_ptr,
+            in_ptr,
             first_stage_radix_size,
             batch,
             param_degree,
@@ -1086,13 +1091,13 @@ void iNTT_impl(
             inverse_power_of_roots_div_two_ptr,
             inverse_scaled_power_of_roots_div_two_ptr,
             param_primes_ptr,
-            op_ptr);
+            out_ptr);
         fhe::Intt8PointPerThreadPhase1OoP<<<
             gridDim,
             (first_stage_radix_size / 8) * pad,
             (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
             stream>>>(
-            op_ptr,
+            out_ptr,
             1,
             batch,
             param_degree,
@@ -1104,13 +1109,14 @@ void iNTT_impl(
             inverse_power_of_roots_div_two_ptr,
             inverse_scaled_power_of_roots_div_two_ptr,
             param_primes_ptr,
-            op_ptr);
+            out_ptr);
       }),
       kUInt64);
 }
 
 void NTT_impl(
-    uint64_t* op_ptr,
+    uint64_t* in_ptr,
+    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,
@@ -1141,7 +1147,8 @@ void NTT_impl(
             (first_stage_radix_size / 8) * pad,
             (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
             stream>>>(
-            op_ptr,
+            in_ptr,
+            out_ptr,
             1,
             batch,
             param_degree,
@@ -1156,7 +1163,8 @@ void NTT_impl(
             blockDim.x,
             per_thread_storage,
             stream>>>(
-            op_ptr,
+            in_ptr,
+            out_ptr,
             first_stage_radix_size,
             batch,
             param_degree,

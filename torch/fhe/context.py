@@ -1,8 +1,70 @@
 import torch
+from enum import Enum
 from .bs_context import *
+import itertools
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
+
+# CRTMult in ckkspackedencoding.cpp
+def crt_mult(xs, ys, mods):
+    return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
+
+class LargeScalingFactorConstants(Enum):
+    MAX_BITS_IN_WORD = 61
+    MAX_LOG_STEP = 60
+
+# todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
+def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoContext):
+
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
+        sc_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    else:
+        sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+    # Compute approxFactor to avoid overflow issues
+    log_approx = 0
+    res = math.fabs(constant * sc_factor)
+    if res > 0:
+        log_sf = int(math.ceil(math.log2(res)))
+        log_valid = min(log_sf, LargeScalingFactorConstants.MAX_BITS_IN_WORD.value)
+        log_approx = log_sf - log_valid
+
+    approx_factor = float(pow(2, log_approx))
+    sc_constant = int(constant * sc_factor / approx_factor + 0.5)
+
+    crt_constant = cur_limbs * [sc_constant]
+
+    # Scale back up by approxFactor within the CRT multiplications.
+    if log_approx > 0:
+        log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+        int_step = 2**log_step
+        crt_approx = cur_limbs * [int_step]
+        log_approx -= log_step
+
+        while log_approx > 0:
+            log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
+            int_step = 2**log_step
+            crt_sf = cur_limbs * [int_step]
+            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            log_approx -= log_step
+
+        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ)
+
+    # Handle FLEXIBLEAUTOEXT mode at level 0, we don't use the depth to calculate the scaling factor,
+    # so we return the value before taking the depth into account.
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
+        return crt_constant
+
+    # Final scaling factor adjustments
+    int_sc_factor = int(sc_factor + 0.5)
+    crt_sc_factor = cur_limbs * [int_sc_factor]
+
+    for i in range(1, noise_deg):
+        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ)
+
+    return crt_constant
+
 
 class Context:
     def __init__(self, BsContext_content_map, gpufhe_content_map):
@@ -36,26 +98,25 @@ class Context:
         self.hat_inverse_vec_shoup_modup = get_item("hat_inverse_vec_shoup_modup", gpufhe_content_map)
         self.inner_out = get_item("inner_out", gpufhe_content_map)
         self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
-        self.inv_power_of_roots_shoup_vec = get_item("inv_power_of_roots_shoup_vec", gpufhe_content_map)
-        self.inv_power_of_roots_vec = get_item("inv_power_of_roots_vec", gpufhe_content_map)
         self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
         self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
         self.key_map = get_item("key_map", gpufhe_content_map)
-        self.left_rot_key_map = get_item("left_rot_key_map", gpufhe_content_map)
+        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
-        self.logSlots = get_item("logSlots", gpufhe_content_map)
-        self.logp = get_item("logp", gpufhe_content_map)
-        self.logqi = get_item("logqi", gpufhe_content_map)
-        self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
-        self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
-        self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
-        self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
-        self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
-        self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
-        self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
-        self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
+        self.logSlots_list = get_item("logSlots_list", gpufhe_content_map)
+        self.auxModSize = get_item("specialMod", gpufhe_content_map)
+        self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
+        #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
+        # self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", gpufhe_content_map)
+        # self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", gpufhe_content_map)
+        # self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", gpufhe_content_map)
+        # self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", gpufhe_content_map)
+        # self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", gpufhe_content_map)
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
         self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
         self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
@@ -71,33 +132,17 @@ class Context:
         self.pHatInvModp = get_item("pHatInvModp", gpufhe_content_map)
         self.pHatModp = get_item("pHatModp", gpufhe_content_map)
         self.pHatModq = get_item("pHatModq", gpufhe_content_map)
-        self.pInvVec = get_item("pInvVec", gpufhe_content_map)
-        self.pRootPows = get_item("pRootPows", gpufhe_content_map)
-        self.pRootPowsInv = get_item("pRootPowsInv", gpufhe_content_map)
-        self.pRootScalePows = get_item("pRootScalePows", gpufhe_content_map)
-        self.pRootScalePowsInv = get_item("pRootScalePowsInv", gpufhe_content_map)
-        self.pRootScalePowsOverp = get_item("pRootScalePowsOverp", gpufhe_content_map)
-        self.pRoots = get_item("pRoots", gpufhe_content_map)
-        self.pRootsInv = get_item("pRootsInv", gpufhe_content_map)
         self.p_mu = get_item("p_mu", gpufhe_content_map)
         self.power_of_roots = get_item("power_of_roots", gpufhe_content_map)
         self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
         self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
-        self.precompute_auto_map = get_item("precompute_auto_map", gpufhe_content_map)
+        self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
         self.prod_inv_shoup_moddown = get_item("prod_inv_shoup_moddown", gpufhe_content_map)
         self.prod_q_i_mod_q_j_moddown = get_item("prod_q_i_mod_q_j_moddown", gpufhe_content_map)
         self.prod_q_i_mod_q_j_modup = get_item("prod_q_i_mod_q_j_modup", gpufhe_content_map)
-        self.qInvModq = get_item("qInvModq", gpufhe_content_map)
-        self.qRootPows = get_item("qRootPows", gpufhe_content_map)
-        self.qRootPowsInv = get_item("qRootPowsInv", gpufhe_content_map)
-        self.qRootScalePows = get_item("qRootScalePows", gpufhe_content_map)
-        self.qRootScalePowsInv = get_item("qRootScalePowsInv", gpufhe_content_map)
-        self.qRootScalePowsOverq = get_item("qRootScalePowsOverq", gpufhe_content_map)
-        self.qRoots = get_item("qRoots", gpufhe_content_map)
-        self.qRootsInv = get_item("qRootsInv", gpufhe_content_map)
         self.qVec = get_item("qVec", gpufhe_content_map)
         self.q_inv_mod_q = get_item("q_inv_mod_q", gpufhe_content_map)
         self.q_inv_mod_q_shoup = get_item("q_inv_mod_q_shoup", gpufhe_content_map)
@@ -114,11 +159,19 @@ class Context:
         self.switch_modulus_out = get_item("switch_modulus_out", gpufhe_content_map)
         self.swk_ax_cuda = get_item("swk_ax_cuda", gpufhe_content_map)
         self.swk_bx_cuda = get_item("swk_bx_cuda", gpufhe_content_map)
-        
-        _BsContext = BsContext(BsContext_content_map)
-        self.BsContext = _BsContext
-        self.to_cuda()
+        self.BsContext_map = {}
+        for logSlots in self.logSlots_list:
+            _BsContext = BsContext(BsContext_content_map[str(logSlots)])
+            self.BsContext_map[str(logSlots)] = _BsContext
 
+        # self.constant_minus_one = {}
+        # for cur_libm, noise_deg in itertools.product(range(self.L), [1, 2]):
+        #     self.constant_minus_one[(cur_libm, noise_deg)] = _get_element_for_eval_add_or_sub(math.fabs(-1.0), cur_libm, noise_deg, self)
+
+        self.to_cuda()
+        self.BsContext = None
+        self.left_rot_key_map = {}
+        self.precompute_auto_map = {}
 
     def to_cuda(self):
         self.q_mu_cuda = torch.tensor(self.q_mu_cuda, dtype = torch.uint64, device = "cuda")
@@ -156,23 +209,24 @@ class Context:
 
         self.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in self.key_map]
 
-        for key, value in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-        for key, value in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+        # for key, value in self.left_rot_key_map.items():
+        #     self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
+        # for key, value in self.precompute_auto_map.items():
+        #     self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
 
-        for key, value in self.BsContext.QplusP_map.items():
-            self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-        for key, value in self.BsContext.QmuplusPmu_map.items():
-            self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        # for key, value in self.BsContext.QplusP_map.items():
+        #     self.BsContext.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+        # for key, value in self.BsContext.QmuplusPmu_map.items():
+        #     self.BsContext.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+
         
-        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
-            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
-                self.BsContext.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
+        # for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+        #     for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+        #         self.BsContext.m_U0hatTPreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0hatTPreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")
 
-        for i in range(len(self.BsContext.m_U0PreFFT)):
-            for j in range(len(self.BsContext.m_U0PreFFT[i])):
-                self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")   
+        # for i in range(len(self.BsContext.m_U0PreFFT)):
+        #     for j in range(len(self.BsContext.m_U0PreFFT[i])):
+        #         self.BsContext.m_U0PreFFT[i][j].mx = torch.tensor(self.BsContext.m_U0PreFFT[i][j].mx, dtype = torch.uint64, device = "cuda")            
 
 
     def cpu(self):
@@ -302,21 +356,18 @@ class Context:
             return 1
 
         # Conjugation automorphism
-        # if i == m - 1:
-        #     return i
-        if i == - 1:
-            return  m - 1
+        if i == m - 1:
+            return i
 
         # Generator
         if i < 0:
             g0 = inv_mod(5, m)
-            g0 = (g0 * 5) % m
         else:
             g0 = 5
 
         i_unsigned = abs(i)
-        g = g0
 
+        g = g0
         for j in range(1, int(i_unsigned)):
             g = (g * g0) % m
 

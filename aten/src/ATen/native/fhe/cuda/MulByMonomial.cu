@@ -24,74 +24,73 @@
 
 namespace fhe {
 __global__ void mulByMonomialKernel_step1(
-    uint64_t* res,
-    uint64_t* qVec,
-    uint64_t* tmp,
-    long l,
-    long N) {
-  STRIDED_LOOP_START(l * N, idx)
-  if (idx < l * N) {
-    long i = idx / N;
-    long n = idx % N;
-      tmp[idx] = qVec[i] - res[idx];
-  }
-  STRIDED_LOOP_END;
+    const uint64_t* in,
+    const uint64_t* qVec,
+    uint64_t* out,
+    const int N) {
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  out[blockIdx.y * N + tid_x] = qVec[blockIdx.y] - in[blockIdx.y * N + tid_x];
 }
 
 __global__ void mulByMonomialKernel_step2(
-    uint64_t* res,
-    uint64_t* qVec,
-    uint64_t* tmp,
-    long l,
-    long N,
-    long shift) {
-  STRIDED_LOOP_START(l * N, idx)
-  if (idx < l * N) {
-    long i = idx / N;
-    long n = idx % N;
-    shift %= N;
-    if (n < shift) {
-      res[idx] = qVec[i] - tmp[idx +(N - shift)];
-    } else {
-      res[idx] = tmp[idx - shift];
-    }
+    uint64_t* out,
+    const uint64_t* qVec,
+    const uint64_t* in,
+    const int N,
+    const int shift) {
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  if (tid_x < shift) {
+    out[blockIdx.y * N + tid_x] =
+        qVec[blockIdx.y] - in[blockIdx.y * N + tid_x + (N - shift)];
+  } else {
+    out[blockIdx.y * N + tid_x] = in[blockIdx.y * N + tid_x - shift];
   }
-  STRIDED_LOOP_END;
 }
+
+__global__ void mulByMonomialKernel_step1_step2(
+    uint64_t* out,
+    const uint64_t* qVec,
+    const uint64_t* in,
+    const int N,
+    const int shift) {
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  if (tid_x < shift) {
+    out[blockIdx.y * N + tid_x] = in[blockIdx.y * N + tid_x + (N - shift)];
+  } else {
+    out[blockIdx.y * N + tid_x] =
+        (qVec[blockIdx.y] - in[blockIdx.y * N + tid_x - shift]);
+  }
+}
+
 } // namespace fhe
 
 namespace at::native {
 
 static void mul_by_monomial_impl(
-    uint64_t* res_ptr,
-    const Tensor& primes,
-    Tensor& tmp,
-    int64_t l,
-    int64_t N,
-    int64_t M,
-    int64_t monomialDeg) {
-  int64_t shift = monomialDeg % M;
-  AT_DISPATCH_V2(
-      tmp.scalar_type(),
-      "mul_by_monomial_impl",
-      AT_WRAP([&]() {
-        auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
-        const int block_dim = 256;
-        const int grid_dim = N * l / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        if (shift > N || shift == N) {
-          fhe::mulByMonomialKernel_step1<<<grid_dim, block_dim, 0, stream>>>(
-            res_ptr, primes_ptr, tmp_ptr, l, N);
-        }
-        fhe::mulByMonomialKernel_step2<<<grid_dim, block_dim, 0, stream>>>(
-           res_ptr, primes_ptr, tmp_ptr, l, N, shift);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
+    uint64_t* out_ptr,
+    const uint64_t* primes_ptr,
+    const uint64_t* in_ptr,
+    const int64_t l,
+    const int64_t N,
+    const int64_t M,
+    const int64_t monomialDeg) {
+
+  dim3 block(BLOCK_SIZE);
+  dim3 grid(N / BLOCK_SIZE, l);
+  auto stream = at::cuda::getCurrentCUDAStream();
+  auto shift = monomialDeg % M;
+  if (shift < N) {
+    fhe::mulByMonomialKernel_step2<<<grid, block, 0, stream>>>(
+      out_ptr, primes_ptr, in_ptr, N, shift);
+  } else {
+    shift = shift % N;
+    fhe::mulByMonomialKernel_step1_step2<<<grid, block, 0, stream>>>(
+        out_ptr, primes_ptr, in_ptr, N, shift);
+  }
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-static void mul_by_monomial_template(
+static void mul_by_monomial_inplace_template(
     Tensor& res,
     const Tensor& param_primes,
     int64_t l,
@@ -103,8 +102,10 @@ static void mul_by_monomial_template(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
+
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
+      res_ptr,
       res_ptr,
       0,
       l,
@@ -115,10 +116,14 @@ static void mul_by_monomial_template(
       param_primes,
       inverse_scaled_power_of_roots_div_two);
 
-  Tensor temp = res.clone();
-  mul_by_monomial_impl(res_ptr, param_primes, temp, l, N, M, monomialDeg);
+  Tensor temp = at::empty_like(res);
+  auto temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
+  auto param_primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+  mul_by_monomial_impl(temp_ptr, param_primes_ptr, res_ptr, l, N, M, monomialDeg);
+  cudaMemcpy(res_ptr, temp_ptr, l * N * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
 
   NTT_impl(
+      res_ptr,
       res_ptr,
       0,
       l,
@@ -140,20 +145,9 @@ Tensor mul_by_monomial_cuda(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  Tensor out = res.clone();
-  mul_by_monomial_template(
-      out,
-      param_primes,
-      l,
-      N,
-      M,
-      monomialDeg,
-      level,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
-  return out;
+  
+  TORCH_INTERNAL_ASSERT(false, "mul_by_monomial_cuda only supports inplace operation");
+  return res;
 }
 
 Tensor& mul_by_monomial_cuda_(
@@ -168,7 +162,7 @@ Tensor& mul_by_monomial_cuda_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  mul_by_monomial_template(
+  mul_by_monomial_inplace_template(
       res,
       param_primes,
       l,
@@ -196,18 +190,7 @@ Tensor& mul_by_monomial_cuda_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
-  mul_by_monomial_template(
-      out,
-      param_primes,
-      l,
-      N,
-      M,
-      monomialDeg,
-      level,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
+  TORCH_INTERNAL_ASSERT(false, "Not implemented");
   return out;
 }
 
