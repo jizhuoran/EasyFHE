@@ -200,12 +200,3 @@ def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
-
-def load_rotation_keys(context, key_name):
-    if (str(key_name) not in context.slots_left_rot_key_map) or (not context.slots_left_rot_key_map[str(key_name)]):
-        print("Warning: slots_left_rot_key_map[", key_name,"] is None")
-        return
-    for key, value in context.slots_left_rot_key_map[str(key_name)].items():
-        context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-    for key, value in context.slots_precompute_auto_map[str(key_name)].items():
-        context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")

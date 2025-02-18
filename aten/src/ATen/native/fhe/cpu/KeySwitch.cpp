@@ -1,3 +1,4 @@
+#include "ATen/native/fhe/cpu/KeySwitch.h"
 #include <ATen/Dispatch_v2.h>
 #include <ATen/TensorOperators.h>
 #include <ATen/core/Tensor.h>
@@ -7,7 +8,6 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 #include <immintrin.h>
-#include "ATen/native/fhe/cpu/KeySwitch.h"
 #include "ATen/native/fhe/cpu/NttImpl.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
@@ -66,7 +66,6 @@ uint128_t4 accumulate_in_modup(
     out.w = mult_64_64_128(op1_w, op2);
     inplace_add_128_128(out.w, accum.w);
 
-
     // // Calculate the address for op1_z and op1_w
     // const uint64_t* addr2 = ptr + i * degree + degree_idx + 2;
 
@@ -80,8 +79,6 @@ uint128_t4 accumulate_in_modup(
     //     : "r" (addr2)                  // Input operand
     //     : "memory"                     // Clobbered register
     // );
-
-
   }
   return accum;
 }
@@ -126,43 +123,47 @@ void modup_step_two_kernel(
   const auto barret_ratio = barrett_ratios[prime_idx];
   const auto barret_k = barrett_Ks[prime_idx];
   {
-        // First store operation
-        uint64_t out1 = barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-        uint64_t out2 = barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
+    // First store operation
+    uint64_t out1 =
+        barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
+    uint64_t out2 =
+        barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
 
-        to[out_idx * degree + degree_idx] = out1;
-        to[out_idx * degree + degree_idx + 1] = out2;
-        // // Inline Assembly for storing out1 and out2
-        // __asm__ __volatile__(
-        //     "mov %[val1], %%rax\n\t"
-        //     "mov %[val2], %%rbx\n\t"
-        //     "mov %%rax, (%[addr])\n\t"
-        //     "mov %%rbx, 8(%[addr])\n\t"
-        //     :
-        //     : [val1] "r" (out1),
-        //       [val2] "r" (out2),
-        //       [addr] "r" (to + out_idx * degree + degree_idx)
-        //     : "rax", "rbx", "memory"
-        // );
+    to[out_idx * degree + degree_idx] = out1;
+    to[out_idx * degree + degree_idx + 1] = out2;
+    // // Inline Assembly for storing out1 and out2
+    // __asm__ __volatile__(
+    //     "mov %[val1], %%rax\n\t"
+    //     "mov %[val2], %%rbx\n\t"
+    //     "mov %%rax, (%[addr])\n\t"
+    //     "mov %%rbx, 8(%[addr])\n\t"
+    //     :
+    //     : [val1] "r" (out1),
+    //       [val2] "r" (out2),
+    //       [addr] "r" (to + out_idx * degree + degree_idx)
+    //     : "rax", "rbx", "memory"
+    // );
   }
   {
-        // Second store operation
-        uint64_t out3 = barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-        uint64_t out4 = barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-        to[out_idx * degree + degree_idx + 2] = out3;
-        to[out_idx * degree + degree_idx + 3] = out4;
-        // // Inline Assembly for storing out3 and out4
-        // __asm__ __volatile__(
-        //     "mov %[val3], %%rax\n\t"
-        //     "mov %[val4], %%rbx\n\t"
-        //     "mov %%rax, 16(%[addr])\n\t" // +2 * 8 bytes = +16 bytes
-        //     "mov %%rbx, 24(%[addr])\n\t"
-        //     :
-        //     : [val3] "r" (out3),
-        //       [val4] "r" (out4),
-        //       [addr] "r" (to + out_idx * degree + degree_idx)
-        //     : "rax", "rbx", "memory"
-        // );
+    // Second store operation
+    uint64_t out3 =
+        barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
+    uint64_t out4 =
+        barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
+    to[out_idx * degree + degree_idx + 2] = out3;
+    to[out_idx * degree + degree_idx + 3] = out4;
+    // // Inline Assembly for storing out3 and out4
+    // __asm__ __volatile__(
+    //     "mov %[val3], %%rax\n\t"
+    //     "mov %[val4], %%rbx\n\t"
+    //     "mov %%rax, 16(%[addr])\n\t" // +2 * 8 bytes = +16 bytes
+    //     "mov %%rbx, 24(%[addr])\n\t"
+    //     :
+    //     : [val3] "r" (out3),
+    //       [val4] "r" (out4),
+    //       [addr] "r" (to + out_idx * degree + degree_idx)
+    //     : "rax", "rbx", "memory"
+    // );
   }
   STRIDED_LOOP_END;
 }
@@ -479,8 +480,7 @@ static void NTT_except_some_range_impl(
   const int first_stage_radix_size = 256;
   const int second_radix_size = param_degree / first_stage_radix_size;
   const int pad = 4;
-  const int per_thread_storage =
-      block * per_thread_ntt_size * sizeof(uint64_t);
+  const int per_thread_storage = block * per_thread_ntt_size * sizeof(uint64_t);
   AT_DISPATCH_V2(
       kUInt64,
       "NTT_except_some_range_impl",
@@ -507,7 +507,7 @@ static void NTT_except_some_range_impl(
             param_power_of_roots_ptr,
             param_power_of_roots_shoup_ptr,
             param_primes_ptr,
-             grid,
+            grid,
             (first_stage_radix_size / 8) * pad,
             (first_stage_radix_size + pad + 1) * pad);
         fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange(
@@ -703,8 +703,8 @@ static void modup_impl_(
       param_power_of_roots_shoup,
       param_primes__,
       param_power_of_roots);
-  
-    memcpy(
+
+  memcpy(
       to_ptr + (param_degree_ * begin_idx),
       from_ptr,
       8 * in_C_L_len * param_degree_);
@@ -752,7 +752,6 @@ static void modup(
 }
 
 Tensor modup_cpu(
-    const Tensor& out,
     const Tensor& in,
     int64_t curr_limbs,
     int64_t level,
@@ -769,49 +768,7 @@ Tensor modup_cpu(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto res = out.clone();
-  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  modup(
-      in_ptr,
-      curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      beta,
-      param_degree_,
-      param_alpha_,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
-      out_ptr);
-  return res;
-}
-Tensor& modup_cpu_(
-    Tensor& out,
-    const Tensor& in,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two) {
-  out.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
+  auto out = at::empty(beta * (curr_limbs + param_alpha_) * param_degree_, in.options());
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
   modup(
@@ -833,246 +790,6 @@ Tensor& modup_cpu_(
       param_power_of_roots,
       out_ptr);
   return out;
-}
-
-Tensor& modup_cpu_out(
-    const Tensor& out,
-    const Tensor& in,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    Tensor& res) {
-  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  modup(
-      in_ptr,
-      curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      beta,
-      param_degree_,
-      param_alpha_,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
-      out_ptr);
-  return res;
-}
-
-static void modup_core_impl_(
-    uint64_t* from_ptr,
-    uint64_t* to_ptr,
-    int curr_limbs,
-    int level,
-    int idx,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const int64_t param_degree_,
-    const int64_t param_alpha_,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    const Tensor& prod_q_i_mod_q_j__) {
-  int num_moduli_after_modup = curr_limbs + param_alpha_;
-  size_t begin_idx = idx * param_alpha_;
-  size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
-      ? (curr_limbs - begin_idx)
-      : param_alpha_;
-  auto hat_inverse_vec =
-      hat_inverse_vec__[idx * param_alpha_ + (in_C_L_len - 1)];
-  auto hat_inverse_vec_psinv =
-      hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
-
-  memcpy(
-      to_ptr + (param_degree_ * begin_idx),
-      from_ptr,
-      8 * in_C_L_len * param_degree_);
-
-  const_mult_batch_(
-      to_ptr,
-      hat_inverse_vec,
-      hat_inverse_vec_psinv,
-      begin_idx,
-      in_C_L_len,
-      begin_idx,
-      0,
-      param_degree_,
-      to_ptr,
-      param_primes__);
-
-  modup_matmul_(
-      to_ptr + param_degree_ * begin_idx,
-      idx,
-      to_ptr,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      param_alpha_,
-      param_degree_,
-      prod_q_i_mod_q_j__,
-      curr_limbs,
-      level);
-  
-  memcpy(
-      from_ptr,
-      to_ptr + (param_degree_ * begin_idx),
-      8 * in_C_L_len * param_degree_);
-}
-
-static void modup_core(
-    uint64_t* in_ptr,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
-    uint64_t* out_ptr) {
-  int num_moduli_after_modup = curr_limbs + param_alpha_;
-  for (int i = 0; i < beta; ++i) {
-    modup_core_impl_(
-        in_ptr + (param_alpha_ * param_degree_ * i),
-        out_ptr + (num_moduli_after_modup * param_degree_) * i,
-        curr_limbs,
-        level,
-        i,
-        hat_inverse_vec__,
-        hat_inverse_vec_shoup__,
-        param_degree_,
-        param_alpha_,
-        param_primes__,
-        param_barret_ratio__,
-        param_barret_k__,
-        prod_q_i_mod_q_j__);
-  }
-}
-
-Tensor modup_core_cpu(
-    const Tensor& out,
-    const Tensor& in,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_) {
-  auto res = out.clone();
-  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  modup_core(
-      in_ptr,
-      curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      beta,
-      param_degree_,
-      param_alpha_,
-      out_ptr);
-  return res;
-}
-
-Tensor& modup_core_cpu_(
-    Tensor& out,
-    const Tensor& in,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_) {
-  out.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
-  modup_core(
-      in_ptr,
-      curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      beta,
-      param_degree_,
-      param_alpha_,
-      out_ptr);
-  return out;
-}
-
-Tensor& modup_core_cpu_out(
-    const Tensor& out,
-    const Tensor& in,
-    int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
-    Tensor& res) {
-  res.resize_({beta * (curr_limbs + param_alpha_) * param_degree_});
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto out_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  modup_core(
-      in_ptr,
-      curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
-      beta,
-      param_degree_,
-      param_alpha_,
-      out_ptr);
-  return res;
 }
 
 static void NegateInplace(
@@ -1109,8 +826,7 @@ void SubInplace(
         const int grid_dim = param_degree * batch / block_dim;
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        fhe::subInplace_(
-            param_degree, batch, primes_ptr, op1, op2);
+        fhe::subInplace_(param_degree, batch, primes_ptr, op1, op2);
       }),
       kUInt64);
 }
@@ -1391,7 +1107,7 @@ static void moddown_cpu_template(
       param_degree,
       from_ptr,
       param_primes);
-    
+
   moddown_impl(
       from_ptr,
       param_degree,
@@ -1436,7 +1152,6 @@ static void moddown_cpu_template(
 }
 
 Tensor moddown_cpu(
-    const Tensor& to,
     const Tensor& from,
     int64_t curr_limbs,
     int64_t level,
@@ -1459,94 +1174,6 @@ Tensor moddown_cpu(
   auto res = at::empty({curr_limbs * param_degree}, from.options());
   moddown_cpu_template(
       from_,
-      curr_limbs,
-      level,
-      alpha,
-      param_degree,
-      param_log_degree,
-      hat_inverse_vec_moddown,
-      hat_inverse_vec_shoup_moddown,
-      prod_q_i_mod_q_j_moddown,
-      prod_inv_moddown,
-      prod_inv_shoup_moddown,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      res);
-  return res;
-}
-
-Tensor& moddown_cpu_(
-    Tensor& to,
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t level,
-    int64_t alpha,
-    int64_t param_degree,
-    int64_t param_log_degree,
-    const Tensor& hat_inverse_vec_moddown,
-    const Tensor& hat_inverse_vec_shoup_moddown,
-    const Tensor& prod_q_i_mod_q_j_moddown,
-    const Tensor& prod_inv_moddown,
-    const Tensor& prod_inv_shoup_moddown,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two) {
-  to.resize_({curr_limbs * param_degree});
-  moddown_cpu_template(
-      from,
-      curr_limbs,
-      level,
-      alpha,
-      param_degree,
-      param_log_degree,
-      hat_inverse_vec_moddown,
-      hat_inverse_vec_shoup_moddown,
-      prod_q_i_mod_q_j_moddown,
-      prod_inv_moddown,
-      prod_inv_shoup_moddown,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      to);
-  return to;
-}
-Tensor& moddown_cpu_out(
-    const Tensor& to,
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t level,
-    int64_t alpha,
-    int64_t param_degree,
-    int64_t param_log_degree,
-    const Tensor& hat_inverse_vec_moddown,
-    const Tensor& hat_inverse_vec_shoup_moddown,
-    const Tensor& prod_q_i_mod_q_j_moddown,
-    const Tensor& prod_inv_moddown,
-    const Tensor& prod_inv_shoup_moddown,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    Tensor& res) {
-  res.resize_({curr_limbs * param_degree});
-  moddown_cpu_template(
-      from,
       curr_limbs,
       level,
       alpha,

@@ -169,11 +169,22 @@ class Context:
         #     self.constant_minus_one[(cur_libm, noise_deg)] = _get_element_for_eval_add_or_sub(math.fabs(-1.0), cur_libm, noise_deg, self)
 
         self.to_cuda()
+        self.device = "cuda"
         self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
 
+    def load_rotation_keys(self, key_name):
+        if (str(key_name) not in self.slots_left_rot_key_map) or (not self.slots_left_rot_key_map[str(key_name)]):
+            print("Warning: slots_left_rot_key_map[", key_name,"] is None")
+            return
+        for key, value in self.slots_left_rot_key_map[str(key_name)].items():
+            self.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = self.device) for v in value]
+        for key, value in self.slots_precompute_auto_map[str(key_name)].items():
+            self.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = self.device)
+
     def to_cuda(self):
+        self.device = "cuda"
         self.q_mu_cuda = torch.tensor(self.q_mu_cuda, dtype = torch.uint64, device = "cuda")
         self.moduliQ_cuda = torch.tensor(self.moduliQ_cuda, dtype = torch.uint64, device = "cuda")
         self.primes = torch.tensor(self.primes, dtype = torch.uint64, device = "cuda")
@@ -230,6 +241,7 @@ class Context:
 
 
     def cpu(self):
+        self.device = "cpu"
         self.q_mu_cuda = self.q_mu_cuda.cpu()
         self.moduliQ_cuda = self.moduliQ_cuda.cpu()
         self.primes = self.primes.cpu()
@@ -265,25 +277,26 @@ class Context:
 
         self.key_map = [v.cpu() for v in self.key_map]
 
-        for key, value in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [v.cpu() for v in value]
-        for key, value in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = value.cpu()
+        # for key, value in self.left_rot_key_map.items():
+        #     self.left_rot_key_map[key] = [v.cpu() for v in value]
+        # for key, value in self.precompute_auto_map.items():
+        #     self.precompute_auto_map[key] = value.cpu()
 
-        for key, value in self.BsContext.QplusP_map.items():
-            self.BsContext.QplusP_map[key] = value.cpu()
-        for key, value in self.BsContext.QmuplusPmu_map.items():
-            self.BsContext.QmuplusPmu_map[key] = value.cpu()
+        # for key, value in self.BsContext.QplusP_map.items():
+        #     self.BsContext.QplusP_map[key] = value.cpu()
+        # for key, value in self.BsContext.QmuplusPmu_map.items():
+        #     self.BsContext.QmuplusPmu_map[key] = value.cpu()
         
-        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
-            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
-                self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cpu()
+        # for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+        #     for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+        #         self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cpu()
 
-        for i in range(len(self.BsContext.m_U0PreFFT)):
-            for j in range(len(self.BsContext.m_U0PreFFT[i])):
-                self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cpu() 
+        # for i in range(len(self.BsContext.m_U0PreFFT)):
+        #     for j in range(len(self.BsContext.m_U0PreFFT[i])):
+        #         self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cpu() 
 
     def cuda(self):
+        self.device = "cuda"
         self.q_mu_cuda = self.q_mu_cuda.cuda()
         self.moduliQ_cuda = self.moduliQ_cuda.cuda()
         self.primes = self.primes.cuda()
@@ -319,23 +332,23 @@ class Context:
 
         self.key_map = [v.cuda() for v in self.key_map]
 
-        for key, value in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [v.cuda() for v in value]
-        for key, value in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = value.cuda()
+        # for key, value in self.left_rot_key_map.items():
+        #     self.left_rot_key_map[key] = [v.cuda() for v in value]
+        # for key, value in self.precompute_auto_map.items():
+        #     self.precompute_auto_map[key] = value.cuda()
 
-        for key, value in self.BsContext.QplusP_map.items():
-            self.BsContext.QplusP_map[key] = value.cuda()
-        for key, value in self.BsContext.QmuplusPmu_map.items():
-            self.BsContext.QmuplusPmu_map[key] = value.cuda()
+        # for key, value in self.BsContext.QplusP_map.items():
+        #     self.BsContext.QplusP_map[key] = value.cuda()
+        # for key, value in self.BsContext.QmuplusPmu_map.items():
+        #     self.BsContext.QmuplusPmu_map[key] = value.cuda()
         
-        for i in range(len(self.BsContext.m_U0hatTPreFFT)):
-            for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
-                self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cuda()
+        # for i in range(len(self.BsContext.m_U0hatTPreFFT)):
+        #     for j in range(len(self.BsContext.m_U0hatTPreFFT[i])):
+        #         self.BsContext.m_U0hatTPreFFT[i][j].mx = self.BsContext.m_U0hatTPreFFT[i][j].mx.cuda()
 
-        for i in range(len(self.BsContext.m_U0PreFFT)):
-            for j in range(len(self.BsContext.m_U0PreFFT[i])):
-                self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cuda()            
+        # for i in range(len(self.BsContext.m_U0PreFFT)):
+        #     for j in range(len(self.BsContext.m_U0PreFFT[i])):
+        #         self.BsContext.m_U0PreFFT[i][j].mx = self.BsContext.m_U0PreFFT[i][j].mx.cuda()            
 
     def find_auto_index(self, i):
         def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!

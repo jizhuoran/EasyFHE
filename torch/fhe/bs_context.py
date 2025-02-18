@@ -128,4 +128,33 @@ class BsContext:
                 self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
 
 
+    def cpu(self):
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = self.QplusP_map[key].cpu()
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = self.QmuplusPmu_map[key].cpu()
+
+        for i in range(len(self.m_U0hatTPreFFT)):
+            for j in range(len(self.m_U0hatTPreFFT[i])):
+                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cpu()
+
+        for i in range(len(self.m_U0PreFFT)):
+            for j in range(len(self.m_U0PreFFT[i])):
+                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cpu()
+
+    def cuda(self):
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = self.QplusP_map[key].cuda()
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = self.QmuplusPmu_map[key].cuda()
+
+        for i in range(len(self.m_U0hatTPreFFT)):
+            for j in range(len(self.m_U0hatTPreFFT[i])):
+                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cuda()
+
+        for i in range(len(self.m_U0PreFFT)):
+            for j in range(len(self.m_U0PreFFT[i])):
+                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cuda()
+
+
 

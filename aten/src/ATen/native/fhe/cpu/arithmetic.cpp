@@ -80,9 +80,6 @@ namespace at::native {
       int64_t cur_limbs) {                                                     \
     TORCH_INTERNAL_ASSERT(a.dim() == 2);                                       \
     auto N = static_cast<int>(a.sizes()[1]);                                   \
-    TORCH_INTERNAL_ASSERT(                                                     \
-        (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
-        (N == 1 << 17) || (N == 1 << 18));                                     \
     fhe::NAME##_kernel(                                                        \
         cur_limbs,                                                             \
         N,                                                                     \

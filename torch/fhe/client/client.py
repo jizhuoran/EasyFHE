@@ -48,7 +48,7 @@ class OpenFHEContext:
                 ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
             ptx.Encode()
             data = ptx.GetVectorOfData()
-            cv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+            cv = [torch.tensor(data, device=x.device, dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
             return Plaintext(cv, cv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(),False)
 
     def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
@@ -60,7 +60,7 @@ class OpenFHEContext:
             ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
-        cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
+        cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
         return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
     
     def decrypt(self, x):

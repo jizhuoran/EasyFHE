@@ -389,7 +389,7 @@ def _cipher_square(in0, cryptoContext):
 
 @check_cipher_len
 def _cipher_add_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
     cv = [
         F.cv_add_scalar(
             in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
@@ -401,7 +401,7 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
     cv = [
         F.cv_sub_scalar(
             in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
@@ -415,7 +415,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 # @check_cipher_len #fixme: comment it to support call from homo_mul_pt
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -434,7 +434,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
     cv = [
         F.cv_mul_scalar(
             cv0,
