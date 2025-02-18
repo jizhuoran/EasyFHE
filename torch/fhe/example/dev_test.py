@@ -2,6 +2,7 @@ from ..client.gen_context import gen_contexts
 from ..bs_context import *
 from .. import homo_ops
 from .. import utils
+from ..bootstrapping import eval_bootstrap
 import numpy as np
 import os
 
