@@ -52,23 +52,23 @@ void vec_add_mod_batch(
     int64_t degree,
     uint64_t* res_ptr);
 
-void const_mult_batch_(
+void const_mult_batch(
     uint64_t* op1_ptr,
     const Tensor& op2,
     const Tensor& op2_psinv,
+    const Tensor& primes,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t start_op1_idx,
     int64_t start_op2_idx,
     int64_t param_degree,
-    uint64_t* res_ptr,
-    const Tensor& primes);
+    uint64_t* res_ptr);
 
-void SubInplace(
-    uint64_t* op1,
-    const uint64_t* op2,
+void sub_inplace(
+    const uint64_t* from_ptr,
     const int64_t batch,
     const int64_t param_degree,
-    const Tensor& primes);
+    const Tensor& primes,
+    uint64_t* to_ptr);
 
 } // namespace at::native

@@ -16,7 +16,8 @@ def BootstrapTest_N65536L26lB44(
     firstMod=60,
     approxModDepth=9,
     rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-    save_dir="torch/fhe/data/"
+    save_dir="torch/fhe/data/",
+    mode = "debug"
 
 ):
     if not os.path.exists(save_dir):
@@ -37,7 +38,8 @@ def BootstrapTest_N65536L26lB44(
                 rotate_index=[],
                 secretKeyDist="UNIFORM_TERNARY",
                 rescaleTech=rescaleTech,
-                save_dir=save_dir
+                save_dir=save_dir,
+                mode = mode
             )
 
     cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
@@ -51,7 +53,8 @@ def BootstrapTest_N65536L26lB44(
             [],
             "UNIFORM_TERNARY",
             rescaleTech,
-            save_dir=save_dir)
+            save_dir=save_dir,
+            mode = mode)
 
     openfhe_context = openfhe_context_dict[str(logSlots_list[0])]
     dim1 = [0, 0]
@@ -128,7 +131,8 @@ def BootstrapTest_slots_list_example(
         firstMod=60,
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/"
+        save_dir="torch/fhe/data/",
+        mode = "debug"
 
 ):
     if not os.path.exists(save_dir):
@@ -145,7 +149,8 @@ def BootstrapTest_slots_list_example(
                                                             [],
                                                             "UNIFORM_TERNARY",
                                                             rescaleTech,
-                                                            save_dir=save_dir)
+                                                            save_dir=save_dir,
+                                                            mode = mode)
 
     dim1 = [0, 0]
 
@@ -272,6 +277,9 @@ def BootstrapTest_test_case(
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
+    for i in range(result.cur_limbs - 3):
+        result = homo_ops.homo_mul(result, result, cryptoContext)
+        openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer

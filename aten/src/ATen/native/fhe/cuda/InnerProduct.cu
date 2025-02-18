@@ -13,9 +13,9 @@
 #include "ATen/native/fhe/cuda/Utils.cuh"
 
 namespace fhe {
-__global__ void sumAndReduceFused(
-    const uint64_t* modup_out,
-    const int degree,
+__global__ void sum_reduce_fused(
+    const uint64_t* in_ptr,
+    const int N,
     const int length,
     const int mult_length,
     const int batch,
@@ -24,23 +24,23 @@ __global__ void sumAndReduceFused(
     const uint64_t* primes,
     const uint64_t* barret_ks,
     const uint64_t* barret_ratios,
-    uint64_t* dst_ax,
-    uint64_t* dst_bx,
     int curr_limbs,
-    int gap) {
-  STRIDED_LOOP_START(degree * length, i);
-  const int idx = i / degree;
+    int gap,
+    uint64_t* out_ax,
+    uint64_t* out_bx) {
+  STRIDED_LOOP_START(N * length, i);
+  const int idx = i / N;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
   uint128_t accum_ax{0, 0};
   uint128_t accum_bx{0, 0};
   for (int batch_idx = 0; batch_idx < batch; batch_idx++) {
-    const int stride = degree * mult_length * batch_idx;
-    const int modup_out_stride = degree * length * batch_idx;
-    const uint64_t op1 = modup_out[modup_out_stride + i];
-    const uint64_t op2_ax = eval_ax[i + degree * prime_idx + stride];
+    const int stride = N * mult_length * batch_idx;
+    const int in_ptr_stride = N * length * batch_idx;
+    const uint64_t op1 = in_ptr[in_ptr_stride + i];
+    const uint64_t op2_ax = eval_ax[i + N * prime_idx + stride];
     const auto mul_ax = mult_64_64_128(op1, op2_ax);
     accum_ax += mul_ax;
-    const uint64_t op2_bx = eval_bx[i + degree * prime_idx + stride];
+    const uint64_t op2_bx = eval_bx[i + N * prime_idx + stride];
     const auto mul_bx = mult_64_64_128(op1, op2_bx);
     accum_bx += mul_bx;
   }
@@ -53,29 +53,29 @@ __global__ void sumAndReduceFused(
       barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
   const auto res_bx =
       barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
-  dst_ax[i] = res_ax;
-  dst_bx[i] = res_bx;
+  out_ax[i] = res_ax;
+  out_bx[i] = res_bx;
   STRIDED_LOOP_END;
 }
 
 template <bool Accum>
-__global__ void mult_(
-    const uint64_t* modup_out,
+__global__ void mult(
+    const uint64_t* in_ptr,
     const uint64_t* eval_poly_ax,
     const uint64_t* eval_poly_bx,
-    const int degree,
+    const int N,
     const int length,
-    uint128_t* accum_ptr_ax,
-    uint128_t* accum_ptr_bx,
     int curr_limbs,
-    int gap) {
-  STRIDED_LOOP_START(degree * length, i);
-  const uint64_t op1 = modup_out[i];
-  const int idx = i / degree;
+    int gap,
+    uint128_t* accum_ptr_ax,
+    uint128_t* accum_ptr_bx) {
+  STRIDED_LOOP_START(N * length, i);
+  const uint64_t op1 = in_ptr[i];
+  const int idx = i / N;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
 
-  const uint64_t op2_ax = eval_poly_ax[i + degree * prime_idx];
-  const uint64_t op2_bx = eval_poly_bx[i + degree * prime_idx];
+  const uint64_t op2_ax = eval_poly_ax[i + N * prime_idx];
+  const uint64_t op2_bx = eval_poly_bx[i + N * prime_idx];
   const auto mul_ax = mult_64_64_128(op1, op2_ax);
   const auto mul_bx = mult_64_64_128(op1, op2_bx);
   if (Accum) {
@@ -88,67 +88,67 @@ __global__ void mult_(
   STRIDED_LOOP_END;
 }
 
-__global__ void Reduce(
+__global__ void reduce(
     const uint128_t* accum,
-    const int degree,
+    const int N,
     const int length,
     const int curr_limbs,
     const int gap,
     const uint64_t* primes,
     const uint64_t* barret_ks,
     const uint64_t* barret_ratios,
-    uint64_t* res) {
-  STRIDED_LOOP_START(degree * length, i);
-  const int idx = i / degree;
+    uint64_t* out_ptr) {
+  STRIDED_LOOP_START(N * length, i);
+  const int idx = i / N;
   const int prime_idx = idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
   const auto prime = primes[prime_idx];
   const auto barret_ratio = barret_ratios[prime_idx];
   const auto barret_k = barret_ks[prime_idx];
   const auto res_ax =
       barret_reduction_128_64(accum[i], prime, barret_ratio, barret_k);
-  res[i] = res_ax;
+  out_ptr[i] = res_ax;
   STRIDED_LOOP_END;
 }
 } // namespace fhe
 
 namespace at::native {
 static void innerproduct_template(
-    const Tensor& modup_out,
+    const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
+    int64_t L,
+    int64_t N,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace,
-    Tensor& res) {
-//  const int total_length = modup_out.size(-1) / param_degree;
-  const int beta = int((curr_limbs + alpha -1)/alpha);
+    Tensor& out) {
+  //  const int total_length = in.size(-1) / N;
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
   int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - level;
+  int64_t sizeP = sizeQP - L;
   const int length = (curr_limbs + sizeP);
-  const int mult_length = (level + sizeP);
-  int gap = level - curr_limbs;
+  const int mult_length = (L + sizeP);
+  int gap = L - curr_limbs;
 
-//  fhe::uint128_t* accum_bx_ptr =
-//      reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
-//  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
+  //  fhe::uint128_t* accum_bx_ptr =
+  //      reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
+  //  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + in.size(-1);
 
   AT_DISPATCH_V2(
       ax.scalar_type(),
       "inner_product_impl",
       AT_WRAP([&]() {
-        auto modup_out_ptr =
-            reinterpret_cast<uint64_t*>(modup_out.data_ptr<uint64_t>());
+        auto in_ptr =
+            reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
         auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
         auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-        auto res_bx_ptr =
-            reinterpret_cast<uint64_t*>(res[0].data_ptr<uint64_t>());
-        auto res_ax_ptr =
-            reinterpret_cast<uint64_t*>(res[1].data_ptr<uint64_t>());
+        auto out_bx_ptr =
+            reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
+        auto out_ax_ptr =
+            reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto barret_ratio_ptr =
@@ -158,21 +158,21 @@ static void innerproduct_template(
         const int gridDim = 1024;
         const int blockDim = 256;
         auto stream = at::cuda::getCurrentCUDAStream();
-          fhe::sumAndReduceFused<<<gridDim, blockDim, 0, stream>>>(
-              modup_out_ptr,
-              param_degree,
-              length,
-              mult_length,
-              beta,
-              ax_ptr,
-              bx_ptr,
-              primes_ptr,
-              barret_k_ptr,
-              barret_ratio_ptr,
-              res_ax_ptr,
-              res_bx_ptr,
-              curr_limbs,
-              gap);
+        fhe::sum_reduce_fused<<<gridDim, blockDim, 0, stream>>>(
+            in_ptr,
+            N,
+            length,
+            mult_length,
+            beta,
+            ax_ptr,
+            bx_ptr,
+            primes_ptr,
+            barret_k_ptr,
+            barret_ratio_ptr,
+            curr_limbs,
+            gap,
+            out_ax_ptr,
+            out_bx_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);
@@ -180,29 +180,29 @@ static void innerproduct_template(
 
 Tensor innerproduct_cuda(
     const Tensor& res,
-    const Tensor& modup_out,
+    const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
+    int64_t L,
+    int64_t N,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
   Tensor out = at::empty_like(res);
   int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - level;
-  out.resize_({2, (curr_limbs + sizeP) * param_degree});
+  int64_t sizeP = sizeQP - L;
+  out.resize_({2, (curr_limbs + sizeP) * N});
   innerproduct_template(
-      modup_out,
+      in,
       bx,
       ax,
       curr_limbs,
       alpha,
-      level,
-      param_degree,
+      L,
+      N,
       primes,
       barret_ratio,
       barret_k,
@@ -213,25 +213,25 @@ Tensor innerproduct_cuda(
 
 Tensor& innerproduct_cuda_(
     Tensor& res,
-    const Tensor& modup_out,
+    const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
+    int64_t L,
+    int64_t N,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
   innerproduct_template(
-      modup_out,
+      in,
       bx,
       ax,
       curr_limbs,
       alpha,
-      level,
-      param_degree,
+      L,
+      N,
       primes,
       barret_ratio,
       barret_k,
@@ -242,26 +242,26 @@ Tensor& innerproduct_cuda_(
 
 Tensor& innerproduct_cuda_out(
     const Tensor& res,
-    const Tensor& modup_out,
+    const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
+    int64_t L,
+    int64_t N,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace,
     Tensor& out) {
   innerproduct_template(
-      modup_out,
+      in,
       bx,
       ax,
       curr_limbs,
       alpha,
-      level,
-      param_degree,
+      L,
+      N,
       primes,
       barret_ratio,
       barret_k,
