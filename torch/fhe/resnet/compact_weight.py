@@ -203,8 +203,8 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
         logSlots_list = [12, 13, 14]
         levelBudget_list = [[4, 4], [4, 4], [4, 4]]
         dnum = 3
-        dcrtBits = 59
-        firstMod = 60
+        dcrtBits = 52
+        firstMod = 56
         max_relu_degree = 59
         secretKeyDist = "UNIFORM_TERNARY"
         rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"

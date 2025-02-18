@@ -227,7 +227,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
     # resLayer3 = layer3(resLayer2,  he_res20_ctx, cryptoContext, openfhe_context_dict)
     # finalRes = final_layer(resLayer3,he_res20_ctx, cryptoContext, openfhe_context_dict)
 
-    for j in range(35,60,2):
+    for j in range(29,60,2):
         # 创建日志文件
         log_filename = f'torch/fhe/resnet/logs/relu_deg_{j}.txt'
         he_res20_ctx.relu_degree = j
@@ -287,8 +287,8 @@ def resnet20( ):
     logSlots_list = [12, 13, 14]
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     dnum = 3
-    dcrtBits = 59
-    firstMod = 60
+    dcrtBits = 52
+    firstMod = 56
     max_relu_degree = 59
     secretKeyDist = "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"

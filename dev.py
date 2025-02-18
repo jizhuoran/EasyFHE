@@ -8,4 +8,4 @@ import torch.fhe.resnet.resnet20 as res
 # bstest.BootstrapTest_test_case()
 
 
-res.resnet20( )
+res.resnet20()
