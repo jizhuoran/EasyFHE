@@ -51,8 +51,8 @@ static void drop_last_element_scale_template(
   auto ptr = from_ptr + N * end_length;
 
   switch_modulus(
-      ptr,
       to_ptr,
+      ptr,
       param_primes,
       param_barret_ratio,
       param_barret_k,
@@ -64,6 +64,7 @@ static void drop_last_element_scale_template(
 
   const_mult_batch(
       to_ptr,
+      to_ptr,
       qlql_inv_mod_ql_div_ql_mod_q,
       qlql_inv_mod_ql_div_ql_mod_q_shoup,
       param_primes,
@@ -71,8 +72,7 @@ static void drop_last_element_scale_template(
       curr_limbs - 1,
       0,
       start_op2_idx,
-      N,
-      to_ptr);
+      N);
 
   NTT_impl(
       to_ptr,
@@ -87,6 +87,7 @@ static void drop_last_element_scale_template(
   start_op2_idx = (curr_limbs - 1) * (L);
   const_mult_batch(
       from_ptr,
+      from_ptr,
       q_inv_mod_q,
       q_inv_mod_q_shoup,
       param_primes,
@@ -94,18 +95,17 @@ static void drop_last_element_scale_template(
       end_length,
       0,
       start_op2_idx,
-      N,
-      from_ptr);
+      N);
 
   vec_add_mod_batch(
+      to_ptr,
       to_ptr,
       from_ptr,
       param_primes,
       param_barret_ratio,
       param_barret_k,
       end_length,
-      N,
-      to_ptr);
+      N);
 }
 
 Tensor drop_last_element_scale_cuda(

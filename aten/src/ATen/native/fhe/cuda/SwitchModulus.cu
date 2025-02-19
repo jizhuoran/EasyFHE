@@ -44,7 +44,7 @@ static void switch_modulus_template(
       moduliQ,
       inverse_scaled_power_of_roots_div_two);
 
-  switch_modulus(op_ptr, res_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
+  switch_modulus(res_ptr, op_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
 
   NTT_impl(
       res_ptr,

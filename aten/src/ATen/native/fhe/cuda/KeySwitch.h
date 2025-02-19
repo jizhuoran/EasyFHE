@@ -26,8 +26,8 @@ void NTT_impl(
     const Tensor& param_power_of_roots);
 
 void switch_modulus(
-    uint64_t* ptr,
     uint64_t* res_ptr,
+    uint64_t* ptr,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
@@ -36,25 +36,26 @@ void switch_modulus(
     int64_t degree);
 
 void vec_mod_batch(
+    uint64_t* res_ptr,
     uint64_t* op1_ptr,
     const Tensor& primes,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
     int64_t batch,
-    int64_t degree,
-    uint64_t* res_ptr);
+    int64_t degree);
 
 void vec_add_mod_batch(
+    uint64_t* res_ptr,
     uint64_t* op1_ptr,
     uint64_t* op2_ptr,
     const Tensor& primes,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
     int64_t batch,
-    int64_t degree,
-    uint64_t* res_ptr);
+    int64_t degree);
 
 void const_mult_batch(
+    uint64_t* res_ptr,
     uint64_t* op1_ptr,
     const Tensor& op2,
     const Tensor& op2_psinv,
@@ -63,14 +64,13 @@ void const_mult_batch(
     int64_t batch,
     int64_t start_op1_idx,
     int64_t start_op2_idx,
-    int64_t param_degree,
-    uint64_t* res_ptr);
+    int64_t param_degree);
 
 void sub_inplace(
+    uint64_t* to_ptr,
     const uint64_t* from_ptr,
     const int64_t batch,
     const int64_t param_degree,
-    const Tensor& primes,
-    uint64_t* to_ptr);
+    const Tensor& primes);
 
 } // namespace at::native
