@@ -9,7 +9,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cuda/KeySwitch.h"
+#include "ATen/native/fhe/cuda/CommonOperation.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 

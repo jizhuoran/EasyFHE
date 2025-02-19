@@ -1178,4 +1178,79 @@ void NTT_impl(
       kUInt64);
 }
 
-} // end native namespace
+void NTT_except_some_range_impl(
+    uint64_t* op_ptr,
+    int64_t start_prime_idx,
+    int64_t batch,
+    int64_t N,
+    int64_t excluded_range_start,
+    int64_t excluded_range_size,
+    int64_t curr_limbs,
+    int64_t L,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& primes,
+    const Tensor& power_of_roots) {
+  auto excluded_range_end = excluded_range_start + excluded_range_size;
+  dim3 grid(2048);
+  dim3 block(256);
+  const int per_thread_ntt_size = 8;
+  const int first_stage_radix_size = 256;
+  const int second_radix_size = N / first_stage_radix_size;
+  const int pad = 4;
+  const int per_thread_storage =
+      block.x * per_thread_ntt_size * sizeof(uint64_t);
+  AT_DISPATCH_V2(
+      kUInt64,
+      "NTT_except_some_range_impl",
+      AT_WRAP([&]() {
+        auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
+            power_of_roots_shoup.data_ptr<uint64_t>());
+        auto param_primes_ptr =
+            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+        auto param_power_of_roots_ptr =
+            reinterpret_cast<uint64_t*>(power_of_roots.data_ptr<uint64_t>());
+        int gap = L - curr_limbs;
+        auto stream = at::cuda::getCurrentCUDAStream();
+        fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange<<<
+            grid,
+            (first_stage_radix_size / 8) * pad,
+            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
+            stream>>>(
+            op_ptr,
+            1,
+            batch,
+            N,
+            start_prime_idx,
+            excluded_range_start,
+            excluded_range_end,
+            curr_limbs,
+            gap,
+            pad,
+            first_stage_radix_size / per_thread_ntt_size,
+            param_power_of_roots_ptr,
+            param_power_of_roots_shoup_ptr,
+            param_primes_ptr);
+        fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange<<<
+            grid,
+            block.x,
+            per_thread_storage,
+            stream>>>(
+            op_ptr,
+            first_stage_radix_size,
+            batch,
+            N,
+            start_prime_idx,
+            excluded_range_start,
+            excluded_range_end,
+            curr_limbs,
+            gap,
+            second_radix_size / per_thread_ntt_size,
+            param_power_of_roots_ptr,
+            param_power_of_roots_shoup_ptr,
+            param_primes_ptr);
+        C10_CUDA_KERNEL_LAUNCH_CHECK();
+      }),
+      kUInt64);
+}
+
+} // namespace at::native

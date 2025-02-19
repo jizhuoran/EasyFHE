@@ -8,7 +8,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include "ATen/native/fhe/cuda/KeySwitch.h"
+#include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
 
 #include <algorithm>
@@ -77,10 +77,7 @@ __global__ void fft_stage_kernel(
   }
 }
 
-__global__ void bit_reverse_kernel(
-    DTYPE* vals_real,
-    DTYPE* vals_imag,
-    int n) {
+__global__ void bit_reverse_kernel(DTYPE* vals_real, DTYPE* vals_imag, int n) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
     return;
@@ -374,10 +371,10 @@ static void encode_template(
             reinterpret_cast<DTYPE*>(inverse_real.data_ptr<DTYPE>());
         auto inverse_imag_ptr =
             reinterpret_cast<DTYPE*>(inverse_imag.data_ptr<DTYPE>());
-        auto precompute_ksipows_real_ptr = reinterpret_cast<DTYPE*>(
-            precompute_ksipows_real.data_ptr<DTYPE>());
-        auto precompute_ksipows_imag_ptr = reinterpret_cast<DTYPE*>(
-            precompute_ksipows_imag.data_ptr<DTYPE>());
+        auto precompute_ksipows_real_ptr =
+            reinterpret_cast<DTYPE*>(precompute_ksipows_real.data_ptr<DTYPE>());
+        auto precompute_ksipows_imag_ptr =
+            reinterpret_cast<DTYPE*>(precompute_ksipows_imag.data_ptr<DTYPE>());
         auto rotGroups = reinterpret_cast<int64_t*>(
             precompute_rotgroups.data_ptr<int64_t>());
         auto elements_ptr =

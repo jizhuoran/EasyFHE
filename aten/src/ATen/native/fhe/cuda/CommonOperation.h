@@ -25,6 +25,19 @@ void NTT_impl(
     const Tensor& param_primes,
     const Tensor& param_power_of_roots);
 
+void NTT_except_some_range_impl(
+    uint64_t* op_ptr,
+    int64_t start_prime_idx,
+    int64_t batch,
+    int64_t N,
+    int64_t excluded_range_start,
+    int64_t excluded_range_size,
+    int64_t curr_limbs,
+    int64_t L,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& primes,
+    const Tensor& power_of_roots);
+
 void switch_modulus(
     uint64_t* res_ptr,
     uint64_t* ptr,
@@ -65,12 +78,5 @@ void const_mult_batch(
     int64_t start_op1_idx,
     int64_t start_op2_idx,
     int64_t param_degree);
-
-void sub_inplace(
-    uint64_t* to_ptr,
-    const uint64_t* from_ptr,
-    const int64_t batch,
-    const int64_t param_degree,
-    const Tensor& primes);
 
 } // namespace at::native

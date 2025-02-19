@@ -83,19 +83,19 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
             raise ValueError("Unsupported scaling factor")
 
         if len(in0.cv) == 1:
-            ptxt = in0.cv[0]
-            ptxtDepth = in0.noise_deg
-            ctxtDepth = in1.noise_deg
-            sizeQl = in1.cur_limbs
+            ptxt, ptxtDepth, ctxtDepth, sizeQl, ptxtIndex= in0.cv[0], in0.noise_deg, in1.noise_deg, in1.cur_limbs, 0
+            # ptxtDepth = in0.noise_deg
+            # ctxtDepth = in1.noise_deg
+            # sizeQl, moduli = in1.cur_limbs,
             moduli = cryptoContext.moduliQ[:sizeQl]
-            ptxtIndex = 0
+            # ptxtIndex = 0
         elif len(in1.cv) == 1:
-            ptxt = in1.cv[0]
-            ptxtDepth = in1.noise_deg
-            ctxtDepth = in0.noise_deg
-            sizeQl = in0.cur_limbs
+            ptxt, ptxtDepth, ctxtDepth, sizeQl, ptxtIndex= in1.cv[0], in1.noise_deg, in0.noise_deg, in0.cur_limbs, 1
+            # ptxtDepth = in1.noise_deg
+            # ctxtDepth = in0.noise_deg
+            # sizeQl = in0.cur_limbs
             moduli = cryptoContext.moduliQ[:sizeQl]
-            ptxtIndex = 1
+            # ptxtIndex = 1
 
         if len(in0.cv) == 1 or len(in1.cv) == 1:  # todo: this branch is not tested
             # Bring to same depth if not already same
@@ -115,11 +115,9 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
                 )  # fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
                 if ptxtIndex == 0:
-                    in0.cv[0] = ptxt  # todo: check if correctly assigned
-                    in0.noise_deg = ctxtDepth
+                    in0.cv[0], in0.noise_deg = ptxt, ctxtDepth  # todo: check if correctly assigned
                 else:
-                    in1.cv[0] = ptxt  # todo: check if correctly assigned
-                    in1.noise_deg = ctxtDepth
+                    in1.cv[0], in1.noise_deg = ptxt, ctxtDepth  # todo: check if correctly assigned
             elif ptxtDepth > ctxtDepth:
                 raise ValueError(
                     "plaintext cannot be encoded at a larger depth than that of the ciphertext."
