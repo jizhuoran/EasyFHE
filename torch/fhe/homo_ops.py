@@ -4,7 +4,6 @@ from .ciphertext import Cipher
 from . import functional as F
 from .ciphertext import Plaintext as Plaintext
 import math
-import numpy as np
 import torch
 from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
 
@@ -67,7 +66,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
     return rct1, rct2
 
 
-# AdjustForAddOrSubInPlace in rns-leveledshe.cpp #todo: to check!!
+# AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):
     rescaleTech = cryptoContext.rescaleTech
     if rescaleTech == "FIXEDMANUAL":
@@ -83,19 +82,19 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
             raise ValueError("Unsupported scaling factor")
 
         if len(in0.cv) == 1:
-            ptxt, ptxtDepth, ctxtDepth, sizeQl, ptxtIndex= in0.cv[0], in0.noise_deg, in1.noise_deg, in1.cur_limbs, 0
-            # ptxtDepth = in0.noise_deg
-            # ctxtDepth = in1.noise_deg
-            # sizeQl, moduli = in1.cur_limbs,
+            ptxt = in0.cv[0]
+            ptxtDepth = in0.noise_deg
+            ctxtDepth = in1.noise_deg
+            sizeQl = in1.cur_limbs
             moduli = cryptoContext.moduliQ[:sizeQl]
-            # ptxtIndex = 0
+            ptxtIndex = 0
         elif len(in1.cv) == 1:
-            ptxt, ptxtDepth, ctxtDepth, sizeQl, ptxtIndex= in1.cv[0], in1.noise_deg, in0.noise_deg, in0.cur_limbs, 1
-            # ptxtDepth = in1.noise_deg
-            # ctxtDepth = in0.noise_deg
-            # sizeQl = in0.cur_limbs
+            ptxt = in1.cv[0]
+            ptxtDepth = in1.noise_deg
+            ctxtDepth = in0.noise_deg
+            sizeQl = in0.cur_limbs
             moduli = cryptoContext.moduliQ[:sizeQl]
-            # ptxtIndex = 1
+            ptxtIndex = 1
 
         if len(in0.cv) == 1 or len(in1.cv) == 1:  # todo: this branch is not tested
             # Bring to same depth if not already same
@@ -115,9 +114,11 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
                 )  # fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
                 if ptxtIndex == 0:
-                    in0.cv[0], in0.noise_deg = ptxt, ctxtDepth  # todo: check if correctly assigned
+                    in0.cv[0] = ptxt  # todo: check if correctly assigned
+                    in0.noise_deg = ctxtDepth
                 else:
-                    in1.cv[0], in1.noise_deg = ptxt, ctxtDepth  # todo: check if correctly assigned
+                    in1.cv[0] = ptxt  # todo: check if correctly assigned
+                    in1.noise_deg = ctxtDepth
             elif ptxtDepth > ctxtDepth:
                 raise ValueError(
                     "plaintext cannot be encoded at a larger depth than that of the ciphertext."
@@ -127,7 +128,6 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
         in0, in1 = adjust_levels_and_depth(in0, in1, cryptoContext)
 
     return in0, in1
-
 
 def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
@@ -455,6 +455,18 @@ def _cipher_neg(in0, cryptoContext):
     )
 
 
+# @check_cipher_len
+#todo: input len of in0.cv could be 1
+def _cipher_automorphism(in0, index, cryptoContext):
+    assert in0.is_ext == False
+    auto_index = cryptoContext.find_auto_index(index)
+    cv = [
+        F.cv_automorphism_transform(cv, in0.cur_limbs, auto_index, cryptoContext)
+        for cv in in0.cv
+    ]
+    return in0.cipher_like(cv)
+
+
 @call_counter
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
@@ -647,24 +659,37 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
             Warning,
         )
-    # res0 = cipher.deep_copy()
-    ctmorphed = Cipher(
-        plaintext.mv,
-        plaintext.cur_limbs,
-        plaintext.scaling_factor,
-        plaintext.noise_deg,
-        plaintext.slots,
-        False,
-    )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
-    moduli = cryptoContext.moduliQ_cuda
-    mu = cryptoContext.q_mu_cuda
-    cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
-    cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
+    if cipher.is_ext:
+        if (cipher.cur_limbs != plaintext.cur_limbs or
+            cipher.noise_deg != plaintext.noise_deg or
+            cipher.scaling_factor != plaintext.scaling_factor or
+            cipher.is_ext != plaintext.is_ext):
+            raise ValueError(f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}")
+        moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
+        mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
+        cv0 = F.cv_mul(cipher.cv[0], plaintext.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], plaintext.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        return cipher.cipher_like([cv0, cv1], scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
+                                  noise_deg=cipher.noise_deg + plaintext.noise_deg)
+    else:
+        ctmorphed = Cipher(
+            plaintext.mv,
+            plaintext.cur_limbs,
+            plaintext.scaling_factor,
+            plaintext.noise_deg,
+            plaintext.slots,
+            False,
+        )  # MorphPlaintext in openfhe
+        res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
-    return res0.cipher_like(
-        [cv0, cv1],
-        scaling_factor=res0.scaling_factor * res1.scaling_factor,
-        noise_deg=res0.noise_deg + res1.noise_deg,
-    )
+        moduli = cryptoContext.moduliQ_cuda
+        mu = cryptoContext.q_mu_cuda
+        cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
+        cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
+
+        return res0.cipher_like(
+            [cv0, cv1],
+            scaling_factor=res0.scaling_factor * res1.scaling_factor,
+            noise_deg=res0.noise_deg + res1.noise_deg,
+        )

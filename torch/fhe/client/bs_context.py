@@ -482,6 +482,7 @@ class BsContext:
 
         RHScnt = 0
         cnt = 0
+        sizeP = context.K
         self.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
         for i in range(0, m_U0hatTPreFFT_dim1):
             j_len = m_U0hatTPreFFT_dim2[i]
@@ -496,7 +497,7 @@ class BsContext:
                 RHScnt += m_U0hatTPreFFT_len
                 self.m_U0hatTPreFFT[i][j] = Plaintext(
                     m_U0hatTPreFFT,
-                    limbs,
+                    limbs-sizeP,
                     self.m_U0hatTPreFFT_scaling_factor[cnt],
                     1,
                     mx_slots,
@@ -517,7 +518,7 @@ class BsContext:
                 RHScnt += m_U0PreFFT_len
                 self.m_U0PreFFT[i][j] = Plaintext(
                     m_U0PreFFT,
-                    limbs,
+                    limbs-sizeP,
                     self.m_U0PreFFT_scaling_factor[cnt],
                     1,
                     mx_slots,

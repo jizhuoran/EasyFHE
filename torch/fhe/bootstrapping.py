@@ -17,6 +17,29 @@ BASE_NUM_LEVELS_TO_DROP = 1
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 
+#todo: to be rolled back
+def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
+    assert digits.is_ext == True
+    assert cipher.is_ext == False
+
+    # Find the automorphism index that corresponds to rotation index.
+    auto_index = cryptoContext.find_auto_index(index)
+
+    # Inner Product
+    swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
+                                 swk_bx=swk[0], swk_ax=swk[1])
+    sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
+
+    cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+                            cryptoContext.q_mu_cuda, cipher.cur_limbs)
+    sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, cipher.cur_limbs, inplace=True)
+
+    cv0 = F.cv_automorphism_transform(sumbxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
+    cv1 = F.cv_automorphism_transform(sumaxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
+    return digits.cipher_like([cv0, cv1], is_ext=True)
+
+
 # @profile_python_function
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     rescale_tech = cryptoContext.rescaleTech
@@ -96,17 +119,13 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
             b = params.baby_step_rem
             num_rotations = params.num_rotations_rem
 
-        curr_limbs = result.cur_limbs
-        limbs_ext = curr_limbs + cryptoContext.K
-        len_ext = limbs_ext << cryptoContext.logN
-
         digits_ext = hoisting_keyswitch.modup_to_ext(result.cipher_like([result.cv[1]]), cryptoContext)
 
         fast_rotation_ext = []
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(hoisting_keyswitch.fused_rotation_add_ext(digits_ext, result, rot_in[s][j],
+                fast_rotation_ext.append(fused_rotation_add_ext(digits_ext, result, rot_in[s][j],
                                                                                  cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
@@ -114,10 +133,10 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         # print("times: ", b * g,  b * 2)        
         for i in range(b):
             G = g * i
-            inner_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[0], A_Ext[s][G], cryptoContext)
+            inner_ext = homo_ops.homo_mul_pt(fast_rotation_ext[0], A_Ext[s][G], cryptoContext)
             for j in range(1, g):
                 if (G + j) != num_rotations:
-                    tmp_ext = hoisting_keyswitch.eval_mult_ext(fast_rotation_ext[j], A_Ext[s][G + j], cryptoContext)
+                    tmp_ext = homo_ops.homo_mul_pt(fast_rotation_ext[j], A_Ext[s][G + j], cryptoContext)
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
             
             if i == 0:
@@ -130,7 +149,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_cv0 = inner.cipher_like([inner.cv[0]])
                     inner_cv1 = inner.cipher_like([inner.cv[1]])
 
-                    first = hoisting_keyswitch.eval_automorphism(inner_cv0, rot_out[s][i], cryptoContext)
+                    first = homo_ops._cipher_automorphism(inner_cv0, rot_out[s][i], cryptoContext)
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
                     
                     inner_digits = hoisting_keyswitch.modup_to_ext(inner_cv1, cryptoContext)
