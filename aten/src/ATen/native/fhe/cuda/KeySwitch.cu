@@ -291,15 +291,29 @@ __global__ void switch_modulus_kernel(
     const size_t batch,
     const size_t old_prime_idx,
     const uint64_t* primes,
+    const uint64_t* barret_ratios,
+    const uint64_t* barret_ks,
     uint64_t* to) {
   STRIDED_LOOP_START(batch * N, i)
   auto old_modulus_by_two = primes[old_prime_idx] >> 1;
   auto old_modulus = primes[old_prime_idx];
   auto new_modulus_idx = i / N;
   auto new_modulus = primes[new_modulus_idx];
-  auto diff = (old_modulus > new_modulus)
-      ? (new_modulus- (old_modulus%new_modulus)) //fixme: remove the `%`, note that in mod_raise case, the quotient of om/nm may be >=2
-      : (new_modulus - old_modulus);
+  auto barret_ratio = barret_ratios[new_modulus_idx];
+  auto barret_k = barret_ks[new_modulus_idx];
+  uint64_t diff;
+  if (old_modulus > new_modulus) {
+    uint64_t temp_out;
+    barret_reduction_64_64(
+        old_modulus, temp_out, new_modulus, barret_ratio, barret_k);
+    diff = new_modulus - temp_out;
+  } else {
+    diff = new_modulus - old_modulus;
+  }
+  //  auto diff = (old_modulus > new_modulus)
+  //      ? (new_modulus- (old_modulus%new_modulus)) // fixme: remove the `%`,
+  //      note that in mod_raise case, the quotient of om/nm may be >=2 :
+  //      (new_modulus - old_modulus);
   int input_idx = i % N;
   auto tmp = (ptr[input_idx] > old_modulus_by_two) ? diff : 0;
 
@@ -313,8 +327,10 @@ __global__ void switch_modulus_kernel(
     //       to[i] = new_modulus - (tmp - ptr[input_idx]);
     //     }
     to[i] = tmp + ptr[input_idx];
-    if (to[i]>=new_modulus)
-        to[i] = to[i] % new_modulus; // fixme: note that quotient>=1, can not replaced with sub trivially
+    if (to[i] >= new_modulus)
+      barret_reduction_64_64(to[i], to[i], new_modulus, barret_ratio, barret_k);
+    //        to[i] = to[i] % new_modulus; // fixme: note that quotient>=1, can
+    //        not replaced with sub trivially
   }
   STRIDED_LOOP_END;
 }
@@ -973,6 +989,8 @@ void switch_modulus(
     uint64_t* in_ptr,
     uint64_t* out_ptr,
     const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
     int64_t old_prime_index,
     int64_t batch,
     int64_t N) {
@@ -982,11 +1000,22 @@ void switch_modulus(
       AT_WRAP([&]() {
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+        auto barret_ratio_ptr =
+            reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+        auto barret_k_ptr =
+            reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = N * batch / block_dim;
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::switch_modulus_kernel<<<grid_dim, block_dim, 0, stream>>>(
-            in_ptr, (int)N, batch, old_prime_index, primes_ptr, out_ptr);
+            in_ptr,
+            (int)N,
+            batch,
+            old_prime_index,
+            primes_ptr,
+            barret_ratio_ptr,
+            barret_k_ptr,
+            out_ptr);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
       kUInt64);

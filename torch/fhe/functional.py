@@ -413,6 +413,8 @@ def cv_switch_modulus_with_intt_ntt(input: Tensor, L0: int, context: Context) ->
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
         param_power_of_roots_shoup=context.power_of_roots_shoup,
         param_power_of_roots=context.power_of_roots,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k
     )
     return switch_modulus.reshape(-1, context.N)
 

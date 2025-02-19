@@ -51,7 +51,14 @@ static void drop_last_element_scale_template(
   auto ptr = from_ptr + N * end_length;
 
   switch_modulus(
-      ptr, to_ptr, param_primes, curr_limbs - 1, curr_limbs - 1, N);
+      ptr,
+      to_ptr,
+      param_primes,
+      param_barret_ratio,
+      param_barret_k,
+      curr_limbs - 1,
+      curr_limbs - 1,
+      N);
 
   int start_op2_idx = (L - curr_limbs + l) * (L - 1);
 

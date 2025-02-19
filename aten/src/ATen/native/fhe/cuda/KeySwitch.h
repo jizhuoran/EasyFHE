@@ -1,6 +1,6 @@
 #pragma once
-#include <cstdint>
 #include <ATen/core/Tensor.h>
+#include <cstdint>
 
 namespace at::native {
 void iNTT_impl(
@@ -29,6 +29,8 @@ void switch_modulus(
     uint64_t* ptr,
     uint64_t* res_ptr,
     const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
     int64_t old_prime_index,
     int64_t batch,
     int64_t degree);

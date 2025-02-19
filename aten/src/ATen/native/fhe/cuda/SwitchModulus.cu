@@ -26,13 +26,15 @@ static void switch_modulus_template(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots) {
+    const Tensor& param_power_of_roots,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
   auto op = in.clone();
   auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
-    op_ptr,
-    op_ptr,
+      op_ptr,
+      op_ptr,
       0,
       1,
       1,
@@ -42,7 +44,7 @@ static void switch_modulus_template(
       moduliQ,
       inverse_scaled_power_of_roots_div_two);
 
-  switch_modulus(op_ptr, res_ptr, moduliQ, 0, L0, N);
+  switch_modulus(op_ptr, res_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
 
   NTT_impl(
       res_ptr,
@@ -66,7 +68,9 @@ Tensor switch_modulus_cuda(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots) {
+    const Tensor& param_power_of_roots,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
   switch_modulus_template(
@@ -80,7 +84,9 @@ Tensor switch_modulus_cuda(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
-      param_power_of_roots);
+      param_power_of_roots,
+      barret_ratio,
+      barret_k);
   return out;
 }
 
@@ -95,7 +101,9 @@ Tensor& switch_modulus_cuda_(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots) {
+    const Tensor& param_power_of_roots,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
   res.resize_({L0 * N});
   switch_modulus_template(
       res,
@@ -108,7 +116,9 @@ Tensor& switch_modulus_cuda_(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
-      param_power_of_roots);
+      param_power_of_roots,
+      barret_ratio,
+      barret_k);
   return res;
 }
 
@@ -124,6 +134,8 @@ Tensor& switch_modulus_cuda_out(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
     Tensor& out) {
   out.resize_({L0 * N});
   switch_modulus_template(
@@ -137,7 +149,9 @@ Tensor& switch_modulus_cuda_out(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
-      param_power_of_roots);
+      param_power_of_roots,
+      barret_ratio,
+      barret_k);
   return out;
 }
 
