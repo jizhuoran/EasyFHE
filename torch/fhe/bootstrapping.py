@@ -22,22 +22,18 @@ def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
     assert digits.is_ext == True
     assert cipher.is_ext == False
 
-    # Find the automorphism index that corresponds to rotation index.
-    auto_index = cryptoContext.find_auto_index(index)
+    sum_mult = hoisting_keyswitch.mult_key_and_sum_ext(digits, cipher, index, cryptoContext)
+    sumbxmult= sum_mult.cv[0]
 
-    # Inner Product
-    swk = cryptoContext.left_rot_key_map[str(auto_index)]
-    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
-                                 swk_bx=swk[0], swk_ax=swk[1])
-    sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
+    cMult = hoisting_keyswitch.key_switch_ext(cipher.cipher_like([cipher.cv[0]]), cryptoContext)
+    # cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+    #                         cryptoContext.q_mu_cuda, cipher.cur_limbs)
+    sumbxmult = F.cv_add(sumbxmult, cMult.cv[0], cryptoContext.moduliQ_cuda, cipher.cur_limbs, inplace=True)
 
-    cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                            cryptoContext.q_mu_cuda, cipher.cur_limbs)
-    sumbxmult = F.cv_add(sumbxmult, cMult, cryptoContext.moduliQ_cuda, cipher.cur_limbs, inplace=True)
+    sum_mult.cv[0] = sumbxmult
+    sum_mult = homo_ops._cipher_automorphism(sum_mult, index, cryptoContext)
 
-    cv0 = F.cv_automorphism_transform(sumbxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
-    cv1 = F.cv_automorphism_transform(sumaxmult, digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
-    return digits.cipher_like([cv0, cv1], is_ext=True)
+    return sum_mult
 
 
 # @profile_python_function

@@ -458,10 +458,10 @@ def _cipher_neg(in0, cryptoContext):
 # @check_cipher_len
 #todo: input len of in0.cv could be 1
 def _cipher_automorphism(in0, index, cryptoContext):
-    assert in0.is_ext == False
     auto_index = cryptoContext.find_auto_index(index)
+    limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
     cv = [
-        F.cv_automorphism_transform(cv, in0.cur_limbs, auto_index, cryptoContext)
+        F.cv_automorphism_transform(cv, limbs, auto_index, cryptoContext)
         for cv in in0.cv
     ]
     return in0.cipher_like(cv)
