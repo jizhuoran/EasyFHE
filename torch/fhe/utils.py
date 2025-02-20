@@ -197,3 +197,11 @@ def load_rotation_keys(context, key_name):
         context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
     for key, value in context.slots_precompute_auto_map[str(key_name)].items():
         context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+
+def load_all_bootstrapping_contexts(logSlots_list,cryptoContext):
+    for log_slots in logSlots_list:
+        # cryptoContext.BsContext_map[str(log_slots)].to_cuda()
+        # load_rotation_keys(cryptoContext, str(log_slots))
+        cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_slots)]
+        cryptoContext.BsContext.to_cuda()
+        load_rotation_keys(cryptoContext, log_slots)

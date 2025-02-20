@@ -28,12 +28,12 @@ def app_example_debug(
                                approxModDepth, "UNIFORM_TERNARY", rescaleTech,
                                save_dir=save_dir, mode=mode))
 
-    specify_slots = logSlots_list[0] # logslots = 11
+    specify_logSlots = logSlots_list[0] # logslots = 11
 
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
+    x = np.array([values[i % len(values)] for i in range((1<<specify_logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1<<specify_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1<<specify_logSlots)
 
     # do the application computation
     utils.load_rotation_keys(cryptoContext, "app")
@@ -51,15 +51,15 @@ def app_example_debug(
             print("homo_rotate: Test failed!")
 
     # bootstrapping, logSlots = 11
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_slots)
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    utils.load_rotation_keys(cryptoContext, specify_logSlots)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
-        cipher_openfhe.SetSlots((1<<specify_slots))
-        openfhe_boot_context = openfhe_boot_contexts[str(specify_slots)]
+        cipher_openfhe.SetSlots((1<<specify_logSlots))
+        openfhe_boot_context = openfhe_boot_contexts[str(specify_logSlots)]
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
         is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
         if is_euqal:
@@ -72,20 +72,20 @@ def app_example_debug(
     # #####################################
 
     # bootstrapping, logSlots = 12
-    specify_slots = logSlots_list[1]
-    result.slots = (1<<specify_slots) # This assignment is for testing purposes only.
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    specify_logSlots = logSlots_list[1]
+    result.slots = (1<<specify_logSlots) # This assignment is for testing purposes only.
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, specify_logSlots)
     for i in range(result.cur_limbs - 3):
         result = homo_ops.homo_mul(result, result, cryptoContext)
         openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
-        openfhe_boot.SetSlots((1 << specify_slots)) # to cheat openfhe boot with (1<<specify_slots)
-        openfhe_boot_context = openfhe_boot_contexts[str(specify_slots)]
+        openfhe_boot.SetSlots((1 << specify_logSlots)) # to cheat openfhe boot with (1<<specify_logSlots)
+        openfhe_boot_context = openfhe_boot_contexts[str(specify_logSlots)]
         openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
 
         is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
@@ -118,16 +118,16 @@ def app_example_release(
                                dnum, dcrtBits, firstMod, levelBudget_list, approxModDepth,
                                "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
-    specify_slots = logSlots_list[0]  # logslots = 11
+    specify_logSlots = logSlots_list[0]  # logslots = 11
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range((1 << specify_slots))])
+    x = np.array([values[i % len(values)] for i in range((1 << specify_logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1 << specify_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, 1 << specify_logSlots)
 
     values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
-    x1 = np.array([values1[i % len(values1)] for i in range((1 << specify_slots))])
+    x1 = np.array([values1[i % len(values1)] for i in range((1 << specify_logSlots))])
     x1 = torch.tensor(x1, device="cuda")
-    cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, 1 << specify_slots)
+    cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, 1 << specify_logSlots)
 
     # do the application computation
     utils.load_rotation_keys(cryptoContext, "app")
@@ -136,11 +136,11 @@ def app_example_release(
     print("homo_rotate done!")
 
     # bootstrapping, logSlots = 11
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, specify_logSlots)
 
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -152,10 +152,10 @@ def app_example_release(
     # #####################################
 
     # # bootstrapping, logSlots = 12
-    result.slots = (1 << specify_slots)  # This assignment is for testing purposes only.
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
+    result.slots = (1 << specify_logSlots)  # This assignment is for testing purposes only.
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_slots)
+    utils.load_rotation_keys(cryptoContext, specify_logSlots)
 
 
     approx_plain_val = clear_result[:10]
@@ -165,7 +165,7 @@ def app_example_release(
         # print(approx_plain_val)
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
 
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_slots, cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -240,7 +240,7 @@ def encode_test_case(
         print("all_correct for this test")
 
     #todo: test encode with specified slots
-    # specify_slots = logSlots_list[0] # logslots = 11
+    # specify_logSlots = logSlots_list[0] # logslots = 11
     print("done")
 
 def ct_pt_test_case(
@@ -264,12 +264,12 @@ def ct_pt_test_case(
                                dcrtBits, firstMod, levelBudget_list, approxModDepth,
                                "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
-    specify_slots = logSlots_list[0] # logslots = 11
+    specify_logSlots = logSlots_list[0] # logslots = 11
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range((1 << specify_slots))])
+    x = np.array([values[i % len(values)] for i in range((1 << specify_logSlots))])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, (1 << specify_slots))
-    encoded = openfhe_context.encode(values, 1, 0, (1 << specify_slots))
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, (1 << specify_logSlots))
+    encoded = openfhe_context.encode(values, 1, 0, (1 << specify_logSlots))
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
