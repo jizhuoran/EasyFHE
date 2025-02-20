@@ -601,7 +601,7 @@ def homo_rotate(in0, index, cryptoContext):
     return res
 
 
-def eval_fast_rotation(digits, cipher, index, need_moddown, cryptoContext):
+def eval_fast_rotate(digits, cipher, index, need_moddown, cryptoContext):
     if index == 0:
         return cipher.deep_copy()
 

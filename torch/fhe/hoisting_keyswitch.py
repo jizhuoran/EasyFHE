@@ -2,7 +2,7 @@ from . import functional as F
 import torch
 
 
-def key_switch_ext(cipher, cryptoContext):
+def key_switch_P_ext(cipher, cryptoContext):
     assert cipher.is_ext == False
     cv = [
         torch.cat((
