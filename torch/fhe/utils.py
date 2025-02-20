@@ -25,13 +25,13 @@ def call_counter(func):
     return wrapper
 
 
-@atexit.register
+# @atexit.register
 def print_call_counts():
     print("\nFunction Call Counts:")
     for func_name, wrapper in call_registry.items():
         print(f"Function '{func_name}' was called {wrapper.count} times.")
 
-@atexit.register
+# @atexit.register
 def print_execution_times():
     print("\nExecution Times:")
     for func_name, exec_time in execution_times.items():

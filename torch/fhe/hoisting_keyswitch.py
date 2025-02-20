@@ -64,7 +64,7 @@ def eval_fast_rotation(digits, cipher, index, need_moddown, cryptoContext):
     else:
         cipher_pmodup_cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq, cryptoContext.moduliQ,
                                             cryptoContext.q_mu, cipher.cur_limbs)
-        # operate first sumMult.cv[0][:curr_limbs], operate first sumMult.cv[0][curr_limbs+1:] remain unchanged
+        # operate first sumMult.cv[0][:curr_limbs], sumMult.cv[0][curr_limbs+1:] remain unchanged
         sumMult.cv[0] = F.cv_add(sumMult.cv[0], cipher_pmodup_cv0, cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
 
         sumMult.cv[0] = F.cv_automorphism_transform(sumMult.cv[0], digits.cur_limbs + cryptoContext.K, auto_index, cryptoContext)
