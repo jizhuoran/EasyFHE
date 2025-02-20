@@ -376,25 +376,6 @@ def cv_automorphism_transform(
     )
 
 
-def cv_switch_modulus_with_intt_ntt(input: Tensor, L0: int, context: Context) -> Tensor:
-    switch_modulus = torch.switch_modulus(
-        context.switch_modulus_out,
-        input,
-        primes=context.primes,
-        N=context.N,
-        L0=L0,
-        logN=context.logN,
-        L=context.L,
-        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-        power_of_roots_shoup=context.power_of_roots_shoup,
-        power_of_roots=context.power_of_roots,
-        barret_ratio=context.barret_ratio,
-        barret_k=context.barret_k
-    )
-    return switch_modulus.reshape(-1, context.N)
-
-
 def cv_mul_by_monomial(
     input: Tensor,
     l: int,
