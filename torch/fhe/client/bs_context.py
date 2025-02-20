@@ -46,15 +46,15 @@ class BsContext:
     def __init__(
         self,
         N,
-        moduliQ,
-        moduliP,
+        moduliQ_scalar,
+        moduliP_scalar,
         q_mu,
         p_mu,
         correctionFactor,
         secretKeyDist,
         BOOT_KEY
     ):
-        K = len(moduliP)
+        K = len(moduliP_scalar)
         self.M = N * 2
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None
@@ -198,9 +198,9 @@ class BsContext:
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
-        for cur_limbs in range(len(moduliQ)):
+        for cur_limbs in range(len(moduliQ_scalar)):
             self.QplusP_map[cur_limbs] = np.array(
-                np.concatenate((moduliQ[0:cur_limbs], moduliP[0:K])), dtype=np.uint64
+                np.concatenate((moduliQ_scalar[0:cur_limbs], moduliP_scalar[0:K])), dtype=np.uint64
             )
             self.QmuplusPmu_map[cur_limbs] = np.array(
                 np.concatenate((q_mu[0:cur_limbs], p_mu[:K])), dtype=np.uint64

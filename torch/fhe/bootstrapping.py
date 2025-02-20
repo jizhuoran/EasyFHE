@@ -26,9 +26,9 @@ def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
     sumbxmult= sum_mult.cv[0]
 
     cMult = hoisting_keyswitch.key_switch_ext(cipher.cipher_like([cipher.cv[0]]), cryptoContext)
-    # cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
+    # cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ,
     #                         cryptoContext.q_mu_cuda, cipher.cur_limbs)
-    sumbxmult = F.cv_add(sumbxmult, cMult.cv[0], cryptoContext.moduliQ_cuda, cipher.cur_limbs, inplace=True)
+    sumbxmult = F.cv_add(sumbxmult, cMult.cv[0], cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
 
     sum_mult.cv[0] = sumbxmult
     sum_mult = homo_ops._cipher_automorphism(sum_mult, index, cryptoContext)
@@ -49,7 +49,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
         target_sf = cryptoContext.GetScalingFactorReal(cur_limbs = (L0 - lvl))
         source_sf = ciphertext.scaling_factor
         num_towers = ciphertext.cur_limbs
-        mod_to_drop = float(cryptoContext.moduliQ[num_towers - 1])
+        mod_to_drop = float(cryptoContext.moduliQ_scalar[num_towers - 1])
         # in the case of FLEXIBLEAUTO, we need to bring the ciphertext to the right scale using a
         # a scaling multiplication. Note the at currently FLEXIBLEAUTO is only supported for NATIVEINT = 64.
         # So the other branch is for future purposes (in case we decide to add add the FLEXIBLEAUTO support
@@ -197,7 +197,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
     slots = 1<<logslots
     # cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
-    moduliQ = cryptoContext.moduliQ
+    moduliQ_scalar = cryptoContext.moduliQ_scalar
     rescaleTech = cryptoContext.rescaleTech
 
     # note: FLEXIBLEAUTOEXT is not implemented yet
@@ -209,7 +209,7 @@ def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
         # as it is multiplied by auxiliary plaintext
         #todo: to be implemented, should raise less modulus
 
-    q = moduliQ[0]
+    q = moduliQ_scalar[0]
     q_double = float(q)
 
     p = cryptoContext.dcrtBits  # Equivalent to dcrbits in OpenFHE

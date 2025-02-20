@@ -86,14 +86,14 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
             ptxtDepth = in0.noise_deg
             ctxtDepth = in1.noise_deg
             sizeQl = in1.cur_limbs
-            moduli = cryptoContext.moduliQ[:sizeQl]
+            moduli = cryptoContext.moduliQ_scalar[:sizeQl]
             ptxtIndex = 0
         elif len(in1.cv) == 1:
             ptxt = in1.cv[0]
             ptxtDepth = in1.noise_deg
             ctxtDepth = in0.noise_deg
             sizeQl = in0.cur_limbs
-            moduli = cryptoContext.moduliQ[:sizeQl]
+            moduli = cryptoContext.moduliQ_scalar[:sizeQl]
             ptxtIndex = 1
 
         if len(in0.cv) == 1 or len(in1.cv) == 1:  # todo: this branch is not tested
@@ -108,8 +108,8 @@ def _adjust_for_add_or_sub(in0, in1, cryptoContext):
                 ptxt = F.cv_mul_scalar(
                     ptxt,
                     crtPowSF.cuda(),
-                    cryptoContext.moduliQ_cuda,
-                    cryptoContext.q_mu_cuda,
+                    cryptoContext.moduliQ,
+                    cryptoContext.q_mu,
                     len(moduli),
                 )  # fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
 
@@ -186,10 +186,10 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
             log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
             int_step = 2**log_step
             crt_sf = cur_limbs * [int_step]
-            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ_scalar)
             log_approx -= log_step
 
-        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ)
+        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ_scalar)
 
     # Handle FLEXIBLEAUTOEXT mode at level 0, we don't use the depth to calculate the scaling factor,
     # so we return the value before taking the depth into account.
@@ -201,7 +201,7 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
     crt_sc_factor = cur_limbs * [int_sc_factor]
 
     for i in range(1, noise_deg):
-        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ)
+        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ_scalar)
 
     return crt_constant
 
@@ -232,13 +232,13 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
     factors = [0] * cur_limbs
     if large_abs >= bound:
         for i in range(cur_limbs):
-            reduced = large % cryptoContext.moduliQ[i]
-            factors[i] = reduced + cryptoContext.moduliQ[i] if reduced < 0 else reduced
+            reduced = large % cryptoContext.moduliQ_scalar[i]
+            factors[i] = reduced + cryptoContext.moduliQ_scalar[i] if reduced < 0 else reduced
     else:
         sc_constant = int(large)
         for i in range(cur_limbs):
-            reduced = sc_constant % int(cryptoContext.moduliQ[i])
-            factors[i] = reduced + cryptoContext.moduliQ[i] if reduced < 0 else reduced
+            reduced = sc_constant % int(cryptoContext.moduliQ_scalar[i])
+            factors[i] = reduced + cryptoContext.moduliQ_scalar[i] if reduced < 0 else reduced
 
     # Scale back up by approxFactor within the CRT multiplications.
     if log_approx > 0:
@@ -259,9 +259,9 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
             )
             int_step = 1 << log_step
             crt_sf = cur_limbs * [int_step]
-            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ_scalar)
             log_approx -= log_step
-        factors = crt_mult(factors, crt_approx, cryptoContext.moduliQ)
+        factors = crt_mult(factors, crt_approx, cryptoContext.moduliQ_scalar)
 
     return factors
 
@@ -281,7 +281,7 @@ def _eval_mult_core(cipher, constant, cryptoContext):
 @check_meta_equal
 def _cipher_add(in0, in1, cryptoContext):
     cv = [
-        F.cv_add(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+        F.cv_add(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
     ]
     return in0.cipher_like(cv)
@@ -304,7 +304,7 @@ def _cipher_add_ext(in0, in1, cryptoContext):
 @check_meta_equal
 def _cipher_sub(in0, in1, cryptoContext):
     cv = [
-        F.cv_sub(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+        F.cv_sub(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs)
         for cv0, cv1 in zip(in0.cv, in1.cv)
     ]
     return in0.cipher_like(cv)
@@ -315,33 +315,33 @@ def _cipher_mul(in0, in1, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0],
         in1.cv[0],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     ax = F.cv_add(
         F.cv_mul(
             in0.cv[0],
             in1.cv[1],
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         ),
         F.cv_mul(
             in0.cv[1],
             in1.cv[0],
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         ),
-        cryptoContext.moduliQ_cuda,
+        cryptoContext.moduliQ,
         in0.cur_limbs,
     )
     axax = F.cv_mul(
         in0.cv[1],
         in1.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
@@ -357,23 +357,23 @@ def _cipher_square(in0, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0],
         in0.cv[0],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     ax = F.cv_mul(
         in0.cv[0],
         in0.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
-    ax = F.cv_add(ax, ax, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+    ax = F.cv_add(ax, ax, cryptoContext.moduliQ, in0.cur_limbs)
     axax = F.cv_mul(
         in0.cv[1],
         in0.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
@@ -386,10 +386,10 @@ def _cipher_square(in0, cryptoContext):
 
 @check_cipher_len
 def _cipher_add_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_add_scalar(
-            in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
+            in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs
         ),
         in0.cv[1],
     ]
@@ -398,10 +398,10 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_sub_scalar(
-            in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
+            in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs
         ),
         in0.cv[1],
     ]
@@ -412,13 +412,13 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 # @check_cipher_len #fixme: comment it to support call from homo_mul_pt
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
             cv0,
             scalar_mod,
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         )
         for cv0 in in0.cv
@@ -431,13 +431,13 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
             cv0,
             scalar_mod,
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         )
         for cv0 in in0.cv
@@ -449,7 +449,7 @@ def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_neg(in0, cryptoContext):
-    cv = [F.cv_neg(cv0, cryptoContext.moduliQ_cuda, in0.cur_limbs) for cv0 in in0.cv]
+    cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
     return in0.cipher_like(
         cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg
     )
@@ -521,8 +521,8 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx_cuda,
-            cryptoContext.swk_ax_cuda,
+            cryptoContext.swk_bx,
+            cryptoContext.swk_ax,
             cryptoContext,
         )
     )
@@ -539,8 +539,8 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx_cuda,
-            cryptoContext.swk_ax_cuda,
+            cryptoContext.swk_bx,
+            cryptoContext.swk_ax,
             cryptoContext,
         )
     )
@@ -602,7 +602,7 @@ def homo_rotate(in0, index, cryptoContext):
         )
     else:
         res = F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext)
-        bxrot = F.cv_add(in0.cv[0], res[0], cryptoContext.moduliQ_cuda, in0.cur_limbs)
+        bxrot = F.cv_add(in0.cv[0], res[0], cryptoContext.moduliQ, in0.cur_limbs)
 
         cv0 = F.cv_automorphism_transform(
             bxrot, in0.cur_limbs, auto_index, cryptoContext
@@ -630,11 +630,11 @@ def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     )  # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
     res0.cv = [
-        F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs),
+        F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs),
         res0.cv[1],
     ]
     # res0.cv[0] = F.cv_add(
-    #     res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
+    #     res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs
     # )
     return res0
 
@@ -683,8 +683,8 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         )  # MorphPlaintext in openfhe
         res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
-        moduli = cryptoContext.moduliQ_cuda
-        mu = cryptoContext.q_mu_cuda
+        moduli = cryptoContext.moduliQ
+        mu = cryptoContext.q_mu
         cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
         cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
 

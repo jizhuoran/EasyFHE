@@ -230,7 +230,7 @@ class OpenFHEContext:
                 native_vec[gap * i] = n % modulus
         return native_vec
 
-    def ptx_encode_without_ntt(self, x, N, slots, type_flag, scaling_factor, moduliQ, L, M, Nh, noise_scale_deg=1, is_encoded = False):
+    def ptx_encode_without_ntt(self, x, N, slots, type_flag, scaling_factor, moduliQ_scalar, L, M, Nh, noise_scale_deg=1, is_encoded = False):
         # /* Round X to nearest integral value, rounding halfway cases away from
         #    zero.  */
         def llround(x):
@@ -345,13 +345,13 @@ class OpenFHEContext:
                 temp[i + slots] = (MAX_64BIT_VALUE + im) if (im < 0) else im
 
             for i in range(L):
-                native_moduli = moduliQ[i]
+                native_moduli = moduliQ_scalar[i]
                 native_vec = np.zeros(ring_dim, dtype=np.uint64)
                 native_vec = self.fit_to_native_vector(temp, MAX_64BIT_VALUE, native_vec, native_moduli, N)
                 encoded_vector_dcrt_elements[i] = native_vec
 
             num_towers = L
-            moduli = moduliQ[: num_towers]
+            moduli = moduliQ_scalar[: num_towers]
             crt_pow_p = [llround(pow_p)] * num_towers
             curr_pow_p = crt_pow_p
 
@@ -360,7 +360,7 @@ class OpenFHEContext:
 
             if noise_scale_deg > 1:
                 for i in range(len(curr_pow_p)):
-                    encoded_vector_dcrt_elements[i] = [(a * curr_pow_p[i]) % moduliQ[i] for a in encoded_vector_dcrt_elements[i]]
+                    encoded_vector_dcrt_elements[i] = [(a * curr_pow_p[i]) % moduliQ_scalar[i] for a in encoded_vector_dcrt_elements[i]]
 
             # 反向缩放
             if log_approx > 0:
@@ -379,7 +379,7 @@ class OpenFHEContext:
 
                 # mul_mod =  (a * b) % modulus
                 for i in range(len(crt_approx)):
-                    encoded_vector_dcrt_elements[i] = [(a * crt_approx[i]) % moduliQ[i] for a in encoded_vector_dcrt_elements[i]]
+                    encoded_vector_dcrt_elements[i] = [(a * crt_approx[i]) % moduliQ_scalar[i] for a in encoded_vector_dcrt_elements[i]]
         # encoded_vector_dcrt = encoded_vector_dcrt_times(crt_approx)
         else:
             print("Only DCRTPoly is supported for CKKS.")
@@ -414,7 +414,7 @@ class OpenFHEContext:
                                      inverse_imag=inverse_imag,
                                      temp=cryptocontext.encode_temp,
                                      primes=cryptocontext.primes,
-                                     precompute_rotgroups=cryptocontext.encode_params_rotGroup_cuda,
+                                     precompute_rotgroups=cryptocontext.encode_params_rotGroup,
                                      precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
                                      precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
                                      M=cryptocontext.M,

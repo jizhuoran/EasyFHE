@@ -8,8 +8,8 @@ def key_switch_ext(cipher, cryptoContext):
     cv_len = len(cipher.cv)
     cv = [None] * cv_len
     for i in range(cv_len):
-        cv[i] = F.cv_mul_scalar(cipher.cv[i], cryptoContext.PModq_cuda, cryptoContext.moduliQ_cuda,
-                                cryptoContext.q_mu_cuda, cipher.cur_limbs)
+        cv[i] = F.cv_mul_scalar(cipher.cv[i], cryptoContext.PModq, cryptoContext.moduliQ,
+                                cryptoContext.q_mu, cipher.cur_limbs)
         cv[i] = torch.cat((cv[i], torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64,
                                               device="cuda").reshape(-1, cryptoContext.N)), dim=0)
     return cipher.cipher_like(cv, is_ext=True)
@@ -61,7 +61,7 @@ def eval_fast_rotation(cipher, index, digits, cryptoContext):
     sumMult = Cipher(sum_mult, cipher.cur_limbs, cipher.scaling_factor, cipher.noise_deg, cipher.slots, is_ext=True)
     result = moddown_from_ext(sumMult, cryptoContext)
     # post add after ks
-    result.cv[0] = F.cv_add(cipher.cv[0], result.cv[0], cryptoContext.moduliQ_cuda, cur_limbs)
+    result.cv[0] = F.cv_add(cipher.cv[0], result.cv[0], cryptoContext.moduliQ, cur_limbs)
 
     # Apply the AutomorphismTransform to ax and bx
     result.cv[0] = F.cv_automorphism_transform(result.cv[0], cur_limbs, auto_index, cryptoContext)
