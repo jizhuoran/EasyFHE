@@ -273,7 +273,7 @@ def BootstrapTest_test_case(
     # bootstrapping, logSlots = 12
     specify_slots = logSlots_list[1]
     openfhe_context1 = openfhe_context_dict[str(specify_slots)]
-
+    result.slots = (1<<specify_slots) # This assignment is for testing purposes only.
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
     utils.load_rotation_keys(cryptoContext, specify_slots)
