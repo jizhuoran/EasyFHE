@@ -184,14 +184,14 @@ def try_load_context(
             debug_keys = pickle.load(file)
 
     cryptoContext = Context(BsContextMembers, gpufheMembers)
+    openfhe_context = client.OpenFHEContext(openfheMembers)
     if mode == "debug":
-        openfhe_context_dict={}
+        openfhe_boot_context_dict={}
         for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
-            openfhe_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1<<logSlots, level_budget)
-        return cryptoContext, openfhe_context_dict
+            openfhe_boot_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
+            openfhe_boot_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1 << logSlots, level_budget)
+        return cryptoContext, openfhe_context, openfhe_boot_context_dict
     else:
-        openfhe_context = client.OpenFHEContext(openfheMembers)
         return cryptoContext, openfhe_context
 
 

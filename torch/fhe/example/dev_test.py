@@ -23,14 +23,14 @@ def app_example_debug(
         raise ValueError(f"Directory {save_dir} does not exist!")
 
     appRotIndex_list = [-1, 2]
-    cryptoContext, openfhe_context_dict = (
+    cryptoContext, _, openfhe_boot_context_dict = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logSlots_list,
                                logN, dnum, dcrtBits, firstMod, levelBudget_list,
                                approxModDepth, "UNIFORM_TERNARY", rescaleTech,
                                save_dir=save_dir, mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
-    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    openfhe_context = openfhe_boot_context_dict[str(specify_slots)]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1<<specify_slots))])
     x = torch.tensor(x, device="cuda")
@@ -73,7 +73,7 @@ def app_example_debug(
 
     # bootstrapping, logSlots = 12
     specify_slots = logSlots_list[1]
-    openfhe_context1 = openfhe_context_dict[str(specify_slots)]
+    openfhe_context1 = openfhe_boot_context_dict[str(specify_slots)]
     result.slots = (1<<specify_slots) # This assignment is for testing purposes only.
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_slots)]
     cryptoContext.BsContext.to_cuda()
@@ -200,14 +200,14 @@ def encode_test_case(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    cryptoContext, openfhe_context_dict = (
+    cryptoContext, _, openfhe_boot_context_dict = (
         utils.try_load_context(maxLevelsRemaining, [], logSlots_list, logN, dnum,
                                dcrtBits, firstMod, levelBudget_list, approxModDepth,
                                "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
-    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    openfhe_context = openfhe_boot_context_dict[str(specify_slots)]
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
     plaintext_golden = openfhe_context.encode(x)
@@ -261,13 +261,13 @@ def ct_pt_test_case(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    cryptoContext, openfhe_context_dict = (
+    cryptoContext, _, openfhe_boot_context_dict = (
         utils.try_load_context(maxLevelsRemaining, [], logSlots_list, logN, dnum,
                                dcrtBits, firstMod, levelBudget_list, approxModDepth,
                                "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
-    openfhe_context = openfhe_context_dict[str(specify_slots)]
+    openfhe_context = openfhe_boot_context_dict[str(specify_slots)]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range((1 << specify_slots))])
     x = torch.tensor(x, device="cuda")
