@@ -206,42 +206,24 @@ def cv_innerproduct(
     curr_limbs: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
-    context: Context,
-    inplace: bool = False,
+    context: Context
 ) -> Tensor:
     # print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
     x.reshape(-1)
-    
-    if inplace:
-        res = torch.innerproduct_(
-            context.inner_out,
-            x,
-            bx=swk_bx,
-            ax=swk_ax,
-            curr_limbs=curr_limbs,
-            alpha= context.alpha,
-            L=context.L,
-            N=context.N,
-            primes=context.primes,
-            barret_ratio=context.barret_ratio,
-            barret_k=context.barret_k,
-            workspace=context.inner_workspace,
-        )
-    else:
-        res = torch.innerproduct( 
-            context.inner_out,
-            x,
-            bx=swk_bx,
-            ax=swk_ax,
-            curr_limbs=curr_limbs,
-            alpha= context.alpha,
-            L=context.L,
-            N=context.N,
-            primes=context.primes,
-            barret_ratio=context.barret_ratio,
-            barret_k=context.barret_k,
-            workspace=context.inner_workspace,
-        )
+    res = torch.innerproduct(
+        context.inner_out,
+        x,
+        bx=swk_bx,
+        ax=swk_ax,
+        curr_limbs=curr_limbs,
+        alpha= context.alpha,
+        L=context.L,
+        N=context.N,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        workspace=context.inner_workspace,
+    )
     return res.reshape(2, -1, context.N)
 
 
@@ -385,19 +367,13 @@ def cv_automorphism_transform(
     input: Tensor,
     cur_limbs: int,
     i: int,
-    context: Context,
-    inplace: bool = False,
+    context: Context
 ) -> Tensor:
     if i % 2 == 0:
-        return input if inplace else input.clone()
-    if inplace:
-        return torch.automorphism_transform_(
-            input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
-        )
-    else:
-        return torch.automorphism_transform(
-            input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
-        )
+        return input.clone()
+    return torch.automorphism_transform(
+        input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
+    )
 
 
 def cv_switch_modulus_with_intt_ntt(input: Tensor, L0: int, context: Context) -> Tensor:
