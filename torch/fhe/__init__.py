@@ -3,7 +3,7 @@ from .hoisting_keyswitch import *
 from .bootstrapping import homo_bootstrap
 from .utils import try_load_context
 
-__all__ = ['homo_add', 'homo_sub', 'homo_mul', 'homo_rescale', 'homo_rotate',
-           'key_switch_ext', 'modup_to_ext', 'moddown_from_ext', 'eval_fast_rotation',
+__all__ = ['homo_add', 'homo_sub', 'homo_mul', 'homo_rescale', 'homo_rotate', 'eval_fast_rotation',
+           'key_switch_ext', 'modup_to_ext', 'moddown_from_ext',
            'homo_bootstrap',
            'try_load_context']

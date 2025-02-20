@@ -100,7 +100,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(hoisting_keyswitch.eval_fast_rotation(digits_ext, result, rot_in[s][j], False,
+                fast_rotation_ext.append(homo_ops.eval_fast_rotation(digits_ext, result, rot_in[s][j], False,
                                                                                cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
