@@ -58,57 +58,6 @@ __global__ void sum_reduce_fused(
   STRIDED_LOOP_END;
 }
 
-template <bool Accum>
-__global__ void mult(
-    const uint64_t* in_ptr,
-    const uint64_t* eval_poly_ax,
-    const uint64_t* eval_poly_bx,
-    const int N,
-    const int length,
-    int curr_limbs,
-    int gap,
-    uint128_t* accum_ptr_ax,
-    uint128_t* accum_ptr_bx) {
-  STRIDED_LOOP_START(N * length, i);
-  const uint64_t op1 = in_ptr[i];
-  const int idx = i / N;
-  const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
-
-  const uint64_t op2_ax = eval_poly_ax[i + N * prime_idx];
-  const uint64_t op2_bx = eval_poly_bx[i + N * prime_idx];
-  const auto mul_ax = mult_64_64_128(op1, op2_ax);
-  const auto mul_bx = mult_64_64_128(op1, op2_bx);
-  if (Accum) {
-    accum_ptr_ax[i] += mul_ax;
-    accum_ptr_bx[i] += mul_bx;
-  } else {
-    accum_ptr_ax[i] = mul_ax;
-    accum_ptr_bx[i] = mul_bx;
-  }
-  STRIDED_LOOP_END;
-}
-
-__global__ void reduce(
-    const uint128_t* accum,
-    const int N,
-    const int length,
-    const int curr_limbs,
-    const int gap,
-    const uint64_t* primes,
-    const uint64_t* barret_ks,
-    const uint64_t* barret_ratios,
-    uint64_t* out_ptr) {
-  STRIDED_LOOP_START(N * length, i);
-  const int idx = i / N;
-  const int prime_idx = idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
-  const auto prime = primes[prime_idx];
-  const auto barret_ratio = barret_ratios[prime_idx];
-  const auto barret_k = barret_ks[prime_idx];
-  const auto res_ax =
-      barret_reduction_128_64(accum[i], prime, barret_ratio, barret_k);
-  out_ptr[i] = res_ax;
-  STRIDED_LOOP_END;
-}
 } // namespace fhe
 
 namespace at::native {
@@ -125,7 +74,7 @@ static void innerproduct_template(
     const Tensor& barret_k,
     const Tensor& workspace,
     Tensor& out) {
-  //  const int total_length = in.size(-1) / N;
+      
   const int beta = int((curr_limbs + alpha - 1) / alpha);
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
@@ -133,49 +82,39 @@ static void innerproduct_template(
   const int mult_length = (L + sizeP);
   int gap = L - curr_limbs;
 
-  //  fhe::uint128_t* accum_bx_ptr =
-  //      reinterpret_cast<fhe::uint128_t*>(workspace.data_ptr<uint64_t>());
-  //  fhe::uint128_t* accum_ax_ptr = accum_bx_ptr + in.size(-1);
-
-  AT_DISPATCH_V2(
-      ax.scalar_type(),
-      "inner_product_impl",
-      AT_WRAP([&]() {
-        auto in_ptr =
-            reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-        auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
-        auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-        auto out_bx_ptr =
-            reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
-        auto out_ax_ptr =
-            reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto barret_ratio_ptr =
-            reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-        auto barret_k_ptr =
-            reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-        const int gridDim = 1024;
-        const int blockDim = 256;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::sum_reduce_fused<<<gridDim, blockDim, 0, stream>>>(
-            in_ptr,
-            N,
-            length,
-            mult_length,
-            beta,
-            ax_ptr,
-            bx_ptr,
-            primes_ptr,
-            barret_k_ptr,
-            barret_ratio_ptr,
-            curr_limbs,
-            gap,
-            out_ax_ptr,
-            out_bx_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
+  auto in_ptr =
+      reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+  auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
+  auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
+  auto out_bx_ptr =
+      reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
+  auto out_ax_ptr =
+      reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
+  auto primes_ptr =
+      reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto barret_ratio_ptr =
+      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+  auto barret_k_ptr =
+      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
+  const int gridDim = 1024;
+  const int blockDim = 256;
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::sum_reduce_fused<<<gridDim, blockDim, 0, stream>>>(
+      in_ptr,
+      N,
+      length,
+      mult_length,
+      beta,
+      ax_ptr,
+      bx_ptr,
+      primes_ptr,
+      barret_k_ptr,
+      barret_ratio_ptr,
+      curr_limbs,
+      gap,
+      out_ax_ptr,
+      out_bx_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 Tensor innerproduct_cuda(

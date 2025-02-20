@@ -29,12 +29,11 @@ static void switch_modulus_template(
     const Tensor& param_power_of_roots,
     const Tensor& barret_ratio,
     const Tensor& barret_k) {
-  auto op = in.clone();
-  auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
+  auto op_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
-      op_ptr,
+      res_ptr,
       0,
       1,
       1,
@@ -44,7 +43,7 @@ static void switch_modulus_template(
       moduliQ,
       inverse_scaled_power_of_roots_div_two);
 
-  switch_modulus(res_ptr, op_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
+  switch_modulus(res_ptr, res_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
 
   NTT_impl(
       res_ptr,

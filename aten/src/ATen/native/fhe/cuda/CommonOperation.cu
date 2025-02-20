@@ -17,7 +17,7 @@
 namespace fhe {
 __global__ void const_mult_batch_kernel(
     uint64_t* to,
-    uint64_t* op1,
+    const uint64_t* op1,
     const uint64_t* op2,
     const uint64_t* op2_psinv,
     const uint64_t* primes,
@@ -122,7 +122,7 @@ __global__ void switch_modulus_kernel(
 namespace at::native {
 void const_mult_batch(
     uint64_t* out_ptr,
-    uint64_t* op1_ptr,
+    const uint64_t* op1_ptr,
     const Tensor& op2,
     const Tensor& op2_psinv,
     const Tensor& primes,

@@ -228,6 +228,7 @@ static void moddown_impl(
 
 static void moddown_cuda_template(
     Tensor& res,
+    Tensor& workspace,
     const Tensor& from,
     int64_t curr_limbs,
     int64_t L,
@@ -253,11 +254,12 @@ static void moddown_cuda_template(
   auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
 
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
+  auto workspace_ptr = reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
   iNTT_impl(
       from_ptr,
-      from_ptr,
+      workspace_ptr,
       end_length,
       start_length,
       curr_limbs,
@@ -268,8 +270,8 @@ static void moddown_cuda_template(
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
-      from_ptr,
-      from_ptr,
+      workspace_ptr,
+      workspace_ptr,
       hat_inverse_vec,
       hat_inverse_vec_psinv,
       primes,
@@ -281,7 +283,7 @@ static void moddown_cuda_template(
 
   moddown_impl(
       to_ptr,
-      from_ptr,
+      workspace_ptr,
       N,
       sizeP,
       start_length,
@@ -332,9 +334,11 @@ Tensor moddown_cuda(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   auto out = at::empty(curr_limbs * N, in.options());
+  auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   moddown_cuda_template(
       out,
-      in.clone(),
+      workspace,
+      in,
       curr_limbs,
       L,
       sizeP,

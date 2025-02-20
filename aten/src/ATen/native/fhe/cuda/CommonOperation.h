@@ -69,7 +69,7 @@ void vec_add_mod_batch(
 
 void const_mult_batch(
     uint64_t* res_ptr,
-    uint64_t* op1_ptr,
+    const uint64_t* op1_ptr,
     const Tensor& op2,
     const Tensor& op2_psinv,
     const Tensor& primes,
