@@ -175,11 +175,11 @@ def try_load_context(
     cryptoContext = Context(BsContextMembers, gpufheMembers)
     openfhe_context = client.OpenFHEContext(openfheMembers)
     if mode == "debug":
-        openfhe_boot_context_dict={}
+        openfhe_boot_contexts={}
         for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_boot_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
-            openfhe_boot_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1 << logSlots, level_budget)
-        return cryptoContext, openfhe_context, openfhe_boot_context_dict
+            openfhe_boot_contexts[str(logSlots)] = client.OpenFHEContext(openfheMembers)
+            openfhe_boot_contexts[str(logSlots)].setup_for_debug(debug_keys, 1 << logSlots, level_budget)
+        return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
 

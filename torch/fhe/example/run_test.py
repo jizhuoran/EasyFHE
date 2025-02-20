@@ -19,13 +19,12 @@ path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
-cryptoContext, openfhe_contexts = (
+cryptoContext, openfhe_context, openfhe_boot_contexts = (
     utils.try_load_context(int(maxLevelsRemaining), [], logSlots_list, int(logN),
                            int(dnum), int(dcrtBits), int(firstMod), levelBudget_list,
                            int(approxModDepth), secretKeyDist, rescaleTech, save_dir=path, mode="debug"))
 
 logSlots = logSlots_list[0]
-openfhe_context = openfhe_contexts[str(logSlots)]
 
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -61,7 +60,8 @@ result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, crypto
 start_time = time.time()
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
 print("Time taken for bootstrapping:", time.time() - start_time)
-openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+openfhe_boot_context = openfhe_boot_contexts[str(logSlots)]
+openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
 if is_equal:

@@ -1,7 +1,7 @@
 import itertools, subprocess, os, sys
 import warnings
 
-warnings.warn("This script is not tested and may not work as expected")
+warnings.warn("This script has not been tested and may not function as intended. Please remove this message once verified.")
 logN_cand = list(range(15, 16))
 logSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
 maxLevelsRemaining_cand = [3, 6]
