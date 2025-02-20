@@ -266,17 +266,32 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context_dict):
                 print("after processing image ", i, "time: ", datetime.datetime.now())
 
                 # finalRes.slots = 10
-                clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
-                clear_result = clear_result.cpu().numpy().reshape(-1)
-                max_element_idx = np.argmax(clear_result[:10])
+                try:
+                    clear_result = openfhe_context.decrypt(finalRes)  # 尝试解密
+                    clear_result = clear_result.cpu().numpy().reshape(-1)
+                    max_element_idx = np.argmax(clear_result[:10])
+                except RuntimeError as e:
+                    print(f"Decryption failed: {e}")  # 打印错误信息
+                    clear_result = None  # 设置一个默认值或采取其他处理措施
+                    max_element_idx = 11
+
+                # clear_result = openfhe_context.decrypt(finalRes) #decrypt by cc with different slots value should be fine
+                # clear_result = clear_result.cpu().numpy().reshape(-1)
+                # max_element_idx = np.argmax(clear_result[:10])
                 # print to console
                 print("For image ", i)
-                print(clear_result[:10]) # should be of len 10
+                if clear_result is not None:
+                    print(clear_result[:10])  # 只有在 clear_result 不是 None 时才执行切片操作
+                else:
+                    print("Decryption failed, clear_result is None.")  # 处理解密失败的情况
                 print("ground truth: ", label, "prediction: ", max_element_idx)
 
                 # print to log file
                 print("For image ", i, "index: ", index, file=log_file)
-                print(clear_result[:10], file=log_file) # should be of len 10
+                if clear_result is not None:
+                    print(clear_result[:10], file=log_file)  # 只有在 clear_result 不是 None 时才执行切片操作
+                else:
+                    print("Decryption failed, clear_result is None.", file=log_file)  # 处理解密失败的情况
                 print("ground truth: ", label, "prediction: ", max_element_idx, file=log_file)
                 log_file.flush()
 
