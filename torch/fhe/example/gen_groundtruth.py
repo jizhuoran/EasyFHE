@@ -1,5 +1,7 @@
 import itertools, subprocess, os, sys
+import warnings
 
+warnings.warn("This script is not tested and may not work as expected")
 logN_cand = list(range(15, 16))
 logSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
 maxLevelsRemaining_cand = [3, 6]
@@ -44,33 +46,39 @@ import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 from fhe.client.gen_context import gen_contexts
-logN = {0}
-logSlots_list = [{1}]
-maxLevelsRemaining = {2}
-levelBudget_list = [[{3}, {4}]]
-dnum = {5}
-rescaleTech = "{6}"
+
+maxLevelsRemaining = {0}
+rotIndex_list = []  # List of rotation indices
+logSlots_list = [{1}]  # List of possible slots value of runtime ciphertext
+logN = {2}
+dnum = {3}
 dcrtBits=59
 firstMod=60
+levelBudget_list = [[{4}, {5}]]
 approxModDepth=9
+secretKeyDist = "UNIFORM_TERNARY"
+rescaleTech = "{6}"
+save_dir = "{7}"
+mode = "debug"
+dim1 = [0, 0]  # Default value for dim1
 
 gen_contexts(
-    logN=logN,
-    logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
     maxLevelsRemaining=maxLevelsRemaining,
-    levelBudget_list=levelBudget_list,
+    rotIndex_list=[],  # List of rotation indices
+    logSlots_list=logSlots_list,  # List of possible slots value of runtime ciphertext
+    logN=logN,
     dnum=dnum,
     dcrtBits=dcrtBits,
     firstMod=firstMod,
+    levelBudget_list=levelBudget_list,
     approxModDepth=approxModDepth,
-    rotate_index=[],
     secretKeyDist="UNIFORM_TERNARY",
     rescaleTech=rescaleTech,
     save_dir="{7}",
-    mode = "debug"
+    mode="debug",
+    dim1=[0, 0],  # Default value for dim1
 )
-""".format(logN, logSlots, maxLevelsRemaining, levelBudget[0], levelBudget[1], dnum, rescaleTech, path)
-        
+""".format(maxLevelsRemaining, logSlots, logN, dnum, levelBudget[0], levelBudget[1], rescaleTech, path)
         # Create a temporary file to store the code
         with open("temp_file.py", "w") as temp_file:
             print(code_string, file=temp_file)

@@ -29,13 +29,13 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 import time
 context_file = "{}"
-logN = int({})
-logSlots_list = {}
 maxLevelsRemaining = int({})
-levelBudgets_list = {}
+logSlots_list = {}
+logN = int({})
 dnum = int({})
 dcrtBits = int({})
 firstMod = int({})
+levelBudgets_list = {}
 approxModDepth = int({})
 rescaleTech = "{}"
 path = "{}"

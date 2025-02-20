@@ -129,10 +129,10 @@ def try_load_context(
     load_path = (
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
+        maxLevelsRemaining,
             '-'.join(map(str, logSlots_list)),
-            maxLevelsRemaining,
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            logN,
             dnum,
             dcrtBits,
             firstMod,
@@ -144,10 +144,10 @@ def try_load_context(
     debug_load_path = (
             save_dir
             + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
-            '-'.join(map(str, logSlots_list)),
             maxLevelsRemaining,
+            '-'.join(map(str, logSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            logN,
             dnum,
             dcrtBits,
             firstMod,
@@ -158,21 +158,10 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
-        gen_contexts(
-            logN=logN,
-            logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
-            maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget_list=levelBudget_list,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            approxModDepth=approxModDepth,
-            rotate_index = rotIndex_list,
-            secretKeyDist=secretKeyDist,
-            rescaleTech=rescaleTech,
-            save_dir=save_dir,
-            mode = mode
-        )
+        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list, logSlots_list=logSlots_list,
+                     logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod, levelBudget_list=levelBudget_list,
+                     approxModDepth=approxModDepth, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
+                     save_dir=save_dir, mode=mode)
 
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)

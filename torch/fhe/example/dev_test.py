@@ -6,23 +6,22 @@ import numpy as np
 import os, warnings
 
 def app_example_debug(
-        logN=14,
-        logSlots_list=[11, 12],
         maxLevelsRemaining=3,
-        levelBudget_list=[[3, 3], [4, 4]],
+        appRotIndex_list = [-1, 2],
+        logSlots_list=[11, 12],
+        logN=14,
         dnum=3,
         dcrtBits=52,
         firstMod=56,
+        levelBudget_list=[[3, 3], [4, 4]],
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
-
 ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    appRotIndex_list = [-1, 2]
     cryptoContext, _, openfhe_boot_context_dict = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logSlots_list,
                                logN, dnum, dcrtBits, firstMod, levelBudget_list,
@@ -95,23 +94,23 @@ def app_example_debug(
 
 
 def app_example_release(
-        logN=14,
-        logSlots_list=[11, 12],
         maxLevelsRemaining=3,
-        levelBudget_list=[[3, 3], [4, 4]],
+        appRotIndex_list = [-1, 2],
+        logSlots_list=[11, 12],
+        logN=14,
         dnum=3,
         dcrtBits=52,
         firstMod=56,
+        levelBudget_list=[[3, 3], [4, 4]],
         approxModDepth=9,
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode="release"  # "debug" or "release"
-
 ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    appRotIndex_list = [-1, 2]
+
     cryptoContext, openfhe_context = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logSlots_list, logN,
                                dnum, dcrtBits, firstMod, levelBudget_list, approxModDepth,
@@ -184,18 +183,17 @@ def app_example_release(
 
 
 def encode_test_case(
-        logN=14,
-        logSlots_list=[11],
         maxLevelsRemaining=3,
-        levelBudget_list=[[3, 3]],
+        logSlots_list=[11, 12],
+        logN=14,
         dnum=3,
-        dcrtBits=59,
-        firstMod=60,
+        dcrtBits=52,
+        firstMod=56,
+        levelBudget_list=[[3, 3], [4, 4]],
         approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
-
 ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
@@ -244,19 +242,17 @@ def encode_test_case(
     print("done")
 
 def ct_pt_test_case(
-        logN=14,
-        logSlots_list=[8],
         maxLevelsRemaining=3,
-        levelBudget_list=[[4, 4]],
+        logSlots_list=[11, 12],
+        logN=14,
         dnum=3,
-        dcrtBits=59,
-        firstMod=60,
+        dcrtBits=52,
+        firstMod=56,
+        levelBudget_list=[[3, 3], [4, 4]],
         approxModDepth=9,
-        # rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        rescaleTech = "FIXEDMANUAL", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
-
 ):
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
