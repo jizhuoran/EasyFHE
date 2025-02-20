@@ -1,39 +1,18 @@
-import time, os
+import time
 from .ciphertext import Cipher
-from .ciphertext import Plaintext as Plaintext
-from .client.gen_context import gen_contexts
-from .context import *
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import approx as approx
 from . import hoisting_keyswitch
 from . import utils
-import numpy as np
+
 
 Tensor = torch.Tensor
 NORMAL_CIPHER_SIZE = 2
 BASE_NUM_LEVELS_TO_DROP = 1
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
-
-#todo: to be rolled back
-def fused_rotation_add_ext(digits, cipher, index, cryptoContext):
-    assert digits.is_ext == True
-    assert cipher.is_ext == False
-
-    sum_mult = hoisting_keyswitch.mult_key_and_sum_ext(digits, cipher, index, cryptoContext)
-    sumbxmult= sum_mult.cv[0]
-
-    cMult = hoisting_keyswitch.key_switch_ext(cipher.cipher_like([cipher.cv[0]]), cryptoContext)
-    # cMult = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq_cuda, cryptoContext.moduliQ,
-    #                         cryptoContext.q_mu_cuda, cipher.cur_limbs)
-    sumbxmult = F.cv_add(sumbxmult, cMult.cv[0], cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
-
-    sum_mult.cv[0] = sumbxmult
-    sum_mult = homo_ops._cipher_automorphism(sum_mult, index, cryptoContext)
-
-    return sum_mult
 
 
 # @profile_python_function
@@ -121,8 +100,8 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(fused_rotation_add_ext(digits_ext, result, rot_in[s][j],
-                                                                                 cryptoContext))
+                fast_rotation_ext.append(hoisting_keyswitch.eval_fast_rotation(digits_ext, result, rot_in[s][j], False,
+                                                                               cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
 
