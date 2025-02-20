@@ -277,6 +277,11 @@ class Context:
 
         self.key_map = [v.cpu() for v in self.key_map]
 
+        for key, value in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [v.cpu() for v in value]
+        for key, value in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = value.cpu()
+
         # for key, value in self.left_rot_key_map.items():
         #     self.left_rot_key_map[key] = [v.cpu() for v in value]
         # for key, value in self.precompute_auto_map.items():
@@ -332,6 +337,11 @@ class Context:
 
         self.key_map = [v.cuda() for v in self.key_map]
 
+        for key, value in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [v.cuda() for v in value]
+        for key, value in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = value.cuda()
+            
         # for key, value in self.left_rot_key_map.items():
         #     self.left_rot_key_map[key] = [v.cuda() for v in value]
         # for key, value in self.precompute_auto_map.items():

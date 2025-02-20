@@ -298,10 +298,6 @@ def ComputeDegreesPS(n):
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time0 = time.time()
-
     rescaleTech = cryptoContext.rescaleTech
     n = degree(coefficients)
     f2 = np.copy(coefficients)
@@ -360,18 +356,18 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if not math.isclose(beta, -1.0):
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time1 = time.time()
-    print("part1: ", time1 - time0)
-    time_count = time1 - time0
 
-    print("k", k)
     for i in range(2, k + 1):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
+        
+        # if len(T) > 1:
+        #     print("TTT[{}]".format(i), T[1].cv[0].cpu().numpy()[-1][:10])
+
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
             tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+
+        # print("tmp1[{}]".format(i), tmp.cv[0].cpu().numpy()[-1][:10])
 
         if i & 1 == 1:  # i is odd
             tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
@@ -379,14 +375,15 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             # tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
             # tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext, cryptoContext.constant_minus_one[tmp.cur_limbs, tmp.noise_deg])
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
+        # print("tmp2[{}]".format(i), tmp.cv[0].cpu().numpy()[-1][:10])
+        
         T.append(tmp)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time2 = time.time()
-    print("part2: ", time2 - time1)
-    time_count += time2 - time1
-    
+    # for idx in range(len(T)):
+    #     print("T[{}]".format(idx), T[idx].cv[0].cpu().numpy()[0][:10])
+    # print("==================")
+    # return T[0]
+
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
@@ -395,13 +392,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time3 = time.time()
-    print("part3: ", time3 - time2)
-    time_count += time3 - time2
-
-    print('m', m)
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     T2 = [T[-1]]
@@ -413,12 +403,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T2.append(tmp)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time4 = time.time()
-    print("part4: ", time4 - time3)
-    time_count += time4 - time3
-
     # computes T_{k(2*m - 1)}(y)
     T2km1 = T2[0]
     for i in range(1, m):
@@ -428,12 +412,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
             T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time5 = time.time()
-    print("part5: ", time5 - time4)
-    time_count += time5 - time4
 
     dc = degree(divcs_q)
     flag_c = False
@@ -454,12 +432,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
     
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time6 = time.time()
-    print("part6: ", time6 - time5)
-    time_count += time6 - time5
-
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     if degree(divqr_q) > k:
         qu = inner_eval_chebyshev_ps(divqr_q, k, m - 1, T, T2, cryptoContext)
@@ -512,28 +484,12 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time7 = time.time()
-    print("part7: ", time7 - time6)
-    time_count += time7 - time6
-
     result = homo_ops.homo_mul(result, qu, cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
 
 
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
-
-
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
-    time8 = time.time()
-    print("part8: ", time8 - time7)
-    time_count += time8 - time7
-
-    print("inner chebyshev count", time_count)
-    print("inner chebyshev total", time8 - time0)
 
     return result
 

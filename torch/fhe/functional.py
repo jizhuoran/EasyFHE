@@ -93,13 +93,12 @@ def cv_check(x, modulus, cur_limbs):
                 print(l, i, x[l][i], modulus[l])
                 # assert False
 
-def gen_scalar_tensor(scalar, modulus, cur_limbs, device):
+def gen_scalar_tensor(scalar, modulus, cur_limbs):
     if isinstance(scalar, int):
         scalar_list = [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)]
     else:
         scalar_list = [int(int(scalar[l]) % int(modulus[l])) for l in range(cur_limbs)]
-    return torch.from_numpy(np.array(scalar_list, dtype=np.uint64)).to(device)
-
+    return torch.from_numpy(np.array(scalar_list, dtype=np.uint64))
 
 # @cpp_cuda_adaptor
 # @cpp_cuda_compare

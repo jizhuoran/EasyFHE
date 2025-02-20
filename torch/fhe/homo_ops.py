@@ -389,7 +389,8 @@ def _cipher_square(in0, cryptoContext):
 
 @check_cipher_len
 def _cipher_add_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_add_scalar(
             in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
@@ -401,7 +402,8 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_sub_scalar(
             in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
@@ -415,7 +417,8 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 # @check_cipher_len #fixme: comment it to support call from homo_mul_pt
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -434,7 +437,8 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 @check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs, cryptoContext.device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -475,6 +479,7 @@ def homo_sub(in0, in1, cryptoContext):
 
 @call_counter
 def homo_rescale(ct, levels, cryptoContext):
+    ct = ct.deep_copy()
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0:
         return ct.deep_copy()

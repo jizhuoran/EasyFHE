@@ -14,7 +14,7 @@ dnum = 3
 dcrtBits = 59
 firstMod = 60
 approxModDepth = 9
-rescaleTech = "FIXEDMANUAL"
+rescaleTech = "FLEXIBLEAUTO"
 path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -61,21 +61,28 @@ cryptoContext, openfhe_contexts = utils.try_load_context(
     mode = "debug")
 
 # Though looks stupid, the Context will always be loaded to GPU first...
-
-cryptoContext.cpu()
 logSlots = logSlots_list[0]
 openfhe_context = openfhe_contexts[str(logSlots)]
-
-# Test the correctness of the bootstrapping
-# Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
-x = torch.tensor(x, device="cpu")
-cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1<<logSlots)) #specify the slots value explicitly
+x_ = np.array([values[i % len(values)] for i in range((1<<logSlots))])
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots)]
 cryptoContext.BsContext.to_cuda()
-cryptoContext.BsContext.cpu()
+
+cryptoContext.cuda()
+x = torch.tensor(x_, device="cuda")
+cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1<<logSlots)) #specify the slots value explicitly
+
+
+
+
 cryptoContext.load_rotation_keys(logSlots)
+cryptoContext.BsContext.cuda()
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+
+cipher.cv = [cv.cpu() for cv in cipher.cv]
+cryptoContext.cpu()
+cryptoContext.load_rotation_keys(logSlots)
+cryptoContext.BsContext.cpu()
 
 
 # result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
@@ -93,21 +100,21 @@ else:
     print("result", result.cv[0].cpu().numpy()[0][:10])
     print("data", data.reshape(-1)[:10])
 
-with torch.profiler.profile(
-        activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-        on_trace_ready=torch.profiler.tensorboard_trace_handler(
-            "/home/zrji/log"
-        ),
-        record_shapes=True,
-        profile_memory=True,
-        with_stack=True,
-    ) as profiler:
-        # Start profiling specific functions with torch.profiler.record_function()
-        result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
-        profiler.step()
+# with torch.profiler.profile(
+#         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+#         on_trace_ready=torch.profiler.tensorboard_trace_handler(
+#             "/home/zrji/log"
+#         ),
+#         record_shapes=True,
+#         profile_memory=True,
+#         with_stack=True,
+#     ) as profiler:
+#         # Start profiling specific functions with torch.profiler.record_function()
+#         result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+#         profiler.step()
 
-# Get the profiling results
-profiler_results = profiler.key_averages()
+# # Get the profiling results
+# profiler_results = profiler.key_averages()
 
-# Print the profiling summary in a table format
-print(profiler_results.table(sort_by="self_cpu_time_total"))
+# # Print the profiling summary in a table format
+# print(profiler_results.table(sort_by="self_cuda_time_total"))
