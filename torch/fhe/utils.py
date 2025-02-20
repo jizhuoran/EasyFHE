@@ -182,19 +182,17 @@ def try_load_context(logN,
         with open(debug_load_path, 'rb') as file:
             debug_keys = pickle.load(file)
 
-    openfhe_context_dict = {}
+    cryptoContext = Context(BsContextMembers, gpufheMembers)
     if mode == "debug":
+        openfhe_context_dict={}
         for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
             openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
             openfhe_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1<<logSlots, level_budget)
+        return cryptoContext, openfhe_context_dict
     else:
         openfhe_context = client.OpenFHEContext(openfheMembers)
-        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_context_dict[str(logSlots)] = openfhe_context
+        return cryptoContext, openfhe_context
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers)
-
-    return cryptoContext, openfhe_context_dict
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
