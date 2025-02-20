@@ -11,44 +11,36 @@
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
+#include <ATen/native/fhe/cuda/modupdown.h>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
-__device__ uint128_t4 accumulate_in_modup(
-    const uint64_t* ptr,
-    const int N,
-    const uint64_t* hat_mod_end,
-    const int start_length,
-    const int degree_idx,
-    const int hat_mod_end_idx) {
-  uint128_t4 accum{0};
-  for (int i = 0; i < start_length; i++) {
-    const uint64_t op2 = hat_mod_end[hat_mod_end_idx * start_length + i];
-    uint128_t4 out;
-    uint64_t op1_x, op1_y, op1_z, op1_w;
-    asm("{\n\t"
-        "ld.global.v2.u64 {%0, %1}, [%2];\n\t"
-        "}"
-        : "=l"(op1_x), "=l"(op1_y)
-        : "l"(ptr + i * N + degree_idx));
+// __device__ uint128_t4 accumulate_in_modup(
+//     const uint64_t* ptr,
+//     const int N,
+//     const uint64_t* hat_mod_end,
+//     const int start_length,
+//     const int degree_idx,
+//     const int hat_mod_end_idx) {
+//   uint128_t4 accum{0};
+//   for (int i = 0; i < start_length; i++) {
+//     const uint64_t op2 = hat_mod_end[hat_mod_end_idx * start_length + i];
+//     uint128_t4 out;
+//   ulonglong4 op1;
+//   op1 = *reinterpret_cast<const ulonglong4*>(ptr + i * N + degree_idx);
 
-    out.x = mult_64_64_128(op1_x, op2);
-    inplace_add_128_128(out.x, accum.x);
-    out.y = mult_64_64_128(op1_y, op2);
-    inplace_add_128_128(out.y, accum.y);
-    asm("{\n\t"
-        "ld.global.v2.u64 {%0, %1}, [%2];\n\t"
-        "}"
-        : "=l"(op1_z), "=l"(op1_w)
-        : "l"(ptr + i * N + degree_idx + 2));
-    out.z = mult_64_64_128(op1_z, op2);
-    inplace_add_128_128(out.z, accum.z);
-    out.w = mult_64_64_128(op1_w, op2);
-    inplace_add_128_128(out.w, accum.w);
-  }
-  return accum;
-}
+//     out.x = mult_64_64_128(op1.x, op2);
+//     inplace_add_128_128(out.x, accum.x);
+//     out.y = mult_64_64_128(op1.y, op2);
+//     inplace_add_128_128(out.y, accum.y);
+//     out.z = mult_64_64_128(op1.z, op2);
+//     inplace_add_128_128(out.z, accum.z);
+//     out.w = mult_64_64_128(op1.w, op2);
+//     inplace_add_128_128(out.w, accum.w);
+//   }
+//   return accum;
+// }
 
 __global__ void modup_step_two_kernel(
     uint64_t* to,
@@ -71,12 +63,12 @@ __global__ void modup_step_two_kernel(
     s_hat_mod_end[i] = hat_mod_end[i];
   }
   __syncthreads();
-  STRIDED_LOOP_START((N * end_length + unroll_number - 1) / unroll_number, i);
-  const int degree_idx = unroll_number * (i / end_length);
-  const int hat_mod_end_idx = i % end_length;
+  const int degree_idx = unroll_number * (blockIdx.x * blockDim.x + threadIdx.x);
+  const int hat_mod_end_idx = blockIdx.y;
+
   const int out_idx =
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
-  uint128_t4 accum = accumulate_in_modup(
+  uint128_t4 accum = accumulate_in_modupdown(
       ptr, N, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
   int gap = L - curr_limbs;
   int prime_idx = out_idx +
@@ -87,27 +79,13 @@ __global__ void modup_step_two_kernel(
   const auto prime = primes[prime_idx];
   const auto barret_ratio = barrett_ratios[prime_idx];
   const auto barret_k = barrett_ks[prime_idx];
-  {
-    uint64_t out =
-        barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_idx * N + degree_idx),
-        "l"(out),
-        "l"(out2));
-  }
-  {
-    uint64_t out =
-        barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    asm("st.cs.global.v2.u64 [%0],{%1, %2};" ::"l"(
-            to + out_idx * N + degree_idx + 2),
-        "l"(out),
-        "l"(out2));
-  }
-  STRIDED_LOOP_END;
+
+  ulonglong4 out;
+    out.x = barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
+    out.y = barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
+    out.z = barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
+    out.w = barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
+    *reinterpret_cast<ulonglong4*>(&to[out_idx * N + degree_idx]) = out;
 }
 
 } // namespace fhe
@@ -132,14 +110,15 @@ static void modup_matmul(
   int start_length =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
   const int end_length = curr_limbs + sizeP - start_length;
-  int grid_dim{(int)N * end_length / 256 / unroll_factor};
-  int block_dim{256};
+//   int grid_dim{(int)N * end_length / 256 / unroll_factor};
+//   int block_dim{256};
+
+  auto block_dim = dim3(256);
+  auto grid_dim = dim3(N / 256 / unroll_factor, end_length);
+
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_js[beta_idx];
 
-  AT_DISPATCH_V2(
-      kUInt64,
-      "modup_matmul",
-      AT_WRAP([&]() {
+
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto barret_ratio_ptr =
@@ -169,8 +148,6 @@ static void modup_matmul(
             start_length,
             end_length);
         C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
 }
 
 static void modup_impl(

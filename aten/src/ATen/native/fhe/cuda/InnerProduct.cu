@@ -28,8 +28,9 @@ __global__ void sum_reduce_fused(
     int gap,
     uint64_t* out_ax,
     uint64_t* out_bx) {
-  STRIDED_LOOP_START(N * length, i);
-  const int idx = i / N;
+  
+        const int idx = blockIdx.y;
+        const int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
   uint128_t accum_ax{0, 0};
   uint128_t accum_bx{0, 0};
@@ -44,8 +45,8 @@ __global__ void sum_reduce_fused(
     const auto mul_bx = mult_64_64_128(op1, op2_bx);
     accum_bx += mul_bx;
   }
-  const auto reduce_prime_idx =
-      idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
+  const auto reduce_prime_idx = idx + prime_idx;
+
   const auto prime = primes[reduce_prime_idx];
   const auto barret_ratio = barret_ratios[reduce_prime_idx];
   const auto barret_k = barret_ks[reduce_prime_idx];
@@ -55,7 +56,6 @@ __global__ void sum_reduce_fused(
       barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
   out_ax[i] = res_ax;
   out_bx[i] = res_bx;
-  STRIDED_LOOP_END;
 }
 
 } // namespace fhe
@@ -96,8 +96,8 @@ static void innerproduct_template(
       reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
   auto barret_k_ptr =
       reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-  const int gridDim = 1024;
-  const int blockDim = 256;
+  auto gridDim = dim3(N / 256, length);
+  auto blockDim = 256;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::sum_reduce_fused<<<gridDim, blockDim, 0, stream>>>(
       in_ptr,

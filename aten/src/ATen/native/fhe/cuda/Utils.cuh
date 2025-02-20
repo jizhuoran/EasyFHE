@@ -1,13 +1,59 @@
 #pragma once
 
 #include <ATen/cuda/CUDAContext.h>
-#include <crt/device_functions.h>
 
-#define STRIDED_LOOP_START(N, i)                             \
-  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < N; \
-       i += blockDim.x * gridDim.x) {
-#define STRIDED_LOOP_END }
-#define TO_PTR(x) (x.data())
+namespace fhe {
+
+__device__ __forceinline__ uint64_t
+neg_mod(uint64_t x, uint64_t null, uint64_t mod) {
+  return x == 0 ? 0 : mod - x;
+}
+
+__device__ __forceinline__ uint64_t
+add_mod(uint64_t a, uint64_t b, uint64_t mod) {
+  uint64_t res = a + b;
+  return res >= mod ? res - mod : res;
+}
+
+__device__ __forceinline__ uint64_t
+sub_mod(uint64_t a, uint64_t b, uint64_t mod) {
+  return a >= b ? a - b : a + mod - b;
+}
+
+__device__ __forceinline__ uint64_t mul_mod(
+    uint64_t a,
+    uint64_t b,
+    uint64_t mod,
+    uint64_t barret_mu0,
+    uint64_t barret_mu1) {
+  uint64_t res;
+  asm("{"
+      " .reg .u64 tmp;"
+      " .reg .u64 lo, hi;"
+      // 128-bit multiply
+      " mul.lo.u64 lo, %1, %2;"
+      " mul.hi.u64 hi, %1, %2;"
+      // Multiply input and const_ratio
+      // Round 1
+      " mul.hi.u64 tmp, lo, %3;"
+      " mad.lo.cc.u64 tmp, lo, %4, tmp;"
+      " madc.hi.u64 %0, lo, %4, 0;"
+      // Round 2
+      " mad.lo.cc.u64 tmp, hi, %3, tmp;"
+      " madc.hi.u64 %0, hi, %3, %0;"
+      // This is all we care about
+      " mad.lo.u64 %0, hi, %4, %0;"
+      // Barrett subtraction
+      " mul.lo.u64 %0, %0, %5;"
+      " sub.u64 %0, lo, %0;"
+      "}"
+      : "=l"(res)
+      : "l"(a), "l"(b), "l"(barret_mu0), "l"(barret_mu1), "l"(mod));
+  return res >= mod ? res - mod : res;
+}
+
+} // namespace fhe
+
 
 namespace fhe {
 struct uint128_t {

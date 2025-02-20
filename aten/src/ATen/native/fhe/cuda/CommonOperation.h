@@ -48,25 +48,6 @@ void switch_modulus(
     int64_t batch,
     int64_t degree);
 
-void vec_mod_batch(
-    uint64_t* res_ptr,
-    uint64_t* op1_ptr,
-    const Tensor& primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    int64_t batch,
-    int64_t degree);
-
-void vec_add_mod_batch(
-    uint64_t* res_ptr,
-    uint64_t* op1_ptr,
-    uint64_t* op2_ptr,
-    const Tensor& primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    int64_t batch,
-    int64_t degree);
-
 void const_mult_batch(
     uint64_t* res_ptr,
     const uint64_t* op1_ptr,
