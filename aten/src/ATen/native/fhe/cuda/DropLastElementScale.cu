@@ -9,6 +9,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
+#include "ATen/native/fhe/cuda/arithmetic.h"
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
@@ -98,15 +99,25 @@ static void drop_last_element_scale_template(
       start_op2_idx,
       N);
 
-  vec_add_mod_batch(
-      to_ptr,
-      to_ptr,
-      workspace_ptr,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      end_length,
-      N);
+
+  vadd_mod(
+  N,
+  end_length,
+  to_ptr,
+  to_ptr,
+  workspace_ptr,
+  param_primes.data_ptr<uint64_t>());
+
+
+  // vec_add_mod_batch(
+  //     to_ptr,
+  //     to_ptr,
+  //     workspace_ptr,
+  //     param_primes,
+  //     param_barret_ratio,
+  //     param_barret_k,
+  //     end_length,
+  //     N);
 }
 
 Tensor drop_last_element_scale_cuda(
