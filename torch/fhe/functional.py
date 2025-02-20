@@ -208,7 +208,6 @@ def cv_innerproduct(
     swk_ax: Tensor,
     context: Context
 ) -> Tensor:
-    # print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
     x.reshape(-1)
     res = torch.innerproduct(
         context.inner_out,
@@ -224,7 +223,7 @@ def cv_innerproduct(
         barret_k=context.barret_k,
         workspace=context.inner_workspace,
     )
-    return res.reshape(2, -1, context.N)
+    return res.reshape(2, -1, context.N) #todo: check return type is tensor or list?
 
 
 def cv_keyswitch(
@@ -233,10 +232,7 @@ def cv_keyswitch(
     swk_bx: Tensor,
     swk_ax: Tensor,
     context: Context,
-    inplace: bool = False,
-) -> Tensor:
-    # true_beta = int((cur_limbs + (context.alpha - 1)) / context.alpha) # todo: remove unused variables?
-    # context.beta = true_beta #fixme: why set context.beta?
+) -> list:
     modup_res = cv_modup(
         input,
         curr_limbs=cur_limbs,
@@ -250,17 +246,15 @@ def cv_keyswitch(
         context
     )
 
-    sumMult_bx = inner_product[0] # todo: omit this shallow copy?
-    sumMult_ax = inner_product[1] # todo: omit this shallow copy?
 
     moddown_bx = cv_moddown(
-        sumMult_bx,
+        inner_product[0],
         curr_limbs=cur_limbs,
         context=context
     )
 
     moddown_ax = cv_moddown(
-        sumMult_ax,
+        inner_product[1],
         curr_limbs=cur_limbs,
         context=context
     )
@@ -381,9 +375,8 @@ def cv_mul_by_monomial(
     l: int,
     monomialDeg: int,
     context: Context,
-    inplace: bool = False,
-) -> Tensor:
-    assert inplace == True and "monomial only supports inplace operation"
+) -> None:
+    # "monomial only supports inplace operation"
     torch.mul_by_monomial_(
         input,
         primes=context.primes,

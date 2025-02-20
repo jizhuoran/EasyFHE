@@ -180,8 +180,8 @@ def mod_raise(cipher, L0, cryptoContext):
 
 # @profile_python_function
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
-    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
-    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
+    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
+    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
