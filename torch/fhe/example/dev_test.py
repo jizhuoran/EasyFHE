@@ -51,10 +51,8 @@ def app_example_debug(
             print("homo_rotate: Test failed!")
 
     # bootstrapping, logSlots = 11
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
-    cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_logSlots)
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
+    utils.load_bootstrapping_info(str(specify_logSlots), cryptoContext)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
@@ -74,13 +72,11 @@ def app_example_debug(
     # bootstrapping, logSlots = 12
     specify_logSlots = logSlots_list[1]
     result.slots = (1<<specify_logSlots) # This assignment is for testing purposes only.
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
-    cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_logSlots)
+    utils.load_bootstrapping_info(str(specify_logSlots), cryptoContext)
     for i in range(result.cur_limbs - 3):
         result = homo_ops.homo_mul(result, result, cryptoContext)
         openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, L0=cryptoContext.L, logSlots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
@@ -136,11 +132,9 @@ def app_example_release(
     print("homo_rotate done!")
 
     # bootstrapping, logSlots = 11
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
-    cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_logSlots)
+    utils.load_bootstrapping_info(str(specify_logSlots), cryptoContext)
 
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
+    result = eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -153,10 +147,7 @@ def app_example_release(
 
     # # bootstrapping, logSlots = 12
     result.slots = (1 << specify_logSlots)  # This assignment is for testing purposes only.
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(specify_logSlots)]
-    cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(cryptoContext, specify_logSlots)
-
+    utils.load_bootstrapping_info(str(specify_logSlots), cryptoContext)
 
     approx_plain_val = clear_result[:10]
     # print(approx_plain_val)
@@ -165,7 +156,7 @@ def app_example_release(
         # print(approx_plain_val)
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
 
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logslots=specify_logSlots, cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, L0=cryptoContext.L, logSlots=specify_logSlots, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine

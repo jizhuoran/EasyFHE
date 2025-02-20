@@ -185,10 +185,10 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
+def eval_bootstrap(ciphertext, L0, logSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
-    slots = 1<<logslots
+    slots = 1 << logSlots
     # cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar

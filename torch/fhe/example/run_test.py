@@ -55,10 +55,10 @@ utils.load_rotation_keys(cryptoContext, logSlots)
 # # Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=logSlots, cryptoContext=cryptoContext)
 
 start_time = time.time()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=logSlots, cryptoContext=cryptoContext)
 print("Time taken for bootstrapping:", time.time() - start_time)
 openfhe_boot_context = openfhe_boot_contexts[str(logSlots)]
 openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
