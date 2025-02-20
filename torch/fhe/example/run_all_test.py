@@ -40,15 +40,15 @@ approxModDepth = int({})
 rescaleTech = "{}"
 path = "{}"
 cryptoContext, openfhe_contexts = utils.try_load_context(
-    int(logN),
-    logSlots_list,
     int(maxLevelsRemaining),
-    levelBudgets_list,
+    [],
+    logSlots_list,
+    int(logN),
     int(dnum),
     int(dcrtBits),
     int(firstMod),
+    levelBudgets_list,
     int(approxModDepth),
-    [],
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,

@@ -45,20 +45,10 @@ secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 # secretKeyDist = "UNIFORM_TERNARY"
 # rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
 
-cryptoContext, openfhe_contexts = utils.try_load_context(
-    int(logN),
-    logSlots_list,
-    int(maxLevelsRemaining),
-    levelBudget_list,
-    int(dnum),
-    int(dcrtBits),
-    int(firstMod),
-    int(approxModDepth),
-    [],
-    secretKeyDist,
-    rescaleTech,
-    save_dir=path,
-    mode = "debug")
+cryptoContext, openfhe_contexts = (
+    utils.try_load_context(int(maxLevelsRemaining), [], logSlots_list, int(logN),
+                           int(dnum), int(dcrtBits), int(firstMod), levelBudget_list,
+                           int(approxModDepth), secretKeyDist, rescaleTech, save_dir=path, mode="debug"))
 
 logSlots = logSlots_list[0]
 openfhe_context = openfhe_contexts[str(logSlots)]

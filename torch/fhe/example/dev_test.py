@@ -22,19 +22,12 @@ def app_example_debug(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
-                                                                 logSlots_list,
-                                                                 maxLevelsRemaining,
-                                                                 levelBudget_list,
-                                                                 dnum,
-                                                                 dcrtBits,
-                                                                 firstMod,
-                                                                 approxModDepth,
-                                                                 [-1,2],
-                                                                 "UNIFORM_TERNARY",
-                                                                 rescaleTech,
-                                                                 save_dir=save_dir,
-                                                                 mode = mode)
+    appRotIndex_list = [-1, 2]
+    cryptoContext, openfhe_context_dict = (
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logSlots_list,
+                               logN, dnum, dcrtBits, firstMod, levelBudget_list,
+                               approxModDepth, "UNIFORM_TERNARY", rescaleTech,
+                               save_dir=save_dir, mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
     openfhe_context = openfhe_context_dict[str(specify_slots)]
@@ -118,20 +111,11 @@ def app_example_release(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    app_rot_index_list = [-1, 2]
-    cryptoContext, openfhe_context = utils.try_load_context(logN,
-                                                            logSlots_list,
-                                                            maxLevelsRemaining,
-                                                            levelBudget_list,
-                                                            dnum,
-                                                            dcrtBits,
-                                                            firstMod,
-                                                            approxModDepth,
-                                                            app_rot_index_list,
-                                                            "UNIFORM_TERNARY",
-                                                            rescaleTech,
-                                                            save_dir=save_dir,
-                                                            mode=mode)
+    appRotIndex_list = [-1, 2]
+    cryptoContext, openfhe_context = (
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logSlots_list, logN,
+                               dnum, dcrtBits, firstMod, levelBudget_list, approxModDepth,
+                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     specify_slots = logSlots_list[0]  # logslots = 11
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -216,19 +200,11 @@ def encode_test_case(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
-                                                                 logSlots_list,
-                                                                 maxLevelsRemaining,
-                                                                 levelBudget_list,
-                                                                 dnum,
-                                                                 dcrtBits,
-                                                                 firstMod,
-                                                                 approxModDepth,
-                                                                 [],
-                                                                 "UNIFORM_TERNARY",
-                                                                 rescaleTech,
-                                                                 save_dir=save_dir,
-                                                                 mode = mode)
+    cryptoContext, openfhe_context_dict = (
+        utils.try_load_context(maxLevelsRemaining, [], logSlots_list, logN, dnum,
+                               dcrtBits, firstMod, levelBudget_list, approxModDepth,
+                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
     openfhe_context = openfhe_context_dict[str(specify_slots)]
@@ -285,19 +261,10 @@ def ct_pt_test_case(
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
-    cryptoContext, openfhe_context_dict = utils.try_load_context(logN,
-                                                                 logSlots_list,
-                                                                 maxLevelsRemaining,
-                                                                 levelBudget_list,
-                                                                 dnum,
-                                                                 dcrtBits,
-                                                                 firstMod,
-                                                                 approxModDepth,
-                                                                 [],
-                                                                 "UNIFORM_TERNARY",
-                                                                 rescaleTech,
-                                                                 save_dir=save_dir,
-                                                                 mode = mode)
+    cryptoContext, openfhe_context_dict = (
+        utils.try_load_context(maxLevelsRemaining, [], logSlots_list, logN, dnum,
+                               dcrtBits, firstMod, levelBudget_list, approxModDepth,
+                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     specify_slots = logSlots_list[0] # logslots = 11
     openfhe_context = openfhe_context_dict[str(specify_slots)]
