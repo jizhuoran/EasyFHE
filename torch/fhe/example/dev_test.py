@@ -14,7 +14,6 @@ def app_example_debug(
         dcrtBits=52,
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
-        approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
@@ -23,10 +22,8 @@ def app_example_debug(
         raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
-        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list,
-                               logN, dnum, dcrtBits, firstMod, levelBudget_list,
-                               approxModDepth, "UNIFORM_TERNARY", rescaleTech,
-                               save_dir=save_dir, mode=mode))
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -101,7 +98,6 @@ def app_example_release(
         dcrtBits=52,
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
-        approxModDepth=9,
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode="release"  # "debug" or "release"
@@ -111,9 +107,8 @@ def app_example_release(
 
 
     cryptoContext, openfhe_context = (
-        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN,
-                               dnum, dcrtBits, firstMod, levelBudget_list, approxModDepth,
-                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -177,7 +172,6 @@ def encode_test_case(
         dcrtBits=52,
         firstMod=56,
         levelBudget_list=[[3, 3]],
-        approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
@@ -186,10 +180,8 @@ def encode_test_case(
         raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, _ = (
-        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum,
-                               dcrtBits, firstMod, levelBudget_list, approxModDepth,
-                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               mode=mode))
+        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
@@ -236,7 +228,6 @@ def ct_pt_test_case(
         dcrtBits=52,
         firstMod=56,
         levelBudget_list=[[3, 3]],
-        approxModDepth=9,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
@@ -245,9 +236,8 @@ def ct_pt_test_case(
         raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, _ = (
-        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum,
-                               dcrtBits, firstMod, levelBudget_list, approxModDepth,
-                               "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 
     encode_slots=(1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]

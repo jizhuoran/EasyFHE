@@ -15,7 +15,7 @@ for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and context_file.startswith("GPU-FHE-CONTEXT"):
         print("Testing", context_file)
         context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
-        logN, logBsSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
+        logN, logBsSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, rescaleTech = context_file[:-4].split("_")[1:]
         try:
             logBsSlots_list = [int(logBsSlots) for logBsSlots in logBsSlots_str.split("-")]
             levelBudgets_list = []
@@ -38,7 +38,6 @@ dnum = int({})
 dcrtBits = int({})
 firstMod = int({})
 levelBudgets_list = {}
-approxModDepth = int({})
 rescaleTech = "{}"
 path = "{}"
 cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
@@ -50,7 +49,6 @@ cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(dcrtBits),
     int(firstMod),
     levelBudgets_list,
-    int(approxModDepth),
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,
@@ -84,7 +82,7 @@ with open("result.txt", "a") as f:
         print("Test failed!", file=f)
         print("result", result.cv[0].cpu().numpy()[0][:10], file=f)
         print("data", data.reshape(-1)[:10], file=f)
-""".format(context_file, logN, logBsSlots_list, maxLevelsRemaining, levelBudgets_list, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech, path)
+""".format(context_file, logN, logBsSlots_list, maxLevelsRemaining, levelBudgets_list, dnum, dcrtBits, firstMod, rescaleTech, path)
 
             # Create a temporary file to store the code
             with open("temp_file.py", "w") as temp_file:

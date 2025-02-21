@@ -13,16 +13,14 @@ dnum = 3
 dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[4, 4]]
-approxModDepth = 9
 rescaleTech = "FLEXIBLEAUTO"
 path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = (
-    utils.try_load_context(int(maxLevelsRemaining), [], logBsSlots_list, int(logN),
-                           int(dnum), int(dcrtBits), int(firstMod), levelBudget_list,
-                           int(approxModDepth), secretKeyDist, rescaleTech, save_dir=path, mode="debug"))
+    utils.try_load_context(int(maxLevelsRemaining), [], logBsSlots_list, int(logN), int(dnum), int(dcrtBits),
+                           int(firstMod), levelBudget_list, secretKeyDist, rescaleTech, save_dir=path, mode="debug"))
 
 logBsSlots = logBsSlots_list[0]
 

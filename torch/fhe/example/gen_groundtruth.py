@@ -20,7 +20,7 @@ for logN, logBsSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in iter
         print(i, ": ", logN, logBsSlots, maxLevelsRemaining, levelBudget, dnum)
         i += 1
 
-        save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
             "-".join(map(str, [logBsSlots])),
             maxLevelsRemaining,
@@ -28,7 +28,6 @@ for logN, logBsSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in iter
             dnum,
             59,
             60,
-            9,
             "UNIFORM_TERNARY",
             rescaleTech,
         )
@@ -55,7 +54,6 @@ dnum = {3}
 dcrtBits=59
 firstMod=60
 levelBudget_list = [[{4}, {5}]]
-approxModDepth=9
 secretKeyDist = "UNIFORM_TERNARY"
 rescaleTech = "{6}"
 save_dir = "{7}"
@@ -71,7 +69,6 @@ gen_contexts(
     dcrtBits=dcrtBits,
     firstMod=firstMod,
     levelBudget_list=levelBudget_list,
-    approxModDepth=approxModDepth,
     secretKeyDist="UNIFORM_TERNARY",
     rescaleTech=rescaleTech,
     save_dir="{7}",

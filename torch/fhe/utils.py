@@ -115,7 +115,6 @@ def try_load_context(
             dcrtBits,
             firstMod,
             levelBudget_list,
-            approxModDepth,
             secretKeyDist,
             rescaleTech,
             save_dir,
@@ -128,7 +127,7 @@ def try_load_context(
 
     load_path = (
         save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
             '-'.join(map(str, logBsSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -136,14 +135,13 @@ def try_load_context(
             dnum,
             dcrtBits,
             firstMod,
-            approxModDepth,
             secretKeyDist,
             rescaleTech,
         )
     )
     debug_load_path = (
             save_dir
-            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             maxLevelsRemaining,
             '-'.join(map(str, logBsSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -151,16 +149,15 @@ def try_load_context(
             dnum,
             dcrtBits,
             firstMod,
-            approxModDepth,
             secretKeyDist,
             rescaleTech,
         )
     )
 
     if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
-        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list, logBsSlots_list=logBsSlots_list,
-                     logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod, levelBudget_list=levelBudget_list,
-                     approxModDepth=approxModDepth, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
+        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list,
+                     logBsSlots_list=logBsSlots_list, logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod,
+                     levelBudget_list=levelBudget_list, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
                      save_dir=save_dir, mode=mode)
 
     with open(load_path, 'rb') as file:

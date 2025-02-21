@@ -1,9 +1,9 @@
 import torch.fhe.example.dev_test as dev_test
-# # note: the following test may not use the same ctx, therefore should not run in one round
-# dev_test.app_example_debug(mode="debug")
-# dev_test.app_example_release(mode="release")
-dev_test.encode_test_case(mode="debug")
-dev_test.ct_pt_test_case(mode="debug")
+# note: the following test may not use the same ctx, therefore should not run in one round
+dev_test.app_example_debug(mode="debug")
+dev_test.app_example_release(mode="release")
+# dev_test.encode_test_case(mode="debug")
+# dev_test.ct_pt_test_case(mode="debug")
 
 
 ##########################
@@ -22,7 +22,6 @@ dnum = 3
 dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[3, 3], [4, 4]]
-approxModDepth = 9
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
 save_dir = "torch/fhe/data/"
 mode = "release"  # "debug" or "release"
@@ -31,11 +30,9 @@ if not os.path.exists(save_dir):
     raise ValueError(f"Directory {save_dir} does not exist!")
 
 cryptoContext, openfhe_context = (
-    fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN,
-                           dnum, dcrtBits, firstMod, levelBudget_list, approxModDepth,
-                           "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+    fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
 #fixme: if list = [], then bs_gen in gen_ctx should be skipped
-#fixme: why we allow setting approxModDepth outside?
 
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 encode_slots = (1 << 11)
@@ -63,7 +60,7 @@ print("gpu bootstrapp done!")
 
 clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
 clear_result = clear_result.cpu().numpy().reshape(-1)
-print("HE decryption result: ", clear_result[:10])  
+print("HE decryption result: ", clear_result[:10])
 
 # #####################################
 # # ..., omit some homomorphic computation
@@ -93,7 +90,7 @@ warnings.warn(
     "and may differ from the OpenFHE decryption result even within the same round."
 )
 print("plain result: ", approx_plain_val)
-print("HE decryption result: ", clear_result[:10])  
+print("HE decryption result: ", clear_result[:10])
 
 is_equal = np.allclose(clear_result[:10], approx_plain_val[:10], atol=1e-02)
 # compare elements of clear_result and approx_plain_eval, if absolute distance is less then 1e-03, then is equal

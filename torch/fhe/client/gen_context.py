@@ -3,7 +3,6 @@ from . import openfhe as openfhe
 from . import context as Context
 import pickle, time
 import numpy as np
-import psutil, os
 
 
 def gen_contexts(
@@ -15,7 +14,6 @@ def gen_contexts(
     dcrtBits,
     firstMod,
     levelBudget_list,
-    approxModDepth,
     secretKeyDist,
     rescaleTech,
     save_dir,
@@ -25,7 +23,7 @@ def gen_contexts(
 
     print("Generating context")
 
-    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         '-'.join(map(str, logBsSlots_list)),
         '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -33,7 +31,6 @@ def gen_contexts(
         dnum,
         dcrtBits,
         firstMod,
-        approxModDepth,
         secretKeyDist,
         rescaleTech,
     )
@@ -65,6 +62,7 @@ def gen_contexts(
     openfhe_secretKeyDist = SecretKeyDist_MAP[secretKeyDist]
     openfhe_rescaleTech = ScalingTechnique_MAP[rescaleTech]
 
+    approxModDepth = 9 # 9 is the default value of approxModDepth in openfhe
     depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
         approxModDepth, max_level_budget, openfhe_secretKeyDist
     )
