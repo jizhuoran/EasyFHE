@@ -75,12 +75,11 @@ static void drop_last_element_scale_template(
   NTT_impl(
       to_ptr,
       to_ptr,
-      0,
       end_length,
       N,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
+      param_primes.data_ptr<uint64_t>(),
+      param_power_of_roots.data_ptr<uint64_t>());
 
   start_op2_idx = (curr_limbs - 1) * (L);
   const_mult_batch(

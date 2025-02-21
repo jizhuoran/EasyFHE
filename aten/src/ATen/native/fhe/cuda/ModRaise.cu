@@ -48,12 +48,11 @@ static void mod_raise_template(
   NTT_impl(
       res_ptr,
       res_ptr,
-      0,
       L0,
       N,
-      param_power_of_roots_shoup,
-      moduliQ,
-      param_power_of_roots);
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
+      moduliQ.data_ptr<uint64_t>(),
+      param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mod_raise_cuda(

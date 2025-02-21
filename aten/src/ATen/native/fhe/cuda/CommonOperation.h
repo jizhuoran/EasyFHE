@@ -16,14 +16,13 @@ void iNTT_impl(
     const Tensor& inverse_scaled_power_of_roots_div_two);
 
 void NTT_impl(
-    uint64_t* in_ptr,
+    const uint64_t* in_ptr,
     uint64_t* out_ptr,
-    int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_primes,
-    const Tensor& param_power_of_roots);
+    const uint64_t* param_power_of_roots_shoup,
+    const uint64_t* param_primes,
+    const uint64_t* param_power_of_roots);
 
 void NTT_except_some_range_impl(
     uint64_t* op_ptr,

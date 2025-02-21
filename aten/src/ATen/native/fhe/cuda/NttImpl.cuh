@@ -40,9 +40,9 @@ __global__ void Intt8PointPerThreadPhase2OoP(
     uint64_t local[8];
     int t = N / 2 / m;
     // prime idx
-    int np_idx = i / (N / 8) + start_prime_idx;
+    int np_idx = i / (N / 8);
     int prime_idx =
-        np_idx + ((np_idx >= 0 && np_idx < ceil_curr_limbs) ? 0 : gap);
+        np_idx + (((np_idx + start_prime_idx) < ceil_curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -363,12 +363,11 @@ __device__ __inline__ void butt_ntt_local(
 }
 
 __global__ void Ntt8PointPerThreadPhase1(
-    uint64_t* in_ptr,
+    const uint64_t* in_ptr,
     uint64_t* out_ptr,
     const int m,
     const int num_prime,
     const int N,
-    const int start_prime_idx,
     const int pad,
     const int radix,
     const uint64_t* base_inv,
@@ -383,14 +382,14 @@ __global__ void Ntt8PointPerThreadPhase1(
     uint64_t local[8];
     int t = N / 2 / m;
     // prime idx
-    int np_idx = i / (N / 8) + start_prime_idx;
+    int np_idx = i / (N / 8);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
     int m_idx = N_idx / (t / 4);
     int t_idx = N_idx % (t / 4);
     // base address
-    uint64_t* a_np = in_ptr + np_idx * N;
+    const uint64_t* a_np = in_ptr + np_idx * N;
     uint64_t* a_np_out = out_ptr + np_idx * N;
     const uint64_t* prime_table = primes;
     const uint64_t* W = base_inv + N * np_idx;
@@ -531,12 +530,11 @@ __global__ void Ntt8PointPerThreadPhase1(
 }
 
 __global__ void Ntt8PointPerThreadPhase2(
-    uint64_t* in_ptr,
+    const uint64_t* in_ptr,
     uint64_t* out_ptr,
     const int m,
     const int num_prime,
     const int N,
-    const int start_prime_idx,
     const int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
@@ -549,14 +547,14 @@ __global__ void Ntt8PointPerThreadPhase2(
     uint64_t local[8];
     int t = N / 2 / m;
     // prime idx
-    int np_idx = num_prime - 1 - (i / (N / 8)) + start_prime_idx;
+    int np_idx = num_prime - 1 - (i / (N / 8));
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
     int m_idx = N_idx / (t / 4);
     int t_idx = N_idx % (t / 4);
     // base address
-    uint64_t* a_np = in_ptr + np_idx * N;
+    const uint64_t* a_np = in_ptr + np_idx * N;
     uint64_t* a_np_out = out_ptr + np_idx * N;
     const uint64_t* prime_table = primes;
     uint64_t prime = prime_table[np_idx];
@@ -1080,7 +1078,7 @@ void iNTT_impl(
             blockDim,
             per_thread_storage,
             stream>>>(
-            in_ptr,
+            in_ptr + param_degree * start_prime_idx,
             first_stage_radix_size,
             batch,
             param_degree,
@@ -1088,10 +1086,10 @@ void iNTT_impl(
             curr_limbs,
             gap,
             second_radix_size / per_thread_ntt_size,
-            inverse_power_of_roots_div_two_ptr,
-            inverse_scaled_power_of_roots_div_two_ptr,
-            param_primes_ptr,
-            out_ptr);
+            inverse_power_of_roots_div_two_ptr + param_degree * start_prime_idx,
+            inverse_scaled_power_of_roots_div_two_ptr + param_degree * start_prime_idx,
+            param_primes_ptr + start_prime_idx,
+            out_ptr + param_degree * start_prime_idx);
         fhe::Intt8PointPerThreadPhase1OoP<<<
             gridDim,
             (first_stage_radix_size / 8) * pad,
@@ -1115,14 +1113,13 @@ void iNTT_impl(
 }
 
 void NTT_impl(
-    uint64_t* in_ptr,
+    const uint64_t* in_ptr,
     uint64_t* out_ptr,
-    int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_primes,
-    const Tensor& param_power_of_roots) {
+    const uint64_t* param_power_of_roots_shoup_ptr,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* param_power_of_roots_ptr) {
   dim3 gridDim(2048);
   dim3 blockDim(256);
   const int per_thread_ntt_size = 8;
@@ -1131,51 +1128,38 @@ void NTT_impl(
   const int pad = 4;
   const int per_thread_storage =
       blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
-  AT_DISPATCH_V2(
-      kUInt64,
-      "NTT_cuda",
-      AT_WRAP([&]() {
-        auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
-            param_power_of_roots_shoup.data_ptr<uint64_t>());
-        auto param_primes_ptr =
-            reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-        auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
-            param_power_of_roots.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::Ntt8PointPerThreadPhase1<<<
-            gridDim,
-            (first_stage_radix_size / 8) * pad,
-            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
-            stream>>>(
-            in_ptr,
-            out_ptr,
-            1,
-            batch,
-            param_degree,
-            start_prime_idx,
-            pad,
-            first_stage_radix_size / per_thread_ntt_size,
-            param_power_of_roots_ptr,
-            param_power_of_roots_shoup_ptr,
-            param_primes_ptr);
-        fhe::Ntt8PointPerThreadPhase2<<<
-            gridDim,
-            blockDim.x,
-            per_thread_storage,
-            stream>>>(
-            in_ptr,
-            out_ptr,
-            first_stage_radix_size,
-            batch,
-            param_degree,
-            start_prime_idx,
-            second_radix_size / per_thread_ntt_size,
-            param_power_of_roots_ptr,
-            param_power_of_roots_shoup_ptr,
-            param_primes_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
+
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::Ntt8PointPerThreadPhase1<<<
+      gridDim,
+      (first_stage_radix_size / 8) * pad,
+      (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
+      stream>>>(
+      in_ptr,
+      out_ptr,
+      1,
+      batch,
+      param_degree,
+      pad,
+      first_stage_radix_size / per_thread_ntt_size,
+      param_power_of_roots_ptr,
+      param_power_of_roots_shoup_ptr,
+      param_primes_ptr);
+  fhe::Ntt8PointPerThreadPhase2<<<
+      gridDim,
+      blockDim.x,
+      per_thread_storage,
+      stream>>>(
+      in_ptr,
+      out_ptr,
+      first_stage_radix_size,
+      batch,
+      param_degree,
+      second_radix_size / per_thread_ntt_size,
+      param_power_of_roots_ptr,
+      param_power_of_roots_shoup_ptr,
+      param_primes_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 void NTT_except_some_range_impl(

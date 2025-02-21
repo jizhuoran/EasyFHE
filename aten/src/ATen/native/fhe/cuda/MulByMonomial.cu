@@ -125,12 +125,11 @@ static void mul_by_monomial_inplace_template(
   NTT_impl(
       res_ptr,
       res_ptr,
-      0,
       l,
       N,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
+      param_primes.data_ptr<uint64_t>(),
+      param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mul_by_monomial_cuda(

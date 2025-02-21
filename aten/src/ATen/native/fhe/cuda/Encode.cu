@@ -448,12 +448,11 @@ static void encode_template(
         NTT_impl(
             elements_ptr,
             elements_ptr,
-            0,
             cur_limbs,
             N,
-            power_of_roots_shoup,
-            primes,
-            power_of_roots);
+            power_of_roots_shoup.data_ptr<uint64_t>(),
+            primes.data_ptr<uint64_t>(),
+            power_of_roots.data_ptr<uint64_t>());
 
         C10_CUDA_KERNEL_LAUNCH_CHECK();
       }),
