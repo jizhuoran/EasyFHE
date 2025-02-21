@@ -28,9 +28,8 @@ __global__ void sum_reduce_fused(
     int gap,
     uint64_t* out_ax,
     uint64_t* out_bx) {
-  
-        const int idx = blockIdx.y;
-        const int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
+  const int idx = blockIdx.y;
+  const int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
   uint128_t accum_ax{0, 0};
   uint128_t accum_bx{0, 0};
@@ -40,10 +39,10 @@ __global__ void sum_reduce_fused(
     const uint64_t op1 = in_ptr[in_ptr_stride + i];
     const uint64_t op2_ax = eval_ax[i + N * prime_idx + stride];
     const auto mul_ax = mult_64_64_128(op1, op2_ax);
-    accum_ax += mul_ax;
+    inplace_add_128_128(mul_ax, accum_ax);
     const uint64_t op2_bx = eval_bx[i + N * prime_idx + stride];
     const auto mul_bx = mult_64_64_128(op1, op2_bx);
-    accum_bx += mul_bx;
+    inplace_add_128_128(mul_bx, accum_bx);
   }
   const auto reduce_prime_idx = idx + prime_idx;
 
@@ -74,7 +73,6 @@ static void innerproduct_template(
     const Tensor& barret_k,
     const Tensor& workspace,
     Tensor& out) {
-      
   const int beta = int((curr_limbs + alpha - 1) / alpha);
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
@@ -82,16 +80,12 @@ static void innerproduct_template(
   const int mult_length = (L + sizeP);
   int gap = L - curr_limbs;
 
-  auto in_ptr =
-      reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
   auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-  auto out_bx_ptr =
-      reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
-  auto out_ax_ptr =
-      reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
-  auto primes_ptr =
-      reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
+  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
   auto barret_ratio_ptr =
       reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
   auto barret_k_ptr =

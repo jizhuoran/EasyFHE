@@ -59,14 +59,6 @@ namespace fhe {
 struct uint128_t {
   uint64_t hi;
   uint64_t lo;
-  __device__ uint128_t& operator+=(const uint128_t& op);
-};
-
-struct uint128_t4 {
-  uint128_t x;
-  uint128_t y;
-  uint128_t z;
-  uint128_t w;
 };
 
 // https://forums.developer.nvidia.com/t/long-integer-multiplication-mul-wide-u64-and-mul-wide-u128/51520
@@ -133,29 +125,6 @@ __inline__ __device__ uint64_t barret_reduction_128_64(
   return res;
 }
 
-__inline__ __device__ uint32_t barret_reduction_64_32(
-    const uint64_t in,
-    const uint32_t prime,
-    const uint32_t barret_ratio,
-    const uint64_t barret_k) {
-  uint32_t temp1_hi = __umulhi(static_cast<uint32_t>(in), barret_ratio);
-  const uint64_t temp2 = static_cast<uint64_t>(in >> 32) * barret_ratio;
-  uint32_t temp2_hi = (temp2 >> 32);
-  uint32_t temp2_lo = static_cast<uint32_t>(temp2);
-  // carry = add_64_64_carry(temp1.hi, temp2.lo, temp1.hi);
-  asm("add.cc.u32 %0, %0, %1;" : "+r"(temp1_hi) : "r"(temp2_lo));
-  // carry = add_64_64_carry(temp2.hi, 0, temp2.hi, carry);
-  asm("{addc.cc.u32 %0, %0, 0;}" : "+r"(temp2_hi));
-  temp1_hi >>= barret_k - 32;
-  temp2_hi <<= 64 - barret_k;
-  temp1_hi = temp1_hi + temp2_hi;
-  temp1_hi = temp1_hi * prime;
-  uint32_t res = static_cast<uint32_t>(in) - temp1_hi;
-  if (res >= prime)
-    res -= prime;
-  return res;
-}
-
 __inline__ __device__ void barret_reduction_64_64(
     const uint64_t in,
     uint64_t& res,
@@ -178,27 +147,6 @@ __inline__ __device__ uint64_t mul_and_reduce_shoup(
   return (uint64_t)op1 * op2 - hi * prime;
 };
 
-__inline__ __device__ uint64_t sub_negate_const_mult(
-    const uint64_t op1,
-    const uint64_t op2,
-    const uint64_t op3,
-    const uint64_t scaled_op3,
-    const uint64_t prime) {
-  uint64_t temp;
-  if (op1 >= op2)
-    temp = prime - op1 + op2;
-  else {
-    temp = op2 - op1;
-  }
-  uint64_t out = mul_and_reduce_shoup(temp, op3, scaled_op3, prime);
-  if (out >= prime)
-    out -= prime;
-  return out;
-};
 
-__inline__ __device__ uint128_t& uint128_t::operator+=(const uint128_t& op) {
-  inplace_add_128_128(op, *this);
-  return *this;
-}
 
 } // namespace fhe
