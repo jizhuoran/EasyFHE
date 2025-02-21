@@ -2,8 +2,8 @@ import torch.fhe.example.dev_test as dev_test
 # note: the following test may not use the same ctx, therefore should not run in one round
 dev_test.app_example_debug(mode="debug")
 dev_test.app_example_release(mode="release")
-# dev_test.encode_test_case(mode="debug")
-# dev_test.ct_pt_test_case(mode="debug")
+dev_test.encode_test_case(mode="debug")
+dev_test.ct_pt_test_case(mode="debug")
 
 
 ##########################
@@ -32,7 +32,7 @@ if not os.path.exists(save_dir):
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                          levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
-#fixme: if list = [], then bs_gen in gen_ctx should be skipped
+
 
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 encode_slots = (1 << 11)

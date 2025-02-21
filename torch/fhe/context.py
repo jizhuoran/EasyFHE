@@ -154,9 +154,10 @@ class Context:
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.BsContext_map = {}
-        for logBsSlots in self.logBsSlots_list:
-            _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
-            self.BsContext_map[str(logBsSlots)] = _BsContext
+        if self.logBsSlots_list[0]!=0:
+            for logBsSlots in self.logBsSlots_list:
+                _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
+                self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
         self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)

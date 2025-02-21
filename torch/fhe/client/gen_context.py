@@ -54,18 +54,23 @@ def gen_contexts(
         "NORESCALE": openfhe.ScalingTechnique.NORESCALE,
     }
 
-    N = int(2**logN)
-    max_level_budget = max(
-        levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1]
-    )
-
     openfhe_secretKeyDist = SecretKeyDist_MAP[secretKeyDist]
     openfhe_rescaleTech = ScalingTechnique_MAP[rescaleTech]
 
-    approxModDepth = 9 # 9 is the default value of approxModDepth in openfhe
-    depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
-        approxModDepth, max_level_budget, openfhe_secretKeyDist
-    )
+    NO_BS = False
+    if logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]:
+        NO_BS = True
+
+    if NO_BS == True:
+        depth = maxLevelsRemaining
+    else:
+        max_level_budget = max(
+            levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1]
+        )
+        approxModDepth = 9 # 9 is the default value of approxModDepth in openfhe
+        depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
+            approxModDepth, max_level_budget, openfhe_secretKeyDist
+        )
 
     parameters = openfhe.CCParamsCKKSRNS()
 
@@ -76,7 +81,7 @@ def gen_contexts(
     parameters.SetScalingTechnique(openfhe_rescaleTech)
     parameters.SetSecretKeyDist(openfhe_secretKeyDist)
     parameters.SetNumLargeDigits(dnum)  # dnum GPU-FHE
-    parameters.SetRingDim(N)
+    parameters.SetRingDim(int(2**logN))
     parameters.SetSecurityLevel(openfhe.SecurityLevel.HEStd_NotSet)
     parameters.SetKeySwitchTechnique(openfhe.KeySwitchTechnique.HYBRID)
 
@@ -100,20 +105,30 @@ def gen_contexts(
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
 
-    boot_gen_time = 0
-    rot_get_time = 0
-    for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-        timei1 = time.time()
-        cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
-        cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
-        timei2 = time.time()
-        ROT_SWK = cc.GetEvalRotateKey()
-        rot_swk_map[str(logBsSlots)] = ROT_SWK
-        timei3 = time.time()
-        boot_gen_time += timei2 - timei1
-        rot_get_time += timei3 - timei2
+    boot_key_map = {}
+    if NO_BS == False:
+        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+            cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
+            cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
+            ROT_SWK = cc.GetEvalRotateKey()
+            rot_swk_map[str(logBsSlots)] = ROT_SWK
 
-    BOOT_KEY = cc.GetEvalBootstrapKey() # get matirx saved in boot_key
+        BOOT_KEY = cc.GetEvalBootstrapKey() # get matirx saved in boot_key
+        for idx, logBsSlots in enumerate(logBsSlots_list):
+            slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
+            assert slot == 1 << logBsSlots
+            boot_key = {
+                "C2S": C2S,
+                "S2C": S2C,
+                "C2S_dim": C2S_dim,
+                "S2C_dim": S2C_dim,
+                "C2S_limbs": C2S_limbs,
+                "S2C_limbs": S2C_limbs,
+                "U0hatTPreFFTScalingFactor": C2S_FC,
+                "U0PreFFTScalingFactor": S2C_FC,
+            }
+            boot_key_map[str(logBsSlots)] = boot_key
+
 
     openfheMembers = {}
     openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
@@ -123,7 +138,6 @@ def gen_contexts(
     with open(OPENFHE_path, "wb") as file:
         pickle.dump(openfheMembers, file)
     del openfheMembers
-
 
     if mode == "debug":
         debugKeys = {}
@@ -139,23 +153,6 @@ def gen_contexts(
     openfhe.ClearEvalMultKeys()
     cc.ClearEvalAutomorphismKeys()
     openfhe.ReleaseAllContexts()
-
-    boot_key_map = {}
-
-    for idx, logBsSlots in enumerate(logBsSlots_list):
-        slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
-        assert slot == 1 << logBsSlots
-        boot_key = {
-            "C2S": C2S,
-            "S2C": S2C,
-            "C2S_dim": C2S_dim,
-            "S2C_dim": S2C_dim,
-            "C2S_limbs": C2S_limbs,
-            "S2C_limbs": S2C_limbs,
-            "U0hatTPreFFTScalingFactor": C2S_FC,
-            "U0PreFFTScalingFactor": S2C_FC,
-        }
-        boot_key_map[str(logBsSlots)] = boot_key
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
@@ -177,11 +174,24 @@ def gen_contexts(
         dim1,
     )
 
-    for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-        print("BsContext_map: ", logBsSlots)
-        gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-            gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-        )
+    BsContextMembers_dict = {}
+    if NO_BS == False:
+        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+            print("BsContext_map: ", logBsSlots)
+            gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
+            )
+
+        for logBsSlots in logBsSlots_list:
+            BsContextMembers = {}
+            for item in dir(gpufhe_context.BsContext_map[str(logBsSlots)]):
+                if (
+                    not callable(getattr(gpufhe_context.BsContext_map[str(logBsSlots)], item))
+                ) and not item.startswith("__"):
+                    BsContextMembers[item] = getattr(
+                        gpufhe_context.BsContext_map[str(logBsSlots)], item
+                    )
+            BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -191,18 +201,6 @@ def gen_contexts(
             and (not item.startswith("BsContext"))
         ):
             gpufheMembers[item] = getattr(gpufhe_context, item)
-
-    BsContextMembers_dict = {}
-    for logBsSlots in logBsSlots_list:
-        BsContextMembers = {}
-        for item in dir(gpufhe_context.BsContext_map[str(logBsSlots)]):
-            if (
-                not callable(getattr(gpufhe_context.BsContext_map[str(logBsSlots)], item))
-            ) and not item.startswith("__"):
-                BsContextMembers[item] = getattr(
-                    gpufhe_context.BsContext_map[str(logBsSlots)], item
-                )
-        BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
 
     with open(OPENFHE_path, "rb") as file:
         openfheMembers = pickle.load(file)

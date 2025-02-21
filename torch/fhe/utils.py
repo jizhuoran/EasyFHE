@@ -120,10 +120,18 @@ def try_load_context(
             save_dir,
             mode):
 
-    sorted_pairs = sorted(zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0])
-    logBsSlots_list, levelBudget_list = zip(*sorted_pairs)
-    logBsSlots_list = list(logBsSlots_list)
-    levelBudget_list = list(levelBudget_list)
+    NO_BS=False
+    if logBsSlots_list is None:
+        assert (logBsSlots_list is None) == (levelBudget_list is None), \
+            "ERROR: logBsSlots_list and levelBudget_list must be both None or both not None!"
+        logBsSlots_list = [0]
+        levelBudget_list = [[0, 0]]
+        NO_BS = True
+    else:
+        sorted_pairs = sorted(zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0])
+        logBsSlots_list, levelBudget_list = zip(*sorted_pairs)
+        logBsSlots_list = list(logBsSlots_list)
+        levelBudget_list = list(levelBudget_list)
 
     load_path = (
         save_dir
@@ -173,9 +181,10 @@ def try_load_context(
     openfhe_context = client.OpenFHEContext(openfheMembers)
     if mode == "debug":
         openfhe_boot_contexts={}
-        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-            openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(openfheMembers)
-            openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(debug_keys, 1 << logBsSlots, level_budget)
+        if NO_BS==False:
+            for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+                openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(openfheMembers)
+                openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(debug_keys, 1 << logBsSlots, level_budget)
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context

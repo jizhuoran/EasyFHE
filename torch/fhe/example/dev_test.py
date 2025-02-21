@@ -165,13 +165,13 @@ def app_example_release(
 
 
 def encode_test_case(
-        maxLevelsRemaining=3,
-        logBsSlots_list=[11],
+        maxLevelsRemaining=6,
+        logBsSlots_list=None,
         logN=14,
         dnum=3,
         dcrtBits=52,
         firstMod=56,
-        levelBudget_list=[[3, 3]],
+        levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"
@@ -221,13 +221,13 @@ def encode_test_case(
     print("done")
 
 def ct_pt_test_case(
-        maxLevelsRemaining=3,
-        logBsSlots_list=[11],
+        maxLevelsRemaining=6,
+        logBsSlots_list=None,
         logN=14,
         dnum=3,
         dcrtBits=52,
         firstMod=56,
-        levelBudget_list=[[3, 3]],
+        levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir="torch/fhe/data/",
         mode = "debug" # "debug" or "release"

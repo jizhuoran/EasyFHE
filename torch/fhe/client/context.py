@@ -722,17 +722,21 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_precompute_auto_map[log_slots] = precompute_auto_map
 
         # init bs_context
-        for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
-            self.BsContext_map[str(logBsSlots)] = BsContext(
-                self.N,
-                self.moduliQ_scalar,
-                self.moduliP_scalar,
-                self.q_mu,
-                self.p_mu,
-                0,
-                self.secretKeyDist,
-                boot_key_map[str(logBsSlots)]
-            )
+        if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:
+            for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
+                self.BsContext_map[str(logBsSlots)] = BsContext(
+                    self.N,
+                    self.moduliQ_scalar,
+                    self.moduliP_scalar,
+                    self.q_mu,
+                    self.p_mu,
+                    0,
+                    self.secretKeyDist,
+                    boot_key_map[str(logBsSlots)]
+                )
+        else:
+            assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]
+
 
     def compute_auto_map(self, k, N):
         def reverse_bits(num, num_bits):
