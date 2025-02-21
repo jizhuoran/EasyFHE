@@ -711,158 +711,150 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
   extern __shared__ uint64_t temp[];
   int Warp_t = threadIdx.x % pad;
   int WarpID = threadIdx.x / pad;
-  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (N / 8 * num_prime);
-       i += blockDim.x * gridDim.x) {
-    // size of a block
-    uint64_t local[8];
-    int t = N / 2 / m;
-    // prime idx
-    int np_idx = i / (N / 8) + start_prime_idx;
-    if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
-      continue;
-    int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
-    // index in N/2 range
-    int N_idx = i % (N / 8);
-    // i'th block
-    int m_idx = N_idx / (t / 4);
-    int t_idx = N_idx % (t / 4);
-    // base address
-    uint64_t* a_np = op + np_idx * N;
-    const uint64_t* prime_table = primes;
-    const uint64_t* W = base_inv + N * prime_idx;
-    const uint64_t* W_ = base_inv_ + N * prime_idx;
-    uint64_t prime = prime_table[prime_idx];
-    int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
-        pad * (t_idx / (radix * pad));
-    for (int j = 0; j < 8; j++) {
-      local[j] = *(a_np + N_init + t / 4 * j);
-    }
-    __syncthreads();
-    int eradix = 8 * radix;
-    int tw_idx = m + m_idx;
-    for (int j = 0; j < 4; j++) {
-      butt_ntt_local(local[j], local[j + 4], W[tw_idx], W_[tw_idx], prime);
-    }
-    for (int j = 0; j < 2; j++) {
-      butt_ntt_local(
-          local[4 * j],
-          local[4 * j + 2],
-          W[2 * tw_idx + j],
-          W_[2 * tw_idx + j],
-          prime);
-      butt_ntt_local(
-          local[4 * j + 1],
-          local[4 * j + 3],
-          W[2 * tw_idx + j],
-          W_[2 * tw_idx + j],
-          prime);
-    }
-    for (int j = 0; j < 4; j++) {
-      butt_ntt_local(
-          local[2 * j],
-          local[2 * j + 1],
-          W[4 * tw_idx + j],
-          W_[4 * tw_idx + j],
-          prime);
-    }
-    for (int j = 0; j < 8; j++) {
-      temp[Warp_t * (eradix + pad) + WarpID + radix * j] = local[j];
-    }
-    int tail = 0;
-    __syncthreads();
+  // for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (N / 8 *
+  // num_prime); i += blockDim.x * gridDim.x) { int i = blockIdx.x * blockDim.x
+  // + threadIdx.x; size of a block
+  uint64_t local[8];
+  int t = N / 2 / m;
+  // prime idx
+  int np_idx = blockIdx.y + start_prime_idx;
+  if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
+    return;
+  int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
+  // index in N/2 range
+  int N_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  // i'th block
+  int m_idx = N_idx / (t / 4);
+  int t_idx = N_idx % (t / 4);
+  // base address
+  uint64_t* a_np = op + np_idx * N;
+  const uint64_t* prime_table = primes;
+  const uint64_t* W = base_inv + N * prime_idx;
+  const uint64_t* W_ = base_inv_ + N * prime_idx;
+  uint64_t prime = prime_table[prime_idx];
+  int N_init = 2 * m_idx * t + t / 4 / radix * WarpID + Warp_t +
+      pad * (t_idx / (radix * pad));
+  for (int j = 0; j < 8; j++) {
+    local[j] = *(a_np + N_init + t / 4 * j);
+  }
+  __syncthreads();
+  int eradix = 8 * radix;
+  int tw_idx = m + m_idx;
+  for (int j = 0; j < 4; j++) {
+    butt_ntt_local(local[j], local[j + 4], W[tw_idx], W_[tw_idx], prime);
+  }
+  for (int j = 0; j < 2; j++) {
+    butt_ntt_local(
+        local[4 * j],
+        local[4 * j + 2],
+        W[2 * tw_idx + j],
+        W_[2 * tw_idx + j],
+        prime);
+    butt_ntt_local(
+        local[4 * j + 1],
+        local[4 * j + 3],
+        W[2 * tw_idx + j],
+        W_[2 * tw_idx + j],
+        prime);
+  }
+  for (int j = 0; j < 4; j++) {
+    butt_ntt_local(
+        local[2 * j],
+        local[2 * j + 1],
+        W[4 * tw_idx + j],
+        W_[4 * tw_idx + j],
+        prime);
+  }
+  for (int j = 0; j < 8; j++) {
+    temp[Warp_t * (eradix + pad) + WarpID + radix * j] = local[j];
+  }
+  int tail = 0;
+  __syncthreads();
 #pragma unroll
-    for (int j = 8, k = radix / 2; j < radix + 1; j *= 8, k >>= 3) {
-      int m_idx2 = WarpID / (k / 4);
-      int t_idx2 = WarpID % (k / 4);
-      for (int l = 0; l < 8; l++) {
-        local[l] = temp
-            [(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l];
-      }
-      int tw_idx2 = j * tw_idx + m_idx2;
-      for (int j2 = 0; j2 < 4; j2++) {
-        butt_ntt_local(
-            local[j2], local[j2 + 4], W[tw_idx2], W_[tw_idx2], prime);
-      }
-      for (int j2 = 0; j2 < 2; j2++) {
-        butt_ntt_local(
-            local[4 * j2],
-            local[4 * j2 + 2],
-            W[2 * tw_idx2 + j2],
-            W_[2 * tw_idx2 + j2],
-            prime);
-        butt_ntt_local(
-            local[4 * j2 + 1],
-            local[4 * j2 + 3],
-            W[2 * tw_idx2 + j2],
-            W_[2 * tw_idx2 + j2],
-            prime);
-      }
-      for (int j2 = 0; j2 < 4; j2++) {
-        butt_ntt_local(
-            local[2 * j2],
-            local[2 * j2 + 1],
-            W[4 * tw_idx2 + j2],
-            W_[4 * tw_idx2 + j2],
-            prime);
-      }
+  for (int j = 8, k = radix / 2; j < radix + 1; j *= 8, k >>= 3) {
+    int m_idx2 = WarpID / (k / 4);
+    int t_idx2 = WarpID % (k / 4);
+    for (int l = 0; l < 8; l++) {
+      local[l] =
+          temp[(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l];
+    }
+    int tw_idx2 = j * tw_idx + m_idx2;
+    for (int j2 = 0; j2 < 4; j2++) {
+      butt_ntt_local(local[j2], local[j2 + 4], W[tw_idx2], W_[tw_idx2], prime);
+    }
+    for (int j2 = 0; j2 < 2; j2++) {
+      butt_ntt_local(
+          local[4 * j2],
+          local[4 * j2 + 2],
+          W[2 * tw_idx2 + j2],
+          W_[2 * tw_idx2 + j2],
+          prime);
+      butt_ntt_local(
+          local[4 * j2 + 1],
+          local[4 * j2 + 3],
+          W[2 * tw_idx2 + j2],
+          W_[2 * tw_idx2 + j2],
+          prime);
+    }
+    for (int j2 = 0; j2 < 4; j2++) {
+      butt_ntt_local(
+          local[2 * j2],
+          local[2 * j2 + 1],
+          W[4 * tw_idx2 + j2],
+          W_[4 * tw_idx2 + j2],
+          prime);
+    }
 
-      for (int l = 0; l < 8; l++) {
-        temp[(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l] =
-            local[l];
-      }
-      if (j == radix / 2)
-        tail = 1;
-      if (j == radix / 4)
-        tail = 2;
-      __syncthreads();
+    for (int l = 0; l < 8; l++) {
+      temp[(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l] =
+          local[l];
     }
-    if (radix < 8)
-      tail = (radix == 4) ? 2 : 1;
-    if (tail == 1) {
-      for (int l = 0; l < 8; l++) {
-        local[l] = temp[(eradix + pad) * Warp_t + 8 * WarpID + l];
-      }
-      int tw_idx2 = (4 * radix) * tw_idx + 4 * WarpID;
-      butt_ntt_local(local[0], local[1], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(
-          local[2], local[3], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[4], local[5], W[tw_idx2 + 2], W_[tw_idx2 + 2], prime);
-      butt_ntt_local(
-          local[6], local[7], W[tw_idx2 + 3], W_[tw_idx2 + 3], prime);
-      for (int l = 0; l < 8; l++) {
-        temp[(eradix + pad) * Warp_t + 8 * WarpID + l] = local[l];
-      }
-    } else if (tail == 2) {
-      for (int l = 0; l < 8; l++) {
-        local[l] = temp[(eradix + pad) * Warp_t + 8 * WarpID + l];
-      }
-      int tw_idx2 = 2 * radix * tw_idx + 2 * WarpID;
-      butt_ntt_local(local[0], local[2], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(local[1], local[3], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(
-          local[4], local[6], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[5], local[7], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[0], local[1], W[2 * tw_idx2], W_[2 * tw_idx2], prime);
-      butt_ntt_local(
-          local[2], local[3], W[2 * tw_idx2 + 1], W_[2 * tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[4], local[5], W[2 * tw_idx2 + 2], W_[2 * tw_idx2 + 2], prime);
-      butt_ntt_local(
-          local[6], local[7], W[2 * tw_idx2 + 3], W_[2 * tw_idx2 + 3], prime);
-      for (int l = 0; l < 8; l++) {
-        temp[(eradix + pad) * Warp_t + 8 * WarpID + l] = local[l];
-      }
-    }
+    if (j == radix / 2)
+      tail = 1;
+    if (j == radix / 4)
+      tail = 2;
     __syncthreads();
-    for (int j = 0; j < 8; j++) {
-      local[j] = temp[Warp_t * (eradix + pad) + WarpID + radix * j];
+  }
+  if (radix < 8)
+    tail = (radix == 4) ? 2 : 1;
+  if (tail == 1) {
+    for (int l = 0; l < 8; l++) {
+      local[l] = temp[(eradix + pad) * Warp_t + 8 * WarpID + l];
     }
-    for (int j = 0; j < 8; j++) {
-      *(a_np + N_init + t / 4 * j) = local[j];
+    int tw_idx2 = (4 * radix) * tw_idx + 4 * WarpID;
+    butt_ntt_local(local[0], local[1], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[2], local[3], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[4], local[5], W[tw_idx2 + 2], W_[tw_idx2 + 2], prime);
+    butt_ntt_local(local[6], local[7], W[tw_idx2 + 3], W_[tw_idx2 + 3], prime);
+    for (int l = 0; l < 8; l++) {
+      temp[(eradix + pad) * Warp_t + 8 * WarpID + l] = local[l];
     }
+  } else if (tail == 2) {
+    for (int l = 0; l < 8; l++) {
+      local[l] = temp[(eradix + pad) * Warp_t + 8 * WarpID + l];
+    }
+    int tw_idx2 = 2 * radix * tw_idx + 2 * WarpID;
+    butt_ntt_local(local[0], local[2], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[1], local[3], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[4], local[6], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[5], local[7], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[0], local[1], W[2 * tw_idx2], W_[2 * tw_idx2], prime);
+    butt_ntt_local(
+        local[2], local[3], W[2 * tw_idx2 + 1], W_[2 * tw_idx2 + 1], prime);
+    butt_ntt_local(
+        local[4], local[5], W[2 * tw_idx2 + 2], W_[2 * tw_idx2 + 2], prime);
+    butt_ntt_local(
+        local[6], local[7], W[2 * tw_idx2 + 3], W_[2 * tw_idx2 + 3], prime);
+    for (int l = 0; l < 8; l++) {
+      temp[(eradix + pad) * Warp_t + 8 * WarpID + l] = local[l];
+    }
+  }
+  __syncthreads();
+  for (int j = 0; j < 8; j++) {
+    local[j] = temp[Warp_t * (eradix + pad) + WarpID + radix * j];
+  }
+  for (int j = 0; j < 8; j++) {
+    *(a_np + N_init + t / 4 * j) = local[j];
   }
 }
 
@@ -882,158 +874,150 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
     const uint64_t* primes) {
   extern __shared__ uint64_t temp[];
   int set = threadIdx.x / radix;
-  for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (N / 8 * num_prime);
-       i += blockDim.x * gridDim.x) {
-    // size of a block
-    uint64_t local[8];
-    int t = N / 2 / m;
-    // prime idx
-    int np_idx = num_prime - 1 - (i / (N / 8)) + start_prime_idx;
-    if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
-      continue;
-    int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
-    // index in N/2 range
-    int N_idx = i % (N / 8);
-    // i'th block
-    int m_idx = N_idx / (t / 4);
-    int t_idx = N_idx % (t / 4);
-    // base address
-    uint64_t* a_np = op + np_idx * N;
-    const uint64_t* prime_table = primes;
-    uint64_t prime = prime_table[prime_idx];
-    int N_init = 2 * m_idx * t + t_idx;
-    for (int j = 0; j < 8; j++) {
-      local[j] = *(a_np + N_init + t / 4 * j);
-    }
-    int tw_idx = m + m_idx;
-    const uint64_t* W = base_inv + N * prime_idx;
-    const uint64_t* W_ = base_inv_ + N * prime_idx;
-    for (int j = 0; j < 4; j++) {
-      butt_ntt_local(local[j], local[j + 4], W[tw_idx], W_[tw_idx], prime);
-    }
-    for (int j = 0; j < 2; j++) {
-      butt_ntt_local(
-          local[4 * j],
-          local[4 * j + 2],
-          W[2 * tw_idx + j],
-          W_[2 * tw_idx + j],
-          prime);
-      butt_ntt_local(
-          local[4 * j + 1],
-          local[4 * j + 3],
-          W[2 * tw_idx + j],
-          W_[2 * tw_idx + j],
-          prime);
-    }
-    for (int j = 0; j < 4; j++) {
-      butt_ntt_local(
-          local[2 * j],
-          local[2 * j + 1],
-          W[4 * tw_idx + j],
-          W_[4 * tw_idx + j],
-          prime);
-    }
-    for (int j = 0; j < 8; j++) {
-      temp[set * 8 * radix + t_idx + t / 4 * j] = local[j];
-    }
-    int tail = 0;
-    __syncthreads();
+  // for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (N / 8 *
+  // num_prime);
+  //      i += blockDim.x * gridDim.x) {
+  // size of a block
+  uint64_t local[8];
+  int t = N / 2 / m;
+  // prime idx
+  int np_idx = num_prime - 1 - blockIdx.y + start_prime_idx;
+  if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
+    return;
+  int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
+  // index in N/2 range
+  int N_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  // i'th block
+  int m_idx = N_idx / (t / 4);
+  int t_idx = N_idx % (t / 4);
+  // base address
+  uint64_t* a_np = op + np_idx * N;
+  const uint64_t* prime_table = primes;
+  uint64_t prime = prime_table[prime_idx];
+  int N_init = 2 * m_idx * t + t_idx;
+  for (int j = 0; j < 8; j++) {
+    local[j] = *(a_np + N_init + t / 4 * j);
+  }
+  int tw_idx = m + m_idx;
+  const uint64_t* W = base_inv + N * prime_idx;
+  const uint64_t* W_ = base_inv_ + N * prime_idx;
+  for (int j = 0; j < 4; j++) {
+    butt_ntt_local(local[j], local[j + 4], W[tw_idx], W_[tw_idx], prime);
+  }
+  for (int j = 0; j < 2; j++) {
+    butt_ntt_local(
+        local[4 * j],
+        local[4 * j + 2],
+        W[2 * tw_idx + j],
+        W_[2 * tw_idx + j],
+        prime);
+    butt_ntt_local(
+        local[4 * j + 1],
+        local[4 * j + 3],
+        W[2 * tw_idx + j],
+        W_[2 * tw_idx + j],
+        prime);
+  }
+  for (int j = 0; j < 4; j++) {
+    butt_ntt_local(
+        local[2 * j],
+        local[2 * j + 1],
+        W[4 * tw_idx + j],
+        W_[4 * tw_idx + j],
+        prime);
+  }
+  for (int j = 0; j < 8; j++) {
+    temp[set * 8 * radix + t_idx + t / 4 * j] = local[j];
+  }
+  int tail = 0;
+  __syncthreads();
 #pragma unroll
-    for (int j = 8, k = t / 8; j < t / 4 + 1; j *= 8, k >>= 3) {
-      int m_idx2 = t_idx / (k / 4);
-      int t_idx2 = t_idx % (k / 4);
-      for (int l = 0; l < 8; l++) {
-        local[l] =
-            temp[set * 8 * radix + 2 * m_idx2 * k + t_idx2 + (k / 4) * l];
-      }
-      int tw_idx2 = j * tw_idx + m_idx2;
-      for (int j2 = 0; j2 < 4; j2++) {
-        butt_ntt_local(
-            local[j2], local[j2 + 4], W[tw_idx2], W_[tw_idx2], prime);
-      }
-      for (int j2 = 0; j2 < 2; j2++) {
-        butt_ntt_local(
-            local[4 * j2],
-            local[4 * j2 + 2],
-            W[2 * tw_idx2 + j2],
-            W_[2 * tw_idx2 + j2],
-            prime);
-        butt_ntt_local(
-            local[4 * j2 + 1],
-            local[4 * j2 + 3],
-            W[2 * tw_idx2 + j2],
-            W_[2 * tw_idx2 + j2],
-            prime);
-      }
-      for (int j2 = 0; j2 < 4; j2++) {
-        butt_ntt_local(
-            local[2 * j2],
-            local[2 * j2 + 1],
-            W[4 * tw_idx2 + j2],
-            W_[4 * tw_idx2 + j2],
-            prime);
-      }
+  for (int j = 8, k = t / 8; j < t / 4 + 1; j *= 8, k >>= 3) {
+    int m_idx2 = t_idx / (k / 4);
+    int t_idx2 = t_idx % (k / 4);
+    for (int l = 0; l < 8; l++) {
+      local[l] = temp[set * 8 * radix + 2 * m_idx2 * k + t_idx2 + (k / 4) * l];
+    }
+    int tw_idx2 = j * tw_idx + m_idx2;
+    for (int j2 = 0; j2 < 4; j2++) {
+      butt_ntt_local(local[j2], local[j2 + 4], W[tw_idx2], W_[tw_idx2], prime);
+    }
+    for (int j2 = 0; j2 < 2; j2++) {
+      butt_ntt_local(
+          local[4 * j2],
+          local[4 * j2 + 2],
+          W[2 * tw_idx2 + j2],
+          W_[2 * tw_idx2 + j2],
+          prime);
+      butt_ntt_local(
+          local[4 * j2 + 1],
+          local[4 * j2 + 3],
+          W[2 * tw_idx2 + j2],
+          W_[2 * tw_idx2 + j2],
+          prime);
+    }
+    for (int j2 = 0; j2 < 4; j2++) {
+      butt_ntt_local(
+          local[2 * j2],
+          local[2 * j2 + 1],
+          W[4 * tw_idx2 + j2],
+          W_[4 * tw_idx2 + j2],
+          prime);
+    }
 
-      for (int l = 0; l < 8; l++) {
-        temp[set * 8 * radix + 2 * m_idx2 * k + t_idx2 + (k / 4) * l] =
-            local[l];
-      }
-      if (j == t / 8)
-        tail = 1;
-      if (j == t / 16)
-        tail = 2;
-      __syncthreads();
+    for (int l = 0; l < 8; l++) {
+      temp[set * 8 * radix + 2 * m_idx2 * k + t_idx2 + (k / 4) * l] = local[l];
     }
-    if (tail == 1) {
-      for (int l = 0; l < 8; l++) {
-        local[l] = temp[set * 8 * radix + 8 * t_idx + l];
-      }
-      int tw_idx2 = t * tw_idx + 4 * t_idx;
-      butt_ntt_local(local[0], local[1], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(
-          local[2], local[3], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[4], local[5], W[tw_idx2 + 2], W_[tw_idx2 + 2], prime);
-      butt_ntt_local(
-          local[6], local[7], W[tw_idx2 + 3], W_[tw_idx2 + 3], prime);
-      for (int l = 0; l < 8; l++) {
-        temp[set * 8 * radix + 8 * t_idx + l] = local[l];
-      }
-    } else if (tail == 2) {
-      for (int l = 0; l < 8; l++) {
-        local[l] = temp[set * 8 * radix + 8 * t_idx + l];
-      }
-      int tw_idx2 = (t / 2) * tw_idx + 2 * t_idx;
-      butt_ntt_local(local[0], local[2], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(local[1], local[3], W[tw_idx2], W_[tw_idx2], prime);
-      butt_ntt_local(
-          local[4], local[6], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[5], local[7], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[0], local[1], W[2 * tw_idx2], W_[2 * tw_idx2], prime);
-      butt_ntt_local(
-          local[2], local[3], W[2 * tw_idx2 + 1], W_[2 * tw_idx2 + 1], prime);
-      butt_ntt_local(
-          local[4], local[5], W[2 * tw_idx2 + 2], W_[2 * tw_idx2 + 2], prime);
-      butt_ntt_local(
-          local[6], local[7], W[2 * tw_idx2 + 3], W_[2 * tw_idx2 + 3], prime);
-      for (int l = 0; l < 8; l++) {
-        temp[set * 8 * radix + 8 * t_idx + l] = local[l];
-      }
-    }
+    if (j == t / 8)
+      tail = 1;
+    if (j == t / 16)
+      tail = 2;
     __syncthreads();
-    for (int j = 0; j < 8; j++) {
-      local[j] = temp[set * 8 * radix + t_idx + t / 4 * j];
-      for (int k = 0; k < 3; k++) {
-        if (local[j] >= prime)
-          local[j] -= prime;
-      }
+  }
+  if (tail == 1) {
+    for (int l = 0; l < 8; l++) {
+      local[l] = temp[set * 8 * radix + 8 * t_idx + l];
     }
-    for (int j = 0; j < 8; j++) {
-      *(a_np + N_init + t / 4 * j) = local[j];
+    int tw_idx2 = t * tw_idx + 4 * t_idx;
+    butt_ntt_local(local[0], local[1], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[2], local[3], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[4], local[5], W[tw_idx2 + 2], W_[tw_idx2 + 2], prime);
+    butt_ntt_local(local[6], local[7], W[tw_idx2 + 3], W_[tw_idx2 + 3], prime);
+    for (int l = 0; l < 8; l++) {
+      temp[set * 8 * radix + 8 * t_idx + l] = local[l];
+    }
+  } else if (tail == 2) {
+    for (int l = 0; l < 8; l++) {
+      local[l] = temp[set * 8 * radix + 8 * t_idx + l];
+    }
+    int tw_idx2 = (t / 2) * tw_idx + 2 * t_idx;
+    butt_ntt_local(local[0], local[2], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[1], local[3], W[tw_idx2], W_[tw_idx2], prime);
+    butt_ntt_local(local[4], local[6], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[5], local[7], W[tw_idx2 + 1], W_[tw_idx2 + 1], prime);
+    butt_ntt_local(local[0], local[1], W[2 * tw_idx2], W_[2 * tw_idx2], prime);
+    butt_ntt_local(
+        local[2], local[3], W[2 * tw_idx2 + 1], W_[2 * tw_idx2 + 1], prime);
+    butt_ntt_local(
+        local[4], local[5], W[2 * tw_idx2 + 2], W_[2 * tw_idx2 + 2], prime);
+    butt_ntt_local(
+        local[6], local[7], W[2 * tw_idx2 + 3], W_[2 * tw_idx2 + 3], prime);
+    for (int l = 0; l < 8; l++) {
+      temp[set * 8 * radix + 8 * t_idx + l] = local[l];
     }
   }
+  __syncthreads();
+  for (int j = 0; j < 8; j++) {
+    local[j] = temp[set * 8 * radix + t_idx + t / 4 * j];
+    for (int k = 0; k < 3; k++) {
+      if (local[j] >= prime)
+        local[j] -= prime;
+    }
+  }
+  for (int j = 0; j < 8; j++) {
+    *(a_np + N_init + t / 4 * j) = local[j];
+  }
+  // }
 }
 
 } // namespace fhe
@@ -1194,7 +1178,7 @@ void NTT_except_some_range_impl(
   int gap = L - curr_limbs;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange<<<
-      grid,
+      dim3(N / 8 / ((first_stage_radix_size / 8) * pad), batch),
       (first_stage_radix_size / 8) * pad,
       (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
       stream>>>(
@@ -1213,7 +1197,7 @@ void NTT_except_some_range_impl(
       param_power_of_roots_shoup_ptr,
       param_primes_ptr);
   fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange<<<
-      grid,
+      dim3(N / 8 / block.x, batch),
       block.x,
       per_thread_storage,
       stream>>>(
