@@ -49,6 +49,19 @@ class BsContext:
         self.paramsDec = get_item("paramsDec", content_map)
         self.paramsEnc = get_item("paramsEnc", content_map)
 
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
+
+        for i in range(len(self.m_U0hatTPreFFT)):
+            for j in range(len(self.m_U0hatTPreFFT[i])):
+                self.m_U0hatTPreFFT[i][j].mv = torch.tensor(self.m_U0hatTPreFFT[i][j].mv, dtype = torch.uint64)
+
+        for i in range(len(self.m_U0PreFFT)):
+            for j in range(len(self.m_U0PreFFT[i])):
+                self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64)
+
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
     def SelectLayers(self, logSlots, budget):
         layers = math.ceil(logSlots / budget)
@@ -115,17 +128,14 @@ class BsContext:
 
     def to_cuda(self):
         for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+            self.QplusP_map[key] = value.cuda()
         for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
+            self.QmuplusPmu_map[key] = value.cuda()
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = torch.tensor(self.m_U0hatTPreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
+                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cuda()
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
-
-
-
+                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cuda()
