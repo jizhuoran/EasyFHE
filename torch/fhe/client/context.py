@@ -801,48 +801,6 @@ class __FOR_SAVE_ONLY_Context:
 
         return g
 
-    #  Method to retrieve the scaling factor of level l.
-    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
-    #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
-    #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
-    #  @return the scaling factor.
-    def GetScalingFactorReal(
-        self, cur_limbs=None
-    ):  # todo: introduce level or transfer limbs to level inside
-        if cur_limbs is None:
-            cur_limbs = self.L
-        lvl = self.L - cur_limbs  # openfhe use `level` to do the index
-        if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
-            if lvl >= len(self.scalingFactorsReal):
-                # openfhetodo: Return an error here.
-                return self.approxSF
-            return self.scalingFactorsReal[lvl]
-        return self.approxSF
-
-    def GetScalingFactorRealBig(self, cur_limbs=None):
-        if cur_limbs is None:
-            cur_limbs = self.L
-        l = self.L - cur_limbs
-        if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
-            if l >= len(self.scalingFactorsRealBig):
-                # openfhetodo: Return an error here.
-                return self.approxSF
-            return self.scalingFactorsRealBig[l]
-        return self.approxSF
-
-    # Method to retrieve the modulus to be dropped of level l.
-    # For FIXEDMANUAL rescaling technique method always returns 2^p, where p corresponds to plaintext modulus
-    # @param l index of modulus to be dropped for FLEXIBLEAUTO scaling technique
-    # @return the precomputed table
-    def GetModReduceFactor(self, cur_limbs=None):
-        if cur_limbs is None:
-            cur_limbs = 0
-        # l = self.L - cur_limbs #todo: check the meaning of input in openfhe
-        l = cur_limbs
-        if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
-            return self.dmoduliQ[l]
-        return self.approxSF
-
     def shoup(self, in_value, prime):
         temp = in_value << 64
         return int(int(temp) // int(prime))
