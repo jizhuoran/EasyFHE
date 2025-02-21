@@ -101,7 +101,8 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         for j in range(g):
             if rot_in[s][j] != 0:
                 fast_rotation_ext.append(
-                    homo_ops.eval_fast_rotate(digits_ext, result, rot_in[s][j], False, cryptoContext))
+                    homo_ops.eval_fast_rotate(digits_ext, result, rot_in[s][j], True, False,
+                                              cryptoContext))
             else:
                 fast_rotation_ext.append(hoisting_keyswitch.key_switch_P_ext(result, cryptoContext))
 
@@ -127,7 +128,8 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
                     
                     inner_digits = hoisting_keyswitch.modup_to_ext(inner_cv1, cryptoContext)
-                    inner_ext = homo_ops.homo_rotate(inner_digits, rot_out[s][i], cryptoContext)
+                    inner_ext = homo_ops.eval_fast_rotate(inner_digits, None, rot_out[s][i],
+                                                          False, None, cryptoContext)
                     outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
                 else:
                     inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]])

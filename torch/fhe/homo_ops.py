@@ -588,36 +588,33 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
 def homo_rotate(in0, index, cryptoContext):
     auto_index = cryptoContext.find_auto_index(index)
     swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
 
-    if in0.is_ext:
-        res = hoisting_keyswitch.mult_rot_key_and_sum_ext(
-            in0.cipher_like(in0.cv[0].reshape(-1)), index, cryptoContext)
-    else:
-        res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
-        res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
+    res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
     res = _cipher_automorphism(res, index, cryptoContext)
 
     return res
 
 
-def eval_fast_rotate(digits, cipher, index, need_moddown, cryptoContext):
+def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoContext):
     if index == 0:
         return cipher.deep_copy()
 
     result = hoisting_keyswitch.mult_rot_key_and_sum_ext(digits, index, cryptoContext)
 
-    if need_moddown:
-        result = hoisting_keyswitch.moddown_from_ext(result, cryptoContext)
-        cipher_cv0 = cipher.cv[0]
-    else:
-        cipher_cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq, cryptoContext.moduliQ,
-                                     cryptoContext.q_mu, cipher.cur_limbs) # PModUp
+    if need_KS_add:
+        if need_moddown:
+            result = hoisting_keyswitch.moddown_from_ext(result, cryptoContext)
+            cipher_cv0 = cipher.cv[0]
+        else:
+            cipher_cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq, cryptoContext.moduliQ,
+                                         cryptoContext.q_mu, cipher.cur_limbs) # PModUp
 
-    # post add after ks
-    # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
-    # so the inplace can't be removed trivially
-    result.cv[0] = F.cv_add(result.cv[0], cipher_cv0, cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
+        # post add after ks
+        # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
+        # so the `inplace` can't be removed trivially
+        result.cv[0] = F.cv_add(result.cv[0], cipher_cv0, cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
 
     result = _cipher_automorphism(result, index, cryptoContext)
 
