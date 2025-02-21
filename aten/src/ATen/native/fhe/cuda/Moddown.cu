@@ -9,10 +9,10 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
 #include <ATen/native/fhe/cuda/arithmetic.h>
 #include <ATen/native/fhe/cuda/modupdown.h>
+#include "ATen/native/fhe/cuda/CommonOperation.h"
+#include "ATen/native/fhe/cuda/Utils.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -26,30 +26,26 @@ __global__ void moddown_kernel(
     const uint64_t* barret_ratios,
     const uint64_t* barret_ks,
     const uint64_t* hat_mod_end,
-    const int hat_mod_end_size,
-    const uint64_t start_length, // it should be the size of the Auxiliary CRT
-                                 // basis {P} = {p_1,...,p_k}
-    const uint64_t end_length) {
-  constexpr const int unroll_number = 4;
-  extern __shared__ uint64_t s_hat_mod_end[];
-  for (int i = threadIdx.x; i < hat_mod_end_size; i += blockDim.x) {
-    s_hat_mod_end[i] = hat_mod_end[i];
-  }
-  __syncthreads();
-  const int degree_idx = unroll_number * (blockIdx.x * blockDim.x + threadIdx.x);
-  const int out_prime_idx = blockIdx.y;
-  uint128_t4 accum = accumulate_in_modupdown(
-      ptr, N, s_hat_mod_end, start_length, degree_idx, out_prime_idx);
-  const auto prime = primes[out_prime_idx];
-  const auto barret_ratio = barret_ratios[out_prime_idx];
-  const auto barret_k = barret_ks[out_prime_idx];
+    const uint64_t start_length) { // it should be the size of the Auxiliary CRT
+  // basis {P} = {p_1,...,p_k}
 
-  ulonglong4 out;
-  out.x = barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-  out.y = barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-  out.z = barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-  out.w = barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-  *reinterpret_cast<ulonglong4*>(&to[out_prime_idx * N + degree_idx]) = out;
+  const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const int out_idx = blockIdx.y;
+  uint128_t accum{0};
+
+  for (int i = 0; i < start_length; i++) {
+    const uint64_t op1 = ptr[i * N + degree_idx];
+    const uint64_t op2 = hat_mod_end[out_idx * start_length + i];
+    uint128_t out = mult_64_64_128(op1, op2);
+    inplace_add_128_128(out, accum);
+  }
+
+  const auto prime = primes[out_idx];
+  const auto barret_ratio = barret_ratios[out_idx];
+  const auto barret_k = barret_ks[out_idx];
+
+  to[out_idx * N + degree_idx] =
+      barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
 }
 
 } // namespace fhe
@@ -69,34 +65,28 @@ static void moddown_impl(
     const Tensor& barret_k) {
   const auto prod_q_i_mod_q_j = prod_q_i_mod_q_j_moddown[0];
 
-        auto block_dim = dim3(256);
-        auto grid_dim = dim3(N / 256 / unroll_factor, end_length);
-        auto ptr = from_ptr + N * end_length;
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto param_barret_ratio_ptr =
-            reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-        auto param_barret_k_ptr =
-            reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-        auto prod_q_i_mod_q_j_ptr =
-            reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::moddown_kernel<<<
-            grid_dim,
-            block_dim,
-            prod_q_i_mod_q_j.size(-1) * sizeof(uint64_t),
-            stream>>>(
-            to_ptr,
-            ptr,
-            N,
-            primes_ptr,
-            param_barret_ratio_ptr,
-            param_barret_k_ptr,
-            prod_q_i_mod_q_j_ptr,
-            start_length * end_length,
-            sizeP,
-            end_length);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
+  auto block_dim = dim3(256);
+  auto grid_dim = dim3(N / 256, end_length);
+  auto ptr = from_ptr + N * end_length;
+  auto primes_ptr = primes.data_ptr<uint64_t>();
+  auto param_barret_ratio_ptr = barret_ratio.data_ptr<uint64_t>();
+  auto param_barret_k_ptr = barret_k.data_ptr<uint64_t>();
+  auto prod_q_i_mod_q_j_ptr = prod_q_i_mod_q_j.data_ptr<uint64_t>();
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::moddown_kernel<<<
+      grid_dim,
+      block_dim,
+      0,
+      stream>>>(
+      to_ptr,
+      ptr,
+      N,
+      primes_ptr,
+      param_barret_ratio_ptr,
+      param_barret_k_ptr,
+      prod_q_i_mod_q_j_ptr,
+      sizeP);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 static void moddown_cuda_template(
@@ -127,7 +117,8 @@ static void moddown_cuda_template(
   auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
 
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-  auto workspace_ptr = reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
+  auto workspace_ptr =
+      reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
   iNTT_impl(
@@ -176,16 +167,17 @@ static void moddown_cuda_template(
   const auto& prod_inv = prod_inv_moddown[0];
   const auto& prod_inv_psinv = prod_inv_shoup_moddown[0];
 
-  vsub_mod(N, end_length, to_ptr, to_ptr, from_ptr, primes.data_ptr<uint64_t>());
+  vsub_mod(
+      N, end_length, to_ptr, to_ptr, from_ptr, primes.data_ptr<uint64_t>());
   vneg_mod(N, end_length, to_ptr, to_ptr, nullptr, primes.data_ptr<uint64_t>());
 
   const_mult_batch(
-      to_ptr, 
-      to_ptr, 
-      prod_inv.data_ptr<uint64_t>(), 
-      prod_inv_psinv.data_ptr<uint64_t>(), 
-      primes.data_ptr<uint64_t>(), 
-      end_length, 
+      to_ptr,
+      to_ptr,
+      prod_inv.data_ptr<uint64_t>(),
+      prod_inv_psinv.data_ptr<uint64_t>(),
+      primes.data_ptr<uint64_t>(),
+      end_length,
       N);
 }
 

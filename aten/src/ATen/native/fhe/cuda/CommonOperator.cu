@@ -28,8 +28,8 @@ __global__ void const_mult_batch_kernel(
   const auto prime = primes[prime_idx];
 
   int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
-  uint64_t out = mul_and_reduce_shoup(
-      op1[i], op2[op2_idx], op2_psinv[op2_idx], prime);
+  uint64_t out =
+      mul_and_reduce_shoup(op1[i], op2[op2_idx], op2_psinv[op2_idx], prime);
 
   if (out >= prime)
     out -= prime;
@@ -47,7 +47,6 @@ __global__ void switch_modulus_kernel(
     const uint64_t* primes,
     const uint64_t* barret_ratios,
     const uint64_t* barret_ks) {
-
   auto old_modulus_by_two = primes[old_prime_idx] >> 1;
   auto old_modulus = primes[old_prime_idx];
   auto new_modulus_idx = blockIdx.y;
@@ -81,25 +80,19 @@ __global__ void switch_modulus_kernel(
 namespace at::native {
 
 void const_mult_batch(
-  uint64_t* out_ptr,
-  const uint64_t* op1_ptr,
-  const uint64_t* op2_ptr,
-  const uint64_t* op2_psinv_ptr,
-  const uint64_t* primes_ptr,
-  int64_t batch,
-  int64_t N) {
-auto block_dim = dim3(256);
-auto grid_dim = dim3(N / 256, batch);
-auto stream = at::cuda::getCurrentCUDAStream();
-fhe::const_mult_batch_kernel<<<grid_dim, block_dim, 0, stream>>>(
-    out_ptr,
-    op1_ptr,
-    op2_ptr,
-    op2_psinv_ptr,
-    primes_ptr,
-    (int)N,
-    (int)batch);
-C10_CUDA_KERNEL_LAUNCH_CHECK();
+    uint64_t* out_ptr,
+    const uint64_t* op1_ptr,
+    const uint64_t* op2_ptr,
+    const uint64_t* op2_psinv_ptr,
+    const uint64_t* primes_ptr,
+    int64_t batch,
+    int64_t N) {
+  auto block_dim = dim3(256);
+  auto grid_dim = dim3(N / 256, batch);
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::const_mult_batch_kernel<<<grid_dim, block_dim, 0, stream>>>(
+      out_ptr, op1_ptr, op2_ptr, op2_psinv_ptr, primes_ptr, (int)N, (int)batch);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 void switch_modulus(
@@ -111,27 +104,25 @@ void switch_modulus(
     int64_t old_prime_index,
     int64_t batch,
     int64_t N) {
-
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto barret_ratio_ptr =
-            reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-        auto barret_k_ptr =
-            reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-        auto block_dim = dim3(256);
-        auto grid_dim = dim3(N / 256, batch);
-        // N * batch / block_dim;
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::switch_modulus_kernel<<<grid_dim, block_dim, 0, stream>>>(
-            out_ptr,
-            in_ptr,
-            (int)N,
-            batch,
-            old_prime_index,
-            primes_ptr,
-            barret_ratio_ptr,
-            barret_k_ptr);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto barret_ratio_ptr =
+      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+  auto barret_k_ptr =
+      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
+  auto block_dim = dim3(256);
+  auto grid_dim = dim3(N / 256, batch);
+  // N * batch / block_dim;
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::switch_modulus_kernel<<<grid_dim, block_dim, 0, stream>>>(
+      out_ptr,
+      in_ptr,
+      (int)N,
+      batch,
+      old_prime_index,
+      primes_ptr,
+      barret_ratio_ptr,
+      barret_k_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 } // namespace at::native

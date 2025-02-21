@@ -9,38 +9,13 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
+#include <ATen/native/fhe/cuda/modupdown.h>
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
-#include <ATen/native/fhe/cuda/modupdown.h>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
-// __device__ uint128_t4 accumulate_in_modup(
-//     const uint64_t* ptr,
-//     const int N,
-//     const uint64_t* hat_mod_end,
-//     const int start_length,
-//     const int degree_idx,
-//     const int hat_mod_end_idx) {
-//   uint128_t4 accum{0};
-//   for (int i = 0; i < start_length; i++) {
-//     const uint64_t op2 = hat_mod_end[hat_mod_end_idx * start_length + i];
-//     uint128_t4 out;
-//   ulonglong4 op1;
-//   op1 = *reinterpret_cast<const ulonglong4*>(ptr + i * N + degree_idx);
-
-//     out.x = mult_64_64_128(op1.x, op2);
-//     inplace_add_128_128(out.x, accum.x);
-//     out.y = mult_64_64_128(op1.y, op2);
-//     inplace_add_128_128(out.y, accum.y);
-//     out.z = mult_64_64_128(op1.z, op2);
-//     inplace_add_128_128(out.z, accum.z);
-//     out.w = mult_64_64_128(op1.w, op2);
-//     inplace_add_128_128(out.w, accum.w);
-//   }
-//   return accum;
-// }
 
 __global__ void modup_step_two_kernel(
     uint64_t* to,
@@ -54,22 +29,21 @@ __global__ void modup_step_two_kernel(
     const uint64_t* barrett_ratios,
     const uint64_t* barrett_ks,
     const uint64_t* hat_mod_end,
-    const int hat_mod_end_size,
-    const uint64_t start_length,
-    const uint64_t end_length) {
-  constexpr const int unroll_number = 4;
-  extern __shared__ uint64_t s_hat_mod_end[];
-  for (int i = threadIdx.x; i < hat_mod_end_size; i += blockDim.x) {
-    s_hat_mod_end[i] = hat_mod_end[i];
-  }
-  __syncthreads();
-  const int degree_idx = unroll_number * (blockIdx.x * blockDim.x + threadIdx.x);
+    const uint64_t start_length) {
+  const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
   const int hat_mod_end_idx = blockIdx.y;
 
   const int out_idx =
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
-  uint128_t4 accum = accumulate_in_modupdown(
-      ptr, N, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
+
+  uint128_t accum{0};
+  for (int i = 0; i < alpha; i++) {
+    const uint64_t op1 = ptr[i * N + degree_idx];
+    const uint64_t op2 = hat_mod_end[hat_mod_end_idx * alpha + i];
+    uint128_t out = mult_64_64_128(op1, op2);
+    inplace_add_128_128(out, accum);
+  }
+
   int gap = L - curr_limbs;
   int prime_idx = out_idx +
       (((out_idx >= 0 && out_idx < begin_idx) ||
@@ -80,12 +54,8 @@ __global__ void modup_step_two_kernel(
   const auto barret_ratio = barrett_ratios[prime_idx];
   const auto barret_k = barrett_ks[prime_idx];
 
-  ulonglong4 out;
-    out.x = barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-    out.y = barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-    out.z = barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    out.w = barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    *reinterpret_cast<ulonglong4*>(&to[out_idx * N + degree_idx]) = out;
+  to[out_idx * N + degree_idx] =
+      barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
 }
 
 } // namespace fhe
@@ -110,44 +80,36 @@ static void modup_matmul(
   int start_length =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
   const int end_length = curr_limbs + sizeP - start_length;
-//   int grid_dim{(int)N * end_length / 256 / unroll_factor};
-//   int block_dim{256};
+  //   int grid_dim{(int)N * end_length / 256 / unroll_factor};
+  //   int block_dim{256};
 
   auto block_dim = dim3(256);
-  auto grid_dim = dim3(N / 256 / unroll_factor, end_length);
+  auto grid_dim = dim3(N / 256 / 1, end_length);
 
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_js[beta_idx];
 
-
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto barret_ratio_ptr =
-            reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-        auto barret_k_ptr =
-            reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-        auto prod_q_i_mod_q_j_ptr =
-            reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
-        auto stream = at::cuda::getCurrentCUDAStream();
-        fhe::modup_step_two_kernel<<<
-            grid_dim,
-            block_dim,
-            prod_q_i_mod_q_j.size(-1) * sizeof(uint64_t),
-            stream>>>(
-            to_ptr,
-            from_ptr,
-            begin_idx,
-            N,
-            alpha,
-            curr_limbs,
-            L,
-            primes_ptr,
-            barret_ratio_ptr,
-            barret_k_ptr,
-            prod_q_i_mod_q_j_ptr,
-            prod_q_i_mod_q_j.size(-1),
-            start_length,
-            end_length);
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto barret_ratio_ptr =
+      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+  auto barret_k_ptr =
+      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
+  auto prod_q_i_mod_q_j_ptr =
+      reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
+  auto stream = at::cuda::getCurrentCUDAStream();
+  fhe::modup_step_two_kernel<<<grid_dim, block_dim, 0, stream>>>(
+      to_ptr,
+      from_ptr,
+      begin_idx,
+      N,
+      alpha,
+      curr_limbs,
+      L,
+      primes_ptr,
+      barret_ratio_ptr,
+      barret_k_ptr,
+      prod_q_i_mod_q_j_ptr,
+      start_length);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 static void modup_impl(
