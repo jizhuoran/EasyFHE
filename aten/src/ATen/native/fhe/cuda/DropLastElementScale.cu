@@ -63,17 +63,13 @@ static void drop_last_element_scale_template(
       N);
 
   int start_op2_idx = (L - curr_limbs + l) * (L - 1);
-
   const_mult_batch(
       to_ptr,
       to_ptr,
-      qlql_inv_mod_ql_div_ql_mod_q,
-      qlql_inv_mod_ql_div_ql_mod_q_shoup,
-      param_primes,
-      0,
+      qlql_inv_mod_ql_div_ql_mod_q.data_ptr<uint64_t>() + start_op2_idx,
+      qlql_inv_mod_ql_div_ql_mod_q_shoup.data_ptr<uint64_t>() + start_op2_idx,
+      param_primes.data_ptr<uint64_t>(),
       curr_limbs - 1,
-      0,
-      start_op2_idx,
       N);
 
   NTT_impl(
@@ -90,13 +86,10 @@ static void drop_last_element_scale_template(
   const_mult_batch(
       workspace_ptr,
       from_ptr,
-      q_inv_mod_q,
-      q_inv_mod_q_shoup,
-      param_primes,
-      0,
+      q_inv_mod_q.data_ptr<uint64_t>() + start_op2_idx,
+      q_inv_mod_q_shoup.data_ptr<uint64_t>() + start_op2_idx,
+      param_primes.data_ptr<uint64_t>(),
       end_length,
-      0,
-      start_op2_idx,
       N);
 
 

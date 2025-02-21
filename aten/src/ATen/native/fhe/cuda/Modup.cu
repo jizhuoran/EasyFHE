@@ -200,15 +200,12 @@ static void modup_impl(
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
-      to_ptr,
-      to_ptr,
-      hat_inverse_vec,
-      hat_inverse_vec_psinv,
-      primes,
-      begin_idx,
+      to_ptr + begin_idx * N,
+      to_ptr + begin_idx * N,
+      hat_inverse_vec.data_ptr<uint64_t>(),
+      hat_inverse_vec_psinv.data_ptr<uint64_t>(),
+      primes.data_ptr<uint64_t>() + begin_idx,
       in_C_L_len,
-      begin_idx,
-      0,
       N);
 
   modup_matmul(

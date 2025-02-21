@@ -51,13 +51,10 @@ void switch_modulus(
 void const_mult_batch(
     uint64_t* res_ptr,
     const uint64_t* op1_ptr,
-    const Tensor& op2,
-    const Tensor& op2_psinv,
-    const Tensor& primes,
-    int64_t start_prime_idx,
+    const uint64_t* op2_ptr,
+    const uint64_t* op2_psinv_ptr,
+    const uint64_t* primes_ptr,
     int64_t batch,
-    int64_t start_op1_idx,
-    int64_t start_op2_idx,
     int64_t param_degree);
 
 } // namespace at::native

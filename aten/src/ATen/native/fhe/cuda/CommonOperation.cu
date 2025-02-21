@@ -22,21 +22,18 @@ __global__ void const_mult_batch_kernel(
     const uint64_t* op2_psinv,
     const uint64_t* primes,
     const size_t N,
-    const int start_prime_idx,
-    const int batch,
-    const int start_op1_idx,
-    const int start_op2_idx) {
-  const int op2_idx = start_op2_idx + blockIdx.y;
-  const int prime_idx = blockIdx.y + start_prime_idx;
+    const int batch) {
+  const int op2_idx = blockIdx.y;
+  const int prime_idx = blockIdx.y;
   const auto prime = primes[prime_idx];
 
   int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
   uint64_t out = mul_and_reduce_shoup(
-      op1[start_op1_idx * N + i], op2[op2_idx], op2_psinv[op2_idx], prime);
+      op1[i], op2[op2_idx], op2_psinv[op2_idx], prime);
 
   if (out >= prime)
     out -= prime;
-  to[start_op1_idx * N + i] = out;
+  to[i] = out;
 }
 
 // note: SwitchModulus in mubintvecnat.cpp (align with update in openFHE commit:
@@ -82,37 +79,27 @@ __global__ void switch_modulus_kernel(
 } // namespace fhe
 
 namespace at::native {
+
 void const_mult_batch(
-    uint64_t* out_ptr,
-    const uint64_t* op1_ptr,
-    const Tensor& op2,
-    const Tensor& op2_psinv,
-    const Tensor& primes,
-    int64_t start_prime_idx,
-    int64_t batch,
-    int64_t start_op1_idx,
-    int64_t start_op2_idx,
-    int64_t N) {
-  auto op2_ptr = reinterpret_cast<uint64_t*>(op2.data_ptr<uint64_t>());
-  auto op2_psinv_ptr =
-      reinterpret_cast<uint64_t*>(op2_psinv.data_ptr<uint64_t>());
-  auto primes_ptr =
-      reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-      auto block_dim = dim3(256);
-      auto grid_dim = dim3(N / 256, batch);
-  auto stream = at::cuda::getCurrentCUDAStream();
-  fhe::const_mult_batch_kernel<<<grid_dim, block_dim, 0, stream>>>(
-      out_ptr,
-      op1_ptr,
-      op2_ptr,
-      op2_psinv_ptr,
-      primes_ptr,
-      (int)N,
-      (int)start_prime_idx,
-      (int)batch,
-      (int)start_op1_idx,
-      (int)start_op2_idx);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  uint64_t* out_ptr,
+  const uint64_t* op1_ptr,
+  const uint64_t* op2_ptr,
+  const uint64_t* op2_psinv_ptr,
+  const uint64_t* primes_ptr,
+  int64_t batch,
+  int64_t N) {
+auto block_dim = dim3(256);
+auto grid_dim = dim3(N / 256, batch);
+auto stream = at::cuda::getCurrentCUDAStream();
+fhe::const_mult_batch_kernel<<<grid_dim, block_dim, 0, stream>>>(
+    out_ptr,
+    op1_ptr,
+    op2_ptr,
+    op2_psinv_ptr,
+    primes_ptr,
+    (int)N,
+    (int)batch);
+C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 void switch_modulus(

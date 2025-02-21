@@ -143,15 +143,12 @@ static void moddown_cuda_template(
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
-      workspace_ptr,
-      workspace_ptr,
-      hat_inverse_vec,
-      hat_inverse_vec_psinv,
-      primes,
-      L,
+      workspace_ptr + curr_limbs * N,
+      workspace_ptr + curr_limbs * N,
+      hat_inverse_vec.data_ptr<uint64_t>(),
+      hat_inverse_vec_psinv.data_ptr<uint64_t>(),
+      primes.data_ptr<uint64_t>() + L,
       sizeP,
-      curr_limbs,
-      0,
       N);
 
   moddown_impl(
@@ -183,7 +180,13 @@ static void moddown_cuda_template(
   vneg_mod(N, end_length, to_ptr, to_ptr, nullptr, primes.data_ptr<uint64_t>());
 
   const_mult_batch(
-      to_ptr, to_ptr, prod_inv, prod_inv_psinv, primes, 0, end_length, 0, 0, N);
+      to_ptr, 
+      to_ptr, 
+      prod_inv.data_ptr<uint64_t>(), 
+      prod_inv_psinv.data_ptr<uint64_t>(), 
+      primes.data_ptr<uint64_t>(), 
+      end_length, 
+      N);
 }
 
 Tensor moddown_cuda(
