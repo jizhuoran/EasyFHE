@@ -9,7 +9,7 @@ import psutil, os
 def gen_contexts(
     maxLevelsRemaining,
     rotIndex_list,
-    logSlots_list,
+    logBsSlots_list,
     logN,
     dnum,
     dcrtBits,
@@ -27,7 +27,7 @@ def gen_contexts(
 
     save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
-        '-'.join(map(str, logSlots_list)),
+        '-'.join(map(str, logBsSlots_list)),
         '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
         logN,
         dnum,
@@ -104,13 +104,13 @@ def gen_contexts(
 
     boot_gen_time = 0
     rot_get_time = 0
-    for logslots, level_budget in zip(logSlots_list, levelBudget_list):
+    for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
         timei1 = time.time()
-        cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logslots)
-        cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logslots)
+        cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
+        cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
         timei2 = time.time()
         ROT_SWK = cc.GetEvalRotateKey()
-        rot_swk_map[str(logslots)] = ROT_SWK
+        rot_swk_map[str(logBsSlots)] = ROT_SWK
         timei3 = time.time()
         boot_gen_time += timei2 - timei1
         rot_get_time += timei3 - timei2
@@ -144,9 +144,9 @@ def gen_contexts(
 
     boot_key_map = {}
 
-    for idx, logslots in enumerate(logSlots_list):
+    for idx, logBsSlots in enumerate(logBsSlots_list):
         slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
-        assert slot == 1 << logslots
+        assert slot == 1 << logBsSlots
         boot_key = {
             "C2S": C2S,
             "S2C": S2C,
@@ -157,11 +157,11 @@ def gen_contexts(
             "U0hatTPreFFTScalingFactor": C2S_FC,
             "U0PreFFTScalingFactor": S2C_FC,
         }
-        boot_key_map[str(logslots)] = boot_key
+        boot_key_map[str(logBsSlots)] = boot_key
 
     gpufhe_context = Context.__FOR_SAVE_ONLY_Context(
         logN,
-        logSlots_list,
+        logBsSlots_list,
         firstMod,
         dcrtBits,
         60,  # auxModSize of openfhe is 60 bits in default
@@ -179,10 +179,10 @@ def gen_contexts(
         dim1,
     )
 
-    for logslots, level_budget in zip(logSlots_list, levelBudget_list):
-        print("BsContext_map: ", logslots)
-        gpufhe_context.BsContext_map[str(logslots)].eval_bootstrap_setup(
-            gpufhe_context, level_budget, dim1, (1 << logslots), 0
+    for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+        print("BsContext_map: ", logBsSlots)
+        gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+            gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
         )
 
     gpufheMembers = {}
@@ -195,16 +195,16 @@ def gen_contexts(
             gpufheMembers[item] = getattr(gpufhe_context, item)
 
     BsContextMembers_dict = {}
-    for logSlots in logSlots_list:
+    for logBsSlots in logBsSlots_list:
         BsContextMembers = {}
-        for item in dir(gpufhe_context.BsContext_map[str(logSlots)]):
+        for item in dir(gpufhe_context.BsContext_map[str(logBsSlots)]):
             if (
-                not callable(getattr(gpufhe_context.BsContext_map[str(logSlots)], item))
+                not callable(getattr(gpufhe_context.BsContext_map[str(logBsSlots)], item))
             ) and not item.startswith("__"):
                 BsContextMembers[item] = getattr(
-                    gpufhe_context.BsContext_map[str(logSlots)], item
+                    gpufhe_context.BsContext_map[str(logBsSlots)], item
                 )
-        BsContextMembers_dict[str(logSlots)] = BsContextMembers
+        BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
 
     with open(OPENFHE_path, "rb") as file:
         openfheMembers = pickle.load(file)

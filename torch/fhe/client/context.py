@@ -9,7 +9,7 @@ class __FOR_SAVE_ONLY_Context:
     def __init__(
         self,
         logN,
-        logSlots_list,
+        logBsSlots_list,
         firstMod,
         dcrtBits,
         specialMod,
@@ -31,7 +31,7 @@ class __FOR_SAVE_ONLY_Context:
         L = len(moduliQ_scalar)
         K = len(moduliP_scalar)
         alpha = int((L+dnum-1)//dnum)
-        self.logSlots_list = logSlots_list
+        self.logBsSlots_list = logBsSlots_list
         self.secretKeyDist = secretKeyDist
         self.rescaleTech = rescaleTech
         self.BsContext_map = {}
@@ -722,8 +722,8 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_precompute_auto_map[log_slots] = precompute_auto_map
 
         # init bs_context
-        for logSlots, levelBudget in zip(self.logSlots_list, levelBudget_list):
-            self.BsContext_map[str(logSlots)] = BsContext(
+        for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
+            self.BsContext_map[str(logBsSlots)] = BsContext(
                 self.N,
                 self.moduliQ_scalar,
                 self.moduliP_scalar,
@@ -731,7 +731,7 @@ class __FOR_SAVE_ONLY_Context:
                 self.p_mu,
                 0,
                 self.secretKeyDist,
-                boot_key_map[str(logSlots)]
+                boot_key_map[str(logBsSlots)]
             )
 
     def compute_auto_map(self, k, N):

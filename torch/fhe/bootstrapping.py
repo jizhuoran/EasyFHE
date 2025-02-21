@@ -187,10 +187,10 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(ciphertext, L0, logSlots, cryptoContext):
+def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
-    slots = 1 << logSlots
+    slots = 1 << logBsSlots
     # cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar
@@ -396,8 +396,8 @@ def eval_bootstrap(ciphertext, L0, logSlots, cryptoContext):
     
     return ctxtDec
 
-def homo_bootstrap(cipher, L0, logSlots, cryptoContext):
-    result = eval_bootstrap(cipher, L0, logSlots, cryptoContext)
+def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
+    result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
 
     if cryptoContext.rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
         result = homo_ops.homo_rescale(result, result.noise_deg-1, cryptoContext)

@@ -107,7 +107,7 @@ class Context:
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
-        self.logSlots_list = get_item("logSlots_list", gpufhe_content_map)
+        self.logBsSlots_list = get_item("logBsSlots_list", gpufhe_content_map)
         self.auxModSize = get_item("specialMod", gpufhe_content_map)
         self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
         #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
@@ -154,9 +154,9 @@ class Context:
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.BsContext_map = {}
-        for logSlots in self.logSlots_list:
-            _BsContext = BsContext(BsContext_content_map[str(logSlots)])
-            self.BsContext_map[str(logSlots)] = _BsContext
+        for logBsSlots in self.logBsSlots_list:
+            _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
+            self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
         self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)

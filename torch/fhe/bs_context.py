@@ -63,10 +63,10 @@ class BsContext:
                 self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
-    def SelectLayers(self, logSlots, budget):
-        layers = math.ceil(logSlots / budget)
-        rows = logSlots // layers
-        rem = logSlots % layers
+    def SelectLayers(self, logBsSlots, budget):
+        layers = math.ceil(logBsSlots / budget)
+        rows = logBsSlots // layers
+        rem = logBsSlots % layers
 
         dim = rows
         if rem != 0:
@@ -75,8 +75,8 @@ class BsContext:
         # The above choice ensures dim <= budget
         if dim < budget:
             layers -= 1
-            rows = logSlots // layers
-            rem = logSlots - rows * layers
+            rows = logBsSlots // layers
+            rem = logBsSlots - rows * layers
             dim = rows
 
             if rem != 0:
@@ -85,7 +85,7 @@ class BsContext:
             # The above choice ensures dim >= budget
             while dim != budget:
                 rows -= 1
-                rem = logSlots - rows * layers
+                rem = logBsSlots - rows * layers
                 dim = rows
                 if rem != 0:
                     dim = rows + 1

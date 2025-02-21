@@ -109,7 +109,7 @@ def round_half_away_from_zero(number, ndigits=0):
 def try_load_context(
             maxLevelsRemaining,
             rotIndex_list,
-            logSlots_list,
+            logBsSlots_list,
             logN,
             dnum,
             dcrtBits,
@@ -121,16 +121,16 @@ def try_load_context(
             save_dir,
             mode):
 
-    sorted_pairs = sorted(zip(logSlots_list, levelBudget_list), key=lambda x: x[0])
-    logSlots_list, levelBudget_list = zip(*sorted_pairs)
-    logSlots_list = list(logSlots_list)
+    sorted_pairs = sorted(zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0])
+    logBsSlots_list, levelBudget_list = zip(*sorted_pairs)
+    logBsSlots_list = list(logBsSlots_list)
     levelBudget_list = list(levelBudget_list)
 
     load_path = (
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
-            '-'.join(map(str, logSlots_list)),
+            '-'.join(map(str, logBsSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
             logN,
             dnum,
@@ -145,7 +145,7 @@ def try_load_context(
             save_dir
             + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             maxLevelsRemaining,
-            '-'.join(map(str, logSlots_list)),
+            '-'.join(map(str, logBsSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
             logN,
             dnum,
@@ -158,7 +158,7 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
-        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list, logSlots_list=logSlots_list,
+        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list, logBsSlots_list=logBsSlots_list,
                      logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod, levelBudget_list=levelBudget_list,
                      approxModDepth=approxModDepth, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
                      save_dir=save_dir, mode=mode)
@@ -176,9 +176,9 @@ def try_load_context(
     openfhe_context = client.OpenFHEContext(openfheMembers)
     if mode == "debug":
         openfhe_boot_contexts={}
-        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_boot_contexts[str(logSlots)] = client.OpenFHEContext(openfheMembers)
-            openfhe_boot_contexts[str(logSlots)].setup_for_debug(debug_keys, 1 << logSlots, level_budget)
+        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+            openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(openfheMembers)
+            openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(debug_keys, 1 << logBsSlots, level_budget)
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
@@ -198,7 +198,7 @@ def load_rotation_keys(context, key_name):
     for key, value in context.slots_precompute_auto_map[str(key_name)].items():
         context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
 
-def load_bootstrapping_info(logSlots, cryptoContext):
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots)]
+def load_bootstrapping_info(logBsSlots, cryptoContext):
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.to_cuda()
-    load_rotation_keys(cryptoContext, logSlots)
+    load_rotation_keys(cryptoContext, logBsSlots)

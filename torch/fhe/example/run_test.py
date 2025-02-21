@@ -7,7 +7,7 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
 maxLevelsRemaining = 10
-logSlots_list = [12]
+logBsSlots_list = [12]
 logN = 14
 dnum = 3
 dcrtBits = 52
@@ -20,21 +20,21 @@ path = "data"
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = (
-    utils.try_load_context(int(maxLevelsRemaining), [], logSlots_list, int(logN),
+    utils.try_load_context(int(maxLevelsRemaining), [], logBsSlots_list, int(logN),
                            int(dnum), int(dcrtBits), int(firstMod), levelBudget_list,
                            int(approxModDepth), secretKeyDist, rescaleTech, save_dir=path, mode="debug"))
 
-logSlots = logSlots_list[0]
+logBsSlots = logBsSlots_list[0]
 
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-x = np.array([values[i % len(values)] for i in range((1<<logSlots))])
+x = np.array([values[i % len(values)] for i in range((1<<logBsSlots))])
 x = torch.tensor(x, device="cuda")
-cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1<<logSlots)) #specify the slots value explicitly
+cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1<<logBsSlots)) #specify the slots value explicitly
 
-cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots)]
+cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
-utils.load_rotation_keys(cryptoContext, logSlots)
+utils.load_rotation_keys(cryptoContext, logBsSlots)
 
 # with torch.profiler.profile(
 #         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
@@ -46,7 +46,7 @@ utils.load_rotation_keys(cryptoContext, logSlots)
 #         with_stack=True,
 #     ) as profiler:
 #         # Start profiling specific functions with torch.profiler.record_function()
-#         result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+#         result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 #         profiler.step()
 
 # # Get the profiling results
@@ -55,12 +55,12 @@ utils.load_rotation_keys(cryptoContext, logSlots)
 # # Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=logSlots, cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 
 start_time = time.time()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logSlots=logSlots, cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 print("Time taken for bootstrapping:", time.time() - start_time)
-openfhe_boot_context = openfhe_boot_contexts[str(logSlots)]
+openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
 openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)

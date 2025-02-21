@@ -3,7 +3,7 @@ import warnings
 
 warnings.warn("This script has not been tested and may not function as intended. Please remove this message once verified.")
 logN_cand = list(range(15, 16))
-logSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
+logBsSlots_cand = list(range(5, 14, 3)) + list(range(14, 17))
 maxLevelsRemaining_cand = [3, 6]
 levelBudget_cand = [[3, 3],[4, 4]]
 dnum_cand = [1, 3, 4]
@@ -11,18 +11,18 @@ rescaleTech_cand = ["FLEXIBLEAUTO", "FIXEDMANUAL"]
 # rescaleTech_cand = ["FIXEDMANUAL"]
 path = "/mnt/public_data/data/"
 i = 0
-for logN, logSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in itertools.product(logN_cand, logSlots_cand, maxLevelsRemaining_cand, levelBudget_cand, dnum_cand, rescaleTech_cand):
-    if logN == 16 and logSlots > 12:
+for logN, logBsSlots, maxLevelsRemaining, levelBudget, dnum, rescaleTech in itertools.product(logN_cand, logBsSlots_cand, maxLevelsRemaining_cand, levelBudget_cand, dnum_cand, rescaleTech_cand):
+    if logN == 16 and logBsSlots > 12:
         continue
-    if logSlots > logN - 1:
+    if logBsSlots > logN - 1:
         continue
     try:
-        print(i, ": ", logN, logSlots, maxLevelsRemaining, levelBudget, dnum)
+        print(i, ": ", logN, logBsSlots, maxLevelsRemaining, levelBudget, dnum)
         i += 1
 
         save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
-            "-".join(map(str, [logSlots])),
+            "-".join(map(str, [logBsSlots])),
             maxLevelsRemaining,
             "-".join("-".join(map(str, levelBudget)) for levelBudget in [levelBudget]),
             dnum,
@@ -49,7 +49,7 @@ from fhe.client.gen_context import gen_contexts
 
 maxLevelsRemaining = {0}
 rotIndex_list = []  # List of rotation indices
-logSlots_list = [{1}]  # List of possible slots value of runtime ciphertext
+logBsSlots_list = [{1}]  # List of possible slots value of runtime ciphertext
 logN = {2}
 dnum = {3}
 dcrtBits=59
@@ -65,7 +65,7 @@ dim1 = [0, 0]  # Default value for dim1
 gen_contexts(
     maxLevelsRemaining=maxLevelsRemaining,
     rotIndex_list=[],  # List of rotation indices
-    logSlots_list=logSlots_list,  # List of possible slots value of runtime ciphertext
+    logBsSlots_list=logBsSlots_list,  # List of possible slots value of runtime ciphertext
     logN=logN,
     dnum=dnum,
     dcrtBits=dcrtBits,
@@ -78,7 +78,7 @@ gen_contexts(
     mode="debug",
     dim1=[0, 0],  # Default value for dim1
 )
-""".format(maxLevelsRemaining, logSlots, logN, dnum, levelBudget[0], levelBudget[1], rescaleTech, path)
+""".format(maxLevelsRemaining, logBsSlots, logN, dnum, levelBudget[0], levelBudget[1], rescaleTech, path)
         # Create a temporary file to store the code
         with open("temp_file.py", "w") as temp_file:
             print(code_string, file=temp_file)
