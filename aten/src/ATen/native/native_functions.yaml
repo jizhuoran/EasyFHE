@@ -15936,10 +15936,10 @@
   dispatch:
     CUDA: automorphism_transform_cuda
 
-- func: switch_modulus(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
+- func: mod_raise(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
   device_check: NoCheck
   dispatch:
-    CUDA: switch_modulus_cuda
+    CUDA: mod_raise_cuda
 
 - func: mul_by_monomial(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck

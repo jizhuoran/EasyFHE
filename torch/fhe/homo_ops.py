@@ -1,11 +1,12 @@
-import warnings
-
 from .ciphertext import Cipher
+from .ciphertext import Plaintext
 from . import functional as F
-from .ciphertext import Plaintext as Plaintext
+from . import hoisting_keyswitch
 import math
 import torch
 from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
+import warnings
+
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
@@ -589,29 +590,38 @@ def homo_rotate(in0, index, cryptoContext):
     swk = cryptoContext.left_rot_key_map[str(auto_index)]
 
     if in0.is_ext:
-        sum_mult = F.cv_innerproduct(
-            in0.cv[0].reshape(-1), in0.cur_limbs, swk[0], swk[1], cryptoContext
-        )
-        sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
-
-        cv0 = F.cv_automorphism_transform(
-            sumbxmult, in0.cur_limbs + cryptoContext.K, auto_index, cryptoContext
-        )
-        cv1 = F.cv_automorphism_transform(
-            sumaxmult, in0.cur_limbs + cryptoContext.K, auto_index, cryptoContext
-        )
+        res = hoisting_keyswitch.mult_rot_key_and_sum_ext(
+            in0.cipher_like(in0.cv[0].reshape(-1)), index, cryptoContext)
     else:
-        res = F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext)
-        bxrot = F.cv_add(in0.cv[0], res[0], cryptoContext.moduliQ, in0.cur_limbs)
+        res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
+        res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
-        cv0 = F.cv_automorphism_transform(
-            bxrot, in0.cur_limbs, auto_index, cryptoContext
-        )
-        cv1 = F.cv_automorphism_transform(
-            res[1], in0.cur_limbs, auto_index, cryptoContext
-        )
+    res = _cipher_automorphism(res, index, cryptoContext)
 
-    return in0.cipher_like([cv0, cv1])
+    return res
+
+
+def eval_fast_rotate(digits, cipher, index, need_moddown, cryptoContext):
+    if index == 0:
+        return cipher.deep_copy()
+
+    result = hoisting_keyswitch.mult_rot_key_and_sum_ext(digits, index, cryptoContext)
+
+    if need_moddown:
+        result = hoisting_keyswitch.moddown_from_ext(result, cryptoContext)
+        cipher_cv0 = cipher.cv[0]
+    else:
+        cipher_cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq, cryptoContext.moduliQ,
+                                     cryptoContext.q_mu, cipher.cur_limbs) # PModUp
+
+    # post add after ks
+    # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
+    # so the inplace can't be removed trivially
+    result.cv[0] = F.cv_add(result.cv[0], cipher_cv0, cryptoContext.moduliQ, cipher.cur_limbs, inplace=True)
+
+    result = _cipher_automorphism(result, index, cryptoContext)
+
+    return result
 
 
 def homo_conjugate(in0, cryptoContext):
@@ -693,3 +703,4 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             scaling_factor=res0.scaling_factor * res1.scaling_factor,
             noise_deg=res0.noise_deg + res1.noise_deg,
         )
+

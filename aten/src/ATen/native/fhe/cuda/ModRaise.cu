@@ -15,7 +15,7 @@
 
 namespace at::native {
 
-static void switch_modulus_template(
+static void mod_raise_template(
     Tensor& res,
     const Tensor& in,
     const Tensor& moduliQ,
@@ -56,7 +56,7 @@ static void switch_modulus_template(
       param_power_of_roots);
 }
 
-Tensor switch_modulus_cuda(
+Tensor mod_raise_cuda(
     const Tensor& res,
     const Tensor& in,
     const Tensor& moduliQ,
@@ -72,7 +72,7 @@ Tensor switch_modulus_cuda(
     const Tensor& barret_k) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
-  switch_modulus_template(
+  mod_raise_template(
       out,
       in,
       moduliQ,

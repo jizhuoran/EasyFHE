@@ -7,15 +7,15 @@ import psutil, os
 
 
 def gen_contexts(
-    logN,
-    logSlots_list,
     maxLevelsRemaining,
-    levelBudget_list,
+    rotIndex_list,
+    logSlots_list,
+    logN,
     dnum,
     dcrtBits,
     firstMod,
+    levelBudget_list,
     approxModDepth,
-    rotate_index,
     secretKeyDist,
     rescaleTech,
     save_dir,
@@ -26,10 +26,10 @@ def gen_contexts(
     print("Generating context")
 
     save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-        logN,
-        "-".join(map(str, logSlots_list)),
         maxLevelsRemaining,
-        "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+        '-'.join(map(str, logSlots_list)),
+        '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+        logN,
         dnum,
         dcrtBits,
         firstMod,
@@ -97,8 +97,8 @@ def gen_contexts(
     rot_swk_map = {}
 
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    if rotate_index:
-        cc.EvalRotateKeyGen(keys.secretKey, rotate_index)
+    if rotIndex_list:
+        cc.EvalRotateKeyGen(keys.secretKey, rotIndex_list)
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
 

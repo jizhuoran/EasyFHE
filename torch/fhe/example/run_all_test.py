@@ -1,7 +1,9 @@
-import sys, os
+import sys, os,warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import time, subprocess
+
+warnings.warn("This script has not been tested and may not function as intended. Please remove this message once verified.")
 
 with open("result.txt", "w") as f:
     print("BEGIN", file=f)
@@ -29,26 +31,26 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 import time
 context_file = "{}"
-logN = int({})
-logSlots_list = {}
 maxLevelsRemaining = int({})
-levelBudgets_list = {}
+logSlots_list = {}
+logN = int({})
 dnum = int({})
 dcrtBits = int({})
 firstMod = int({})
+levelBudgets_list = {}
 approxModDepth = int({})
 rescaleTech = "{}"
 path = "{}"
-cryptoContext, openfhe_contexts = utils.try_load_context(
-    int(logN),
-    logSlots_list,
+cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),
-    levelBudgets_list,
+    [],
+    logSlots_list,
+    int(logN),
     int(dnum),
     int(dcrtBits),
     int(firstMod),
+    levelBudgets_list,
     int(approxModDepth),
-    [],
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,
@@ -65,13 +67,14 @@ with open("result.txt", "a") as f:
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 x = np.array([values[i % len(values)] for i in range((1<<logSlots_list[0]))])
 x = torch.tensor(x, device="cuda")
-openfhe_context = openfhe_contexts[str(logSlots_list[0])]
 cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
 start_time = time.time()
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
 end_time = time.time()
-openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+openfhe_boot_context = openfhe_boot_contexts[str(logSlots)]
+openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 with open("result.txt", "a") as f:
     print("Time taken:", end_time - start_time, file=f)

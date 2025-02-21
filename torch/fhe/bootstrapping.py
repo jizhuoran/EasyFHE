@@ -100,10 +100,10 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         
         for j in range(g):
             if rot_in[s][j] != 0:
-                fast_rotation_ext.append(hoisting_keyswitch.eval_fast_rotation(digits_ext, result, rot_in[s][j], False,
-                                                                               cryptoContext))
+                fast_rotation_ext.append(
+                    homo_ops.eval_fast_rotate(digits_ext, result, rot_in[s][j], False, cryptoContext))
             else:
-                fast_rotation_ext.append(hoisting_keyswitch.key_switch_ext(result, cryptoContext))
+                fast_rotation_ext.append(hoisting_keyswitch.key_switch_P_ext(result, cryptoContext))
 
         for i in range(b):
             G = g * i
@@ -158,21 +158,37 @@ def eval_linear_transform(A, ct, scheme):
 
 # @profile_python_function
 def mod_raise(cipher, L0, cryptoContext):
-    cv0 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[0], L0, cryptoContext)
-    cv1 = F.cv_switch_modulus_with_intt_ntt(cipher.cv[1], L0, cryptoContext)
-    return Cipher([cv0, cv1], L0, cipher.scaling_factor, cipher.noise_deg, cipher.slots, cipher.is_ext)
+    cv = [
+        torch.mod_raise(
+            cryptoContext.mod_raise_out,
+            cv,
+            primes=cryptoContext.primes,
+            N=cryptoContext.N,
+            L0=L0,
+            logN=cryptoContext.logN,
+            L=cryptoContext.L,
+            inverse_power_of_roots_div_two=cryptoContext.inverse_power_of_roots_div_two,
+            inverse_scaled_power_of_roots_div_two=cryptoContext.inverse_scaled_power_of_roots_div_two,
+            power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
+            power_of_roots=cryptoContext.power_of_roots,
+            barret_ratio=cryptoContext.barret_ratio,
+            barret_k=cryptoContext.barret_k
+        ).reshape(-1, cryptoContext.N)
+        for cv in cipher.cv
+    ]
+    return cipher.cipher_like(cv, L0)
 
 # @profile_python_function
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
-    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
-    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext, inplace=True)
+    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
+    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
+def eval_bootstrap(ciphertext, L0, logSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
-    slots = 1<<logslots
+    slots = 1 << logSlots
     # cryptoContext.slots = slots #fixme: bad assignment!
     precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar

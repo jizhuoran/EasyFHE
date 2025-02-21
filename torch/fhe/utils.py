@@ -106,15 +106,16 @@ def round_half_away_from_zero(number, ndigits=0):
     else:
         return 0.0
 
-def try_load_context(logN,
-            logSlots_list,
+def try_load_context(
             maxLevelsRemaining,
-            levelBudget_list,
+            rotIndex_list,
+            logSlots_list,
+            logN,
             dnum,
             dcrtBits,
             firstMod,
+            levelBudget_list,
             approxModDepth,
-            rotate_index,
             secretKeyDist,
             rescaleTech,
             save_dir,
@@ -128,10 +129,10 @@ def try_load_context(logN,
     load_path = (
         save_dir
         + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
+        maxLevelsRemaining,
             '-'.join(map(str, logSlots_list)),
-            maxLevelsRemaining,
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            logN,
             dnum,
             dcrtBits,
             firstMod,
@@ -143,10 +144,10 @@ def try_load_context(logN,
     debug_load_path = (
             save_dir
             + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            logN,
-            '-'.join(map(str, logSlots_list)),
             maxLevelsRemaining,
+            '-'.join(map(str, logSlots_list)),
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            logN,
             dnum,
             dcrtBits,
             firstMod,
@@ -157,21 +158,10 @@ def try_load_context(logN,
     )
 
     if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
-        gen_contexts(
-            logN=logN,
-            logSlots_list=logSlots_list, # possible slots value of runtime ciphertext #todo: should be a list?
-            maxLevelsRemaining=maxLevelsRemaining,
-            levelBudget_list=levelBudget_list,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            approxModDepth=approxModDepth,
-            rotate_index = rotate_index,
-            secretKeyDist=secretKeyDist,
-            rescaleTech=rescaleTech,
-            save_dir=save_dir,
-            mode = mode
-        )
+        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list, logSlots_list=logSlots_list,
+                     logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod, levelBudget_list=levelBudget_list,
+                     approxModDepth=approxModDepth, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
+                     save_dir=save_dir, mode=mode)
 
     with open(load_path, 'rb') as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
@@ -182,19 +172,17 @@ def try_load_context(logN,
         with open(debug_load_path, 'rb') as file:
             debug_keys = pickle.load(file)
 
-    openfhe_context_dict = {}
-    if mode == "debug":
-        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_context_dict[str(logSlots)] = client.OpenFHEContext(openfheMembers)
-            openfhe_context_dict[str(logSlots)].setup_for_debug(debug_keys, 1<<logSlots, level_budget)
-    else:
-        openfhe_context = client.OpenFHEContext(openfheMembers)
-        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
-            openfhe_context_dict[str(logSlots)] = openfhe_context
-
     cryptoContext = Context(BsContextMembers, gpufheMembers)
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    if mode == "debug":
+        openfhe_boot_contexts={}
+        for logSlots, level_budget in zip(logSlots_list, levelBudget_list):
+            openfhe_boot_contexts[str(logSlots)] = client.OpenFHEContext(openfheMembers)
+            openfhe_boot_contexts[str(logSlots)].setup_for_debug(debug_keys, 1 << logSlots, level_budget)
+        return cryptoContext, openfhe_context, openfhe_boot_contexts
+    else:
+        return cryptoContext, openfhe_context
 
-    return cryptoContext, openfhe_context_dict
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
@@ -209,3 +197,8 @@ def load_rotation_keys(context, key_name):
         context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
     for key, value in context.slots_precompute_auto_map[str(key_name)].items():
         context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+
+def load_bootstrapping_info(logSlots, cryptoContext):
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots)]
+    cryptoContext.BsContext.to_cuda()
+    load_rotation_keys(cryptoContext, logSlots)

@@ -150,7 +150,7 @@ class Context:
         self.scalingFactorsRealBig = get_item("scalingFactorsRealBig", gpufhe_content_map)
         self.secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
         self.sigma = get_item("sigma", gpufhe_content_map)
-        self.switch_modulus_out = get_item("switch_modulus_out", gpufhe_content_map)
+        self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.BsContext_map = {}
@@ -205,7 +205,7 @@ class Context:
         self.modup_out = torch.tensor(self.modup_out, dtype = torch.uint64, device = "cuda")
         self.rescale_out = torch.tensor(self.rescale_out, dtype = torch.uint64, device = "cuda")
         self.automorphism_transform_out = torch.tensor(self.automorphism_transform_out, dtype = torch.uint64, device = "cuda")
-        self.switch_modulus_out = torch.tensor(self.switch_modulus_out, dtype = torch.uint64, device = "cuda")
+        self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64, device = "cuda")
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64, device = "cuda")
         self.key_map = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in self.key_map]
         self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double, device = "cuda")

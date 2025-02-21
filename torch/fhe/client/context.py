@@ -516,7 +516,7 @@ class __FOR_SAVE_ONLY_Context:
                 [0] * (self.num_moduli_after_modup * self.N * self.beta),
                 dtype=np.uint64,
             ) #todo: over estiamted, at least remove self.beta if remain (L+K) for hoisted moddown in partial-sum-like computation
-            self.switch_modulus_out = np.array(
+            self.mod_raise_out = np.array(
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
             )
