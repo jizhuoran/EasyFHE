@@ -72,15 +72,12 @@ static void modup_matmul(
     const Tensor& prod_q_i_mod_q_js,
     int64_t curr_limbs,
     int64_t L) {
-  const int unroll_factor = 4;
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   const int begin_idx = (int)beta_idx * (int)alpha;
   int start_length =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
   const int end_length = curr_limbs + sizeP - start_length;
-  //   int grid_dim{(int)N * end_length / 256 / unroll_factor};
-  //   int block_dim{256};
 
   auto block_dim = dim3(256);
   auto grid_dim = dim3(N / 256 / 1, end_length);

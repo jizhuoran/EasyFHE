@@ -61,45 +61,19 @@ struct uint128_t {
   uint64_t lo;
 };
 
-// https://forums.developer.nvidia.com/t/long-integer-multiplication-mul-wide-u64-and-mul-wide-u128/51520
 __inline__ __device__ uint128_t
 mult_64_64_128(const uint64_t op1, const uint64_t op2) {
-  uint128_t temp;
-  asm("{\n\t"
-      ".reg .u32 p0l, p0h, p1l, p1h, p2l, p2h, p3l, p3h, r0, r1, r2, r3, "
-      "alo, "
-      "ahi, blo, bhi;\n\t"
-      ".reg .u64 p0, p1, p2, p3;\n\t"
-      "mov.b64         {alo,ahi}, %2;\n\t"
-      "mov.b64         {blo,bhi}, %3;\n\t"
-      "mul.wide.u32    p0, alo, blo;\n\t"
-      "mul.wide.u32    p1, alo, bhi;\n\t"
-      "mul.wide.u32    p2, ahi, blo;\n\t"
-      "mul.wide.u32    p3, ahi, bhi;\n\t"
-      "mov.b64         {p0l,p0h}, p0;\n\t"
-      "mov.b64         {p1l,p1h}, p1;\n\t"
-      "mov.b64         {p2l,p2h}, p2;\n\t"
-      "mov.b64         {p3l,p3h}, p3;\n\t"
-      "mov.b32         r0, p0l;\n\t"
-      "add.cc.u32      r1, p0h, p1l;\n\t"
-      "addc.cc.u32     r2, p1h, p2h;\n\t"
-      "addc.u32        r3, p3h, 0;\n\t"
-      "add.cc.u32      r1, r1, p2l;\n\t"
-      "addc.cc.u32     r2, r2, p3l;\n\t"
-      "addc.u32        r3, r3, 0;\n\t"
-      "mov.b64         %0, {r0,r1};\n\t"
-      "mov.b64         %1, {r2,r3};\n\t"
-      "}"
-      : "=l"(temp.lo), "=l"(temp.hi)
-      : "l"(op1), "l"(op2));
-  return temp;
+  uint128_t res;
+  res.lo = op1 * op2;
+  res.hi = __umul64hi(op1, op2);
+  return res;
 }
 
 __inline__ __device__ void inplace_add_128_128(
     const uint128_t op1,
     uint128_t& res) {
-  asm("add.cc.u64 %1, %3, %1;\n\t"
-      "addc.cc.u64 %0, %2, %0;\n\t"
+  asm("add.cc.u64 %1, %3, %1;"
+      "addc.cc.u64 %0, %2, %0;"
       : "+l"(res.hi), "+l"(res.lo)
       : "l"(op1.hi), "l"(op1.lo));
 }
@@ -111,9 +85,7 @@ __inline__ __device__ uint64_t barret_reduction_128_64(
     const uint64_t barret_k) {
   uint128_t temp1 = mult_64_64_128(in.lo, barret_ratio);
   uint128_t temp2 = mult_64_64_128(in.hi, barret_ratio);
-  // carry = add_64_64_carry(temp1.hi, temp2.lo, temp1.hi);
   asm("add.cc.u64 %0, %0, %1;" : "+l"(temp1.hi) : "l"(temp2.lo));
-  // carry = add_64_64_carry(temp2.hi, 0, temp2.hi, carry);
   asm("{addc.cc.u64 %0, %0, %1;}" : "+l"(temp2.hi) : "l"((unsigned long)0));
   temp1.hi >>= barret_k - 64;
   temp2.hi <<= 128 - barret_k;
