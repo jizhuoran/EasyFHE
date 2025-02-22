@@ -47,7 +47,7 @@ def app_example_debug(
             print("homo_rotate: Test failed!")
 
     # bootstrapping
-    utils.load_bootstrapping_info(str(logBsSlots_list[0]), cryptoContext)
+    utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
@@ -68,7 +68,7 @@ def app_example_debug(
         result = homo_ops.homo_mul(result, result, cryptoContext)
 
     # bootstrapping
-    utils.load_bootstrapping_info(str(logBsSlots_list[1]), cryptoContext)
+    utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -128,7 +128,7 @@ def app_example_release(
     print("homo_rotate done!")
 
     # bootstrapping
-    utils.load_bootstrapping_info(str(logBsSlots_list[0]), cryptoContext)
+    utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -146,7 +146,7 @@ def app_example_release(
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
     
     # bootstrapping
-    utils.load_bootstrapping_info(str(logBsSlots_list[1]), cryptoContext)
+    utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 

@@ -21,7 +21,7 @@ class __FOR_SAVE_ONLY_Context:
         rootsP=None,
         MULT_SWK=None,
         rot_swk_map=None,
-        boot_key_map=None,
+        boot_cnst_map=None,
         secretKeyDist=None,
         rescaleTech=None,
         dim1=None,
@@ -38,8 +38,8 @@ class __FOR_SAVE_ONLY_Context:
         self.specialMod = specialMod
         self.qVec = None
         self.slots_left_rot_key_map = {}
-        self.key_map = None
-        self.correctionFactor = 0
+        self.mult_key_map = None
+        # self.correctionFactor = 0 # todo: to be removed
 
         self.logN = logN
         self.dcrtBits = dcrtBits
@@ -704,7 +704,7 @@ class __FOR_SAVE_ONLY_Context:
         swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
         key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
         key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
-        self.key_map = [key_map_bx_fixed, key_map_ax_fixed]
+        self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
         for log_slots, ROT_SWK in rot_swk_map.items():
             left_rot_key_map = {}
@@ -732,7 +732,7 @@ class __FOR_SAVE_ONLY_Context:
                     self.p_mu,
                     0,
                     self.secretKeyDist,
-                    boot_key_map[str(logBsSlots)]
+                    boot_cnst_map[str(logBsSlots)]
                 )
         else:
             assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]

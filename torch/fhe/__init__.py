@@ -1,7 +1,7 @@
 from .homo_ops import *
 from .hoisting_keyswitch import *
 from .bootstrapping import homo_bootstrap
-from .utils import try_load_context, load_bootstrapping_info, load_rotation_keys
+from .utils import try_load_context, load_bootstrapping_context, load_rotation_keys
 
 __all__ = [
     'homo_add', 'homo_sub', 'homo_mul', 'homo_square', 'homo_rescale',
@@ -10,5 +10,5 @@ __all__ = [
     'homo_mul_pt', 'homo_add_pt',
     'homo_bootstrap',
     'key_switch_P_ext', 'modup_to_ext', 'mult_rot_key_and_sum_ext', 'moddown_from_ext',
-    'try_load_context', 'load_rotation_keys', 'load_bootstrapping_info'
+    'try_load_context', 'load_rotation_keys', 'load_bootstrapping_context'
 ]

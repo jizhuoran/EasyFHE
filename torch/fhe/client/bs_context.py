@@ -52,7 +52,7 @@ class BsContext:
         p_mu,
         correctionFactor,
         secretKeyDist,
-        BOOT_KEY
+        BOOT_CNST
     ):
         K = len(moduliP_scalar)
         self.M = N * 2
@@ -64,14 +64,14 @@ class BsContext:
         self.paramsDec = None
         self.paramsEnc = None
 
-        self.m_U0hatTPreFFT_mx = BOOT_KEY["C2S"]
-        self.m_U0PreFFT_mx = BOOT_KEY["S2C"]
-        self.m_U0hatTPreFFT_dim = BOOT_KEY["C2S_dim"]
-        self.m_U0PreFFT_dim = BOOT_KEY["S2C_dim"]
-        self.m_U0hatTPreFFT_limbs = BOOT_KEY["C2S_limbs"]
-        self.m_U0PreFFT_limbs = BOOT_KEY["S2C_limbs"]
-        self.m_U0hatTPreFFT_scaling_factor = BOOT_KEY["U0hatTPreFFTScalingFactor"]
-        self.m_U0PreFFT_scaling_factor = BOOT_KEY["U0PreFFTScalingFactor"]
+        self.m_U0hatTPreFFT_mx = BOOT_CNST["C2S"]
+        self.m_U0PreFFT_mx = BOOT_CNST["S2C"]
+        self.m_U0hatTPreFFT_dim = BOOT_CNST["C2S_dim"]
+        self.m_U0PreFFT_dim = BOOT_CNST["S2C_dim"]
+        self.m_U0hatTPreFFT_limbs = BOOT_CNST["C2S_limbs"]
+        self.m_U0PreFFT_limbs = BOOT_CNST["S2C_limbs"]
+        self.m_U0hatTPreFFT_scaling_factor = BOOT_CNST["U0hatTPreFFTScalingFactor"]
+        self.m_U0PreFFT_scaling_factor = BOOT_CNST["U0PreFFTScalingFactor"]
 
         coefficientsSparse = np.array(
             [

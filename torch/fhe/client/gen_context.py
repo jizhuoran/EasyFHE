@@ -105,7 +105,7 @@ def gen_contexts(
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
 
-    boot_key_map = {}
+    boot_cnst_map = {}
     if NO_BS == False:
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
@@ -127,7 +127,7 @@ def gen_contexts(
                 "U0hatTPreFFTScalingFactor": C2S_FC,
                 "U0PreFFTScalingFactor": S2C_FC,
             }
-            boot_key_map[str(logBsSlots)] = boot_key
+            boot_cnst_map[str(logBsSlots)] = boot_key
 
 
     openfheMembers = {}
@@ -168,7 +168,7 @@ def gen_contexts(
         rootsP,
         MULT_SWK,
         rot_swk_map,
-        boot_key_map,
+        boot_cnst_map,
         secretKeyDist,
         rescaleTech,
         dim1,

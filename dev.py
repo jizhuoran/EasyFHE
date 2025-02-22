@@ -54,7 +54,8 @@ cipher = fhe.homo_rotate(cipher, 2, cryptoContext)
 print("homo_rotate done!")
 
 # bootstrapping
-fhe.load_bootstrapping_info(logBsSlots_list[0], cryptoContext) # logBsSlots = 11, lb = [3,3] #todo: the online load is for performance only?
+fhe.load_bootstrapping_context(logBsSlots_list[0],
+                               cryptoContext)  # logBsSlots = 11, lb = [3,3] #todo: the online load is for performance only?
 result = fhe.homo_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
 print("gpu bootstrapp done!")
 
@@ -69,7 +70,7 @@ print("HE decryption result: ", clear_result[:10])
 # # bootstrapping, logBsSlots = 12, lb = [4,4]
 encode_slots = (1<<12)
 result.slots = encode_slots  # This assignment is for testing purposes only.
-fhe.load_bootstrapping_info(logBsSlots_list[1], cryptoContext)
+fhe.load_bootstrapping_context(logBsSlots_list[1], cryptoContext)
 #todo: load, offload, set: set_bootstrapping_keys(he_res20_ctx.cur_num_slots, cryptoContext)
 
 approx_plain_val = clear_result[:10]

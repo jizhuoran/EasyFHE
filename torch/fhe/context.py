@@ -91,7 +91,7 @@ class Context:
         self.barret_ratio = get_item("barret_ratio", gpufhe_content_map)
         self.beta = get_item("beta", gpufhe_content_map)
         self.chain_length = get_item("chain_length", gpufhe_content_map)
-        self.correctionFactor = get_item("correctionFactor", gpufhe_content_map)
+        # self.correctionFactor = get_item("correctionFactor", gpufhe_content_map) #todo: to be removed
         self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
         self.h = get_item("h", gpufhe_content_map)
         self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
@@ -102,7 +102,7 @@ class Context:
         self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
         self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
         self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
-        self.key_map = get_item("key_map", gpufhe_content_map)
+        self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
@@ -202,7 +202,7 @@ class Context:
         self.automorphism_transform_out = torch.tensor(self.automorphism_transform_out, dtype = torch.uint64)
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
-        self.key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.key_map]
+        self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
         self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double)
         self.encode_params_ksiPows_imag = torch.tensor(self.encode_params_ksiPows_imag, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
@@ -247,7 +247,7 @@ class Context:
         self.automorphism_transform_out = self.automorphism_transform_out.cuda()
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
-        self.key_map = [v.cuda() for v in self.key_map]
+        self.mult_key_map = [v.cuda() for v in self.mult_key_map]
         self.encode_params_ksiPows_real = self.encode_params_ksiPows_real.cuda()
         self.encode_params_ksiPows_imag = self.encode_params_ksiPows_imag.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
