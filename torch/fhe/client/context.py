@@ -714,7 +714,7 @@ class __FOR_SAVE_ONLY_Context:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
                 if int(rotIdx)<0:
                     rotIdx = self.N//2 + rotIdx
-                left_rot_key_map[str(rotIdx)] = [
+                left_rot_key_map[int(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]

@@ -587,7 +587,7 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
 
 def homo_rotate(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
-    swk = cryptoContext.left_rot_key_map[str(norm_index)]
+    swk = cryptoContext.left_rot_key_map[norm_index]
     res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
