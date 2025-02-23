@@ -119,7 +119,7 @@ def gen_contexts(
         N = int(2 ** logN)
         rotIdx2autoIdx_map[N * 2 - 1] = N * 2 - 1  # add conjugation automorphism index
 
-        BOOT_KEY = cc.GetEvalBootstrapKey() # get matirx saved in boot_key
+        BOOT_KEY = cc.GetEvalBootstrapContext() # get matirx saved in boot_key
         for idx, logBsSlots in enumerate(logBsSlots_list):
             slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
             assert slot == 1 << logBsSlots
