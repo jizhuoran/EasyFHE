@@ -22,8 +22,8 @@ def modup_to_ext(cipher, cryptoContext):
 #todo: do we need to support mult key, considering that hoisting is only for rotation
 def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     assert digits.is_ext == True
-    auto_index = cryptoContext.auto_index_lookup_table(index)
-    swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    norm_index = cryptoContext.norm_rot_index(index)
+    swk = cryptoContext.left_rot_key_map[str(norm_index)]
     sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
                                  swk_bx=swk[0], swk_ax=swk[1])
     return digits.cipher_like(sum_mult, is_ext = True)

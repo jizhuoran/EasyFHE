@@ -363,8 +363,8 @@ def cv_automorphism_transform(
     i: int,
     context: Context
 ) -> Tensor:
-    if i % 2 == 0:
-        return input.clone()
+    if i < 0:
+        raise ValueError("i should be non-negative")
     return torch.automorphism_transform(
         input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
     )

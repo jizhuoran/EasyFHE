@@ -21,7 +21,7 @@ class __FOR_SAVE_ONLY_Context:
         rootsP=None,
         MULT_SWK=None,
         rot_swk_map=None,
-        rotIdx2autoIdx_map = None,
+        autoIdx2rotIdx_map = None,
         boot_cnst_map=None,
         secretKeyDist=None,
         rescaleTech=None,
@@ -61,7 +61,6 @@ class __FOR_SAVE_ONLY_Context:
         qRootPowsInv = [[] for _ in range(L)]
         self.mult_key_map = None
         self.slots_left_rot_key_map = {} #fixme: why adding prefix slots_ ?
-        self.slots_rotIdx2autoIdx_map = {} #fixme: why adding prefix slots_ ?
         self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
@@ -711,18 +710,19 @@ class __FOR_SAVE_ONLY_Context:
         for key, ROT_SWK in rot_swk_map.items():
             left_rot_key_map = {}
             precompute_auto_map = {}
-            for i, bx, ax in ROT_SWK:
-                left_rot_key_map[str(i)] = [
+            for autoIdx, bx, ax in ROT_SWK:
+                rotIdx = autoIdx2rotIdx_map[autoIdx]
+                if int(rotIdx)<0:
+                    rotIdx = self.N//2 + rotIdx
+                left_rot_key_map[str(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
-            for autoIdx, _ in left_rot_key_map.items():
-                precompute_auto_map[int(autoIdx)] = self.compute_auto_map(
+                precompute_auto_map[int(rotIdx)] = self.compute_auto_map(
                     int(autoIdx), self.N
                 )
             self.slots_left_rot_key_map[key] = left_rot_key_map
             self.slots_precompute_auto_map[key] = precompute_auto_map
-        self.slots_rotIdx2autoIdx_map = rotIdx2autoIdx_map
 
         # init bs_context
         if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:

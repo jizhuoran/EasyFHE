@@ -1,7 +1,5 @@
-import torch
 from enum import Enum
 from .bs_context import *
-import itertools
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
@@ -131,7 +129,6 @@ class Context:
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
         self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
-        self.slots_rotIdx2autoIdx_map = get_item("slots_rotIdx2autoIdx_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -257,9 +254,10 @@ class Context:
 
         # self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
 
-
-    def auto_index_lookup_table(self, i):
-        return self.slots_rotIdx2autoIdx_map[i]
+    def norm_rot_index(self, i):
+        if i < 0:
+            i = self.N // 2 + i
+        return i
 
    #  Method to retrieve the scaling factor of level l.
    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
