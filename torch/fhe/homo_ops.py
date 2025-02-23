@@ -1,7 +1,7 @@
 from .ciphertext import Cipher
 from .ciphertext import Plaintext
 from . import functional as F
-from . import hoisting_keyswitch
+from . import hybrid_keyswitch
 import math
 import torch
 from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
@@ -601,11 +601,11 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
     if index == 0:
         return cipher.deep_copy()
 
-    result = hoisting_keyswitch.mult_rot_key_and_sum_ext(digits, index, cryptoContext)
+    result = hybrid_keyswitch.mult_rot_key_and_sum_ext(digits, index, cryptoContext)
 
     if need_KS_add:
         if need_moddown:
-            result = hoisting_keyswitch.moddown_from_ext(result, cryptoContext)
+            result = hybrid_keyswitch.moddown_from_ext(result, cryptoContext)
             cipher_cv0 = cipher.cv[0]
         else:
             cipher_cv0 = F.cv_mul_scalar(cipher.cv[0], cryptoContext.PModq, cryptoContext.moduliQ,

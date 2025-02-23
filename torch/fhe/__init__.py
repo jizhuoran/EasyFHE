@@ -1,5 +1,5 @@
 from .homo_ops import *
-from .hoisting_keyswitch import *
+from .hybrid_keyswitch import *
 from .bootstrapping import homo_bootstrap
 from .utils import try_load_context, load_bootstrapping_context, load_rotation_keys
 
