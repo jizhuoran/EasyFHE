@@ -92,6 +92,9 @@ def gen_contexts(
     cc.Enable(openfhe.PKESchemeFeature.FHE)
     cc.Enable(openfhe.PKESchemeFeature.PRE)
 
+    openfhe.ClearEvalMultKeys()
+    cc.ClearEvalAutomorphismKeys()
+
     keys = cc.KeyGen()
     evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
@@ -106,6 +109,18 @@ def gen_contexts(
         rotIndex_list_int_32t = [rotIndex & 0xFFFFFFFF if rotIndex < 0 else rotIndex for rotIndex in rotIndex_list]
         autoIdx_list = cc.FindAutomorphismIndices(rotIndex_list_int_32t)
         autoIdx2rotIdx_map.update(dict(zip(autoIdx_list, rotIndex_list)))
+
+    openfheMembers = {}
+    openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
+    openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
+    openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
+    openfheMembers["depth"] = depth
+    openfheMembers["app_rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
+        openfhe.BINARY
+    )
+    with open(OPENFHE_path, "wb") as file:
+        pickle.dump(openfheMembers, file)
+    del openfheMembers
 
     boot_cnst_map = {}
     if NO_BS == False: # need to do BS
@@ -134,16 +149,6 @@ def gen_contexts(
                 "U0PreFFTScalingFactor": S2C_FC,
             }
             boot_cnst_map[str(logBsSlots)] = boot_key
-
-
-    openfheMembers = {}
-    openfheMembers["cc"] = openfhe.Serialize(cc, openfhe.BINARY)
-    openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
-    openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
-    openfheMembers["depth"] = depth
-    with open(OPENFHE_path, "wb") as file:
-        pickle.dump(openfheMembers, file)
-    del openfheMembers
 
     if mode == "debug":
         debugKeys = {}

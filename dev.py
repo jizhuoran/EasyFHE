@@ -1,5 +1,6 @@
 import torch.fhe.example.dev_test as dev_test
 # note: the following test may not use the same ctx, therefore should not run in one round
+dev_test.app_without_bs_example_debug(mode="debug")
 dev_test.app_example_debug(mode="debug")
 dev_test.app_example_release(mode="release")
 dev_test.encode_test_case(mode="debug")

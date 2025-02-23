@@ -5,6 +5,52 @@ from ..bootstrapping import eval_bootstrap
 import numpy as np
 import os, warnings
 
+
+def app_without_bs_example_debug(
+        maxLevelsRemaining=5,
+        appRotIndex_list = [-1, 2, -4, 5],
+        logBsSlots_list=None,
+        logN=14,
+        dnum=3,
+        dcrtBits=52,
+        firstMod=56,
+        levelBudget_list=None,
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir="torch/fhe/data/",
+        mode = "debug" # "debug" or "release"
+):
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+
+    cryptoContext, openfhe_context, openfhe_boot_contexts = (
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+
+    encode_slots = (1 << 11)
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+
+    # do the application computation
+    utils.load_rotation_keys(cryptoContext, "app")
+    cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, 5, cryptoContext)
+    print("homo_rotate done!")
+    # compute golden answer
+    if mode == "debug":
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
+        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
+        is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+        if is_euqal:
+            print("homo_rotate: Test passed!")
+        else:
+            print("homo_rotate: Test failed!")
+
 def app_example_debug(
         maxLevelsRemaining=3,
         appRotIndex_list = [-1, 2],
