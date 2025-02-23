@@ -21,6 +21,7 @@ class __FOR_SAVE_ONLY_Context:
         rootsP=None,
         MULT_SWK=None,
         rot_swk_map=None,
+        rotIdx2autoIdx_map = None,
         boot_cnst_map=None,
         secretKeyDist=None,
         rescaleTech=None,
@@ -37,8 +38,6 @@ class __FOR_SAVE_ONLY_Context:
         self.BsContext_map = {}
         self.specialMod = specialMod
         self.qVec = None
-        self.slots_left_rot_key_map = {}
-        self.mult_key_map = None
         # self.correctionFactor = 0 # todo: to be removed
 
         self.logN = logN
@@ -60,7 +59,10 @@ class __FOR_SAVE_ONLY_Context:
         qRootsInv = [0] * L
         qRootPows = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
-        self.slots_precompute_auto_map = {}
+        self.mult_key_map = None
+        self.slots_left_rot_key_map = {} #fixme: why adding prefix slots_ ?
+        self.slots_rotIdx2autoIdx_map = {} #fixme: why adding prefix slots_ ?
+        self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
         if moduliQ_scalar is None and rootsQ is None:
@@ -706,7 +708,7 @@ class __FOR_SAVE_ONLY_Context:
         key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
         self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
-        for log_slots, ROT_SWK in rot_swk_map.items():
+        for key, ROT_SWK in rot_swk_map.items():
             left_rot_key_map = {}
             precompute_auto_map = {}
             for i, bx, ax in ROT_SWK:
@@ -714,12 +716,13 @@ class __FOR_SAVE_ONLY_Context:
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
-            for key, _ in left_rot_key_map.items():
-                precompute_auto_map[int(key)] = self.compute_auto_map(
-                    int(key), self.N
+            for autoIdx, _ in left_rot_key_map.items():
+                precompute_auto_map[int(autoIdx)] = self.compute_auto_map(
+                    int(autoIdx), self.N
                 )
-            self.slots_left_rot_key_map[log_slots] = left_rot_key_map
-            self.slots_precompute_auto_map[log_slots] = precompute_auto_map
+            self.slots_left_rot_key_map[key] = left_rot_key_map
+            self.slots_precompute_auto_map[key] = precompute_auto_map
+        self.slots_rotIdx2autoIdx_map = rotIdx2autoIdx_map
 
         # init bs_context
         if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:
@@ -761,45 +764,6 @@ class __FOR_SAVE_ONLY_Context:
             res[j_rev] = idx_rev
 
         return np.array(res)
-
-    def find_auto_index(self, i):
-        def inv_mod(
-            a, m
-        ):  # note: check all the output value before merge with func: invMod!! These two values may differ by m!!
-            m0, x0, x1 = m, 0, 1
-            if m == 1:
-                return 0
-            while a > 1:
-                q = a // m
-                m, a = a % m, m
-                x0, x1 = x1 - q * x0, x0
-            if x1 < 0:
-                x1 += m0
-            return x1
-
-        m = self.N << 1
-
-        if i == 0:
-            return 1
-
-        # Conjugation automorphism
-        if i == -1:
-            return m - 1
-
-        # Generator
-        if i < 0:
-            g0 = inv_mod(5, m)
-            g0 = (g0 * 5) % m
-        else:
-            g0 = 5
-
-        i_unsigned = abs(i)
-        g = g0
-
-        for j in range(1, int(i_unsigned)):
-            g = (g * g0) % m
-
-        return g
 
     def shoup(self, in_value, prime):
         temp = in_value << 64

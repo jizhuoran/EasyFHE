@@ -1,4 +1,3 @@
-import time
 from .ciphertext import Cipher
 from .bs_context import *
 from . import functional as F
@@ -310,7 +309,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # -------------------
         torch.cuda.synchronize()
         torch.cpu.synchronize()
-        time1 = time.time()
         for step in range(int(math.log2(N // (2 * slots)))):
             temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
             raised = homo_ops.homo_add(raised, temp, cryptoContext)

@@ -1,7 +1,6 @@
-from os import utime
 from . import openfhe as openfhe
 from . import context as Context
-import pickle, time
+import pickle
 import numpy as np
 
 
@@ -98,20 +97,27 @@ def gen_contexts(
     cc.EvalMultKeyGen(keys.secretKey)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
     rot_swk_map = {}
-
+    rotIdx2autoIdx_map = {}
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
-    if rotIndex_list:
+    if rotIndex_list: # deal with "app" rot Index
         cc.EvalRotateKeyGen(keys.secretKey, rotIndex_list)
         APP_ROT_SWK = cc.GetEvalRotateKey()
         rot_swk_map["app"] = APP_ROT_SWK
+        rotIndex_list_int_32t = [rotIndex & 0xFFFFFFFF if rotIndex < 0 else rotIndex for rotIndex in rotIndex_list]
+        autoIdx_list = cc.FindAutomorphismIndices(rotIndex_list_int_32t)
+        rotIdx2autoIdx_map.update(dict(zip(rotIndex_list, autoIdx_list)))
 
     boot_cnst_map = {}
-    if NO_BS == False:
+    if NO_BS == False: # need to do BS
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
             cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
             ROT_SWK = cc.GetEvalRotateKey()
+            ROTIDX_TO_AUTOIDX = cc.GetEvalBootstrapRotIdx2AutoIdxMap(logBsSlots)
             rot_swk_map[str(logBsSlots)] = ROT_SWK
+            rotIdx2autoIdx_map.update(ROTIDX_TO_AUTOIDX)
+        N = int(2 ** logN)
+        rotIdx2autoIdx_map[N * 2 - 1] = N * 2 - 1  # add conjugation automorphism index
 
         BOOT_KEY = cc.GetEvalBootstrapKey() # get matirx saved in boot_key
         for idx, logBsSlots in enumerate(logBsSlots_list):
@@ -168,6 +174,7 @@ def gen_contexts(
         rootsP,
         MULT_SWK,
         rot_swk_map,
+        rotIdx2autoIdx_map,
         boot_cnst_map,
         secretKeyDist,
         rescaleTech,

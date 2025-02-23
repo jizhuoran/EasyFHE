@@ -102,8 +102,6 @@ class Context:
         self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
         self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
         self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
-        self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
-        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
@@ -131,6 +129,9 @@ class Context:
         self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
         self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
+        self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
+        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.slots_rotIdx2autoIdx_map = get_item("slots_rotIdx2autoIdx_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -257,41 +258,8 @@ class Context:
         # self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
 
 
-    def find_auto_index(self, i):
-        def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!
-            m0, x0, x1 = m, 0, 1
-            if m == 1:
-                return 0
-            while a > 1:
-                q = a // m
-                m, a = a % m, m
-                x0, x1 = x1 - q * x0, x0
-            if x1 < 0:
-                x1 += m0
-            return x1
-
-        m = (self.N << 1)
-
-        if i == 0:
-            return 1
-
-        # Conjugation automorphism
-        if i == m - 1:
-            return i
-
-        # Generator
-        if i < 0:
-            g0 = inv_mod(5, m)
-        else:
-            g0 = 5
-
-        i_unsigned = abs(i)
-
-        g = g0
-        for j in range(1, int(i_unsigned)):
-            g = (g * g0) % m
-
-        return g
+    def auto_index_lookup_table(self, i):
+        return self.slots_rotIdx2autoIdx_map[i]
 
    #  Method to retrieve the scaling factor of level l.
    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus

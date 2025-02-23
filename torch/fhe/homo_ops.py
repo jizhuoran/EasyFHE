@@ -459,7 +459,7 @@ def _cipher_neg(in0, cryptoContext):
 # @check_cipher_len
 #todo: input len of in0.cv could be 1
 def _cipher_automorphism(in0, index, cryptoContext):
-    auto_index = cryptoContext.find_auto_index(index)
+    auto_index = cryptoContext.auto_index_lookup_table(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
     cv = [
         F.cv_automorphism_transform(cv, limbs, auto_index, cryptoContext)
@@ -586,7 +586,7 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
 
 
 def homo_rotate(in0, index, cryptoContext):
-    auto_index = cryptoContext.find_auto_index(index)
+    auto_index = cryptoContext.auto_index_lookup_table(index)
     swk = cryptoContext.left_rot_key_map[str(auto_index)]
     res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
 

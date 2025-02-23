@@ -22,11 +22,11 @@ class CKKS_Boot_Params:
 
 class BsContext:
     def __init__(self, content_map):
-        self.C2S_rot_in = get_item("C2S_rot_in", content_map)
-        self.C2S_rot_out = get_item("C2S_rot_out", content_map)
         self.M = get_item("M", content_map)
         self.QmuplusPmu_map = get_item("QmuplusPmu_map", content_map)
         self.QplusP_map = get_item("QplusP_map", content_map)
+        self.C2S_rot_in = get_item("C2S_rot_in", content_map)
+        self.C2S_rot_out = get_item("C2S_rot_out", content_map)
         self.S2C_rot_in = get_item("S2C_rot_in", content_map)
         self.S2C_rot_out = get_item("S2C_rot_out", content_map)
         self.coefficients = get_item("coefficients", content_map)

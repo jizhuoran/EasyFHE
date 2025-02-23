@@ -279,12 +279,12 @@ class BsContext:
 
         for i in range(level_budget):
             if flag_rem == 1 and i == (level_budget - 1):
-                rot_in.append(np.zeros(num_rotations_rem + 1))
+                rot_in.append([0] * (num_rotations_rem + 1))
 
             else:
-                rot_in.append(np.zeros(num_rotations + 1))
+                rot_in.append([0] * (num_rotations + 1))
         for i in range(level_budget):
-            rot_out.append(np.zeros(b + b_rem))
+            rot_out.append([0] * (b + b_rem))
 
         for s in range(level_budget - flag_rem):
             for j in range(g):
