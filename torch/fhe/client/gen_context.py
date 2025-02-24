@@ -96,7 +96,6 @@ def gen_contexts(
     cc.ClearEvalAutomorphismKeys()
 
     keys = cc.KeyGen()
-    evalKey = cc.ReKeyGen(keys.secretKey, keys.publicKey)
     cc.EvalMultKeyGen(keys.secretKey)
     moduliQ, rootsQ, moduliP, rootsP = cc.GetPQ()
     rot_swk_map = {}
@@ -152,7 +151,6 @@ def gen_contexts(
 
     if mode == "debug":
         debugKeys = {}
-        debugKeys["eval_key"] = openfhe.Serialize(evalKey, openfhe.BINARY)
         debugKeys["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
         debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
             openfhe.BINARY

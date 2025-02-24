@@ -48,7 +48,6 @@ class OpenFHEContext:
 
     def setup_for_debug(self, debug_keys, slots, level_budget):
         self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
-        openfhe.DeserializeEvalKeyString(debug_keys["eval_key"], openfhe.BINARY)
         openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
