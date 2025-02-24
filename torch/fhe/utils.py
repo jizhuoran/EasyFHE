@@ -196,16 +196,18 @@ def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
-def load_rotation_keys(context, key_name):
-    if (str(key_name) not in context.slots_left_rot_key_map) or (not context.slots_left_rot_key_map[str(key_name)]):
+def load_rotation_keys(key_name, cryptoContext):
+    if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (not cryptoContext.slots_left_rot_key_map[str(key_name)]):
         print("Warning: slots_left_rot_key_map[", key_name,"] is None")
         return
-    for key, value in context.slots_left_rot_key_map[str(key_name)].items():
-        context.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device = "cuda") for v in value]
-    for key, value in context.slots_precompute_auto_map[str(key_name)].items():
-        context.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device = "cuda")
+    for key, value in cryptoContext.slots_left_rot_key_map[str(key_name)].items():
+        cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device ="cuda") for v in value]
+    for key, value in cryptoContext.slots_precompute_auto_map[str(key_name)].items():
+        cryptoContext.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device ="cuda")
 
 def load_bootstrapping_context(logBsSlots, cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.to_cuda()
-    load_rotation_keys(cryptoContext, logBsSlots)
+    load_rotation_keys(logBsSlots, cryptoContext)
+
+

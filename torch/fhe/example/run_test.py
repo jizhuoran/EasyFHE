@@ -1,4 +1,4 @@
-import pickle, sys, os, time
+import sys, os, time
 import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
@@ -32,7 +32,7 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
-utils.load_rotation_keys(cryptoContext, logBsSlots)
+utils.load_rotation_keys(logBsSlots, cryptoContext)
 
 # with torch.profiler.profile(
 #         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],

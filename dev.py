@@ -47,7 +47,7 @@ x1 = torch.tensor(x1, device="cuda")
 cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, encode_slots)
 
 # do the application computation
-fhe.load_rotation_keys(cryptoContext, "app")
+fhe.load_rotation_keys("app", cryptoContext)
 # todo: assign specific rot_index_list or load all the keys
 # todo: add offload and set for rotation keys and bs context separately
 cipher = fhe.homo_rotate(cipher, -1, cryptoContext)

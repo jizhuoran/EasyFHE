@@ -33,7 +33,7 @@ def app_without_bs_example_debug(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys(cryptoContext, "app")
+    utils.load_rotation_keys("app", cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
@@ -78,7 +78,7 @@ def app_example_debug(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys(cryptoContext, "app")
+    utils.load_rotation_keys("app", cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
@@ -168,7 +168,7 @@ def app_example_release(
     cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys(cryptoContext, "app")
+    utils.load_rotation_keys("app", cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
