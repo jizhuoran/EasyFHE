@@ -1,7 +1,7 @@
-from ..bs_context import *
-from .. import homo_ops
-from .. import utils
-from ..bootstrapping import eval_bootstrap
+import torch.fhe.homo_ops as homo_ops
+from torch.fhe.bootstrapping import eval_bootstrap
+import torch.fhe.utils as utils
+import torch.fhe.bs_context
 import numpy as np
 import os, warnings
 
@@ -16,7 +16,7 @@ def app_without_bs_example_debug(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/",
+        save_dir="data",
         mode = "debug" # "debug" or "release"
 ):
     if not os.path.exists(save_dir):
@@ -24,7 +24,8 @@ def app_without_bs_example_debug(
 
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               autoLoadAndSetConfig=False, mode=mode))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -61,7 +62,7 @@ def app_example_debug(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/",
+        save_dir="data",
         mode = "debug" # "debug" or "release"
 ):
     if not os.path.exists(save_dir):
@@ -69,7 +70,8 @@ def app_example_debug(
 
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               autoLoadAndSetConfig=False, mode=mode))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -145,7 +147,7 @@ def app_example_release(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/",
+        save_dir="data",
         mode="release"  # "debug" or "release"
 ):
     if not os.path.exists(save_dir):
@@ -154,7 +156,8 @@ def app_example_release(
 
     cryptoContext, openfhe_context = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               autoLoadAndSetConfig=True, mode=mode))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -168,13 +171,11 @@ def app_example_release(
     cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys("app", cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
 
     # bootstrapping
-    utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -192,7 +193,6 @@ def app_example_release(
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
     
     # bootstrapping
-    utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -219,7 +219,7 @@ def encode_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/",
+        save_dir="data",
         mode = "debug" # "debug" or "release"
 ):
     if not os.path.exists(save_dir):
@@ -227,7 +227,8 @@ def encode_test_case(
 
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               autoLoadAndSetConfig=False, mode=mode))
 
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
@@ -260,7 +261,9 @@ def encode_test_case(
         print(plaintext.scaling_factor)
 
     if all_correct:
-        print("all_correct for this test")
+        print("Test passed!")
+    else:
+        print("Test failed!")
 
     #todo: test encode with specified encode_slots, for example (encode_slots = 1 << 10)
 
@@ -275,7 +278,7 @@ def ct_pt_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="torch/fhe/data/",
+        save_dir="data",
         mode = "debug" # "debug" or "release"
 ):
     if not os.path.exists(save_dir):
@@ -283,7 +286,8 @@ def ct_pt_test_case(
 
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir, mode=mode))
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               autoLoadAndSetConfig=False, mode=mode))
 
     encode_slots=(1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -325,3 +329,16 @@ def ct_pt_test_case(
         print("homo_add_pt second Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
+
+
+
+##############
+## run tests #
+##############
+
+if __name__ == "__main__":
+    app_without_bs_example_debug(mode="debug")
+    app_example_debug(mode="debug")
+    app_example_release(mode="release")
+    encode_test_case(mode="debug")
+    ct_pt_test_case(mode="debug")

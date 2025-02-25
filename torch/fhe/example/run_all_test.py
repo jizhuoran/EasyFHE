@@ -52,11 +52,11 @@ cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,
+    autoLoadAndSetConfig=True,
     mode = "debug")
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
 cryptoContext.BsContext.to_cuda()
-utils.load_rotation_keys(logBsSlots_list[0], cryptoContext, )
 
 with open("result.txt", "a") as f:
     print(context_file, file=f)

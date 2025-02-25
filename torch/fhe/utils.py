@@ -118,6 +118,7 @@ def try_load_context(
             secretKeyDist,
             rescaleTech,
             save_dir,
+            autoLoadAndSetConfig,
             mode):
 
     NO_BS=False
@@ -178,8 +179,17 @@ def try_load_context(
         with open(debug_load_path, 'rb') as file:
             debug_keys = pickle.load(file)
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers)
+    cryptoContext = Context(BsContextMembers, gpufheMembers, autoLoadAndSetConfig)
     openfhe_context = client.OpenFHEContext(openfheMembers)
+    if cryptoContext.autoLoadAndSetConfig:
+        if rotIndex_list is not None:
+            load_rotation_keys("app", cryptoContext)
+        if NO_BS==False:
+            for logBsSlots in logBsSlots_list:
+                cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+                cryptoContext.BsContext.to_cuda()
+                load_rotation_keys(logBsSlots, cryptoContext)
+
     if mode == "debug":
         openfhe_boot_contexts={}
         if NO_BS==False:

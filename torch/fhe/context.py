@@ -66,7 +66,7 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
 
 
 class Context:
-    def __init__(self, BsContext_content_map, gpufhe_content_map):
+    def __init__(self, BsContext_content_map, gpufhe_content_map, autoLoadAndSetConfig):
         self.L = get_item("L", gpufhe_content_map)
         self.dnum = get_item("dnum", gpufhe_content_map)
         self.alpha = get_item("alpha", gpufhe_content_map)
@@ -211,6 +211,8 @@ class Context:
         self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
+
+        self.autoLoadAndSetConfig=autoLoadAndSetConfig
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()

@@ -346,9 +346,7 @@ def _cipher_mul(in0, in1, cryptoContext):
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return in0.cipher_like(
-        [bx, ax, axax],
-        scaling_factor=in0.scaling_factor * scFactor,
+    return in0.cipher_like([bx, ax, axax], scaling_factor=in0.scaling_factor * scFactor,
         noise_deg=in0.noise_deg + in1.noise_deg,
     )
 
@@ -378,9 +376,7 @@ def _cipher_square(in0, cryptoContext):
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return in0.cipher_like(
-        [bx, ax, axax],
-        scaling_factor=in0.scaling_factor * scFactor,
+    return in0.cipher_like([bx, ax, axax], scaling_factor=in0.scaling_factor * scFactor,
         noise_deg=in0.noise_deg + in0.noise_deg,
     )
 
@@ -425,9 +421,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
         for cv0 in in0.cv
     ]
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1
-    )
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1)
 
 
 @check_cipher_len
@@ -443,17 +437,13 @@ def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
         )
         for cv0 in in0.cv
     ]
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg
-    )
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
 
 @check_cipher_len
 def _cipher_neg(in0, cryptoContext):
     cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg
-    )
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
 
 # @check_cipher_len
@@ -503,7 +493,8 @@ def homo_rescale(ct, levels, cryptoContext):
         )  # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
         scFactor = scFactor / modReduceFactor
 
-    return ct.cipher_like(res_cv, cur_limbs = ct.cur_limbs - levels, scaling_factor = scFactor, noise_deg = ct.noise_deg - levels)
+    return ct.cipher_like(res_cv, cur_limbs=ct.cur_limbs - levels, scaling_factor=scFactor,
+                          noise_deg=ct.noise_deg - levels)
 
 
 @call_counter
@@ -511,15 +502,13 @@ def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
     in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
     res = _cipher_mul(in0, in1, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
-            cryptoContext,
-        )
-    )
+    tmp = res.cipher_like(F.cv_keyswitch(
+        res.cv[2],
+        res.cur_limbs,
+        cryptoContext.swk_bx,
+        cryptoContext.swk_ax,
+        cryptoContext,
+    ))
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)
 
@@ -529,15 +518,13 @@ def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale(in0, 1, cryptoContext)
     res = _cipher_square(in0, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
-            cryptoContext,
-        )
-    )
+    tmp = res.cipher_like(F.cv_keyswitch(
+        res.cv[2],
+        res.cur_limbs,
+        cryptoContext.swk_bx,
+        cryptoContext.swk_ax,
+        cryptoContext,
+    ))
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)
 
@@ -674,9 +661,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
         cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
 
-        return res0.cipher_like(
-            [cv0, cv1],
-            scaling_factor=res0.scaling_factor * res1.scaling_factor,
+        return res0.cipher_like([cv0, cv1], scaling_factor=res0.scaling_factor * res1.scaling_factor,
             noise_deg=res0.noise_deg + res1.noise_deg,
         )
 

@@ -114,9 +114,9 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
             
             if i == 0:
-                inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]])
+                inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]], )
                 first_acc = hybrid_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
-                outer_ext = inner_ext.cipher_like([torch.zeros_like(inner_ext.cv[0]), inner_ext.cv[1]])
+                outer_ext = inner_ext.cipher_like([torch.zeros_like(inner_ext.cv[0]), inner_ext.cv[1]], )
             else:
                 if rot_out[s][i] != 0:
                     inner = hybrid_keyswitch.moddown_from_ext(inner_ext, cryptoContext)
@@ -131,7 +131,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                                                           False, None, cryptoContext)
                     outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
                 else:
-                    inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]])
+                    inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]], )
                     first = hybrid_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
                     inner_ext.cv[0] = torch.zeros_like(inner_ext.cv[0])
@@ -395,6 +395,10 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     return ctxtDec
 
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
+
+    if cryptoContext.autoLoadAndSetConfig == True:
+        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+
     result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
 
     if cryptoContext.rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
