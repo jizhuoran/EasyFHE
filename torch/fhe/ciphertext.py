@@ -1,6 +1,5 @@
 import torch
 
-
 class Cipher:
     def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
         self.cv = cv
@@ -37,10 +36,6 @@ class Cipher:
     def drop_last_elements(self, num_levels):
         assert num_levels <= self.cur_limbs and num_levels >= 0
         self.cur_limbs -= num_levels
-
-    def try_drop_last_elements(self, num_levels):
-        if num_levels > 0:
-            self.drop_last_elements(num_levels)
 
     def __repr__(self):
 

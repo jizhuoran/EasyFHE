@@ -50,9 +50,10 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
             rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
         else:
             raise ValueError
-        rct1.try_drop_last_elements(
-            rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
-        )
+        if rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2 > 0:
+            rct1.drop_last_elements(
+                rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
+            )
         if rct2.noise_deg == 1:
             rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         rct1.scaling_factor = rct2.scaling_factor
@@ -445,7 +446,7 @@ def _cipher_neg(in0, cryptoContext):
 
 
 # @check_cipher_len
-#todo: input len of in0.cv could be 1
+# todo: input len of in0.cv could be 1
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
@@ -672,5 +673,3 @@ def extract_cv(cipher: Cipher, index, append_zeros=False):
             return cipher.cipher_like([torch.zeros_like(cipher.cv[1]), cipher.cv[1]])
     else:
         return cipher.cipher_like([cipher.cv[index]])
-
-
