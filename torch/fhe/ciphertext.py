@@ -77,10 +77,28 @@ class Plaintext:
     def __init__(self, mv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
         self.mv = mv
         self.cur_limbs = cur_limbs
-        self.noise_deg = noise_deg
         self.scaling_factor = scaling_factor
+        self.noise_deg = noise_deg
         self.slots = slots
         self.is_ext = is_ext
+
+    def cipher_like(
+        self,
+        mv,
+        cur_limbs=None,
+        scaling_factor=None,
+        noise_deg=None,
+        slots=None,
+        is_ext=None,
+    ):
+        return Cipher(
+            mv,
+            self.cur_limbs if cur_limbs == None else cur_limbs,
+            self.scaling_factor if scaling_factor == None else scaling_factor,
+            self.noise_deg if noise_deg == None else noise_deg,
+            self.slots if slots == None else slots,
+            self.is_ext if is_ext == None else is_ext,
+        )
 
     def __eq__(self, other):
         if not isinstance(other, Plaintext):
