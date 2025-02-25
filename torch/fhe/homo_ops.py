@@ -503,14 +503,7 @@ def homo_rescale(ct, levels, cryptoContext):
         )  # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
         scFactor = scFactor / modReduceFactor
 
-    return Cipher(
-        res_cv,
-        ct.cur_limbs - levels,
-        scFactor,
-        ct.noise_deg - levels,
-        ct.slots,
-        ct.is_ext,
-    )
+    return ct.cipher_like(res_cv, cur_limbs = ct.cur_limbs - levels, scaling_factor = scFactor, noise_deg = ct.noise_deg - levels)
 
 
 @call_counter
@@ -627,14 +620,7 @@ def homo_conjugate(in0, cryptoContext):
 
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # res0 = cipher.deep_copy()
-    ctmorphed = Cipher(
-        plaintext.mv,
-        plaintext.cur_limbs,
-        plaintext.scaling_factor,
-        plaintext.noise_deg,
-        plaintext.slots,
-        False,
-    )  # MorphPlaintext in openfhe
+    ctmorphed = plaintext.cipher_like(plaintext.mv) # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
     res0.cv = [
         F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs),
@@ -680,14 +666,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         return cipher.cipher_like([cv0, cv1], scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
                                   noise_deg=cipher.noise_deg + plaintext.noise_deg)
     else:
-        ctmorphed = Cipher(
-            plaintext.mv,
-            plaintext.cur_limbs,
-            plaintext.scaling_factor,
-            plaintext.noise_deg,
-            plaintext.slots,
-            False,
-        )  # MorphPlaintext in openfhe
+        ctmorphed = plaintext.cipher_like(plaintext.mv) # MorphPlaintext in openfhe
         res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
         moduli = cryptoContext.moduliQ
