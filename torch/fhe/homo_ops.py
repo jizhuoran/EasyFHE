@@ -662,3 +662,15 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             noise_deg=res0.noise_deg + res1.noise_deg,
         )
 
+
+def extract_cv(cipher: Cipher, index, append_zeros=False):
+    assert index == 0 or index == 1, "index must be 0 or 1"
+    if append_zeros:
+        if index == 0:
+            return cipher.cipher_like([cipher.cv[0], torch.zeros_like(cipher.cv[0])])
+        else:
+            return cipher.cipher_like([torch.zeros_like(cipher.cv[1]), cipher.cv[1]])
+    else:
+        return cipher.cipher_like([cipher.cv[index]])
+
+

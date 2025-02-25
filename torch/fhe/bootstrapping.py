@@ -93,7 +93,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
             b = params.baby_step_rem
             num_rotations = params.num_rotations_rem
 
-        digits_ext = hybrid_keyswitch.modup_to_ext(result.cipher_like([result.cv[1]]), cryptoContext)
+        digits_ext = hybrid_keyswitch.modup_to_ext(homo_ops.extract_cv(result, 1), cryptoContext)
 
         fast_rotation_ext = []
         
@@ -114,14 +114,14 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
             
             if i == 0:
-                inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]], )
+                inner_ext_cv0 = homo_ops.extract_cv(inner_ext, 0)
                 first_acc = hybrid_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
-                outer_ext = inner_ext.cipher_like([torch.zeros_like(inner_ext.cv[0]), inner_ext.cv[1]], )
+                outer_ext = homo_ops.extract_cv(inner_ext, 1, append_zeros=True)
             else:
                 if rot_out[s][i] != 0:
                     inner = hybrid_keyswitch.moddown_from_ext(inner_ext, cryptoContext)
-                    inner_cv0 = inner.cipher_like([inner.cv[0]])
-                    inner_cv1 = inner.cipher_like([inner.cv[1]])
+                    inner_cv0 = homo_ops.extract_cv(inner, 0)
+                    inner_cv1 = homo_ops.extract_cv(inner, 1)
 
                     first = homo_ops._cipher_automorphism(inner_cv0, rot_out[s][i], cryptoContext)
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
@@ -131,14 +131,14 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                                                           False, None, cryptoContext)
                     outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
                 else:
-                    inner_ext_cv0 = inner_ext.cipher_like([inner_ext.cv[0]], )
+                    inner_ext_cv0 = homo_ops.extract_cv(inner_ext, 0)
                     first = hybrid_keyswitch.moddown_from_ext(inner_ext_cv0, cryptoContext)
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
-                    inner_ext.cv[0] = torch.zeros_like(inner_ext.cv[0])
+                    inner_ext = homo_ops.extract_cv(inner_ext, 1, append_zeros=True)
                     outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
         
         outer = hybrid_keyswitch.moddown_from_ext(outer_ext, cryptoContext)
-        first_full_cv = first_acc.cipher_like([first_acc.cv[0], torch.zeros_like(first_acc.cv[0])])
+        first_full_cv = homo_ops.extract_cv(first_acc, 0, append_zeros=True)
         result = homo_ops.homo_add(outer, first_full_cv, cryptoContext)
 
     
