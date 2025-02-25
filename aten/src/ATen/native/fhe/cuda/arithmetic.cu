@@ -14,7 +14,7 @@
 
 #define WORK_PER_THREAD (1)
 #define WARP_SIZE (32)
-#define NUM_WARPS (1)
+#define NUM_WARPS (8)
 #define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
 #define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
 
