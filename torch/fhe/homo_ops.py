@@ -268,11 +268,9 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
 
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
-# todo: should merge this function with _cipher_mul_scalar_double? or redesign interface
-def _eval_mult_core(cipher, constant, cryptoContext):
-    factors = _get_element_for_eval_mult(constant, cipher.cur_limbs, cryptoContext)
-    return _cipher_mul_scalar_double(cipher, factors, cryptoContext)
-
+def _eval_mult_core(in0, cnst, cryptoContext):
+    factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
+    return _cipher_mul_scalar_double(in0, factors, cryptoContext)
 
 # todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
@@ -561,8 +559,7 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
         in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
-    return _cipher_mul_scalar_double(in0, factors, cryptoContext)
+    return _eval_mult_core(in0, cnst, cryptoContext)
 
 
 def homo_rotate(in0, index, cryptoContext):
