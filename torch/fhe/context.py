@@ -4,65 +4,10 @@ from .bs_context import *
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
 
-#fixme: zrji added, remove?
-# CRTMult in ckkspackedencoding.cpp
-def crt_mult(xs, ys, mods):
-    return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
 
 class LargeScalingFactorConstants(Enum):
     MAX_BITS_IN_WORD = 61
     MAX_LOG_STEP = 60
-
-# todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
-def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoContext):
-
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
-        sc_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
-    else:
-        sc_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
-
-    # Compute approxFactor to avoid overflow issues
-    log_approx = 0
-    res = math.fabs(constant * sc_factor)
-    if res > 0:
-        log_sf = int(math.ceil(math.log2(res)))
-        log_valid = min(log_sf, LargeScalingFactorConstants.MAX_BITS_IN_WORD.value)
-        log_approx = log_sf - log_valid
-
-    approx_factor = float(pow(2, log_approx))
-    sc_constant = int(constant * sc_factor / approx_factor + 0.5)
-
-    crt_constant = cur_limbs * [sc_constant]
-
-    # Scale back up by approxFactor within the CRT multiplications.
-    if log_approx > 0:
-        log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
-        int_step = 2**log_step
-        crt_approx = cur_limbs * [int_step]
-        log_approx -= log_step
-
-        while log_approx > 0:
-            log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
-            int_step = 2**log_step
-            crt_sf = cur_limbs * [int_step]
-            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ_scalar)
-            log_approx -= log_step
-
-        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ_scalar)
-
-    # Handle FLEXIBLEAUTOEXT mode at level 0, we don't use the depth to calculate the scaling factor,
-    # so we return the value before taking the depth into account.
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
-        return crt_constant
-
-    # Final scaling factor adjustments
-    int_sc_factor = int(sc_factor + 0.5)
-    crt_sc_factor = cur_limbs * [int_sc_factor]
-
-    for i in range(1, noise_deg):
-        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ_scalar)
-
-    return crt_constant
 
 
 class Context:
@@ -76,12 +21,8 @@ class Context:
         self.Nh = get_item("Nh", gpufhe_content_map)
         self.PInvModq = get_item("PInvModq", gpufhe_content_map)
         self.PModq = get_item("PModq", gpufhe_content_map)
-        # self.PModq_cuda = get_item("PModq_cuda", gpufhe_content_map)
         self.PartQlHatInvModq = get_item("PartQlHatInvModq", gpufhe_content_map)
         self.PartQlHatModp = get_item("PartQlHatModp", gpufhe_content_map)
-        self.PartQlHatModp_pad = get_item("PartQlHatModp_pad", gpufhe_content_map)
-        # self.QHatInvModq = get_item("QHatInvModq", gpufhe_content_map)
-        # self.QHatModp = get_item("QHatModp", gpufhe_content_map)
         self.QlQlInvModqlDivqlModq = get_item("QlQlInvModqlDivqlModq", gpufhe_content_map)
         self.approxSF = get_item("approxSF", gpufhe_content_map)
         self.automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
@@ -89,7 +30,6 @@ class Context:
         self.barret_ratio = get_item("barret_ratio", gpufhe_content_map)
         self.beta = get_item("beta", gpufhe_content_map)
         self.chain_length = get_item("chain_length", gpufhe_content_map)
-        # self.correctionFactor = get_item("correctionFactor", gpufhe_content_map) #todo: to be removed
         self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
         self.h = get_item("h", gpufhe_content_map)
         self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
@@ -106,7 +46,6 @@ class Context:
         self.logBsSlots_list = get_item("logBsSlots_list", gpufhe_content_map)
         self.auxModSize = get_item("specialMod", gpufhe_content_map)
         self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
-        #todo: need to add firstMod? correspond to firstMod in openfhe, correspond to q0 in client.py
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
         self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
         self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
@@ -138,7 +77,6 @@ class Context:
         self.qVec = get_item("qVec", gpufhe_content_map)
         self.q_inv_mod_q = get_item("q_inv_mod_q", gpufhe_content_map)
         self.q_inv_mod_q_shoup = get_item("q_inv_mod_q_shoup", gpufhe_content_map)
-        # self.q_mu_scalar = get_item("q_mu_scalar", gpufhe_content_map)
         self.q_mu = get_item("q_mu", gpufhe_content_map)
         self.qlql_inv_mod_ql_div_ql_mod_q = get_item("qlql_inv_mod_ql_div_ql_mod_q", gpufhe_content_map)
         self.qlql_inv_mod_ql_div_ql_mod_q_shoup = get_item("qlql_inv_mod_ql_div_ql_mod_q_shoup", gpufhe_content_map)
@@ -152,7 +90,7 @@ class Context:
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.BsContext_map = {}
-        if self.logBsSlots_list[0]!=0:
+        if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
                 _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
                 self.BsContext_map[str(logBsSlots)] = _BsContext
@@ -160,14 +98,8 @@ class Context:
         self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
         self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
-        # self.encode_params_rotGroup_cuda = get_item("encode_params_rotGroup_cuda", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
         self.encode_out = get_item("encode_out", gpufhe_content_map)
-
-        # self.constant_minus_one = {}
-        # for cur_libm, noise_deg in itertools.product(range(self.L), [1, 2]):
-        #     self.constant_minus_one[(cur_libm, noise_deg)] = _get_element_for_eval_add_or_sub(math.fabs(-1.0), cur_libm, noise_deg, self)
-
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -266,7 +198,7 @@ class Context:
    #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
    #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
    #  @return the scaling factor.
-    def GetScalingFactorReal(self, cur_limbs= None): #todo: introduce level or transfer limbs to level inside
+    def GetScalingFactorReal(self, cur_limbs= None):
         if cur_limbs is None:
             cur_limbs = self.L
         lvl = self.L - cur_limbs # openfhe use `level` to do the index
