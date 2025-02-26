@@ -122,8 +122,8 @@ def try_load_context(
             mode):
 
     NO_BS=False
-    if logBsSlots_list is None:
-        assert (logBsSlots_list is None) == (levelBudget_list is None), \
+    if logBsSlots_list is None or logBsSlots_list == []:
+        assert (logBsSlots_list is None or logBsSlots_list == []) == (levelBudget_list is None or levelBudget_list == []), \
             "ERROR: logBsSlots_list and levelBudget_list must be both None or both not None!"
         logBsSlots_list = [0]
         levelBudget_list = [[0, 0]]
@@ -182,7 +182,7 @@ def try_load_context(
     cryptoContext = Context(BsContextMembers, gpufheMembers, autoLoadAndSetConfig)
     openfhe_context = client.OpenFHEContext(openfheMembers)
     if cryptoContext.autoLoadAndSetConfig:
-        if rotIndex_list is not None:
+        if rotIndex_list is not None and rotIndex_list != []:
             load_rotation_keys("app", cryptoContext)
         if NO_BS==False:
             for logBsSlots in logBsSlots_list:
