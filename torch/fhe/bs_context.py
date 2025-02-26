@@ -56,11 +56,11 @@ class BsContext:
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = torch.tensor(self.m_U0hatTPreFFT[i][j].mv, dtype = torch.uint64)
+                self.m_U0hatTPreFFT[i][j].cv = torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64)
+                self.m_U0PreFFT[i][j].cv = torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
     def SelectLayers(self, logBsSlots, budget):
@@ -134,8 +134,8 @@ class BsContext:
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cuda()
+                self.m_U0hatTPreFFT[i][j].cv = self.m_U0hatTPreFFT[i][j].cv.cuda()
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cuda()
+                self.m_U0PreFFT[i][j].cv = self.m_U0PreFFT[i][j].cv.cuda()

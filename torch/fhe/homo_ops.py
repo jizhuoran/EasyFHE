@@ -605,7 +605,7 @@ def homo_conjugate(in0, cryptoContext):
 
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # res0 = cipher.deep_copy()
-    ctmorphed = plaintext.cipher_like(plaintext.mv) # MorphPlaintext in openfhe
+    ctmorphed = plaintext.cipher_like(plaintext.cv) # MorphPlaintext in openfhe
     res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
     res0.cv = [
         F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs),
@@ -646,12 +646,12 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             raise ValueError(f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}")
         moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
         mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
-        cv0 = F.cv_mul(cipher.cv[0], plaintext.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
-        cv1 = F.cv_mul(cipher.cv[1], plaintext.mv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
         return cipher.cipher_like([cv0, cv1], scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
                                   noise_deg=cipher.noise_deg + plaintext.noise_deg)
     else:
-        ctmorphed = plaintext.cipher_like(plaintext.mv) # MorphPlaintext in openfhe
+        ctmorphed = plaintext.cipher_like(plaintext.cv) # MorphPlaintext in openfhe
         res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
         moduli = cryptoContext.moduliQ

@@ -234,9 +234,9 @@ def encode_test_case(
     plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
     plaintext_golden = openfhe_context.encode(x)
 
-    encoded_data = plaintext.mv[0]
+    encoded_data = plaintext.cv[0]
     encoded_data = encoded_data.cpu().numpy()
-    encode_data_golden = plaintext_golden.mv[0]
+    encode_data_golden = plaintext_golden.cv[0]
     encode_data_golden = encode_data_golden.cpu().numpy()
     all_correct = True
     for i in range(len(encode_data_golden)):
