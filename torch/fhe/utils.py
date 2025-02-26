@@ -6,13 +6,268 @@ import atexit
 from .client import client as client
 from .client.gen_context import gen_contexts
 from .context import *
+from .ciphertext import Cipher
 import torch
+
+
+def printFrontend(func):
+    if func.__name__ == "homo_rescale":
+
+        def wrapper(*args, **kwargs):
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
+                return func(*args, **kwargs)
+            ct, levels, cryptoContext = args
+            in_node_id = ct.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_rescale(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in_node_id, levels
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    if func.__name__ == "homo_mul_scalar_double":
+
+        def wrapper(*args, **kwargs):
+            in0, cnst, cryptoContext = args
+            in_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_mul_scalar_double(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in_node_id, repr(cnst)
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    if func.__name__ == "mod_raise":
+
+        def wrapper(*args, **kwargs):
+            cipher, L0, cryptoContext = args
+            in_node_id = cipher.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = mod_raise(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in_node_id, repr(L0)
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    if func.__name__ == "homo_rotate":
+
+        def wrapper(*args, **kwargs):
+            in0, index, cryptoContext = args
+            in_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_rotate(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in_node_id, repr(index)
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    if func.__name__ == "homo_add":
+
+        def wrapper(*args, **kwargs):
+            in0, in1, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            in1_node_id = in1.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_add(NODE{}, NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id, in1_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "eval_fast_rotate":
+
+        def wrapper(*args, **kwargs):
+            digits, cipher, index, need_KS_add, need_moddown, cryptoContext = args
+            digits_node_id = digits.cipher_id
+            cipher_node_name = 'NODE{}'.format(cipher.cipher_id) if cipher is not None else 'None'
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.eval_fast_rotate(NODE{}, {}, {}, {}, {}, cryptoContext)".format(
+                    out_node_id,
+                    digits_node_id,
+                    cipher_node_name,
+                    index,
+                    need_KS_add,
+                    need_moddown,
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "extract_cv":
+
+        def wrapper(*args, **kwargs):
+            in0, index = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            if "append_zeros" in kwargs:
+                append_zeros = ", append_zeros = " + str(kwargs["append_zeros"])
+            else:
+                append_zeros = ""
+            print(
+                "NODE{} = homo_ops.extract_cv(NODE{}, {}{})".format(
+                    out_node_id, in0_node_id, index, append_zeros
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    if func.__name__ == "homo_mul_pt":
+
+        def wrapper(*args, **kwargs):
+            cipher, plaintext, cryptoContext = args
+            cipher_node_id = cipher.cipher_id
+            plaintext_node_id = plaintext.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_mul_pt(NODE{}, NODE{}, cryptoContext)".format(
+                    out_node_id, cipher_node_id, plaintext_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    
+    if func.__name__ == "homo_mul_scalar_int":
+
+        def wrapper(*args, **kwargs):
+            in0, scalar, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_mul_scalar_int(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in0_node_id, scalar
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "_cipher_automorphism":
+    
+        def wrapper(*args, **kwargs):
+            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+                return func(*args)
+            in0, index, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops._cipher_automorphism(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in0_node_id, index
+                )
+            )
+            res = func(*args)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    
+
+    if func.__name__ == "key_switch_P_ext":
+
+        def wrapper(*args, **kwargs):
+            in0, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = hybrid_keyswitch.key_switch_P_ext(NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "modup_to_ext":
+
+        def wrapper(*args, **kwargs):
+            in0, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = hybrid_keyswitch.modup_to_ext(NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "mult_rot_key_and_sum_ext":
+
+        def wrapper(*args, **kwargs):
+            digits, index, cryptoContext = args
+            in0_node_id = digits.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in0_node_id, index
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+    if func.__name__ == "moddown_from_ext":
+
+        def wrapper(*args, **kwargs):
+            cipher, cryptoContext = args
+            in0_node_id = cipher.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = hybrid_keyswitch.moddown_from_ext(NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
 
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
 
 # Registry to keep track of function call counts
 call_registry = {}
+
 
 def call_counter(func):
     @functools.wraps(func)
@@ -31,11 +286,13 @@ def print_call_counts():
     for func_name, wrapper in call_registry.items():
         print(f"Function '{func_name}' was called {wrapper.count} times.")
 
+
 # @atexit.register
 def print_execution_times():
     print("\nExecution Times:")
     for func_name, exec_time in execution_times.items():
         print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
+
 
 def check_meta_equal(func):
     def wrapper(*args, **kwargs):
@@ -47,12 +304,15 @@ def check_meta_equal(func):
         # assert in0.is_ext == in1.is_ext
         # assert in0.slots == in1.slots
         return func(*args, **kwargs)
+
     return wrapper
+
 
 def check_cipher_len(func):
     def wrapper(*args, **kwargs):
         assert len(args[0].cv) == 2
         return func(*args, **kwargs)
+
     return wrapper
 
 
@@ -80,11 +340,14 @@ def profile_pytorch_function(func):
     def wrapper(*args, **kwargs):
         # Set up the profiler
         with torch.profiler.profile(
-                activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
-                on_trace_ready=torch.profiler.tensorboard_trace_handler('/home/zrji/log'),
-                record_shapes=True,
-                profile_memory=True,
-                with_stack=True
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler("/home/zrji/log"),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
         ) as profiler:
             result = func(*args, **kwargs)
             profiler.step()
@@ -97,8 +360,9 @@ def profile_pytorch_function(func):
 
     return wrapper
 
+
 def round_half_away_from_zero(number, ndigits=0):
-    multiplier = 10 ** ndigits
+    multiplier = 10**ndigits
     if number > 0:
         return math.floor(number * multiplier + 0.5) / multiplier
     elif number < 0:
@@ -106,55 +370,59 @@ def round_half_away_from_zero(number, ndigits=0):
     else:
         return 0.0
 
-def try_load_context(
-            maxLevelsRemaining,
-            rotIndex_list,
-            logBsSlots_list,
-            logN,
-            dnum,
-            dcrtBits,
-            firstMod,
-            levelBudget_list,
-            secretKeyDist,
-            rescaleTech,
-            save_dir,
-            autoLoadAndSetConfig,
-            mode):
 
-    NO_BS=False
+def try_load_context(
+    maxLevelsRemaining,
+    rotIndex_list,
+    logBsSlots_list,
+    logN,
+    dnum,
+    dcrtBits,
+    firstMod,
+    levelBudget_list,
+    secretKeyDist,
+    rescaleTech,
+    save_dir,
+    autoLoadAndSetConfig,
+    mode,
+):
+
+    NO_BS = False
     if logBsSlots_list is None:
-        assert (logBsSlots_list is None) == (levelBudget_list is None), \
-            "ERROR: logBsSlots_list and levelBudget_list must be both None or both not None!"
+        assert (logBsSlots_list is None) == (
+            levelBudget_list is None
+        ), "ERROR: logBsSlots_list and levelBudget_list must be both None or both not None!"
         logBsSlots_list = [0]
         levelBudget_list = [[0, 0]]
         NO_BS = True
     else:
-        sorted_pairs = sorted(zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0])
+        sorted_pairs = sorted(
+            zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0]
+        )
         logBsSlots_list, levelBudget_list = zip(*sorted_pairs)
         logBsSlots_list = list(logBsSlots_list)
         levelBudget_list = list(levelBudget_list)
 
-    load_path = (
-        save_dir
-        + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
-            '-'.join(map(str, logBsSlots_list)),
-            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-            logN,
-            dnum,
-            dcrtBits,
-            firstMod,
-            secretKeyDist,
-            rescaleTech,
-        )
+        "-".join(map(str, logBsSlots_list)),
+        "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+        logN,
+        dnum,
+        dcrtBits,
+        firstMod,
+        secretKeyDist,
+        rescaleTech,
     )
 
     debug_load_path = (
-            save_dir
-            + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        save_dir
+        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             maxLevelsRemaining,
-            '-'.join(map(str, logBsSlots_list)),
-            '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
+            "-".join(map(str, logBsSlots_list)),
+            "-".join(
+                "-".join(map(str, levelBudget)) for levelBudget in levelBudget_list
+            ),
             logN,
             dnum,
             dcrtBits,
@@ -164,19 +432,31 @@ def try_load_context(
         )
     )
 
-    if (not os.path.exists(load_path)) or (not os.path.exists(debug_load_path) and mode == "debug"):
-        gen_contexts(maxLevelsRemaining=maxLevelsRemaining, rotIndex_list=rotIndex_list,
-                     logBsSlots_list=logBsSlots_list, logN=logN, dnum=dnum, dcrtBits=dcrtBits, firstMod=firstMod,
-                     levelBudget_list=levelBudget_list, secretKeyDist=secretKeyDist, rescaleTech=rescaleTech,
-                     save_dir=save_dir, mode=mode)
+    if (not os.path.exists(load_path)) or (
+        not os.path.exists(debug_load_path) and mode == "debug"
+    ):
+        gen_contexts(
+            maxLevelsRemaining=maxLevelsRemaining,
+            rotIndex_list=rotIndex_list,
+            logBsSlots_list=logBsSlots_list,
+            logN=logN,
+            dnum=dnum,
+            dcrtBits=dcrtBits,
+            firstMod=firstMod,
+            levelBudget_list=levelBudget_list,
+            secretKeyDist=secretKeyDist,
+            rescaleTech=rescaleTech,
+            save_dir=save_dir,
+            mode=mode,
+        )
 
-    with open(load_path, 'rb') as file:
+    with open(load_path, "rb") as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
     if mode == "debug":
         if not os.path.exists(debug_load_path):
             print("ERROR: There is no debug context file! Please regenerate context!")
-        with open(debug_load_path, 'rb') as file:
+        with open(debug_load_path, "rb") as file:
             debug_keys = pickle.load(file)
 
     cryptoContext = Context(BsContextMembers, gpufheMembers, autoLoadAndSetConfig)
@@ -184,40 +464,52 @@ def try_load_context(
     if cryptoContext.autoLoadAndSetConfig:
         if rotIndex_list is not None:
             load_rotation_keys("app", cryptoContext)
-        if NO_BS==False:
+        if NO_BS == False:
             for logBsSlots in logBsSlots_list:
                 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
                 cryptoContext.BsContext.to_cuda()
                 load_rotation_keys(logBsSlots, cryptoContext)
 
     if mode == "debug":
-        openfhe_boot_contexts={}
-        if NO_BS==False:
+        openfhe_boot_contexts = {}
+        if NO_BS == False:
             for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-                openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(openfheMembers)
-                openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(debug_keys, 1 << logBsSlots, level_budget)
+                openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(
+                    openfheMembers
+                )
+                openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
+                    debug_keys, 1 << logBsSlots, level_budget
+                )
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
 
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
-    gpu_bootstrapping_res = np.array([bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]).reshape(-1)
+    gpu_bootstrapping_res = np.array(
+        [bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]
+    ).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
+
 def load_rotation_keys(key_name, cryptoContext):
-    if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (not cryptoContext.slots_left_rot_key_map[str(key_name)]):
-        print("Warning: slots_left_rot_key_map[", key_name,"] is None")
+    if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (
+        not cryptoContext.slots_left_rot_key_map[str(key_name)]
+    ):
+        print("Warning: slots_left_rot_key_map[", key_name, "] is None")
         return
     for key, value in cryptoContext.slots_left_rot_key_map[str(key_name)].items():
-        cryptoContext.left_rot_key_map[key] = [torch.tensor(v, dtype = torch.uint64, device ="cuda") for v in value]
+        cryptoContext.left_rot_key_map[key] = [
+            torch.tensor(v, dtype=torch.uint64, device="cuda") for v in value
+        ]
     for key, value in cryptoContext.slots_precompute_auto_map[str(key_name)].items():
-        cryptoContext.precompute_auto_map[key] = torch.tensor(value, dtype = torch.int32, device ="cuda")
+        cryptoContext.precompute_auto_map[key] = torch.tensor(
+            value, dtype=torch.int32, device="cuda"
+        )
+
 
 def load_bootstrapping_context(logBsSlots, cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.to_cuda()
     load_rotation_keys(logBsSlots, cryptoContext)
-
-

@@ -1,13 +1,23 @@
 import torch
 
 class Cipher:
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext):
+    _id_counter = 0
+
+    def get_next_id():
+        Cipher._id_counter += 1
+        return Cipher._id_counter
+
+    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, cipher_id = "assign"):
         self.cv = cv
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
         self.noise_deg = noise_deg
         self.slots = slots
         self.is_ext = is_ext
+        if cipher_id == "assign":
+            self.cipher_id = Cipher.get_next_id()
+        else:
+            self.cipher_id = cipher_id
 
     def cipher_like(
         self,
@@ -17,6 +27,7 @@ class Cipher:
         noise_deg=None,
         slots=None,
         is_ext=None,
+        cipher_id="copy",
     ):
         return Cipher(
             cv,
@@ -25,20 +36,20 @@ class Cipher:
             self.noise_deg if noise_deg == None else noise_deg,
             self.slots if slots == None else slots,
             self.is_ext if is_ext == None else is_ext,
+            self.cipher_id if cipher_id == "copy" else cipher_id,
         )
 
     def deep_copy(self):
-        return self.cipher_like([x.clone() for x in self.cv])
+        return self.cipher_like([x.clone() for x in self.cv], cipher_id="assign")
 
     def shallow_copy(self):
-        return self.cipher_like(self.cv)
+        return self.cipher_like(self.cv, cipher_id="copy")
 
     def drop_last_elements(self, num_levels):
         assert num_levels <= self.cur_limbs and num_levels >= 0
         self.cur_limbs -= num_levels
 
     def __repr__(self):
-
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):
             s += f"cv{i}={cv[:self.cur_limbs]},\n"

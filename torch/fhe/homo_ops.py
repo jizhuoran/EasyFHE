@@ -3,8 +3,9 @@ from .ciphertext import Plaintext
 from . import functional as F
 from . import hybrid_keyswitch
 import math
+import functools
 import torch
-from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
+from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function, printFrontend
 import warnings
 
 
@@ -45,7 +46,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
             rct2.noise_deg == 1 and rct1.cur_limbs - rct2.cur_limbs == 1
         ):
             rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
         elif rct1.noise_deg == 1:
             rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
         else:
@@ -55,7 +56,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
                 rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
             )
         if rct2.noise_deg == 1:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
         rct1.scaling_factor = rct2.scaling_factor
 
         if swapped:
@@ -138,8 +139,8 @@ def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
         # inline `AdjustLevelsAndDepthToOneInPlace` in ckksrns-leveledshe.cpp as following
         rct1, rct2 = adjust_levels_and_depth(ct1, ct2, cryptoContext)
         if rct1.noise_deg == 2:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
+            rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
     return rct1, rct2
 
 
@@ -447,6 +448,7 @@ def _cipher_neg(in0, cryptoContext):
 
 # @check_cipher_len
 # todo: input len of in0.cv could be 1
+@printFrontend
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
@@ -458,6 +460,7 @@ def _cipher_automorphism(in0, index, cryptoContext):
 
 
 @call_counter
+@printFrontend
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
@@ -473,7 +476,8 @@ def homo_sub(in0, in1, cryptoContext):
 
 
 @call_counter
-def homo_rescale(ct, levels, cryptoContext):
+@printFrontend
+def homo_rescale(ct, levels, cryptoContext, printInfo = True):
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0:
         return ct.deep_copy()
@@ -515,7 +519,7 @@ def homo_mul(in0, in1, cryptoContext):
 @call_counter
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
-        in0 = homo_rescale(in0, 1, cryptoContext)
+        in0 = homo_rescale(in0, 1, cryptoContext, printInfo=False)
     res = _cipher_square(in0, cryptoContext)
     tmp = res.cipher_like(F.cv_keyswitch(
         res.cv[2],
@@ -547,6 +551,7 @@ def homo_add_scalar_int(in0, scalar, cryptoContext):
 
 # note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
 # fixme: do we accept scalar<0?
+@printFrontend
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = _cipher_mul_scalar_int(in0, abs(scalar), cryptoContext)
     if scalar < 0:
@@ -557,12 +562,13 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 # note: EvalMultInPlace in ckksrns-leveledshe.cpp
 @profile_python_function
 @call_counter
+@printFrontend
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
-        in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
     return _eval_mult_core(in0, cnst, cryptoContext)
 
-
+@printFrontend
 def homo_rotate(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.left_rot_key_map[norm_index]
@@ -575,6 +581,7 @@ def homo_rotate(in0, index, cryptoContext):
     return res
 
 
+@printFrontend
 def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoContext):
     if index == 0:
         return cipher.deep_copy()
@@ -616,7 +623,7 @@ def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # )
     return res0
 
-
+@printFrontend
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # if (isinstance(cipher, Cipher) and isinstance(plaintext, Plaintext)) :
     #     in_ct, in_pt = cipher, plaintext
@@ -663,7 +670,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             noise_deg=res0.noise_deg + res1.noise_deg,
         )
 
-
+@printFrontend
 def extract_cv(cipher: Cipher, index, append_zeros=False):
     assert index == 0 or index == 1, "index must be 0 or 1"
     if append_zeros:
