@@ -1,202 +1,11 @@
-from .ciphertext import Cipher
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
-from . import approx as approx
 from . import hybrid_keyswitch
 from . import utils
-
-
-Tensor = torch.Tensor
-NORMAL_CIPHER_SIZE = 2
-BASE_NUM_LEVELS_TO_DROP = 1
-R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
-R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
-
+import numpy as np
 
 # @profile_python_function
-def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
-    rescale_tech = cryptoContext.rescaleTech
-
-    if rescale_tech == "FLEXIBLEAUTO" or rescale_tech == "FLEXIBLEAUTOEXT":
-        lvl = 0 if rescale_tech == "FLEXIBLEAUTO" else 1
-        if cryptoContext.L != L0:
-            # Print error message and raise an exception to stop the program
-            print("cryptoContext.L != L0")
-            raise Exception("Error: cryptoContext.L != L0")
-        target_sf = cryptoContext.GetScalingFactorReal(cur_limbs=(L0 - lvl))
-        source_sf = ciphertext.scaling_factor
-        num_towers = ciphertext.cur_limbs
-        mod_to_drop = float(cryptoContext.moduliQ_scalar[num_towers - 1])
-        # in the case of FLEXIBLEAUTO, we need to bring the ciphertext to the right scale using a
-        # a scaling multiplication. Note the at currently FLEXIBLEAUTO is only supported for NATIVEINT = 64.
-        # So the other branch is for future purposes (in case we decide to add add the FLEXIBLEAUTO support
-        # for NATIVEINT = 128.
-        # Scaling down the message by a correction factor to emulate using a larger q0.
-        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
-        adjustment_factor = (
-            (target_sf / source_sf)
-            * (mod_to_drop / source_sf)
-            * math.pow(2, -correction)
-        )  # if NATIVEINT != 128
-        ciphertext = homo_ops.homo_mul_scalar_double(
-            ciphertext, adjustment_factor, cryptoContext
-        )
-        ciphertext = homo_ops.homo_rescale(
-            ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-        )
-        ciphertext.scaling_factor = target_sf
-
-    else:
-        # Scaling down the message by a correction factor to emulate using a larger q0.
-        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
-        cnst = math.pow(2, -correction)
-        ciphertext = homo_ops.homo_mul_scalar_double(ciphertext, cnst, cryptoContext)
-        ciphertext = homo_ops.homo_rescale(
-            ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-        )
-    return ciphertext
-
-
-# @profile_python_function
-def apply_double_angle_iterations(ciphertext, cryptoContext):
-    if cryptoContext.secretKeyDist == "UNIFORM_TERNARY":
-        r = R_UNIFORM
-    elif cryptoContext.secretKeyDist == "SPARSE_TERNARY":
-        r = R_SPARSE
-    else:
-        raise ValueError("set secretKeyDist first!")
-
-    for j in range(1, r + 1):
-        ciphertext = homo_ops.homo_square(ciphertext, cryptoContext)
-        ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
-        scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
-        ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
-        ciphertext = (
-            homo_ops.homo_rescale(ciphertext, 1, cryptoContext)
-            if cryptoContext.rescaleTech == "FIXEDMANUAL"
-            else ciphertext
-        )
-    return ciphertext
-
-
-def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
-
-    if direction == "C2S":
-        params = cryptoContext.BsContext.paramsEnc
-        rot_in = cryptoContext.BsContext.C2S_rot_in
-        rot_out = cryptoContext.BsContext.C2S_rot_out
-        loop_range = list(range(0, params.level_budget))[::-1]
-    elif direction == "S2C":
-        params = cryptoContext.BsContext.paramsDec
-        rot_in = cryptoContext.BsContext.S2C_rot_in
-        rot_out = cryptoContext.BsContext.S2C_rot_out
-        loop_range = list(range(0, params.level_budget))
-
-    num_rotations = params.num_rotations
-    b = params.baby_step
-    g = params.giant_step
-
-    result = ctxt.deep_copy()
-
-    for s in loop_range:
-        if not s == loop_range[0]:
-            result = homo_ops.homo_rescale(
-                result, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-        if s == loop_range[-1] and params.layers_rem:
-            g = params.giant_step_rem
-            b = params.baby_step_rem
-            num_rotations = params.num_rotations_rem
-
-        digits_ext = hybrid_keyswitch.modup_to_ext(
-            homo_ops.extract_cv(result, 1), cryptoContext
-        )
-
-        fast_rotation_ext = []
-
-        for j in range(g):
-            if rot_in[s][j] != 0:
-                fast_rotation_ext.append(
-                    homo_ops.eval_fast_rotate(
-                        digits_ext, result, rot_in[s][j], True, False, cryptoContext
-                    )
-                )
-            else:
-                fast_rotation_ext.append(
-                    hybrid_keyswitch.key_switch_P_ext(result, cryptoContext)
-                )
-
-        for i in range(b):
-            G = g * i
-            inner_ext = homo_ops.homo_mul_pt(
-                fast_rotation_ext[0], A_Ext[s][G], cryptoContext
-            )
-            for j in range(1, g):
-                if (G + j) != num_rotations:
-                    tmp_ext = homo_ops.homo_mul_pt(
-                        fast_rotation_ext[j], A_Ext[s][G + j], cryptoContext
-                    )
-                    inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
-
-            if i == 0:
-                inner_ext_cv0 = homo_ops.extract_cv(inner_ext, 0)
-                first_acc = hybrid_keyswitch.moddown_from_ext(
-                    inner_ext_cv0, cryptoContext
-                )
-                outer_ext = homo_ops.extract_cv(inner_ext, 1, append_zeros=True)
-            else:
-                if rot_out[s][i] != 0:
-                    inner = hybrid_keyswitch.moddown_from_ext(inner_ext, cryptoContext)
-                    inner_cv0 = homo_ops.extract_cv(inner, 0)
-                    inner_cv1 = homo_ops.extract_cv(inner, 1)
-
-                    first = homo_ops._cipher_automorphism(
-                        inner_cv0, rot_out[s][i], cryptoContext
-                    )
-                    first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
-
-                    inner_digits = hybrid_keyswitch.modup_to_ext(
-                        inner_cv1, cryptoContext
-                    )
-                    inner_ext = homo_ops.eval_fast_rotate(
-                        inner_digits, None, rot_out[s][i], False, None, cryptoContext
-                    )
-                    outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
-                else:
-                    inner_ext_cv0 = homo_ops.extract_cv(inner_ext, 0)
-                    first = hybrid_keyswitch.moddown_from_ext(
-                        inner_ext_cv0, cryptoContext
-                    )
-                    first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
-                    inner_ext = homo_ops.extract_cv(inner_ext, 1, append_zeros=True)
-                    outer_ext = homo_ops.homo_add(outer_ext, inner_ext, cryptoContext)
-
-        outer = hybrid_keyswitch.moddown_from_ext(outer_ext, cryptoContext)
-        first_full_cv = homo_ops.extract_cv(first_acc, 0, append_zeros=True)
-        result = homo_ops.homo_add(outer, first_full_cv, cryptoContext)
-
-    return result
-
-
-# @profile_python_function
-def eval_coeffs_to_slots(A, ctxt, cryptoContext):
-    return coeffs_slots_conversion(A, ctxt, "C2S", cryptoContext)
-
-
-# @profile_python_function
-def eval_slots_to_coeffs(A, ctxt, cryptoContext):
-    return coeffs_slots_conversion(A, ctxt, "S2C", cryptoContext)
-
-
-# @profile_python_function
-def eval_linear_transform(A, ct, scheme):
-    # TODO: to be implemented
-    pass
-
-
-# @profile_python_function
-@utils.printFrontend
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
         torch.mod_raise(
@@ -219,15 +28,13 @@ def mod_raise(cipher, L0, cryptoContext):
     return cipher.cipher_like(cv, L0)
 
 
-# @profile_python_function
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
+    return cipher
 
-
-# @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(NODE_IN, L0, logBsSlots, cryptoContext):
+def eval_bootstrap(IN_NODE, L0, logBsSlots, cryptoContext):
     NODE1 = cryptoContext.BsContext.m_U0hatTPreFFT[0][0]
     NODE2 = cryptoContext.BsContext.m_U0hatTPreFFT[0][1]
     NODE3 = cryptoContext.BsContext.m_U0hatTPreFFT[0][2]
@@ -235,899 +42,717 @@ def eval_bootstrap(NODE_IN, L0, logBsSlots, cryptoContext):
     NODE5 = cryptoContext.BsContext.m_U0hatTPreFFT[0][4]
     NODE6 = cryptoContext.BsContext.m_U0hatTPreFFT[0][5]
     NODE7 = cryptoContext.BsContext.m_U0hatTPreFFT[0][6]
-    NODE8 = cryptoContext.BsContext.m_U0hatTPreFFT[0][7]
-    NODE9 = cryptoContext.BsContext.m_U0hatTPreFFT[0][8]
-    NODE10 = cryptoContext.BsContext.m_U0hatTPreFFT[0][9]
-    NODE11 = cryptoContext.BsContext.m_U0hatTPreFFT[0][10]
-    NODE12 = cryptoContext.BsContext.m_U0hatTPreFFT[0][11]
-    NODE13 = cryptoContext.BsContext.m_U0hatTPreFFT[0][12]
-    NODE14 = cryptoContext.BsContext.m_U0hatTPreFFT[0][13]
-    NODE15 = cryptoContext.BsContext.m_U0hatTPreFFT[0][14]
-    NODE16 = cryptoContext.BsContext.m_U0hatTPreFFT[1][0]
-    NODE17 = cryptoContext.BsContext.m_U0hatTPreFFT[1][1]
-    NODE18 = cryptoContext.BsContext.m_U0hatTPreFFT[1][2]
-    NODE19 = cryptoContext.BsContext.m_U0hatTPreFFT[1][3]
-    NODE20 = cryptoContext.BsContext.m_U0hatTPreFFT[1][4]
-    NODE21 = cryptoContext.BsContext.m_U0hatTPreFFT[1][5]
-    NODE22 = cryptoContext.BsContext.m_U0hatTPreFFT[1][6]
-    NODE23 = cryptoContext.BsContext.m_U0hatTPreFFT[1][7]
-    NODE24 = cryptoContext.BsContext.m_U0hatTPreFFT[1][8]
-    NODE25 = cryptoContext.BsContext.m_U0hatTPreFFT[1][9]
-    NODE26 = cryptoContext.BsContext.m_U0hatTPreFFT[1][10]
-    NODE27 = cryptoContext.BsContext.m_U0hatTPreFFT[1][11]
-    NODE28 = cryptoContext.BsContext.m_U0hatTPreFFT[1][12]
-    NODE29 = cryptoContext.BsContext.m_U0hatTPreFFT[1][13]
-    NODE30 = cryptoContext.BsContext.m_U0hatTPreFFT[1][14]
-    NODE31 = cryptoContext.BsContext.m_U0hatTPreFFT[2][0]
-    NODE32 = cryptoContext.BsContext.m_U0hatTPreFFT[2][1]
-    NODE33 = cryptoContext.BsContext.m_U0hatTPreFFT[2][2]
-    NODE34 = cryptoContext.BsContext.m_U0hatTPreFFT[2][3]
-    NODE35 = cryptoContext.BsContext.m_U0hatTPreFFT[2][4]
-    NODE36 = cryptoContext.BsContext.m_U0hatTPreFFT[2][5]
-    NODE37 = cryptoContext.BsContext.m_U0hatTPreFFT[2][6]
-    NODE38 = cryptoContext.BsContext.m_U0hatTPreFFT[2][7]
-    NODE39 = cryptoContext.BsContext.m_U0hatTPreFFT[2][8]
-    NODE40 = cryptoContext.BsContext.m_U0hatTPreFFT[2][9]
-    NODE41 = cryptoContext.BsContext.m_U0hatTPreFFT[2][10]
-    NODE42 = cryptoContext.BsContext.m_U0hatTPreFFT[2][11]
-    NODE43 = cryptoContext.BsContext.m_U0hatTPreFFT[2][12]
-    NODE44 = cryptoContext.BsContext.m_U0hatTPreFFT[2][13]
-    NODE45 = cryptoContext.BsContext.m_U0hatTPreFFT[2][14]
-    NODE46 = cryptoContext.BsContext.m_U0hatTPreFFT[3][0]
-    NODE47 = cryptoContext.BsContext.m_U0hatTPreFFT[3][1]
-    NODE48 = cryptoContext.BsContext.m_U0hatTPreFFT[3][2]
-    NODE49 = cryptoContext.BsContext.m_U0hatTPreFFT[3][3]
-    NODE50 = cryptoContext.BsContext.m_U0hatTPreFFT[3][4]
-    NODE51 = cryptoContext.BsContext.m_U0hatTPreFFT[3][5]
-    NODE52 = cryptoContext.BsContext.m_U0hatTPreFFT[3][6]
-    NODE53 = cryptoContext.BsContext.m_U0hatTPreFFT[3][7]
-    NODE54 = cryptoContext.BsContext.m_U0hatTPreFFT[3][8]
-    NODE55 = cryptoContext.BsContext.m_U0hatTPreFFT[3][9]
-    NODE56 = cryptoContext.BsContext.m_U0hatTPreFFT[3][10]
-    NODE57 = cryptoContext.BsContext.m_U0hatTPreFFT[3][11]
-    NODE58 = cryptoContext.BsContext.m_U0hatTPreFFT[3][12]
-    NODE59 = cryptoContext.BsContext.m_U0hatTPreFFT[3][13]
-    NODE60 = cryptoContext.BsContext.m_U0hatTPreFFT[3][14]
-    NODE61 = cryptoContext.BsContext.m_U0PreFFT[0][0]
-    NODE62 = cryptoContext.BsContext.m_U0PreFFT[0][1]
-    NODE63 = cryptoContext.BsContext.m_U0PreFFT[0][2]
-    NODE64 = cryptoContext.BsContext.m_U0PreFFT[0][3]
-    NODE65 = cryptoContext.BsContext.m_U0PreFFT[0][4]
-    NODE66 = cryptoContext.BsContext.m_U0PreFFT[0][5]
-    NODE67 = cryptoContext.BsContext.m_U0PreFFT[0][6]
-    NODE68 = cryptoContext.BsContext.m_U0PreFFT[0][7]
-    NODE69 = cryptoContext.BsContext.m_U0PreFFT[0][8]
-    NODE70 = cryptoContext.BsContext.m_U0PreFFT[0][9]
-    NODE71 = cryptoContext.BsContext.m_U0PreFFT[0][10]
-    NODE72 = cryptoContext.BsContext.m_U0PreFFT[0][11]
-    NODE73 = cryptoContext.BsContext.m_U0PreFFT[0][12]
-    NODE74 = cryptoContext.BsContext.m_U0PreFFT[0][13]
-    NODE75 = cryptoContext.BsContext.m_U0PreFFT[0][14]
-    NODE76 = cryptoContext.BsContext.m_U0PreFFT[1][0]
-    NODE77 = cryptoContext.BsContext.m_U0PreFFT[1][1]
-    NODE78 = cryptoContext.BsContext.m_U0PreFFT[1][2]
-    NODE79 = cryptoContext.BsContext.m_U0PreFFT[1][3]
-    NODE80 = cryptoContext.BsContext.m_U0PreFFT[1][4]
-    NODE81 = cryptoContext.BsContext.m_U0PreFFT[1][5]
-    NODE82 = cryptoContext.BsContext.m_U0PreFFT[1][6]
-    NODE83 = cryptoContext.BsContext.m_U0PreFFT[1][7]
-    NODE84 = cryptoContext.BsContext.m_U0PreFFT[1][8]
-    NODE85 = cryptoContext.BsContext.m_U0PreFFT[1][9]
-    NODE86 = cryptoContext.BsContext.m_U0PreFFT[1][10]
-    NODE87 = cryptoContext.BsContext.m_U0PreFFT[1][11]
-    NODE88 = cryptoContext.BsContext.m_U0PreFFT[1][12]
-    NODE89 = cryptoContext.BsContext.m_U0PreFFT[1][13]
-    NODE90 = cryptoContext.BsContext.m_U0PreFFT[1][14]
-    NODE91 = cryptoContext.BsContext.m_U0PreFFT[2][0]
-    NODE92 = cryptoContext.BsContext.m_U0PreFFT[2][1]
-    NODE93 = cryptoContext.BsContext.m_U0PreFFT[2][2]
-    NODE94 = cryptoContext.BsContext.m_U0PreFFT[2][3]
-    NODE95 = cryptoContext.BsContext.m_U0PreFFT[2][4]
-    NODE96 = cryptoContext.BsContext.m_U0PreFFT[2][5]
-    NODE97 = cryptoContext.BsContext.m_U0PreFFT[2][6]
-    NODE98 = cryptoContext.BsContext.m_U0PreFFT[2][7]
-    NODE99 = cryptoContext.BsContext.m_U0PreFFT[2][8]
-    NODE100 = cryptoContext.BsContext.m_U0PreFFT[2][9]
-    NODE101 = cryptoContext.BsContext.m_U0PreFFT[2][10]
-    NODE102 = cryptoContext.BsContext.m_U0PreFFT[2][11]
-    NODE103 = cryptoContext.BsContext.m_U0PreFFT[2][12]
-    NODE104 = cryptoContext.BsContext.m_U0PreFFT[2][13]
-    NODE105 = cryptoContext.BsContext.m_U0PreFFT[2][14]
-    NODE106 = cryptoContext.BsContext.m_U0PreFFT[3][0]
-    NODE107 = cryptoContext.BsContext.m_U0PreFFT[3][1]
-    NODE108 = cryptoContext.BsContext.m_U0PreFFT[3][2]
-    NODE109 = cryptoContext.BsContext.m_U0PreFFT[3][3]
-    NODE110 = cryptoContext.BsContext.m_U0PreFFT[3][4]
-    NODE111 = cryptoContext.BsContext.m_U0PreFFT[3][5]
-    NODE112 = cryptoContext.BsContext.m_U0PreFFT[3][6]
-    NODE113 = cryptoContext.BsContext.m_U0PreFFT[3][7]
-    NODE114 = cryptoContext.BsContext.m_U0PreFFT[3][8]
-    NODE115 = cryptoContext.BsContext.m_U0PreFFT[3][9]
-    NODE116 = cryptoContext.BsContext.m_U0PreFFT[3][10]
-    NODE117 = cryptoContext.BsContext.m_U0PreFFT[3][11]
-    NODE118 = cryptoContext.BsContext.m_U0PreFFT[3][12]
-    NODE119 = cryptoContext.BsContext.m_U0PreFFT[3][13]
-    NODE120 = cryptoContext.BsContext.m_U0PreFFT[3][14]
-
-    NODE121 = NODE_IN #my add
-    NODE122 = homo_ops.homo_rescale(NODE121, 0, cryptoContext)
-    NODE124 = homo_ops.homo_mul_scalar_double(NODE122, 0.00390625, cryptoContext)
-    NODE125 = homo_ops.homo_rescale(NODE124, 1, cryptoContext)
-    NODE126 = mod_raise(NODE125, 21, cryptoContext)
-    NODE127 = homo_ops.homo_mul_scalar_double(NODE126, 3.0517578125e-05, cryptoContext)
-    NODE128 = homo_ops.homo_rotate(NODE127, 4096, cryptoContext)
-    NODE129 = homo_ops.homo_add(NODE127, NODE128, cryptoContext)
-    NODE130 = homo_ops.homo_rescale(NODE129, 1, cryptoContext)
-    NODE131 = NODE130.deep_copy()  #my add
-    NODE132 = homo_ops.extract_cv(NODE131, 1)
-    NODE133 = hybrid_keyswitch.modup_to_ext(NODE132, cryptoContext)
-    NODE134 = homo_ops.eval_fast_rotate(NODE133, NODE131, 512, True, False, cryptoContext)
-    NODE135 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 512, cryptoContext)
-    NODE136 = homo_ops.eval_fast_rotate(NODE133, NODE131, 1024, True, False, cryptoContext)
-    NODE137 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 1024, cryptoContext)
-    NODE138 = homo_ops.eval_fast_rotate(NODE133, NODE131, 1536, True, False, cryptoContext)
-    NODE139 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 1536, cryptoContext)
-    NODE140 = homo_ops.eval_fast_rotate(NODE133, NODE131, 2048, True, False, cryptoContext)
-    NODE141 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 2048, cryptoContext)
-    NODE142 = homo_ops.eval_fast_rotate(NODE133, NODE131, 2560, True, False, cryptoContext)
-    NODE143 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 2560, cryptoContext)
-    NODE144 = homo_ops.eval_fast_rotate(NODE133, NODE131, 3072, True, False, cryptoContext)
-    NODE145 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 3072, cryptoContext)
-    NODE146 = homo_ops.eval_fast_rotate(NODE133, NODE131, 3584, True, False, cryptoContext)
-    NODE147 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE133, 3584, cryptoContext)
-    NODE148 = hybrid_keyswitch.key_switch_P_ext(NODE131, cryptoContext)
-    NODE149 = homo_ops.homo_mul_pt(NODE134, NODE46, cryptoContext)
-    NODE150 = homo_ops.homo_mul_pt(NODE136, NODE47, cryptoContext)
+    NODE8 = cryptoContext.BsContext.m_U0hatTPreFFT[1][0]
+    NODE9 = cryptoContext.BsContext.m_U0hatTPreFFT[1][1]
+    NODE10 = cryptoContext.BsContext.m_U0hatTPreFFT[1][2]
+    NODE11 = cryptoContext.BsContext.m_U0hatTPreFFT[1][3]
+    NODE12 = cryptoContext.BsContext.m_U0hatTPreFFT[1][4]
+    NODE13 = cryptoContext.BsContext.m_U0hatTPreFFT[1][5]
+    NODE14 = cryptoContext.BsContext.m_U0hatTPreFFT[1][6]
+    NODE15 = cryptoContext.BsContext.m_U0hatTPreFFT[2][0]
+    NODE16 = cryptoContext.BsContext.m_U0hatTPreFFT[2][1]
+    NODE17 = cryptoContext.BsContext.m_U0hatTPreFFT[2][2]
+    NODE18 = cryptoContext.BsContext.m_U0hatTPreFFT[2][3]
+    NODE19 = cryptoContext.BsContext.m_U0hatTPreFFT[2][4]
+    NODE20 = cryptoContext.BsContext.m_U0hatTPreFFT[2][5]
+    NODE21 = cryptoContext.BsContext.m_U0hatTPreFFT[2][6]
+    NODE22 = cryptoContext.BsContext.m_U0hatTPreFFT[3][0]
+    NODE23 = cryptoContext.BsContext.m_U0hatTPreFFT[3][1]
+    NODE24 = cryptoContext.BsContext.m_U0hatTPreFFT[3][2]
+    NODE25 = cryptoContext.BsContext.m_U0hatTPreFFT[3][3]
+    NODE26 = cryptoContext.BsContext.m_U0hatTPreFFT[3][4]
+    NODE27 = cryptoContext.BsContext.m_U0hatTPreFFT[3][5]
+    NODE28 = cryptoContext.BsContext.m_U0hatTPreFFT[3][6]
+    NODE29 = cryptoContext.BsContext.m_U0PreFFT[0][0]
+    NODE30 = cryptoContext.BsContext.m_U0PreFFT[0][1]
+    NODE31 = cryptoContext.BsContext.m_U0PreFFT[0][2]
+    NODE32 = cryptoContext.BsContext.m_U0PreFFT[0][3]
+    NODE33 = cryptoContext.BsContext.m_U0PreFFT[0][4]
+    NODE34 = cryptoContext.BsContext.m_U0PreFFT[0][5]
+    NODE35 = cryptoContext.BsContext.m_U0PreFFT[0][6]
+    NODE36 = cryptoContext.BsContext.m_U0PreFFT[1][0]
+    NODE37 = cryptoContext.BsContext.m_U0PreFFT[1][1]
+    NODE38 = cryptoContext.BsContext.m_U0PreFFT[1][2]
+    NODE39 = cryptoContext.BsContext.m_U0PreFFT[1][3]
+    NODE40 = cryptoContext.BsContext.m_U0PreFFT[1][4]
+    NODE41 = cryptoContext.BsContext.m_U0PreFFT[1][5]
+    NODE42 = cryptoContext.BsContext.m_U0PreFFT[1][6]
+    NODE43 = cryptoContext.BsContext.m_U0PreFFT[2][0]
+    NODE44 = cryptoContext.BsContext.m_U0PreFFT[2][1]
+    NODE45 = cryptoContext.BsContext.m_U0PreFFT[2][2]
+    NODE46 = cryptoContext.BsContext.m_U0PreFFT[2][3]
+    NODE47 = cryptoContext.BsContext.m_U0PreFFT[2][4]
+    NODE48 = cryptoContext.BsContext.m_U0PreFFT[2][5]
+    NODE49 = cryptoContext.BsContext.m_U0PreFFT[2][6]
+    NODE50 = cryptoContext.BsContext.m_U0PreFFT[3][0]
+    NODE51 = cryptoContext.BsContext.m_U0PreFFT[3][1]
+    NODE52 = cryptoContext.BsContext.m_U0PreFFT[3][2]
+    NODE53 = cryptoContext.BsContext.m_U0PreFFT[3][3]
+    NODE54 = cryptoContext.BsContext.m_U0PreFFT[3][4]
+    NODE55 = cryptoContext.BsContext.m_U0PreFFT[3][5]
+    NODE56 = cryptoContext.BsContext.m_U0PreFFT[3][6]
+    NODE57 = IN_NODE
+    NODE58 = homo_ops.homo_rescale(NODE57, 0, cryptoContext)
+    NODE60 = homo_ops.homo_mul_scalar_double(NODE58, 0.0019531249999613642, cryptoContext)
+    NODE61 = homo_ops.homo_rescale(NODE60, 1, cryptoContext)
+    NODE61.scaling_factor = 5.764607523044393e+17
+    NODE62 = mod_raise(NODE61, 26, cryptoContext)
+    NODE63 = homo_ops.homo_mul_scalar_double(NODE62, 5.960464477539063e-08, cryptoContext)
+    NODE64 = homo_ops.homo_rotate(NODE63, 256, cryptoContext)
+    NODE65 = homo_ops.homo_add(NODE63, NODE64, cryptoContext)
+    NODE66 = homo_ops.homo_rotate(NODE65, 512, cryptoContext)
+    NODE67 = homo_ops.homo_add(NODE65, NODE66, cryptoContext)
+    NODE68 = homo_ops.homo_rotate(NODE67, 1024, cryptoContext)
+    NODE69 = homo_ops.homo_add(NODE67, NODE68, cryptoContext)
+    NODE70 = homo_ops.homo_rotate(NODE69, 2048, cryptoContext)
+    NODE71 = homo_ops.homo_add(NODE69, NODE70, cryptoContext)
+    NODE72 = homo_ops.homo_rotate(NODE71, 4096, cryptoContext)
+    NODE73 = homo_ops.homo_add(NODE71, NODE72, cryptoContext)
+    NODE74 = homo_ops.homo_rescale(NODE73, 1, cryptoContext)
+    NODE75 = homo_ops.extract_cv(NODE74, 1)
+    NODE76 = hybrid_keyswitch.modup_to_ext(NODE75, cryptoContext)
+    NODE77 = homo_ops.eval_fast_rotate(NODE76, NODE74, 64, True, False, cryptoContext)
+    NODE78 = homo_ops.eval_fast_rotate(NODE76, NODE74, 128, True, False, cryptoContext)
+    NODE79 = homo_ops.eval_fast_rotate(NODE76, NODE74, 192, True, False, cryptoContext)
+    NODE80 = hybrid_keyswitch.key_switch_P_ext(NODE74, cryptoContext)
+    NODE81 = homo_ops.homo_mul_pt(NODE77, NODE22, cryptoContext)
+    NODE82 = homo_ops.homo_mul_pt(NODE78, NODE23, cryptoContext)
+    NODE83 = homo_ops.homo_add(NODE81, NODE82, cryptoContext)
+    NODE84 = homo_ops.homo_mul_pt(NODE79, NODE24, cryptoContext)
+    NODE85 = homo_ops.homo_add(NODE83, NODE84, cryptoContext)
+    NODE86 = homo_ops.homo_mul_pt(NODE80, NODE25, cryptoContext)
+    NODE87 = homo_ops.homo_add(NODE85, NODE86, cryptoContext)
+    NODE88 = homo_ops.extract_cv(NODE87, 0)
+    NODE89 = hybrid_keyswitch.moddown_from_ext(NODE88, cryptoContext)
+    NODE90 = homo_ops.extract_cv(NODE87, 1, append_zeros = True)
+    NODE91 = homo_ops.homo_mul_pt(NODE77, NODE26, cryptoContext)
+    NODE92 = homo_ops.homo_mul_pt(NODE78, NODE27, cryptoContext)
+    NODE93 = homo_ops.homo_add(NODE91, NODE92, cryptoContext)
+    NODE94 = homo_ops.homo_mul_pt(NODE79, NODE28, cryptoContext)
+    NODE95 = homo_ops.homo_add(NODE93, NODE94, cryptoContext)
+    NODE96 = hybrid_keyswitch.moddown_from_ext(NODE95, cryptoContext)
+    NODE97 = homo_ops.extract_cv(NODE96, 0)
+    NODE98 = homo_ops.extract_cv(NODE96, 1)
+    NODE99 = homo_ops._cipher_automorphism(NODE97, 256, cryptoContext)
+    NODE100 = homo_ops.homo_add(NODE89, NODE99, cryptoContext)
+    NODE101 = hybrid_keyswitch.modup_to_ext(NODE98, cryptoContext)
+    NODE102 = homo_ops.eval_fast_rotate(NODE101, None, 256, False, None, cryptoContext)
+    NODE103 = homo_ops.homo_add(NODE90, NODE102, cryptoContext)
+    NODE104 = hybrid_keyswitch.moddown_from_ext(NODE103, cryptoContext)
+    NODE105 = homo_ops.extract_cv(NODE100, 0, append_zeros = True)
+    NODE106 = homo_ops.homo_add(NODE104, NODE105, cryptoContext)
+    NODE107 = homo_ops.homo_rescale(NODE106, 1, cryptoContext)
+    NODE108 = homo_ops.extract_cv(NODE107, 1)
+    NODE109 = hybrid_keyswitch.modup_to_ext(NODE108, cryptoContext)
+    NODE110 = homo_ops.eval_fast_rotate(NODE109, NODE107, 208, True, False, cryptoContext)
+    NODE111 = homo_ops.eval_fast_rotate(NODE109, NODE107, 224, True, False, cryptoContext)
+    NODE112 = homo_ops.eval_fast_rotate(NODE109, NODE107, 240, True, False, cryptoContext)
+    NODE113 = hybrid_keyswitch.key_switch_P_ext(NODE107, cryptoContext)
+    NODE114 = homo_ops.homo_mul_pt(NODE110, NODE15, cryptoContext)
+    NODE115 = homo_ops.homo_mul_pt(NODE111, NODE16, cryptoContext)
+    NODE116 = homo_ops.homo_add(NODE114, NODE115, cryptoContext)
+    NODE117 = homo_ops.homo_mul_pt(NODE112, NODE17, cryptoContext)
+    NODE118 = homo_ops.homo_add(NODE116, NODE117, cryptoContext)
+    NODE119 = homo_ops.homo_mul_pt(NODE113, NODE18, cryptoContext)
+    NODE120 = homo_ops.homo_add(NODE118, NODE119, cryptoContext)
+    NODE121 = homo_ops.extract_cv(NODE120, 0)
+    NODE122 = hybrid_keyswitch.moddown_from_ext(NODE121, cryptoContext)
+    NODE123 = homo_ops.extract_cv(NODE120, 1, append_zeros = True)
+    NODE124 = homo_ops.homo_mul_pt(NODE110, NODE19, cryptoContext)
+    NODE125 = homo_ops.homo_mul_pt(NODE111, NODE20, cryptoContext)
+    NODE126 = homo_ops.homo_add(NODE124, NODE125, cryptoContext)
+    NODE127 = homo_ops.homo_mul_pt(NODE112, NODE21, cryptoContext)
+    NODE128 = homo_ops.homo_add(NODE126, NODE127, cryptoContext)
+    NODE129 = hybrid_keyswitch.moddown_from_ext(NODE128, cryptoContext)
+    NODE130 = homo_ops.extract_cv(NODE129, 0)
+    NODE131 = homo_ops.extract_cv(NODE129, 1)
+    NODE132 = homo_ops._cipher_automorphism(NODE130, 64, cryptoContext)
+    NODE133 = homo_ops.homo_add(NODE122, NODE132, cryptoContext)
+    NODE134 = hybrid_keyswitch.modup_to_ext(NODE131, cryptoContext)
+    NODE135 = homo_ops.eval_fast_rotate(NODE134, None, 64, False, None, cryptoContext)
+    NODE136 = homo_ops.homo_add(NODE123, NODE135, cryptoContext)
+    NODE137 = hybrid_keyswitch.moddown_from_ext(NODE136, cryptoContext)
+    NODE138 = homo_ops.extract_cv(NODE133, 0, append_zeros = True)
+    NODE139 = homo_ops.homo_add(NODE137, NODE138, cryptoContext)
+    NODE140 = homo_ops.homo_rescale(NODE139, 1, cryptoContext)
+    NODE141 = homo_ops.extract_cv(NODE140, 1)
+    NODE142 = hybrid_keyswitch.modup_to_ext(NODE141, cryptoContext)
+    NODE143 = homo_ops.eval_fast_rotate(NODE142, NODE140, 244, True, False, cryptoContext)
+    NODE144 = homo_ops.eval_fast_rotate(NODE142, NODE140, 248, True, False, cryptoContext)
+    NODE145 = homo_ops.eval_fast_rotate(NODE142, NODE140, 252, True, False, cryptoContext)
+    NODE146 = hybrid_keyswitch.key_switch_P_ext(NODE140, cryptoContext)
+    NODE147 = homo_ops.homo_mul_pt(NODE143, NODE8, cryptoContext)
+    NODE148 = homo_ops.homo_mul_pt(NODE144, NODE9, cryptoContext)
+    NODE149 = homo_ops.homo_add(NODE147, NODE148, cryptoContext)
+    NODE150 = homo_ops.homo_mul_pt(NODE145, NODE10, cryptoContext)
     NODE151 = homo_ops.homo_add(NODE149, NODE150, cryptoContext)
-    NODE152 = homo_ops.homo_mul_pt(NODE138, NODE48, cryptoContext)
+    NODE152 = homo_ops.homo_mul_pt(NODE146, NODE11, cryptoContext)
     NODE153 = homo_ops.homo_add(NODE151, NODE152, cryptoContext)
-    NODE154 = homo_ops.homo_mul_pt(NODE140, NODE49, cryptoContext)
-    NODE155 = homo_ops.homo_add(NODE153, NODE154, cryptoContext)
-    NODE156 = homo_ops.homo_mul_pt(NODE142, NODE50, cryptoContext)
-    NODE157 = homo_ops.homo_add(NODE155, NODE156, cryptoContext)
-    NODE158 = homo_ops.homo_mul_pt(NODE144, NODE51, cryptoContext)
+    NODE154 = homo_ops.extract_cv(NODE153, 0)
+    NODE155 = hybrid_keyswitch.moddown_from_ext(NODE154, cryptoContext)
+    NODE156 = homo_ops.extract_cv(NODE153, 1, append_zeros = True)
+    NODE157 = homo_ops.homo_mul_pt(NODE143, NODE12, cryptoContext)
+    NODE158 = homo_ops.homo_mul_pt(NODE144, NODE13, cryptoContext)
     NODE159 = homo_ops.homo_add(NODE157, NODE158, cryptoContext)
-    NODE160 = homo_ops.homo_mul_pt(NODE146, NODE52, cryptoContext)
+    NODE160 = homo_ops.homo_mul_pt(NODE145, NODE14, cryptoContext)
     NODE161 = homo_ops.homo_add(NODE159, NODE160, cryptoContext)
-    NODE162 = homo_ops.homo_mul_pt(NODE148, NODE53, cryptoContext)
-    NODE163 = homo_ops.homo_add(NODE161, NODE162, cryptoContext)
-    NODE164 = homo_ops.extract_cv(NODE163, 0)
-    NODE165 = hybrid_keyswitch.moddown_from_ext(NODE164, cryptoContext)
-    NODE166 = homo_ops.extract_cv(NODE163, 1, append_zeros = True)
-    NODE167 = homo_ops.homo_mul_pt(NODE134, NODE54, cryptoContext)
-    NODE168 = homo_ops.homo_mul_pt(NODE136, NODE55, cryptoContext)
-    NODE169 = homo_ops.homo_add(NODE167, NODE168, cryptoContext)
-    NODE170 = homo_ops.homo_mul_pt(NODE138, NODE56, cryptoContext)
-    NODE171 = homo_ops.homo_add(NODE169, NODE170, cryptoContext)
-    NODE172 = homo_ops.homo_mul_pt(NODE140, NODE57, cryptoContext)
-    NODE173 = homo_ops.homo_add(NODE171, NODE172, cryptoContext)
-    NODE174 = homo_ops.homo_mul_pt(NODE142, NODE58, cryptoContext)
-    NODE175 = homo_ops.homo_add(NODE173, NODE174, cryptoContext)
-    NODE176 = homo_ops.homo_mul_pt(NODE144, NODE59, cryptoContext)
-    NODE177 = homo_ops.homo_add(NODE175, NODE176, cryptoContext)
-    NODE178 = homo_ops.homo_mul_pt(NODE146, NODE60, cryptoContext)
-    NODE179 = homo_ops.homo_add(NODE177, NODE178, cryptoContext)
-    NODE180 = hybrid_keyswitch.moddown_from_ext(NODE179, cryptoContext)
-    NODE181 = homo_ops.extract_cv(NODE180, 0)
-    NODE182 = homo_ops.extract_cv(NODE180, 1)
-    NODE183 = homo_ops._cipher_automorphism(NODE181, 4096, cryptoContext)
-    NODE184 = homo_ops.homo_add(NODE165, NODE183, cryptoContext)
-    NODE185 = hybrid_keyswitch.modup_to_ext(NODE182, cryptoContext)
-    NODE186 = homo_ops.eval_fast_rotate(NODE185, None, 4096, False, None, cryptoContext)
-    NODE187 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE185, 4096, cryptoContext)
-    NODE188 = homo_ops.homo_add(NODE166, NODE186, cryptoContext)
-    NODE189 = hybrid_keyswitch.moddown_from_ext(NODE188, cryptoContext)
-    NODE190 = homo_ops.extract_cv(NODE184, 0, append_zeros = True)
-    NODE191 = homo_ops.homo_add(NODE189, NODE190, cryptoContext)
-    NODE192 = homo_ops.homo_rescale(NODE191, 1, cryptoContext)
-    NODE193 = homo_ops.extract_cv(NODE192, 1)
-    NODE194 = hybrid_keyswitch.modup_to_ext(NODE193, cryptoContext)
-    NODE195 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3648, True, False, cryptoContext)
-    NODE196 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3648, cryptoContext)
-    NODE197 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3712, True, False, cryptoContext)
-    NODE198 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3712, cryptoContext)
-    NODE199 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3776, True, False, cryptoContext)
-    NODE200 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3776, cryptoContext)
-    NODE201 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3840, True, False, cryptoContext)
-    NODE202 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3840, cryptoContext)
-    NODE203 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3904, True, False, cryptoContext)
-    NODE204 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3904, cryptoContext)
-    NODE205 = homo_ops.eval_fast_rotate(NODE194, NODE192, 3968, True, False, cryptoContext)
-    NODE206 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 3968, cryptoContext)
-    NODE207 = homo_ops.eval_fast_rotate(NODE194, NODE192, 4032, True, False, cryptoContext)
-    NODE208 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE194, 4032, cryptoContext)
-    NODE209 = hybrid_keyswitch.key_switch_P_ext(NODE192, cryptoContext)
-    NODE210 = homo_ops.homo_mul_pt(NODE195, NODE31, cryptoContext)
-    NODE211 = homo_ops.homo_mul_pt(NODE197, NODE32, cryptoContext)
-    NODE212 = homo_ops.homo_add(NODE210, NODE211, cryptoContext)
-    NODE213 = homo_ops.homo_mul_pt(NODE199, NODE33, cryptoContext)
-    NODE214 = homo_ops.homo_add(NODE212, NODE213, cryptoContext)
-    NODE215 = homo_ops.homo_mul_pt(NODE201, NODE34, cryptoContext)
-    NODE216 = homo_ops.homo_add(NODE214, NODE215, cryptoContext)
-    NODE217 = homo_ops.homo_mul_pt(NODE203, NODE35, cryptoContext)
-    NODE218 = homo_ops.homo_add(NODE216, NODE217, cryptoContext)
-    NODE219 = homo_ops.homo_mul_pt(NODE205, NODE36, cryptoContext)
-    NODE220 = homo_ops.homo_add(NODE218, NODE219, cryptoContext)
-    NODE221 = homo_ops.homo_mul_pt(NODE207, NODE37, cryptoContext)
-    NODE222 = homo_ops.homo_add(NODE220, NODE221, cryptoContext)
-    NODE223 = homo_ops.homo_mul_pt(NODE209, NODE38, cryptoContext)
-    NODE224 = homo_ops.homo_add(NODE222, NODE223, cryptoContext)
-    NODE225 = homo_ops.extract_cv(NODE224, 0)
-    NODE226 = hybrid_keyswitch.moddown_from_ext(NODE225, cryptoContext)
-    NODE227 = homo_ops.extract_cv(NODE224, 1, append_zeros = True)
-    NODE228 = homo_ops.homo_mul_pt(NODE195, NODE39, cryptoContext)
-    NODE229 = homo_ops.homo_mul_pt(NODE197, NODE40, cryptoContext)
-    NODE230 = homo_ops.homo_add(NODE228, NODE229, cryptoContext)
-    NODE231 = homo_ops.homo_mul_pt(NODE199, NODE41, cryptoContext)
-    NODE232 = homo_ops.homo_add(NODE230, NODE231, cryptoContext)
-    NODE233 = homo_ops.homo_mul_pt(NODE201, NODE42, cryptoContext)
-    NODE234 = homo_ops.homo_add(NODE232, NODE233, cryptoContext)
-    NODE235 = homo_ops.homo_mul_pt(NODE203, NODE43, cryptoContext)
-    NODE236 = homo_ops.homo_add(NODE234, NODE235, cryptoContext)
-    NODE237 = homo_ops.homo_mul_pt(NODE205, NODE44, cryptoContext)
-    NODE238 = homo_ops.homo_add(NODE236, NODE237, cryptoContext)
-    NODE239 = homo_ops.homo_mul_pt(NODE207, NODE45, cryptoContext)
-    NODE240 = homo_ops.homo_add(NODE238, NODE239, cryptoContext)
-    NODE241 = hybrid_keyswitch.moddown_from_ext(NODE240, cryptoContext)
-    NODE242 = homo_ops.extract_cv(NODE241, 0)
-    NODE243 = homo_ops.extract_cv(NODE241, 1)
-    NODE244 = homo_ops._cipher_automorphism(NODE242, 512, cryptoContext)
-    NODE245 = homo_ops.homo_add(NODE226, NODE244, cryptoContext)
-    NODE246 = hybrid_keyswitch.modup_to_ext(NODE243, cryptoContext)
-    NODE247 = homo_ops.eval_fast_rotate(NODE246, None, 512, False, None, cryptoContext)
-    NODE248 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE246, 512, cryptoContext)
-    NODE249 = homo_ops.homo_add(NODE227, NODE247, cryptoContext)
-    NODE250 = hybrid_keyswitch.moddown_from_ext(NODE249, cryptoContext)
-    NODE251 = homo_ops.extract_cv(NODE245, 0, append_zeros = True)
-    NODE252 = homo_ops.homo_add(NODE250, NODE251, cryptoContext)
-    NODE253 = homo_ops.homo_rescale(NODE252, 1, cryptoContext)
-    NODE254 = homo_ops.extract_cv(NODE253, 1)
-    NODE255 = hybrid_keyswitch.modup_to_ext(NODE254, cryptoContext)
-    NODE256 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4040, True, False, cryptoContext)
-    NODE257 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4040, cryptoContext)
-    NODE258 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4048, True, False, cryptoContext)
-    NODE259 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4048, cryptoContext)
-    NODE260 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4056, True, False, cryptoContext)
-    NODE261 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4056, cryptoContext)
-    NODE262 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4064, True, False, cryptoContext)
-    NODE263 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4064, cryptoContext)
-    NODE264 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4072, True, False, cryptoContext)
-    NODE265 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4072, cryptoContext)
-    NODE266 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4080, True, False, cryptoContext)
-    NODE267 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4080, cryptoContext)
-    NODE268 = homo_ops.eval_fast_rotate(NODE255, NODE253, 4088, True, False, cryptoContext)
-    NODE269 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE255, 4088, cryptoContext)
-    NODE270 = hybrid_keyswitch.key_switch_P_ext(NODE253, cryptoContext)
-    NODE271 = homo_ops.homo_mul_pt(NODE256, NODE16, cryptoContext)
-    NODE272 = homo_ops.homo_mul_pt(NODE258, NODE17, cryptoContext)
+    NODE162 = hybrid_keyswitch.moddown_from_ext(NODE161, cryptoContext)
+    NODE163 = homo_ops.extract_cv(NODE162, 0)
+    NODE164 = homo_ops.extract_cv(NODE162, 1)
+    NODE165 = homo_ops._cipher_automorphism(NODE163, 16, cryptoContext)
+    NODE166 = homo_ops.homo_add(NODE155, NODE165, cryptoContext)
+    NODE167 = hybrid_keyswitch.modup_to_ext(NODE164, cryptoContext)
+    NODE168 = homo_ops.eval_fast_rotate(NODE167, None, 16, False, None, cryptoContext)
+    NODE169 = homo_ops.homo_add(NODE156, NODE168, cryptoContext)
+    NODE170 = hybrid_keyswitch.moddown_from_ext(NODE169, cryptoContext)
+    NODE171 = homo_ops.extract_cv(NODE166, 0, append_zeros = True)
+    NODE172 = homo_ops.homo_add(NODE170, NODE171, cryptoContext)
+    NODE173 = homo_ops.homo_rescale(NODE172, 1, cryptoContext)
+    NODE174 = homo_ops.extract_cv(NODE173, 1)
+    NODE175 = hybrid_keyswitch.modup_to_ext(NODE174, cryptoContext)
+    NODE176 = homo_ops.eval_fast_rotate(NODE175, NODE173, 253, True, False, cryptoContext)
+    NODE177 = homo_ops.eval_fast_rotate(NODE175, NODE173, 254, True, False, cryptoContext)
+    NODE178 = homo_ops.eval_fast_rotate(NODE175, NODE173, 255, True, False, cryptoContext)
+    NODE179 = hybrid_keyswitch.key_switch_P_ext(NODE173, cryptoContext)
+    NODE180 = homo_ops.homo_mul_pt(NODE176, NODE1, cryptoContext)
+    NODE181 = homo_ops.homo_mul_pt(NODE177, NODE2, cryptoContext)
+    NODE182 = homo_ops.homo_add(NODE180, NODE181, cryptoContext)
+    NODE183 = homo_ops.homo_mul_pt(NODE178, NODE3, cryptoContext)
+    NODE184 = homo_ops.homo_add(NODE182, NODE183, cryptoContext)
+    NODE185 = homo_ops.homo_mul_pt(NODE179, NODE4, cryptoContext)
+    NODE186 = homo_ops.homo_add(NODE184, NODE185, cryptoContext)
+    NODE187 = homo_ops.extract_cv(NODE186, 0)
+    NODE188 = hybrid_keyswitch.moddown_from_ext(NODE187, cryptoContext)
+    NODE189 = homo_ops.extract_cv(NODE186, 1, append_zeros = True)
+    NODE190 = homo_ops.homo_mul_pt(NODE176, NODE5, cryptoContext)
+    NODE191 = homo_ops.homo_mul_pt(NODE177, NODE6, cryptoContext)
+    NODE192 = homo_ops.homo_add(NODE190, NODE191, cryptoContext)
+    NODE193 = homo_ops.homo_mul_pt(NODE178, NODE7, cryptoContext)
+    NODE194 = homo_ops.homo_add(NODE192, NODE193, cryptoContext)
+    NODE195 = hybrid_keyswitch.moddown_from_ext(NODE194, cryptoContext)
+    NODE196 = homo_ops.extract_cv(NODE195, 0)
+    NODE197 = homo_ops.extract_cv(NODE195, 1)
+    NODE198 = homo_ops._cipher_automorphism(NODE196, 4, cryptoContext)
+    NODE199 = homo_ops.homo_add(NODE188, NODE198, cryptoContext)
+    NODE200 = hybrid_keyswitch.modup_to_ext(NODE197, cryptoContext)
+    NODE201 = homo_ops.eval_fast_rotate(NODE200, None, 4, False, None, cryptoContext)
+    NODE202 = homo_ops.homo_add(NODE189, NODE201, cryptoContext)
+    NODE203 = hybrid_keyswitch.moddown_from_ext(NODE202, cryptoContext)
+    NODE204 = homo_ops.extract_cv(NODE199, 0, append_zeros = True)
+    NODE205 = homo_ops.homo_add(NODE203, NODE204, cryptoContext)
+    NODE206 = homo_ops.homo_rotate(NODE205, 32767, cryptoContext)
+    NODE207 = homo_ops.homo_add(NODE205, NODE206, cryptoContext)
+    NODE208 = homo_ops.homo_rescale(NODE207, 1, cryptoContext)
+    NODE209 = homo_ops.homo_mul(NODE208, NODE208, cryptoContext)
+    NODE210 = homo_ops.homo_add(NODE209, NODE209, cryptoContext)
+    NODE211 = homo_ops.homo_add_scalar_double(NODE210, -1.0, cryptoContext)
+    NODE212 = homo_ops.homo_mul(NODE208, NODE211, cryptoContext)
+    NODE213 = homo_ops.homo_add(NODE212, NODE212, cryptoContext)
+    NODE214 = homo_ops.homo_sub(NODE213, NODE208, cryptoContext)
+    NODE215 = homo_ops.homo_mul(NODE211, NODE211, cryptoContext)
+    NODE216 = homo_ops.homo_add(NODE215, NODE215, cryptoContext)
+    NODE217 = homo_ops.homo_add_scalar_double(NODE216, -1.0, cryptoContext)
+    NODE218 = homo_ops.homo_mul(NODE211, NODE214, cryptoContext)
+    NODE219 = homo_ops.homo_add(NODE218, NODE218, cryptoContext)
+    NODE220 = homo_ops.homo_sub(NODE219, NODE208, cryptoContext)
+    NODE221 = homo_ops.homo_mul(NODE214, NODE214, cryptoContext)
+    NODE222 = homo_ops.homo_add(NODE221, NODE221, cryptoContext)
+    NODE223 = homo_ops.homo_add_scalar_double(NODE222, -1.0, cryptoContext)
+    NODE224, NODE225 = homo_ops.adjust_levels_and_depth(NODE208, NODE223, cryptoContext)
+    NODE226, NODE227 = homo_ops.adjust_levels_and_depth(NODE211, NODE225, cryptoContext)
+    NODE228, NODE229 = homo_ops.adjust_levels_and_depth(NODE214, NODE227, cryptoContext)
+    NODE230, NODE231 = homo_ops.adjust_levels_and_depth(NODE217, NODE229, cryptoContext)
+    NODE232, NODE233 = homo_ops.adjust_levels_and_depth(NODE220, NODE231, cryptoContext)
+    NODE234 = homo_ops.homo_square(NODE233, cryptoContext)
+    NODE235 = homo_ops.homo_add(NODE234, NODE234, cryptoContext)
+    NODE236 = homo_ops.homo_add_scalar_double(NODE235, -1.0, cryptoContext)
+    NODE237 = homo_ops.homo_square(NODE236, cryptoContext)
+    NODE238 = homo_ops.homo_add(NODE237, NODE237, cryptoContext)
+    NODE239 = homo_ops.homo_add_scalar_double(NODE238, -1.0, cryptoContext)
+    NODE240 = homo_ops.homo_square(NODE239, cryptoContext)
+    NODE241 = homo_ops.homo_add(NODE240, NODE240, cryptoContext)
+    NODE242 = homo_ops.homo_add_scalar_double(NODE241, -1.0, cryptoContext)
+    NODE243 = homo_ops.homo_mul(NODE233, NODE236, cryptoContext)
+    NODE244 = homo_ops.homo_add(NODE243, NODE243, cryptoContext)
+    NODE245 = homo_ops.homo_sub(NODE244, NODE233, cryptoContext)
+    NODE246 = homo_ops.homo_mul(NODE245, NODE239, cryptoContext)
+    NODE247 = homo_ops.homo_add(NODE246, NODE246, cryptoContext)
+    NODE248 = homo_ops.homo_sub(NODE247, NODE233, cryptoContext)
+    NODE249 = homo_ops.homo_mul(NODE248, NODE242, cryptoContext)
+    NODE250 = homo_ops.homo_add(NODE249, NODE249, cryptoContext)
+    NODE251 = homo_ops.homo_sub(NODE250, NODE233, cryptoContext)
+    NODE252, NODE253 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE254, NODE255 = homo_ops.adjust_levels_and_depth(NODE226, NODE253, cryptoContext)
+    NODE256, NODE257 = homo_ops.adjust_levels_and_depth(NODE228, NODE255, cryptoContext)
+    NODE258, NODE259 = homo_ops.adjust_levels_and_depth(NODE230, NODE257, cryptoContext)
+    NODE260 = homo_ops.homo_rescale(NODE252, 1, cryptoContext)
+    NODE261 = homo_ops.homo_rescale(NODE254, 1, cryptoContext)
+    NODE262 = homo_ops.homo_rescale(NODE256, 1, cryptoContext)
+    NODE263 = homo_ops.homo_rescale(NODE258, 1, cryptoContext)
+    NODE264 = homo_ops.homo_rescale(NODE259, 1, cryptoContext)
+    NODE265 = homo_ops.homo_mul_scalar_double(NODE260, np.float64(-0.0005862476626482575), cryptoContext)
+    NODE266 = homo_ops.homo_mul_scalar_double(NODE261, np.float64(-0.05094407670735883), cryptoContext)
+    NODE267 = homo_ops.homo_add(NODE265, NODE266, cryptoContext)
+    NODE268 = homo_ops.homo_mul_scalar_double(NODE262, np.float64(0.010324286361991016), cryptoContext)
+    NODE269 = homo_ops.homo_add(NODE267, NODE268, cryptoContext)
+    NODE270 = homo_ops.homo_mul_scalar_double(NODE263, np.float64(-0.06820640296455721), cryptoContext)
+    NODE271 = homo_ops.homo_add(NODE269, NODE270, cryptoContext)
+    NODE272 = homo_ops.homo_mul_scalar_double(NODE264, np.float64(-0.01629177159536448), cryptoContext)
     NODE273 = homo_ops.homo_add(NODE271, NODE272, cryptoContext)
-    NODE274 = homo_ops.homo_mul_pt(NODE260, NODE18, cryptoContext)
-    NODE275 = homo_ops.homo_add(NODE273, NODE274, cryptoContext)
-    NODE276 = homo_ops.homo_mul_pt(NODE262, NODE19, cryptoContext)
-    NODE277 = homo_ops.homo_add(NODE275, NODE276, cryptoContext)
-    NODE278 = homo_ops.homo_mul_pt(NODE264, NODE20, cryptoContext)
-    NODE279 = homo_ops.homo_add(NODE277, NODE278, cryptoContext)
-    NODE280 = homo_ops.homo_mul_pt(NODE266, NODE21, cryptoContext)
-    NODE281 = homo_ops.homo_add(NODE279, NODE280, cryptoContext)
-    NODE282 = homo_ops.homo_mul_pt(NODE268, NODE22, cryptoContext)
-    NODE283 = homo_ops.homo_add(NODE281, NODE282, cryptoContext)
-    NODE284 = homo_ops.homo_mul_pt(NODE270, NODE23, cryptoContext)
-    NODE285 = homo_ops.homo_add(NODE283, NODE284, cryptoContext)
-    NODE286 = homo_ops.extract_cv(NODE285, 0)
-    NODE287 = hybrid_keyswitch.moddown_from_ext(NODE286, cryptoContext)
-    NODE288 = homo_ops.extract_cv(NODE285, 1, append_zeros = True)
-    NODE289 = homo_ops.homo_mul_pt(NODE256, NODE24, cryptoContext)
-    NODE290 = homo_ops.homo_mul_pt(NODE258, NODE25, cryptoContext)
-    NODE291 = homo_ops.homo_add(NODE289, NODE290, cryptoContext)
-    NODE292 = homo_ops.homo_mul_pt(NODE260, NODE26, cryptoContext)
-    NODE293 = homo_ops.homo_add(NODE291, NODE292, cryptoContext)
-    NODE294 = homo_ops.homo_mul_pt(NODE262, NODE27, cryptoContext)
-    NODE295 = homo_ops.homo_add(NODE293, NODE294, cryptoContext)
-    NODE296 = homo_ops.homo_mul_pt(NODE264, NODE28, cryptoContext)
-    NODE297 = homo_ops.homo_add(NODE295, NODE296, cryptoContext)
-    NODE298 = homo_ops.homo_mul_pt(NODE266, NODE29, cryptoContext)
-    NODE299 = homo_ops.homo_add(NODE297, NODE298, cryptoContext)
-    NODE300 = homo_ops.homo_mul_pt(NODE268, NODE30, cryptoContext)
-    NODE301 = homo_ops.homo_add(NODE299, NODE300, cryptoContext)
-    NODE302 = hybrid_keyswitch.moddown_from_ext(NODE301, cryptoContext)
-    NODE303 = homo_ops.extract_cv(NODE302, 0)
-    NODE304 = homo_ops.extract_cv(NODE302, 1)
-    NODE305 = homo_ops._cipher_automorphism(NODE303, 64, cryptoContext)
-    NODE306 = homo_ops.homo_add(NODE287, NODE305, cryptoContext)
-    NODE307 = hybrid_keyswitch.modup_to_ext(NODE304, cryptoContext)
-    NODE308 = homo_ops.eval_fast_rotate(NODE307, None, 64, False, None, cryptoContext)
-    NODE309 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE307, 64, cryptoContext)
-    NODE310 = homo_ops.homo_add(NODE288, NODE308, cryptoContext)
-    NODE311 = hybrid_keyswitch.moddown_from_ext(NODE310, cryptoContext)
-    NODE312 = homo_ops.extract_cv(NODE306, 0, append_zeros = True)
+    NODE274 = homo_ops.homo_add_scalar_double(NODE273, -0.3617312474102197, cryptoContext)
+    NODE275, NODE276 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE277, NODE278 = homo_ops.adjust_levels_and_depth(NODE226, NODE276, cryptoContext)
+    NODE279, NODE280 = homo_ops.adjust_levels_and_depth(NODE228, NODE278, cryptoContext)
+    NODE281, NODE282 = homo_ops.adjust_levels_and_depth(NODE230, NODE280, cryptoContext)
+    NODE283 = homo_ops.homo_rescale(NODE275, 1, cryptoContext)
+    NODE284 = homo_ops.homo_rescale(NODE277, 1, cryptoContext)
+    NODE285 = homo_ops.homo_rescale(NODE279, 1, cryptoContext)
+    NODE286 = homo_ops.homo_rescale(NODE281, 1, cryptoContext)
+    NODE287 = homo_ops.homo_rescale(NODE282, 1, cryptoContext)
+    NODE288 = homo_ops.homo_mul_scalar_double(NODE283, np.float64(-3.646495964794955e-07), cryptoContext)
+    NODE289 = homo_ops.homo_mul_scalar_double(NODE284, np.float64(6.523242811745607e-06), cryptoContext)
+    NODE290 = homo_ops.homo_add(NODE288, NODE289, cryptoContext)
+    NODE291 = homo_ops.homo_mul_scalar_double(NODE285, np.float64(6.924798172957744e-08), cryptoContext)
+    NODE292 = homo_ops.homo_add(NODE290, NODE291, cryptoContext)
+    NODE293 = homo_ops.homo_mul_scalar_double(NODE286, np.float64(-1.153465700731715e-06), cryptoContext)
+    NODE294 = homo_ops.homo_add(NODE292, NODE293, cryptoContext)
+    NODE295 = homo_ops.homo_mul_scalar_double(NODE287, np.float64(-1.3952337882417398e-08), cryptoContext)
+    NODE296 = homo_ops.homo_add(NODE294, NODE295, cryptoContext)
+    NODE297 = homo_ops.homo_add_scalar_double(NODE296, -0.25001653312166516, cryptoContext)
+    NODE298, NODE299 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE300, NODE301 = homo_ops.adjust_levels_and_depth(NODE226, NODE299, cryptoContext)
+    NODE302, NODE303 = homo_ops.adjust_levels_and_depth(NODE228, NODE301, cryptoContext)
+    NODE304, NODE305 = homo_ops.adjust_levels_and_depth(NODE230, NODE303, cryptoContext)
+    NODE306 = homo_ops.homo_rescale(NODE298, 1, cryptoContext)
+    NODE307 = homo_ops.homo_rescale(NODE300, 1, cryptoContext)
+    NODE308 = homo_ops.homo_rescale(NODE302, 1, cryptoContext)
+    NODE309 = homo_ops.homo_rescale(NODE304, 1, cryptoContext)
+    NODE310 = homo_ops.homo_rescale(NODE305, 1, cryptoContext)
+    NODE311 = homo_ops.homo_mul_scalar_double(NODE306, np.float64(-5.287332369682873e-12), cryptoContext)
+    NODE312 = homo_ops.homo_mul_scalar_double(NODE307, np.float64(7.59317852040558e-11), cryptoContext)
     NODE313 = homo_ops.homo_add(NODE311, NODE312, cryptoContext)
-    NODE314 = homo_ops.homo_rescale(NODE313, 1, cryptoContext)
-    NODE315 = homo_ops.extract_cv(NODE314, 1)
-    NODE316 = hybrid_keyswitch.modup_to_ext(NODE315, cryptoContext)
-    NODE317 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4089, True, False, cryptoContext)
-    NODE318 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4089, cryptoContext)
-    NODE319 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4090, True, False, cryptoContext)
-    NODE320 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4090, cryptoContext)
-    NODE321 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4091, True, False, cryptoContext)
-    NODE322 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4091, cryptoContext)
-    NODE323 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4092, True, False, cryptoContext)
-    NODE324 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4092, cryptoContext)
-    NODE325 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4093, True, False, cryptoContext)
-    NODE326 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4093, cryptoContext)
-    NODE327 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4094, True, False, cryptoContext)
-    NODE328 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4094, cryptoContext)
-    NODE329 = homo_ops.eval_fast_rotate(NODE316, NODE314, 4095, True, False, cryptoContext)
-    NODE330 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE316, 4095, cryptoContext)
-    NODE331 = hybrid_keyswitch.key_switch_P_ext(NODE314, cryptoContext)
-    NODE332 = homo_ops.homo_mul_pt(NODE317, NODE1, cryptoContext)
-    NODE333 = homo_ops.homo_mul_pt(NODE319, NODE2, cryptoContext)
-    NODE334 = homo_ops.homo_add(NODE332, NODE333, cryptoContext)
-    NODE335 = homo_ops.homo_mul_pt(NODE321, NODE3, cryptoContext)
-    NODE336 = homo_ops.homo_add(NODE334, NODE335, cryptoContext)
-    NODE337 = homo_ops.homo_mul_pt(NODE323, NODE4, cryptoContext)
-    NODE338 = homo_ops.homo_add(NODE336, NODE337, cryptoContext)
-    NODE339 = homo_ops.homo_mul_pt(NODE325, NODE5, cryptoContext)
-    NODE340 = homo_ops.homo_add(NODE338, NODE339, cryptoContext)
-    NODE341 = homo_ops.homo_mul_pt(NODE327, NODE6, cryptoContext)
-    NODE342 = homo_ops.homo_add(NODE340, NODE341, cryptoContext)
-    NODE343 = homo_ops.homo_mul_pt(NODE329, NODE7, cryptoContext)
-    NODE344 = homo_ops.homo_add(NODE342, NODE343, cryptoContext)
-    NODE345 = homo_ops.homo_mul_pt(NODE331, NODE8, cryptoContext)
-    NODE346 = homo_ops.homo_add(NODE344, NODE345, cryptoContext)
-    NODE347 = homo_ops.extract_cv(NODE346, 0)
-    NODE348 = hybrid_keyswitch.moddown_from_ext(NODE347, cryptoContext)
-    NODE349 = homo_ops.extract_cv(NODE346, 1, append_zeros = True)
-    NODE350 = homo_ops.homo_mul_pt(NODE317, NODE9, cryptoContext)
-    NODE351 = homo_ops.homo_mul_pt(NODE319, NODE10, cryptoContext)
-    NODE352 = homo_ops.homo_add(NODE350, NODE351, cryptoContext)
-    NODE353 = homo_ops.homo_mul_pt(NODE321, NODE11, cryptoContext)
-    NODE354 = homo_ops.homo_add(NODE352, NODE353, cryptoContext)
-    NODE355 = homo_ops.homo_mul_pt(NODE323, NODE12, cryptoContext)
+    NODE314 = homo_ops.homo_mul_scalar_double(NODE308, np.float64(6.476916381503101e-13), cryptoContext)
+    NODE315 = homo_ops.homo_add(NODE313, NODE314, cryptoContext)
+    NODE316 = homo_ops.homo_mul_scalar_double(NODE309, np.float64(-8.902002730465436e-12), cryptoContext)
+    NODE317 = homo_ops.homo_add(NODE315, NODE316, cryptoContext)
+    NODE318 = homo_ops.homo_mul_scalar_double(NODE310, np.float64(-8.256706803909277e-14), cryptoContext)
+    NODE319 = homo_ops.homo_add(NODE317, NODE318, cryptoContext)
+    NODE320 = homo_ops.homo_add_scalar_double(NODE319, -0.6250000003005246, cryptoContext)
+    NODE321, NODE322 = homo_ops.adjust_levels_and_depth(NODE224, NODE230, cryptoContext)
+    NODE323, NODE324 = homo_ops.adjust_levels_and_depth(NODE226, NODE322, cryptoContext)
+    NODE325, NODE326 = homo_ops.adjust_levels_and_depth(NODE228, NODE324, cryptoContext)
+    NODE327 = homo_ops.homo_rescale(NODE321, 1, cryptoContext)
+    NODE328 = homo_ops.homo_rescale(NODE323, 1, cryptoContext)
+    NODE329 = homo_ops.homo_rescale(NODE325, 1, cryptoContext)
+    NODE330 = homo_ops.homo_rescale(NODE326, 1, cryptoContext)
+    NODE331 = homo_ops.homo_mul_scalar_double(NODE327, np.float64(6.536095011040416e-14), cryptoContext)
+    NODE332 = homo_ops.homo_mul_scalar_double(NODE328, np.float64(-8.489388967084298e-13), cryptoContext)
+    NODE333 = homo_ops.homo_add(NODE331, NODE332, cryptoContext)
+    NODE334 = homo_ops.homo_mul_scalar_double(NODE329, np.float64(-7.167799437636123e-15), cryptoContext)
+    NODE335 = homo_ops.homo_add(NODE333, NODE334, cryptoContext)
+    NODE336 = homo_ops.homo_mul_scalar_double(NODE330, np.float64(9.137260236825108e-14), cryptoContext)
+    NODE337 = homo_ops.homo_add(NODE335, NODE336, cryptoContext)
+    NODE338 = homo_ops.homo_mul_scalar_int(NODE233, 8, cryptoContext)
+    NODE339 = homo_ops.homo_add(NODE337, NODE338, cryptoContext)
+    NODE340 = homo_ops.homo_add_scalar_double(NODE339, 4.022969223666898e-12, cryptoContext)
+    NODE341, NODE342 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE343, NODE344 = homo_ops.adjust_levels_and_depth(NODE226, NODE342, cryptoContext)
+    NODE345, NODE346 = homo_ops.adjust_levels_and_depth(NODE228, NODE344, cryptoContext)
+    NODE347, NODE348 = homo_ops.adjust_levels_and_depth(NODE230, NODE346, cryptoContext)
+    NODE349 = homo_ops.homo_rescale(NODE341, 1, cryptoContext)
+    NODE350 = homo_ops.homo_rescale(NODE343, 1, cryptoContext)
+    NODE351 = homo_ops.homo_rescale(NODE345, 1, cryptoContext)
+    NODE352 = homo_ops.homo_rescale(NODE347, 1, cryptoContext)
+    NODE353 = homo_ops.homo_rescale(NODE348, 1, cryptoContext)
+    NODE354 = homo_ops.homo_mul_scalar_double(NODE349, np.float64(7.749189507306355e-09), cryptoContext)
+    NODE355 = homo_ops.homo_mul_scalar_double(NODE350, np.float64(-1.2322659470598354e-07), cryptoContext)
     NODE356 = homo_ops.homo_add(NODE354, NODE355, cryptoContext)
-    NODE357 = homo_ops.homo_mul_pt(NODE325, NODE13, cryptoContext)
+    NODE357 = homo_ops.homo_mul_scalar_double(NODE351, np.float64(-1.1631474999766912e-09), cryptoContext)
     NODE358 = homo_ops.homo_add(NODE356, NODE357, cryptoContext)
-    NODE359 = homo_ops.homo_mul_pt(NODE327, NODE14, cryptoContext)
+    NODE359 = homo_ops.homo_mul_scalar_double(NODE352, np.float64(1.7512691686329833e-08), cryptoContext)
     NODE360 = homo_ops.homo_add(NODE358, NODE359, cryptoContext)
-    NODE361 = homo_ops.homo_mul_pt(NODE329, NODE15, cryptoContext)
+    NODE361 = homo_ops.homo_mul_scalar_double(NODE353, np.float64(1.8316987627039723e-10), cryptoContext)
     NODE362 = homo_ops.homo_add(NODE360, NODE361, cryptoContext)
-    NODE363 = hybrid_keyswitch.moddown_from_ext(NODE362, cryptoContext)
-    NODE364 = homo_ops.extract_cv(NODE363, 0)
-    NODE365 = homo_ops.extract_cv(NODE363, 1)
-    NODE366 = homo_ops._cipher_automorphism(NODE364, 8, cryptoContext)
-    NODE367 = homo_ops.homo_add(NODE348, NODE366, cryptoContext)
-    NODE368 = hybrid_keyswitch.modup_to_ext(NODE365, cryptoContext)
-    NODE369 = homo_ops.eval_fast_rotate(NODE368, None, 8, False, None, cryptoContext)
-    NODE370 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE368, 8, cryptoContext)
-    NODE371 = homo_ops.homo_add(NODE349, NODE369, cryptoContext)
-    NODE372 = hybrid_keyswitch.moddown_from_ext(NODE371, cryptoContext)
-    NODE373 = homo_ops.extract_cv(NODE367, 0, append_zeros = True)
-    NODE374 = homo_ops.homo_add(NODE372, NODE373, cryptoContext)
-    NODE375 = homo_ops.homo_rotate(NODE374, 32767, cryptoContext)
-    NODE376 = homo_ops.homo_add(NODE374, NODE375, cryptoContext)
-    NODE377 = homo_ops.homo_rescale(NODE376, 1, cryptoContext)
-    NODE378 = homo_ops.homo_mul(NODE377, NODE377, cryptoContext)
-    NODE379 = homo_ops.homo_add(NODE378, NODE378, cryptoContext)
-    NODE380 = homo_ops.homo_rescale(NODE379, 1, cryptoContext)
-    NODE381 = homo_ops.homo_add_scalar_double(NODE380, -1.0, cryptoContext)
-    NODE382 = homo_ops.homo_mul(NODE377, NODE381, cryptoContext)
-    NODE383 = homo_ops.homo_add(NODE382, NODE382, cryptoContext)
-    NODE384 = homo_ops.homo_rescale(NODE383, 1, cryptoContext)
-    NODE385 = homo_ops.homo_sub(NODE384, NODE377, cryptoContext)
-    NODE386 = homo_ops.homo_mul(NODE381, NODE381, cryptoContext)
-    NODE387 = homo_ops.homo_add(NODE386, NODE386, cryptoContext)
-    NODE388 = homo_ops.homo_rescale(NODE387, 1, cryptoContext)
-    NODE389 = homo_ops.homo_add_scalar_double(NODE388, -1.0, cryptoContext)
-    NODE390 = homo_ops.homo_mul(NODE381, NODE385, cryptoContext)
-    NODE391 = homo_ops.homo_add(NODE390, NODE390, cryptoContext)
-    NODE392 = homo_ops.homo_rescale(NODE391, 1, cryptoContext)
-    NODE393 = homo_ops.homo_sub(NODE392, NODE377, cryptoContext)
-    NODE394 = homo_ops.homo_mul(NODE385, NODE385, cryptoContext)
-    NODE395 = homo_ops.homo_add(NODE394, NODE394, cryptoContext)
-    NODE396 = homo_ops.homo_rescale(NODE395, 1, cryptoContext)
-    NODE397 = homo_ops.homo_add_scalar_double(NODE396, -1.0, cryptoContext)
-    NODE398 = homo_ops.homo_mul(NODE385, NODE389, cryptoContext)
-    NODE399 = homo_ops.homo_add(NODE398, NODE398, cryptoContext)
-    NODE400 = homo_ops.homo_rescale(NODE399, 1, cryptoContext)
-    NODE401 = homo_ops.homo_sub(NODE400, NODE377, cryptoContext)
-    NODE402 = homo_ops.drop_last_elements_(NODE377, 3)
-    NODE403 = homo_ops.drop_last_elements_(NODE381, 2)
-    NODE404 = homo_ops.drop_last_elements_(NODE385, 1)
-    NODE405 = homo_ops.drop_last_elements_(NODE389, 1)
-    NODE406 = homo_ops.drop_last_elements_(NODE393, 0)
-    NODE407 = homo_ops.drop_last_elements_(NODE397, 0)
-    return NODE401
-
-    # ---------------------------------
-    # Running Approximate Mod Reduction
-    # ---------------------------------
-
-    # Evaluate Chebyshev series for the sine wave
-    ctxtEnc = approx.eval_chebyshev_series_ps(
-        NODE377, cryptoContext.BsContext.coefficients, -1, 1, cryptoContext
-    )
-
-
-
-    if cryptoContext.rescaleTech != "FIXEDMANUAL":
-        ctxtEnc = homo_ops.homo_rescale(
-            ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-        )
-    ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
-
-    NODE495 = homo_ops.homo_mul_scalar_int(ctxtEnc, 2, cryptoContext)
-    NODE496 = NODE495.deep_copy() #my add
-    NODE497 = homo_ops.extract_cv(NODE496, 1)
-    NODE498 = hybrid_keyswitch.modup_to_ext(NODE497, cryptoContext)
-    NODE499 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8185, True, False, cryptoContext)
-    NODE500 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8185, cryptoContext)
-    NODE501 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8186, True, False, cryptoContext)
-    NODE502 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8186, cryptoContext)
-    NODE503 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8187, True, False, cryptoContext)
-    NODE504 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8187, cryptoContext)
-    NODE505 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8188, True, False, cryptoContext)
-    NODE506 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8188, cryptoContext)
-    NODE507 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8189, True, False, cryptoContext)
-    NODE508 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8189, cryptoContext)
-    NODE509 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8190, True, False, cryptoContext)
-    NODE510 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8190, cryptoContext)
-    NODE511 = homo_ops.eval_fast_rotate(NODE498, NODE496, 8191, True, False, cryptoContext)
-    NODE512 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE498, 8191, cryptoContext)
-    NODE513 = hybrid_keyswitch.key_switch_P_ext(NODE496, cryptoContext)
-    NODE514 = homo_ops.homo_mul_pt(NODE499, NODE61, cryptoContext)
-    NODE515 = homo_ops.homo_mul_pt(NODE501, NODE62, cryptoContext)
-    NODE516 = homo_ops.homo_add(NODE514, NODE515, cryptoContext)
-    NODE517 = homo_ops.homo_mul_pt(NODE503, NODE63, cryptoContext)
-    NODE518 = homo_ops.homo_add(NODE516, NODE517, cryptoContext)
-    NODE519 = homo_ops.homo_mul_pt(NODE505, NODE64, cryptoContext)
-    NODE520 = homo_ops.homo_add(NODE518, NODE519, cryptoContext)
-    NODE521 = homo_ops.homo_mul_pt(NODE507, NODE65, cryptoContext)
-    NODE522 = homo_ops.homo_add(NODE520, NODE521, cryptoContext)
-    NODE523 = homo_ops.homo_mul_pt(NODE509, NODE66, cryptoContext)
-    NODE524 = homo_ops.homo_add(NODE522, NODE523, cryptoContext)
-    NODE525 = homo_ops.homo_mul_pt(NODE511, NODE67, cryptoContext)
-    NODE526 = homo_ops.homo_add(NODE524, NODE525, cryptoContext)
-    NODE527 = homo_ops.homo_mul_pt(NODE513, NODE68, cryptoContext)
-    NODE528 = homo_ops.homo_add(NODE526, NODE527, cryptoContext)
-    NODE529 = homo_ops.extract_cv(NODE528, 0)
-    NODE530 = hybrid_keyswitch.moddown_from_ext(NODE529, cryptoContext)
-    NODE531 = homo_ops.extract_cv(NODE528, 1, append_zeros = True)
-    NODE532 = homo_ops.homo_mul_pt(NODE499, NODE69, cryptoContext)
-    NODE533 = homo_ops.homo_mul_pt(NODE501, NODE70, cryptoContext)
+    NODE363 = homo_ops.homo_add(NODE362, NODE233, cryptoContext)
+    NODE364 = homo_ops.homo_add_scalar_double(NODE363, 3.9678931330873265e-07, cryptoContext)
+    NODE365 = homo_ops.homo_add(NODE236, NODE320, cryptoContext)
+    NODE366 = homo_ops.homo_mul(NODE365, NODE340, cryptoContext)
+    NODE367 = homo_ops.homo_add(NODE366, NODE364, cryptoContext)
+    NODE368, NODE369 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE370, NODE371 = homo_ops.adjust_levels_and_depth(NODE226, NODE369, cryptoContext)
+    NODE372, NODE373 = homo_ops.adjust_levels_and_depth(NODE228, NODE371, cryptoContext)
+    NODE374, NODE375 = homo_ops.adjust_levels_and_depth(NODE230, NODE373, cryptoContext)
+    NODE376 = homo_ops.homo_rescale(NODE368, 1, cryptoContext)
+    NODE377 = homo_ops.homo_rescale(NODE370, 1, cryptoContext)
+    NODE378 = homo_ops.homo_rescale(NODE372, 1, cryptoContext)
+    NODE379 = homo_ops.homo_rescale(NODE374, 1, cryptoContext)
+    NODE380 = homo_ops.homo_rescale(NODE375, 1, cryptoContext)
+    NODE381 = homo_ops.homo_mul_scalar_double(NODE376, np.float64(-0.001985156334269243), cryptoContext)
+    NODE382 = homo_ops.homo_mul_scalar_double(NODE377, np.float64(0.04890697608593539), cryptoContext)
+    NODE383 = homo_ops.homo_add(NODE381, NODE382, cryptoContext)
+    NODE384 = homo_ops.homo_mul_scalar_double(NODE378, np.float64(0.000726959089533452), cryptoContext)
+    NODE385 = homo_ops.homo_add(NODE383, NODE384, cryptoContext)
+    NODE386 = homo_ops.homo_mul_scalar_double(NODE379, np.float64(-0.015211841305959308), cryptoContext)
+    NODE387 = homo_ops.homo_add(NODE385, NODE386, cryptoContext)
+    NODE388 = homo_ops.homo_mul_scalar_double(NODE380, np.float64(-0.00028591236092496), cryptoContext)
+    NODE389 = homo_ops.homo_add(NODE387, NODE388, cryptoContext)
+    NODE390 = homo_ops.homo_add_scalar_double(NODE389, -2.0636663259883834, cryptoContext)
+    NODE391, NODE392 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE393, NODE394 = homo_ops.adjust_levels_and_depth(NODE226, NODE392, cryptoContext)
+    NODE395, NODE396 = homo_ops.adjust_levels_and_depth(NODE228, NODE394, cryptoContext)
+    NODE397, NODE398 = homo_ops.adjust_levels_and_depth(NODE230, NODE396, cryptoContext)
+    NODE399 = homo_ops.homo_rescale(NODE391, 1, cryptoContext)
+    NODE400 = homo_ops.homo_rescale(NODE393, 1, cryptoContext)
+    NODE401 = homo_ops.homo_rescale(NODE395, 1, cryptoContext)
+    NODE402 = homo_ops.homo_rescale(NODE397, 1, cryptoContext)
+    NODE403 = homo_ops.homo_rescale(NODE398, 1, cryptoContext)
+    NODE404 = homo_ops.homo_mul_scalar_double(NODE399, np.float64(0.00012477734912342626), cryptoContext)
+    NODE405 = homo_ops.homo_mul_scalar_double(NODE400, np.float64(-0.002570327090752504), cryptoContext)
+    NODE406 = homo_ops.homo_add(NODE404, NODE405, cryptoContext)
+    NODE407 = homo_ops.homo_mul_scalar_double(NODE401, np.float64(-3.149139809684569e-05), cryptoContext)
+    NODE408 = homo_ops.homo_add(NODE406, NODE407, cryptoContext)
+    NODE409 = homo_ops.homo_mul_scalar_double(NODE402, np.float64(0.0005863073308399249), cryptoContext)
+    NODE410 = homo_ops.homo_add(NODE408, NODE409, cryptoContext)
+    NODE411 = homo_ops.homo_mul_scalar_double(NODE403, np.float64(8.526941207335678e-06), cryptoContext)
+    NODE412 = homo_ops.homo_add(NODE410, NODE411, cryptoContext)
+    NODE413 = homo_ops.homo_mul_scalar_int(NODE233, 2, cryptoContext)
+    NODE414 = homo_ops.homo_add(NODE412, NODE413, cryptoContext)
+    NODE415 = homo_ops.homo_add_scalar_double(NODE414, 0.004878114964813271, cryptoContext)
+    NODE416, NODE417 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE418, NODE419 = homo_ops.adjust_levels_and_depth(NODE226, NODE417, cryptoContext)
+    NODE420, NODE421 = homo_ops.adjust_levels_and_depth(NODE228, NODE419, cryptoContext)
+    NODE422, NODE423 = homo_ops.adjust_levels_and_depth(NODE230, NODE421, cryptoContext)
+    NODE424 = homo_ops.homo_rescale(NODE416, 1, cryptoContext)
+    NODE425 = homo_ops.homo_rescale(NODE418, 1, cryptoContext)
+    NODE426 = homo_ops.homo_rescale(NODE420, 1, cryptoContext)
+    NODE427 = homo_ops.homo_rescale(NODE422, 1, cryptoContext)
+    NODE428 = homo_ops.homo_rescale(NODE423, 1, cryptoContext)
+    NODE429 = homo_ops.homo_mul_scalar_double(NODE424, np.float64(0.015624554739935346), cryptoContext)
+    NODE430 = homo_ops.homo_mul_scalar_double(NODE425, np.float64(-0.4926956557510557), cryptoContext)
+    NODE431 = homo_ops.homo_add(NODE429, NODE430, cryptoContext)
+    NODE432 = homo_ops.homo_mul_scalar_double(NODE426, np.float64(-0.010257275690652224), cryptoContext)
+    NODE433 = homo_ops.homo_add(NODE431, NODE432, cryptoContext)
+    NODE434 = homo_ops.homo_mul_scalar_double(NODE427, np.float64(0.231850036361479), cryptoContext)
+    NODE435 = homo_ops.homo_add(NODE433, NODE434, cryptoContext)
+    NODE436 = homo_ops.homo_mul_scalar_double(NODE428, np.float64(0.006741889972948954), cryptoContext)
+    NODE437 = homo_ops.homo_add(NODE435, NODE436, cryptoContext)
+    NODE438 = homo_ops.homo_add(NODE437, NODE233, cryptoContext)
+    NODE439 = homo_ops.homo_add_scalar_double(NODE438, 0.3576223526326776, cryptoContext)
+    NODE440 = homo_ops.homo_add(NODE236, NODE390, cryptoContext)
+    NODE441 = homo_ops.homo_mul(NODE440, NODE415, cryptoContext)
+    NODE442 = homo_ops.homo_add(NODE441, NODE439, cryptoContext)
+    NODE443 = homo_ops.homo_add(NODE239, NODE297, cryptoContext)
+    NODE444 = homo_ops.homo_mul(NODE443, NODE367, cryptoContext)
+    NODE445 = homo_ops.homo_add(NODE444, NODE442, cryptoContext)
+    NODE446, NODE447 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE448, NODE449 = homo_ops.adjust_levels_and_depth(NODE226, NODE447, cryptoContext)
+    NODE450, NODE451 = homo_ops.adjust_levels_and_depth(NODE228, NODE449, cryptoContext)
+    NODE452, NODE453 = homo_ops.adjust_levels_and_depth(NODE230, NODE451, cryptoContext)
+    NODE454 = homo_ops.homo_rescale(NODE446, 1, cryptoContext)
+    NODE455 = homo_ops.homo_rescale(NODE448, 1, cryptoContext)
+    NODE456 = homo_ops.homo_rescale(NODE450, 1, cryptoContext)
+    NODE457 = homo_ops.homo_rescale(NODE452, 1, cryptoContext)
+    NODE458 = homo_ops.homo_rescale(NODE453, 1, cryptoContext)
+    NODE459 = homo_ops.homo_mul_scalar_double(NODE454, np.float64(-0.011226693751242361), cryptoContext)
+    NODE460 = homo_ops.homo_mul_scalar_double(NODE455, np.float64(-0.44790338425378234), cryptoContext)
+    NODE461 = homo_ops.homo_add(NODE459, NODE460, cryptoContext)
+    NODE462 = homo_ops.homo_mul_scalar_double(NODE456, np.float64(-0.007289276288252454), cryptoContext)
+    NODE463 = homo_ops.homo_add(NODE461, NODE462, cryptoContext)
+    NODE464 = homo_ops.homo_mul_scalar_double(NODE457, np.float64(-0.3635089821481836), cryptoContext)
+    NODE465 = homo_ops.homo_add(NODE463, NODE464, cryptoContext)
+    NODE466 = homo_ops.homo_mul_scalar_double(NODE458, np.float64(-0.0018484514839724984), cryptoContext)
+    NODE467 = homo_ops.homo_add(NODE465, NODE466, cryptoContext)
+    NODE468 = homo_ops.homo_add_scalar_double(NODE467, -0.5683810697947218, cryptoContext)
+    NODE469, NODE470 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE471, NODE472 = homo_ops.adjust_levels_and_depth(NODE226, NODE470, cryptoContext)
+    NODE473, NODE474 = homo_ops.adjust_levels_and_depth(NODE228, NODE472, cryptoContext)
+    NODE475, NODE476 = homo_ops.adjust_levels_and_depth(NODE230, NODE474, cryptoContext)
+    NODE477 = homo_ops.homo_rescale(NODE469, 1, cryptoContext)
+    NODE478 = homo_ops.homo_rescale(NODE471, 1, cryptoContext)
+    NODE479 = homo_ops.homo_rescale(NODE473, 1, cryptoContext)
+    NODE480 = homo_ops.homo_rescale(NODE475, 1, cryptoContext)
+    NODE481 = homo_ops.homo_rescale(NODE476, 1, cryptoContext)
+    NODE482 = homo_ops.homo_mul_scalar_double(NODE477, np.float64(0.007108279652990469), cryptoContext)
+    NODE483 = homo_ops.homo_mul_scalar_double(NODE478, np.float64(0.0019489797083740077), cryptoContext)
+    NODE484 = homo_ops.homo_add(NODE482, NODE483, cryptoContext)
+    NODE485 = homo_ops.homo_mul_scalar_double(NODE479, np.float64(-0.0028843595536510837), cryptoContext)
+    NODE486 = homo_ops.homo_add(NODE484, NODE485, cryptoContext)
+    NODE487 = homo_ops.homo_mul_scalar_double(NODE480, np.float64(0.05422695740202513), cryptoContext)
+    NODE488 = homo_ops.homo_add(NODE486, NODE487, cryptoContext)
+    NODE489 = homo_ops.homo_mul_scalar_double(NODE481, np.float64(-0.025460400506956273), cryptoContext)
+    NODE490 = homo_ops.homo_add(NODE488, NODE489, cryptoContext)
+    NODE491 = homo_ops.homo_add_scalar_double(NODE490, -0.819156762828709, cryptoContext)
+    NODE492, NODE493 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE494, NODE495 = homo_ops.adjust_levels_and_depth(NODE226, NODE493, cryptoContext)
+    NODE496, NODE497 = homo_ops.adjust_levels_and_depth(NODE228, NODE495, cryptoContext)
+    NODE498, NODE499 = homo_ops.adjust_levels_and_depth(NODE230, NODE497, cryptoContext)
+    NODE500 = homo_ops.homo_rescale(NODE492, 1, cryptoContext)
+    NODE501 = homo_ops.homo_rescale(NODE494, 1, cryptoContext)
+    NODE502 = homo_ops.homo_rescale(NODE496, 1, cryptoContext)
+    NODE503 = homo_ops.homo_rescale(NODE498, 1, cryptoContext)
+    NODE504 = homo_ops.homo_rescale(NODE499, 1, cryptoContext)
+    NODE505 = homo_ops.homo_mul_scalar_double(NODE500, np.float64(0.08762600334510307), cryptoContext)
+    NODE506 = homo_ops.homo_mul_scalar_double(NODE501, np.float64(0.01248205312237963), cryptoContext)
+    NODE507 = homo_ops.homo_add(NODE505, NODE506, cryptoContext)
+    NODE508 = homo_ops.homo_mul_scalar_double(NODE502, np.float64(-0.03159516554230107), cryptoContext)
+    NODE509 = homo_ops.homo_add(NODE507, NODE508, cryptoContext)
+    NODE510 = homo_ops.homo_mul_scalar_double(NODE503, np.float64(-0.891126735623574), cryptoContext)
+    NODE511 = homo_ops.homo_add(NODE509, NODE510, cryptoContext)
+    NODE512 = homo_ops.homo_mul_scalar_double(NODE504, np.float64(-0.021505227410223895), cryptoContext)
+    NODE513 = homo_ops.homo_add(NODE511, NODE512, cryptoContext)
+    NODE514 = homo_ops.homo_mul_scalar_int(NODE233, 4, cryptoContext)
+    NODE515 = homo_ops.homo_add(NODE513, NODE514, cryptoContext)
+    NODE516 = homo_ops.homo_add_scalar_double(NODE515, 0.5084800652890352, cryptoContext)
+    NODE517, NODE518 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE519, NODE520 = homo_ops.adjust_levels_and_depth(NODE226, NODE518, cryptoContext)
+    NODE521, NODE522 = homo_ops.adjust_levels_and_depth(NODE228, NODE520, cryptoContext)
+    NODE523, NODE524 = homo_ops.adjust_levels_and_depth(NODE230, NODE522, cryptoContext)
+    NODE525 = homo_ops.homo_rescale(NODE517, 1, cryptoContext)
+    NODE526 = homo_ops.homo_rescale(NODE519, 1, cryptoContext)
+    NODE527 = homo_ops.homo_rescale(NODE521, 1, cryptoContext)
+    NODE528 = homo_ops.homo_rescale(NODE523, 1, cryptoContext)
+    NODE529 = homo_ops.homo_rescale(NODE524, 1, cryptoContext)
+    NODE530 = homo_ops.homo_mul_scalar_double(NODE525, np.float64(0.100241699512197), cryptoContext)
+    NODE531 = homo_ops.homo_mul_scalar_double(NODE526, np.float64(0.36533466956500815), cryptoContext)
+    NODE532 = homo_ops.homo_add(NODE530, NODE531, cryptoContext)
+    NODE533 = homo_ops.homo_mul_scalar_double(NODE527, np.float64(-0.013581504535905302), cryptoContext)
     NODE534 = homo_ops.homo_add(NODE532, NODE533, cryptoContext)
-    NODE535 = homo_ops.homo_mul_pt(NODE503, NODE71, cryptoContext)
+    NODE535 = homo_ops.homo_mul_scalar_double(NODE528, np.float64(-0.48032816165746395), cryptoContext)
     NODE536 = homo_ops.homo_add(NODE534, NODE535, cryptoContext)
-    NODE537 = homo_ops.homo_mul_pt(NODE505, NODE72, cryptoContext)
+    NODE537 = homo_ops.homo_mul_scalar_double(NODE529, np.float64(-0.006172605335918508), cryptoContext)
     NODE538 = homo_ops.homo_add(NODE536, NODE537, cryptoContext)
-    NODE539 = homo_ops.homo_mul_pt(NODE507, NODE73, cryptoContext)
-    NODE540 = homo_ops.homo_add(NODE538, NODE539, cryptoContext)
-    NODE541 = homo_ops.homo_mul_pt(NODE509, NODE74, cryptoContext)
-    NODE542 = homo_ops.homo_add(NODE540, NODE541, cryptoContext)
-    NODE543 = homo_ops.homo_mul_pt(NODE511, NODE75, cryptoContext)
-    NODE544 = homo_ops.homo_add(NODE542, NODE543, cryptoContext)
-    NODE545 = hybrid_keyswitch.moddown_from_ext(NODE544, cryptoContext)
-    NODE546 = homo_ops.extract_cv(NODE545, 0)
-    NODE547 = homo_ops.extract_cv(NODE545, 1)
-    NODE548 = homo_ops._cipher_automorphism(NODE546, 8, cryptoContext)
-    NODE549 = homo_ops.homo_add(NODE530, NODE548, cryptoContext)
-    NODE550 = hybrid_keyswitch.modup_to_ext(NODE547, cryptoContext)
-    NODE551 = homo_ops.eval_fast_rotate(NODE550, None, 8, False, None, cryptoContext)
-    NODE552 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE550, 8, cryptoContext)
-    NODE553 = homo_ops.homo_add(NODE531, NODE551, cryptoContext)
-    NODE554 = hybrid_keyswitch.moddown_from_ext(NODE553, cryptoContext)
-    NODE555 = homo_ops.extract_cv(NODE549, 0, append_zeros = True)
-    NODE556 = homo_ops.homo_add(NODE554, NODE555, cryptoContext)
-    NODE557 = homo_ops.homo_rescale(NODE556, 1, cryptoContext)
-    NODE558 = homo_ops.extract_cv(NODE557, 1)
-    NODE559 = hybrid_keyswitch.modup_to_ext(NODE558, cryptoContext)
-    NODE560 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8136, True, False, cryptoContext)
-    NODE561 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8136, cryptoContext)
-    NODE562 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8144, True, False, cryptoContext)
-    NODE563 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8144, cryptoContext)
-    NODE564 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8152, True, False, cryptoContext)
-    NODE565 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8152, cryptoContext)
-    NODE566 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8160, True, False, cryptoContext)
-    NODE567 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8160, cryptoContext)
-    NODE568 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8168, True, False, cryptoContext)
-    NODE569 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8168, cryptoContext)
-    NODE570 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8176, True, False, cryptoContext)
-    NODE571 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8176, cryptoContext)
-    NODE572 = homo_ops.eval_fast_rotate(NODE559, NODE557, 8184, True, False, cryptoContext)
-    NODE573 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE559, 8184, cryptoContext)
-    NODE574 = hybrid_keyswitch.key_switch_P_ext(NODE557, cryptoContext)
-    NODE575 = homo_ops.homo_mul_pt(NODE560, NODE76, cryptoContext)
-    NODE576 = homo_ops.homo_mul_pt(NODE562, NODE77, cryptoContext)
-    NODE577 = homo_ops.homo_add(NODE575, NODE576, cryptoContext)
-    NODE578 = homo_ops.homo_mul_pt(NODE564, NODE78, cryptoContext)
-    NODE579 = homo_ops.homo_add(NODE577, NODE578, cryptoContext)
-    NODE580 = homo_ops.homo_mul_pt(NODE566, NODE79, cryptoContext)
-    NODE581 = homo_ops.homo_add(NODE579, NODE580, cryptoContext)
-    NODE582 = homo_ops.homo_mul_pt(NODE568, NODE80, cryptoContext)
-    NODE583 = homo_ops.homo_add(NODE581, NODE582, cryptoContext)
-    NODE584 = homo_ops.homo_mul_pt(NODE570, NODE81, cryptoContext)
-    NODE585 = homo_ops.homo_add(NODE583, NODE584, cryptoContext)
-    NODE586 = homo_ops.homo_mul_pt(NODE572, NODE82, cryptoContext)
-    NODE587 = homo_ops.homo_add(NODE585, NODE586, cryptoContext)
-    NODE588 = homo_ops.homo_mul_pt(NODE574, NODE83, cryptoContext)
-    NODE589 = homo_ops.homo_add(NODE587, NODE588, cryptoContext)
-    NODE590 = homo_ops.extract_cv(NODE589, 0)
-    NODE591 = hybrid_keyswitch.moddown_from_ext(NODE590, cryptoContext)
-    NODE592 = homo_ops.extract_cv(NODE589, 1, append_zeros = True)
-    NODE593 = homo_ops.homo_mul_pt(NODE560, NODE84, cryptoContext)
-    NODE594 = homo_ops.homo_mul_pt(NODE562, NODE85, cryptoContext)
-    NODE595 = homo_ops.homo_add(NODE593, NODE594, cryptoContext)
-    NODE596 = homo_ops.homo_mul_pt(NODE564, NODE86, cryptoContext)
-    NODE597 = homo_ops.homo_add(NODE595, NODE596, cryptoContext)
-    NODE598 = homo_ops.homo_mul_pt(NODE566, NODE87, cryptoContext)
-    NODE599 = homo_ops.homo_add(NODE597, NODE598, cryptoContext)
-    NODE600 = homo_ops.homo_mul_pt(NODE568, NODE88, cryptoContext)
-    NODE601 = homo_ops.homo_add(NODE599, NODE600, cryptoContext)
-    NODE602 = homo_ops.homo_mul_pt(NODE570, NODE89, cryptoContext)
-    NODE603 = homo_ops.homo_add(NODE601, NODE602, cryptoContext)
-    NODE604 = homo_ops.homo_mul_pt(NODE572, NODE90, cryptoContext)
-    NODE605 = homo_ops.homo_add(NODE603, NODE604, cryptoContext)
-    NODE606 = hybrid_keyswitch.moddown_from_ext(NODE605, cryptoContext)
-    NODE607 = homo_ops.extract_cv(NODE606, 0)
-    NODE608 = homo_ops.extract_cv(NODE606, 1)
-    NODE609 = homo_ops._cipher_automorphism(NODE607, 64, cryptoContext)
-    NODE610 = homo_ops.homo_add(NODE591, NODE609, cryptoContext)
-    NODE611 = hybrid_keyswitch.modup_to_ext(NODE608, cryptoContext)
-    NODE612 = homo_ops.eval_fast_rotate(NODE611, None, 64, False, None, cryptoContext)
-    NODE613 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE611, 64, cryptoContext)
-    NODE614 = homo_ops.homo_add(NODE592, NODE612, cryptoContext)
-    NODE615 = hybrid_keyswitch.moddown_from_ext(NODE614, cryptoContext)
-    NODE616 = homo_ops.extract_cv(NODE610, 0, append_zeros = True)
-    NODE617 = homo_ops.homo_add(NODE615, NODE616, cryptoContext)
-    NODE618 = homo_ops.homo_rescale(NODE617, 1, cryptoContext)
-    NODE619 = homo_ops.extract_cv(NODE618, 1)
-    NODE620 = hybrid_keyswitch.modup_to_ext(NODE619, cryptoContext)
-    NODE621 = homo_ops.eval_fast_rotate(NODE620, NODE618, 7744, True, False, cryptoContext)
-    NODE622 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 7744, cryptoContext)
-    NODE623 = homo_ops.eval_fast_rotate(NODE620, NODE618, 7808, True, False, cryptoContext)
-    NODE624 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 7808, cryptoContext)
-    NODE625 = homo_ops.eval_fast_rotate(NODE620, NODE618, 7872, True, False, cryptoContext)
-    NODE626 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 7872, cryptoContext)
-    NODE627 = homo_ops.eval_fast_rotate(NODE620, NODE618, 7936, True, False, cryptoContext)
-    NODE628 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 7936, cryptoContext)
-    NODE629 = homo_ops.eval_fast_rotate(NODE620, NODE618, 8000, True, False, cryptoContext)
-    NODE630 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 8000, cryptoContext)
-    NODE631 = homo_ops.eval_fast_rotate(NODE620, NODE618, 8064, True, False, cryptoContext)
-    NODE632 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 8064, cryptoContext)
-    NODE633 = homo_ops.eval_fast_rotate(NODE620, NODE618, 8128, True, False, cryptoContext)
-    NODE634 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE620, 8128, cryptoContext)
-    NODE635 = hybrid_keyswitch.key_switch_P_ext(NODE618, cryptoContext)
-    NODE636 = homo_ops.homo_mul_pt(NODE621, NODE91, cryptoContext)
-    NODE637 = homo_ops.homo_mul_pt(NODE623, NODE92, cryptoContext)
-    NODE638 = homo_ops.homo_add(NODE636, NODE637, cryptoContext)
-    NODE639 = homo_ops.homo_mul_pt(NODE625, NODE93, cryptoContext)
-    NODE640 = homo_ops.homo_add(NODE638, NODE639, cryptoContext)
-    NODE641 = homo_ops.homo_mul_pt(NODE627, NODE94, cryptoContext)
-    NODE642 = homo_ops.homo_add(NODE640, NODE641, cryptoContext)
-    NODE643 = homo_ops.homo_mul_pt(NODE629, NODE95, cryptoContext)
-    NODE644 = homo_ops.homo_add(NODE642, NODE643, cryptoContext)
-    NODE645 = homo_ops.homo_mul_pt(NODE631, NODE96, cryptoContext)
-    NODE646 = homo_ops.homo_add(NODE644, NODE645, cryptoContext)
-    NODE647 = homo_ops.homo_mul_pt(NODE633, NODE97, cryptoContext)
-    NODE648 = homo_ops.homo_add(NODE646, NODE647, cryptoContext)
-    NODE649 = homo_ops.homo_mul_pt(NODE635, NODE98, cryptoContext)
-    NODE650 = homo_ops.homo_add(NODE648, NODE649, cryptoContext)
-    NODE651 = homo_ops.extract_cv(NODE650, 0)
-    NODE652 = hybrid_keyswitch.moddown_from_ext(NODE651, cryptoContext)
-    NODE653 = homo_ops.extract_cv(NODE650, 1, append_zeros = True)
-    NODE654 = homo_ops.homo_mul_pt(NODE621, NODE99, cryptoContext)
-    NODE655 = homo_ops.homo_mul_pt(NODE623, NODE100, cryptoContext)
-    NODE656 = homo_ops.homo_add(NODE654, NODE655, cryptoContext)
-    NODE657 = homo_ops.homo_mul_pt(NODE625, NODE101, cryptoContext)
-    NODE658 = homo_ops.homo_add(NODE656, NODE657, cryptoContext)
-    NODE659 = homo_ops.homo_mul_pt(NODE627, NODE102, cryptoContext)
-    NODE660 = homo_ops.homo_add(NODE658, NODE659, cryptoContext)
-    NODE661 = homo_ops.homo_mul_pt(NODE629, NODE103, cryptoContext)
-    NODE662 = homo_ops.homo_add(NODE660, NODE661, cryptoContext)
-    NODE663 = homo_ops.homo_mul_pt(NODE631, NODE104, cryptoContext)
-    NODE664 = homo_ops.homo_add(NODE662, NODE663, cryptoContext)
-    NODE665 = homo_ops.homo_mul_pt(NODE633, NODE105, cryptoContext)
-    NODE666 = homo_ops.homo_add(NODE664, NODE665, cryptoContext)
-    NODE667 = hybrid_keyswitch.moddown_from_ext(NODE666, cryptoContext)
-    NODE668 = homo_ops.extract_cv(NODE667, 0)
-    NODE669 = homo_ops.extract_cv(NODE667, 1)
-    NODE670 = homo_ops._cipher_automorphism(NODE668, 512, cryptoContext)
-    NODE671 = homo_ops.homo_add(NODE652, NODE670, cryptoContext)
-    NODE672 = hybrid_keyswitch.modup_to_ext(NODE669, cryptoContext)
-    NODE673 = homo_ops.eval_fast_rotate(NODE672, None, 512, False, None, cryptoContext)
-    NODE674 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE672, 512, cryptoContext)
-    NODE675 = homo_ops.homo_add(NODE653, NODE673, cryptoContext)
+    NODE539 = homo_ops.homo_add(NODE538, NODE233, cryptoContext)
+    NODE540 = homo_ops.homo_add_scalar_double(NODE539, 0.5188622170523641, cryptoContext)
+    NODE541 = homo_ops.homo_add(NODE236, NODE491, cryptoContext)
+    NODE542 = homo_ops.homo_mul(NODE541, NODE516, cryptoContext)
+    NODE543 = homo_ops.homo_add(NODE542, NODE540, cryptoContext)
+    NODE544, NODE545 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE546, NODE547 = homo_ops.adjust_levels_and_depth(NODE226, NODE545, cryptoContext)
+    NODE548, NODE549 = homo_ops.adjust_levels_and_depth(NODE228, NODE547, cryptoContext)
+    NODE550, NODE551 = homo_ops.adjust_levels_and_depth(NODE230, NODE549, cryptoContext)
+    NODE552 = homo_ops.homo_rescale(NODE544, 1, cryptoContext)
+    NODE553 = homo_ops.homo_rescale(NODE546, 1, cryptoContext)
+    NODE554 = homo_ops.homo_rescale(NODE548, 1, cryptoContext)
+    NODE555 = homo_ops.homo_rescale(NODE550, 1, cryptoContext)
+    NODE556 = homo_ops.homo_rescale(NODE551, 1, cryptoContext)
+    NODE557 = homo_ops.homo_mul_scalar_double(NODE552, np.float64(-0.00043842621075034687), cryptoContext)
+    NODE558 = homo_ops.homo_mul_scalar_double(NODE553, np.float64(-0.0731687237383307), cryptoContext)
+    NODE559 = homo_ops.homo_add(NODE557, NODE558, cryptoContext)
+    NODE560 = homo_ops.homo_mul_scalar_double(NODE554, np.float64(0.023004825216687307), cryptoContext)
+    NODE561 = homo_ops.homo_add(NODE559, NODE560, cryptoContext)
+    NODE562 = homo_ops.homo_mul_scalar_double(NODE555, np.float64(-0.1998683402180191), cryptoContext)
+    NODE563 = homo_ops.homo_add(NODE561, NODE562, cryptoContext)
+    NODE564 = homo_ops.homo_mul_scalar_double(NODE556, np.float64(-0.046113339586327906), cryptoContext)
+    NODE565 = homo_ops.homo_add(NODE563, NODE564, cryptoContext)
+    NODE566 = homo_ops.homo_add_scalar_double(NODE565, -1.914253203669351, cryptoContext)
+    NODE567, NODE568 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE569, NODE570 = homo_ops.adjust_levels_and_depth(NODE226, NODE568, cryptoContext)
+    NODE571, NODE572 = homo_ops.adjust_levels_and_depth(NODE228, NODE570, cryptoContext)
+    NODE573, NODE574 = homo_ops.adjust_levels_and_depth(NODE230, NODE572, cryptoContext)
+    NODE575 = homo_ops.homo_rescale(NODE567, 1, cryptoContext)
+    NODE576 = homo_ops.homo_rescale(NODE569, 1, cryptoContext)
+    NODE577 = homo_ops.homo_rescale(NODE571, 1, cryptoContext)
+    NODE578 = homo_ops.homo_rescale(NODE573, 1, cryptoContext)
+    NODE579 = homo_ops.homo_rescale(NODE574, 1, cryptoContext)
+    NODE580 = homo_ops.homo_mul_scalar_double(NODE575, np.float64(0.05464497109317642), cryptoContext)
+    NODE581 = homo_ops.homo_mul_scalar_double(NODE576, np.float64(0.8598467539571557), cryptoContext)
+    NODE582 = homo_ops.homo_add(NODE580, NODE581, cryptoContext)
+    NODE583 = homo_ops.homo_mul_scalar_double(NODE577, np.float64(0.029222571731159365), cryptoContext)
+    NODE584 = homo_ops.homo_add(NODE582, NODE583, cryptoContext)
+    NODE585 = homo_ops.homo_mul_scalar_double(NODE578, np.float64(0.949487448098409), cryptoContext)
+    NODE586 = homo_ops.homo_add(NODE584, NODE585, cryptoContext)
+    NODE587 = homo_ops.homo_mul_scalar_double(NODE579, np.float64(0.020919545017172893), cryptoContext)
+    NODE588 = homo_ops.homo_add(NODE586, NODE587, cryptoContext)
+    NODE589 = homo_ops.homo_mul_scalar_int(NODE233, 2, cryptoContext)
+    NODE590 = homo_ops.homo_add(NODE588, NODE589, cryptoContext)
+    NODE591 = homo_ops.homo_add_scalar_double(NODE590, 0.07590256636785217, cryptoContext)
+    NODE592, NODE593 = homo_ops.adjust_levels_and_depth(NODE224, NODE232, cryptoContext)
+    NODE594, NODE595 = homo_ops.adjust_levels_and_depth(NODE226, NODE593, cryptoContext)
+    NODE596, NODE597 = homo_ops.adjust_levels_and_depth(NODE228, NODE595, cryptoContext)
+    NODE598, NODE599 = homo_ops.adjust_levels_and_depth(NODE230, NODE597, cryptoContext)
+    NODE600 = homo_ops.homo_rescale(NODE592, 1, cryptoContext)
+    NODE601 = homo_ops.homo_rescale(NODE594, 1, cryptoContext)
+    NODE602 = homo_ops.homo_rescale(NODE596, 1, cryptoContext)
+    NODE603 = homo_ops.homo_rescale(NODE598, 1, cryptoContext)
+    NODE604 = homo_ops.homo_rescale(NODE599, 1, cryptoContext)
+    NODE605 = homo_ops.homo_mul_scalar_double(NODE600, np.float64(0.1682903223534578), cryptoContext)
+    NODE606 = homo_ops.homo_mul_scalar_double(NODE601, np.float64(2.349462982852268), cryptoContext)
+    NODE607 = homo_ops.homo_add(NODE605, NODE606, cryptoContext)
+    NODE608 = homo_ops.homo_mul_scalar_double(NODE602, np.float64(0.05342369715514261), cryptoContext)
+    NODE609 = homo_ops.homo_add(NODE607, NODE608, cryptoContext)
+    NODE610 = homo_ops.homo_mul_scalar_double(NODE603, np.float64(2.370388179536648), cryptoContext)
+    NODE611 = homo_ops.homo_add(NODE609, NODE610, cryptoContext)
+    NODE612 = homo_ops.homo_mul_scalar_double(NODE604, np.float64(0.0533822343175047), cryptoContext)
+    NODE613 = homo_ops.homo_add(NODE611, NODE612, cryptoContext)
+    NODE614 = homo_ops.homo_add(NODE613, NODE233, cryptoContext)
+    NODE615 = homo_ops.homo_add_scalar_double(NODE614, 0.6710793101298114, cryptoContext)
+    NODE616 = homo_ops.homo_add(NODE236, NODE566, cryptoContext)
+    NODE617 = homo_ops.homo_mul(NODE616, NODE591, cryptoContext)
+    NODE618 = homo_ops.homo_add(NODE617, NODE615, cryptoContext)
+    NODE619 = homo_ops.homo_add(NODE239, NODE468, cryptoContext)
+    NODE620 = homo_ops.homo_mul(NODE619, NODE543, cryptoContext)
+    NODE621 = homo_ops.homo_add(NODE620, NODE618, cryptoContext)
+    NODE622 = homo_ops.homo_add(NODE242, NODE274, cryptoContext)
+    NODE623 = homo_ops.homo_mul(NODE622, NODE445, cryptoContext)
+    NODE624 = homo_ops.homo_add(NODE623, NODE621, cryptoContext)
+    NODE625 = homo_ops.homo_sub(NODE624, NODE251, cryptoContext)
+    NODE626 = homo_ops.homo_rescale(NODE625, 1, cryptoContext)
+    NODE627 = homo_ops.homo_square(NODE626, cryptoContext)
+    NODE628 = homo_ops.homo_add(NODE627, NODE627, cryptoContext)
+    NODE629 = homo_ops.homo_add_scalar_double(NODE628, -0.9441845270914478, cryptoContext)
+    NODE630 = homo_ops.homo_square(NODE629, cryptoContext)
+    NODE631 = homo_ops.homo_add(NODE630, NODE630, cryptoContext)
+    NODE632 = homo_ops.homo_add_scalar_double(NODE631, -0.891484421198901, cryptoContext)
+    NODE633 = homo_ops.homo_square(NODE632, cryptoContext)
+    NODE634 = homo_ops.homo_add(NODE633, NODE633, cryptoContext)
+    NODE635 = homo_ops.homo_add_scalar_double(NODE634, -0.7947444732403395, cryptoContext)
+    NODE636 = homo_ops.homo_square(NODE635, cryptoContext)
+    NODE637 = homo_ops.homo_add(NODE636, NODE636, cryptoContext)
+    NODE638 = homo_ops.homo_add_scalar_double(NODE637, -0.6316187777460647, cryptoContext)
+    NODE639 = homo_ops.homo_square(NODE638, cryptoContext)
+    NODE640 = homo_ops.homo_add(NODE639, NODE639, cryptoContext)
+    NODE641 = homo_ops.homo_add_scalar_double(NODE640, -0.3989422804014327, cryptoContext)
+    NODE642 = homo_ops.homo_square(NODE641, cryptoContext)
+    NODE643 = homo_ops.homo_add(NODE642, NODE642, cryptoContext)
+    NODE644 = homo_ops.homo_add_scalar_double(NODE643, -0.15915494309189535, cryptoContext)
+    NODE645 = homo_ops.homo_mul_scalar_int(NODE644, 2, cryptoContext)
+    NODE646 = homo_ops.homo_rescale(NODE645, 1, cryptoContext)
+    NODE647 = homo_ops.extract_cv(NODE646, 1)
+    NODE648 = hybrid_keyswitch.modup_to_ext(NODE647, cryptoContext)
+    NODE649 = homo_ops.eval_fast_rotate(NODE648, NODE646, 8189, True, False, cryptoContext)
+    NODE650 = homo_ops.eval_fast_rotate(NODE648, NODE646, 8190, True, False, cryptoContext)
+    NODE651 = homo_ops.eval_fast_rotate(NODE648, NODE646, 8191, True, False, cryptoContext)
+    NODE652 = hybrid_keyswitch.key_switch_P_ext(NODE646, cryptoContext)
+    NODE653 = homo_ops.homo_mul_pt(NODE649, NODE29, cryptoContext)
+    NODE654 = homo_ops.homo_mul_pt(NODE650, NODE30, cryptoContext)
+    NODE655 = homo_ops.homo_add(NODE653, NODE654, cryptoContext)
+    NODE656 = homo_ops.homo_mul_pt(NODE651, NODE31, cryptoContext)
+    NODE657 = homo_ops.homo_add(NODE655, NODE656, cryptoContext)
+    NODE658 = homo_ops.homo_mul_pt(NODE652, NODE32, cryptoContext)
+    NODE659 = homo_ops.homo_add(NODE657, NODE658, cryptoContext)
+    NODE660 = homo_ops.extract_cv(NODE659, 0)
+    NODE661 = hybrid_keyswitch.moddown_from_ext(NODE660, cryptoContext)
+    NODE662 = homo_ops.extract_cv(NODE659, 1, append_zeros = True)
+    NODE663 = homo_ops.homo_mul_pt(NODE649, NODE33, cryptoContext)
+    NODE664 = homo_ops.homo_mul_pt(NODE650, NODE34, cryptoContext)
+    NODE665 = homo_ops.homo_add(NODE663, NODE664, cryptoContext)
+    NODE666 = homo_ops.homo_mul_pt(NODE651, NODE35, cryptoContext)
+    NODE667 = homo_ops.homo_add(NODE665, NODE666, cryptoContext)
+    NODE668 = hybrid_keyswitch.moddown_from_ext(NODE667, cryptoContext)
+    NODE669 = homo_ops.extract_cv(NODE668, 0)
+    NODE670 = homo_ops.extract_cv(NODE668, 1)
+    NODE671 = homo_ops._cipher_automorphism(NODE669, 4, cryptoContext)
+    NODE672 = homo_ops.homo_add(NODE661, NODE671, cryptoContext)
+    NODE673 = hybrid_keyswitch.modup_to_ext(NODE670, cryptoContext)
+    NODE674 = homo_ops.eval_fast_rotate(NODE673, None, 4, False, None, cryptoContext)
+    NODE675 = homo_ops.homo_add(NODE662, NODE674, cryptoContext)
     NODE676 = hybrid_keyswitch.moddown_from_ext(NODE675, cryptoContext)
-    NODE677 = homo_ops.extract_cv(NODE671, 0, append_zeros = True)
+    NODE677 = homo_ops.extract_cv(NODE672, 0, append_zeros = True)
     NODE678 = homo_ops.homo_add(NODE676, NODE677, cryptoContext)
     NODE679 = homo_ops.homo_rescale(NODE678, 1, cryptoContext)
     NODE680 = homo_ops.extract_cv(NODE679, 1)
     NODE681 = hybrid_keyswitch.modup_to_ext(NODE680, cryptoContext)
-    NODE682 = homo_ops.eval_fast_rotate(NODE681, NODE679, 4608, True, False, cryptoContext)
-    NODE683 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 4608, cryptoContext)
-    NODE684 = homo_ops.eval_fast_rotate(NODE681, NODE679, 5120, True, False, cryptoContext)
-    NODE685 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 5120, cryptoContext)
-    NODE686 = homo_ops.eval_fast_rotate(NODE681, NODE679, 5632, True, False, cryptoContext)
-    NODE687 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 5632, cryptoContext)
-    NODE688 = homo_ops.eval_fast_rotate(NODE681, NODE679, 6144, True, False, cryptoContext)
-    NODE689 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 6144, cryptoContext)
-    NODE690 = homo_ops.eval_fast_rotate(NODE681, NODE679, 6656, True, False, cryptoContext)
-    NODE691 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 6656, cryptoContext)
-    NODE692 = homo_ops.eval_fast_rotate(NODE681, NODE679, 7168, True, False, cryptoContext)
-    NODE693 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 7168, cryptoContext)
-    NODE694 = homo_ops.eval_fast_rotate(NODE681, NODE679, 7680, True, False, cryptoContext)
-    NODE695 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE681, 7680, cryptoContext)
-    NODE696 = hybrid_keyswitch.key_switch_P_ext(NODE679, cryptoContext)
-    NODE697 = homo_ops.homo_mul_pt(NODE682, NODE106, cryptoContext)
-    NODE698 = homo_ops.homo_mul_pt(NODE684, NODE107, cryptoContext)
-    NODE699 = homo_ops.homo_add(NODE697, NODE698, cryptoContext)
-    NODE700 = homo_ops.homo_mul_pt(NODE686, NODE108, cryptoContext)
-    NODE701 = homo_ops.homo_add(NODE699, NODE700, cryptoContext)
-    NODE702 = homo_ops.homo_mul_pt(NODE688, NODE109, cryptoContext)
-    NODE703 = homo_ops.homo_add(NODE701, NODE702, cryptoContext)
-    NODE704 = homo_ops.homo_mul_pt(NODE690, NODE110, cryptoContext)
-    NODE705 = homo_ops.homo_add(NODE703, NODE704, cryptoContext)
-    NODE706 = homo_ops.homo_mul_pt(NODE692, NODE111, cryptoContext)
-    NODE707 = homo_ops.homo_add(NODE705, NODE706, cryptoContext)
-    NODE708 = homo_ops.homo_mul_pt(NODE694, NODE112, cryptoContext)
-    NODE709 = homo_ops.homo_add(NODE707, NODE708, cryptoContext)
-    NODE710 = homo_ops.homo_mul_pt(NODE696, NODE113, cryptoContext)
+    NODE682 = homo_ops.eval_fast_rotate(NODE681, NODE679, 8180, True, False, cryptoContext)
+    NODE683 = homo_ops.eval_fast_rotate(NODE681, NODE679, 8184, True, False, cryptoContext)
+    NODE684 = homo_ops.eval_fast_rotate(NODE681, NODE679, 8188, True, False, cryptoContext)
+    NODE685 = hybrid_keyswitch.key_switch_P_ext(NODE679, cryptoContext)
+    NODE686 = homo_ops.homo_mul_pt(NODE682, NODE36, cryptoContext)
+    NODE687 = homo_ops.homo_mul_pt(NODE683, NODE37, cryptoContext)
+    NODE688 = homo_ops.homo_add(NODE686, NODE687, cryptoContext)
+    NODE689 = homo_ops.homo_mul_pt(NODE684, NODE38, cryptoContext)
+    NODE690 = homo_ops.homo_add(NODE688, NODE689, cryptoContext)
+    NODE691 = homo_ops.homo_mul_pt(NODE685, NODE39, cryptoContext)
+    NODE692 = homo_ops.homo_add(NODE690, NODE691, cryptoContext)
+    NODE693 = homo_ops.extract_cv(NODE692, 0)
+    NODE694 = hybrid_keyswitch.moddown_from_ext(NODE693, cryptoContext)
+    NODE695 = homo_ops.extract_cv(NODE692, 1, append_zeros = True)
+    NODE696 = homo_ops.homo_mul_pt(NODE682, NODE40, cryptoContext)
+    NODE697 = homo_ops.homo_mul_pt(NODE683, NODE41, cryptoContext)
+    NODE698 = homo_ops.homo_add(NODE696, NODE697, cryptoContext)
+    NODE699 = homo_ops.homo_mul_pt(NODE684, NODE42, cryptoContext)
+    NODE700 = homo_ops.homo_add(NODE698, NODE699, cryptoContext)
+    NODE701 = hybrid_keyswitch.moddown_from_ext(NODE700, cryptoContext)
+    NODE702 = homo_ops.extract_cv(NODE701, 0)
+    NODE703 = homo_ops.extract_cv(NODE701, 1)
+    NODE704 = homo_ops._cipher_automorphism(NODE702, 16, cryptoContext)
+    NODE705 = homo_ops.homo_add(NODE694, NODE704, cryptoContext)
+    NODE706 = hybrid_keyswitch.modup_to_ext(NODE703, cryptoContext)
+    NODE707 = homo_ops.eval_fast_rotate(NODE706, None, 16, False, None, cryptoContext)
+    NODE708 = homo_ops.homo_add(NODE695, NODE707, cryptoContext)
+    NODE709 = hybrid_keyswitch.moddown_from_ext(NODE708, cryptoContext)
+    NODE710 = homo_ops.extract_cv(NODE705, 0, append_zeros = True)
     NODE711 = homo_ops.homo_add(NODE709, NODE710, cryptoContext)
-    NODE712 = homo_ops.extract_cv(NODE711, 0)
-    NODE713 = hybrid_keyswitch.moddown_from_ext(NODE712, cryptoContext)
-    NODE714 = homo_ops.extract_cv(NODE711, 1, append_zeros = True)
-    NODE715 = homo_ops.homo_mul_pt(NODE682, NODE114, cryptoContext)
-    NODE716 = homo_ops.homo_mul_pt(NODE684, NODE115, cryptoContext)
-    NODE717 = homo_ops.homo_add(NODE715, NODE716, cryptoContext)
-    NODE718 = homo_ops.homo_mul_pt(NODE686, NODE116, cryptoContext)
-    NODE719 = homo_ops.homo_add(NODE717, NODE718, cryptoContext)
-    NODE720 = homo_ops.homo_mul_pt(NODE688, NODE117, cryptoContext)
+    NODE712 = homo_ops.homo_rescale(NODE711, 1, cryptoContext)
+    NODE713 = homo_ops.extract_cv(NODE712, 1)
+    NODE714 = hybrid_keyswitch.modup_to_ext(NODE713, cryptoContext)
+    NODE715 = homo_ops.eval_fast_rotate(NODE714, NODE712, 8144, True, False, cryptoContext)
+    NODE716 = homo_ops.eval_fast_rotate(NODE714, NODE712, 8160, True, False, cryptoContext)
+    NODE717 = homo_ops.eval_fast_rotate(NODE714, NODE712, 8176, True, False, cryptoContext)
+    NODE718 = hybrid_keyswitch.key_switch_P_ext(NODE712, cryptoContext)
+    NODE719 = homo_ops.homo_mul_pt(NODE715, NODE43, cryptoContext)
+    NODE720 = homo_ops.homo_mul_pt(NODE716, NODE44, cryptoContext)
     NODE721 = homo_ops.homo_add(NODE719, NODE720, cryptoContext)
-    NODE722 = homo_ops.homo_mul_pt(NODE690, NODE118, cryptoContext)
+    NODE722 = homo_ops.homo_mul_pt(NODE717, NODE45, cryptoContext)
     NODE723 = homo_ops.homo_add(NODE721, NODE722, cryptoContext)
-    NODE724 = homo_ops.homo_mul_pt(NODE692, NODE119, cryptoContext)
+    NODE724 = homo_ops.homo_mul_pt(NODE718, NODE46, cryptoContext)
     NODE725 = homo_ops.homo_add(NODE723, NODE724, cryptoContext)
-    NODE726 = homo_ops.homo_mul_pt(NODE694, NODE120, cryptoContext)
-    NODE727 = homo_ops.homo_add(NODE725, NODE726, cryptoContext)
-    NODE728 = hybrid_keyswitch.moddown_from_ext(NODE727, cryptoContext)
-    NODE729 = homo_ops.extract_cv(NODE728, 0)
-    NODE730 = homo_ops.extract_cv(NODE728, 1)
-    NODE731 = homo_ops._cipher_automorphism(NODE729, 4096, cryptoContext)
-    NODE732 = homo_ops.homo_add(NODE713, NODE731, cryptoContext)
-    NODE733 = hybrid_keyswitch.modup_to_ext(NODE730, cryptoContext)
-    NODE734 = homo_ops.eval_fast_rotate(NODE733, None, 4096, False, None, cryptoContext)
-    NODE735 = hybrid_keyswitch.mult_rot_key_and_sum_ext(NODE733, 4096, cryptoContext)
-    NODE736 = homo_ops.homo_add(NODE714, NODE734, cryptoContext)
-    NODE737 = hybrid_keyswitch.moddown_from_ext(NODE736, cryptoContext)
-    NODE738 = homo_ops.extract_cv(NODE732, 0, append_zeros = True)
-    NODE739 = homo_ops.homo_add(NODE737, NODE738, cryptoContext)
-    NODE740 = homo_ops.homo_rotate(NODE739, 4096, cryptoContext)
-    NODE741 = homo_ops.homo_add(NODE739, NODE740, cryptoContext)
-    NODE742 = homo_ops.homo_mul_scalar_int(NODE741, 256, cryptoContext)
-    return NODE742
-    
-    precom = cryptoContext.BsContext
-    ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, NODE10, cryptoContext)
-    NODE158 = ctxtEnc
-    NODE159 = homo_ops.homo_rotate(NODE158, 32767, cryptoContext)
-    NODE160 = homo_ops.homo_add(NODE158, NODE159, cryptoContext)
-    NODE161 = homo_ops.homo_rescale(NODE160, 1, cryptoContext)
+    NODE726 = homo_ops.extract_cv(NODE725, 0)
+    NODE727 = hybrid_keyswitch.moddown_from_ext(NODE726, cryptoContext)
+    NODE728 = homo_ops.extract_cv(NODE725, 1, append_zeros = True)
+    NODE729 = homo_ops.homo_mul_pt(NODE715, NODE47, cryptoContext)
+    NODE730 = homo_ops.homo_mul_pt(NODE716, NODE48, cryptoContext)
+    NODE731 = homo_ops.homo_add(NODE729, NODE730, cryptoContext)
+    NODE732 = homo_ops.homo_mul_pt(NODE717, NODE49, cryptoContext)
+    NODE733 = homo_ops.homo_add(NODE731, NODE732, cryptoContext)
+    NODE734 = hybrid_keyswitch.moddown_from_ext(NODE733, cryptoContext)
+    NODE735 = homo_ops.extract_cv(NODE734, 0)
+    NODE736 = homo_ops.extract_cv(NODE734, 1)
+    NODE737 = homo_ops._cipher_automorphism(NODE735, 64, cryptoContext)
+    NODE738 = homo_ops.homo_add(NODE727, NODE737, cryptoContext)
+    NODE739 = hybrid_keyswitch.modup_to_ext(NODE736, cryptoContext)
+    NODE740 = homo_ops.eval_fast_rotate(NODE739, None, 64, False, None, cryptoContext)
+    NODE741 = homo_ops.homo_add(NODE728, NODE740, cryptoContext)
+    NODE742 = hybrid_keyswitch.moddown_from_ext(NODE741, cryptoContext)
+    NODE743 = homo_ops.extract_cv(NODE738, 0, append_zeros = True)
+    NODE744 = homo_ops.homo_add(NODE742, NODE743, cryptoContext)
+    NODE745 = homo_ops.homo_rescale(NODE744, 1, cryptoContext)
+    NODE746 = homo_ops.extract_cv(NODE745, 1)
+    NODE747 = hybrid_keyswitch.modup_to_ext(NODE746, cryptoContext)
+    NODE748 = homo_ops.eval_fast_rotate(NODE747, NODE745, 8000, True, False, cryptoContext)
+    NODE749 = homo_ops.eval_fast_rotate(NODE747, NODE745, 8064, True, False, cryptoContext)
+    NODE750 = homo_ops.eval_fast_rotate(NODE747, NODE745, 8128, True, False, cryptoContext)
+    NODE751 = hybrid_keyswitch.key_switch_P_ext(NODE745, cryptoContext)
+    NODE752 = homo_ops.homo_mul_pt(NODE748, NODE50, cryptoContext)
+    NODE753 = homo_ops.homo_mul_pt(NODE749, NODE51, cryptoContext)
+    NODE754 = homo_ops.homo_add(NODE752, NODE753, cryptoContext)
+    NODE755 = homo_ops.homo_mul_pt(NODE750, NODE52, cryptoContext)
+    NODE756 = homo_ops.homo_add(NODE754, NODE755, cryptoContext)
+    NODE757 = homo_ops.homo_mul_pt(NODE751, NODE53, cryptoContext)
+    NODE758 = homo_ops.homo_add(NODE756, NODE757, cryptoContext)
+    NODE759 = homo_ops.extract_cv(NODE758, 0)
+    NODE760 = hybrid_keyswitch.moddown_from_ext(NODE759, cryptoContext)
+    NODE761 = homo_ops.extract_cv(NODE758, 1, append_zeros = True)
+    NODE762 = homo_ops.homo_mul_pt(NODE748, NODE54, cryptoContext)
+    NODE763 = homo_ops.homo_mul_pt(NODE749, NODE55, cryptoContext)
+    NODE764 = homo_ops.homo_add(NODE762, NODE763, cryptoContext)
+    NODE765 = homo_ops.homo_mul_pt(NODE750, NODE56, cryptoContext)
+    NODE766 = homo_ops.homo_add(NODE764, NODE765, cryptoContext)
+    NODE767 = hybrid_keyswitch.moddown_from_ext(NODE766, cryptoContext)
+    NODE768 = homo_ops.extract_cv(NODE767, 0)
+    NODE769 = homo_ops.extract_cv(NODE767, 1)
+    NODE770 = homo_ops._cipher_automorphism(NODE768, 256, cryptoContext)
+    NODE771 = homo_ops.homo_add(NODE760, NODE770, cryptoContext)
+    NODE772 = hybrid_keyswitch.modup_to_ext(NODE769, cryptoContext)
+    NODE773 = homo_ops.eval_fast_rotate(NODE772, None, 256, False, None, cryptoContext)
+    NODE774 = homo_ops.homo_add(NODE761, NODE773, cryptoContext)
+    NODE775 = hybrid_keyswitch.moddown_from_ext(NODE774, cryptoContext)
+    NODE776 = homo_ops.extract_cv(NODE771, 0, append_zeros = True)
+    NODE777 = homo_ops.homo_add(NODE775, NODE776, cryptoContext)
+    NODE778 = homo_ops.homo_rotate(NODE777, 256, cryptoContext)
+    NODE779 = homo_ops.homo_add(NODE777, NODE778, cryptoContext)
+    NODE780 = homo_ops.homo_mul_scalar_int(NODE779, 512, cryptoContext)
 
-
-
-
-
-    M = cryptoContext.M
-    N = cryptoContext.N
-    slots = 1 << logBsSlots
-    # cryptoContext.slots = slots #fixme: bad assignment!
-    precom = cryptoContext.BsContext
-    moduliQ_scalar = cryptoContext.moduliQ_scalar
-    rescaleTech = cryptoContext.rescaleTech
-
-    # note: FLEXIBLEAUTOEXT is not implemented yet
-    assert rescaleTech == "FIXEDMANUAL" or rescaleTech == "FLEXIBLEAUTO"
-
-    if rescaleTech == "FLEXIBLEAUTOEXT":
-        pass
-        # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
-        # as it is multiplied by auxiliary plaintext
-        # todo: to be implemented, should raise less modulus
-
-    q = moduliQ_scalar[0]
-    q_double = float(q)
-
-    p = cryptoContext.dcrtBits  # Equivalent to dcrbits in OpenFHE
-    powP = 2**p
-    deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
-
-    if deg > int(precom.correctionFactor):
-        print(
-            "Warning: Degree [",
-            deg,
-            "] must be less than or equal to the correction factor[",
-            precom.correctionFactor,
-            "].",
-        )
-
-    correction = (
-        precom.correctionFactor - deg
-    )  # fixme: originally a uint32_t in OpenFHE
-    post = 2**deg
-    pre = 1.0 / post
-    scalar = round(post)
-
-    # -------------------
-    # raising the modulus
-    # -------------------
-    # In FLEXIBLEAUTO, raising the ciphertext to a larger number
-    # of towers is a bit more complex, because we need to adjust
-    # it's scaling factor to the one that corresponds to the level
-    # it's being raised to.
-    # Increasing the modulus
-
-    tmp = ciphertext
-    tmp = homo_ops.homo_rescale(tmp, tmp.noise_deg - 1, cryptoContext)
-    tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
-
-    # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
-    # CKKS bootstrapping faster.
-    raised = mod_raise(tmp, L0, cryptoContext)
-
-    constantEvalMult = pre * (1.0 / (precom.k * N))
-    raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
-
-    ctxtDec = None  # Initialize decrypted ciphertext
-    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
-        precom.paramsDec.level_budget == 1
-    )
-
-    if slots == M // 4:  # FULLY PACKED CASE
-        # need to call internal modular reduction so it also works for FLEXIBLEAUTO
-        raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
-
-        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-        mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
-
-        if rescaleTech == "FIXEDMANUAL":
-            while ctxtEnc.noise_deg > 1:
-                ctxtEnc = homo_ops.homo_rescale(
-                    ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-                )
-                ctxtEncI = homo_ops.homo_rescale(
-                    ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-                )
-        else:
-            if ctxtEnc.noise_deg == 2:
-                ctxtEnc = homo_ops.homo_rescale(
-                    ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-                )
-                ctxtEncI = homo_ops.homo_rescale(
-                    ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-                )
-
-        # ---------------------------------
-        # Running Approximate Mod Reduction
-        # ---------------------------------
-        # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(
-            ctxtEnc, precom.coefficients, -1, 1, cryptoContext
-        )
-        ctxtEncI = approx.eval_chebyshev_series_ps(
-            ctxtEncI, precom.coefficients, -1, 1, cryptoContext
-        )
-
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(
-                ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-            ctxtEncI = homo_ops.homo_rescale(
-                ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-        ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
-        ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
-
-        mult_by_monomial_inplace(ctxtEncI, M // 4, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(
-                ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
-
-    else:  # SPARSELY PACKED CASE
-        # -------------------
-        # Running PartialSum
-        # -------------------
-
-        for step in range(int(math.log2(N // (2 * slots)))):
-            temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
-            raised = homo_ops.homo_add(raised, temp, cryptoContext)
-
-        # ---------------------
-        # Running CoeffsToSlots
-        # ---------------------
-        raised = homo_ops.homo_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        exit(0)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
-
-        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-
-        if rescaleTech == "FIXEDMANUAL":
-            while ctxtEnc.noise_deg > 1:
-                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
-        else:
-            if ctxtEnc.noise_deg == 2:
-                ctxtEnc = homo_ops.homo_rescale(ctxtEnc, 1, cryptoContext)
-
-        # ---------------------------------
-        # Running Approximate Mod Reduction
-        # ---------------------------------
-
-        # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(
-            ctxtEnc, precom.coefficients, -1, 1, cryptoContext
-        )
-
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(
-                ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-        ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale(
-                ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
-
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
-
-        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
-        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
-
-    # 64-bit only: scale back the message to its original scale.
-    corFactor = 1 << round(correction)
-    ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
-
-    return ctxtDec
-
+    return NODE780
 
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 

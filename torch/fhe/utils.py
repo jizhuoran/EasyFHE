@@ -15,7 +15,7 @@ def printFrontend(func):
 
         def wrapper(*args, **kwargs):
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
-                return func(*args, **kwargs)
+                return func(*args)
             ct, levels, cryptoContext = args
             in_node_id = ct.cipher_id
             out_node_id = Cipher.get_next_id()
@@ -24,7 +24,7 @@ def printFrontend(func):
                     out_node_id, in_node_id, levels
                 )
             )
-            res = func(*args, **kwargs)
+            res = func(*args)
             res.cipher_id = out_node_id
             return res
 
@@ -61,6 +61,24 @@ def printFrontend(func):
             return res
 
         return wrapper
+    if func.__name__ == "mult_by_monomial_inplace":
+
+        def wrapper(*args, **kwargs):
+            cipher, monomial_degree, cryptoContext = args
+            in_node_id = cipher.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = mult_by_monomial_inplace(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in_node_id, repr(monomial_degree)
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+
     if func.__name__ == "homo_rotate":
 
         def wrapper(*args, **kwargs):
@@ -231,7 +249,7 @@ def printFrontend(func):
     if func.__name__ == "_cipher_automorphism":
     
         def wrapper(*args, **kwargs):
-            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 return func(*args)
             in0, index, cryptoContext = args
             in0_node_id = in0.cipher_id
@@ -251,27 +269,30 @@ def printFrontend(func):
     if func.__name__ == "adjust_levels_and_depth":
     
         def wrapper(*args, **kwargs):
-            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 return func(*args)
             ct1, ct2, cryptoContext = args
             ct1_node_id = ct1.cipher_id
             ct2_node_id = ct2.cipher_id
-            out_node_id = Cipher.get_next_id()
+            out1_node_id = Cipher.get_next_id()
+            out2_node_id = Cipher.get_next_id()
             print(
-                "NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext)".format(
-                    out_node_id, ct1_node_id, ct2_node_id
+                "NODE{}, NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext)".format(
+                    out1_node_id, out2_node_id, ct1_node_id, ct2_node_id
                 )
             )
-            res = func(*args)
-            res.cipher_id = out_node_id
-            return res
+            out1, out2 = func(*args)
+            out1.cipher_id = out1_node_id
+            out2.cipher_id = out2_node_id
+
+            return out1, out2
 
         return wrapper
     
     if func.__name__ == "drop_last_elements_":
     
         def wrapper(*args, **kwargs):
-            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 return func(*args)
             ct1, num_levels = args
             ct1_node_id = ct1.cipher_id
@@ -323,8 +344,9 @@ def printFrontend(func):
         return wrapper
 
     if func.__name__ == "mult_rot_key_and_sum_ext":
-
         def wrapper(*args, **kwargs):
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
+                return func(*args)
             digits, index, cryptoContext = args
             in0_node_id = digits.cipher_id
             out_node_id = Cipher.get_next_id()
@@ -333,7 +355,7 @@ def printFrontend(func):
                     out_node_id, in0_node_id, index
                 )
             )
-            res = func(*args, **kwargs)
+            res = func(*args)
             res.cipher_id = out_node_id
             return res
 

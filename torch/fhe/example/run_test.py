@@ -8,16 +8,16 @@ import torch.fhe.bs_compilered as COMPILE
 import torch.fhe.utils as utils
 
 maxLevelsRemaining = 3
-logBsSlots_list = [12]
+logBsSlots_list = [8]
 logN = 14
 dnum = 3
 dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]
-rescaleTech = "FIXEDMANUAL"
+rescaleTech = "FLEXIBLEAUTO"
 path = "data"
 
-secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = (
     utils.try_load_context(int(maxLevelsRemaining), [], logBsSlots_list, int(logN), int(dnum), int(dcrtBits),
@@ -57,6 +57,8 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 
 result1 = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 print("=======================")
+print("=======================")
+print("=======================")
 result2 = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 
 print("result1", result1.cv[0].cpu().numpy()[0][:10])
@@ -74,17 +76,17 @@ else:
 
 
 
-# start_time = time.time()
-# result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
-# print("Time taken for bootstrapping:", time.time() - start_time)
-# openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
-# openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
-# data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
-# is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
-# if is_equal:
-#     print("Test passed!")
-# else:
-#     print("Test failed!")
-#     print("result", result.cv[0].cpu().numpy()[0][:10])
-#     print("data", data.reshape(-1)[:10])
+start_time = time.time()
+result = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+print("Time taken for bootstrapping:", time.time() - start_time)
+openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
+openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
+is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
+if is_equal:
+    print("Test passed!")
+else:
+    print("Test failed!")
+    print("result", result.cv[0].cpu().numpy()[0][:10])
+    print("data", data.reshape(-1)[:10])
 

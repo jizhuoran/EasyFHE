@@ -46,6 +46,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
             ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
         )
         ciphertext.scaling_factor = target_sf
+        print("NODE{}.scaling_factor = {}".format(ciphertext.cipher_id, repr(target_sf)))
 
     else:
         # Scaling down the message by a correction factor to emulate using a larger q0.
@@ -97,7 +98,8 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
     b = params.baby_step
     g = params.giant_step
 
-    result = ctxt.deep_copy()
+    # result = ctxt.deep_copy()
+    result = ctxt
     for s in loop_range:
         if not s == loop_range[0]:
             result = homo_ops.homo_rescale(
@@ -152,7 +154,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_cv1 = homo_ops.extract_cv(inner, 1)
 
                     first = homo_ops._cipher_automorphism(
-                        inner_cv0, rot_out[s][i], cryptoContext, printInfo=True
+                        inner_cv0, rot_out[s][i], cryptoContext
                     )
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
 
@@ -218,14 +220,17 @@ def mod_raise(cipher, L0, cryptoContext):
 
 
 # @profile_python_function
+@utils.printFrontend
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
+    return cipher
 
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
 def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
+    print("NODE{} = IN_NODE".format(ciphertext.cipher_id))
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
@@ -304,7 +309,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-        mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
+        ctxtEncI = mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if rescaleTech == "FIXEDMANUAL":
             while ctxtEnc.noise_deg > 1:
@@ -401,14 +406,9 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
-        print("!!!!!!!!!!!!!!!!!")
-        print("before eval_chebyshev_series_ps")
-        print("!!!!!!!!!!!!!!!!!")
-        print("!!!!!!!!!!!!!!!!!")
         ctxtEnc = approx.eval_chebyshev_series_ps(
             ctxtEnc, precom.coefficients, -1, 1, cryptoContext
         )
-        return ctxtEnc
 
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.homo_rescale(
@@ -416,8 +416,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
             )
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
         
-
-
 
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
