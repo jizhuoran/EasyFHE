@@ -77,7 +77,7 @@ def printFrontend(func):
             return res
 
         return wrapper
-    if func.__name__ == "homo_add":
+    if func.__name__ == "homo_add" or func.__name__ == "homo_sub":
 
         def wrapper(*args, **kwargs):
             in0, in1, cryptoContext = args
@@ -85,8 +85,8 @@ def printFrontend(func):
             in1_node_id = in1.cipher_id
             out_node_id = Cipher.get_next_id()
             print(
-                "NODE{} = homo_ops.homo_add(NODE{}, NODE{}, cryptoContext)".format(
-                    out_node_id, in0_node_id, in1_node_id
+                "NODE{} = homo_ops.{}(NODE{}, NODE{}, cryptoContext)".format(
+                    out_node_id, func.__name__, in0_node_id, in1_node_id
                 )
             )
             res = func(*args, **kwargs)
@@ -94,6 +94,7 @@ def printFrontend(func):
             return res
 
         return wrapper
+    
 
     if func.__name__ == "eval_fast_rotate":
 
@@ -172,6 +173,60 @@ def printFrontend(func):
             return res
 
         return wrapper
+    
+    if func.__name__ == "homo_mul":
+
+        def wrapper(*args, **kwargs):
+            in0, in1, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            in1_node_id = in1.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_mul(NODE{}, NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id, in1_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
+
+    if func.__name__ == "homo_square":
+
+        def wrapper(*args, **kwargs):
+            in0, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_square(NODE{}, cryptoContext)".format(
+                    out_node_id, in0_node_id
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    
+    if func.__name__ == "homo_add_scalar_double":
+
+        def wrapper(*args, **kwargs):
+            in0, cnst, cryptoContext = args
+            in0_node_id = in0.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.homo_add_scalar_double(NODE{}, {}, cryptoContext)".format(
+                    out_node_id, in0_node_id, cnst
+                )
+            )
+            res = func(*args, **kwargs)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+
 
     if func.__name__ == "_cipher_automorphism":
     
@@ -184,6 +239,46 @@ def printFrontend(func):
             print(
                 "NODE{} = homo_ops._cipher_automorphism(NODE{}, {}, cryptoContext)".format(
                     out_node_id, in0_node_id, index
+                )
+            )
+            res = func(*args)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    
+    
+    if func.__name__ == "adjust_levels_and_depth":
+    
+        def wrapper(*args, **kwargs):
+            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+                return func(*args)
+            ct1, ct2, cryptoContext = args
+            ct1_node_id = ct1.cipher_id
+            ct2_node_id = ct2.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext)".format(
+                    out_node_id, ct1_node_id, ct2_node_id
+                )
+            )
+            res = func(*args)
+            res.cipher_id = out_node_id
+            return res
+
+        return wrapper
+    
+    if func.__name__ == "drop_last_elements_":
+    
+        def wrapper(*args, **kwargs):
+            if "printInfo" not in kwargs or kwargs["printInfo"] == False:
+                return func(*args)
+            ct1, num_levels = args
+            ct1_node_id = ct1.cipher_id
+            out_node_id = Cipher.get_next_id()
+            print(
+                "NODE{} = homo_ops.drop_last_elements_(NODE{}, {})".format(
+                    out_node_id, ct1_node_id, num_levels
                 )
             )
             res = func(*args)

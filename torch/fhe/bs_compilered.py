@@ -605,6 +605,37 @@ def eval_bootstrap(NODE_IN, L0, logBsSlots, cryptoContext):
     NODE375 = homo_ops.homo_rotate(NODE374, 32767, cryptoContext)
     NODE376 = homo_ops.homo_add(NODE374, NODE375, cryptoContext)
     NODE377 = homo_ops.homo_rescale(NODE376, 1, cryptoContext)
+    NODE378 = homo_ops.homo_mul(NODE377, NODE377, cryptoContext)
+    NODE379 = homo_ops.homo_add(NODE378, NODE378, cryptoContext)
+    NODE380 = homo_ops.homo_rescale(NODE379, 1, cryptoContext)
+    NODE381 = homo_ops.homo_add_scalar_double(NODE380, -1.0, cryptoContext)
+    NODE382 = homo_ops.homo_mul(NODE377, NODE381, cryptoContext)
+    NODE383 = homo_ops.homo_add(NODE382, NODE382, cryptoContext)
+    NODE384 = homo_ops.homo_rescale(NODE383, 1, cryptoContext)
+    NODE385 = homo_ops.homo_sub(NODE384, NODE377, cryptoContext)
+    NODE386 = homo_ops.homo_mul(NODE381, NODE381, cryptoContext)
+    NODE387 = homo_ops.homo_add(NODE386, NODE386, cryptoContext)
+    NODE388 = homo_ops.homo_rescale(NODE387, 1, cryptoContext)
+    NODE389 = homo_ops.homo_add_scalar_double(NODE388, -1.0, cryptoContext)
+    NODE390 = homo_ops.homo_mul(NODE381, NODE385, cryptoContext)
+    NODE391 = homo_ops.homo_add(NODE390, NODE390, cryptoContext)
+    NODE392 = homo_ops.homo_rescale(NODE391, 1, cryptoContext)
+    NODE393 = homo_ops.homo_sub(NODE392, NODE377, cryptoContext)
+    NODE394 = homo_ops.homo_mul(NODE385, NODE385, cryptoContext)
+    NODE395 = homo_ops.homo_add(NODE394, NODE394, cryptoContext)
+    NODE396 = homo_ops.homo_rescale(NODE395, 1, cryptoContext)
+    NODE397 = homo_ops.homo_add_scalar_double(NODE396, -1.0, cryptoContext)
+    NODE398 = homo_ops.homo_mul(NODE385, NODE389, cryptoContext)
+    NODE399 = homo_ops.homo_add(NODE398, NODE398, cryptoContext)
+    NODE400 = homo_ops.homo_rescale(NODE399, 1, cryptoContext)
+    NODE401 = homo_ops.homo_sub(NODE400, NODE377, cryptoContext)
+    NODE402 = homo_ops.drop_last_elements_(NODE377, 3)
+    NODE403 = homo_ops.drop_last_elements_(NODE381, 2)
+    NODE404 = homo_ops.drop_last_elements_(NODE385, 1)
+    NODE405 = homo_ops.drop_last_elements_(NODE389, 1)
+    NODE406 = homo_ops.drop_last_elements_(NODE393, 0)
+    NODE407 = homo_ops.drop_last_elements_(NODE397, 0)
+    return NODE401
 
     # ---------------------------------
     # Running Approximate Mod Reduction
@@ -614,7 +645,6 @@ def eval_bootstrap(NODE_IN, L0, logBsSlots, cryptoContext):
     ctxtEnc = approx.eval_chebyshev_series_ps(
         NODE377, cryptoContext.BsContext.coefficients, -1, 1, cryptoContext
     )
-    return ctxtEnc
 
 
 

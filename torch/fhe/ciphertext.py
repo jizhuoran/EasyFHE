@@ -45,10 +45,6 @@ class Cipher:
     def shallow_copy(self):
         return self.cipher_like(self.cv, cipher_id="copy")
 
-    def drop_last_elements(self, num_levels):
-        assert num_levels <= self.cur_limbs and num_levels >= 0
-        self.cur_limbs -= num_levels
-
     def __repr__(self):
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):

@@ -11,19 +11,26 @@ import warnings
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
+#drop last elem is a inplace operation now
+@printFrontend
+def drop_last_elements_(ct, num_levels):
+    assert num_levels <= ct.cur_limbs and num_levels >= 0
+    ct.cur_limbs -= num_levels
+    return ct
 
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
 def _adjust_levels(ct1, ct2, cryptoContext):
     ct1, ct2 = ct1.shallow_copy(), ct2.shallow_copy()
     if ct1.cur_limbs > ct2.cur_limbs:
-        ct1.drop_last_elements(ct1.cur_limbs - ct2.cur_limbs)
+        ct1 = drop_last_elements_(ct1, ct1.cur_limbs - ct2.cur_limbs)
     elif ct1.cur_limbs < ct2.cur_limbs:
-        ct2.drop_last_elements(ct2.cur_limbs - ct1.cur_limbs)
+        ct2 = drop_last_elements_(ct2, ct2.cur_limbs - ct1.cur_limbs)
     return ct1, ct2
 
 
 # note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
+@printFrontend
 def adjust_levels_and_depth(ct1, ct2, cryptoContext):
     if ct1.cur_limbs < ct2.cur_limbs:
         rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
@@ -52,8 +59,8 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
         else:
             raise ValueError
         if rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2 > 0:
-            rct1.drop_last_elements(
-                rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
+            rct1 = drop_last_elements_(
+                rct1, rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
             )
         if rct2.noise_deg == 1:
             rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
@@ -470,6 +477,7 @@ def homo_add(in0, in1, cryptoContext):
 
 
 @call_counter
+@printFrontend
 def homo_sub(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_sub(in0, in1, cryptoContext)
@@ -501,6 +509,7 @@ def homo_rescale(ct, levels, cryptoContext, printInfo = True):
 
 
 @call_counter
+@printFrontend
 def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
     in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
@@ -517,6 +526,7 @@ def homo_mul(in0, in1, cryptoContext):
 
 
 @call_counter
+@printFrontend
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale(in0, 1, cryptoContext, printInfo=False)
@@ -531,12 +541,9 @@ def homo_square(in0, cryptoContext):
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)
 
-
+@printFrontend
 def homo_add_scalar_double(in0, cnst, cryptoContext, precomp = None):
-    if precomp is not None:
-        tmpr = precomp
-    else:
-        tmpr = _get_element_for_eval_add_or_sub(
+    tmpr = _get_element_for_eval_add_or_sub(
             math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext
         )
     if cnst < 0:
