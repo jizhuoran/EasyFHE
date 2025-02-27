@@ -40,11 +40,6 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 # note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
 @printFrontend
 def adjust_levels_and_depth(ct1, ct2, cryptoContext):
-    import traceback, os
-    try:
-        traceback.print_stack(file=os.sys.stdout)
-    except:
-        pass
     if ct1.cur_limbs < ct2.cur_limbs:
         rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
     else:

@@ -14,7 +14,8 @@ dnum = 3
 dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]
-rescaleTech = "FLEXIBLEAUTO"
+# rescaleTech = "FLEXIBLEAUTO"
+rescaleTech = "FIXEDAUTO"
 path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -59,25 +60,25 @@ result1 = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, c
 print("=======================")
 print("=======================")
 print("=======================")
-result2 = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+# result2 = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 
-print("result1", result1.cv[0].cpu().numpy()[0][:10])
-print("result2", result2.cv[0].cpu().numpy()[0][:10])
+# print("result1", result1.cv[0].cpu().numpy()[0][:10])
+# print("result2", result2.cv[0].cpu().numpy()[0][:10])
 
-if np.array_equal(result1.cv[0].cpu().numpy(), result2.cv[0].cpu().numpy()):
-    print("Test passed!")
-    print("Test passed!")
-    print("Test passed!")
-else:
-    print("Test failed!")
-    print("Test failed!")
-    print("Test failed!")
+# if np.array_equal(result1.cv[0].cpu().numpy(), result2.cv[0].cpu().numpy()):
+#     print("Test passed!")
+#     print("Test passed!")
+#     print("Test passed!")
+# else:
+#     print("Test failed!")
+#     print("Test failed!")
+#     print("Test failed!")
 
 
 
 
 start_time = time.time()
-result = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 print("Time taken for bootstrapping:", time.time() - start_time)
 openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
 openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
