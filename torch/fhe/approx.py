@@ -31,13 +31,13 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
 
         if ciphertexts[minIdx].noise_deg == 2:
             for i in range(0, input_size):
-                ciphertexts[i] = homo_ops.homo_rescale(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                ciphertexts[i] = homo_ops.homo_rescale_internal(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
     wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
     for i in range(1, input_size):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
-    wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else wsum
+    wsum = homo_ops.homo_rescale_internal(wsum, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else wsum
     return wsum
 
 
@@ -133,7 +133,7 @@ def inner_eval_chebyshev_ps(coefficients,
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.homo_rescale(cu, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
+                cu = homo_ops.homo_rescale_internal(cu, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
             else:
                 cu = T[0]
         else:
@@ -199,7 +199,7 @@ def inner_eval_chebyshev_ps(coefficients,
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
+    result = homo_ops.homo_rescale_internal(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
@@ -352,7 +352,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if not math.isclose(alpha, 1.0):
         T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
         T[0] = (
-            homo_ops.homo_rescale(T[0], 1, cryptoContext)
+            homo_ops.homo_rescale_internal(T[0], 1, cryptoContext)
             if cryptoContext.rescaleTech == "FIXEDMANUAL"
             else T[0]
         )
@@ -368,7 +368,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+            tmp = homo_ops.homo_rescale_internal(tmp, 1, cryptoContext)
 
         if i & 1 == 1:  # i is odd
             tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
@@ -401,7 +401,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         tmp = homo_ops.homo_square(T2[i - 1], cryptoContext)
         tmp = homo_ops.homo_add(tmp, tmp, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL": 
-            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+            tmp = homo_ops.homo_rescale_internal(tmp, 1, cryptoContext)
         tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T2.append(tmp)
 
@@ -416,7 +416,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
+            T2km1 = homo_ops.homo_rescale_internal(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
     torch.cuda.synchronize()
@@ -430,7 +430,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
                 if cryptoContext.rescaleTech == "FIXEDMANUAL": 
-                    cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
+                    cu = homo_ops.homo_rescale_internal(cu, 1, cryptoContext)
             else:
                 cu = T[0]
         else:
@@ -503,7 +503,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
+    result = homo_ops.homo_rescale_internal(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
     result = homo_ops.homo_add(result, su, cryptoContext)
 
 

@@ -45,7 +45,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
             rct2.noise_deg == 1 and rct1.cur_limbs - rct2.cur_limbs == 1
         ):
             rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         elif rct1.noise_deg == 1:
             rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
         else:
@@ -55,7 +55,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
                 rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
             )
         if rct2.noise_deg == 1:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         rct1.scaling_factor = rct2.scaling_factor
 
         if swapped:
@@ -138,8 +138,8 @@ def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
         # inline `AdjustLevelsAndDepthToOneInPlace` in ckksrns-leveledshe.cpp as following
         rct1, rct2 = adjust_levels_and_depth(ct1, ct2, cryptoContext)
         if rct1.noise_deg == 2:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct2 = homo_rescale_internal(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return rct1, rct2
 
 
@@ -473,7 +473,14 @@ def homo_sub(in0, in1, cryptoContext):
 
 
 @call_counter
-def homo_rescale(ct, levels, cryptoContext):
+def homo_rescale(ct, levels, cryptoContext): #todo: add force_rescale flag in user api for other rescaleTech?
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        return homo_rescale_internal(ct, levels, cryptoContext)
+    else:
+        return ct.deep_copy()
+
+
+def homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0:
         return ct.deep_copy()
@@ -515,7 +522,7 @@ def homo_mul(in0, in1, cryptoContext):
 @call_counter
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
-        in0 = homo_rescale(in0, 1, cryptoContext)
+        in0 = homo_rescale_internal(in0, 1, cryptoContext)
     res = _cipher_square(in0, cryptoContext)
     tmp = res.cipher_like(F.cv_keyswitch(
         res.cv[2],
@@ -559,7 +566,7 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 @call_counter
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
-        in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        in0 = homo_rescale_internal(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return _eval_mult_core(in0, cnst, cryptoContext)
 
 

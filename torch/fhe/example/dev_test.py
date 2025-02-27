@@ -337,8 +337,8 @@ def ct_pt_test_case(
 ##############
 
 if __name__ == "__main__":
-    # app_without_bs_example_debug(mode="debug")
-    # app_example_debug(mode="debug")
-    # app_example_release(mode="release")
+    app_without_bs_example_debug(mode="debug")
+    app_example_debug(mode="debug")
+    app_example_release(mode="release")
     encode_test_case(mode="debug")
-    # ct_pt_test_case(mode="debug")
+    ct_pt_test_case(mode="debug")
