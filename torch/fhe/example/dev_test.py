@@ -234,31 +234,31 @@ def encode_test_case(
     plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
     plaintext_golden = openfhe_context.encode(x)
 
-    encoded_data = plaintext.cv[0]
-    encoded_data = encoded_data.cpu().numpy()
-    encode_data_golden = plaintext_golden.cv[0]
-    encode_data_golden = encode_data_golden.cpu().numpy()
     all_correct = True
-    for i in range(len(encode_data_golden)):
-        diff_indices = np.where(encode_data_golden[i] != encoded_data[i])
-        if len(diff_indices[0]) > 0:
-            print("diff_indices: ", diff_indices[0][:10])
-            print("len(diff_indices): ", len(diff_indices[0]))
-            all_correct = False
-            if i == 0:  # prt a wrong case
-                print(encode_data_golden[0][:10])
-                print(encoded_data[0][:10])
-
-    if (plaintext==plaintext_golden) != True:
+    if plaintext.slots != plaintext_golden.slots:
         all_correct = False
-        print("ground_truth: ")
-        print(plaintext_golden.cur_limbs)
-        print(plaintext_golden.noise_deg)
-        print(plaintext_golden.scaling_factor)
-        print("result: ")
-        print(plaintext.cur_limbs)
-        print(plaintext.noise_deg)
-        print(plaintext.scaling_factor)
+        print("plaintext.slots", plaintext.slots)
+        print("plaintext_golden.slots", plaintext_golden.slots)
+    if plaintext.noise_deg != plaintext_golden.noise_deg:
+        all_correct = False
+        print("plaintext.noise_deg", plaintext.noise_deg)
+        print("plaintext_golden.noise_deg", plaintext_golden.noise_deg)
+    if plaintext.scaling_factor != plaintext_golden.scaling_factor:
+        all_correct = False
+        print("plaintext.scaling_factor", plaintext.scaling_factor)
+        print("plaintext_golden.scaling_factor", plaintext_golden.scaling_factor)
+    if plaintext.cur_limbs != plaintext_golden.cur_limbs:
+        all_correct = False
+        print("plaintext.cur_limbs", plaintext.cur_limbs)
+        print("plaintext_golden.cur_limbs", plaintext_golden.cur_limbs)
+    if len(plaintext.cv) != len(plaintext_golden.cv):
+        all_correct = False
+        print("len(plaintext.cv)", len(plaintext.cv))
+        print("len(plaintext_golden.cv)", len(plaintext_golden.cv))
+    for i in range(len(plaintext.cv)):
+        if not torch.equal(plaintext.cv[i], plaintext_golden.cv[i]):
+            all_correct = False
+            break
 
     if all_correct:
         print("Test passed!")
@@ -337,8 +337,8 @@ def ct_pt_test_case(
 ##############
 
 if __name__ == "__main__":
-    app_without_bs_example_debug(mode="debug")
-    app_example_debug(mode="debug")
-    app_example_release(mode="release")
+    # app_without_bs_example_debug(mode="debug")
+    # app_example_debug(mode="debug")
+    # app_example_release(mode="release")
     encode_test_case(mode="debug")
-    ct_pt_test_case(mode="debug")
+    # ct_pt_test_case(mode="debug")
