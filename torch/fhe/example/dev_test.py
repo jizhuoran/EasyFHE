@@ -55,7 +55,7 @@ def app_without_bs_example_debug(
 def app_example_debug(
         maxLevelsRemaining=3,
         appRotIndex_list = [-1, 2],
-        logBsSlots_list=[11, 12],
+        logBsSlots_list=[12, 13],
         logN=14,
         dnum=3,
         dcrtBits=52,
@@ -100,7 +100,7 @@ def app_example_debug(
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
-        cipher_openfhe.SetSlots((1<<11))
+        cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
         is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
@@ -337,8 +337,8 @@ def ct_pt_test_case(
 ##############
 
 if __name__ == "__main__":
-    app_without_bs_example_debug(mode="debug")
+    # app_without_bs_example_debug(mode="debug")
     app_example_debug(mode="debug")
-    app_example_release(mode="release")
-    encode_test_case(mode="debug")
-    ct_pt_test_case(mode="debug")
+    # app_example_release(mode="release")
+    # encode_test_case(mode="debug")
+    # ct_pt_test_case(mode="debug")

@@ -62,8 +62,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
         ciphertext = homo_ops.homo_add(ciphertext, ciphertext, cryptoContext)
         scalar = -1.0 / math.pow((2.0 * math.pi), math.pow(2.0, j - r))
         ciphertext = homo_ops.homo_add_scalar_double(ciphertext, scalar, cryptoContext)
-        ciphertext = homo_ops.homo_rescale_internal(ciphertext, 1,
-                                                    cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else ciphertext
+        ciphertext = homo_ops.homo_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
 
 def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
@@ -260,14 +259,9 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
         mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
 
-        if rescaleTech == "FIXEDMANUAL":
-            while(ctxtEnc.noise_deg>1):
-                ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                ctxtEncI = homo_ops.homo_rescale_internal(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        else:
-            if ctxtEnc.noise_deg==2:
-                ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                ctxtEncI = homo_ops.homo_rescale_internal(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        if ctxtEnc.noise_deg == 2: # noise_deg of ctxtEnc and ctxtEncI should be the same
+            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEncI = homo_ops.homo_rescale_internal(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -334,12 +328,9 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
-        if rescaleTech == "FIXEDMANUAL":
-            while ctxtEnc.noise_deg>1:
-                ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, 1, cryptoContext)
-        else:
-            if ctxtEnc.noise_deg ==2 :
-                ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, 1, cryptoContext)
+
+        if ctxtEnc.noise_deg ==2 :
+            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, 1, cryptoContext)
 
         torch.cuda.synchronize()
         torch.cpu.synchronize()
@@ -401,7 +392,7 @@ def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
     result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
 
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":  # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-        result = homo_ops.homo_rescale_internal(result, result.noise_deg - 1, cryptoContext)
+    # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
+    result = homo_ops.homo_rescale(result, result.noise_deg - 1, cryptoContext)
 
     return result
