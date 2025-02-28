@@ -16,7 +16,7 @@ dnum = 3
 dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[4, 4]]
-rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 save_dir = "data/"
 mode = "debug"  # "debug" or "release"
 autoLoadAndSetConfig = True  # note: currently only support True
@@ -107,6 +107,7 @@ else:
         logBsSlots=logBsSlots_list[0],
         cryptoContext=cryptoContext,
     )
+    print("Time for BS: ", time.time() - start_time)
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)

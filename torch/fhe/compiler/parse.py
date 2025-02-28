@@ -70,14 +70,38 @@ def calculate_metadata(graph, metadata, node):
         CT0 = metadata[inputs[0]]
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
     elif operation in ['homo_add', 'homo_sub']:
-        CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]]
-        return MetaInfo(min(CT0.cur_limbs, CT1.cur_limbs), max(CT0.noise_deg, CT1.noise_deg))
+        CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
+        if metadata["RESCALE_TECH"] == "FLEXIBLEAUTO":
+            if CT0.cur_limbs > CT1.cur_limbs:
+                target_libms = CT1.cur_limbs
+                target_noise_deg = CT1.noise_deg
+            elif CT0.cur_limbs < CT1.cur_limbs:
+                target_libms = CT0.cur_limbs
+                target_noise_deg = CT0.noise_deg
+            else:
+                target_libms = CT0.cur_limbs
+                target_noise_deg = max(CT0.noise_deg, CT1.noise_deg)
+        else:
+            raise ValueError
+        return MetaInfo(target_libms, target_noise_deg)
     elif operation in['homo_mul_scalar_double', 'homo_square']:
         CT0 = metadata[inputs[0]]
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg + 1)
     elif operation in['homo_mul_pt', 'homo_mul']:
         CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
-        return MetaInfo(min(CT0.cur_limbs, CT1.cur_limbs), max(CT0.noise_deg, CT1.noise_deg) + 1)
+        if metadata["RESCALE_TECH"] == "FLEXIBLEAUTO":
+            if CT0.cur_limbs > CT1.cur_limbs:
+                target_libms = CT1.cur_limbs
+                target_noise_deg = CT1.noise_deg
+            elif CT0.cur_limbs < CT1.cur_limbs:
+                target_libms = CT0.cur_limbs
+                target_noise_deg = CT0.noise_deg
+            else:
+                target_libms = CT0.cur_limbs
+                target_noise_deg = max(CT0.noise_deg, CT1.noise_deg)
+        else:
+            raise ValueError
+        return MetaInfo(target_libms, 2)
     elif operation == 'adjust_levels_and_depth':
         CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
@@ -115,6 +139,7 @@ def process_graph_topologically(graph, initial_metadata):
 
 # Example of provided metadata for source nodes (like NODE_IN)
 initial_metadata = {
+    "RESCALE_TECH" : "FLEXIBLEAUTO",
     "IN_NODE": MetaInfo(2, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[0][0]" : MetaInfo(22, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[0][1]" : MetaInfo(22, 1),
