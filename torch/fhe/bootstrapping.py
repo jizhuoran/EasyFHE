@@ -239,11 +239,9 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     moduliQ_scalar = cryptoContext.moduliQ_scalar
     rescaleTech = cryptoContext.rescaleTech
 
-    # note: FLEXIBLEAUTOEXT is not implemented yet
-    assert rescaleTech == "FIXEDMANUAL" or rescaleTech == "FLEXIBLEAUTO"
 
     if rescaleTech == "FLEXIBLEAUTOEXT":
-        pass
+        assert False, "FLEXIBLEAUTOEXT is not supported yet."
         # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
         # as it is multiplied by auxiliary plaintext
         # todo: to be implemented, should raise less modulus
