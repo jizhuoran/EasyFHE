@@ -222,6 +222,9 @@ def encode_test_case(
         save_dir="data",
         mode = "debug" # "debug" or "release"
 ):
+    ############
+    ## test 1 ##
+    ############
     if not os.path.exists(save_dir):
         raise ValueError(f"Directory {save_dir} does not exist!")
 
@@ -231,43 +234,89 @@ def encode_test_case(
                                autoLoadAndSetConfig=False, mode=mode))
 
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
-    plaintext        = openfhe_context.encode_gpu_fhe(cryptoContext, x)
+    plaintext        = openfhe_context.encode_gpu(cryptoContext, x, None, None, None, use_gpu_fft=False)
     plaintext_golden = openfhe_context.encode(x)
 
     all_correct = True
-    if plaintext.slots != plaintext_golden.slots:
-        all_correct = False
-        print("plaintext.slots", plaintext.slots)
-        print("plaintext_golden.slots", plaintext_golden.slots)
-    if plaintext.noise_deg != plaintext_golden.noise_deg:
-        all_correct = False
-        print("plaintext.noise_deg", plaintext.noise_deg)
-        print("plaintext_golden.noise_deg", plaintext_golden.noise_deg)
-    if plaintext.scaling_factor != plaintext_golden.scaling_factor:
-        all_correct = False
-        print("plaintext.scaling_factor", plaintext.scaling_factor)
-        print("plaintext_golden.scaling_factor", plaintext_golden.scaling_factor)
-    if plaintext.cur_limbs != plaintext_golden.cur_limbs:
-        all_correct = False
-        print("plaintext.cur_limbs", plaintext.cur_limbs)
-        print("plaintext_golden.cur_limbs", plaintext_golden.cur_limbs)
-    if len(plaintext.cv) != len(plaintext_golden.cv):
-        all_correct = False
-        print("len(plaintext.cv)", len(plaintext.cv))
-        print("len(plaintext_golden.cv)", len(plaintext_golden.cv))
+    attributes = [
+        ('slots', plaintext.slots, plaintext_golden.slots),
+        ('noise_deg', plaintext.noise_deg, plaintext_golden.noise_deg),
+        ('scaling_factor', plaintext.scaling_factor, plaintext_golden.scaling_factor),
+        ('cur_limbs', plaintext.cur_limbs, plaintext_golden.cur_limbs),
+        ('len', len(plaintext.cv), len(plaintext_golden.cv)),
+    ]
+
+    # Compare attributes
+    for attr_name, attr_value, golden_value in attributes:
+        if attr_value != golden_value:
+            all_correct = False
+            print(f"{attr_name}: {attr_value} != {golden_value}")
+
+    # Compare cv values
     for i in range(len(plaintext.cv)):
         if not torch.equal(plaintext.cv[i], plaintext_golden.cv[i]):
             all_correct = False
             break
 
     if all_correct:
-        print("Test passed!")
+        print("encode with default values: Test passed!")
     else:
-        print("Test failed!")
+        print("encode with default values: Test failed!")
 
-    #todo: test encode with specified encode_slots, for example (encode_slots = 1 << 10)
+    ############
+    ## test 2 ##
+    ############
+    x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
+    encode_slots = (1<<10)
+    plaintext = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=False)
+    plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
-    print("done")
+    all_correct = True
+    attributes = [
+        ('slots', plaintext.slots, plaintext_golden.slots),
+        ('noise_deg', plaintext.noise_deg, plaintext_golden.noise_deg),
+        ('scaling_factor', plaintext.scaling_factor, plaintext_golden.scaling_factor),
+        ('cur_limbs', plaintext.cur_limbs, plaintext_golden.cur_limbs),
+        ('len', len(plaintext.cv), len(plaintext_golden.cv)),
+    ]
+
+    # Compare attributes
+    for attr_name, attr_value, golden_value in attributes:
+        if attr_value != golden_value:
+            all_correct = False
+            print(f"{attr_name}: {attr_value} != {golden_value}")
+
+    # Compare cv values
+    for i in range(len(plaintext.cv)):
+        if not torch.equal(plaintext.cv[i], plaintext_golden.cv[i]):
+            all_correct = False
+            break
+
+    if all_correct:
+        print("encode with specify slots Test passed!")
+    else:
+        print("encode with specify slots Test failed!")
+
+    ############
+    ## test 3 ##
+    ############
+    encode_slots = (1 << 11)
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    encoded = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=True)
+
+    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(values) + np.array(values)
+    if np.allclose(clear_result, ground_truth):
+        print("homo_add_pt with gpu_fft Test passed!")
+    else:
+        print("homo_add_pt with gpu_fft Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
 
 def ct_pt_test_case(
         maxLevelsRemaining=6,
@@ -338,7 +387,7 @@ def ct_pt_test_case(
 
 if __name__ == "__main__":
     # app_without_bs_example_debug(mode="debug")
-    app_example_debug(mode="debug")
+    # app_example_debug(mode="debug")
     # app_example_release(mode="release")
-    # encode_test_case(mode="debug")
+    encode_test_case(mode="debug")
     # ct_pt_test_case(mode="debug")
