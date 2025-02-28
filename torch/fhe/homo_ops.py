@@ -92,91 +92,105 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
 
 @frontend
 def adjust_levels_and_depth(ct1, ct2, cryptoContext):
+
+        # if ct1.cur_limbs > ct2.cur_limbs:
+    #     target_limbs = ct2.cur_limbs
+    #     target_noise_deg = ct2.noise_deg
+    #     target_scaling_factor = ct2.scaling_factor
+    # elif ct1.cur_limbs < ct2.cur_limbs:
+    #     target_limbs = ct1.cur_limbs
+    #     target_noise_deg = ct1.noise_deg
+    #     target_scaling_factor = ct1.scaling_factor
+    # else:
+    #     target_limbs = ct1.cur_limbs
+    #     target_noise_deg = max(rct1.noise_deg, ct2.noise_deg)
+    #     target_scaling_factor = None
+
+    # def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor):
+    #     assert cipher.cur_limbs >= target_limbs
+    #     if cipher.cur_limbs == target_limbs:
+    #         if cipher.cur_limbs < target_noise_deg:
+    #             return _eval_mult_core(cipher, 1.0, cryptoContext)
+    #         else:
+    #             return cipher
+    #     else:  # cur_limbs > target_limbs
+
     if ct1.cur_limbs < ct2.cur_limbs:
         rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
     else:
         rct1, rct2, swapped = ct1.shallow_copy(), ct2.shallow_copy(), False
 
-    L = cryptoContext.L
-    c1_cur_limbs = rct1.cur_limbs
-    c2_cur_limbs = rct2.cur_limbs
-    c1lvl = L - c1_cur_limbs
-    c2lvl = L - c2_cur_limbs
-    c1depth = rct1.noise_deg
-    c2depth = rct2.noise_deg
-    sizeQl1 = c1_cur_limbs
-
-    if rct1.cur_limbs > rct2.cur_limbs:
-        target_libms = rct2.cur_limbs
-        target_noise_deg = rct2.noise_deg
-    elif rct1.cur_limbs < rct2.cur_limbs:
-        target_libms = rct1.cur_limbs
-        target_noise_deg = rct1.noise_deg
+    if ct1.cur_limbs > ct2.cur_limbs:
+        target_libms = ct2.cur_limbs
+        target_noise_deg = ct2.noise_deg
+    elif ct1.cur_limbs < ct2.cur_limbs:
+        target_libms = ct1.cur_limbs
+        target_noise_deg = ct1.noise_deg
     else:
-        target_libms = rct1.cur_limbs
-        target_noise_deg = max(rct1.noise_deg, rct2.noise_deg)
+        target_libms = ct1.cur_limbs
+        target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
 
     #ct1 has a higher cur_limbs than ct2
     if rct2.cur_limbs < rct1.cur_limbs:
-        if c1depth == 2 and c2depth == 2:
+        if rct1.noise_deg == 2 and rct2.noise_deg == 2:
             #if both degree 2, mul the higher to a factor, then rescale, then drop
             #interesting, ct1 actually has a noise_deg == 2, but can still do a rescale
             scf1 = rct1.scaling_factor
             scf2 = rct2.scaling_factor
-            scf = cryptoContext.GetScalingFactorReal(cur_limbs =c1_cur_limbs)
-            q1 = cryptoContext.GetModReduceFactor(sizeQl1 - 1)
+            scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
+            q1 = cryptoContext.GetModReduceFactor(rct1.cur_limbs - 1)
             rct1 = _eval_mult_core(rct1, scf2 / scf1 * q1 / scf, cryptoContext)
             rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            if (c1lvl+1<c2lvl):
-                rct1 = drop_last_elements_(rct1, c2lvl - c1lvl - 1)
+            if (rct1.cur_limbs > rct2.cur_limbs):
+                rct1 = drop_last_elements_(rct1, rct1.cur_limbs - rct2.cur_limbs)
             rct1.scaling_factor = rct2.scaling_factor
             #so the output has noise_deg2, and the same cur_limb
-        elif c1depth == 1 and c2depth==1:
+        elif rct1.noise_deg == 1 and rct2.noise_deg==1:
             #if both degree 1, mul the higher to a factor, then drop, then rescale
             #interesting, here we can do drop first...
             scf1 = rct1.scaling_factor
-            scf2 = cryptoContext.GetScalingFactorRealBig(cur_limbs = (L-(c2lvl-1)))
-            scf = cryptoContext.GetScalingFactorReal(cur_limbs = (L-c1lvl))
+            scf2 = cryptoContext.GetScalingFactorRealBig(rct2.cur_limbs+1)
+            scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
             rct1 = _eval_mult_core(rct1, scf2 / scf1 / scf, cryptoContext)
-            if (c1lvl+1<c2lvl):
-                rct1 = drop_last_elements_(rct1, c2lvl - c1lvl - 1)
+            if (rct1.cur_limbs > rct2.cur_limbs):
+                rct1 = drop_last_elements_(rct1, rct1.cur_limbs - rct2.cur_limbs)
             rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             rct1.scaling_factor = rct2.scaling_factor
             #so the output has noise_deg 1, and the same cur_limb
-        elif c1depth == 2 and c2depth == 1:
+        elif rct1.noise_deg == 2 and rct2.noise_deg == 1:
             #if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
-            if c1lvl + 1 == c2lvl:
+            if rct1.cur_limbs == rct2.cur_limbs + 1:
                 homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 #otherwise, mul the higher with scale factor, rescale, drop, rescale.
                 #the last rescale is to make sure both has degree 1
                 scf1 = rct1.scaling_factor
-                scf2 = cryptoContext.GetScalingFactorRealBig(cur_limbs = (L-(c2lvl-1)))
-                scf = cryptoContext.GetScalingFactorReal(cur_limbs = (L-c1lvl))
-                q1 = cryptoContext.GetModReduceFactor(sizeQl1 - 1)
+                scf2 = cryptoContext.GetScalingFactorRealBig(cryptoContext.L-(cryptoContext.L - rct2.cur_limbs-1))
+                scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
+                q1 = cryptoContext.GetModReduceFactor(ct1.cur_limbs - 1)
                 rct1 = _eval_mult_core(rct1, scf2 / scf1 * q1 / scf, cryptoContext)
                 rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                if (c1lvl+2<c2lvl):
-                    rct1 =drop_last_elements_(rct1, c2lvl - c1lvl - 2)
+                if (rct1.cur_limbs > rct2.cur_limbs + 1):
+                    rct1 =drop_last_elements_(rct1, rct1.cur_limbs - rct2.cur_limbs - 1)
                 rct1 = homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
                 rct1.scaling_factor = rct2.scaling_factor
-        elif c1depth == 1 and c2depth == 2:
+        elif rct1.noise_deg == 1 and rct2.noise_deg == 2:
             #if the higher has a lower degree, mul it with the factor, and then drop
             #so the output has noise_deg 2, and same cur_limb
             scf1 = rct1.scaling_factor
             scf2 = rct2.scaling_factor
-            scf = cryptoContext.GetScalingFactorReal(cur_limbs =c1_cur_limbs)
+            scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
             rct1 = _eval_mult_core(rct1, scf2 / scf1 / scf, cryptoContext)
-            rct1 = drop_last_elements_(rct1, c2lvl - c1lvl)
+            rct1 = drop_last_elements_(rct1, rct1.cur_limbs - rct2.cur_limbs)
             rct1.scaling_factor = scf2
         else:
             raise ValueError
         if swapped:
             rct1, rct2 = rct2.shallow_copy(), rct1.shallow_copy()
     else:
-        if c1depth < c2depth:
+        if rct1.noise_deg < rct2.noise_deg:
             rct1 = _eval_mult_core(rct1, 1.0, cryptoContext)
-        elif c2depth < c1depth:
+        elif rct2.noise_deg < rct1.noise_deg:
             rct2 = _eval_mult_core(rct2, 1.0, cryptoContext)
 
     # print("limb:", "rect1", rct1.cur_limbs, "rect2", rct2.cur_limbs, "target", target_libms)
