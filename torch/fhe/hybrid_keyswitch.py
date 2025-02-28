@@ -1,9 +1,8 @@
 from . import functional as F
 import torch
-from .utils import printFrontend
+from .compiler.compiler import frontend
 
-
-@printFrontend
+@frontend
 def key_switch_P_ext(cipher, cryptoContext):
     assert cipher.is_ext == False
     cv = [
@@ -15,7 +14,7 @@ def key_switch_P_ext(cipher, cryptoContext):
     ]
     return cipher.cipher_like(cv, is_ext=True)
 
-@printFrontend
+@frontend
 def modup_to_ext(cipher, cryptoContext):
     assert cipher.is_ext == False
     assert len(cipher.cv) == 1
@@ -23,7 +22,7 @@ def modup_to_ext(cipher, cryptoContext):
     return cipher.cipher_like(cv, is_ext=True)
 
 #todo: do we need to support mult key, considering that hoisting is only for rotation
-@printFrontend
+@frontend
 def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     assert digits.is_ext == True
     norm_index = cryptoContext.norm_rot_index(index)
@@ -33,7 +32,7 @@ def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     return digits.cipher_like(sum_mult, is_ext=True)
 
 
-@printFrontend
+@frontend
 def moddown_from_ext(cipher, cryptoContext):
     assert cipher.is_ext == True
     cv = [

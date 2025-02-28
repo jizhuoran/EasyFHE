@@ -9,9 +9,9 @@ from .utils import (
     check_meta_equal,
     check_cipher_len,
     call_counter,
-    profile_python_function,
-    printFrontend,
+    profile_python_function
 )
+from .compiler.compiler import frontend
 import warnings
 
 
@@ -19,7 +19,7 @@ BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
 
 # drop last elem is a inplace operation now
-@printFrontend
+@frontend
 def drop_last_elements_(ct, num_levels):
     assert num_levels <= ct.cur_limbs and num_levels >= 0
     ct.cur_limbs -= num_levels
@@ -38,7 +38,7 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 
 
 # note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
-@printFrontend
+@frontend
 def adjust_levels_and_depth(ct1, ct2, cryptoContext):
     if ct1.cur_limbs < ct2.cur_limbs:
         rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
@@ -495,7 +495,7 @@ def _cipher_neg(in0, cryptoContext):
 
 # @check_cipher_len
 # todo: input len of in0.cv could be 1
-@printFrontend
+@frontend
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
@@ -507,7 +507,7 @@ def _cipher_automorphism(in0, index, cryptoContext):
 
 
 @call_counter
-@printFrontend
+@frontend
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
@@ -517,21 +517,21 @@ def homo_add(in0, in1, cryptoContext):
 
 
 @call_counter
-@printFrontend
+@frontend
 def homo_sub(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_sub(in0, in1, cryptoContext)
 
 
 @call_counter
-@printFrontend
+@frontend
 def homo_rescale(ct, levels, cryptoContext): #todo: add force_rescale flag in user api for other rescaleTech?
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        return homo_rescale_internal(ct, levels, cryptoContext)
+        return homo_rescale_internal(ct, levels, cryptoContext, printInfo=False)
     else:
         return ct.deep_copy()
 
-
+@frontend
 def homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0:
@@ -560,7 +560,7 @@ def homo_rescale_internal(ct, levels, cryptoContext):
 
 
 @call_counter
-@printFrontend
+@frontend
 def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
     in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
@@ -579,7 +579,7 @@ def homo_mul(in0, in1, cryptoContext):
 
 
 @call_counter
-@printFrontend
+@frontend
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
         in0 = homo_rescale_internal(in0, 1, cryptoContext, printInfo=False)
@@ -597,7 +597,7 @@ def homo_square(in0, cryptoContext):
     return _cipher_add(res, tmp, cryptoContext)
 
 
-@printFrontend
+@frontend
 def homo_add_scalar_double(in0, cnst, cryptoContext, precomp=None):
     tmpr = _get_element_for_eval_add_or_sub(
         math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext
@@ -614,7 +614,7 @@ def homo_add_scalar_int(in0, scalar, cryptoContext):
 
 # note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
 # fixme: do we accept scalar<0?
-@printFrontend
+@frontend
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = _cipher_mul_scalar_int(in0, abs(scalar), cryptoContext)
     if scalar < 0:
@@ -625,14 +625,14 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 # note: EvalMultInPlace in ckksrns-leveledshe.cpp
 @profile_python_function
 @call_counter
-@printFrontend
+@frontend
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
         in0 = homo_rescale_internal(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
     return _eval_mult_core(in0, cnst, cryptoContext)
 
 
-@printFrontend
+@frontend
 def homo_rotate(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.left_rot_key_map[norm_index]
@@ -647,7 +647,7 @@ def homo_rotate(in0, index, cryptoContext):
     return res
 
 
-@printFrontend
+@frontend
 def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoContext):
     if index == 0:
         return cipher.deep_copy()
@@ -703,7 +703,7 @@ def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     return res0
 
 
-@printFrontend
+@frontend
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # if (isinstance(cipher, Cipher) and isinstance(plaintext, Plaintext)) :
     #     in_ct, in_pt = cipher, plaintext
@@ -765,7 +765,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         )
 
 
-@printFrontend
+@frontend
 def extract_cv(cipher: Cipher, index, append_zeros=False):
     assert index == 0 or index == 1, "index must be 0 or 1"
     if append_zeros:

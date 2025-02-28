@@ -5,6 +5,7 @@ from . import homo_ops
 from . import approx as approx
 from . import hybrid_keyswitch
 from . import utils
+from .compiler.compiler import frontend
 
 
 Tensor = torch.Tensor
@@ -13,6 +14,10 @@ BASE_NUM_LEVELS_TO_DROP = 1
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 
+@frontend
+def assign_scaling_factor(cipher, target_sf, cryptoContext):
+    cipher.scaling_factor = target_sf
+    return cipher    
 
 # @profile_python_function
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
@@ -45,8 +50,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
         ciphertext = homo_ops.homo_rescale_internal(
             ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
         )
-        ciphertext.scaling_factor = target_sf
-        print("NODE{}.scaling_factor = {}".format(ciphertext.cipher_id, repr(target_sf)))
+        ciphertext = assign_scaling_factor(ciphertext, target_sf, cryptoContext)
 
     else:
         # Scaling down the message by a correction factor to emulate using a larger q0.
@@ -189,10 +193,10 @@ def eval_slots_to_coeffs(A, ctxt, cryptoContext):
 def eval_linear_transform(A, ct, scheme):
     # TODO: to be implemented
     pass
-
+                  
 
 # @profile_python_function
-@utils.printFrontend
+@frontend
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
         torch.mod_raise(
@@ -216,7 +220,7 @@ def mod_raise(cipher, L0, cryptoContext):
 
 
 # @profile_python_function
-@utils.printFrontend
+@frontend
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
@@ -225,8 +229,8 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
+@frontend
 def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
-    print("NODE{} = IN_NODE".format(ciphertext.cipher_id))
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
