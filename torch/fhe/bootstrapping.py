@@ -82,7 +82,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
     b = params.baby_step
     g = params.giant_step
 
-    result = ctxt.deep_copy()
+    result = ctxt
 
     for s in loop_range:
         if not s == loop_range[0]:
