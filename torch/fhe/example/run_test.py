@@ -15,7 +15,7 @@ dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]
 # rescaleTech = "FLEXIBLEAUTO"
-rescaleTech = "FIXEDAUTO"
+rescaleTech = "FLEXIBLEAUTO"
 path = "data"
 
 secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -56,10 +56,10 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 # # Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
-result1 = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
-print("=======================")
-print("=======================")
-print("=======================")
+# result1 = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+# print("=======================")
+# print("=======================")
+# print("=======================")
 # result2 = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 
 # print("result1", result1.cv[0].cpu().numpy()[0][:10])

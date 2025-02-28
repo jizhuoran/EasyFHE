@@ -1,100 +1,148 @@
-import ast
-import networkx as nx
-import matplotlib.pyplot as plt
 import re
+import networkx as nx
 
-# Step 1: Parse the Python Code from a Text File
-def parse_python_code(file_path):
-    with open(file_path, 'r') as file:
-        code = file.read()
-    return code
+class MetaInfo:
+    def __init__(self, cur_limbs, noise_deg):
+        self.cur_limbs = cur_limbs
+        self.noise_deg = noise_deg
 
-# Step 2: Extract Function Calls, Attribute Accesses, and Indexing
-def extract_operations(code):
-    operations = []
+    def __repr__(self):
+        return f"(cur_limbs={self.cur_limbs}, noise_deg={self.noise_deg})"
+
+
+def parse_code_to_graph(code):
+    # Create an empty directed graph
+    graph = nx.DiGraph()
     
-    # Regular expression for function calls like 'homo_ops.function_name'
-    pattern_function_call = r'(\w+)\.(\w+)\(([^)]*)\)'  # Captures object, function name, and arguments
-    matches_function_call = re.finditer(pattern_function_call, code)
+    # Regular expression to match the pattern of the assignments
+    assignment_pattern = re.compile(r'(\w+) = (.*)')
     
-    for match in matches_function_call:
-        object_name = match.group(1)
-        function_name = match.group(2)
-        arguments = match.group(3).split(',')
+    # Regular expression to detect function calls (operation nodes)
+    func_pattern = re.compile(r'(\w+)\(([^)]+)\)')
+    
+    # Define a dictionary to store the nodes and their inputs
+    node_info = {}
+    
+    for line in code.splitlines():
+        line = line.strip()
         
-        # Remove any whitespace around arguments
-        arguments = [arg.strip() for arg in arguments]
+        # Ignore comments (lines starting with '#')
+        if line.startswith("#") or not line:
+            continue
         
-        # Save the function call operation and its arguments
-        operations.append({
-            'operation': f"{object_name}.{function_name}",
-            'arguments': arguments
-        })
+        # Remove inline comments
+        line = line.split('#')[0].strip()
+
+        # Parse the assignment to extract the node and its assigned value
+        match = assignment_pattern.match(line)
+        if match:
+            node_name = match.group(1)
+            expression = match.group(2)
+            
+            # Check if it's a function call (operation)
+            func_match = func_pattern.search(expression)
+            if func_match:
+                operation = func_match.group(1)
+                inputs = [input.strip() for input in func_match.group(2).split(',')]
+                # Add the operation to the graph with the node as the output
+                graph.add_node(node_name, operation=operation, inputs=inputs)
+                
+                # Add edges between nodes (input -> output)
+                for input_node in inputs:
+                    if 'NODE' in input_node:
+                        graph.add_edge(input_node, node_name)
+            else:
+                # If it's not an operation, treat it as a simple assignment
+                graph.add_node(node_name, operation="assignment", inputs=[expression])
     
-    # Regular expression for attribute accesses, including array/indexing accesses
-    pattern_attr_access = r'(\w+)\.(\w+)((?:\[[^\]]*\])*)'  # Captures object, attribute, and indexing
-    matches_attr_access = re.finditer(pattern_attr_access, code)
+    # Return the constructed graph
+    return graph
+
+
+def calculate_metadata(operation, inputs, metadata_dict):
+    if operation in['assignment', 'homo_rotate']:
+        CT0 = metadata_dict[inputs[0]]
+        return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
+    elif operation == 'homo_add':
+        CT0, CT1 = metadata_dict[inputs[0]], metadata_dict[inputs[1]]
+        return MetaInfo(min(CT0.cur_limbs, CT1.cur_limbs), max(CT0.noise_deg, CT1.noise_deg))
+    elif operation == 'homo_mul_scalar_double':
+        CT0 = metadata_dict[inputs[0]]
+        return MetaInfo(CT0.cur_limbs, CT0.noise_deg + 1)
+    elif operation == 'homo_rescale':
+        CT0, scale_level = metadata_dict[inputs[0]], int(inputs[1])
+        return MetaInfo(CT0.cur_limbs - scale_level, CT0.noise_deg - scale_level)
+    elif operation == 'mod_raise':
+        CT0, raise_level = metadata_dict[inputs[0]], int(inputs[1])
+        return MetaInfo(raise_level, CT0.noise_deg)
+    else:
+        return MetaInfo(-1, -1)
     
-    for match in matches_attr_access:
-        object_name = match.group(1)
-        attribute_name = match.group(2)
-        indices = match.group(3)
+
+def assign_metadata(graph, start_node, end_node):
+    # Dictionary to store metadata for each node
+    metadata_dict = {"IN_NODE" : MetaInfo(2, 1)}
+
+    # Perform a breadth-first search (BFS) to traverse the graph from start_node to end_node
+    queue = [start_node]
+    visited = set()
+
+    while queue:
+        current_node = queue.pop(0)
+
+        if current_node == end_node:
+            break  # Stop if we reach NODE_OUT
+
+        # Skip nodes we've already processed
+        if current_node in visited:
+            continue
+        visited.add(current_node)
+
+        # Retrieve the operation and inputs for the current node
+        operation = graph.nodes[current_node].get("operation")
+        inputs = graph.nodes[current_node].get("inputs")
         
-        # Save the attribute access operation
-        operations.append({
-            'operation': f"{object_name}.{attribute_name}{indices}",
-            'arguments': [object_name]  # The object itself is the input for this operation
-        })
+        print(current_node)
+        calculate_metadata(operation, inputs, metadata_dict)
+        metadata_dict[current_node] = calculate_metadata(operation, inputs, metadata_dict)
 
-    return operations
+        # Add successors (dependent nodes) to the queue for BFS traversal
+        print("  Successors: ", end="")
+        for successor in graph.successors(current_node):
+            print(successor, end=" ")
+            queue.append(successor)
+        print()
 
-# Step 3: Create a Computation Graph Based on the Operations
-def create_computation_graph(operations):
-    G = nx.DiGraph()  # Directed graph to represent the computation flow
+    return metadata_dict
 
-    # For each operation, add a node and its dependencies
-    for operation in operations:
-        op_name = operation['operation']
-        inputs = operation['arguments']
-        
-        # Add the node for the operation
-        G.add_node(op_name)
 
-        # Create edges from inputs to this operation (input dependencies)
-        for input_op in inputs:
-            if input_op != 'cryptoContext':  # Ignore 'cryptoContext' as it's not a dependency
-                G.add_edge(input_op, op_name)
-    
-    return G
+def print_graph_info(graph):
+    for node in graph.nodes:
+        print(f"Node: {node}")
+        print(f"  Operation: {graph.nodes[node].get('operation')}")
+        print(f"  Inputs: {graph.nodes[node].get('inputs')}")
+        print(f"  Outputs: {[n for n in graph.successors(node)]}")
+        print()
 
-# Step 4: Save the Computation Graph as a PDF
-def save_graph_as_pdf(G, output_pdf_path):
-    plt.figure(figsize=(12, 12))
-    pos = nx.spring_layout(G)  # Spring layout for better visualization
-    nx.draw(G, pos, with_labels=True, node_size=2000, node_color="skyblue", font_size=10, font_weight="bold", arrowsize=20)
-    plt.title("Computation Graph")
-    
-    # Save the graph as a PDF
-    plt.savefig(output_pdf_path, format='pdf')
-    plt.close()
+# Sample code string
+with open("sample_code.txt", "r") as f:
+    code = f.read()
 
-# Step 5: Main Function to Parse the Code and Create Graph
-def main():
-    # Provide the path to your Python script file
-    file_path = 'res.py'  # Replace with the actual path to your Python code file
-    output_pdf_path = 'computation_graph.pdf'  # Output PDF file path
-    
-    code = parse_python_code(file_path)
-    
-    # Extract operations from the code
-    operations = extract_operations(code)
-    
-    # Create a computation graph from the operations
-    G = create_computation_graph(operations)
-    
-    # Save the computation graph as a PDF
-    save_graph_as_pdf(G, output_pdf_path)
-    print(f"Computation graph saved to {output_pdf_path}")
+# Parse the code and construct the graph
+graph = parse_code_to_graph(code)
 
-if __name__ == "__main__":
-    main()
+# Print the information about the graph
+print_graph_info(graph)
+
+# Define the start and end nodes
+start_node = "NODE57"  # NODE_IN
+end_node = "NODE102"   # NODE_OUT
+
+# Calculate metadata for each node along the path from NODE_IN to NODE_OUT
+metadata = assign_metadata(graph, start_node, end_node)
+
+# Print the metadata for each node in the path
+for node, data in metadata.items():
+    print(f"Node: {node}")
+    print(f"  data: {data}")
+    print()
