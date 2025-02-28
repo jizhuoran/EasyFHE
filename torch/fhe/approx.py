@@ -298,8 +298,6 @@ def ComputeDegreesPS(n):
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
     time0 = time.time()
 
     rescaleTech = cryptoContext.rescaleTech
@@ -356,8 +354,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if not math.isclose(beta, -1.0):
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     for i in range(2, k + 1):
@@ -372,8 +368,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
@@ -384,8 +378,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
@@ -398,8 +390,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T2.append(tmp)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     # computes T_{k(2*m - 1)}(y)
@@ -411,8 +401,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     dc = degree(divcs_q)
@@ -433,8 +421,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
     
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
@@ -489,8 +475,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     else:
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
@@ -501,8 +485,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
 
 
-    torch.cuda.synchronize()
-    torch.cpu.synchronize()
 
     return result
 

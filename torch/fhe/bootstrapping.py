@@ -301,8 +301,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # -------------------
         # Running PartialSum
         # -------------------
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
         for step in range(int(math.log2(N // (2 * slots)))):
             temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
             raised = homo_ops.homo_add(raised, temp, cryptoContext)
@@ -312,8 +311,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------
         raised = homo_ops.homo_rescale_internal(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
 
         if isLTBootstrap:
@@ -321,8 +319,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
@@ -332,8 +329,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if ctxtEnc.noise_deg ==2 :
             ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, 1, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -342,8 +338,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
 
         if rescaleTech != "FIXEDMANUAL":
@@ -354,8 +349,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
 
         # --------------------
@@ -371,8 +365,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         else:
             ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
-        torch.cuda.synchronize()
-        torch.cpu.synchronize()
+
 
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
