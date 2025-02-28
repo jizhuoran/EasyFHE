@@ -29,7 +29,7 @@ binary_op = {
     "homo_mul_pt": "homo_ops.",
 }
 
-COMPILE = "ON"
+COMPILE = "OFF"
 
 
 def omitFrontend(func):
