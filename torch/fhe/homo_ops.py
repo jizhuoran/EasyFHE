@@ -650,7 +650,12 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             cipher.noise_deg != plaintext.noise_deg or
             cipher.scaling_factor != plaintext.scaling_factor or
             cipher.is_ext != plaintext.is_ext):
-            raise ValueError(f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}")
+            raise ValueError(
+                f"Unequal values! Cipher and plaintext have mismatched properties:\n"
+                f"  cipher.cur_limbs = {cipher.cur_limbs}, plaintext.cur_limbs = {plaintext.cur_limbs}\n"
+                f"  cipher.noise_deg = {cipher.noise_deg}, plaintext.noise_deg = {plaintext.noise_deg}\n"
+                f"  cipher.scaling_factor = {cipher.scaling_factor}, plaintext.scaling_factor = {plaintext.scaling_factor}\n"
+                f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}")
         moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
         mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
         cv0 = F.cv_mul(cipher.cv[0], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
