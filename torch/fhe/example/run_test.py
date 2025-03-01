@@ -13,10 +13,10 @@ maxLevelsRemaining = 3
 logBsSlots_list = [12]
 logN = 15
 dnum = 3
-dcrtBits = 52
-firstMod = 56
+dcrtBits = 59
+firstMod = 60
 levelBudget_list = [[4, 4]]
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = "data"
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -81,7 +81,7 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 
-TEST_COMPILE = True
+TEST_COMPILE = False
 
 if TEST_COMPILE:
     result1 = BS.eval_bootstrap(

@@ -90,7 +90,7 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
     return rct1, rct2
 
 
-def adjust_to(
+def flex_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 ):
     assert cipher.cur_limbs >= target_limbs
@@ -170,7 +170,54 @@ def adjust_to(
     # print("cipher", cipher.cur_limbs, cipher.noise_deg)
     return cipher
 
-# def adjust_to(
+def fixed_adjust_to(
+    cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+):
+    assert cipher.cur_limbs >= target_limbs
+    if cipher.cur_limbs == target_limbs:
+        if cipher.noise_deg < target_noise_deg:
+            return _eval_mult_core(cipher, 1.0, cryptoContext)
+        else:
+            return cipher
+    else:  # cur_limbs > target_limbs
+        if cipher.noise_deg == 2 and target_noise_deg == 2:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            cipher = homo_rescale_internal(
+                cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+            )
+            if cipher.cur_limbs > target_limbs:
+                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+        elif cipher.noise_deg == 1 and target_noise_deg == 1:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            if cipher.cur_limbs > target_limbs:
+                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+            cipher = homo_rescale_internal(
+                cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+            )
+        elif cipher.noise_deg == 2 and target_noise_deg == 1:
+            if cipher.cur_limbs == target_limbs + 1:
+                homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
+            else:
+                cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+                cipher = homo_rescale_internal(
+                    cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+                )
+                if cipher.cur_limbs > target_limbs + 1:
+                    cipher = drop_last_elements_(
+                        cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False
+                    )
+                cipher = homo_rescale_internal(
+                    cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+                )
+        elif cipher.noise_deg == 1 and target_noise_deg == 2:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+        else:
+            print("noise_deg", cipher.noise_deg, target_noise_deg)
+            raise ValueError
+    return cipher
+
+# def flex_adjust_to(
 #     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 # ):
 #     assert cipher.cur_limbs >= target_limbs
@@ -202,12 +249,20 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
         target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
         target_scaling_factor = None
         # print("case3", target_limbs, target_noise_deg, target_scaling_factor)
-
-    return adjust_to(
-        ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
-    ), adjust_to(
-        ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
-    )
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
+        return flex_adjust_to(
+            ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+        ), flex_adjust_to(
+            ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+        )
+    elif cryptoContext.rescaleTech == "FIXEDAUTO":
+        return fixed_adjust_to(
+            ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+        ), fixed_adjust_to(
+            ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+        )
+    else:
+        raise ValueError
 
 
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
