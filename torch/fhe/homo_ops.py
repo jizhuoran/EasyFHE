@@ -178,7 +178,7 @@ def fixed_adjust_to(
         if cipher.noise_deg < target_noise_deg:
             return _eval_mult_core(cipher, 1.0, cryptoContext)
         else:
-            return cipher
+            return cipher.shallow_copy()
     else:  # cur_limbs > target_limbs
         if cipher.noise_deg == 2 and target_noise_deg == 2:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
