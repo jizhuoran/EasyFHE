@@ -391,13 +391,16 @@ def ct_pt_test_case(
 ##############
 
 if __name__ == "__main__":
-    print("==========={}============".format('app_without_bs_example_debug'))
-    app_without_bs_example_debug(mode="debug")
-    print("==========={}============".format('app_example_debug'))
-    app_example_debug(mode="debug")
-    print("==========={}============".format('app_example_release'))
-    app_example_release(mode="release")
-    print("==========={}============".format('encode_test_case'))
-    encode_test_case(mode="debug")
-    print("==========={}============".format('ct_pt_test_case'))
-    ct_pt_test_case(mode="debug")
+    for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
+        print("***********{}***********".format(rescaleTech))
+        print("==========={}============".format('app_without_bs_example_debug'))
+        app_without_bs_example_debug(rescaleTech = rescaleTech, mode="debug")
+        print("==========={}============".format('app_example_debug'))
+        app_example_debug(rescaleTech = rescaleTech, mode="debug")
+        print("==========={}============".format('app_example_release'))
+        app_example_release(rescaleTech = rescaleTech, mode="release")
+        print("==========={}============".format('encode_test_case'))
+        encode_test_case(rescaleTech = rescaleTech, mode="debug")
+        print("==========={}============".format('ct_pt_test_case'))
+        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug")
+        print("************************************".format(rescaleTech))

@@ -2,7 +2,7 @@ from ..ciphertext import Cipher
 
 unary_op = {
     "homo_square": "homo_ops.",
-    "drop_last_elements_": "homo_ops.",
+    "drop_last_elements": "homo_ops.",
     "key_switch_P_ext": "hybrid_keyswitch.",
     "modup_to_ext": "hybrid_keyswitch.",
     "moddown_from_ext": "hybrid_keyswitch.",
@@ -47,11 +47,12 @@ def compilerFrontend(func):
 
         def wrapper(*args, **kwargs):
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
-                return func(*args)
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
             ct, val, _ = args
             in_node_id = ct.cipher_id
             out_node_id = Cipher.get_next_id()
-            res = func(*args)
+            res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
                 "NODE{} = {}{}(NODE{}, {}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
@@ -77,7 +78,8 @@ def compilerFrontend(func):
 
         def wrapper(*args, **kwargs):
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
-                return func(*args)
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
             in0, in1, _ = args
             in0_node_id = in0.cipher_id
             in1_node_id = in1.cipher_id
@@ -111,7 +113,8 @@ def compilerFrontend(func):
 
         def wrapper(*args, **kwargs):
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
-                return func(*args)
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
             in0, _ = args
             in0_node_id = in0.cipher_id
             out_node_id = Cipher.get_next_id()
@@ -208,7 +211,8 @@ def compilerFrontend(func):
 
         def wrapper(*args, **kwargs):
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
-                return func(*args)
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
             ct1, ct2, cryptoContext = args
             ct1_node_id = ct1.cipher_id
             ct2_node_id = ct2.cipher_id
