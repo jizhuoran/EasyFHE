@@ -1,9 +1,11 @@
+import sys, os, warnings
+sys.path.append("/".join(os.getcwd().split("/")[:-3]))
+sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch.fhe.homo_ops as homo_ops
 from torch.fhe.bootstrapping import eval_bootstrap
 import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
-import os, warnings
 
 
 def app_without_bs_example_debug(
@@ -389,5 +391,5 @@ if __name__ == "__main__":
     # app_without_bs_example_debug(mode="debug")
     # app_example_debug(mode="debug")
     # app_example_release(mode="release")
-    encode_test_case(mode="debug")
-    # ct_pt_test_case(mode="debug")
+    # encode_test_case(mode="debug")
+    ct_pt_test_case(mode="debug")
