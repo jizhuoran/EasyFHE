@@ -122,8 +122,8 @@ def flex_adjust_to(
             scf2 = cryptoContext.GetScalingFactorRealBig(target_limbs + 1)
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
-            if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+            if cipher.cur_limbs > target_limbs + 1:
+                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False)
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
