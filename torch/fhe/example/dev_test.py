@@ -102,12 +102,14 @@ def app_example_debug(
     # bootstrapping
     utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
         cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+        openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
         is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
         if is_euqal:
             print("BootstrapTest_logBsSlots11: Test passed!")
@@ -119,10 +121,12 @@ def app_example_debug(
     drop_limbs = result.cur_limbs - 3
     for i in range(drop_limbs):
         result = homo_ops.homo_mul(result, result, cryptoContext)
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
     utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     # compute golden answer
@@ -130,10 +134,12 @@ def app_example_debug(
         # do some multiplication to consume some limbs
         for i in range(drop_limbs):
             openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
+            openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
 
         openfhe_boot.SetSlots((1 << logBsSlots_list[1])) # to cheat openfhe boot with bs_slots = (1<<logBsSlots_list[1])
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[1])]
         openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
+        openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
 
         is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
         if is_euqal:
@@ -182,6 +188,7 @@ def app_example_release(
 
     # bootstrapping
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -196,9 +203,11 @@ def app_example_release(
         approx_plain_val = approx_plain_val * values1[0]
         # print(approx_plain_val)
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
-    
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
+
     # bootstrapping
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -212,7 +221,7 @@ def app_example_release(
     if is_equal:
         print("app: Test passed!")
     else:
-        print_failed("app: Test failed!")
+        print_failed("app: Test failed! The code verifies if the first 10 elements of clear_result and approx_plain_val are approximately equal, allowing a maximum difference of 0.01 (1e-2). Please review the results.")
 
 
 def encode_test_case(

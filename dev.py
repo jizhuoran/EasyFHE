@@ -59,6 +59,7 @@ for i in range(result.cur_limbs - 4):
     approx_plain_val = approx_plain_val * values1[0]
     # print(approx_plain_val)
     result = fhe.homo_mul_pt(result, ptx, cryptoContext)
+    result = fhe.homo_rescale(result,1, cryptoContext)  # for FIXEDMANUAL mode only
 
 # do another bootstrapping
 result1 = fhe.homo_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
