@@ -32,12 +32,12 @@ values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 
 encode_slots = (1 << 11)
 x = np.array([values[i % len(values)] for i in range(encode_slots)])
 x = torch.tensor(x, device="cuda")
-cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
 x1 = torch.tensor(x1, device="cuda")
-cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, encode_slots)
+ptx = openfhe_context.encode(x1, 1, 0, encode_slots)
 
 # do some application computation
 cipher = fhe.homo_rotate(cipher, -1, cryptoContext)
@@ -53,14 +53,12 @@ clear_result = clear_result.cpu().numpy().reshape(-1)
 print("HE decryption result: ", clear_result[:10])
 
 # do some application computation
-encode_slots = (1<<12)
-result.slots = encode_slots  # This assignment is for testing purposes only.
 approx_plain_val = clear_result[:10]
 # print(approx_plain_val)
 for i in range(result.cur_limbs - 4):
     approx_plain_val = approx_plain_val * values1[0]
     # print(approx_plain_val)
-    result = fhe.homo_mul(result, cipher1, cryptoContext)
+    result = fhe.homo_mul_pt(result, ptx, cryptoContext)
 
 # do another bootstrapping
 result1 = fhe.homo_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)

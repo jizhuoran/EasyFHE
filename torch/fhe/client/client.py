@@ -98,7 +98,7 @@ class OpenFHEContext:
             mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
             return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
 
-    def encrypt(self, x, scale_deg = 1, level = 0, slots= None):
+    def encrypt(self, x, scale_deg = 1, level = 0, slots= None, mode = "release"):
         if slots is None:
             slots = len(x)
         if isinstance(x, (np.ndarray, torch.Tensor)):
@@ -108,7 +108,10 @@ class OpenFHEContext:
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
-        return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
+        if mode == "debug":
+            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
+        else:
+            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
 
     def decrypt(self, x):
         assert len(x.cv) == 2
