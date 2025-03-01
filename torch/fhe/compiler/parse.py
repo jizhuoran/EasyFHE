@@ -83,12 +83,24 @@ def calculate_metadata(graph, metadata, node):
                 target_noise_deg = max(CT0.noise_deg, CT1.noise_deg)
         else:
             raise ValueError
+        if not (CT0.cur_limbs == target_libms and CT0.noise_deg == target_noise_deg):
+            print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
+        if not (CT1.cur_limbs == target_libms and CT1.noise_deg == target_noise_deg):
+            print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
+
         return MetaInfo(target_libms, target_noise_deg)
     elif operation in['homo_mul_scalar_double', 'homo_square']:
         CT0 = metadata[inputs[0]]
-        return MetaInfo(CT0.cur_limbs, CT0.noise_deg + 1)
+        if metadata["RESCALE_TECH"] == "FLEXIBLEAUTO":
+            if CT0.noise_deg == 2:
+                return MetaInfo(CT0.cur_limbs - 1, 2)
+            else:
+                return MetaInfo(CT0.cur_limbs, 2)
+        else:
+            raise ValueError
+
     elif operation in['homo_mul_pt', 'homo_mul']:
-        CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
+        CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] 
         if metadata["RESCALE_TECH"] == "FLEXIBLEAUTO":
             if CT0.cur_limbs > CT1.cur_limbs:
                 target_libms = CT1.cur_limbs
@@ -99,8 +111,17 @@ def calculate_metadata(graph, metadata, node):
             else:
                 target_libms = CT0.cur_limbs
                 target_noise_deg = max(CT0.noise_deg, CT1.noise_deg)
+
+            if target_noise_deg == 2:
+                target_noise_deg -= 1
+                target_libms -= 1
         else:
             raise ValueError
+        if not (CT0.cur_limbs == target_libms and CT0.noise_deg == target_noise_deg):
+            print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
+        if not (CT1.cur_limbs == target_libms and CT1.noise_deg == target_noise_deg):
+            print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
+
         return MetaInfo(target_libms, 2)
     elif operation == 'adjust_levels_and_depth':
         CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
