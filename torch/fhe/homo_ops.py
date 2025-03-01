@@ -20,8 +20,10 @@ BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
 # drop last elem is a inplace operation now
 @frontend
-def drop_last_elements_(ct, num_levels):
+def drop_last_elements(ct, num_levels, inplace=False):
     assert num_levels <= ct.cur_limbs and num_levels >= 0
+    if not inplace:
+        ct = ct.deep_copy()
     ct.cur_limbs -= num_levels
     return ct
 
@@ -31,64 +33,10 @@ def drop_last_elements_(ct, num_levels):
 def _adjust_levels(ct1, ct2, cryptoContext):
     ct1, ct2 = ct1.shallow_copy(), ct2.shallow_copy()
     if ct1.cur_limbs > ct2.cur_limbs:
-        ct1 = drop_last_elements_(ct1, ct1.cur_limbs - ct2.cur_limbs, printInfo=False)
+        ct1 = drop_last_elements(ct1, ct1.cur_limbs - ct2.cur_limbs, inplace=True, printInfo=False)
     elif ct1.cur_limbs < ct2.cur_limbs:
-        ct2 = drop_last_elements_(ct2, ct2.cur_limbs - ct1.cur_limbs, printInfo=False)
+        ct2 = drop_last_elements(ct2, ct2.cur_limbs - ct1.cur_limbs, inplace=True, printInfo=False)
     return ct1, ct2
-
-
-# note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
-@frontend
-def adjust_levels_and_depth(ct1, ct2, cryptoContext):
-    if ct1.cur_limbs < ct2.cur_limbs:
-        rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
-    else:
-        rct1, rct2, swapped = ct1.shallow_copy(), ct2.shallow_copy(), False
-
-    if not rct1.cur_limbs == rct2.cur_limbs:
-        scf1 = rct1.scaling_factor
-        scf2 = cryptoContext.GetScalingFactorRealBig(
-            rct2.cur_limbs + 2 - rct2.noise_deg
-        )
-        scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
-        q1 = (
-            cryptoContext.GetModReduceFactor(rct1.cur_limbs - 1)
-            if rct1.noise_deg == 2
-            else 1
-        )
-        scaling_factor = scf2 / scf1 * q1 / scf
-        if rct1.noise_deg == 2 and not (
-            rct2.noise_deg == 1 and rct1.cur_limbs - rct2.cur_limbs == 1
-        ):
-            rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
-            rct1 = homo_rescale_internal(
-                rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
-            )
-        elif rct1.noise_deg == 1:
-            rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
-        else:
-            raise ValueError
-        if rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2 > 0:
-            rct1 = drop_last_elements_(
-                rct1,
-                rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2,
-                printInfo=False,
-            )
-        if rct2.noise_deg == 1:
-            rct1 = homo_rescale_internal(
-                rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
-            )
-        rct1.scaling_factor = rct2.scaling_factor
-
-        if swapped:
-            rct1, rct2 = rct2.shallow_copy(), rct1.shallow_copy()
-    else:
-        if rct1.noise_deg < rct2.noise_deg:
-            rct1 = _eval_mult_core(rct1, 1.0, cryptoContext)
-        elif rct2.noise_deg < rct1.noise_deg:
-            rct2 = _eval_mult_core(rct2, 1.0, cryptoContext)
-    return rct1, rct2
-
 
 def flex_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
@@ -112,7 +60,7 @@ def flex_adjust_to(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
             if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
             cipher.scaling_factor = target_scaling_factor
             # so the output has noise_deg2, and the same cur_limb
         elif cipher.noise_deg == 1 and target_noise_deg == 1:
@@ -123,7 +71,7 @@ def flex_adjust_to(
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
             if cipher.cur_limbs > target_limbs + 1:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False)
+                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False)
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
@@ -147,8 +95,8 @@ def flex_adjust_to(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
                 )
                 if cipher.cur_limbs > target_limbs + 1:
-                    cipher = drop_last_elements_(
-                        cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False
+                    cipher = drop_last_elements(
+                        cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False
                     )
                 cipher = homo_rescale_internal(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
@@ -161,7 +109,7 @@ def flex_adjust_to(
             scf2 = target_scaling_factor
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
-            cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+            cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
             cipher.scaling_factor = scf2
         else:
             print("noise_deg", cipher.noise_deg, target_noise_deg)
@@ -186,11 +134,11 @@ def fixed_adjust_to(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
             if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=False, printInfo=False)
         elif cipher.noise_deg == 1 and target_noise_deg == 1:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
             if cipher.cur_limbs > target_limbs + 1:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False)
+                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False)
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
@@ -203,15 +151,15 @@ def fixed_adjust_to(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
                 )
                 if cipher.cur_limbs > target_limbs + 1:
-                    cipher = drop_last_elements_(
-                        cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False
+                    cipher = drop_last_elements(
+                        cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False
                     )
                 cipher = homo_rescale_internal(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
                 )
         elif cipher.noise_deg == 1 and target_noise_deg == 2:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
-            cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+            cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
         else:
             print("noise_deg", cipher.noise_deg, target_noise_deg)
             raise ValueError
