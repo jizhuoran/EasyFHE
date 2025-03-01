@@ -19,3 +19,4 @@ ninja
 packaging
 optree>=0.13.0
 cmake
+termcolor>=1.1.0

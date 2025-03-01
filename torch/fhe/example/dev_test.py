@@ -6,7 +6,10 @@ from torch.fhe.bootstrapping import eval_bootstrap
 import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
+from termcolor import colored
 
+def print_failed(message):
+    print(colored(message, "red"))
 
 def app_without_bs_example_debug(
         maxLevelsRemaining=5,
@@ -52,7 +55,7 @@ def app_without_bs_example_debug(
         if is_euqal:
             print("homo_rotate: Test passed!")
         else:
-            print("homo_rotate: Test failed!")
+            print_failed("homo_rotate: Test failed!")
 
 def app_example_debug(
         maxLevelsRemaining=3,
@@ -94,7 +97,7 @@ def app_example_debug(
         if is_euqal:
             print("homo_rotate: Test passed!")
         else:
-            print("homo_rotate: Test failed!")
+            print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
     utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
@@ -109,7 +112,7 @@ def app_example_debug(
         if is_euqal:
             print("BootstrapTest_logBsSlots11: Test passed!")
         else:
-            print("BootstrapTest_logBsSlots11: Test failed!")
+            print_failed("BootstrapTest_logBsSlots11: Test failed!")
     
     # do some multiplication to consume some limbs
     result.slots =  (1 << 12) # This assignment is for testing purposes only
@@ -136,7 +139,7 @@ def app_example_debug(
         if is_euqal:
             print("BootstrapTest_logBsSlots12: Test passed!")
         else:
-            print("BootstrapTest_logBsSlots12: Test failed!")
+            print_failed("BootstrapTest_logBsSlots12: Test failed!")
 
 
 def app_example_release(
@@ -209,7 +212,7 @@ def app_example_release(
     if is_equal:
         print("app: Test passed!")
     else:
-        print("app: Test failed!")
+        print_failed("app: Test failed!")
 
 
 def encode_test_case(
@@ -263,7 +266,7 @@ def encode_test_case(
     if all_correct:
         print("encode with default values: Test passed!")
     else:
-        print("encode with default values: Test failed!")
+        print_failed("encode with default values: Test failed!")
 
     ############
     ## test 2 ##
@@ -297,7 +300,7 @@ def encode_test_case(
     if all_correct:
         print("encode with specify slots Test passed!")
     else:
-        print("encode with specify slots Test failed!")
+        print_failed("encode with specify slots Test failed!")
 
     ############
     ## test 3 ##
@@ -316,7 +319,7 @@ def encode_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt with gpu_fft Test passed!")
     else:
-        print("homo_add_pt with gpu_fft Test failed!")
+        print_failed("homo_add_pt with gpu_fft Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -354,7 +357,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt Test passed!")
     else:
-        print("homo_add_pt Test failed!")
+        print_failed("homo_add_pt Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -366,7 +369,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result,ground_truth):
         print("homo_mul_pt Test passed!")
     else:
-        print("homo_mul_pt Test failed!")
+        print_failed("homo_mul_pt Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -377,7 +380,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt second Test passed!")
     else:
-        print("homo_add_pt second Test failed!")
+        print_failed("homo_add_pt second Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
