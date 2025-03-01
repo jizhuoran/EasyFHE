@@ -10,13 +10,13 @@ import torch.fhe.compiler.bs_compilered as COMPILE
 
 
 maxLevelsRemaining = 3
-logBsSlots_list = [8]
-logN = 14
+logBsSlots_list = [12]
+logN = 15
 dnum = 3
 dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[4, 4]]
-rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = "data"
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -81,7 +81,7 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
 
-TEST_COMPILE = False
+TEST_COMPILE = True
 
 if TEST_COMPILE:
     result1 = BS.eval_bootstrap(
@@ -90,6 +90,14 @@ if TEST_COMPILE:
         logBsSlots=logBsSlots_list[0],
         cryptoContext=cryptoContext,
     )
+    start_time = time.time()
+    result1 = BS.eval_bootstrap(
+        cipher,
+        L0=cryptoContext.L,
+        logBsSlots=logBsSlots_list[0],
+        cryptoContext=cryptoContext,
+    )
+    print("Time taken for NORMAL bootstrapping:", time.time() - start_time)
     print("=======================")
     print("=======================")
     print("=======================")
@@ -99,7 +107,14 @@ if TEST_COMPILE:
         logBsSlots=logBsSlots_list[0],
         cryptoContext=cryptoContext,
     )
-
+    start_time = time.time()
+    result2 = COMPILE.eval_bootstrap(
+        cipher,
+        L0=cryptoContext.L,
+        logBsSlots=logBsSlots_list[0],
+        cryptoContext=cryptoContext,
+    )
+    print("Time taken for COMPILE bootstrapping:", time.time() - start_time)
     print("result1", result1.cv[0].cpu().numpy()[0][:10])
     print("result2", result2.cv[0].cpu().numpy()[0][:10])
 
@@ -111,6 +126,51 @@ if TEST_COMPILE:
         print("Test failed!")
         print("Test failed!")
         print("Test failed!")
+
+
+
+    with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                "/home/zrji/log"
+            ),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as profiler:
+            # Start profiling specific functions with torch.profiler.record_function()
+            result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+            profiler.step()
+
+    # Get the profiling results
+    profiler_results = profiler.key_averages()
+
+    # Print the profiling summary in a table format
+    print(profiler_results.table(sort_by="self_cpu_time_total"))
+
+    print("++++++++")
+    print("++++++++")
+    print("++++++++")
+
+    with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                "/home/zrji/log"
+            ),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as profiler:
+            # Start profiling specific functions with torch.profiler.record_function()
+            result = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+            profiler.step()
+
+    # Get the profiling results
+    profiler_results = profiler.key_averages()
+
+    # Print the profiling summary in a table format
+    print(profiler_results.table(sort_by="self_cpu_time_total"))
+
 
 else:
 

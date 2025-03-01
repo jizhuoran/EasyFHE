@@ -1,5 +1,6 @@
 import re
 import networkx as nx
+from pyvis.network import Network
 
 class MetaInfo:
     def __init__(self, cur_limbs, noise_deg):
@@ -66,7 +67,7 @@ def calculate_metadata(graph, metadata, adjust_record, node):
     operation = graph.nodes[node].get("operation")
     inputs = graph.nodes[node].get("inputs")
 
-    if operation in['assignment', 'homo_rotate', 'extract_cv', 'key_switch_P_ext', 'modup_to_ext', 'eval_fast_rotate', 'moddown_from_ext', '_cipher_automorphism', 'homo_add_scalar_double', 'homo_mul_scalar_int']:
+    if operation in['assignment', 'homo_rotate', 'extract_cv', 'key_switch_P_ext', 'modup_to_ext', 'eval_fast_rotate', 'moddown_from_ext', '_cipher_automorphism', 'homo_add_scalar_double', 'homo_mul_scalar_int', 'assign_scaling_factor']:
         CT0 = metadata[inputs[0]]
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
     elif operation in ['homo_add', 'homo_sub', 'adjust_levels_and_depth']:
@@ -130,14 +131,15 @@ def calculate_metadata(graph, metadata, adjust_record, node):
     # elif operation == 'adjust_levels_and_depth':
     #     CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
     #     return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
-    elif operation == 'homo_rescale':
+    elif operation in ['homo_rescale', 'homo_rescale_internal']:
         CT0, scale_level = metadata[inputs[0]], int(inputs[1])
         return MetaInfo(CT0.cur_limbs - scale_level, CT0.noise_deg - scale_level)
     elif operation == 'mod_raise':
         CT0, raise_level = metadata[inputs[0]], int(inputs[1])
         return MetaInfo(raise_level, CT0.noise_deg)
     else:
-        return MetaInfo(-1, -1)
+        print(operation)
+        raise ValueError
 
 
 def process_graph_topologically(graph, initial_metadata):
@@ -172,6 +174,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0hatTPreFFT[0][4]" : MetaInfo(22, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[0][5]" : MetaInfo(22, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[0][6]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][7]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][8]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][9]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][10]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][11]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][12]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][13]" : MetaInfo(22, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[0][14]" : MetaInfo(22, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][0]" : MetaInfo(23, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][1]" : MetaInfo(23, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][2]" : MetaInfo(23, 1),
@@ -179,6 +189,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][4]" : MetaInfo(23, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][5]" : MetaInfo(23, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[1][6]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][7]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][8]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][9]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][10]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][11]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][12]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][13]" : MetaInfo(23, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[1][14]" : MetaInfo(23, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][0]" : MetaInfo(24, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][1]" : MetaInfo(24, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][2]" : MetaInfo(24, 1),
@@ -186,6 +204,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][4]" : MetaInfo(24, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][5]" : MetaInfo(24, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[2][6]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][7]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][8]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][9]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][10]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][11]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][12]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][13]" : MetaInfo(24, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[2][14]" : MetaInfo(24, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][0]" : MetaInfo(25, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][1]" : MetaInfo(25, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][2]" : MetaInfo(25, 1),
@@ -193,6 +219,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][4]" : MetaInfo(25, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][5]" : MetaInfo(25, 1),
     "cryptoContext.BsContext.m_U0hatTPreFFT[3][6]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][7]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][8]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][9]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][10]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][11]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][12]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][13]" : MetaInfo(25, 1),
+    "cryptoContext.BsContext.m_U0hatTPreFFT[3][14]" : MetaInfo(25, 1),
     "cryptoContext.BsContext.m_U0PreFFT[0][0]" : MetaInfo(8, 1),
     "cryptoContext.BsContext.m_U0PreFFT[0][1]" : MetaInfo(8, 1),
     "cryptoContext.BsContext.m_U0PreFFT[0][2]" : MetaInfo(8, 1),
@@ -200,6 +234,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0PreFFT[0][4]" : MetaInfo(8, 1),
     "cryptoContext.BsContext.m_U0PreFFT[0][5]" : MetaInfo(8, 1),
     "cryptoContext.BsContext.m_U0PreFFT[0][6]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][7]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][8]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][9]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][10]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][11]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][12]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][13]" : MetaInfo(8, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[0][14]" : MetaInfo(8, 1),
     "cryptoContext.BsContext.m_U0PreFFT[1][0]" : MetaInfo(7, 1),
     "cryptoContext.BsContext.m_U0PreFFT[1][1]" : MetaInfo(7, 1),
     "cryptoContext.BsContext.m_U0PreFFT[1][2]" : MetaInfo(7, 1),
@@ -207,6 +249,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0PreFFT[1][4]" : MetaInfo(7, 1),
     "cryptoContext.BsContext.m_U0PreFFT[1][5]" : MetaInfo(7, 1),
     "cryptoContext.BsContext.m_U0PreFFT[1][6]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][7]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][8]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][9]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][10]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][11]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][12]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][13]" : MetaInfo(7, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[1][14]" : MetaInfo(7, 1),
     "cryptoContext.BsContext.m_U0PreFFT[2][0]" : MetaInfo(6, 1),
     "cryptoContext.BsContext.m_U0PreFFT[2][1]" : MetaInfo(6, 1),
     "cryptoContext.BsContext.m_U0PreFFT[2][2]" : MetaInfo(6, 1),
@@ -214,6 +264,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0PreFFT[2][4]" : MetaInfo(6, 1),
     "cryptoContext.BsContext.m_U0PreFFT[2][5]" : MetaInfo(6, 1),
     "cryptoContext.BsContext.m_U0PreFFT[2][6]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][7]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][8]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][9]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][10]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][11]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][12]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][13]" : MetaInfo(6, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[2][14]" : MetaInfo(6, 1),
     "cryptoContext.BsContext.m_U0PreFFT[3][0]" : MetaInfo(5, 1),
     "cryptoContext.BsContext.m_U0PreFFT[3][1]" : MetaInfo(5, 1),
     "cryptoContext.BsContext.m_U0PreFFT[3][2]" : MetaInfo(5, 1),
@@ -221,6 +279,14 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0PreFFT[3][4]" : MetaInfo(5, 1),
     "cryptoContext.BsContext.m_U0PreFFT[3][5]" : MetaInfo(5, 1),
     "cryptoContext.BsContext.m_U0PreFFT[3][6]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][7]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][8]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][9]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][10]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][11]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][12]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][13]" : MetaInfo(5, 1),
+    "cryptoContext.BsContext.m_U0PreFFT[3][14]" : MetaInfo(5, 1),
 } 
 
 
@@ -232,6 +298,86 @@ def print_graph_info(graph):
         print(f"  Outputs: {[n for n in graph.successors(node)]}")
         print()
 
+
+def draw_graph(graph):
+    # Create a chain (path) graph with 10 nodes
+    G = graph
+
+    # Compute levels for each node using topological order.
+    levels = {}
+    for node in nx.topological_sort(G):
+        preds = list(G.predecessors(node))
+        if not preds:
+            levels[node] = 0
+        else:
+            levels[node] = max(levels[pred] for pred in preds) + 1
+
+    # Group nodes by their level.
+    level_nodes = {}
+    for node, level in levels.items():
+        level_nodes.setdefault(level, []).append(node)
+
+    # Compute positions for each node (layered layout).
+    pos = {}
+    vertical_gap = 150   # vertical spacing between levels
+    horizontal_gap = 150 # horizontal spacing within each level
+    for level, nodes in level_nodes.items():
+        count = len(nodes)
+        # Center nodes horizontally on each level.
+        start_x = - (count - 1) * horizontal_gap / 2
+        for i, node in enumerate(nodes):
+            pos[node] = {"x": start_x + i * horizontal_gap, "y": level * vertical_gap}
+
+    # Create a PyVis network.
+    net = Network(height="600px", width="100%", notebook=False)
+
+    # Import the entire NetworkX graph (nodes and edges) into PyVis.
+    net.from_nx(G)
+
+    # Update each node with computed positions and add custom label info.
+    for node in net.nodes:
+        node_id = node["id"]
+        # Create your custom info string.
+        custom_info = node.get("operation")
+        # You can choose to append to the existing label or overwrite it.
+        # For instance, if the original label is just the node id:
+        node["label"] = f"{node['label']}\n{custom_info}"
+        
+        # Set fixed positions so the physics engine doesn't change them.
+        if node_id in pos:
+            node["x"] = pos[node_id]["x"]
+            node["y"] = pos[node_id]["y"]
+            node["fixed"] = {"x": True, "y": True}
+
+    # Disable physics to keep nodes in assigned positions.
+    net.toggle_physics(False)
+
+    # Save the interactive graph as an HTML file
+    net.show("interactive_topo_graph.html", notebook=False)
+
+def generate_execution_plan(G: nx.DiGraph):
+    """
+    Generates an execution plan for a DAG.
+    Each "line" in the plan is a list of nodes that can be executed concurrently.
+    """
+    # Work on a copy so the original graph remains intact.
+    G_copy = G.copy()
+    plan = []
+    
+    # Continue until there are no nodes left.
+    while G_copy.nodes:
+        # Find all nodes with no incoming edges (ready to execute).
+        ready = [n for n in G_copy.nodes if G_copy.in_degree(n) == 0]
+        if not ready:
+            raise ValueError("Graph has a cycle or a dependency error!")
+        plan.append(ready)
+        # Remove these nodes from the graph.
+        G_copy.remove_nodes_from(ready)
+    
+    return plan
+
+
+        
 # Sample code string
 with open("sample_code.txt", "r") as f:
     code = f.read()
@@ -242,9 +388,8 @@ graph = parse_code_to_graph(code)
 # Print the information about the graph
 print_graph_info(graph)
 
-# Define the start and end nodes
-start_node = "NODE57"  # NODE_IN
-end_node = "NODE102"   # NODE_OUT
+#save graph to pdf
+draw_graph(graph)
 
 # Process the graph in topological order and calculate metadata
 final_metadata, adjust_record = process_graph_topologically(graph, initial_metadata)
@@ -256,6 +401,10 @@ from collections import Counter
 for item, occur_time in Counter(adjust_record).items():
     if occur_time > 1:
         print(item, occur_time)
+
+plan = generate_execution_plan(graph)
+for line in plan:
+    print(line)
 
 # # Print the metadata for each node in the path
 # for node, data in final_metadata.items():
