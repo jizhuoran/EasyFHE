@@ -384,7 +384,7 @@ class OpenFHEContext:
         inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
         if type_flag == 'IsDCRTPoly':
             if not use_fft:
-                inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup, cryptocontext.encode_params_ksiPows)
+                inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup.cpu().numpy(), cryptocontext.encode_params_ksiPows)
 
             #move precompute&inverse to cuda
             inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")

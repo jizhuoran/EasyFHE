@@ -388,8 +388,13 @@ def ct_pt_test_case(
 ##############
 
 if __name__ == "__main__":
-    # app_without_bs_example_debug(mode="debug")
-    # app_example_debug(mode="debug")
-    # app_example_release(mode="release")
-    # encode_test_case(mode="debug")
+    print("==========={}============".format('app_without_bs_example_debug'))
+    app_without_bs_example_debug(mode="debug")
+    print("==========={}============".format('app_example_debug'))
+    app_example_debug(mode="debug")
+    print("==========={}============".format('app_example_release'))
+    app_example_release(mode="release")
+    print("==========={}============".format('encode_test_case'))
+    encode_test_case(mode="debug")
+    print("==========={}============".format('ct_pt_test_case'))
     ct_pt_test_case(mode="debug")

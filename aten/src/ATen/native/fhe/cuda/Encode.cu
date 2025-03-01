@@ -477,8 +477,9 @@ Tensor encode_cuda(
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
     bool use_fft) {
-  Tensor out = at::empty_like(res);
-  out.resize_({cur_limbs, N});
+  // Tensor out = at::empty_like(res);
+  // out.resize_({cur_limbs, N});
+  Tensor out = at::zeros({cur_limbs, N}, res.options());
   encode_template(
       inverse_real,
       inverse_imag,
