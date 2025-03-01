@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import warnings,os
 
-maxLevelsRemaining = 3
+maxLevelsRemaining = 12
 appRotIndex_list = [-1, 2]
 logBsSlots_list = [11, 12]
 logN = 14

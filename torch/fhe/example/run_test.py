@@ -4,15 +4,17 @@ sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch
 import torch.fhe.bootstrapping as BS
+import torch.fhe.bs_compilered as COMPILE
 import torch.fhe.utils as utils
 
 maxLevelsRemaining = 3
-logBsSlots_list = [12]
+logBsSlots_list = [8]
 logN = 14
 dnum = 3
 dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]
+# rescaleTech = "FLEXIBLEAUTO"
 rescaleTech = "FLEXIBLEAUTO"
 path = "data"
 
@@ -54,7 +56,26 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 # # Print the profiling summary in a table format
 # print(profiler_results.table(sort_by="self_cuda_time_total"))
 
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+# result1 = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+# print("=======================")
+# print("=======================")
+# print("=======================")
+# result2 = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+
+# print("result1", result1.cv[0].cpu().numpy()[0][:10])
+# print("result2", result2.cv[0].cpu().numpy()[0][:10])
+
+# if np.array_equal(result1.cv[0].cpu().numpy(), result2.cv[0].cpu().numpy()):
+#     print("Test passed!")
+#     print("Test passed!")
+#     print("Test passed!")
+# else:
+#     print("Test failed!")
+#     print("Test failed!")
+#     print("Test failed!")
+
+
+
 
 start_time = time.time()
 result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)

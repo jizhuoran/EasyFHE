@@ -1,5 +1,7 @@
 import math
 import torch
+from .ciphertext import Cipher
+
 
 def get_item(item_name, content_map):
     if item_name in content_map:
@@ -57,10 +59,14 @@ class BsContext:
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
                 self.m_U0hatTPreFFT[i][j].cv = torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)
+                print("NODE{} = cryptoContext.BsContext.m_U0hatTPreFFT[{}][{}] # limb={}, noise={}".format(self.m_U0hatTPreFFT[i][j].cipher_id, i, j, self.m_U0hatTPreFFT[i][j].cur_limbs, self.m_U0hatTPreFFT[i][j].noise_deg))
+                Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT[i][j].cipher_id)
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
+                print("NODE{} = cryptoContext.BsContext.m_U0PreFFT[{}][{}] # limb={}, noise={}".format(self.m_U0PreFFT[i][j].cipher_id, i, j, self.m_U0PreFFT[i][j].cur_limbs, self.m_U0PreFFT[i][j].noise_deg))
                 self.m_U0PreFFT[i][j].cv = torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)
+                Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT[i][j].cipher_id)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
     def SelectLayers(self, logBsSlots, budget):

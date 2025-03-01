@@ -56,7 +56,7 @@ def degree(lst):
 def long_division_chebyshev(f, g):
     assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
     n, k = len(f) - 1, len(g) - 1
-    
+
     if n < k:
         return np.array([1.0]), np.array(f)
 
@@ -145,7 +145,7 @@ def inner_eval_chebyshev_ps(coefficients,
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            cu.drop_last_elements(cu.cur_limbs - T2[m - 1].cur_limbs)
+            cu = homo_ops.drop_last_elements_(cu, cu.cur_limbs - T2[m - 1].cur_limbs)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -163,13 +163,13 @@ def inner_eval_chebyshev_ps(coefficients,
             divqr_q[-1] += 1.1
             sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
             # for i in range(int(math.log2(divqr_q[-1]))):
-                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = homo_ops.homo_add(qu, sum, cryptoContext)
         else:
             sum = T[k - 1]
             sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
             # for i in range(int(math.log2(divqr_q[-1]))):
-                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = sum
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
@@ -191,7 +191,7 @@ def inner_eval_chebyshev_ps(coefficients,
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            su.drop_last_elements(1)
+            su = homo_ops.drop_last_elements_(su, 1)
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -298,8 +298,6 @@ def ComputeDegreesPS(n):
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
-    time0 = time.time()
-
     rescaleTech = cryptoContext.rescaleTech
     n = degree(coefficients)
     f2 = np.copy(coefficients)
@@ -354,8 +352,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     if not math.isclose(beta, -1.0):
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
-
-
     for i in range(2, k + 1):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
@@ -364,20 +360,17 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
         else:
             # tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
-            # tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext, cryptoContext.constant_minus_one[tmp.cur_limbs, tmp.noise_deg])
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
-
 
 
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
         for i in range(1, k):
-            T[i - 1].drop_last_elements(T[i - 1].cur_limbs - T[k - 1].cur_limbs)
+            T[i - 1] = homo_ops.drop_last_elements_(T[i - 1], T[i - 1].cur_limbs - T[k - 1].cur_limbs)
     else:
         for i in range(1, k):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
 
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
@@ -420,7 +413,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
-    
+
 
 
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
