@@ -1,8 +1,8 @@
-from .bs_context import *
-from . import functional as F
-from . import homo_ops
-from . import hybrid_keyswitch
-from . import utils
+from ..bs_context import *
+from .. import functional as F
+from .. import homo_ops
+from .. import hybrid_keyswitch
+from .. import utils
 import numpy as np
 
 # @profile_python_function

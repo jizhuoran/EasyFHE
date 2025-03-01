@@ -62,14 +62,14 @@ def parse_code_to_graph(code):
     return graph
 
 
-def calculate_metadata(graph, metadata, node):
+def calculate_metadata(graph, metadata, adjust_record, node):
     operation = graph.nodes[node].get("operation")
     inputs = graph.nodes[node].get("inputs")
 
     if operation in['assignment', 'homo_rotate', 'extract_cv', 'key_switch_P_ext', 'modup_to_ext', 'eval_fast_rotate', 'moddown_from_ext', '_cipher_automorphism', 'homo_add_scalar_double', 'homo_mul_scalar_int']:
         CT0 = metadata[inputs[0]]
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
-    elif operation in ['homo_add', 'homo_sub']:
+    elif operation in ['homo_add', 'homo_sub', 'adjust_levels_and_depth']:
         CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
         if metadata["RESCALE_TECH"] == "FLEXIBLEAUTO":
             if CT0.cur_limbs > CT1.cur_limbs:
@@ -84,8 +84,10 @@ def calculate_metadata(graph, metadata, node):
         else:
             raise ValueError
         if not (CT0.cur_limbs == target_libms and CT0.noise_deg == target_noise_deg):
+            adjust_record.append((inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
             print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
         if not (CT1.cur_limbs == target_libms and CT1.noise_deg == target_noise_deg):
+            adjust_record.append((inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
             print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
 
         return MetaInfo(target_libms, target_noise_deg)
@@ -118,14 +120,16 @@ def calculate_metadata(graph, metadata, node):
         else:
             raise ValueError
         if not (CT0.cur_limbs == target_libms and CT0.noise_deg == target_noise_deg):
+            adjust_record.append((inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
             print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[0], CT0.cur_limbs, CT0.noise_deg, target_libms, target_noise_deg))
         if not (CT1.cur_limbs == target_libms and CT1.noise_deg == target_noise_deg):
+            adjust_record.append((inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
             print("DO RESCALE: {} from limb {} noise_deg {} to limb {} noise_deg {}".format(inputs[1], CT1.cur_limbs, CT1.noise_deg, target_libms, target_noise_deg))
 
         return MetaInfo(target_libms, 2)
-    elif operation == 'adjust_levels_and_depth':
-        CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
-        return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
+    # elif operation == 'adjust_levels_and_depth':
+    #     CT0, CT1 = metadata[inputs[0]], metadata[inputs[1]] #this is wrong
+    #     return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
     elif operation == 'homo_rescale':
         CT0, scale_level = metadata[inputs[0]], int(inputs[1])
         return MetaInfo(CT0.cur_limbs - scale_level, CT0.noise_deg - scale_level)
@@ -142,7 +146,7 @@ def process_graph_topologically(graph, initial_metadata):
     """
     # Create a copy of the metadata to update
     metadata = initial_metadata.copy()
-
+    adjust_record = []
     # Perform topological sort (from NODE_OUT to NODE_IN)
     topological_order = list(nx.topological_sort(graph))
     
@@ -150,13 +154,12 @@ def process_graph_topologically(graph, initial_metadata):
     for node in topological_order:
         # If metadata is not already computed for the node, calculate it
         if node not in metadata:
-            metainfo = calculate_metadata(graph, metadata, node)
+            metainfo = calculate_metadata(graph, metadata, adjust_record, node)
             metadata[node] = metainfo
             print(f"Node: {node}")
             print(f"  data: {metainfo}")
             print()
-    
-    return metadata
+    return metadata, adjust_record
 
 # Example of provided metadata for source nodes (like NODE_IN)
 initial_metadata = {
@@ -220,42 +223,6 @@ initial_metadata = {
     "cryptoContext.BsContext.m_U0PreFFT[3][6]" : MetaInfo(5, 1),
 } 
 
-# def assign_metadata(graph, start_node, end_node):
-#     # Dictionary to store metadata for each node
-#     metadata_dict = {"IN_NODE" : MetaInfo(2, 1)}
-
-#     # Perform a breadth-first search (BFS) to traverse the graph from start_node to end_node
-#     queue = [start_node]
-#     visited = set()
-
-#     while queue:
-#         current_node = queue.pop(0)
-
-#         if current_node == end_node:
-#             break  # Stop if we reach NODE_OUT
-
-#         # Skip nodes we've already processed
-#         if current_node in visited:
-#             continue
-#         visited.add(current_node)
-
-#         # Retrieve the operation and inputs for the current node
-#         operation = graph.nodes[current_node].get("operation")
-#         inputs = graph.nodes[current_node].get("inputs")
-        
-#         print(current_node)
-#         calculate_metadata(operation, inputs, metadata_dict)
-#         metadata_dict[current_node] = calculate_metadata(operation, inputs, metadata_dict)
-
-#         # Add successors (dependent nodes) to the queue for BFS traversal
-#         print("  Successors: ", end="")
-#         for successor in graph.successors(current_node):
-#             print(successor, end=" ")
-#             queue.append(successor)
-#         print()
-
-#     return metadata_dict
-
 
 def print_graph_info(graph):
     for node in graph.nodes:
@@ -280,7 +247,15 @@ start_node = "NODE57"  # NODE_IN
 end_node = "NODE102"   # NODE_OUT
 
 # Process the graph in topological order and calculate metadata
-final_metadata = process_graph_topologically(graph, initial_metadata)
+final_metadata, adjust_record = process_graph_topologically(graph, initial_metadata)
+
+for item in adjust_record:
+    print(item)
+
+from collections import Counter
+for item, occur_time in Counter(adjust_record).items():
+    if occur_time > 1:
+        print(item, occur_time)
 
 # # Print the metadata for each node in the path
 # for node, data in final_metadata.items():

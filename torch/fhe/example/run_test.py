@@ -6,6 +6,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
+import torch.fhe.compiler.bs_compilered as COMPILE
 
 
 maxLevelsRemaining = 3
@@ -15,7 +16,7 @@ dnum = 3
 dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[4, 4]]
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = "data"
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -125,6 +126,11 @@ else:
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
+
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)
+    print("HE decryption result: ", clear_result[:10])
+
     is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
     if is_equal:
         print("Test passed!")

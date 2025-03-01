@@ -54,7 +54,7 @@ def compilerFrontend(func):
             res = func(*args)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = {}{}(NODE{}, {}, cryptoContext) #out: limb={}, noise={}, in0: limb={}, noise={}".format(
+                "NODE{} = {}{}(NODE{}, {}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     unary_cnst_op[func.__name__],
                     func.__name__,
@@ -62,8 +62,10 @@ def compilerFrontend(func):
                     repr(val),
                     res.cur_limbs,
                     res.noise_deg,
+                    res.scaling_factor,
                     ct.cur_limbs,
                     ct.noise_deg,
+                    ct.scaling_factor,
                 )
             )
 
@@ -83,7 +85,7 @@ def compilerFrontend(func):
             res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = {}{}(NODE{}, NODE{}, cryptoContext) #out: limb={}, noise={}, in0: limb={}, noise={}, in1: limb={}, noise={}".format(
+                "NODE{} = {}{}(NODE{}, NODE{}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}, in1: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     binary_op[func.__name__],
                     func.__name__,
@@ -91,10 +93,13 @@ def compilerFrontend(func):
                     in1_node_id,
                     res.cur_limbs,
                     res.noise_deg,
+                    res.scaling_factor,
                     in0.cur_limbs,
                     in0.noise_deg,
+                    in0.scaling_factor,
                     in1.cur_limbs,
                     in1.noise_deg,
+                    in1.scaling_factor,
                 )
             )
 
@@ -113,15 +118,17 @@ def compilerFrontend(func):
             res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = {}{}(NODE{}, cryptoContext) #out: limb={}, noise={}, in0: limb={}, noise={}".format(
+                "NODE{} = {}{}(NODE{}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     unary_op[func.__name__],
                     func.__name__,
                     in0_node_id,
                     res.cur_limbs,
                     res.noise_deg,
+                    res.scaling_factor,
                     in0.cur_limbs,
                     in0.noise_deg,
+                    in0.scaling_factor,
                 )
             )
             return res
@@ -140,7 +147,7 @@ def compilerFrontend(func):
             res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = homo_ops.eval_fast_rotate(NODE{}, {}, {}, {}, {}, cryptoContext) #out: limb={}, noise={}, in0: limb={}, noise={}".format(
+                "NODE{} = homo_ops.eval_fast_rotate(NODE{}, {}, {}, {}, {}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     digits_node_id,
                     cipher_node_name,
@@ -149,14 +156,16 @@ def compilerFrontend(func):
                     need_moddown,
                     res.cur_limbs,
                     res.noise_deg,
+                    res.scaling_factor,
                     digits.cur_limbs,
                     digits.noise_deg,
+                    digits.scaling_factor,
                 )
                 + (
                     ""
                     if cipher is None
-                    else "in1: limb={}, noise={}".format(
-                        cipher.cur_limbs, cipher.noise_deg
+                    else "in1: limb={}, noise={}, sf={}".format(
+                        cipher.cur_limbs, cipher.noise_deg, cipher.scaling_factor
                     )
                 )
             )
@@ -177,15 +186,17 @@ def compilerFrontend(func):
             res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = homo_ops.extract_cv(NODE{}, {}{}) #out: limb={}, noise={}, in0: limb={}, noise={}".format(
+                "NODE{} = homo_ops.extract_cv(NODE{}, {}{}) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     in0_node_id,
                     index,
                     append_zeros,
                     res.cur_limbs,
                     res.noise_deg,
+                    res.scaling_factor,
                     in0.cur_limbs,
                     in0.noise_deg,
+                    in0.scaling_factor,
                 )
             )
 
@@ -207,19 +218,23 @@ def compilerFrontend(func):
             out1.cipher_id = out1_node_id
             out2.cipher_id = out2_node_id
             print(
-                "NODE{}, NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext) #out0: limb={}, noise={}, #out1: limb={}, noise={}, in0: limb={}, noise={}, in1: limb={}, noise={}".format(
+                "NODE{}, NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext) #out0: limb={}, noise={}, sf={}, #out1: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}, in1: limb={}, noise={}, sf={}".format(
                     out1_node_id,
                     out2_node_id,
                     ct1_node_id,
                     ct2_node_id,
                     out1.cur_limbs,
                     out1.noise_deg,
+                    out1.scaling_factor,
                     out2.cur_limbs,
                     out2.noise_deg,
+                    out2.scaling_factor,
                     ct1.cur_limbs,
                     ct1.noise_deg,
+                    ct1.scaling_factor,
                     ct2.cur_limbs,
                     ct2.noise_deg,
+                    ct2.scaling_factor,
                 )
             )
 
@@ -243,24 +258,26 @@ def compilerFrontend(func):
             for i in range(len(m_U0hatTPreFFT)):
                 for j in range(len(m_U0hatTPreFFT[i])):
                     print(
-                        "NODE{} = cryptoContext.BsContext.m_U0hatTPreFFT[{}][{}] # limb={}, noise={}".format(
+                        "NODE{} = cryptoContext.BsContext.m_U0hatTPreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
                             m_U0hatTPreFFT[i][j].cipher_id,
                             i,
                             j,
                             m_U0hatTPreFFT[i][j].cur_limbs,
                             m_U0hatTPreFFT[i][j].noise_deg,
+                            m_U0hatTPreFFT[i][j].scaling_factor,
                         )
                     )
 
             for i in range(len(m_U0PreFFT)):
                 for j in range(len(m_U0PreFFT[i])):
                     print(
-                        "NODE{} = cryptoContext.BsContext.m_U0PreFFT[{}][{}] # limb={}, noise={}".format(
+                        "NODE{} = cryptoContext.BsContext.m_U0PreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
                             m_U0PreFFT[i][j].cipher_id,
                             i,
                             j,
                             m_U0PreFFT[i][j].cur_limbs,
                             m_U0PreFFT[i][j].noise_deg,
+                            m_U0PreFFT[i][j].scaling_factor,
                         )
                     )
 

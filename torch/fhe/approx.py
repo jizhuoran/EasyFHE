@@ -359,7 +359,6 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         if i & 1 == 1:  # i is odd
             tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
         else:
-            # tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
