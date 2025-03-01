@@ -189,8 +189,8 @@ def fixed_adjust_to(
                 cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
         elif cipher.noise_deg == 1 and target_noise_deg == 1:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
-            if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs, printInfo=False)
+            if cipher.cur_limbs > target_limbs + 1:
+                cipher = drop_last_elements_(cipher, cipher.cur_limbs - target_limbs - 1, printInfo=False)
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
