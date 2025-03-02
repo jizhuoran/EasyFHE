@@ -257,8 +257,8 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
 
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):
-    assert in0.noise_deg == 1 and in1.noise_deg == 1
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        assert in0.noise_deg == in1.noise_deg
         return _adjust_levels(in0, in1, cryptoContext)
     else:
         return adjust_levels_and_depth(in0, in1, cryptoContext, printInfo=False)
