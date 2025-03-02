@@ -906,3 +906,123 @@ def extract_cv(cipher: Cipher, index, append_zeros=False):
             return cipher.cipher_like([torch.zeros_like(cipher.cv[1]), cipher.cv[1]])
     else:
         return cipher.cipher_like([cipher.cv[index]])
+
+
+import numpy as np
+
+MAX_BITS_IN_WORD = 61
+MAX_64BIT_VALUE = (1 << 63) - (1 << 9) - 1 # openfhetodo: the var must be renamed
+
+
+def bit_reverse(vals):
+    size = len(vals)
+    vals = np.array(vals, dtype=np.complex128)  # 转为 numpy 复数数组
+    j = 0
+    for i in range(1, size):
+        bit = size >> 1
+        while j >= bit:
+            j -= bit
+            bit >>= 1
+        j += bit
+        if i < j:
+            vals[i], vals[j] = vals[j], vals[i]  # 交换复数
+    return vals
+
+
+def fft_special_inv(vals, M, rotGroup, ksiPows):
+    # # 检查是否已为给定的cyclotomic order预计算了旋转因子
+    # if cycl_order not in precomputed_values:
+    #     raise ValueError(f"DiscreteFourierTransform::Initialize() must be called for cyclOrder = {cycl_order}")
+
+    vals_size = len(vals)
+
+    # FFT特定的操作
+    len_size = vals_size
+    while len_size >= 1:
+        len_h = len_size >> 1
+        len_q = len_size << 2
+        gap = M // len_q  # 根据给定的m_M进行计算
+
+        for i in range(0, vals_size, len_size):
+            for j in range(len_h):
+                idx = (len_q - (rotGroup[j] % len_q)) * gap
+                u = vals[i + j] + vals[i + j + len_h]
+                v = vals[i + j] - vals[i + j + len_h]
+                v *= ksiPows[idx]  # 乘以预先计算的旋转因子
+                vals[i + j] = u
+                vals[i + j + len_h] = v
+        len_size >>= 1
+
+    vals = bit_reverse(vals)
+
+    for i in range(vals_size):
+        vals[i] /= vals_size
+    return vals
+
+
+def ptx_encode_cuda(x, slots, type_flag, scaling_factor, cur_limbs, noise_scale_deg, use_gpu_fft, cryptocontext):
+        inverse = x
+        pt_encode = []
+
+        if slots < len(inverse):
+            raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
+        # Clears all imaginary values as CKKS for complex numbers
+        inverse = np.array([complex(v.real, 0.0) for v in inverse])
+
+        # Resize the inverse to fit the slot size.
+        # note that default: slots value should be greater than size of input data list x
+        inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
+        if type_flag == 'IsDCRTPoly':
+            if not use_gpu_fft:
+                inverse = fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup.cpu().numpy(), cryptocontext.encode_params_ksiPows)
+
+            #move precompute&inverse to cuda
+            inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
+            inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
+
+            pt_encode = torch.encode(cryptocontext.encode_out,
+                                     inverse_real=inverse_real,
+                                     inverse_imag=inverse_imag,
+                                     temp=cryptocontext.encode_temp,
+                                     primes=cryptocontext.primes,
+                                     precompute_rotgroups=cryptocontext.encode_params_rotGroup,
+                                     precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
+                                     precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
+                                     M=cryptocontext.M,
+                                     N=cryptocontext.N,
+                                     cur_limbs=cur_limbs,
+                                     slots=slots,
+                                     noise_scale_deg = noise_scale_deg,
+                                     scaling_factor=scaling_factor,
+                                     power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+                                     power_of_roots=cryptocontext.power_of_roots,
+                                     use_fft=use_gpu_fft)
+        else:
+            print("Only DCRTPoly is supported for CKKS.")
+        return pt_encode
+
+
+def encode(x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None):
+        if cryptoContext is None:
+            raise ValueError("Error: cryptoContext is not set.")
+        if not ((scale_deg is None and level is None and slots is None) or
+                (scale_deg is not None and level is not None and slots is not None)):
+            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+
+        slots = cryptoContext.Nh if slots is None else slots # note: default slots is N/2, which is Nh
+        scale_deg = 1 if scale_deg is None else scale_deg
+        cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
+        if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" :
+            scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
+            # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
+            # in our encoding function, so we set it to 1 to make sure it
+            # has no effect on the encoding.
+            scale_deg = 1
+        else:
+            scFact = cryptoContext.GetScalingFactorReal(cur_limb)
+
+        encoded_vector_dcrt_elements_cuda = (
+            ptx_encode_cuda(x, slots, 'IsDCRTPoly', scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext))
+
+        mv = [encoded_vector_dcrt_elements_cuda]
+        return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)

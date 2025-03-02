@@ -6,6 +6,10 @@ from torch.fhe.bootstrapping import eval_bootstrap
 import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
+from termcolor import colored
+
+def print_failed(message):
+    print(colored(message, "red"))
 
 def app_without_bs_example_debug(
         maxLevelsRemaining=5,
@@ -32,7 +36,7 @@ def app_without_bs_example_debug(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
 
     # do the application computation
     utils.load_rotation_keys("app", cryptoContext)
@@ -51,7 +55,7 @@ def app_without_bs_example_debug(
         if is_euqal:
             print("homo_rotate: Test passed!")
         else:
-            print("homo_rotate: Test failed!")
+            print_failed("homo_rotate: Test failed!")
 
 def app_example_debug(
         maxLevelsRemaining=3,
@@ -78,7 +82,7 @@ def app_example_debug(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
 
     # do the application computation
     utils.load_rotation_keys("app", cryptoContext)
@@ -93,31 +97,36 @@ def app_example_debug(
         if is_euqal:
             print("homo_rotate: Test passed!")
         else:
-            print("homo_rotate: Test failed!")
+            print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
     utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
     if mode == "debug":
         cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+        openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
         is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
         if is_euqal:
             print("BootstrapTest_logBsSlots11: Test passed!")
         else:
-            print("BootstrapTest_logBsSlots11: Test failed!")
+            print_failed("BootstrapTest_logBsSlots11: Test failed!")
+    
     # do some multiplication to consume some limbs
     result.slots =  (1 << 12) # This assignment is for testing purposes only
     drop_limbs = result.cur_limbs - 3
     for i in range(drop_limbs):
         result = homo_ops.homo_mul(result, result, cryptoContext)
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
     utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     # compute golden answer
@@ -125,16 +134,18 @@ def app_example_debug(
         # do some multiplication to consume some limbs
         for i in range(drop_limbs):
             openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
+            openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
 
         openfhe_boot.SetSlots((1 << logBsSlots_list[1])) # to cheat openfhe boot with bs_slots = (1<<logBsSlots_list[1])
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[1])]
         openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
+        openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
 
         is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
         if is_euqal:
             print("BootstrapTest_logBsSlots12: Test passed!")
         else:
-            print("BootstrapTest_logBsSlots12: Test failed!")
+            print_failed("BootstrapTest_logBsSlots12: Test failed!")
 
 
 def app_example_release(
@@ -163,12 +174,12 @@ def app_example_release(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
 
     values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
     x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
     x1 = torch.tensor(x1, device="cuda")
-    cipher1, cipher1_openfhe = openfhe_context.encrypt(x1, 1, 0, encode_slots)
+    cipher1 = openfhe_context.encrypt(x1, 1, 0, encode_slots, mode)
 
     # do the application computation
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
@@ -177,6 +188,7 @@ def app_example_release(
 
     # bootstrapping
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -191,9 +203,11 @@ def app_example_release(
         approx_plain_val = approx_plain_val * values1[0]
         # print(approx_plain_val)
         result = homo_ops.homo_mul(result, cipher1, cryptoContext)
-    
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
+
     # bootstrapping
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -207,7 +221,7 @@ def app_example_release(
     if is_equal:
         print("app: Test passed!")
     else:
-        print("app: Test failed!")
+        print_failed("app: Test failed! The code verifies if the first 10 elements of clear_result and approx_plain_val are approximately equal, allowing a maximum difference of 0.01 (1e-2). Please review the results.")
 
 
 def encode_test_case(
@@ -234,7 +248,7 @@ def encode_test_case(
                                autoLoadAndSetConfig=False, mode=mode))
 
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
-    plaintext        = openfhe_context.encode_gpu(cryptoContext, x, None, None, None, use_gpu_fft=False)
+    plaintext        = homo_ops.encode(x, None, None, None, use_gpu_fft=False, cryptoContext=cryptoContext)
     plaintext_golden = openfhe_context.encode(x)
 
     all_correct = True
@@ -261,14 +275,14 @@ def encode_test_case(
     if all_correct:
         print("encode with default values: Test passed!")
     else:
-        print("encode with default values: Test failed!")
+        print_failed("encode with default values: Test failed!")
 
     ############
     ## test 2 ##
     ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=False)
+    plaintext = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=False, cryptoContext=cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -295,7 +309,7 @@ def encode_test_case(
     if all_correct:
         print("encode with specify slots Test passed!")
     else:
-        print("encode with specify slots Test failed!")
+        print_failed("encode with specify slots Test failed!")
 
     ############
     ## test 3 ##
@@ -304,8 +318,8 @@ def encode_test_case(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    encoded = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=True)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
+    encoded = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -314,7 +328,7 @@ def encode_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt with gpu_fft Test passed!")
     else:
-        print("homo_add_pt with gpu_fft Test failed!")
+        print_failed("homo_add_pt with gpu_fft Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -342,7 +356,7 @@ def ct_pt_test_case(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
     encoded = openfhe_context.encode(values, 1, 0, encode_slots)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
@@ -352,7 +366,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt Test passed!")
     else:
-        print("homo_add_pt Test failed!")
+        print_failed("homo_add_pt Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -364,7 +378,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result,ground_truth):
         print("homo_mul_pt Test passed!")
     else:
-        print("homo_mul_pt Test failed!")
+        print_failed("homo_mul_pt Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
@@ -375,7 +389,7 @@ def ct_pt_test_case(
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt second Test passed!")
     else:
-        print("homo_add_pt second Test failed!")
+        print_failed("homo_add_pt second Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
