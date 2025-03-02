@@ -334,6 +334,20 @@ def draw_graph(graph):
     # Import the entire NetworkX graph (nodes and edges) into PyVis.
     net.from_nx(G)
 
+    def get_color(operation):
+        if operation in ['homo_add', 'homo_sub', 'key_switch_P_ext']:
+            return "green"
+        if operation in ['eval_fast_rotate', 'homo_rotate']:
+            return "blue"
+        if operation in ['homo_mul_pt', 'homo_mul', 'homo_mul_scalar_double', 'homo_square']:
+            return "red"
+        if operation in ['homo_rescale', 'homo_rescale_internal', 'adjust_levels_and_depth', 'modup_to_ext', 'moddown_from_ext']:
+            return "purple"
+        if operation in ['mod_raise', 'assignment', 'extract_cv']:
+            return "gray"
+        else:
+            return "orange"
+
     # Update each node with computed positions and add custom label info.
     for node in net.nodes:
         node_id = node["id"]
@@ -342,7 +356,9 @@ def draw_graph(graph):
         # You can choose to append to the existing label or overwrite it.
         # For instance, if the original label is just the node id:
         node["label"] = f"{node['label']}\n{custom_info}"
-        
+        # Assign a color based on the level, using the mapping, or a default value.
+        node["color"] = get_color(custom_info)
+
         # Set fixed positions so the physics engine doesn't change them.
         if node_id in pos:
             node["x"] = pos[node_id]["x"]
