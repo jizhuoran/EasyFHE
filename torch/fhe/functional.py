@@ -84,7 +84,7 @@ def cv_modup(
     return torch.modup(
         x,
         curr_limbs=curr_limbs,
-        level=context.L,
+        L=context.L,
         hat_inverse_vec=context.hat_inverse_vec_modup,
         hat_inverse_vec_shoup=context.hat_inverse_vec_shoup_modup,
         prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
@@ -94,8 +94,8 @@ def cv_modup(
         beta=beta,
         degree=context.N,
         alpha=context.alpha,
-        param_power_of_roots_shoup=context.power_of_roots_shoup,
-        param_power_of_roots=context.power_of_roots,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
     ).reshape(-1, context.N)
@@ -110,20 +110,20 @@ def cv_moddown(
     return torch.moddown(
         x,
         curr_limbs=curr_limbs,
-        level=context.L,
-        alpha=context.K, #fixme: rename the variable to "K" or sizeP for clarity
-        param_degree=context.N,
-        param_log_degree=context.logN,
+        L=context.L,
+        sizeP=context.K,
+        N=context.N,
+        logN=context.logN,
         hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
         hat_inverse_vec_shoup_moddown=context.hat_inverse_vec_shoup_moddown,
         prod_q_i_mod_q_j_moddown=context.prod_q_i_mod_q_j_moddown,
         prod_inv_moddown=context.prod_inv_moddown,
         prod_inv_shoup_moddown=context.prod_inv_shoup_moddown,
-        param_primes=context.primes,
-        param_barret_ratio=context.barret_ratio,
-        param_barret_k=context.barret_k,
-        param_power_of_roots_shoup=context.power_of_roots_shoup,
-        param_power_of_roots=context.power_of_roots,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
     ).reshape(-1, context.N)
@@ -206,43 +206,24 @@ def cv_innerproduct(
     curr_limbs: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
-    context: Context,
-    inplace: bool = False,
+    context: Context
 ) -> Tensor:
-    # print("curr_limbs", curr_limbs, "level", context.L, "shape", x.reshape(-1, context.N).shape)
     x.reshape(-1)
-    
-    if inplace:
-        res = torch.innerproduct_(
-            context.inner_out,
-            x,
-            bx=swk_bx,
-            ax=swk_ax,
-            curr_limbs=curr_limbs,
-            alpha= context.alpha,
-            level=context.L,
-            param_degree=context.N,
-            primes=context.primes,
-            barret_ratio=context.barret_ratio,
-            barret_k=context.barret_k,
-            workspace=context.inner_workspace,
-        )
-    else:
-        res = torch.innerproduct( 
-            context.inner_out,
-            x,
-            bx=swk_bx,
-            ax=swk_ax,
-            curr_limbs=curr_limbs,
-            alpha= context.alpha,
-            level=context.L,
-            param_degree=context.N,
-            primes=context.primes,
-            barret_ratio=context.barret_ratio,
-            barret_k=context.barret_k,
-            workspace=context.inner_workspace,
-        )
-    return res.reshape(2, -1, context.N)
+    res = torch.innerproduct(
+        context.inner_out,
+        x,
+        bx=swk_bx,
+        ax=swk_ax,
+        curr_limbs=curr_limbs,
+        alpha= context.alpha,
+        L=context.L,
+        N=context.N,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        workspace=context.inner_workspace,
+    )
+    return res.reshape(2, -1, context.N) #todo: check return type is tensor or list?
 
 
 def cv_keyswitch(
@@ -251,10 +232,7 @@ def cv_keyswitch(
     swk_bx: Tensor,
     swk_ax: Tensor,
     context: Context,
-    inplace: bool = False,
-) -> Tensor:
-    true_beta = int((cur_limbs + (context.alpha - 1)) / context.alpha) # todo: remove unused variables?
-    context.beta = true_beta #fixme: why set context.beta?
+) -> list:
     modup_res = cv_modup(
         input,
         curr_limbs=cur_limbs,
@@ -268,17 +246,15 @@ def cv_keyswitch(
         context
     )
 
-    sumMult_bx = inner_product[0] # todo: omit this shallow copy?
-    sumMult_ax = inner_product[1] # todo: omit this shallow copy?
 
     moddown_bx = cv_moddown(
-        sumMult_bx,
+        inner_product[0],
         curr_limbs=cur_limbs,
         context=context
     )
 
     moddown_ax = cv_moddown(
-        sumMult_ax,
+        inner_product[1],
         curr_limbs=cur_limbs,
         context=context
     )
@@ -299,13 +275,13 @@ def cv_drop_last_element_and_scale(
             input,
             curr_limbs=cur_limbs,
             l=l,
-            level=context.L,
-            param_degree=context.N,
-            param_primes=context.primes,
-            param_barret_ratio=context.barret_ratio,
-            param_barret_k=context.barret_k,
-            param_power_of_roots_shoup=context.power_of_roots_shoup,
-            param_power_of_roots=context.power_of_roots,
+            L=context.L,
+            N=context.N,
+            primes=context.primes,
+            barret_ratio=context.barret_ratio,
+            barret_k=context.barret_k,
+            power_of_roots_shoup=context.power_of_roots_shoup,
+            power_of_roots=context.power_of_roots,
             inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
             qlql_inv_mod_ql_div_ql_mod_q=context.qlql_inv_mod_ql_div_ql_mod_q,
@@ -319,13 +295,13 @@ def cv_drop_last_element_and_scale(
             input,
             curr_limbs=cur_limbs,
             l=l,
-            level=context.L,
-            param_degree=context.N,
-            param_primes=context.primes,
-            param_barret_ratio=context.barret_ratio,
-            param_barret_k=context.barret_k,
-            param_power_of_roots_shoup=context.power_of_roots_shoup,
-            param_power_of_roots=context.power_of_roots,
+            L=context.L,
+            N=context.N,
+            primes=context.primes,
+            barret_ratio=context.barret_ratio,
+            barret_k=context.barret_k,
+            power_of_roots_shoup=context.power_of_roots_shoup,
+            power_of_roots=context.power_of_roots,
             inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
             qlql_inv_mod_ql_div_ql_mod_q=context.qlql_inv_mod_ql_div_ql_mod_q,
@@ -385,36 +361,13 @@ def cv_automorphism_transform(
     input: Tensor,
     cur_limbs: int,
     i: int,
-    context: Context,
-    inplace: bool = False,
+    context: Context
 ) -> Tensor:
-    if i % 2 == 0:
-        return input if inplace else input.clone()
-    if inplace:
-        return torch.automorphism_transform_(
-            input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
-        )
-    else:
-        return torch.automorphism_transform(
-            input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
-        )
-
-
-def cv_switch_modulus_with_intt_ntt(input: Tensor, L0: int, context: Context) -> Tensor:
-    switch_modulus = torch.switch_modulus(
-        context.switch_modulus_out,
-        input,
-        primes=context.primes,
-        N=context.N,
-        L0=L0,
-        logN=context.logN,
-        level=context.L,
-        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-        param_power_of_roots_shoup=context.power_of_roots_shoup,
-        param_power_of_roots=context.power_of_roots,
+    if i < 0:
+        raise ValueError("i should be non-negative")
+    return torch.automorphism_transform(
+        input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
     )
-    return switch_modulus.reshape(-1, context.N)
 
 
 def cv_mul_by_monomial(
@@ -422,9 +375,8 @@ def cv_mul_by_monomial(
     l: int,
     monomialDeg: int,
     context: Context,
-    inplace: bool = False,
-) -> Tensor:
-    assert inplace == True and "monomial only supports inplace operation"
+) -> None:
+    # "monomial only supports inplace operation"
     torch.mul_by_monomial_(
         input,
         primes=context.primes,
@@ -432,9 +384,9 @@ def cv_mul_by_monomial(
         N=context.N,
         M=context.M,
         monomialDeg=monomialDeg,
-        level=context.L,
+        L=context.L,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-        param_power_of_roots_shoup=context.power_of_roots_shoup,
-        param_power_of_roots=context.power_of_roots,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
     )

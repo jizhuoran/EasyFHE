@@ -46,15 +46,15 @@ class BsContext:
     def __init__(
         self,
         N,
-        moduliQ,
-        moduliP,
+        moduliQ_scalar,
+        moduliP_scalar,
         q_mu,
         p_mu,
         correctionFactor,
         secretKeyDist,
-        BOOT_KEY
+        BOOT_CNST
     ):
-        K = len(moduliP)
+        K = len(moduliP_scalar)
         self.M = N * 2
         self.correctionFactor = correctionFactor
         self.m_U0hatTPre = None
@@ -64,14 +64,14 @@ class BsContext:
         self.paramsDec = None
         self.paramsEnc = None
 
-        self.m_U0hatTPreFFT_mx = BOOT_KEY["C2S"]
-        self.m_U0PreFFT_mx = BOOT_KEY["S2C"]
-        self.m_U0hatTPreFFT_dim = BOOT_KEY["C2S_dim"]
-        self.m_U0PreFFT_dim = BOOT_KEY["S2C_dim"]
-        self.m_U0hatTPreFFT_limbs = BOOT_KEY["C2S_limbs"]
-        self.m_U0PreFFT_limbs = BOOT_KEY["S2C_limbs"]
-        self.m_U0hatTPreFFT_scaling_factor = BOOT_KEY["U0hatTPreFFTScalingFactor"]
-        self.m_U0PreFFT_scaling_factor = BOOT_KEY["U0PreFFTScalingFactor"]
+        self.m_U0hatTPreFFT_mx = BOOT_CNST["C2S"]
+        self.m_U0PreFFT_mx = BOOT_CNST["S2C"]
+        self.m_U0hatTPreFFT_dim = BOOT_CNST["C2S_dim"]
+        self.m_U0PreFFT_dim = BOOT_CNST["S2C_dim"]
+        self.m_U0hatTPreFFT_limbs = BOOT_CNST["C2S_limbs"]
+        self.m_U0PreFFT_limbs = BOOT_CNST["S2C_limbs"]
+        self.m_U0hatTPreFFT_scaling_factor = BOOT_CNST["U0hatTPreFFTScalingFactor"]
+        self.m_U0PreFFT_scaling_factor = BOOT_CNST["U0PreFFTScalingFactor"]
 
         coefficientsSparse = np.array(
             [
@@ -198,9 +198,9 @@ class BsContext:
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
-        for cur_limbs in range(len(moduliQ)):
+        for cur_limbs in range(len(moduliQ_scalar)):
             self.QplusP_map[cur_limbs] = np.array(
-                np.concatenate((moduliQ[0:cur_limbs], moduliP[0:K])), dtype=np.uint64
+                np.concatenate((moduliQ_scalar[0:cur_limbs], moduliP_scalar[0:K])), dtype=np.uint64
             )
             self.QmuplusPmu_map[cur_limbs] = np.array(
                 np.concatenate((q_mu[0:cur_limbs], p_mu[:K])), dtype=np.uint64
@@ -279,12 +279,12 @@ class BsContext:
 
         for i in range(level_budget):
             if flag_rem == 1 and i == (level_budget - 1):
-                rot_in.append(np.zeros(num_rotations_rem + 1))
+                rot_in.append([0] * (num_rotations_rem + 1))
 
             else:
-                rot_in.append(np.zeros(num_rotations + 1))
+                rot_in.append([0] * (num_rotations + 1))
         for i in range(level_budget):
-            rot_out.append(np.zeros(b + b_rem))
+            rot_out.append([0] * (b + b_rem))
 
         for s in range(level_budget - flag_rem):
             for j in range(g):
@@ -316,10 +316,10 @@ class BsContext:
         self.S2C_rot_out = rot_out
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
-    def SelectLayers(self, logSlots, budget):
-        layers = math.ceil(logSlots / budget)
-        rows = logSlots // layers
-        rem = logSlots % layers
+    def SelectLayers(self, logBsSlots, budget):
+        layers = math.ceil(logBsSlots / budget)
+        rows = logBsSlots // layers
+        rem = logBsSlots % layers
 
         dim = rows
         if rem != 0:
@@ -328,8 +328,8 @@ class BsContext:
         # The above choice ensures dim <= budget
         if dim < budget:
             layers -= 1
-            rows = logSlots // layers
-            rem = logSlots - rows * layers
+            rows = logBsSlots // layers
+            rem = logBsSlots - rows * layers
             dim = rows
 
             if rem != 0:
@@ -338,7 +338,7 @@ class BsContext:
             # The above choice ensures dim >= budget
             while dim != budget:
                 rows -= 1
-                rem = logSlots - rows * layers
+                rem = logBsSlots - rows * layers
                 dim = rows
                 if rem != 0:
                     dim = rows + 1
@@ -482,6 +482,7 @@ class BsContext:
 
         RHScnt = 0
         cnt = 0
+        sizeP = context.K
         self.m_U0hatTPreFFT = [[0] * i for i in m_U0hatTPreFFT_dim2]
         for i in range(0, m_U0hatTPreFFT_dim1):
             j_len = m_U0hatTPreFFT_dim2[i]
@@ -496,7 +497,7 @@ class BsContext:
                 RHScnt += m_U0hatTPreFFT_len
                 self.m_U0hatTPreFFT[i][j] = Plaintext(
                     m_U0hatTPreFFT,
-                    limbs,
+                    limbs-sizeP,
                     self.m_U0hatTPreFFT_scaling_factor[cnt],
                     1,
                     mx_slots,
@@ -517,7 +518,7 @@ class BsContext:
                 RHScnt += m_U0PreFFT_len
                 self.m_U0PreFFT[i][j] = Plaintext(
                     m_U0PreFFT,
-                    limbs,
+                    limbs-sizeP,
                     self.m_U0PreFFT_scaling_factor[cnt],
                     1,
                     mx_slots,
