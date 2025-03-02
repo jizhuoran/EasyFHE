@@ -1,6 +1,7 @@
 import os, sys
 import numpy as np
 import pickle
+import torch.fhe as fhe
 
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 
@@ -187,10 +188,10 @@ def get_relu_depth(degree):
     raise ValueError("Set a valid degree for ReLU")
 
 
-def pre_encode(val, openfhe_context, level, scale_deg, slots):
-    encode_val = openfhe_context.encode(val, level, scale_deg, slots)
+def pre_encode(val, level, scale_deg, slots, cryptoContext):
+    encode_val = fhe.encode(val, scale_deg, level, slots, use_gpu_fft=False, cryptoContext=cryptoContext)
     assert isinstance(encode_val, Plaintext)
-    encode_val.mv = [encode_val.mv[0].cpu().numpy()]
+    encode_val.cv = [encode_val.cv[0].cpu().numpy()]
     return encode_val
 
 #glob file in weights
@@ -198,47 +199,29 @@ def pre_encode(val, openfhe_context, level, scale_deg, slots):
 def gen_pre_encode_file(cryptoContext, openfhe_context):
 
     if cryptoContext is None and openfhe_context is None:
-
-        logN = 17
-        logSlots_list = [12, 13, 14]
-        levelBudget_list = [[4, 4], [4, 4], [4, 4]]
-        dnum = 3
-        dcrtBits = 52
-        firstMod = 56
+        # generate context
         max_relu_degree = 59
-        secretKeyDist = "UNIFORM_TERNARY"
-        rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir = "/data/yhh/data/"
-
-
-            # generate context
-        approxModDepth = 9
         maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
         if max_relu_degree < 59:
             diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
             maxLevelsRemaining +=diff
-
-
         rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
                                 1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+        logBsSlots_list = [12, 13, 14]
+        logN = 17
+        dnum = 3
+        dcrtBits = 52
+        firstMod = 56
+        levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+        secretKeyDist = "UNIFORM_TERNARY"
+        rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir = "/data/yhh/data/"
         
-        cryptoContext, openfhe_context_dict = (
-            utils.try_load_context(logN,
-                                    logSlots_list,
-                                    maxLevelsRemaining,
-                                    levelBudget_list,
-                                    dnum,
-                                    dcrtBits,
-                                    firstMod,
-                                    approxModDepth,
-                                    rotate_index_list,
-                                    secretKeyDist,
-                                    rescaleTech,
-                                    save_dir=save_dir,
-                                    mode="release"))
+        cryptoContext, openfhe_context = (
+            utils.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                           levelBudget_list, secretKeyDist, rescaleTech, save_dir=save_dir,
+                           autoLoadAndSetConfig=True, mode="release"))
 
-
-        openfhe_context = openfhe_context_dict[str(14)]
         cryptoContext.weight_dir = "/data/yhh/data/"
 
 
@@ -274,7 +257,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_mod(n, cur_limbs, custom_val, slots, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_mod_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -291,7 +274,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_scecond_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -308,7 +291,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_first_n(n, cur_limbs, slots, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -326,7 +309,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_from_to(from_, to, cur_limbs, slots, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -343,7 +326,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = gen_mask(n, cur_limbs, slots, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "gen_mask_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -362,7 +345,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
             # if key in encode_val:
                 # print("Already encoded")
@@ -381,7 +364,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
             # if key in encode_val:
                 # print("Already encoded")
@@ -398,7 +381,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_channel(n, cur_limbs, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -415,7 +398,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             val = mask_channel2(n, cur_limbs, cryptoContext, openfhe_context)
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, slots)
             # if key in encode_val:
                 # print("Already encoded")
@@ -438,7 +421,7 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
             level = int(encode_command.split(" ")[2])
             scale_deg = int(encode_command.split(" ")[4])
             slots = int(encode_command.split(" ")[-1])
-            encoded = pre_encode(val, openfhe_context, level, scale_deg, slots)
+            encoded = pre_encode(val, level, scale_deg, slots, cryptoContext)
             encode_val[command.split(" ")[1]+"_{}_{}_{}".format(level, scale_deg, slots)] = encoded
         
         else:
@@ -449,14 +432,13 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
 
     encode_weight_path = (
         cryptoContext.weight_dir
-        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/ENCODE-VAL_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             logN,
-            '-'.join(map(str, logSlots_list)),
+            '-'.join(map(str, logBsSlots_list)),
             maxLevelsRemaining,
             '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
             dcrtBits,
             firstMod,
-            approxModDepth,
             secretKeyDist,
             rescaleTech,
         )
@@ -472,9 +454,9 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
     # if weight_file.endswith(".bin") and "GPU-FHE-CONTEXT" in weight_file:
     #     print("Testing", weight_file)
     #     weight_file = weight_file.replace("_UNIFORM_TERNARY_", "_")
-    #     logN, logSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = weight_file[:-4].split("_")[1:]
+    #     logN, logBsSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = weight_file[:-4].split("_")[1:]
     #     try:
-    #         logSlots_list = [int(logSlots) for logSlots in logSlots_str.split("-")]
+    #         logBsSlots_list = [int(logBsSlots) for logBsSlots in logBsSlots_str.split("-")]
     #         levelBudgets_list = []
     #         for levelBudgets in range(len(levelBudgets_str.split("-")) // 2):
     #             levelBudgets_list.append([int(levelBudgets_str.split("-")[2 * levelBudgets]), int(levelBudgets_str.split("-")[2 * levelBudgets + 1])])
