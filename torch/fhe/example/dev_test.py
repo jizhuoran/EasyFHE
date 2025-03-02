@@ -382,14 +382,26 @@ def ct_pt_test_case(
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
-    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    result = homo_ops.homo_add_pt(result, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
-    ground_truth = np.array(values) + np.array(values)
+    ground_truth = np.array(ground_truth) + np.array(values)
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt second Test passed!")
     else:
         print_failed("homo_add_pt second Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
+    
+    result = homo_ops.homo_mul_pt(result, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(ground_truth) * np.array(values)
+    if np.allclose(clear_result, ground_truth):
+        print("homo_mul_pt second Test passed!")
+    else:
+        print_failed("homo_mul_pt second Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
