@@ -15956,17 +15956,8 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor self, *, Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
+- func: encode(Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
 
-- func: encode_(Tensor(a!) self, *, Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_cuda_
-
-- func: encode.out(Tensor self, *, Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_cuda_out

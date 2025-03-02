@@ -22,7 +22,7 @@
 
 namespace fhe {
 
-__device__ DTYPE2
+__device__ __forceinline__ DTYPE2
 complex_mul(DTYPE a_real, DTYPE a_imag, DTYPE b_real, DTYPE b_imag) {
   return MAKE_DTYPE2(
       a_real * b_real - a_imag * b_imag, a_real * b_imag + a_imag * b_real);
@@ -362,105 +362,99 @@ static void encode_template(
     const Tensor& power_of_roots,
     bool use_fft,
     Tensor& res) {
-  AT_DISPATCH_V2(
-      res.scalar_type(),
-      "encode_impl",
-      AT_WRAP([&]() {
-        int inverse_size = inverse_real.numel();
-        auto inverse_real_ptr =
-            reinterpret_cast<DTYPE*>(inverse_real.data_ptr<DTYPE>());
-        auto inverse_imag_ptr =
-            reinterpret_cast<DTYPE*>(inverse_imag.data_ptr<DTYPE>());
-        auto precompute_ksipows_real_ptr =
-            reinterpret_cast<DTYPE*>(precompute_ksipows_real.data_ptr<DTYPE>());
-        auto precompute_ksipows_imag_ptr =
-            reinterpret_cast<DTYPE*>(precompute_ksipows_imag.data_ptr<DTYPE>());
-        auto rotGroups = reinterpret_cast<int64_t*>(
-            precompute_rotgroups.data_ptr<int64_t>());
-        auto elements_ptr =
-            reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        if (use_fft) {
-          fft_special_inv_cuda(
-              inverse_real_ptr,
-              inverse_imag_ptr,
-              rotGroups,
-              precompute_ksipows_real_ptr,
-              precompute_ksipows_imag_ptr,
-              M,
-              inverse_size);
-        }
 
-        auto stream = at::cuda::getCurrentCUDAStream();
-        const int blockDim2 = 256;
-        const int gridDim2 = (inverse_size + blockDim2 - 1) / blockDim2;
-        auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
-        const int temp_size = 2 * slots;
-        int64_t* d_log_approx;
-        cudaMalloc(&d_log_approx, sizeof(int64_t));
-        fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
-            inverse_real_ptr,
-            inverse_imag_ptr,
-            slots,
-            scaling_factor,
-            temp_ptr,
-            d_log_approx);
+    int inverse_size = inverse_real.numel();
+    auto inverse_real_ptr =
+        reinterpret_cast<DTYPE*>(inverse_real.data_ptr<DTYPE>());
+    auto inverse_imag_ptr =
+        reinterpret_cast<DTYPE*>(inverse_imag.data_ptr<DTYPE>());
+    auto precompute_ksipows_real_ptr =
+        reinterpret_cast<DTYPE*>(precompute_ksipows_real.data_ptr<DTYPE>());
+    auto precompute_ksipows_imag_ptr =
+        reinterpret_cast<DTYPE*>(precompute_ksipows_imag.data_ptr<DTYPE>());
+    auto rotGroups = reinterpret_cast<int64_t*>(
+        precompute_rotgroups.data_ptr<int64_t>());
+    auto elements_ptr =
+        reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+    auto primes_ptr =
+        reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+    if (use_fft) {
+      fft_special_inv_cuda(
+          inverse_real_ptr,
+          inverse_imag_ptr,
+          rotGroups,
+          precompute_ksipows_real_ptr,
+          precompute_ksipows_imag_ptr,
+          M,
+          inverse_size);
+    }
 
-        int gap = N / temp_size;
-        fit_to_native_vector(
-            temp_ptr,
-            MAX_64BIT_VALUE,
-            elements_ptr,
-            primes_ptr,
-            temp_size,
-            gap,
-            cur_limbs,
-            N);
+    auto stream = at::cuda::getCurrentCUDAStream();
+    const int blockDim2 = 256;
+    const int gridDim2 = (inverse_size + blockDim2 - 1) / blockDim2;
+    auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
+    const int temp_size = 2 * slots;
+    int64_t* d_log_approx;
+    cudaMalloc(&d_log_approx, sizeof(int64_t));
+    fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
+        inverse_real_ptr,
+        inverse_imag_ptr,
+        slots,
+        scaling_factor,
+        temp_ptr,
+        d_log_approx);
 
-        int* h_log_approx = new int[1];
-        cudaMemcpy(
-            h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
-        int log_approx = h_log_approx[0];
-        std::vector<uint64_t> moduli(cur_limbs, 0);
-        cudaMemcpy(
-            moduli.data(),
-            primes_ptr,
-            sizeof(uint64_t) * cur_limbs,
-            cudaMemcpyDeviceToHost);
+    int gap = N / temp_size;
+    fit_to_native_vector(
+        temp_ptr,
+        MAX_64BIT_VALUE,
+        elements_ptr,
+        primes_ptr,
+        temp_size,
+        gap,
+        cur_limbs,
+        N);
 
-        if (noise_scale_deg > 1) {
-          scale_noise_degree_vector(
-              elements_ptr,
-              primes_ptr,
-              moduli,
-              cur_limbs,
-              N,
-              noise_scale_deg,
-              scaling_factor);
-        }
+    int* h_log_approx = new int[1];
+    cudaMemcpy(
+        h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
+    int log_approx = h_log_approx[0];
+    std::vector<uint64_t> moduli(cur_limbs, 0);
+    cudaMemcpy(
+        moduli.data(),
+        primes_ptr,
+        sizeof(uint64_t) * cur_limbs,
+        cudaMemcpyDeviceToHost);
 
-        if (log_approx > 0) {
-          scale_log_approx_vector(
-              elements_ptr, primes_ptr, moduli, log_approx, cur_limbs, N);
-        }
+    if (noise_scale_deg > 1) {
+      scale_noise_degree_vector(
+          elements_ptr,
+          primes_ptr,
+          moduli,
+          cur_limbs,
+          N,
+          noise_scale_deg,
+          scaling_factor);
+    }
 
-        NTT_impl(
-            elements_ptr,
-            elements_ptr,
-            cur_limbs,
-            N,
-            power_of_roots_shoup.data_ptr<uint64_t>(),
-            primes.data_ptr<uint64_t>(),
-            power_of_roots.data_ptr<uint64_t>());
+    if (log_approx > 0) {
+      scale_log_approx_vector(
+          elements_ptr, primes_ptr, moduli, log_approx, cur_limbs, N);
+    }
 
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
+    NTT_impl(
+        elements_ptr,
+        elements_ptr,
+        cur_limbs,
+        N,
+        power_of_roots_shoup.data_ptr<uint64_t>(),
+        primes.data_ptr<uint64_t>(),
+        power_of_roots.data_ptr<uint64_t>());
+
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 Tensor encode_cuda(
-    const Tensor& res,
     const Tensor& inverse_real,
     const Tensor& inverse_imag,
     const Tensor& temp,
@@ -479,88 +473,7 @@ Tensor encode_cuda(
     bool use_fft) {
   // Tensor out = at::empty_like(res);
   // out.resize_({cur_limbs, N});
-  Tensor out = at::zeros({cur_limbs, N}, res.options());
-  encode_template(
-      inverse_real,
-      inverse_imag,
-      temp,
-      primes,
-      precompute_rotgroups,
-      precompute_ksipows_real,
-      precompute_ksipows_imag,
-      M,
-      N,
-      cur_limbs,
-      slots,
-      noise_scale_deg,
-      scaling_factor,
-      power_of_roots_shoup,
-      power_of_roots,
-      use_fft,
-      out);
-  return out;
-}
-
-Tensor encode_cuda_(
-    Tensor& res,
-    const Tensor& inverse_real,
-    const Tensor& inverse_imag,
-    const Tensor& temp,
-    const Tensor& primes,
-    const Tensor& precompute_rotgroups,
-    const Tensor& precompute_ksipows_real,
-    const Tensor& precompute_ksipows_imag,
-    int64_t M,
-    int64_t N,
-    int64_t cur_limbs,
-    int64_t slots,
-    int64_t noise_scale_deg,
-    DTYPE scaling_factor,
-    const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots,
-    bool use_fft) {
-  res.resize_({cur_limbs, N});
-  encode_template(
-      inverse_real,
-      inverse_imag,
-      temp,
-      primes,
-      precompute_rotgroups,
-      precompute_ksipows_real,
-      precompute_ksipows_imag,
-      M,
-      N,
-      cur_limbs,
-      slots,
-      noise_scale_deg,
-      scaling_factor,
-      power_of_roots_shoup,
-      power_of_roots,
-      use_fft,
-      res);
-  return res;
-}
-
-Tensor encode_cuda_out(
-    const Tensor& res,
-    const Tensor& inverse_real,
-    const Tensor& inverse_imag,
-    const Tensor& temp,
-    const Tensor& primes,
-    const Tensor& precompute_rotgroups,
-    const Tensor& precompute_ksipows_real,
-    const Tensor& precompute_ksipows_imag,
-    int64_t M,
-    int64_t N,
-    int64_t cur_limbs,
-    int64_t slots,
-    int64_t noise_scale_deg,
-    DTYPE scaling_factor,
-    const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots,
-    bool use_fft,
-    Tensor& out) {
-  out.resize_({cur_limbs, N});
+  Tensor out = at::zeros({cur_limbs, N}, primes.options());
   encode_template(
       inverse_real,
       inverse_imag,
