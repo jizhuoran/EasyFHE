@@ -33,10 +33,15 @@ def drop_last_elements(ct, num_levels, inplace=False):
 def _adjust_levels(ct1, ct2, cryptoContext):
     ct1, ct2 = ct1.shallow_copy(), ct2.shallow_copy()
     if ct1.cur_limbs > ct2.cur_limbs:
-        ct1 = drop_last_elements(ct1, ct1.cur_limbs - ct2.cur_limbs, inplace=True, printInfo=False)
+        ct1 = drop_last_elements(
+            ct1, ct1.cur_limbs - ct2.cur_limbs, inplace=True, printInfo=False
+        )
     elif ct1.cur_limbs < ct2.cur_limbs:
-        ct2 = drop_last_elements(ct2, ct2.cur_limbs - ct1.cur_limbs, inplace=True, printInfo=False)
+        ct2 = drop_last_elements(
+            ct2, ct2.cur_limbs - ct1.cur_limbs, inplace=True, printInfo=False
+        )
     return ct1, ct2
+
 
 def flex_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
@@ -60,7 +65,12 @@ def flex_adjust_to(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
             if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
+                cipher = drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs,
+                    inplace=True,
+                    printInfo=False,
+                )
             cipher.scaling_factor = target_scaling_factor
             # so the output has noise_deg2, and the same cur_limb
         elif cipher.noise_deg == 1 and target_noise_deg == 1:
@@ -71,7 +81,12 @@ def flex_adjust_to(
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
             if cipher.cur_limbs > target_limbs + 1:
-                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False)
+                cipher = drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs - 1,
+                    inplace=True,
+                    printInfo=False,
+                )
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
@@ -80,7 +95,9 @@ def flex_adjust_to(
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
             if cipher.cur_limbs == target_limbs + 1:
-                homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
+                homo_rescale_internal(
+                    cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+                )
             else:
                 # otherwise, mul the higher with scale factor, rescale, drop, rescale.
                 # the last rescale is to make sure both has degree 1
@@ -96,7 +113,10 @@ def flex_adjust_to(
                 )
                 if cipher.cur_limbs > target_limbs + 1:
                     cipher = drop_last_elements(
-                        cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False
+                        cipher,
+                        cipher.cur_limbs - target_limbs - 1,
+                        inplace=True,
+                        printInfo=False,
                     )
                 cipher = homo_rescale_internal(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
@@ -109,7 +129,9 @@ def flex_adjust_to(
             scf2 = target_scaling_factor
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
-            cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
+            cipher = drop_last_elements(
+                cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False
+            )
             cipher.scaling_factor = scf2
         else:
             print("noise_deg", cipher.noise_deg, target_noise_deg)
@@ -117,6 +139,7 @@ def flex_adjust_to(
 
     # print("cipher", cipher.cur_limbs, cipher.noise_deg)
     return cipher
+
 
 def fixed_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
@@ -134,17 +157,29 @@ def fixed_adjust_to(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
             if cipher.cur_limbs > target_limbs:
-                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=False, printInfo=False)
+                cipher = drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs,
+                    inplace=False,
+                    printInfo=False,
+                )
         elif cipher.noise_deg == 1 and target_noise_deg == 1:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
             if cipher.cur_limbs > target_limbs + 1:
-                cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False)
+                cipher = drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs - 1,
+                    inplace=True,
+                    printInfo=False,
+                )
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             if cipher.cur_limbs == target_limbs + 1:
-                homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
+                homo_rescale_internal(
+                    cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
+                )
             else:
                 cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
                 cipher = homo_rescale_internal(
@@ -152,18 +187,24 @@ def fixed_adjust_to(
                 )
                 if cipher.cur_limbs > target_limbs + 1:
                     cipher = drop_last_elements(
-                        cipher, cipher.cur_limbs - target_limbs - 1, inplace=True, printInfo=False
+                        cipher,
+                        cipher.cur_limbs - target_limbs - 1,
+                        inplace=True,
+                        printInfo=False,
                     )
                 cipher = homo_rescale_internal(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
                 )
         elif cipher.noise_deg == 1 and target_noise_deg == 2:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
-            cipher = drop_last_elements(cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False)
+            cipher = drop_last_elements(
+                cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False
+            )
         else:
             print("noise_deg", cipher.noise_deg, target_noise_deg)
             raise ValueError
     return cipher
+
 
 # def flex_adjust_to(
 #     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
@@ -179,6 +220,7 @@ def fixed_adjust_to(
 #         res = cipher
 #     assert res.cur_limbs == target_limbs and res.noise_deg == target_noise_deg
 #     return res
+
 
 @frontend
 def adjust_levels_and_depth(ct1, ct2, cryptoContext):
@@ -215,66 +257,11 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
 
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):
-    rescaleTech = cryptoContext.rescaleTech
-    if rescaleTech == "FIXEDMANUAL":
-        # function `_adjust_levels` doesnt change memory, therefore its fine with a ciphertext morphed form plaintext
-        in0, in1 = _adjust_levels(in0, in1, cryptoContext)
-        if len(in0.cv) == len(in1.cv):
-            return in0, in1
-
-        scFactor = cryptoContext.GetScalingFactorReal(
-            cryptoContext.L
-        )  # openfhe default value is 0, here transfer to the max value of #limb
-        if scFactor == 0.0:
-            raise ValueError("Unsupported scaling factor")
-
-        if len(in0.cv) == 1:
-            ptxt = in0.cv[0]
-            ptxtDepth = in0.noise_deg
-            ctxtDepth = in1.noise_deg
-            sizeQl = in1.cur_limbs
-            moduli = cryptoContext.moduliQ_scalar[:sizeQl]
-            ptxtIndex = 0
-        elif len(in1.cv) == 1:
-            ptxt = in1.cv[0]
-            ptxtDepth = in1.noise_deg
-            ctxtDepth = in0.noise_deg
-            sizeQl = in0.cur_limbs
-            moduli = cryptoContext.moduliQ_scalar[:sizeQl]
-            ptxtIndex = 1
-
-        if len(in0.cv) == 1 or len(in1.cv) == 1:  # todo: this branch is not tested
-            # Bring to same depth if not already same
-            if ptxtDepth < ctxtDepth:
-                diffDepth = ctxtDepth - ptxtDepth
-                intSF = int(scFactor + 0.5)  # todo: to check if equivalent to openfhe
-                crtSF = torch.tensor(sizeQl * [intSF], dtype=torch.uint64)
-                crtPowSF = torch.clone(crtSF)
-                for i in range(diffDepth):
-                    crtPowSF = crt_mult(crtPowSF, crtSF, moduli)
-                ptxt = F.cv_mul_scalar(
-                    ptxt,
-                    crtPowSF.cuda(),
-                    cryptoContext.moduliQ,
-                    cryptoContext.q_mu,
-                    len(moduli),
-                )  # fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
-
-                if ptxtIndex == 0:
-                    in0.cv[0] = ptxt  # todo: check if correctly assigned
-                    in0.noise_deg = ctxtDepth
-                else:
-                    in1.cv[0] = ptxt  # todo: check if correctly assigned
-                    in1.noise_deg = ctxtDepth
-            elif ptxtDepth > ctxtDepth:
-                raise ValueError(
-                    "plaintext cannot be encoded at a larger depth than that of the ciphertext."
-                )
-
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        assert in0.noise_deg == in1.noise_deg
+        return _adjust_levels(in0, in1, cryptoContext)
     else:
-        in0, in1 = adjust_levels_and_depth(in0, in1, cryptoContext, printInfo=False)
-
-    return in0, in1
+        return adjust_levels_and_depth(in0, in1, cryptoContext, printInfo=False)
 
 
 def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
@@ -287,6 +274,7 @@ def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
             rct1 = homo_rescale_internal(
                 rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
+        if rct2.noise_deg == 2: #if rct1's noise_deg is 1, so is rct2
             rct2 = homo_rescale_internal(
                 rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
@@ -656,6 +644,7 @@ def homo_rescale(
     else:
         return ct.deep_copy()
 
+
 @frontend
 @call_counter
 def homo_rescale_internal(ct, levels, cryptoContext):
@@ -911,7 +900,7 @@ def extract_cv(cipher: Cipher, index, append_zeros=False):
 import numpy as np
 
 MAX_BITS_IN_WORD = 61
-MAX_64BIT_VALUE = (1 << 63) - (1 << 9) - 1 # openfhetodo: the var must be renamed
+MAX_64BIT_VALUE = (1 << 63) - (1 << 9) - 1  # openfhetodo: the var must be renamed
 
 
 def bit_reverse(vals):
@@ -960,69 +949,101 @@ def fft_special_inv(vals, M, rotGroup, ksiPows):
     return vals
 
 
-def ptx_encode_cuda(x, slots, type_flag, scaling_factor, cur_limbs, noise_scale_deg, use_gpu_fft, cryptocontext):
-        inverse = x
-        pt_encode = []
+def ptx_encode_cuda(
+    x,
+    slots,
+    type_flag,
+    scaling_factor,
+    cur_limbs,
+    noise_scale_deg,
+    use_gpu_fft,
+    cryptocontext,
+):
+    inverse = x
+    pt_encode = []
 
-        if slots < len(inverse):
-            raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
-        # Clears all imaginary values as CKKS for complex numbers
-        inverse = np.array([complex(v.real, 0.0) for v in inverse])
+    if slots < len(inverse):
+        raise ValueError(
+            f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]"
+        )
+    # Clears all imaginary values as CKKS for complex numbers
+    inverse = np.array([complex(v.real, 0.0) for v in inverse])
 
-        # Resize the inverse to fit the slot size.
-        # note that default: slots value should be greater than size of input data list x
-        inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
-        if type_flag == 'IsDCRTPoly':
-            if not use_gpu_fft:
-                inverse = fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup.cpu().numpy(), cryptocontext.encode_params_ksiPows)
+    # Resize the inverse to fit the slot size.
+    # note that default: slots value should be greater than size of input data list x
+    inverse = np.pad(
+        inverse,
+        pad_width=(0, slots - len(inverse)),
+        mode="constant",
+        constant_values=complex(0.0, 0.0),
+    )
+    if type_flag == "IsDCRTPoly":
+        if not use_gpu_fft:
+            inverse = fft_special_inv(
+                inverse,
+                cryptocontext.M,
+                cryptocontext.encode_params_rotGroup.cpu().numpy(),
+                cryptocontext.encode_params_ksiPows,
+            )
 
-            #move precompute&inverse to cuda
-            inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
-            inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
+        # move precompute&inverse to cuda
+        inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
+        inverse_imag = torch.tensor(inverse.imag.astype(np.double), device="cuda")
 
-            pt_encode = torch.encode(cryptocontext.encode_out,
-                                     inverse_real=inverse_real,
-                                     inverse_imag=inverse_imag,
-                                     temp=cryptocontext.encode_temp,
-                                     primes=cryptocontext.primes,
-                                     precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-                                     precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
-                                     precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
-                                     M=cryptocontext.M,
-                                     N=cryptocontext.N,
-                                     cur_limbs=cur_limbs,
-                                     slots=slots,
-                                     noise_scale_deg = noise_scale_deg,
-                                     scaling_factor=scaling_factor,
-                                     power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-                                     power_of_roots=cryptocontext.power_of_roots,
-                                     use_fft=use_gpu_fft)
-        else:
-            print("Only DCRTPoly is supported for CKKS.")
-        return pt_encode
+        pt_encode = torch.encode(
+            cryptocontext.encode_out,
+            inverse_real=inverse_real,
+            inverse_imag=inverse_imag,
+            temp=cryptocontext.encode_temp,
+            primes=cryptocontext.primes,
+            precompute_rotgroups=cryptocontext.encode_params_rotGroup,
+            precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
+            precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
+            M=cryptocontext.M,
+            N=cryptocontext.N,
+            cur_limbs=cur_limbs,
+            slots=slots,
+            noise_scale_deg=noise_scale_deg,
+            scaling_factor=scaling_factor,
+            power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+            power_of_roots=cryptocontext.power_of_roots,
+            use_fft=use_gpu_fft,
+        )
+    else:
+        print("Only DCRTPoly is supported for CKKS.")
+    return pt_encode
 
 
-def encode(x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None):
-        if cryptoContext is None:
-            raise ValueError("Error: cryptoContext is not set.")
-        if not ((scale_deg is None and level is None and slots is None) or
-                (scale_deg is not None and level is not None and slots is not None)):
-            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+def encode(
+    x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None
+):
+    if cryptoContext is None:
+        raise ValueError("Error: cryptoContext is not set.")
+    if not (
+        (scale_deg is None and level is None and slots is None)
+        or (scale_deg is not None and level is not None and slots is not None)
+    ):
+        raise ValueError(
+            "Error: check if scale_deg, level, and slots are set correctly."
+        )
 
-        slots = cryptoContext.Nh if slots is None else slots # note: default slots is N/2, which is Nh
-        scale_deg = 1 if scale_deg is None else scale_deg
-        cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
-        if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" :
-            scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
-            # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
-            # in our encoding function, so we set it to 1 to make sure it
-            # has no effect on the encoding.
-            scale_deg = 1
-        else:
-            scFact = cryptoContext.GetScalingFactorReal(cur_limb)
+    slots = (
+        cryptoContext.Nh if slots is None else slots
+    )  # note: default slots is N/2, which is Nh
+    scale_deg = 1 if scale_deg is None else scale_deg
+    cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+        scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
+        # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
+        # in our encoding function, so we set it to 1 to make sure it
+        # has no effect on the encoding.
+        scale_deg = 1
+    else:
+        scFact = cryptoContext.GetScalingFactorReal(cur_limb)
 
-        encoded_vector_dcrt_elements_cuda = (
-            ptx_encode_cuda(x, slots, 'IsDCRTPoly', scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext))
+    encoded_vector_dcrt_elements_cuda = ptx_encode_cuda(
+        x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext
+    )
 
-        mv = [encoded_vector_dcrt_elements_cuda]
-        return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+    mv = [encoded_vector_dcrt_elements_cuda]
+    return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)

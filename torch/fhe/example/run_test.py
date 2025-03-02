@@ -9,9 +9,9 @@ import torch.fhe.utils as utils
 import torch.fhe.compiler.bs_compilered as COMPILE
 
 
-maxLevelsRemaining = 3
-logBsSlots_list = [12]
-logN = 15
+maxLevelsRemaining = 9
+logBsSlots_list = [15]
+logN = 16
 dnum = 3
 dcrtBits = 59
 firstMod = 60
