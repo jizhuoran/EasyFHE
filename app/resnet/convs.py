@@ -1,5 +1,5 @@
-from torch.fhe import hoisting_keyswitch
-from torch.fhe.resnet.utils import *
+import torch.fhe as fhe
+from app.resnet.utils import *
 
 
 #     /**
@@ -17,7 +17,7 @@ def eval_add_many(ciphertexts, cryptoContext):
         raise ValueError("Input ciphertext vector size should be 1 or more")
     sum = ciphertexts[0].deep_copy()
     for i in range(1,inSize):
-        sum = homo_ops.homo_add(sum, ciphertexts[i], cryptoContext)
+        sum = fhe.homo_add(sum, ciphertexts[i], cryptoContext)
 
     return sum
 
@@ -39,7 +39,7 @@ def eval_add_many(ciphertexts, cryptoContext):
     #     if cur_limbs != ciphertexts[i].cur_limbs:
     #         raise ValueError("All ciphertexts should have the same cur_limbs")
     # for i in range(0, lim, 2):
-    #     ciphertextSumVec[ctrIndex] = homo_ops.homo_add(ciphertexts[i] if i < inSize else ciphertextSumVec[i - inSize],
+    #     ciphertextSumVec[ctrIndex] = fhe.homo_add(ciphertexts[i] if i < inSize else ciphertextSumVec[i - inSize],
     #                                           ciphertexts[i + 1] if i + 1 < inSize else ciphertextSumVec[i + 1 - inSize],
     #                                           cryptoContext)
     #     ctrIndex += 1
@@ -47,190 +47,185 @@ def eval_add_many(ciphertexts, cryptoContext):
     # return ciphertextSumVec[-1]
 
 
-def convbn_initial(input, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn_initial(input, scale, he_res20_ctx, cryptoContext):
     img_width=32
     padding=1
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),-img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), -img_width, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias=read_values_from_file(cryptoContext, "conv1bn1-bias", cryptoContext.L-input.cur_limbs, 1, 16384, scale)
 
     for j in range(16):
         k_rows=[]
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"conv1bn1-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,16384,scale)
-            k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+            k_rows.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
             # del encoded
 
         sum=eval_add_many(k_rows,cryptoContext)
         res=sum.deep_copy()
-        res=homo_ops.homo_add(res,homo_ops.homo_rotate(sum,1024,cryptoContext),cryptoContext)
-        res = homo_ops.homo_add(res, homo_ops.homo_rotate(homo_ops.homo_rotate(sum,1024,cryptoContext), 1024, cryptoContext), cryptoContext)
+        res=fhe.homo_add(res,fhe.homo_rotate(sum,1024,cryptoContext),cryptoContext)
+        res = fhe.homo_add(res, fhe.homo_rotate(fhe.homo_rotate(sum,1024,cryptoContext), 1024, cryptoContext), cryptoContext)
 
-        res=homo_ops.homo_mul_pt(res,mask_from_to(0,1024,res.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
+        res=fhe.homo_mul_pt(res, mask_from_to(0, 1024, res.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
 
         if j == 0:
             finalsum = res.deep_copy()
-            finalsum = homo_ops.homo_rotate(finalsum, 1024, cryptoContext)
+            finalsum = fhe.homo_rotate(finalsum, 1024, cryptoContext)
 
         else:
-            finalsum = homo_ops.homo_add(finalsum, res, cryptoContext)
-            finalsum = homo_ops.homo_rotate(finalsum, 1024, cryptoContext)
+            finalsum = fhe.homo_add(finalsum, res, cryptoContext)
+            finalsum = fhe.homo_rotate(finalsum, 1024, cryptoContext)
 
-    finalsum=homo_ops.homo_add_pt(finalsum,bias,cryptoContext)
+    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
 
     return finalsum
 
 
-def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext):
     img_width=32
     padding=1
 
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),-img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), -img_width, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)#这里旋转什么的都只需要对cv1吗？
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias = read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias",cryptoContext.L-input.cur_limbs,1,16384,scale)
 
     for j in range(16):
         k_rows=[]
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,16384,scale)
-            k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+            k_rows.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
             # del encoded
         sum=eval_add_many(k_rows,cryptoContext)
         if j==0:
             finalsum=sum.deep_copy()
-            finalsum=homo_ops.homo_rotate(finalsum,-1024,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-1024,cryptoContext)
         else:
-            finalsum=homo_ops.homo_add(finalsum,sum,cryptoContext)
-            finalsum=homo_ops.homo_rotate(finalsum,-1024,cryptoContext)
-    finalsum=homo_ops.homo_add_pt(finalsum,bias,cryptoContext)
+            finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-1024,cryptoContext)
+    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
 
     return finalsum
 
 
-def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext):
     img_width=16
     padding=1
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),-img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), -img_width, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias=read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias",cryptoContext.L-input.cur_limbs,1,8192,scale)
 
     for j in range(32):
         k_rows=[]
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,8192,scale)
-            k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+            k_rows.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
             # del encoded
 
         sum=eval_add_many(k_rows,cryptoContext)
         if j==0:
             finalsum=sum.deep_copy()
-            finalsum=homo_ops.homo_rotate(finalsum,-256,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-256,cryptoContext)
         else:
-            finalsum=homo_ops.homo_add(finalsum,sum,cryptoContext)
-            finalsum=homo_ops.homo_rotate(finalsum,-256,cryptoContext)
-    finalsum=homo_ops.homo_add_pt(finalsum,bias,cryptoContext)
+            finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-256,cryptoContext)
+    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
 
     return finalsum
 
 
-def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):
     img_width=8
     padding=1
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),-img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),-img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), -img_width, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)#这里旋转什么的都只需要对cv1吗？
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-padding,digits,cryptoContext),img_width,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, padding, digits, cryptoContext), img_width, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias",cryptoContext.L-input.cur_limbs,1,4096,scale)
 
     for j in range(64):
         k_rows=[]
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,4096,scale)
-            k_rows.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+            k_rows.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
             # del encoded
         sum=eval_add_many(k_rows,cryptoContext)
         if j==0:
             finalsum=sum.deep_copy()
-            finalsum=homo_ops.homo_rotate(finalsum,-64,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-64,cryptoContext)
         else:
-            finalsum=homo_ops.homo_add(finalsum,sum,cryptoContext)
-            finalsum=homo_ops.homo_rotate(finalsum,-64,cryptoContext)
+            finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-64,cryptoContext)
 
-    finalsum=homo_ops.homo_add_pt(finalsum,bias,cryptoContext)
+    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
     return finalsum
 
 
-def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
     img_width=32
     padding=1
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-(img_width),digits,cryptoContext),-padding,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext),-padding,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, -(img_width), digits, cryptoContext), padding, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext), padding, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input,padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,img_width,digits,cryptoContext),-padding,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext),-padding,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, img_width, digits, cryptoContext), padding, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext), padding, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias1=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1",cryptoContext.L-input.cur_limbs,1,16384,scale)
     bias2=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2",cryptoContext.L-input.cur_limbs,1,16384,scale)
 
@@ -240,10 +235,10 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
         k_rows1632 = []
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,16384,scale)
-            k_rows016.append(homo_ops.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+            k_rows016.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
             # del encoded
             encoded = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j+16}-k{k+1}", cryptoContext.L - input.cur_limbs,1, 16384, scale)
-            k_rows1632.append(homo_ops.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
+            k_rows1632.append(fhe.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
             # del encoded
 
         sum016  = eval_add_many(k_rows016,cryptoContext)
@@ -251,25 +246,22 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
 
         if j==0:
             finalsum016 = sum016.deep_copy()
-            finalsum016 = homo_ops.homo_rotate(finalsum016,-1024,cryptoContext)
+            finalsum016 = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
             finalsum1632 = sum1632.deep_copy()
-            finalsum1632 = homo_ops.homo_rotate(finalsum1632, -1024, cryptoContext)
+            finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
         else:
-            finalsum016 = homo_ops.homo_add(finalsum016,sum016,cryptoContext)
-            finalsum016 = homo_ops.homo_rotate(finalsum016,-1024,cryptoContext)
-            finalsum1632 = homo_ops.homo_add(finalsum1632, sum1632, cryptoContext)
-            finalsum1632 = homo_ops.homo_rotate(finalsum1632, -1024, cryptoContext)
+            finalsum016 = fhe.homo_add(finalsum016,sum016,cryptoContext)
+            finalsum016 = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
+            finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
+            finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
 
-    finalsum016 =homo_ops.homo_add_pt(finalsum016,bias1,cryptoContext)
-    finalsum1632=homo_ops.homo_add_pt(finalsum1632,bias2,cryptoContext)
+    finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
+    finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
 
     return finalsum016, finalsum1632
 
 
-def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
-
-
+def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext):
     bias1 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias1", cryptoContext.L - input.cur_limbs,1, 16384, scale)
     bias2 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias2", cryptoContext.L - input.cur_limbs,1, 16384, scale)
 
@@ -279,11 +271,11 @@ def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
 
         encoded = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-ch{j}-k1", cryptoContext.L - input.cur_limbs,1,
                                                                     he_res20_ctx.cur_num_slots, scale)
-        k_rows016.append(homo_ops.homo_mul_pt(input, encoded, cryptoContext))
+        k_rows016.append(fhe.homo_mul_pt(input, encoded, cryptoContext))
         # del encoded
         encoded = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-ch{j+16}-k1", cryptoContext.L - input.cur_limbs,1,
                                                                     he_res20_ctx.cur_num_slots, scale)
-        k_rows1632.append(homo_ops.homo_mul_pt(input,  encoded, cryptoContext))
+        k_rows1632.append(fhe.homo_mul_pt(input,  encoded, cryptoContext))
         # del encoded
 
         sum016  = eval_add_many(k_rows016,cryptoContext)
@@ -291,40 +283,39 @@ def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext, openfhe_co
 
         if(j==0):
             finalsum016  = sum016.deep_copy()
-            finalsum016  = homo_ops.homo_rotate(finalsum016,-1024,cryptoContext)
+            finalsum016  = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
             finalsum1632 = sum1632.deep_copy()
-            finalsum1632 = homo_ops.homo_rotate(finalsum1632, -1024, cryptoContext)
+            finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
         else:
-            finalsum016  = homo_ops.homo_add(finalsum016,sum016,cryptoContext)
-            finalsum016  = homo_ops.homo_rotate(finalsum016,-1024,cryptoContext)
-            finalsum1632 = homo_ops.homo_add(finalsum1632, sum1632, cryptoContext)
-            finalsum1632 = homo_ops.homo_rotate(finalsum1632, -1024, cryptoContext)
+            finalsum016  = fhe.homo_add(finalsum016,sum016,cryptoContext)
+            finalsum016  = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
+            finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
+            finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
 
-    finalsum016 =homo_ops.homo_add_pt(finalsum016,bias1,cryptoContext)
-    finalsum1632=homo_ops.homo_add_pt(finalsum1632,bias2,cryptoContext)
+    finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
+    finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
 
     return finalsum016, finalsum1632
 
 
-def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
     img_width=16
     padding=1
-    digits=hoisting_keyswitch.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,-(img_width),digits,cryptoContext),-padding,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,-img_width,digits,cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext),-padding,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, -(img_width), digits, cryptoContext), padding, cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input, -padding, digits, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext), padding, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
     c_rotations.append(input)
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation(input,padding, digits, cryptoContext))
-    c_rotations.append(homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input,img_width,digits,cryptoContext),-padding,cryptoContext))
-    c_rotations.append(hoisting_keyswitch.eval_fast_rotation( input,img_width,digits,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext),-padding,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
     c_rotations.append(
-        homo_ops.homo_rotate(hoisting_keyswitch.eval_fast_rotation(input, img_width, digits, cryptoContext), padding, cryptoContext))
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext), padding, cryptoContext))
 
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
     bias1 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     bias2 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     for j in range(32):
@@ -333,12 +324,12 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
         for k in range(9):
             encoded = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}", cryptoContext.L - input.cur_limbs, 1,
                                                                          8192, scale)
-            k_rows032.append(homo_ops.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
+            k_rows032.append(fhe.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
             # del encoded
 
             encoded = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j+32}-k{k+1}", cryptoContext.L - input.cur_limbs, 1,
                                                                         8192, scale)
-            k_rows3264.append(homo_ops.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
+            k_rows3264.append(fhe.homo_mul_pt(c_rotations[k], encoded, cryptoContext))
             # del encoded
 
 
@@ -347,23 +338,22 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
 
         if j==0:
             finalsum032=sum032.deep_copy()
-            finalsum032=homo_ops.homo_rotate(finalsum032,-256,cryptoContext)
+            finalsum032=fhe.homo_rotate(finalsum032,-256,cryptoContext)
             finalsum3264 = sum3264.deep_copy()
-            finalsum3264 = homo_ops.homo_rotate(finalsum3264, -256, cryptoContext)
+            finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
         else:
-            finalsum032=homo_ops.homo_add(finalsum032,sum032,cryptoContext)
-            finalsum032=homo_ops.homo_rotate(finalsum032,-256,cryptoContext)
-            finalsum3264 = homo_ops.homo_add(finalsum3264, sum3264, cryptoContext)
-            finalsum3264 = homo_ops.homo_rotate(finalsum3264, -256, cryptoContext)
+            finalsum032=fhe.homo_add(finalsum032,sum032,cryptoContext)
+            finalsum032=fhe.homo_rotate(finalsum032,-256,cryptoContext)
+            finalsum3264 = fhe.homo_add(finalsum3264, sum3264, cryptoContext)
+            finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
 
-    finalsum032=homo_ops.homo_add_pt(finalsum032,bias1,cryptoContext)
-    finalsum3264=homo_ops.homo_add_pt(finalsum3264,bias2,cryptoContext)
+    finalsum032=fhe.homo_add_pt(finalsum032,bias1,cryptoContext)
+    finalsum3264=fhe.homo_add_pt(finalsum3264,bias2,cryptoContext)
 
     return finalsum032, finalsum3264
 
 
-def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_context_dict):
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
+def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext):
     bias1 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias1", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     bias2 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias2", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     for j in range(32):
@@ -372,12 +362,12 @@ def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
 
         encoded = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-ch{j}-k1", cryptoContext.L - input.cur_limbs, 1,
                                                                          8192, scale)
-        k_rows032.append(homo_ops.homo_mul_pt(input, encoded, cryptoContext))
+        k_rows032.append(fhe.homo_mul_pt(input, encoded, cryptoContext))
         # del encoded
 
         encoded = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-ch{j+32}-k1", cryptoContext.L - input.cur_limbs, 1,
                                                                           8192, scale)
-        k_rows3264.append(homo_ops.homo_mul_pt(input, encoded, cryptoContext))
+        k_rows3264.append(fhe.homo_mul_pt(input, encoded, cryptoContext))
         # del encoded
 
         sum032=eval_add_many(k_rows032,cryptoContext)
@@ -385,115 +375,113 @@ def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext, openfhe_conte
 
         if(j==0):
             finalsum032=sum032.deep_copy()
-            finalsum032=homo_ops.homo_rotate(finalsum032,-256,cryptoContext)
+            finalsum032=fhe.homo_rotate(finalsum032,-256,cryptoContext)
             finalsum3264 = sum3264.deep_copy()
-            finalsum3264 = homo_ops.homo_rotate(finalsum3264, -256, cryptoContext)
+            finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
         else:
-            finalsum032=homo_ops.homo_add(finalsum032,sum032,cryptoContext)
-            finalsum032=homo_ops.homo_rotate(finalsum032,-256,cryptoContext)
-            finalsum3264 = homo_ops.homo_add(finalsum3264, sum3264, cryptoContext)
-            finalsum3264 = homo_ops.homo_rotate(finalsum3264, -256, cryptoContext)
+            finalsum032=fhe.homo_add(finalsum032,sum032,cryptoContext)
+            finalsum032=fhe.homo_rotate(finalsum032,-256,cryptoContext)
+            finalsum3264 = fhe.homo_add(finalsum3264, sum3264, cryptoContext)
+            finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
 
-    finalsum032=homo_ops.homo_add_pt(finalsum032,bias1,cryptoContext)
-    finalsum3264=homo_ops.homo_add_pt(finalsum3264,bias2,cryptoContext)
+    finalsum032=fhe.homo_add_pt(finalsum032,bias1,cryptoContext)
+    finalsum3264=fhe.homo_add_pt(finalsum3264,bias2,cryptoContext)
 
     return finalsum032, finalsum3264
 
 
-def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
 
     c1.slots=32768
     c2.slots=32768
     he_res20_ctx.cur_num_slots = 16384 * 2
-    openfhe_context = openfhe_context_dict[str(14)] #todo: check, 14 is filled in randomly
-    fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,mask_first_n(  16384, c1.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),
-                               homo_ops.homo_mul_pt(c2,mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),cryptoContext)
+    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1, mask_first_n(16384, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+                          fhe.homo_mul_pt(c2, mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
 
-    fullpack=homo_ops.homo_mul_pt(homo_ops.homo_add(fullpack,
-                                                    homo_ops.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
-                                  gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),
-                                  cryptoContext)
-    fullpack = homo_ops.homo_mul_pt(homo_ops.homo_add(fullpack,
-                                                      homo_ops.homo_rotate(
-                                                          homo_ops.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
-                                    gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context), cryptoContext)
-    fullpack=homo_ops.homo_mul_pt(homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,4,cryptoContext),cryptoContext),
-                                  gen_mask(8,fullpack.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
-    fullpack=homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,8,cryptoContext),cryptoContext)
+    fullpack=fhe.homo_mul_pt(fhe.homo_add(fullpack,
+                                                    fhe.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
+                             gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
+                             cryptoContext)
+    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
+                                                      fhe.homo_rotate(
+                                                          fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
+                               gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack=fhe.homo_mul_pt(fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext),
+                             gen_mask(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack=fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,8,cryptoContext),cryptoContext)
 
     # zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows = cryptoContext.zero_32K #,_=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    downsampledrows = cryptoContext.zero_32K # =openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
     for i in range(16):
-        masked=homo_ops.homo_mul_pt(fullpack,
-                                    mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
-        downsampledrows=homo_ops.homo_add(downsampledrows,masked,cryptoContext)
+        masked=fhe.homo_mul_pt(fullpack,
+                               mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
+        downsampledrows=fhe.homo_add(downsampledrows,masked,cryptoContext)
         if i<15:
-            fullpack=homo_ops.homo_rotate(fullpack,64-16,cryptoContext)
+            fullpack=fhe.homo_rotate(fullpack,64-16,cryptoContext)
 
 
     # zeros=[0]*he_res20_ctx.cur_num_slots
-    downsampledchannels = cryptoContext.zero_32K #,_=openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    downsampledchannels = cryptoContext.zero_32K # =openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
     for i in range(32):
-        masked=homo_ops.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
-        downsampledchannels=homo_ops.homo_add(downsampledchannels,masked,cryptoContext)
-        downsampledchannels=homo_ops.homo_rotate(downsampledchannels,-(1024-256),cryptoContext)
+        masked=fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
+        downsampledchannels=fhe.homo_add(downsampledchannels,masked,cryptoContext)
+        downsampledchannels=fhe.homo_rotate(downsampledchannels,-(1024-256),cryptoContext)
 
-    downsampledchannels=homo_ops.homo_rotate(downsampledchannels,(1024-256)*32,cryptoContext)
-    downsampledchannels=homo_ops.homo_add(downsampledchannels,homo_ops.homo_rotate(downsampledchannels,-8192,cryptoContext),cryptoContext)
-    downsampledchannels = homo_ops.homo_add(downsampledchannels,
-                                            homo_ops.homo_rotate(
-                                                homo_ops.homo_rotate(downsampledchannels,-8192,cryptoContext), -8192, cryptoContext),
+    downsampledchannels=fhe.homo_rotate(downsampledchannels,(1024-256)*32,cryptoContext)
+    downsampledchannels=fhe.homo_add(downsampledchannels,fhe.homo_rotate(downsampledchannels,-8192,cryptoContext),cryptoContext)
+    downsampledchannels = fhe.homo_add(downsampledchannels,
+                                            fhe.homo_rotate(
+                                                fhe.homo_rotate(downsampledchannels,-8192,cryptoContext), -8192, cryptoContext),
                                             cryptoContext)
     downsampledchannels.slots=8192
 
     return downsampledchannels
 
 
-def downsample256to64(c1, c2, he_res20_ctx, cryptoContext, openfhe_context_dict):
+def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
 
     c1.slots=16384
     c2.slots=16384
     he_res20_ctx.cur_num_slots = 8192 * 2
-    openfhe_context = openfhe_context_dict[str(log2_int(he_res20_ctx.cur_num_slots))]
-    fullpack=homo_ops.homo_add(homo_ops.homo_mul_pt(c1,
-                                                    mask_first_n(8192,c1.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),
-                               homo_ops.homo_mul_pt(c2,mask_scecond_n(8192,c2.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext),cryptoContext)
+    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1,
+                                          mask_first_n(8192, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+                          fhe.homo_mul_pt(c2, mask_scecond_n(8192, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
-    fullpack=homo_ops.homo_mul_pt(
-        homo_ops.homo_add(fullpack,homo_ops.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
-        gen_mask(2,fullpack.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context),cryptoContext)
-    fullpack = homo_ops.homo_mul_pt(
-        homo_ops.homo_add(fullpack,
-                          homo_ops.homo_rotate(
-                              homo_ops.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
-        gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext, openfhe_context), cryptoContext)
-    fullpack=homo_ops.homo_add(fullpack,
-                               homo_ops.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
+    fullpack=fhe.homo_mul_pt(
+        fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
+        gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),cryptoContext)
+    fullpack = fhe.homo_mul_pt(
+        fhe.homo_add(fullpack,
+                          fhe.homo_rotate(
+                              fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
+        gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack=fhe.homo_add(fullpack,
+                               fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
 
     # zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows = cryptoContext.zero_16K #,_ = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
+    downsampledrows = cryptoContext.zero_16K # = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
 
     for i in range(32):
-        masked=homo_ops.homo_mul_pt(fullpack,
-                                    mask_first_n_mod2(8, 256, i, fullpack.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
-        downsampledrows=homo_ops.homo_add(downsampledrows, masked, cryptoContext)
+        masked=fhe.homo_mul_pt(fullpack,
+                               mask_first_n_mod2(8, 256, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
+        downsampledrows=fhe.homo_add(downsampledrows, masked, cryptoContext)
         if i<31:
-            fullpack = homo_ops.homo_rotate(fullpack, 32-8, cryptoContext)
+            fullpack = fhe.homo_rotate(fullpack, 32-8, cryptoContext)
 
     # zeros = [0] * he_res20_ctx.cur_num_slots
-    downsampledchannels = cryptoContext.zero_16K #,_ = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
+    downsampledchannels = cryptoContext.zero_16K # = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
 
     for i in range(64):
-        masked=homo_ops.homo_mul_pt(downsampledrows,
-                                    mask_channel2(i, downsampledrows.cur_limbs, cryptoContext, openfhe_context), cryptoContext)
-        downsampledchannels = homo_ops.homo_add(downsampledchannels,masked,cryptoContext)
-        downsampledchannels = homo_ops.homo_rotate(downsampledchannels,-(256-64),cryptoContext)
+        masked=fhe.homo_mul_pt(downsampledrows,
+                               mask_channel2(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
+        downsampledchannels = fhe.homo_add(downsampledchannels,masked,cryptoContext)
+        downsampledchannels = fhe.homo_rotate(downsampledchannels,-(256-64),cryptoContext)
 
-    downsampledchannels = homo_ops.homo_rotate(downsampledchannels,(256-64)*64,cryptoContext)
-    downsampledchannels = homo_ops.homo_add(downsampledchannels,homo_ops.homo_rotate(downsampledchannels,-4096,cryptoContext),cryptoContext)
-    downsampledchannels = homo_ops.homo_add(downsampledchannels,
-                                            homo_ops.homo_rotate(homo_ops.homo_rotate(downsampledchannels,-4096,cryptoContext), -4096, cryptoContext),
+    downsampledchannels = fhe.homo_rotate(downsampledchannels,(256-64)*64,cryptoContext)
+    downsampledchannels = fhe.homo_add(downsampledchannels,fhe.homo_rotate(downsampledchannels,-4096,cryptoContext),cryptoContext)
+    downsampledchannels = fhe.homo_add(downsampledchannels,
+                                            fhe.homo_rotate(fhe.homo_rotate(downsampledchannels,-4096,cryptoContext), -4096, cryptoContext),
                                             cryptoContext)
     downsampledchannels.slots=4096
 

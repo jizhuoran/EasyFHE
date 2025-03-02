@@ -208,21 +208,21 @@ def gen_pre_encode_file(cryptoContext, openfhe_context):
         rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
                                 1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
         logBsSlots_list = [12, 13, 14]
-        logN = 17
+        logN = 16
         dnum = 3
         dcrtBits = 52
         firstMod = 56
         levelBudget_list = [[4, 4], [4, 4], [4, 4]]
         secretKeyDist = "UNIFORM_TERNARY"
         rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir = "/data/yhh/data/"
+        save_dir = "/home/ysjs1/data/yhh/data/"
         
         cryptoContext, openfhe_context = (
             utils.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                            levelBudget_list, secretKeyDist, rescaleTech, save_dir=save_dir,
                            autoLoadAndSetConfig=True, mode="release"))
 
-        cryptoContext.weight_dir = "/data/yhh/data/"
+        cryptoContext.weight_dir = "/home/ysjs1/data/yhh/data/"
 
 
     weight_map = {}
