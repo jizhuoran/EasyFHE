@@ -37,7 +37,7 @@ cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
 x1 = torch.tensor(x1, device="cuda")
-ptx = openfhe_context.encode(x1, 1, 0, encode_slots)
+ptx = fhe.encode(x1, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
 
 # do some application computation
 cipher = fhe.homo_rotate(cipher, -1, cryptoContext)

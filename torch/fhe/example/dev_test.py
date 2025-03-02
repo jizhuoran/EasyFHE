@@ -248,7 +248,7 @@ def encode_test_case(
                                autoLoadAndSetConfig=False, mode=mode))
 
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
-    plaintext        = openfhe_context.encode_gpu(cryptoContext, x, None, None, None, use_gpu_fft=False)
+    plaintext        = homo_ops.encode(x, None, None, None, use_gpu_fft=False, cryptoContext=cryptoContext)
     plaintext_golden = openfhe_context.encode(x)
 
     all_correct = True
@@ -282,7 +282,7 @@ def encode_test_case(
     ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=False)
+    plaintext = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=False, cryptoContext=cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -319,7 +319,7 @@ def encode_test_case(
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
-    encoded = openfhe_context.encode_gpu(cryptoContext, x, 1, 0, encode_slots, use_gpu_fft=True)
+    encoded = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
