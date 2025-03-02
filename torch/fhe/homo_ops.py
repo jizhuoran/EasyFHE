@@ -991,7 +991,6 @@ def ptx_encode_cuda(
         inverse_imag = torch.tensor(inverse.imag.astype(np.double), device="cuda")
 
         pt_encode = torch.encode(
-            cryptocontext.encode_out,
             inverse_real=inverse_real,
             inverse_imag=inverse_imag,
             temp=cryptocontext.encode_temp,
