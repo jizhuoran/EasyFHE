@@ -440,9 +440,7 @@ class __FOR_SAVE_ONLY_Context:
             self.encode_params_ksiPows.append(cmath.exp(1j * angle))
         self.encode_params_ksiPows.append(self.encode_params_ksiPows[0])
 
-        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128)
-        self.encode_params_ksiPows_real = self.encode_params_ksiPows.real.astype(np.double)
-        self.encode_params_ksiPows_imag = self.encode_params_ksiPows.imag.astype(np.double)
+        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
         self.encode_params_rotGroup = np.array(self.encode_params_rotGroup)
 
 
@@ -524,10 +522,6 @@ class __FOR_SAVE_ONLY_Context:
             self.encode_temp = np.array(
                 [0] * (2 * self.Nh),
                 dtype=np.int64,
-                )
-            self.encode_out = np.array(
-                [0] * (self.L * self.N),
-                dtype=np.uint64,
                 )
 
             power_of_roots = qRootPows + pRootPows

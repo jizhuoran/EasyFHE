@@ -95,11 +95,8 @@ class Context:
                 _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
-        self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
-        self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
-        self.encode_out = get_item("encode_out", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -133,11 +130,9 @@ class Context:
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
         self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double)
-        self.encode_params_ksiPows_imag = torch.tensor(self.encode_params_ksiPows_imag, dtype = torch.double)
+        self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
-        self.encode_out = torch.tensor(self.encode_out, dtype = torch.uint64)
 
         self.to_cuda()
         self.BsContext = None
@@ -180,13 +175,9 @@ class Context:
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
         self.mult_key_map = [v.cuda() for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = self.encode_params_ksiPows_real.cuda()
-        self.encode_params_ksiPows_imag = self.encode_params_ksiPows_imag.cuda()
+        self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
-        self.encode_out = self.encode_out.cuda()
-
-        # self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
 
     def norm_rot_index(self, i):
         if i < 0:

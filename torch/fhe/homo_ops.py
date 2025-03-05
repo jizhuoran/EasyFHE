@@ -1,3 +1,5 @@
+import time
+
 from .ciphertext import Cipher
 from .ciphertext import Plaintext
 from . import functional as F
@@ -917,12 +919,16 @@ def bit_reverse(vals):
             vals[i], vals[j] = vals[j], vals[i]  # 交换复数
     return vals
 
+def bitreverse(index: int, n_power: int) -> int:
+    res_1 = 0
+    for _ in range(n_power):
+        res_1 <<= 1
+        res_1 |= (index & 1)
+        index >>= 1
+    return res_1
+
 
 def fft_special_inv(vals, M, rotGroup, ksiPows):
-    # # 检查是否已为给定的cyclotomic order预计算了旋转因子
-    # if cycl_order not in precomputed_values:
-    #     raise ValueError(f"DiscreteFourierTransform::Initialize() must be called for cyclOrder = {cycl_order}")
-
     vals_size = len(vals)
 
     # FFT特定的操作
@@ -930,14 +936,14 @@ def fft_special_inv(vals, M, rotGroup, ksiPows):
     while len_size >= 1:
         len_h = len_size >> 1
         len_q = len_size << 2
-        gap = M // len_q  # 根据给定的m_M进行计算
+        gap = M // len_q
 
         for i in range(0, vals_size, len_size):
             for j in range(len_h):
                 idx = (len_q - (rotGroup[j] % len_q)) * gap
                 u = vals[i + j] + vals[i + j + len_h]
                 v = vals[i + j] - vals[i + j + len_h]
-                v *= ksiPows[idx]  # 乘以预先计算的旋转因子
+                v *= ksiPows[idx]
                 vals[i + j] = u
                 vals[i + j + len_h] = v
         len_size >>= 1
@@ -948,7 +954,6 @@ def fft_special_inv(vals, M, rotGroup, ksiPows):
         vals[i] /= vals_size
     return vals
 
-
 def ptx_encode_cuda(
     x,
     slots,
@@ -958,6 +963,7 @@ def ptx_encode_cuda(
     noise_scale_deg,
     use_gpu_fft,
     cryptocontext,
+    openfheContext,
 ):
     inverse = x
     pt_encode = []
@@ -977,6 +983,15 @@ def ptx_encode_cuda(
         mode="constant",
         constant_values=complex(0.0, 0.0),
     )
+
+    reserved_order = np.zeros(slots, dtype=np.uint32)
+    bits = int(np.log2(slots))
+    for i in range(slots):
+        r = 0
+        for j in range(bits):
+            r |= ((i >> j) & 1) << (bits - 1 - j)
+        reserved_order[i] = r
+
     if type_flag == "IsDCRTPoly":
         if not use_gpu_fft:
             inverse = fft_special_inv(
@@ -985,19 +1000,20 @@ def ptx_encode_cuda(
                 cryptocontext.encode_params_rotGroup.cpu().numpy(),
                 cryptocontext.encode_params_ksiPows,
             )
-
         # move precompute&inverse to cuda
-        inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
-        inverse_imag = torch.tensor(inverse.imag.astype(np.double), device="cuda")
+        inverse_array = np.array(inverse, dtype=np.complex128).view(np.float64).tolist()
+        inverse_cuda = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
+        # encode_params_ksiPows = np.array(cryptocontext.encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
+        # encode_params_ksiPows_cuda = torch.tensor(encode_params_ksiPows, dtype=torch.double, device="cuda")
+        reserved_order_cuda = torch.tensor(reserved_order, dtype=torch.int64, device="cuda")
 
         pt_encode = torch.encode(
-            inverse_real=inverse_real,
-            inverse_imag=inverse_imag,
+            inverse=inverse_cuda,
             temp=cryptocontext.encode_temp,
             primes=cryptocontext.primes,
             precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-            precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
-            precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
+            precompute_ksipows=cryptocontext.encode_params_ksiPows,
+            precompute_reserved_order= reserved_order_cuda,
             M=cryptocontext.M,
             N=cryptocontext.N,
             cur_limbs=cur_limbs,
@@ -1014,7 +1030,7 @@ def ptx_encode_cuda(
 
 
 def encode(
-    x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None
+    x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None, openfhe_context=None
 ):
     if cryptoContext is None:
         raise ValueError("Error: cryptoContext is not set.")
@@ -1041,7 +1057,7 @@ def encode(
         scFact = cryptoContext.GetScalingFactorReal(cur_limb)
 
     encoded_vector_dcrt_elements_cuda = ptx_encode_cuda(
-        x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext
+        x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext, openfhe_context
     )
 
     mv = [encoded_vector_dcrt_elements_cuda]

@@ -10403,7 +10403,7 @@
     #QuantizedCPU: cat_quantized_cpu
 
     #- func: _cat.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
-    #dispatch:
+  #dispatch:
   #CPU: _cat_out_cpu
   #CUDA: cat_out_cuda
   #QuantizedCPU: cat_out_quantized_cpu
@@ -15808,7 +15808,7 @@
 - func: neg_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: neg_mod_cuda_
+    CUDA: neg_mod_cuda_
 
 - func: neg_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15823,7 +15823,7 @@
 - func: add_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: add_mod_cuda_
+    CUDA: add_mod_cuda_
 
 - func: add_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15838,7 +15838,7 @@
 - func: sub_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: sub_mod_cuda_
+    CUDA: sub_mod_cuda_
 
 - func: sub_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15853,7 +15853,7 @@
 - func: mul_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: mul_mod_cuda_
+    CUDA: mul_mod_cuda_
 
 - func: mul_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15868,7 +15868,7 @@
 - func: add_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: add_scalar_mod_cuda_
+    CUDA: add_scalar_mod_cuda_
 
 - func: add_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15883,7 +15883,7 @@
 - func: sub_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: sub_scalar_mod_cuda_
+    CUDA: sub_scalar_mod_cuda_
 
 - func: sub_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15898,7 +15898,7 @@
 - func: mul_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: mul_scalar_mod_cuda_
+    CUDA: mul_scalar_mod_cuda_
 
 - func: mul_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15960,8 +15960,7 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
+- func: encode(Tensor inverse, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows, Tensor precompute_reserved_order, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
-
