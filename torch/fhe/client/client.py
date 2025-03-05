@@ -2,7 +2,7 @@ import cmath
 import math
 import warnings
 
-from . import openfhe as openfhe
+import openfhe as openfhe
 import torch
 from .. import ciphertext as Cipher
 import numpy as np
