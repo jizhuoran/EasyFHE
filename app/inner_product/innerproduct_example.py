@@ -10,6 +10,7 @@ import math
 
 def homo_inner_product(cipher_A, cipher_B, cryptoContext):
     cipher_product = fhe.homo_mul(cipher_A, cipher_B, cryptoContext)
+    cipher_product = fhe.homo_rescale(cipher_product, 1, cryptoContext)
     n = cipher_product.slots
     assert (n & (n - 1)) == 0, "n must be a power of two"
     log_n = int(math.log2(n))
