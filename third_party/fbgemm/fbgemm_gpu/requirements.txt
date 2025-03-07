@@ -1,0 +1,8 @@
+cmake
+hypothesis
+jinja2
+ninja
+numpy
+scikit-build
+setuptools_git_versioning
+tabulate

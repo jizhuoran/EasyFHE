@@ -1,0 +1,26 @@
+include_directories("common")
+include_directories("arch")
+
+add_subdirectory("libm")
+if (SLEEF_BUILD_TESTS AND NOT MINGW)
+  add_subdirectory("libm-tester")
+endif()
+add_subdirectory("common")
+
+if (SLEEF_BUILD_BENCH)
+  add_subdirectory("libm-benchmarks")
+endif()
+
+if (SLEEF_BUILD_DFT)
+  add_subdirectory("dft")
+  if (SLEEF_BUILD_TESTS)
+    add_subdirectory("dft-tester")
+  endif()
+endif()
+
+if (SLEEF_BUILD_QUAD)
+  add_subdirectory("quad")
+  if (SLEEF_BUILD_TESTS AND NOT MINGW)
+    add_subdirectory("quad-tester")
+  endif()
+endif()

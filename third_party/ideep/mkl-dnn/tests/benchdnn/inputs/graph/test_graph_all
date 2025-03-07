@@ -1,0 +1,5 @@
+--batch=test_graph_f32
+--batch=test_graph_bf16
+--batch=test_graph_f16
+--batch=test_graph_int8
+--batch=complex_fusion/harness_mha_all

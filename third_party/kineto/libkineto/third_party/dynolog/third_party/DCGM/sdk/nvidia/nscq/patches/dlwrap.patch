@@ -1,0 +1,57 @@
+*** dlwrap/posix.c
+--- dlwrap/posix.c
+***************
+*** 22,28 ****
+  
+  #include "os.h"
+  
+! #include "nscq/nscq.h"
+  
+  #include <dlfcn.h>
+  #include <errno.h>
+--- 22,28 ----
+  
+  #include "os.h"
+  
+! #include "nscq.h"
+  
+  #include <dlfcn.h>
+  #include <errno.h>
+*** dlwrap/dlwrap.c
+--- dlwrap/dlwrap.c
+***************
+*** 20,26 ****
+  // DEALINGS IN THE SOFTWARE.
+  //
+
+! #include "nscq/dlwrap.h"
+
+  #include "os.h"
+
+--- 20,26 ----
+  // DEALINGS IN THE SOFTWARE.
+  //
+
+! #include "dlwrap.h"
+
+  #include "os.h"
+
+*** dlwrap/dlwrap.h
+--- dlwrap/dlwrap.h
+***************
+*** 26,32 ****
+  extern "C" {
+  #endif
+
+! #include "nscq/nscq.h"
+
+  int nscq_dlwrap_attach(void);
+  void nscq_dlwrap_detach(void);
+--- 26,32 ----
+  extern "C" {
+  #endif
+
+! #include "nscq.h"
+
+  int nscq_dlwrap_attach(void);
+  void nscq_dlwrap_detach(void);

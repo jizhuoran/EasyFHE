@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  c_build:
+    name: Check upstream C library
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Build C library
+      run: python buildall.py
+
+  rust_format:
+    name: Check Rust formatting
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+    - uses: actions/checkout@v2
+    - run: rustup component add rustfmt clippy
+    - run: cargo fmt --all -- --check
+    - run: cargo clippy
+
+  rust_dependencies:
+    name: Check Rust dependencies
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: EmbarkStudios/cargo-deny-action@v1
+      with:
+        arguments: --manifest-path rust/Cargo.toml
+
+  rust_build:
+    name: Check Rust crate
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        submodules: recursive
+    - name: Build Rust crate
+      run: cargo build
+    - name: Test Rust crate
+      run: cargo test
+    - name: Check crates are publishable
+      run: scripts/verify-publish.sh
