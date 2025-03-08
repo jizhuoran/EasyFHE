@@ -27,10 +27,11 @@ Alternatively, if you prefer to install EasyFHE from source, clone the repositor
 
 EasyFHE comes with a suite of demonstrative examples that illustrate how to implement FHE programs using the framework. These examples include:
 
-- Dot Product Calculation
-- Matrix Multiplication
-- Logistic Regression
-- ResNet-20 Implementation
+- Dot Product Calculation (TBA)
+- Matrix Multiplication (TBA)
+- Bootstrapping (Released)
+- Logistic Regression (TBA)
+- ResNet-20 (Released)
 
 Additional features and examples are under active development, and community feedback is highly encouraged.
 
@@ -56,8 +57,8 @@ EasyFHE is distributed under the GPL-3.0 license.
 Your feedback is invaluable to us, and we welcome contributions to enhance the project further. Please star and watch the repository if you are interested in following its development.
 
 
-============
-============
+========================
+========================
 
 Below is the original README of PyTorch, where you can find the installation guild
 
