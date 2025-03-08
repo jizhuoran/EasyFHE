@@ -1453,9 +1453,9 @@ def main():
 
     setup(
         name=package_name,
-        version=version,
+        version="0.0.1",
         description=(
-            "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
+            "Tensors and Homeomorphic Encryption in Python with strong GPU acceleration"
         ),
         long_description=long_description,
         long_description_content_type="text/markdown",

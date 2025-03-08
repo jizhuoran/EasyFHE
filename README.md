@@ -13,6 +13,16 @@ EasyFHE is an emerging Fully Homomorphic Encryption (FHE) framework designed to 
 - **Efficient Bootstrapping:**  
   Experience bootstrapping operations as fast as approximately 200ms on an A100 GPU for parameters such as N = 65536, slot = 32768, and L = 30, ensuring practical performance for complex FHE computations.
 
+## Installation
+
+To install EasyFHE, use pip. Due to the size of the wheel file, it is not hosted on PyPI. Instead, please download the appropriate wheel file for your platform and Python version from the [release page](https://1drv.ms/f/c/bf37f4266c3f52d0/EudeJ2juTltFvAnRS8yypz0BVMYR65X7sQvEyCXleme8gQ?e=paaZNk). For example, to install the version for Python 3.12 on Linux, run:
+
+```bash
+pip install easyfhe-0.0.1-cp312-cp312-linux_x86_64.whl
+```
+
+Alternatively, if you prefer to install EasyFHE from source, clone the repository and follow the build instructions analogous to those provided by PyTorch.
+
 ## Example Applications
 
 EasyFHE comes with a suite of demonstrative examples that illustrate how to implement FHE programs using the framework. These examples include:
@@ -46,18 +56,11 @@ EasyFHE is distributed under the GPL-3.0 license.
 Your feedback is invaluable to us, and we welcome contributions to enhance the project further. Please star and watch the repository if you are interested in following its development.
 
 
-## Installation
+============
+============
 
-You can simply install EasyFHE by pip:
+Below is the original README of PyTorch, where you can find the installation guild
 
-```bash
-pip install TBW
-```
-
-If you want to install EasyFHE from source, you can clone the repository and follow the build instructions exactly as you would for PyTorch.
-
-
-====== Below is the original README of PyTorch, where you can find the installation guild ======
 
 
 PyTorch is a Python package that provides two high-level features:
