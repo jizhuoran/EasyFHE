@@ -89,6 +89,8 @@ class Context:
         self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
+        self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
+        self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
         self.BsContext_map = {}
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
@@ -134,6 +136,11 @@ class Context:
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
 
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
+
         self.to_cuda()
         self.BsContext = None
         self.left_rot_key_map = {}
@@ -178,6 +185,10 @@ class Context:
         self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = value.cuda()
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = value.cuda()
 
     def norm_rot_index(self, i):
         if i < 0:

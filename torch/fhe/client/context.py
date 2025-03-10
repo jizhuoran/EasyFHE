@@ -718,15 +718,21 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_left_rot_key_map[key] = left_rot_key_map
             self.slots_precompute_auto_map[key] = precompute_auto_map
 
+        self.QplusP_map = {}
+        self.QmuplusPmu_map = {}
+        for cur_limbs in range(len(moduliQ_scalar)):
+            self.QplusP_map[cur_limbs] = np.array(
+                np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
+            )
+            self.QmuplusPmu_map[cur_limbs] = np.array(
+                np.concatenate((self.q_mu[0:cur_limbs], self.p_mu[:K])), dtype=np.uint64
+            )
         # init bs_context
         if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:
             for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
-                    self.moduliQ_scalar,
                     self.moduliP_scalar,
-                    self.q_mu,
-                    self.p_mu,
                     0,
                     self.secretKeyDist,
                     boot_cnst_map[str(logBsSlots)]

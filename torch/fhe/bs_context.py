@@ -25,8 +25,6 @@ class CKKS_Boot_Params:
 class BsContext:
     def __init__(self, content_map):
         self.M = get_item("M", content_map)
-        self.QmuplusPmu_map = get_item("QmuplusPmu_map", content_map)
-        self.QplusP_map = get_item("QplusP_map", content_map)
         self.C2S_rot_in = get_item("C2S_rot_in", content_map)
         self.C2S_rot_out = get_item("C2S_rot_out", content_map)
         self.S2C_rot_in = get_item("S2C_rot_in", content_map)
@@ -50,11 +48,6 @@ class BsContext:
         self.slots = get_item("slots", content_map)
         self.paramsDec = get_item("paramsDec", content_map)
         self.paramsEnc = get_item("paramsEnc", content_map)
-
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
@@ -131,10 +124,10 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = value.cuda()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = value.cuda()
+        # for key, value in self.QplusP_map.items():
+        #     self.QplusP_map[key] = value.cuda()
+        # for key, value in self.QmuplusPmu_map.items():
+        #     self.QmuplusPmu_map[key] = value.cuda()
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):

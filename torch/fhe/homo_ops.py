@@ -440,7 +440,7 @@ def _cipher_add_ext(in0, in1, cryptoContext):
         F.cv_add(
             cv0,
             cv1,
-            cryptoContext.BsContext.QplusP_map[in0.cur_limbs],
+            cryptoContext.QplusP_map[in0.cur_limbs],
             in0.cur_limbs + cryptoContext.K,
         )
         for cv0, cv1 in zip(in0.cv, in1.cv)
@@ -858,8 +858,8 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
                 f"  cipher.scaling_factor = {cipher.scaling_factor}, plaintext.scaling_factor = {plaintext.scaling_factor}\n"
                 f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}"
             )
-        moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]
-        mu = cryptoContext.BsContext.QmuplusPmu_map[cipher.cur_limbs]
+        moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
+        mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
         cv0 = F.cv_mul(
             cipher.cv[0], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K
         )
