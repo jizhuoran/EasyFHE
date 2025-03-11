@@ -38,34 +38,36 @@ __global__ void convert_and_pad_inverse(
 
 __global__ void fft_stage_kernel(
     DTYPE2* vals,
-    int len_size,
+    int num_stages,
     int vals_size,
     int m_M,
     int64_t* m_rotGroup,
     DTYPE2* m_ksiPows) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   int total_threads = vals_size / 2;
-
   if (tid >= total_threads)
     return;
+  for (int s = 0; s < num_stages; ++s) {
+    int len_size = vals_size >> s;
+    int len_h = len_size >> 1;
+    int len_q = len_size << 2;
+    int gap = m_M / len_q;
 
-  int len_h = len_size >> 1;
-  int len_q = len_size << 2;
-  int gap = m_M / len_q;
+    int block_idx = tid / len_h;
+    int j = tid % len_h;
+    int i = block_idx * len_size;
 
-  int block_idx = tid / len_h;
-  int j = tid % len_h;
-  int i = block_idx * len_size;
+    int rot = m_rotGroup[j] % len_q;
+    int idx = (len_q - rot) * gap;
 
-  int rot = m_rotGroup[j] % len_q;
-  int idx = (len_q - rot) * gap;
-
-  DTYPE2 val_low = vals[i + j];
-  DTYPE2 val_high = vals[i + j + len_h];
-  DTYPE2 u = MAKE_DTYPE2(val_low.x + val_high.x, val_low.y + val_high.y);
-  DTYPE2 v = MAKE_DTYPE2(val_low.x - val_high.x, val_low.y - val_high.y);
-  vals[i + j] = u;
-  vals[i + j + len_h] = mul(v, m_ksiPows[idx]);
+    DTYPE2 val_low = vals[i + j];
+    DTYPE2 val_high = vals[i + j + len_h];
+    DTYPE2 u = MAKE_DTYPE2(val_low.x + val_high.x, val_low.y + val_high.y);
+    DTYPE2 v = MAKE_DTYPE2(val_low.x - val_high.x, val_low.y - val_high.y);
+    vals[i + j] = u;
+    vals[i + j + len_h] = mul(v, m_ksiPows[idx]);
+    __syncthreads();
+  }
 }
 
 __global__ void bit_reverse_normalize_kernel(DTYPE2* vals, int n, int num_bits, DTYPE factor) {
@@ -190,23 +192,20 @@ static void fft_special_inv_cuda(
     DTYPE2* precompute_ksipows,
     int64_t M,
     int vals_size) {
-  int len_size = vals_size;
   dim3 block(256);
   auto stream = at::cuda::getCurrentCUDAStream();
-  while (len_size >= 1) {
-    int total_threads = vals_size / 2;
-    dim3 grid((total_threads + block.x - 1) / block.x);
+  int total_threads = vals_size / 2;
+  dim3 grid((total_threads + block.x - 1) / block.x);
 
-    fhe::fft_stage_kernel<<<grid, block, 0, stream>>>(
-        inverse,
-        len_size,
-        vals_size,
-        M,
-        precompute_rotgroups,
-        precompute_ksipows);
-    cudaDeviceSynchronize();
-    len_size >>= 1;
-  }
+  fhe::fft_stage_kernel<<<grid, block, 0, stream>>>(
+      inverse,
+      log2(vals_size),
+      vals_size,
+      M,
+      precompute_rotgroups,
+      precompute_ksipows);
+  cudaDeviceSynchronize();
+
   dim3 grid_br((vals_size + block.x - 1) / block.x);
   DTYPE factor = 1.0f / vals_size;
   fhe::bit_reverse_normalize_kernel<<<grid_br, block, 0, stream>>>(
