@@ -99,6 +99,7 @@ class Context:
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
+        self.encode_inverse = get_item("encode_inverse", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -135,6 +136,7 @@ class Context:
         self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
+        self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
 
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
@@ -185,6 +187,7 @@ class Context:
         self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
+        self.encode_inverse = self.encode_inverse.cuda()
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = value.cuda()
         for key, value in self.QmuplusPmu_map.items():
