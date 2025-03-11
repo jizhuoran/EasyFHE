@@ -30,14 +30,10 @@ __global__ void convert_and_pad_inverse(
     DTYPE2* inverse_internal,
     int size) {
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
-
-  if (tid < size) {
-    inverse_internal[tid].x = inverse[tid];
-    inverse_internal[tid].y = 0.0;
-  } else {
-    inverse_internal[tid].x = 0.0;
-    inverse_internal[tid].y = 0.0;
-  }
+  if (tid >= size)
+    return;
+  DTYPE value = (tid < size) ? inverse[tid] : 0.0;
+  inverse_internal[tid] = MAKE_DTYPE2(value, 0.0);
 }
 
 __global__ void fft_stage_kernel(
@@ -72,83 +68,19 @@ __global__ void fft_stage_kernel(
   vals[i + j + len_h] = mul(v, m_ksiPows[idx]);
 }
 
-__global__ void bit_reverse_kernel(DTYPE2* vals, int n) {
+__global__ void bit_reverse_normalize_kernel(DTYPE2* vals, int n, int num_bits, DTYPE factor) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
     return;
-  int num_bits = (int)log2f(n);
-  int reversed = 0;
-  for (int i = 0; i < num_bits; ++i) {
-    reversed <<= 1;
-    reversed |= (tid >> i) & 1;
-  }
+  vals[tid].x *= factor;
+  vals[tid].y *= factor;
+  int reversed = __brev(tid) >> (32 - num_bits);
   if (reversed > tid) {
     DTYPE2 temp = vals[tid];
     vals[tid] = vals[reversed];
     vals[reversed] = temp;
   }
 }
-
-__global__ void normalize_kernel(DTYPE2* vals, int n, DTYPE factor) {
-  int tid = blockIdx.x * blockDim.x + threadIdx.x;
-  if (tid >= n)
-    return;
-  vals[tid].x *= factor;
-  vals[tid].y *= factor;
-}
-
-//__global__ void compute_max_logc(
-//    DTYPE2* inverse,
-//    int slots,
-//    DTYPE scaling_factor,
-//    int* max_logc) {
-//  extern __shared__ int sdata[];
-//  int tid = threadIdx.x;
-//  int i = blockIdx.x * blockDim.x + tid;
-//  int local_logc = 0;
-//  inverse[i].x *= scaling_factor; // real part
-//  inverse[i].y *= scaling_factor; // imag part
-//
-//  if (i < slots) {
-//    DTYPE abs_real = fabs(inverse[i].x);
-//    DTYPE abs_imag = fabs(inverse[i].y);
-//    // int logc = 0;
-//    if (abs_real > 0)
-//      local_logc = max(local_logc, (int)ceil(log2(abs_real)));
-//    if (abs_imag > 0)
-//      local_logc = max(local_logc, (int)ceil(log2(abs_imag)));
-//    // local_max = logc;
-//  }
-//
-//  sdata[tid] = local_logc;
-//  __syncthreads();
-//
-//  for (int s = blockDim.x / 2; s > 0; s >>= 1) {
-//    if (tid < s)
-//      sdata[tid] = max(sdata[tid], sdata[tid + s]);
-//    __syncthreads();
-//  }
-//
-//  if (tid == 0)
-//    max_logc[blockIdx.x] = sdata[0];
-//  // 这里只得到了所有的块内最大，并不是全局最大
-//}
-//
-//__global__ void quantize_values(
-//    DTYPE2* inverse,
-//    int64_t* temp,
-//    int log_approx,
-//    int slots) {
-//  int i = blockIdx.x * blockDim.x + threadIdx.x;
-//  if (i >= slots)
-//    return;
-//  int approx_factor = 1 << log_approx;
-//  DTYPE dre = inverse[i].x / approx_factor;
-//  DTYPE dim = inverse[i].y / approx_factor;
-//
-//  temp[i] = (llround(dre) + MAX_64BIT_VALUE) % MAX_64BIT_VALUE;
-//  temp[i + slots] = (llround(dim) + MAX_64BIT_VALUE) % MAX_64BIT_VALUE;
-//}
 
 __global__ void scaleAndCheckOverflow(
     DTYPE2* inverse,
@@ -159,18 +91,16 @@ __global__ void scaleAndCheckOverflow(
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if (i >= slots)
     return;
+  DTYPE2 val = inverse[i];
+  val.x *= scaling_factor;
+  val.y *= scaling_factor;
 
-  inverse[i].x *= scaling_factor; // real part
-  inverse[i].y *= scaling_factor; // imag part
+  DTYPE abs_real = fabs(val.x);
+  DTYPE abs_imag = fabs(val.y);
 
-  DTYPE abs_real = fabs(inverse[i].x);
-  DTYPE abs_imag = fabs(inverse[i].y);
-
-  int logc = 0;
-  if (abs_real > 0)
-    logc = max(logc, (int)ceil(log2(abs_real)));
-  if (abs_imag > 0)
-    logc = max(logc, (int)ceil(log2(abs_imag)));
+  int log_real = (abs_real > 0) ? (int)ceil(log2(abs_real)) : 0;
+  int log_imag = (abs_imag > 0) ? (int)ceil(log2(abs_imag)) : 0;
+  int logc = max(log_real, log_imag);
 
   if (logc < 0) {
     printf("Too small scaling factor\n");
@@ -180,8 +110,8 @@ __global__ void scaleAndCheckOverflow(
   int log_approx = logc - log_valid;
   log_approx_out[0] = log_approx;
   int approx_factor = 1 << log_approx;
-  DTYPE dre = inverse[i].x / approx_factor;
-  DTYPE dim = inverse[i].y / approx_factor;
+  DTYPE dre = val.x / approx_factor;
+  DTYPE dim = val.y / approx_factor;
 
   if (abs(dre) > MAX_64BIT_VALUE || abs(dim) > MAX_64BIT_VALUE) {
     printf(
@@ -207,14 +137,15 @@ __global__ void fit_to_native_vector_kernel(
     int gap) {
   const int i = blockIdx.x * blockDim.x + threadIdx.x;
 
-  const int l = i/dslots;
-  const int slot = i%dslots;
+  const int l = i / dslots;
+  const int slot = i % dslots;
   const int64_t bigValueHf = big_bound >> 1;
   const int64_t diff = big_bound - native_modulus[l];
   const int64_t n = vec[slot];
 
-  uint64_t result = n > bigValueHf ? (( n - diff) % native_modulus[l]):(n % native_modulus[l]) ;
-  native_vec[l *N +gap * slot] = result;
+  uint64_t result = n > bigValueHf ? ((n - diff) % native_modulus[l])
+                                   : (n % native_modulus[l]);
+  native_vec[l * N + gap * slot] = result;
 }
 
 __global__ void mul_mod_kernel(
@@ -224,7 +155,8 @@ __global__ void mul_mod_kernel(
     int N) {
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   int l = idx / N;
-  encoded_vector[idx] = (encoded_vector[idx] * crt_approx[l]) % moduliQ[l];
+  encoded_vector[idx] = (encoded_vector[idx] * crt_approx[l]) %
+      moduliQ[l]; // use utils mul_mod, maybe better
 }
 
 } // namespace fhe
@@ -275,43 +207,11 @@ static void fft_special_inv_cuda(
     cudaDeviceSynchronize();
     len_size >>= 1;
   }
-
   dim3 grid_br((vals_size + block.x - 1) / block.x);
-  fhe::bit_reverse_kernel<<<grid_br, block, 0, stream>>>(inverse, vals_size);
-
-  cudaDeviceSynchronize();
-
   DTYPE factor = 1.0f / vals_size;
-  fhe::normalize_kernel<<<grid_br, block, 0, stream>>>(
-      inverse, vals_size, factor);
-  cudaDeviceSynchronize();
+  fhe::bit_reverse_normalize_kernel<<<grid_br, block, 0, stream>>>(
+      inverse, vals_size, (int)log2f(vals_size), factor);
 }
-
-//int scale_and_check_overflow(
-//    DTYPE2* inverse_internal_ptr,
-//    int64_t* temp_ptr,
-//    int slots,
-//    DTYPE scaling_factor) {
-//  auto stream = at::cuda::getCurrentCUDAStream();
-//  int h_logc = 0;
-//  int* d_logc;
-//  cudaMalloc(&d_logc, sizeof(int));
-//  cudaMemset(d_logc, 0, sizeof(int));
-//
-//  dim3 block(256);
-//  dim3 grid((slots + block.x - 1) / block.x);
-//  fhe::compute_max_logc<<<grid, block, block.x * sizeof(int), stream>>>(
-//      inverse_internal_ptr, slots, scaling_factor, d_logc);
-//
-//  cudaMemcpyAsync(&h_logc, d_logc, sizeof(int), cudaMemcpyDeviceToHost, stream);
-//  cudaStreamSynchronize(stream);
-//  int log_valid = min(h_logc, MAX_BITS_IN_WORD);
-//  int log_approx = h_logc - log_valid;
-//
-//  fhe::quantize_values<<<grid, block, 0, stream>>>(
-//      inverse_internal_ptr, temp_ptr, log_approx, slots);
-//  return log_approx;
-//}
 
 void fit_to_native_vector(
     int64_t* d_vec,
@@ -322,7 +222,8 @@ void fit_to_native_vector(
     int gap,
     int cur_limbs,
     int N) {
-  if(cur_limbs==0) return;
+  if (cur_limbs == 0)
+    return;
   auto stream = at::cuda::getCurrentCUDAStream();
   const int blockSize = 256;
   const int gridSize = (dslots * cur_limbs + blockSize - 1) / blockSize;
@@ -428,10 +329,15 @@ static void encode_template(
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
+
         if (use_fft) {
           convert_inverse(inverse_ptr, inverse_internal_ptr, slots);
           fft_special_inv_cuda(
-              inverse_internal_ptr, rotGroups, precompute_ksipows_ptr, M, slots);
+              inverse_internal_ptr,
+              rotGroups,
+              precompute_ksipows_ptr,
+              M,
+              slots);
         }
         auto stream = at::cuda::getCurrentCUDAStream();
         const int blockDim2 = 256;
@@ -440,11 +346,12 @@ static void encode_template(
         int64_t* d_log_approx;
         cudaMalloc(&d_log_approx, sizeof(int64_t));
         fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
-            inverse_internal_ptr, slots, scaling_factor, temp_ptr, d_log_approx);
+            inverse_internal_ptr,
+            slots,
+            scaling_factor,
+            temp_ptr,
+            d_log_approx);
         cudaDeviceSynchronize();
-        // int log_approx = scale_and_check_overflow(
-        //     inverse_internal_ptr, temp_ptr, slots, scaling_factor);
-        // int temp_size = 2 * slots;
         int gap = N / temp_size;
         fit_to_native_vector(
             temp_ptr,
@@ -473,7 +380,12 @@ static void encode_template(
 
         if (log_approx > 0) {
           scale_log_approx_vector(
-              elements_ptr, primes_ptr, primes.cpu().data_ptr<uint64_t>(), log_approx, cur_limbs, N);
+              elements_ptr,
+              primes_ptr,
+              primes.cpu().data_ptr<uint64_t>(),
+              log_approx,
+              cur_limbs,
+              N);
         }
         cudaDeviceSynchronize();
         NTT_impl(
