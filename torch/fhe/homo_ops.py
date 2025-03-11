@@ -971,52 +971,51 @@ def ptx_encode_cuda(
         raise ValueError(
             f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]"
         )
-    if type_flag == "IsDCRTPoly":
-        if not use_gpu_fft:
-            # Clears all imaginary values as CKKS for complex numbers
-            inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
 
-            # Resize the inverse to fit the slot size.
-            # note that default: slots value should be greater than size of input data list x
-            inverse_complex = np.pad(
-                inverse_complex,
-                pad_width=(0, slots - len(inverse)),
-                mode="constant",
-                constant_values=complex(0.0, 0.0),
-            )
-            arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
-            complex_arr = arr[0::2] + arr[1::2]*1j
-            inverse_complex = fft_special_inv(
-                inverse_complex,
-                cryptocontext.M,
-                cryptocontext.encode_params_rotGroup.cpu().numpy(),
-                complex_arr,
-            )
-            inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
-            inverse_internal = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
-            inverse = torch.tensor(inverse, device="cuda")
-        else:
-            inverse_internal = cryptocontext.encode_inverse
+    if not use_gpu_fft:
+        # Clears all imaginary values as CKKS for complex numbers
+        inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
 
-        pt_encode = torch.encode(
-            inverse=inverse,
-            inverse_internal= inverse_internal,
-            temp=cryptocontext.encode_temp,
-            primes=cryptocontext.primes,
-            precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-            precompute_ksipows=cryptocontext.encode_params_ksiPows,
-            M=cryptocontext.M,
-            N=cryptocontext.N,
-            cur_limbs=cur_limbs,
-            slots=slots,
-            noise_scale_deg=noise_scale_deg,
-            scaling_factor=scaling_factor,
-            power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-            power_of_roots=cryptocontext.power_of_roots,
-            use_fft=use_gpu_fft,
+        # Resize the inverse to fit the slot size.
+        # note that default: slots value should be greater than size of input data list x
+        inverse_complex = np.pad(
+            inverse_complex,
+            pad_width=(0, slots - len(inverse)),
+            mode="constant",
+            constant_values=complex(0.0, 0.0),
         )
+        arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
+        complex_arr = arr[0::2] + arr[1::2]*1j
+        inverse_complex = fft_special_inv(
+            inverse_complex,
+            cryptocontext.M,
+            cryptocontext.encode_params_rotGroup.cpu().numpy(),
+            complex_arr,
+        )
+        inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
+        inverse_internal = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
+        inverse = torch.tensor(inverse, device="cuda")
     else:
-        print("Only DCRTPoly is supported for CKKS.")
+        inverse_internal = cryptocontext.encode_inverse
+
+    pt_encode = torch.encode(
+        inverse=inverse,
+        inverse_internal= inverse_internal,
+        temp=cryptocontext.encode_temp,
+        primes=cryptocontext.primes,
+        precompute_rotgroups=cryptocontext.encode_params_rotGroup,
+        precompute_ksipows=cryptocontext.encode_params_ksiPows,
+        M=cryptocontext.M,
+        N=cryptocontext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        noise_scale_deg=noise_scale_deg,
+        scaling_factor=scaling_factor,
+        power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+        power_of_roots=cryptocontext.power_of_roots,
+        use_fft=use_gpu_fft,
+    )
+
     return pt_encode
 
 
