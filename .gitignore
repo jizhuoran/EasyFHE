@@ -146,6 +146,7 @@ torchgen/packaged/*
 .ipynb_checkpoints
 
 # Editor temporaries
+*.pkl
 *.swa
 *.swb
 *.swc

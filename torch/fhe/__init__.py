@@ -12,5 +12,6 @@ __all__ = [
     'key_switch_P_ext', 'modup_to_ext', 'mult_rot_key_and_sum_ext', 'moddown_from_ext',
     'extract_cv',
     'encode',
-    'try_load_context', 'load_rotation_keys', 'load_bootstrapping_context'
+    'try_load_context', 'load_rotation_keys', 'load_bootstrapping_context',
+    'drop_last_elements'
 ]

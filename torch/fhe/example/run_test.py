@@ -9,18 +9,17 @@ import torch.fhe.utils as utils
 import torch.fhe.compiler.bs_compilered as COMPILE
 
 
-maxLevelsRemaining = 9
-logBsSlots_list = [15]
+maxLevelsRemaining = 3
+logBsSlots_list = [12, 13, 14]
 logN = 16
 dnum = 3
 dcrtBits = 59
 firstMod = 60
-levelBudget_list = [[4, 4]]
-rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+levelBudget_list = [[4, 4],[4, 4],[4, 4]]
+rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = "data"
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),
@@ -59,6 +58,26 @@ cipher, cipher_openfhe = openfhe_context.encrypt(
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
+
+keyset1 = list()
+for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[0])]:
+    keyset1.append(key)
+keyset2 = set()
+for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[1])]:
+    keyset2.add(key)
+keyset3 = set()
+for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[2])]:
+    keyset3.add(key)
+
+exit(0)
+
+# print("num of keys in keyset1:", len(keyset1))
+# print("L", cryptoContext.L)
+# print("num of keys in keyset2:", len(keyset2))
+# print("num of keys in keyset3:", len(keyset3))
+# print("num of smae keys:", len(keyset1.intersection(keyset2.intersection(keyset3))))
+
+
 utils.load_rotation_keys(logBsSlots, cryptoContext)
 
 # with torch.profiler.profile(
@@ -71,7 +90,7 @@ utils.load_rotation_keys(logBsSlots, cryptoContext)
 #         with_stack=True,
 #     ) as profiler:
 #         # Start profiling specific functions with torch.profiler.record_function()
-#         result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+#         result = BS.eval_bootstrap(cipher, cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
 #         profiler.step()
 
 # # Get the profiling results
@@ -86,16 +105,16 @@ TEST_COMPILE = False
 if TEST_COMPILE:
     result1 = BS.eval_bootstrap(
         cipher,
-        L0=cryptoContext.L,
-        logBsSlots=logBsSlots_list[0],
-        cryptoContext=cryptoContext,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
     )
     start_time = time.time()
     result1 = BS.eval_bootstrap(
         cipher,
-        L0=cryptoContext.L,
-        logBsSlots=logBsSlots_list[0],
-        cryptoContext=cryptoContext,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
     )
     print("Time taken for NORMAL bootstrapping:", time.time() - start_time)
     print("=======================")
@@ -103,16 +122,16 @@ if TEST_COMPILE:
     print("=======================")
     result2 = COMPILE.eval_bootstrap(
         cipher,
-        L0=cryptoContext.L,
-        logBsSlots=logBsSlots_list[0],
-        cryptoContext=cryptoContext,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
     )
     start_time = time.time()
     result2 = COMPILE.eval_bootstrap(
         cipher,
-        L0=cryptoContext.L,
-        logBsSlots=logBsSlots_list[0],
-        cryptoContext=cryptoContext,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
     )
     print("Time taken for COMPILE bootstrapping:", time.time() - start_time)
     print("result1", result1.cv[0].cpu().numpy()[0][:10])
@@ -139,7 +158,7 @@ if TEST_COMPILE:
             with_stack=True,
         ) as profiler:
             # Start profiling specific functions with torch.profiler.record_function()
-            result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+            result = BS.eval_bootstrap(cipher, cryptoContext.L, logBsSlots, cryptoContext)
             profiler.step()
 
     # Get the profiling results
@@ -162,7 +181,7 @@ if TEST_COMPILE:
             with_stack=True,
         ) as profiler:
             # Start profiling specific functions with torch.profiler.record_function()
-            result = COMPILE.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+            result = COMPILE.eval_bootstrap(cipher, cryptoContext.L, logBsSlots, cryptoContext)
             profiler.step()
 
     # Get the profiling results
@@ -174,13 +193,13 @@ if TEST_COMPILE:
 
 else:
 
-    result = BS.eval_bootstrap(
-        cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext
-    )
+    # result = BS.eval_bootstrap(
+    #     cipher, cryptoContext.L, logBsSlots, cryptoContext
+    # )
 
     start_time = time.time()
     result = BS.eval_bootstrap(
-        cipher, L0=cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext
+        cipher, cryptoContext.L, logBsSlots, cryptoContext
     )
     print("Time taken for bootstrapping:", time.time() - start_time)
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]

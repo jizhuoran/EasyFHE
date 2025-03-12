@@ -68,6 +68,7 @@ class Context:
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
         self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -138,6 +139,7 @@ class Context:
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
         self.encode_out = torch.tensor(self.encode_out, dtype = torch.uint64)
+        self.inBS = False
 
         self.to_cuda()
         self.BsContext = None
