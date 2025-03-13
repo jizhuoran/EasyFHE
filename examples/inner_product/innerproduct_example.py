@@ -38,14 +38,14 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, cryptoContext):
     shifts = [2 ** i for i in range(log_n)]
 
 
-    bxExt = fhe.key_switch_P_ext(fhe.extract_cv(cipher_product,0), cryptoContext)
-    ax = fhe.extract_cv(cipher_product,1)
+    bxExt = fhe.key_switch_P_ext(fhe.extract_cv(cipher_product,0, cryptoContext), cryptoContext)
+    ax = fhe.extract_cv(cipher_product,1, cryptoContext)
     for shift in shifts:
         # ver1
         # rotated = fhe.homo_rotate(cipher_product, shift, cryptoContext)
 
         # ver2
-        # rotated_modup = fhe.modup_to_ext(fhe.extract_cv(cipher_product, 1), cryptoContext)
+        # rotated_modup = fhe.modup_to_ext(fhe.extract_cv(cipher_product, 1, cryptoContext), cryptoContext)
         # rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, shift, cryptoContext)
         # rotated = fhe.moddown_from_ext(rotated_innerp, cryptoContext)
         # rotated.cv[0] = F.cv_add(rotated.cv[0], cipher_product.cv[0], cryptoContext.moduliQ, rotated.cur_limbs)
@@ -56,8 +56,8 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, cryptoContext):
         norm_index = cryptoContext.norm_rot_index(shift)
         rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, norm_index, cryptoContext)
 
-        tmp_bxExt = fhe.homo_add(fhe.extract_cv(rotated_innerp,0), bxExt, cryptoContext)
-        tmp_ax    = fhe.moddown_from_ext(fhe.extract_cv(rotated_innerp,1), cryptoContext)
+        tmp_bxExt = fhe.homo_add(fhe.extract_cv(rotated_innerp,0, cryptoContext), bxExt, cryptoContext)
+        tmp_ax    = fhe.moddown_from_ext(fhe.extract_cv(rotated_innerp,1, cryptoContext), cryptoContext)
 
         tmp_bxExt = homo_ops._cipher_automorphism(tmp_bxExt, norm_index, cryptoContext)
         tmp_ax  = homo_ops._cipher_automorphism(tmp_ax, norm_index, cryptoContext)

@@ -1,7 +1,7 @@
 import math
 import torch.fhe as fhe
 import numpy as np
-from torch.fhe.utils import profile_python_function, profile_pytorch_function
+
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 

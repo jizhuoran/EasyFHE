@@ -1,7 +1,6 @@
 import torch
 import pickle
-from torch.fhe import homo_ops
-import numpy as np
+import torch.fhe as fhe
 import atexit, os
 
 DATA_DIR = os.environ["DATA_DIR"]
@@ -228,7 +227,8 @@ else:
         except IOError as e:
             print(f"error: {e}")
 
-        encoded = homo_ops.encode(values, scale_deg, level, slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        values = torch.tensor(values, dtype=torch.float64).cuda()
+        encoded = fhe.encode(values, scale_deg, level, slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         encoded_weight[key] = encoded
@@ -267,8 +267,8 @@ else:
                 weight_corrected.append(weight[(10 * i) + j])
             for j in range(64 - 10):
                 weight_corrected.append(0)
-
-        encoded = homo_ops.encode(weight_corrected, scale_deg, level, slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        weight_corrected = torch.tensor(weight_corrected, dtype=torch.float64).cuda()
+        encoded = fhe.encode(weight_corrected, scale_deg, level, slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "fc_{}_{}_{}".format(level, scale_deg, slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -284,8 +284,8 @@ else:
                 vec.append(custom_val)
             else:
                 vec.append(0)
-
-        encoded = homo_ops.encode(vec,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        vec = torch.tensor(vec, dtype=torch.float64).cuda()
+        encoded = fhe.encode(vec,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -301,7 +301,8 @@ else:
                 mask.append(1)
             else:
                 mask.append(0)
-        encoded = homo_ops.encode(mask,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -317,8 +318,8 @@ else:
                 mask.append(1)
             else:
                 mask.append(0)
-
-        encoded = homo_ops.encode(mask, 1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask, 1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -334,8 +335,8 @@ else:
                 vec.append(1)
             else:
                 vec.append(0)
-
-        encoded = homo_ops.encode(vec,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        vec = torch.tensor(vec, dtype=torch.float64).cuda()
+        encoded = fhe.encode(vec,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -355,7 +356,8 @@ else:
             copy_interval-=1
             if copy_interval<= -n:
                 copy_interval=n
-        encoded = homo_ops.encode(mask,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask,1, level, he_res20_ctx.cur_num_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -373,8 +375,8 @@ else:
                 mask.append(1)
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
-
-        encoded = homo_ops.encode(mask, 1, level, 16384*2, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask, 1, level, 16384*2, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -392,7 +394,8 @@ else:
                 mask.append(1)
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
-        encoded = homo_ops.encode(mask, 1, level, 8192*2, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask, 1, level, 8192*2, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -415,7 +418,8 @@ else:
         for i in range(31-n):
             for j in range(1024):
                 mask.append(0)
-        encoded = homo_ops.encode(mask, 1, level, 16384*2, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask, 1, level, 16384*2, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -438,7 +442,8 @@ else:
         for i in range(63-n):
             for j in range(256):
                 mask.append(0)
-        encoded = homo_ops.encode(mask, 1, level, 8192*2, use_gpu_fft=True, cryptoContext=cryptoContext)
+        mask = torch.tensor(mask, dtype=torch.float64).cuda()
+        encoded = fhe.encode(mask, 1, level, 8192*2, use_gpu_fft=True, cryptoContext=cryptoContext)
         key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
         encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -456,16 +461,16 @@ def save_encoded_weight():
 def rotsum(input,slots,cryptoContext):
     result=input.deep_copy()
     for i in range(log2_int(slots)):
-        result=homo_ops.homo_add(result,homo_ops.homo_rotate(result,pow(2,i),cryptoContext),cryptoContext)
+        result=fhe.homo_add(result,fhe.homo_rotate(result,pow(2,i),cryptoContext),cryptoContext)
     return result
 
 
 def rotsum_padded(input,slots,cryptoContext):
     result=input.deep_copy()
     for i in range(log2_int(slots)):
-        result=homo_ops.homo_add(result,homo_ops.homo_rotate(result,slots*pow(2,i),cryptoContext),cryptoContext)
+        result=fhe.homo_add(result,fhe.homo_rotate(result,slots*pow(2,i),cryptoContext),cryptoContext)
     return result
 
 
 def repeat(input,slots,cryptoContext):
-    return homo_ops.homo_rotate(rotsum(input,slots,cryptoContext),-slots+1,cryptoContext)
+    return fhe.homo_rotate(rotsum(input,slots,cryptoContext),-slots+1,cryptoContext)

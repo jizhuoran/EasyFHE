@@ -5,6 +5,7 @@ from convs import *
 import torch.fhe as fhe
 from examples.utils import approx
 import torch
+import numpy as np
 
 DATA_DIR = os.environ["DATA_DIR"]
 
