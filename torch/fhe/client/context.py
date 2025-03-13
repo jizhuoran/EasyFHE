@@ -60,7 +60,8 @@ class __FOR_SAVE_ONLY_Context:
         qRootPows = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
         self.mult_key_map = None
-        self.slots_left_rot_key_map = {} #fixme: why adding prefix slots_ ?
+        self.slots_left_rot_key_map = {} 
+        self.total_left_rot_key_map = {} 
         self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
@@ -702,14 +703,16 @@ class __FOR_SAVE_ONLY_Context:
         key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
         self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
+        #half_key
         for key, ROT_SWK in rot_swk_map.items():
-            left_rot_key_map = {}
+            left_rot_key_map = []
             precompute_auto_map = {}
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
                 if int(rotIdx)<0:
                     rotIdx = self.N//2 + rotIdx
-                left_rot_key_map[int(rotIdx)] = [
+                left_rot_key_map.append(int(rotIdx))
+                self.total_left_rot_key_map[int(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
