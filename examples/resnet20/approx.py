@@ -5,7 +5,6 @@ from torch.fhe.utils import profile_python_function, profile_pytorch_function
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
-@profile_python_function
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
     input_size = len(constants)
 
@@ -50,7 +49,7 @@ def degree(lst):
 # division f/g. longDiv is a struct that contains the vectors of coefficients for the
 # quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
 # the same format.
-@profile_python_function
+
 def long_division_chebyshev(f, g):
     assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
     n, k = len(f) - 1, len(g) - 1
@@ -291,7 +290,7 @@ def ComputeDegreesPS(n):
         return [klist[min_index], mlist[min_index]]
 
 
-# @profile_python_function
+
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
