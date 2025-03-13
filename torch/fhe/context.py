@@ -68,6 +68,7 @@ class Context:
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
         self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -89,17 +90,17 @@ class Context:
         self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
+        self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
+        self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
         self.BsContext_map = {}
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
                 _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
-        self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
-        self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
-        self.encode_out = get_item("encode_out", gpufhe_content_map)
+        self.encode_inverse = get_item("encode_inverse", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -133,11 +134,15 @@ class Context:
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
         self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double)
-        self.encode_params_ksiPows_imag = torch.tensor(self.encode_params_ksiPows_imag, dtype = torch.double)
+        self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
-        self.encode_out = torch.tensor(self.encode_out, dtype = torch.uint64)
+        self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
+
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
 
         self.to_cuda()
         self.BsContext = None
@@ -145,6 +150,7 @@ class Context:
         self.precompute_auto_map = {}
 
         self.autoLoadAndSetConfig=autoLoadAndSetConfig
+        self.inBS = False
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()
@@ -180,13 +186,14 @@ class Context:
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
         self.mult_key_map = [v.cuda() for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = self.encode_params_ksiPows_real.cuda()
-        self.encode_params_ksiPows_imag = self.encode_params_ksiPows_imag.cuda()
+        self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
-        self.encode_out = self.encode_out.cuda()
-
-        # self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
+        self.encode_inverse = self.encode_inverse.cuda()
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = value.cuda()
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = value.cuda()
 
     def norm_rot_index(self, i):
         if i < 0:

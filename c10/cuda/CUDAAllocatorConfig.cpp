@@ -18,8 +18,7 @@ CUDAAllocatorConfig::CUDAAllocatorConfig()
       m_expandable_segments(false),
       m_release_lock_on_cudamalloc(false),
       m_pinned_use_cuda_host_register(false),
-      m_pinned_use_background_threads(false),
-      m_last_allocator_settings("") {
+      m_pinned_use_background_threads(false) {
   m_roundup_power2_divisions.assign(kRoundUpPowerOfTwoIntervals, 0);
 }
 
@@ -144,6 +143,7 @@ size_t CUDAAllocatorConfig::parseRoundUpPower2Divisions(
   if (++i < config.size()) {
     if (std::string_view(config[i]) == "[") {
       size_t last_index = 0;
+      // NOLINTNEXTLINE(bugprone-inc-dec-in-conditions)
       while (++i < config.size() && std::string_view(config[i]) != "]") {
         const std::string& val1 = config[i];
         size_t val2 = 0;

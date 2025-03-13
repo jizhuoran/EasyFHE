@@ -2,13 +2,13 @@ from ..ciphertext import Cipher
 
 unary_op = {
     "homo_square": "homo_ops.",
-    "drop_last_elements": "homo_ops.",
     "key_switch_P_ext": "hybrid_keyswitch.",
     "modup_to_ext": "hybrid_keyswitch.",
     "moddown_from_ext": "hybrid_keyswitch.",
 }
 
 unary_cnst_op = {
+    "drop_last_elements": "homo_ops.",
     "homo_rescale": "homo_ops.",
     "homo_rescale_internal": "homo_ops.",
     "homo_mul_scalar_double": "homo_ops.",
@@ -46,10 +46,12 @@ def compilerFrontend(func):
     if func.__name__ in unary_cnst_op:
 
         def wrapper(*args, **kwargs):
+            ct, val, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 del kwargs["printInfo"]
                 return func(*args, **kwargs)
-            ct, val, _ = args
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             in_node_id = ct.cipher_id
             out_node_id = Cipher.get_next_id()
             res = func(*args, **kwargs)
@@ -77,10 +79,12 @@ def compilerFrontend(func):
     if func.__name__ in binary_op:
 
         def wrapper(*args, **kwargs):
+            in0, in1, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 del kwargs["printInfo"]
                 return func(*args, **kwargs)
-            in0, in1, _ = args
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             in0_node_id = in0.cipher_id
             in1_node_id = in1.cipher_id
             out_node_id = Cipher.get_next_id()
@@ -112,10 +116,12 @@ def compilerFrontend(func):
     if func.__name__ in unary_op:
 
         def wrapper(*args, **kwargs):
+            in0, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 del kwargs["printInfo"]
                 return func(*args, **kwargs)
-            in0, _ = args
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             in0_node_id = in0.cipher_id
             out_node_id = Cipher.get_next_id()
             res = func(*args, **kwargs)
@@ -142,6 +148,11 @@ def compilerFrontend(func):
 
         def wrapper(*args, **kwargs):
             digits, cipher, index, need_KS_add, need_moddown, cryptoContext = args
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             digits_node_id = digits.cipher_id
             cipher_node_name = (
                 "NODE{}".format(cipher.cipher_id) if cipher is not None else "None"
@@ -179,7 +190,12 @@ def compilerFrontend(func):
     if func.__name__ == "extract_cv":
 
         def wrapper(*args, **kwargs):
-            in0, index = args
+            in0, index, cryptoContext = args
+            if "printInfo" in kwargs and kwargs["printInfo"] == False:
+                del kwargs["printInfo"]
+                return func(*args, **kwargs)
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             in0_node_id = in0.cipher_id
             out_node_id = Cipher.get_next_id()
             if "append_zeros" in kwargs:
@@ -189,7 +205,7 @@ def compilerFrontend(func):
             res = func(*args, **kwargs)
             res.cipher_id = out_node_id
             print(
-                "NODE{} = homo_ops.extract_cv(NODE{}, {}{}) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
+                "NODE{} = homo_ops.extract_cv(NODE{}, {}{}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out_node_id,
                     in0_node_id,
                     index,
@@ -210,10 +226,12 @@ def compilerFrontend(func):
     if func.__name__ == "adjust_levels_and_depth":
 
         def wrapper(*args, **kwargs):
+            ct1, ct2, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 del kwargs["printInfo"]
                 return func(*args, **kwargs)
-            ct1, ct2, cryptoContext = args
+            if cryptoContext.inBS == True:
+                return func(*args, **kwargs)
             ct1_node_id = ct1.cipher_id
             ct2_node_id = ct2.cipher_id
             out1_node_id = Cipher.get_next_id()
@@ -249,44 +267,59 @@ def compilerFrontend(func):
     if func.__name__ == "eval_bootstrap":
 
         def wrapper(*args, **kwargs):
-            if 'ciphertext' in kwargs:
-                ciphertext = kwargs['kwargs']
-            else:
-                ciphertext = args[0]
-            if 'cryptoContext' in kwargs:
-                cryptoContext = kwargs['cryptoContext']
-            else:
-                cryptoContext = args[-1]
-            m_U0hatTPreFFT = cryptoContext.BsContext.m_U0hatTPreFFT
-            m_U0PreFFT = cryptoContext.BsContext.m_U0PreFFT
-            for i in range(len(m_U0hatTPreFFT)):
-                for j in range(len(m_U0hatTPreFFT[i])):
-                    print(
-                        "NODE{} = cryptoContext.BsContext.m_U0hatTPreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
-                            m_U0hatTPreFFT[i][j].cipher_id,
-                            i,
-                            j,
-                            m_U0hatTPreFFT[i][j].cur_limbs,
-                            m_U0hatTPreFFT[i][j].noise_deg,
-                            m_U0hatTPreFFT[i][j].scaling_factor,
+            ciphertext, L0, logBsSlots, cryptoContext = args
+            if False: #in application
+                m_U0hatTPreFFT = cryptoContext.BsContext.m_U0hatTPreFFT
+                m_U0PreFFT = cryptoContext.BsContext.m_U0PreFFT
+                for i in range(len(m_U0hatTPreFFT)):
+                    for j in range(len(m_U0hatTPreFFT[i])):
+                        print(
+                            "NODE{} = cryptoContext.BsContext.m_U0hatTPreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
+                                m_U0hatTPreFFT[i][j].cipher_id,
+                                i,
+                                j,
+                                m_U0hatTPreFFT[i][j].cur_limbs,
+                                m_U0hatTPreFFT[i][j].noise_deg,
+                                m_U0hatTPreFFT[i][j].scaling_factor,
+                            )
                         )
-                    )
 
-            for i in range(len(m_U0PreFFT)):
-                for j in range(len(m_U0PreFFT[i])):
-                    print(
-                        "NODE{} = cryptoContext.BsContext.m_U0PreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
-                            m_U0PreFFT[i][j].cipher_id,
-                            i,
-                            j,
-                            m_U0PreFFT[i][j].cur_limbs,
-                            m_U0PreFFT[i][j].noise_deg,
-                            m_U0PreFFT[i][j].scaling_factor,
+                for i in range(len(m_U0PreFFT)):
+                    for j in range(len(m_U0PreFFT[i])):
+                        print(
+                            "NODE{} = cryptoContext.BsContext.m_U0PreFFT[{}][{}] # limb={}, noise={}, sf={}".format(
+                                m_U0PreFFT[i][j].cipher_id,
+                                i,
+                                j,
+                                m_U0PreFFT[i][j].cur_limbs,
+                                m_U0PreFFT[i][j].noise_deg,
+                                m_U0PreFFT[i][j].scaling_factor,
+                            )
                         )
+                print("NODE{} = NODE_IN".format(Cipher._id_counter))
+                res = func(*args, **kwargs)
+            else:
+                cryptoContext.inBS = True
+                in0_node_id = ciphertext.cipher_id
+                out_node_id = Cipher.get_next_id()
+                res = func(*args, **kwargs)
+                res.cipher_id = out_node_id
+                print(
+                    "NODE{} = eval_bootstrap(NODE{}, {}, {}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
+                        out_node_id,
+                        in0_node_id,
+                        L0,
+                        logBsSlots,
+                        res.cur_limbs,
+                        res.noise_deg,
+                        res.scaling_factor,
+                        ciphertext.cur_limbs,
+                        ciphertext.noise_deg,
+                        ciphertext.scaling_factor,
                     )
-
-            print("NODE{} = IN_NODE".format(ciphertext.cipher_id))
-            res = func(*args, **kwargs)
+                )
+                res = func(*args, **kwargs)
+                cryptoContext.inBS = False
             return res
 
         return wrapper

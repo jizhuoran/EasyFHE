@@ -28,6 +28,7 @@ from torch.testing import FileCheck
 from torch.testing._internal.common_cuda import (
     PLATFORM_SUPPORTS_FLASH_ATTENTION,
     SM80OrLater,
+    SM90OrLater,
     TEST_MULTIGPU,
 )
 from torch.testing._internal.common_utils import (
@@ -36,6 +37,7 @@ from torch.testing._internal.common_utils import (
     IS_FBCODE,
     skipIfRocm,
     TEST_WITH_ASAN,
+    xfailIfPy312Plus,
 )
 
 
@@ -148,6 +150,37 @@ class CudaReproTests(TestCase):
 
         # dont check rng state
         self.assertEqual(out[:2], fn(query, key, value, input_tensor2)[:2])
+
+    def test_effn_attn_bias_padding_misaligned(self):
+        seqlen_start = 1008
+
+        for offset in range(-1, 2):
+            seqlen = seqlen_start + offset
+            torch._dynamo.reset()
+
+            bsz = 32
+            q = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            k = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            v = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            mask = torch.ones([bsz, 1, seqlen, seqlen], dtype=torch.bool, device="cuda")
+            inputs = [q, k, v, mask]
+
+            def f(q, k, v, mask):
+                return F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=mask, dropout_p=0.0
+                )
+
+            f_compiled = torch.compile(f)
+
+            out, code = run_and_get_code(f_compiled, *inputs)
+            # padded bias should have an expanded dim
+            FileCheck().check("buf0 =").check_same(", 0, ").run(code[0])
+            # single fused padded kernel
+            FileCheck().check("def call").check_count(
+                "empty_strided_cuda", 1, exactly=True
+            ).check("return").run(code[0])
+
+            self.assertEqual(out, f(*inputs))
 
     @skipIfRocm
     def test_input_channels_last(self):
@@ -281,6 +314,60 @@ class CudaReproTests(TestCase):
                     torch.randn((6, 6), device="cuda"),
                 )
                 self.assertTrue(same(fn(*inputs), (inputs[0] + inputs[1], 6)))
+
+    @config.patch({"emulate_precision_casts": True})
+    def test_bool_emulate_low_precision(self):
+        from torch import device
+
+        inf = float("inf")
+
+        def forward():
+            full_1 = torch.ops.aten.full.default(
+                [6, 6],
+                1,
+                dtype=torch.float32,
+                layout=torch.strided,
+                device=device(type="cpu"),
+                pin_memory=False,
+            )
+            device_put_3 = torch.ops.prims.device_put.default(
+                full_1, device(type="cuda", index=0)
+            )
+            full_1 = None
+
+            convert_element_type_40 = torch.ops.prims.convert_element_type.default(
+                device_put_3, torch.bool
+            )
+            device_put_3 = None
+            unsqueeze_4 = torch.ops.aten.unsqueeze.default(convert_element_type_40, 1)
+            convert_element_type_40 = None
+            unsqueeze_5 = torch.ops.aten.unsqueeze.default(unsqueeze_4, 3)
+            unsqueeze_4 = None
+            expand = torch.ops.aten.expand.default(unsqueeze_5, [-1, 256, -1, 256])
+            unsqueeze_5 = None
+            clone = torch.ops.aten.clone.default(
+                expand, memory_format=torch.contiguous_format
+            )
+            expand = None
+            view_15 = torch.ops.aten.reshape.default(clone, [1536, 1536])
+            clone = None
+            scalar_tensor = torch.ops.aten.scalar_tensor.default(
+                -inf, dtype=torch.float16, device=device(type="cuda", index=0)
+            )
+            scalar_tensor_1 = torch.ops.aten.scalar_tensor.default(
+                0.0,
+                dtype=torch.float16,
+                layout=torch.strided,
+                device=device(type="cuda", index=0),
+            )
+            where = torch.ops.aten.where.self(view_15, scalar_tensor_1, scalar_tensor)
+            view_15 = scalar_tensor_1 = scalar_tensor = None
+            return where
+
+        from torch._inductor import config
+
+        config.emulate_precision_casts = True
+        self.assertEqual(torch.compile(forward)(), forward())
 
     @config.patch({"emulate_precision_casts": True})
     def test_emulate_low_precision(self):
@@ -463,10 +550,16 @@ class CudaReproTests(TestCase):
         """
         from torch._C import _cuda_getCurrentRawStream as get_cuda_stream
         from torch._inductor.runtime.hints import AttrsDescriptorWrapper, HeuristicType
-        from torch._inductor.runtime.triton_heuristics import CachingAutotuner, grid
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+        from torch._inductor.utils import triton_version_uses_attrs_dict
 
         def autotune(configs, meta):
             def decorator(fn):
+                if triton_version_uses_attrs_dict():
+                    # Newer versions of Triton puts constexpr in signature
+                    # Ref: https://github.com/pytorch/pytorch/pull/145051
+                    meta["signature"]["XBLOCK"] = "constexpr"
+
                 return CachingAutotuner(
                     # force autotune by setting save_cache_hook to False
                     fn,
@@ -477,6 +570,7 @@ class CudaReproTests(TestCase):
                     reset_to_zero_arg_names=[],
                     optimize_mem=True,
                     heuristic_type=HeuristicType.POINTWISE,
+                    inductor_meta={"grid_type": "Grid1D"},
                 )
 
             return decorator
@@ -516,8 +610,8 @@ class CudaReproTests(TestCase):
         inout2 = inout1.clone()
 
         stream0 = get_cuda_stream(0)
-        kernel.run(inout1, in0, xnumel, grid=grid(xnumel), stream=stream0)
-        kernel.run(inout2, in0, xnumel, grid=grid(xnumel), stream=stream0)
+        kernel.run(inout1, in0, xnumel, stream=stream0)
+        kernel.run(inout2, in0, xnumel, stream=stream0)
 
         assert same(
             inout1, inout2, tol=0.001, equal_nan=True
@@ -966,6 +1060,43 @@ class CudaReproTests(TestCase):
         actual = opt_fn(values, offsets)
 
         self.assertEqual(expect, actual)
+
+    @config.patch(
+        {
+            "max_autotune_gemm_backends": "TRITON",
+            "triton.disallow_failing_autotune_kernels_TESTING_ONLY": True,
+            "compile_threads": 1,
+        }
+    )
+    def test_bucketize_epilogue(self):
+        """
+        See https://github.com/pytorch/pytorch/issues/148764.
+        Make sure that when torch.bucketize appears as an epilogue, the codegen is valid.
+
+        Note: during autotuning, there's also the option to _not_ do the fusion.
+        So if you run the test with standard configs, the fused kernel would fail during
+        autotuning, and another non-fused kernel would be selected (and Inductor would
+        throw some errors, but the test would pass)
+
+        So we set disallow_failing_autotune_kernels_TESTING_ONLY=True to prevent the
+        autotuner from catching failures. And set compile_threads=1 so that compile
+        failures aren't caught by the asyn runner infra.
+        """
+
+        def fn(x: torch.Tensor, y: torch.Tensor, buckets: torch.Tensor) -> torch.Tensor:
+            z = torch.mm(x, y)
+            return torch.bucketize(z, buckets)
+
+        buckets = torch.arange(-100, 100, 10, device="cuda")
+        x = torch.randn(64, 64, device="cuda").clamp(-99, 99)
+        y = torch.randn(64, 64, device="cuda").clamp(-99, 99)
+
+        opt_fn = torch.compile(fn, mode="max-autotune")
+
+        expected = fn(x, y, buckets)
+        actual = opt_fn(x, y, buckets)
+
+        self.assertEqual(expected, actual)
 
     def test_float64_constants(self):
         def fn():
@@ -1522,6 +1653,92 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
             foo_c = torch.compile(foo)
             torch.testing.assert_allclose(foo(inp), foo_c(inp))
 
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    def test_float8_e8m0fnu(self):
+        device = "cuda"
+        dtype = torch.float8_e8m0fnu
+        hp_dtype = torch.float32  # and torch.bfloat16
+
+        def foo(x0):
+            x1 = x0.to(dtype)
+            x2 = x1.to(hp_dtype)
+            return x2
+
+        x0 = torch.randn(16, 16, device=device, dtype=hp_dtype)
+        foo_c = torch.compile(foo, backend="inductor", fullgraph=True)
+
+        with torch.no_grad():
+            y_c = foo_c(x0)
+
+        self.assertEqual(foo(x0), y_c)
+
+        dtype = torch.float8_e8m0fnu
+
+        def foo(x0):
+            x1 = x0 + 1
+            x2 = x1.view(dtype)
+            return x2
+
+        x0 = torch.randint(0, 255, (16, 16), device=device, dtype=torch.uint8)
+        foo_c = torch.compile(foo, backend="inductor", fullgraph=True)
+
+        with torch.no_grad():
+            y_c = foo_c(x0)
+
+        self.assertEqual(foo(x0), y_c)
+
+    @unittest.skipIf(
+        not config.is_fbcode(),
+        "bfloat16 atomic add is only supported in fbcode today #97016",
+    )
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    def test_atomic_add_bfloat16(self):
+        def f(x, y):
+            return torch.index_select(x, 0, y)
+
+        x = torch.randn(
+            2000, 384, dtype=torch.bfloat16, device="cuda", requires_grad=True
+        )
+        y = torch.ones(713268, dtype=torch.int64, device="cuda")
+        x_ref = x.clone().detach().requires_grad_(True)
+        y_ref = y.clone().detach()
+
+        out, (_, bw_code) = run_fw_bw_and_get_code(lambda: torch.compile(f)(x, y))
+        fc = FileCheck()
+        fc.check("tl.atomic_add")
+        fc.run(bw_code)
+
+        self.assertEqual(f(x_ref, y_ref), out)
+
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    @unittest.skipIf(
+        config.is_fbcode(),
+        "bfloat16 atomic add is supported in fbcode, so we won't fallback",
+    )
+    def test_index_add_fallback(self):
+        def f(x, y):
+            return torch.index_select(x, 0, y)
+
+        x = torch.randn(
+            2000, 384, dtype=torch.bfloat16, device="cuda", requires_grad=True
+        )
+        y = torch.ones(713268, dtype=torch.int64, device="cuda")
+        x_ref = x.clone().detach().requires_grad_(True)
+        y_ref = y.clone().detach()
+
+        out, (_, bw_code) = run_fw_bw_and_get_code(lambda: torch.compile(f)(x, y))
+        fc = FileCheck()
+        fc.check("aten.index_add")
+        fc.run(bw_code)
+
+        self.assertEqual(f(x_ref, y_ref), out)
+
     @requires_multigpu()
     def test_not_initializing_wrong_device(self):
         device_stats = torch.cuda.memory_stats("cuda:0")
@@ -1567,6 +1784,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         self.assertEqual(result, a + b)
         self.assertIn("znumel", code)
 
+    @xfailIfPy312Plus  # https://github.com/pytorch/pytorch/issues/142032
     def test_repeated_masked_load(self):
         target_size = (8, 2)
         mem_eff_temporal_upsampling_interp_chunks = 2
