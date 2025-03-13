@@ -1,9 +1,6 @@
 import os, sys, datetime
-import numpy as np
-
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-from utils import *
 from convs import *
 import torch.fhe as fhe
 from examples.utils import approx
@@ -38,13 +35,10 @@ def get_relu_depth(degree):
     raise ValueError("Set a valid degree for ReLU")
 
 def homo_relu(ciphertext, scale, degree, cryptoContext):
-    def relu_function(x):
+    def scaled_relu_function(x):
         return 0 if x < 0 else (1 / scale) * x
 
-    coefficients = approx.eval_chebyshev_coefficients(relu_function, -1, 1, degree)
-    result = approx.eval_chebyshev_series_ps(
-        ciphertext, coefficients, -1, 1, cryptoContext
-    )
+    result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
     return result
 
 
