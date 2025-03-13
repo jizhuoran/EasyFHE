@@ -4,6 +4,8 @@ from torch.fhe import homo_ops
 import numpy as np
 import atexit, os
 
+DATA_DIR = os.environ["DATA_DIR"]
+
 encoded_weight = {}
 
 normalized_deltas = [
@@ -230,7 +232,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = '../data/weights/' + filename + '.bin'
+        filename = DATA_DIR + '/weights/' + filename + '.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -261,7 +263,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = '../data/weights/fc.bin'
+        filename = DATA_DIR + '/weights/fc.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values

@@ -46,8 +46,8 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 def flex_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 ):
-    if cipher.cur_limbs != target_limbs:
-        print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
+    # if cipher.cur_limbs != target_limbs:
+    #     print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
     assert cipher.cur_limbs >= target_limbs
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
@@ -149,8 +149,8 @@ def flex_adjust_to(
 def fixed_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 ):
-    if cipher.cur_limbs != target_limbs:
-        print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
+    # if cipher.cur_limbs != target_limbs:
+    #     print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
 
     assert cipher.cur_limbs >= target_limbs
     if cipher.cur_limbs == target_limbs:
