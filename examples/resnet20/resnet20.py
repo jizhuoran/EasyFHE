@@ -6,7 +6,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from utils import *
 from convs import *
 import torch.fhe as fhe
-import approx
+from examples.utils import approx
 import torch
 
 DATA_DIR = os.environ["DATA_DIR"]

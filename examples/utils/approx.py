@@ -502,3 +502,12 @@ def eval_chebyshev_coefficients(func, a, b, degree):
         coefficients[i] *= mult_factor
 
     return coefficients
+
+
+def eval_chebyshev_function(function, ciphertext, lowerBound, upperBound, poly_degree, cryptoContext):
+    coefficients = eval_chebyshev_coefficients(
+        function, lowerBound, upperBound, poly_degree)
+    result = eval_chebyshev_series_ps(
+        ciphertext, coefficients, lowerBound, upperBound, cryptoContext
+    )
+    return result
