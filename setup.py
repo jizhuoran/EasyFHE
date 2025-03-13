@@ -219,7 +219,7 @@
 #      Builds libtorch.so and its dependencies as a wheel
 #
 #   BUILD_PYTHON_ONLY
-#      Builds pytorch as a wheel using libtorch.so from a seperate wheel
+#      Builds pytorch as a wheel using libtorch.so from a separate wheel
 
 import os
 import sys
@@ -366,7 +366,7 @@ cmake_python_include_dir = sysconfig.get_path("include")
 # Version, create_version_file, and package_name
 ################################################################################
 
-package_name = os.getenv("TORCH_PACKAGE_NAME", "torch")
+package_name = os.getenv("TORCH_PACKAGE_NAME", "internal_version_DO_NOT_DISTRIBUTE")
 LIBTORCH_PKG_NAME = os.getenv("LIBTORCH_PACKAGE_NAME", "torch_no_python")
 if BUILD_LIBTORCH_WHL:
     package_name = LIBTORCH_PKG_NAME
@@ -1120,10 +1120,11 @@ def main():
         "filelock",
         "typing-extensions>=4.10.0",
         'setuptools ; python_version >= "3.12"',
-        "sympy==1.13.3",
+        "sympy>=1.13.3",
         "networkx",
         "jinja2",
         "fsspec",
+        "gpufhe-wrapper==0.0.5"
     ]
 
     if BUILD_PYTHON_ONLY:
@@ -1274,6 +1275,7 @@ def main():
         "include/c10/xpu/impl/*.h",
         "include/torch/*.h",
         "include/torch/csrc/*.h",
+        "include/torch/csrc/stable/*.h",
         "include/torch/csrc/api/include/torch/*.h",
         "include/torch/csrc/api/include/torch/data/*.h",
         "include/torch/csrc/api/include/torch/data/dataloader/*.h",
@@ -1363,6 +1365,7 @@ def main():
         "include/sleef.h",
         "_inductor/codegen/*.h",
         "_inductor/codegen/aoti_runtime/*.cpp",
+        "_inductor/script.ld",
         "_export/serde/*.yaml",
         "_export/serde/*.thrift",
         "share/cmake/ATen/*.cmake",
@@ -1467,22 +1470,22 @@ def main():
         package_data=package_data,
         url="https://pytorch.org/",
         download_url="https://github.com/pytorch/pytorch/tags",
-        author="PyTorch Team",
-        author_email="packages@pytorch.org",
+        author="Zhuoran Ji",
+        author_email="jizhuoran.work@gmail.com",
         python_requires=f">={python_min_version_str}",
         # PyPI package information.
         classifiers=[
-            "Development Status :: 5 - Production/Stable",
-            "Intended Audience :: Developers",
-            "Intended Audience :: Education",
-            "Intended Audience :: Science/Research",
-            "License :: OSI Approved :: BSD License",
-            "Topic :: Scientific/Engineering",
-            "Topic :: Scientific/Engineering :: Mathematics",
-            "Topic :: Scientific/Engineering :: Artificial Intelligence",
-            "Topic :: Software Development",
-            "Topic :: Software Development :: Libraries",
-            "Topic :: Software Development :: Libraries :: Python Modules",
+            "Development Status :: 5 - Production/Stable WRONG",
+            "Intended Audience :: Developers WRONG",
+            "Intended Audience :: Education WRONG",
+            "Intended Audience :: Science/Research WRONG",
+            "License :: OSI Approved :: BSD License WRONG",
+            "Topic :: Scientific/Engineering WRONG",
+            "Topic :: Scientific/Engineering :: Mathematics WRONG",
+            "Topic :: Scientific/Engineering :: Artificial Intelligence WRONG",
+            "Topic :: Software Development WRONG",
+            "Topic :: Software Development :: Libraries WRONG",
+            "Topic :: Software Development :: Libraries :: Python Modules WRONG",
             "Programming Language :: C++",
             "Programming Language :: Python :: 3",
         ]
