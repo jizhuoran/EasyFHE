@@ -1,4 +1,4 @@
-import re
+import re, os
 import networkx as nx
 from pyvis.network import Network
 
@@ -496,9 +496,10 @@ def stat_rotate_limb(graph, metadata):
         print(key, data)
     print(len(rot_limb))
 
-        
+DATA_DIR = os.environ["DATA_DIR"]
+
 # Sample code string
-with open("sample_code.txt", "r") as f:
+with open(DATA_DIR + "/sample_code.txt", "r") as f:
     code = f.read()
 
 # Parse the code and construct the graph

@@ -6,8 +6,9 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
-import torch.fhe.compiler.bs_compilered as COMPILE
+# import torch.fhe.compiler.bs_compilered as COMPILE
 
+DATA_DIR = os.environ["DATA_DIR"]
 
 maxLevelsRemaining = 3
 logBsSlots_list = [12, 13, 14]
@@ -17,7 +18,7 @@ dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4],[4, 4],[4, 4]]
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-path = "data"
+path = DATA_DIR
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
@@ -151,7 +152,7 @@ if TEST_COMPILE:
     with torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                "/home/zrji/log"
+                DATA_DIR+"/log"
             ),
             record_shapes=True,
             profile_memory=True,
@@ -174,7 +175,7 @@ if TEST_COMPILE:
     with torch.profiler.profile(
             activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
             on_trace_ready=torch.profiler.tensorboard_trace_handler(
-                "/home/zrji/log"
+                DATA_DIR+"/log"
             ),
             record_shapes=True,
             profile_memory=True,

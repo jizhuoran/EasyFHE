@@ -8,6 +8,8 @@ import torch.fhe.bs_context
 import numpy as np
 from termcolor import colored
 
+DATA_DIR = os.environ["DATA_DIR"]
+
 def print_failed(message):
     print(colored(message, "red"))
 
@@ -21,11 +23,9 @@ def app_without_bs_example_debug(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="data",
+        save_dir=DATA_DIR,
         mode = "debug" # "debug" or "release"
 ):
-    if not os.path.exists(save_dir):
-        raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
@@ -67,11 +67,9 @@ def app_example_debug(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="data",
+        save_dir=DATA_DIR,
         mode = "debug" # "debug" or "release"
 ):
-    if not os.path.exists(save_dir):
-        raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
@@ -158,11 +156,9 @@ def app_example_release(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="data",
+        save_dir=DATA_DIR,
         mode="release"  # "debug" or "release"
 ):
-    if not os.path.exists(save_dir):
-        raise ValueError(f"Directory {save_dir} does not exist!")
 
 
     cryptoContext, openfhe_context = (
@@ -233,14 +229,12 @@ def encode_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="data",
+        save_dir=DATA_DIR,
         mode = "debug" # "debug" or "release"
 ):
     ############
     ## test 1 ##
     ############
-    if not os.path.exists(save_dir):
-        raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
@@ -341,11 +335,9 @@ def ct_pt_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir="data",
+        save_dir=DATA_DIR,
         mode = "debug" # "debug" or "release"
 ):
-    if not os.path.exists(save_dir):
-        raise ValueError(f"Directory {save_dir} does not exist!")
 
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,

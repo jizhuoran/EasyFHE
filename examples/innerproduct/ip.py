@@ -34,22 +34,20 @@ def plain_inner_product(x, x1):
 maxLevelsRemaining = 5
 appRotIndex_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
 logBsSlots_list = []
-logN = 14
+logN = 16
 dnum = 3
 dcrtBits = 48 
 firstMod = 60
 levelBudget_list = []
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-save_dir = "data/"
 mode = "release"  # "debug" or "release"
 autoLoadAndSetConfig = True # note: currently only support True
 
-if not os.path.exists(save_dir):
-    raise ValueError(f"Directory {save_dir} does not exist!")
+DATA_DIR = os.environ["DATA_DIR"]
 
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR,
                          autoLoadAndSetConfig=True, mode=mode))
 
 
@@ -69,7 +67,13 @@ cipher1 = openfhe_context.encrypt(x1, 1, openfhe_context.depth - 1, encode_slots
 # clear_result = clear_result.cpu().numpy().reshape(-1)
 # print("HE decryption result: ", clear_result[0])
 # inner_product
+torch.cpu.synchronize()
+torch.cuda.synchronize()
+start_time = time.time()
 cipher_inner_product = homo_inner_product(cipher,cipher1,cryptoContext)
+torch.cpu.synchronize()
+torch.cuda.synchronize()
+print("time: ", time.time() - start_time)
 print("homo_inner_product done!")
 
 clear_result = openfhe_context.decrypt(cipher_inner_product)  
