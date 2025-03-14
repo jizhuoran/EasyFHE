@@ -70,18 +70,31 @@ __global__ void fft_stage_kernel(
   }
 }
 
-__global__ void bit_reverse_normalize_kernel(DTYPE2* vals, int n, int num_bits, DTYPE factor) {
+__global__ void bit_reverse_normalize_kernel(
+    DTYPE2* vals,
+    int n,
+    int num_bits) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
     return;
-  vals[tid].x *= factor;
-  vals[tid].y *= factor;
-  int reversed = __brev(tid) >> (32 - num_bits);
+
+  int reversed = 0;
+  for (int i = 0; i < num_bits; ++i) {
+    reversed <<= 1;
+    reversed |= (tid >> i) & 1;
+  }
   if (reversed > tid) {
     DTYPE2 temp = vals[tid];
     vals[tid] = vals[reversed];
     vals[reversed] = temp;
   }
+}
+__global__ void normalize_kernel(DTYPE2* vals, int n, DTYPE factor) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n)
+    return;
+  vals[tid].x *= factor;
+  vals[tid].y *= factor;
 }
 
 __global__ void scaleAndCheckOverflow(
@@ -99,11 +112,12 @@ __global__ void scaleAndCheckOverflow(
 
   DTYPE abs_real = fabs(val.x);
   DTYPE abs_imag = fabs(val.y);
-
-  int log_real = (abs_real > 0) ? (int)ceil(log2(abs_real)) : 0;
-  int log_imag = (abs_imag > 0) ? (int)ceil(log2(abs_imag)) : 0;
-  int logc = max(log_real, log_imag);
-
+  int logc = 0;
+  if (((abs_imag - 0) < 1e-6) && ((abs_real - 0) < 1e-6)) {
+    logc = 0;
+  } else {
+    logc = max((int)ceil(log2(abs_real)), (int)ceil(log2(abs_imag)));
+  }
   if (logc < 0) {
     printf("Too small scaling factor\n");
     return;
@@ -209,7 +223,11 @@ static void fft_special_inv_cuda(
   dim3 grid_br((vals_size + block.x - 1) / block.x);
   DTYPE factor = 1.0f / vals_size;
   fhe::bit_reverse_normalize_kernel<<<grid_br, block, 0, stream>>>(
-      inverse, vals_size, (int)log2f(vals_size), factor);
+      inverse, vals_size, (int)log2f(vals_size));
+  cudaDeviceSynchronize();
+  fhe::normalize_kernel<<<grid_br, block, 0, stream>>>(
+      inverse, vals_size, factor);
+  cudaDeviceSynchronize();
 }
 
 void fit_to_native_vector(
@@ -338,9 +356,11 @@ static void encode_template(
               M,
               slots);
         }
+        cudaDeviceSynchronize();
         auto stream = at::cuda::getCurrentCUDAStream();
         const int blockDim2 = 256;
         const int gridDim2 = (slots + blockDim2 - 1) / blockDim2;
+        printf("slots: %d\n", slots);
         const int temp_size = 2 * slots;
         int64_t* d_log_approx;
         cudaMalloc(&d_log_approx, sizeof(int64_t));
@@ -367,6 +387,7 @@ static void encode_template(
             h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
         int log_approx = h_log_approx[0];
         if (noise_scale_deg > 1) {
+          //todo: need optimize
           scale_noise_degree_vector(
               elements_ptr,
               primes_ptr,
@@ -378,6 +399,7 @@ static void encode_template(
         }
 
         if (log_approx > 0) {
+          //todo: need optimize
           scale_log_approx_vector(
               elements_ptr,
               primes_ptr,
