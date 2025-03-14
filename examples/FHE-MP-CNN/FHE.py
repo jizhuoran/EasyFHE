@@ -3,15 +3,19 @@ import sys,os
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from torch.fhe.ciphertext import Cipher
-from torch.fhe.ciphertext import Plaintext
 import torch.fhe as fhe
-import numpy as np
 import torch
-import warnings,os
+import os
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-from app.resnet.resnet20 import homo_relu
+from examples.utils import approx
 import time
 
+def homo_relu(ciphertext, scale, degree, cryptoContext):
+    def scaled_relu_function(x):
+        return 0 if x < 0 else (1 / scale) * x
+
+    result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
+    return result
 
 def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_weight,bn_bias,bn_running_mean,bn_running_var,bn_weight):
     if layer_num==20:
@@ -65,7 +69,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
                 ci=32
             else:
                 ci=64
-            file_path = os.path.join("..",  "pretrained_parameters", dir, f"layer{j}_{k}_conv1_weight.txt")
+            file_path = os.path.join(".",  "pretrained_parameters", dir, f"layer{j}_{k}_conv1_weight.txt")
             if not os.path.exists(file_path):
                 raise RuntimeError("file is not open")
             with open(file_path, "r") as f:
@@ -82,7 +86,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
                 ci=32
             elif j==3:
                 ci=64
-            file_path = os.path.join("..", "pretrained_parameters", dir, f"layer{j}_{k}_conv2_weight.txt")
+            file_path = os.path.join(".", "pretrained_parameters", dir, f"layer{j}_{k}_conv2_weight.txt")
             if not os.path.exists(file_path):
                 raise RuntimeError("file is not open")
             with open(file_path, "r") as f:
@@ -93,7 +97,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
             num_c += 1
     ci=16
 
-    file_path = os.path.join("..",  "pretrained_parameters", dir, "bn1_bias.txt")
+    file_path = os.path.join(".","pretrained_parameters", dir, "bn1_bias.txt")
     if not os.path.exists(file_path):
         raise RuntimeError("file is not open")
     with open(file_path, "r") as f:
@@ -101,7 +105,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
     for i in range(ci):
         bn_bias[num_b].append(float(tokens[i]))
     num_b += 1
-    file_path = os.path.join("..",  "pretrained_parameters", dir, "bn1_running_mean.txt")
+    file_path = os.path.join(".",  "pretrained_parameters", dir, "bn1_running_mean.txt")
     if not os.path.exists(file_path):
         raise RuntimeError("file is not open")
     with open(file_path, "r") as f:
@@ -109,7 +113,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
     for i in range(ci):
         bn_running_mean[num_m].append(float(tokens[i]))
     num_m += 1
-    file_path = os.path.join("..",  "pretrained_parameters", dir, "bn1_running_var.txt")
+    file_path = os.path.join(".",  "pretrained_parameters", dir, "bn1_running_var.txt")
     if not os.path.exists(file_path):
         raise RuntimeError("file is not open")
     with open(file_path, "r") as f:
@@ -117,7 +121,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
     for i in range(ci):
         bn_running_var[num_v].append(float(tokens[i]))
     num_v += 1
-    file_path = os.path.join("..", "pretrained_parameters", dir, "bn1_weight.txt")
+    file_path = os.path.join(".", "pretrained_parameters", dir, "bn1_weight.txt")
     if not os.path.exists(file_path):
         raise RuntimeError("file is not open")
     with open(file_path, "r") as f:
@@ -133,7 +137,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
         elif j==3:
             ci=64
         for k in range(end_num+1):
-            base_parts = ["..", "pretrained_parameters", dir]
+            base_parts = [".", "pretrained_parameters", dir]
             file_path = os.path.join(*base_parts, f"layer{j}_{k}_bn1_bias.txt")
             if not os.path.exists(file_path):
                 raise RuntimeError("file is not open")
@@ -198,7 +202,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
             for i in range(ci):
                 bn_weight[num_w].append(float(tokens[i]))
             num_w += 1
-    base_parts = ["..", "pretrained_parameters", dir]
+    base_parts = [".", "pretrained_parameters", dir]
     file_path = os.path.join(*base_parts, "linear_weight.txt")
     if not os.path.exists(file_path):
         raise RuntimeError("file is not open")
@@ -322,15 +326,16 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             ctxt_rot[i1][i2] = ctxt_in
             # print(type(ctxt_rot[i1][i2]))
             ctxt_rot[i1][i2]=fhe.homo_rotate(ctxt_rot[i1][i2],ki*ki*wi*(i1-int((fh-1)/2))+ki*(i2-int((fw-1)/2)),cryptoContext)
+
     zero=[0.0 for _ in range(1<<logn)]
-    #zero=torch.tensor(zero,device="cuda")
+    #zero=torch.tensor(zero,dtype=torch.float64, device="cuda")
     #plain=fhe.encode(zero,1,0,1<<logn,use_gpu_fft=True, cryptoContext=cryptoContext)
-    x=torch.tensor(zero,device="cuda")
+    x=torch.tensor(zero,dtype=torch.float64,device="cuda")
     ct_zero=openfhe_context.encrypt(x,1,0, 1<<logn,"release")
     for i9 in range(q):
         for i1 in range(fh):
             for i2 in range(fw):
-                value = torch.tensor(compact_weight_vec[i1][i2][i9], device="cuda")
+                value = torch.tensor(compact_weight_vec[i1][i2][i9], dtype=torch.float64, device="cuda")
                 value = fhe.encode(value, 1, 0, n, use_gpu_fft=True, cryptoContext=cryptoContext)
                 temp=fhe.homo_mul_pt(ctxt_rot[i1][i2],value,cryptoContext)
                 if(i1==0 and i2==0):sum=temp
@@ -366,7 +371,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             if(j4>=co):raise ValueError(f"the value of j4 is out of range!")
             temp=var
             temp = fhe.homo_rotate(temp,  int(n/pi)*(j4%pi) - j4%ko - int(j4/(ko*ko))*ko*ko*ho*wo - (int(j4%(ko*ko))/ko)*ko*wo, cryptoContext)
-            value = torch.tensor(select_one_vec[j4], device="cuda")
+            value = torch.tensor(select_one_vec[j4], dtype=torch.float64, device="cuda")
             value = fhe.encode(value, 1, 0, 1<<logn, use_gpu_fft=True, cryptoContext=cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(i8==0 and i9==0):
@@ -487,7 +492,7 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
             select_one=zero
             for i in range(ki):
                 select_one[(ki*u+s)*ki+i]=B/(hi*wi)
-            value = torch.tensor(select_one, device="cuda")
+            value = torch.tensor(select_one, dtype=torch.float64, device="cuda")
             value = fhe.encode(value, 1, 0, 1<<logn, use_gpu_fft=True, cryptoContext=cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(u==0 or s==0):
@@ -529,7 +534,7 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
     ct=input.cipher
     for s in range(q+r-1):
         temp=ct
-        value = torch.tensor(W[s], device="cuda")
+        value = torch.tensor(W[s], dtype=torch.float64, device="cuda")
         value = fhe.encode(value, 1, 0, 1 << logn, use_gpu_fft=True, cryptoContext=cryptoContext)
         temp = fhe.homo_mul_pt(temp, value, cryptoContext)
         if s==0:
@@ -577,7 +582,7 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
     for w1 in range(ki):
         for w2 in range(ti):
             temp=ct
-            value = torch.tensor(select_one_vec[w1][w2], device="cuda")
+            value = torch.tensor(select_one_vec[w1][w2], dtype=torch.float64, device="cuda")
             value = fhe.encode(value, 1, 0, 1 << logn, use_gpu_fft=True, cryptoContext=cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             w3 = ((ki * w2 + w1) % (2 * ko)) / 2
@@ -659,7 +664,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     rotation_kinds = [3]
     log_special_prime = 51
     log_integer_part = logq - logp - loge + 5
-    remaining_level = 16
+    remaining_level = 16 + 1
     boot_level = 14
     total_level = remaining_level + boot_level
     logBsSlots_list = [14,13,12]
@@ -676,10 +681,14 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     # coeff_bit_vec = np.append(coeff_bit_vec, log_special_prime)
     dnum=3
     print("start")
+    # cryptoContext, openfhe_context = (
+    #     fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, dnum, logp, logq,
+    #                          levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir="/data/yky/data/new_resnet",
+    #                          autoLoadAndSetConfig=True, mode=mode))#Todo:参数对齐？
     cryptoContext, openfhe_context = (
-        fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, dnum, logp, logq,
-                             levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir="/data/yky/data/new_resnet",
-                             autoLoadAndSetConfig=True, mode=mode))#Todo:参数对齐？
+        fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
+                             levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir="/data/yky/data/new_resnet",
+                             autoLoadAndSetConfig=True, mode=mode))#Todo:参数对齐？ #faster gen
     temp_time2=time.time()
     print("load运行时间为",temp_time2-temp_time1)
     print("hello")
@@ -691,7 +700,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     elif layer_num==110:end_num=17
     for image_id in range(start_image_id,end_image_id+1):
         temp_time3=time.time()
-        if layer_num==20:output = open(f"../result/resnet20_cifar10_image{image_id}.txt", "w")
+        if layer_num==20:output = open(f"./result/resnet20_cifar10_image{image_id}.txt", "w")
         #Todo:这里只给出了resnet20，源码中没有resnet32......
         dir=f"resnet{layer_num}_new"
         cipher_pool = [Cipher for _ in range(14)]
@@ -712,7 +721,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         bn_running_var = []
         bn_weight = []
         linear_weight,linear_bias,conv_weight,bn_bias,bn_running_mean,bn_running_var,bn_weight=import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_weight,bn_bias,bn_running_mean,bn_running_var,bn_weight)
-        with open("../testFile/test_values.txt", "r") as in_file:
+        with open("./testFile/test_values.txt", "r") as in_file:
             for i in range(32 * 32 * 3 * image_id):
                 val = float(next(in_file))
             for i in range(32 * 32 * 3):
@@ -725,20 +734,20 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
             image[i]=image[i%(int(n/init_p))]
         for i in range(n):
             image[i]/=B
-        with open("../testFile/test_label.txt", "r") as in_label:
+        with open("./testFile/test_label.txt", "r") as in_label:
             for _ in range(image_id):
                 image_label = int(in_label.readline().strip())
             image_label = int(in_label.readline().strip())
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
         scale_temp=pow(2.0,logq)
-        x = torch.tensor(vec, device="cuda")
+        x = torch.tensor(vec, dtype=torch.float64,device="cuda")
         cipher_temp= openfhe_context.encrypt(x, 1, 0, len(vec), "release")#Todo:scale？
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
         #ctxt=cnn.cipher
         #for i in range(boot_level-3):
             #evaluator.mod_switch_to_next_inplace(ctxt);
-        #cnn = homo_relu(cnn, B, 29, cryptoContext)
+
 
         # layer 0:
 
@@ -748,7 +757,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
         scale=1.7
         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        #Todo:cnn=homo_relu(cnn,B,29,cryptoContext)
+        cnn.cipher=homo_relu(cnn.cipher,B,29,cryptoContext)
 
         print("first success")
         for j in range (3):
@@ -778,7 +787,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                #Todo:cnn = homo_relu(cnn, B, 29, cryptoContext)
+                cnn.cipher = homo_relu(cnn.cipher, B, 29, cryptoContext) # fixme: everything is fine if we skip this relu
 
                 stage=2*((end_num+1)*j+k)+2
                 st=1
@@ -796,7 +805,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                #Todo:cnn = homo_relu(cnn, B, 29, cryptoContext)
+                cnn.cipher = homo_relu(cnn.cipher, B, 29, cryptoContext)
 
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
