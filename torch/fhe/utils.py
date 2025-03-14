@@ -38,9 +38,11 @@ def print_call_counts():
 
 # @atexit.register
 def print_execution_times():
+    total_time = sum(execution_times.values())
     print("\nExecution Times:")
     for func_name, exec_time in execution_times.items():
         print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
+    print(f"Total execution time profiled: {total_time:.6f} seconds.")
 
 
 def check_meta_equal(func):
@@ -67,8 +69,12 @@ def check_cipher_len(func):
 
 def profile_python_function(func):
     def wrapper(*args, **kwargs):
+        torch.cpu.synchronize()
+        torch.cuda.synchronize()
         start_time = time.time()
         result = func(*args, **kwargs)
+        torch.cpu.synchronize()
+        torch.cuda.synchronize()
         end_time = time.time()
 
         # Calculate the execution time for this call
@@ -245,17 +251,18 @@ def load_rotation_keys(key_name, cryptoContext):
     if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (
         not cryptoContext.slots_left_rot_key_map[str(key_name)]
     ):
-        print("Warning: slots_left_rot_key_map[", key_name, "] is None")
+        print("Warning: slots_left_rot_key_map[", key_name, "] is not in", cryptoContext.slots_left_rot_key_map.keys())
         return
-    for key, value in cryptoContext.slots_left_rot_key_map[str(key_name)].items():
-        cryptoContext.left_rot_key_map[key] = [
-            torch.tensor(v, dtype=torch.uint64, device="cuda") for v in value
-        ]
+    for key in cryptoContext.slots_left_rot_key_map[str(key_name)]:
+        if key not in cryptoContext.left_rot_key_map:
+            cryptoContext.left_rot_key_map[key] = [
+                torch.tensor(v, dtype=torch.uint64, device="cuda")
+                for v in cryptoContext.total_left_rot_key_map[key]
+            ]
     for key, value in cryptoContext.slots_precompute_auto_map[str(key_name)].items():
         cryptoContext.precompute_auto_map[key] = torch.tensor(
             value, dtype=torch.int32, device="cuda"
         )
-
 
 def load_bootstrapping_context(logBsSlots, cryptoContext):
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]

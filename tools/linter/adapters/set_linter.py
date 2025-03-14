@@ -5,7 +5,7 @@ import sys
 import token
 from functools import cached_property
 from pathlib import Path
-from typing import Iterator, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 
 _PARENT = Path(__file__).parent.absolute()
@@ -17,6 +17,7 @@ else:
     import _linter
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
     from tokenize import TokenInfo
 
 
@@ -133,6 +134,8 @@ class TokenLine:
     def is_braced_set(self, begin: int, end: int) -> bool:
         if begin + 1 == end or self.tokens[begin].string != "{":
             return False
+        if begin and self.tokens[begin - 1].string == "in":
+            return False  # skip `x in {1, 2, 3}`
         i = begin + 1
         empty = True
         while i < end:
