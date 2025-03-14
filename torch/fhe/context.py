@@ -68,6 +68,7 @@ class Context:
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
         self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -149,6 +150,7 @@ class Context:
         self.precompute_auto_map = {}
 
         self.autoLoadAndSetConfig=autoLoadAndSetConfig
+        self.inBS = False
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()

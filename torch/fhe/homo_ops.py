@@ -22,7 +22,7 @@ BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
 # drop last elem is a inplace operation now
 @frontend
-def drop_last_elements(ct, num_levels, inplace=False):
+def drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
     assert num_levels <= ct.cur_limbs and num_levels >= 0
     if not inplace:
         ct = ct.deep_copy()
@@ -36,11 +36,11 @@ def _adjust_levels(ct1, ct2, cryptoContext):
     ct1, ct2 = ct1.shallow_copy(), ct2.shallow_copy()
     if ct1.cur_limbs > ct2.cur_limbs:
         ct1 = drop_last_elements(
-            ct1, ct1.cur_limbs - ct2.cur_limbs, inplace=True, printInfo=False
+            ct1, ct1.cur_limbs - ct2.cur_limbs, cryptoContext, inplace=True, printInfo=False
         )
     elif ct1.cur_limbs < ct2.cur_limbs:
         ct2 = drop_last_elements(
-            ct2, ct2.cur_limbs - ct1.cur_limbs, inplace=True, printInfo=False
+            ct2, ct2.cur_limbs - ct1.cur_limbs, cryptoContext, inplace=True, printInfo=False
         )
     return ct1, ct2
 
@@ -48,6 +48,8 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 def flex_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 ):
+    # if cipher.cur_limbs != target_limbs:
+    #     print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
     assert cipher.cur_limbs >= target_limbs
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
@@ -70,6 +72,7 @@ def flex_adjust_to(
                 cipher = drop_last_elements(
                     cipher,
                     cipher.cur_limbs - target_limbs,
+                    cryptoContext,
                     inplace=True,
                     printInfo=False,
                 )
@@ -86,6 +89,7 @@ def flex_adjust_to(
                 cipher = drop_last_elements(
                     cipher,
                     cipher.cur_limbs - target_limbs - 1,
+                    cryptoContext,
                     inplace=True,
                     printInfo=False,
                 )
@@ -117,6 +121,7 @@ def flex_adjust_to(
                     cipher = drop_last_elements(
                         cipher,
                         cipher.cur_limbs - target_limbs - 1,
+                        cryptoContext,
                         inplace=True,
                         printInfo=False,
                     )
@@ -132,7 +137,7 @@ def flex_adjust_to(
             scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
             cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
             cipher = drop_last_elements(
-                cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False
+                cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=True, printInfo=False
             )
             cipher.scaling_factor = scf2
         else:
@@ -146,6 +151,9 @@ def flex_adjust_to(
 def fixed_adjust_to(
     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
 ):
+    # if cipher.cur_limbs != target_limbs:
+    #     print("NODE0 = flex_adjust_to(NODE0) # limb {}".format(cipher.cur_limbs))
+
     assert cipher.cur_limbs >= target_limbs
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
@@ -162,6 +170,7 @@ def fixed_adjust_to(
                 cipher = drop_last_elements(
                     cipher,
                     cipher.cur_limbs - target_limbs,
+                    cryptoContext,
                     inplace=False,
                     printInfo=False,
                 )
@@ -171,6 +180,7 @@ def fixed_adjust_to(
                 cipher = drop_last_elements(
                     cipher,
                     cipher.cur_limbs - target_limbs - 1,
+                    cryptoContext,
                     inplace=True,
                     printInfo=False,
                 )
@@ -191,6 +201,7 @@ def fixed_adjust_to(
                     cipher = drop_last_elements(
                         cipher,
                         cipher.cur_limbs - target_limbs - 1,
+                        cryptoContext,
                         inplace=True,
                         printInfo=False,
                     )
@@ -200,7 +211,7 @@ def fixed_adjust_to(
         elif cipher.noise_deg == 1 and target_noise_deg == 2:
             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
             cipher = drop_last_elements(
-                cipher, cipher.cur_limbs - target_limbs, inplace=True, printInfo=False
+                cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=True, printInfo=False
             )
         else:
             print("noise_deg", cipher.noise_deg, target_noise_deg)
@@ -740,7 +751,6 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 
 
 # note: EvalMultInPlace in ckksrns-leveledshe.cpp
-@profile_python_function
 @call_counter
 @frontend
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
@@ -888,7 +898,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 @frontend
-def extract_cv(cipher: Cipher, index, append_zeros=False):
+def extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):
     assert index == 0 or index == 1, "index must be 0 or 1"
     if append_zeros:
         if index == 0:
@@ -971,52 +981,51 @@ def ptx_encode_cuda(
         raise ValueError(
             f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]"
         )
-    if type_flag == "IsDCRTPoly":
-        if not use_gpu_fft:
-            # Clears all imaginary values as CKKS for complex numbers
-            inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
 
-            # Resize the inverse to fit the slot size.
-            # note that default: slots value should be greater than size of input data list x
-            inverse_complex = np.pad(
-                inverse_complex,
-                pad_width=(0, slots - len(inverse)),
-                mode="constant",
-                constant_values=complex(0.0, 0.0),
-            )
-            arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
-            complex_arr = arr[0::2] + arr[1::2]*1j
-            inverse_complex = fft_special_inv(
-                inverse_complex,
-                cryptocontext.M,
-                cryptocontext.encode_params_rotGroup.cpu().numpy(),
-                complex_arr,
-            )
-            inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
-            inverse_internal = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
-            inverse = torch.tensor(inverse, device="cuda")
-        else:
-            inverse_internal = cryptocontext.encode_inverse
+    if not use_gpu_fft:
+        # Clears all imaginary values as CKKS for complex numbers
+        inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
 
-        pt_encode = torch.encode(
-            inverse=inverse,
-            inverse_internal= inverse_internal,
-            temp=cryptocontext.encode_temp,
-            primes=cryptocontext.primes,
-            precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-            precompute_ksipows=cryptocontext.encode_params_ksiPows,
-            M=cryptocontext.M,
-            N=cryptocontext.N,
-            cur_limbs=cur_limbs,
-            slots=slots,
-            noise_scale_deg=noise_scale_deg,
-            scaling_factor=scaling_factor,
-            power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-            power_of_roots=cryptocontext.power_of_roots,
-            use_fft=use_gpu_fft,
+        # Resize the inverse to fit the slot size.
+        # note that default: slots value should be greater than size of input data list x
+        inverse_complex = np.pad(
+            inverse_complex,
+            pad_width=(0, slots - len(inverse)),
+            mode="constant",
+            constant_values=complex(0.0, 0.0),
         )
+        arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
+        complex_arr = arr[0::2] + arr[1::2]*1j
+        inverse_complex = fft_special_inv(
+            inverse_complex,
+            cryptocontext.M,
+            cryptocontext.encode_params_rotGroup.cpu().numpy(),
+            complex_arr,
+        )
+        inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
+        inverse_internal = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
+        inverse = torch.tensor(inverse, device="cuda")
     else:
-        print("Only DCRTPoly is supported for CKKS.")
+        inverse_internal = cryptocontext.encode_inverse
+
+    pt_encode = torch.encode(
+        inverse=inverse,
+        inverse_internal= inverse_internal,
+        temp=cryptocontext.encode_temp,
+        primes=cryptocontext.primes,
+        precompute_rotgroups=cryptocontext.encode_params_rotGroup,
+        precompute_ksipows=cryptocontext.encode_params_ksiPows,
+        M=cryptocontext.M,
+        N=cryptocontext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        noise_scale_deg=noise_scale_deg,
+        scaling_factor=scaling_factor,
+        power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+        power_of_roots=cryptocontext.power_of_roots,
+        use_fft=use_gpu_fft,
+    )
+
     return pt_encode
 
 
