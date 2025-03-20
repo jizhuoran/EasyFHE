@@ -113,7 +113,7 @@ def app_example_debug(
             print("BootstrapTest_logBsSlots11: Test passed!")
         else:
             print_failed("BootstrapTest_logBsSlots11: Test failed!")
-    
+
     # do some multiplication to consume some limbs
     result.slots =  (1 << 12) # This assignment is for testing purposes only
     drop_limbs = result.cur_limbs - 3
@@ -211,7 +211,7 @@ def app_example_release(
     warnings.warn("note: openfhe adds random noise during decryption, therefore the result might be slightly different each time, "
           "and might be different from the openfhe decryption result even in the same round")
     print("plain result: ", approx_plain_val)
-    print("HE decryption result: ", clear_result[:10])  
+    print("HE decryption result: ", clear_result[:10])
 
     is_equal = np.allclose(clear_result[:10], approx_plain_val[:10], atol=1e-02)
     if is_equal:
@@ -329,6 +329,28 @@ def encode_test_case(
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
+    ############
+    ## test 4 ##
+    ############
+    encode_slots = (1 << 11)
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array(values)
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
+    encoded = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+
+    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    ground_truth = np.array(values) + np.array(values)
+    if np.allclose(clear_result, ground_truth):
+        print("homo_add_pt with gpu_fft Test passed!")
+    else:
+        print_failed("homo_add_pt with gpu_fft Test failed!")
+        print("result", clear_result[:len(values)])
+        print("data", ground_truth)
+
+
 def ct_pt_test_case(
         maxLevelsRemaining=6,
         logBsSlots_list=None,
@@ -388,7 +410,7 @@ def ct_pt_test_case(
         print_failed("homo_add_pt second Test failed!")
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
-    
+
     result = homo_ops.homo_mul_pt(result, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]

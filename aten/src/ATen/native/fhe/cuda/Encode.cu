@@ -28,11 +28,9 @@ __device__ DTYPE2 mul(DTYPE2 a, DTYPE2 b) {
 __global__ void convert_and_pad_inverse(
     DTYPE* inverse,
     DTYPE2* inverse_internal,
-    int size) {
+    int inverse_size) {
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
-  if (tid >= size)
-    return;
-  DTYPE value = (tid < size) ? inverse[tid] : 0.0;
+  DTYPE value = (tid < inverse_size) ? inverse[tid] : 0.0;
   inverse_internal[tid] = MAKE_DTYPE2(value, 0.0);
 }
 
@@ -192,12 +190,13 @@ static std::vector<uint64_t> crt_mult(
 static void convert_inverse(
     DTYPE* inverse,
     DTYPE2* inverse_internal,
+    int inverse_size,
     int slots) {
   const int blockSize = 256;
   const int gridSize = (slots + blockSize - 1) / blockSize;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::convert_and_pad_inverse<<<gridSize, blockSize, 0, stream>>>(
-      inverse, inverse_internal, slots);
+      inverse, inverse_internal, inverse_size);
 }
 
 static void fft_special_inv_cuda(
@@ -346,9 +345,9 @@ static void encode_template(
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
-
+        auto inverse_size = inverse.numel();
         if (use_fft) {
-          convert_inverse(inverse_ptr, inverse_internal_ptr, slots);
+          convert_inverse(inverse_ptr, inverse_internal_ptr, inverse_size, slots);
           fft_special_inv_cuda(
               inverse_internal_ptr,
               rotGroups,
@@ -360,7 +359,6 @@ static void encode_template(
         auto stream = at::cuda::getCurrentCUDAStream();
         const int blockDim2 = 256;
         const int gridDim2 = (slots + blockDim2 - 1) / blockDim2;
-        printf("slots: %d\n", slots);
         const int temp_size = 2 * slots;
         int64_t* d_log_approx;
         cudaMalloc(&d_log_approx, sizeof(int64_t));
