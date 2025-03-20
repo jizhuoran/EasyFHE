@@ -74,11 +74,14 @@ class OpenFHEContext:
             mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
             return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
 
-    def encrypt(self, x, scale_deg = 1, level = 0, slots= None, mode = "release"):
-        if slots is None:
-            slots = len(x)
+    def encrypt(self, x, scale_deg=None, level=None, slots= None, mode = "release"):
+        if not ((scale_deg is None and level is None and slots is None) or
+                (scale_deg is not None and level is not None and slots is not None)):
+            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
         if isinstance(x, (np.ndarray, torch.Tensor)):
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
+            x= x.tolist()
+        if level is None and scale_deg is None and slots is None:
+            ptx = self.cc.MakeCKKSPackedPlaintext(x) # note: default slots is N/2 in openFHE
         else:
             ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
