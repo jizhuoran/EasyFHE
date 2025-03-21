@@ -1023,29 +1023,20 @@ def ptx_encode_cuda(
 
 
 def encode(
-    x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None,
+    x,
+    scale_deg,
+    level,
+    slots,
+    use_gpu_fft,
+    cryptoContext,
 ):
-    if cryptoContext is None:
-        raise ValueError("Error: cryptoContext is not set.")
-    if not (
-        (scale_deg is None and level is None and slots is None)
-        or (scale_deg is not None and level is not None and slots is not None)
-    ):
-        raise ValueError(
-            "Error: check if scale_deg, level, and slots are set correctly."
-        )
-
-    slots = (
-        cryptoContext.Nh if slots is None else slots
-    )  # note: default slots is N/2, which is Nh
-    scale_deg = 1 if scale_deg is None else scale_deg
-    cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
+    cur_limb = cryptoContext.L - level
     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
         scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
         # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
         # in our encoding function, so we set it to 1 to make sure it
         # has no effect on the encoding.
-        scale_deg = 1
+        assert scale_deg == 1
     else:
         scFact = cryptoContext.GetScalingFactorReal(cur_limb)
 

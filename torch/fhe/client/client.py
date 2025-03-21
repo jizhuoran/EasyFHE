@@ -52,42 +52,25 @@ class OpenFHEContext:
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
 
-    def encode(self, x, scale_deg=None, level=None, slots=None):
-        if not ((scale_deg is None and level is None and slots is None) or
-                (scale_deg is not None and level is not None and slots is not None)):
-            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+    def encode(self, x, scale_deg, level, slots):
+        if isinstance(x, (np.ndarray, torch.Tensor)):
+            x = x.tolist()
+        ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+        ptx.Encode()
+        data = ptx.GetVectorOfData()
+        mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+        return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
 
-        if level is None and scale_deg is None and slots is None:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-            ptx.Encode()
-            data = ptx.GetVectorOfData()
-            mv = [
-                torch.tensor(data, device="cuda", dtype=torch.uint64)]  # fixme: shall we set device = "cuda" directly?
-            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
-        else:
-            if isinstance(x, (np.ndarray, torch.Tensor)):
-                ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
-            else:
-                ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
-            ptx.Encode()
-            data = ptx.GetVectorOfData()
-            mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
-            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
-
-    def encrypt(self, x, scale_deg=None, level=None, slots= None):
-        if not ((scale_deg is None and level is None and slots is None) or
-                (scale_deg is not None and level is not None and slots is not None)):
-            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+    def encrypt(self, x, scale_deg, level, slots):
         if isinstance(x, (np.ndarray, torch.Tensor)):
             x= x.tolist()
-        if level is None and scale_deg is None and slots is None:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x) # note: default slots is N/2 in openFHE
-        else:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+        ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
         gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
+        if self.config.PTX_TWIN:
+            gpufhe_cipher.ptx_twin = x
         if self.config.mode == "debug":
             return gpufhe_cipher, cipher
         else:
