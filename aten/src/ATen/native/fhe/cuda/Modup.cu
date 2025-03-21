@@ -36,7 +36,7 @@ __global__ void modup_step_two_kernel(
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
 
   uint128_t accum{0};
-  for (int i = 0; i < alpha; i++) {
+  for (int i = 0; i < start_length; i++) {
     const uint64_t op1 = ptr[i * N + degree_idx];
     const uint64_t op2 = hat_mod_end[hat_mod_end_idx * alpha + i];
     uint128_t out = mult_64_64_128(op1, op2);

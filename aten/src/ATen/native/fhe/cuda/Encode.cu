@@ -28,11 +28,9 @@ __device__ DTYPE2 mul(DTYPE2 a, DTYPE2 b) {
 __global__ void convert_and_pad_inverse(
     DTYPE* inverse,
     DTYPE2* inverse_internal,
-    int size) {
+    int inverse_size) {
   int tid = blockDim.x * blockIdx.x + threadIdx.x;
-  if (tid >= size)
-    return;
-  DTYPE value = (tid < size) ? inverse[tid] : 0.0;
+  DTYPE value = (tid < inverse_size) ? inverse[tid] : 0.0;
   inverse_internal[tid] = MAKE_DTYPE2(value, 0.0);
 }
 
@@ -70,18 +68,31 @@ __global__ void fft_stage_kernel(
   }
 }
 
-__global__ void bit_reverse_normalize_kernel(DTYPE2* vals, int n, int num_bits, DTYPE factor) {
+__global__ void bit_reverse_normalize_kernel(
+    DTYPE2* vals,
+    int n,
+    int num_bits) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
   if (tid >= n)
     return;
-  vals[tid].x *= factor;
-  vals[tid].y *= factor;
-  int reversed = __brev(tid) >> (32 - num_bits);
+
+  int reversed = 0;
+  for (int i = 0; i < num_bits; ++i) {
+    reversed <<= 1;
+    reversed |= (tid >> i) & 1;
+  }
   if (reversed > tid) {
     DTYPE2 temp = vals[tid];
     vals[tid] = vals[reversed];
     vals[reversed] = temp;
   }
+}
+__global__ void normalize_kernel(DTYPE2* vals, int n, DTYPE factor) {
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid >= n)
+    return;
+  vals[tid].x *= factor;
+  vals[tid].y *= factor;
 }
 
 __global__ void scaleAndCheckOverflow(
@@ -99,11 +110,12 @@ __global__ void scaleAndCheckOverflow(
 
   DTYPE abs_real = fabs(val.x);
   DTYPE abs_imag = fabs(val.y);
-
-  int log_real = (abs_real > 0) ? (int)ceil(log2(abs_real)) : 0;
-  int log_imag = (abs_imag > 0) ? (int)ceil(log2(abs_imag)) : 0;
-  int logc = max(log_real, log_imag);
-
+  int logc = 0;
+  if (((abs_imag - 0) < 1e-6) && ((abs_real - 0) < 1e-6)) {
+    logc = 0;
+  } else {
+    logc = max((int)ceil(log2(abs_real)), (int)ceil(log2(abs_imag)));
+  }
   if (logc < 0) {
     printf("Too small scaling factor\n");
     return;
@@ -178,12 +190,13 @@ static std::vector<uint64_t> crt_mult(
 static void convert_inverse(
     DTYPE* inverse,
     DTYPE2* inverse_internal,
+    int inverse_size,
     int slots) {
   const int blockSize = 256;
   const int gridSize = (slots + blockSize - 1) / blockSize;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::convert_and_pad_inverse<<<gridSize, blockSize, 0, stream>>>(
-      inverse, inverse_internal, slots);
+      inverse, inverse_internal, inverse_size);
 }
 
 static void fft_special_inv_cuda(
@@ -209,7 +222,11 @@ static void fft_special_inv_cuda(
   dim3 grid_br((vals_size + block.x - 1) / block.x);
   DTYPE factor = 1.0f / vals_size;
   fhe::bit_reverse_normalize_kernel<<<grid_br, block, 0, stream>>>(
-      inverse, vals_size, (int)log2f(vals_size), factor);
+      inverse, vals_size, (int)log2f(vals_size));
+  cudaDeviceSynchronize();
+  fhe::normalize_kernel<<<grid_br, block, 0, stream>>>(
+      inverse, vals_size, factor);
+  cudaDeviceSynchronize();
 }
 
 void fit_to_native_vector(
@@ -328,9 +345,9 @@ static void encode_template(
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
-
+        auto inverse_size = inverse.numel();
         if (use_fft) {
-          convert_inverse(inverse_ptr, inverse_internal_ptr, slots);
+          convert_inverse(inverse_ptr, inverse_internal_ptr, inverse_size, slots);
           fft_special_inv_cuda(
               inverse_internal_ptr,
               rotGroups,
@@ -338,6 +355,7 @@ static void encode_template(
               M,
               slots);
         }
+        cudaDeviceSynchronize();
         auto stream = at::cuda::getCurrentCUDAStream();
         const int blockDim2 = 256;
         const int gridDim2 = (slots + blockDim2 - 1) / blockDim2;
@@ -367,6 +385,7 @@ static void encode_template(
             h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
         int log_approx = h_log_approx[0];
         if (noise_scale_deg > 1) {
+          //todo: need optimize
           scale_noise_degree_vector(
               elements_ptr,
               primes_ptr,
@@ -378,6 +397,7 @@ static void encode_template(
         }
 
         if (log_approx > 0) {
+          //todo: need optimize
           scale_log_approx_vector(
               elements_ptr,
               primes_ptr,

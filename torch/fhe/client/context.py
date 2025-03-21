@@ -709,7 +709,7 @@ class __FOR_SAVE_ONLY_Context:
             precompute_auto_map = {}
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
-                if int(rotIdx)<0:
+                if int(rotIdx)<0:    # the same as `norm_rot_index(self, i)` in class Context
                     rotIdx = self.N//2 + rotIdx
                 left_rot_key_map.append(int(rotIdx))
                 self.total_left_rot_key_map[int(rotIdx)] = [

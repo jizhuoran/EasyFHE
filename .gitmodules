@@ -133,7 +133,3 @@
 [submodule "third_party/flash-attention"]
 	path = third_party/flash-attention
 	url = https://github.com/Dao-AILab/flash-attention.git
-[submodule "third_party/foxi"]
-    ignore = dirty
-    path = third_party/foxi
-    url = https://github.com/houseroad/foxi.git
