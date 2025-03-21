@@ -366,7 +366,7 @@ def cv_automorphism_transform(
     if i < 0:
         raise ValueError("i should be non-negative")
     return torch.automorphism_transform(
-        input, l=cur_limbs, N=context.N, precomp_vec=context.precompute_auto_map[i]
+        input, l=cur_limbs, N=context.N, precomp_vec=context.get_precompute_auto(i)
     )
 
 

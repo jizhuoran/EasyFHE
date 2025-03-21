@@ -54,6 +54,8 @@ def profiling_single_op(
     mode="release",  # "debug" or "release"
 ):
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+
     cryptoContext, openfhe_context = utils.try_load_context(
         maxLevelsRemaining,
         appRotIndex_list,
@@ -66,15 +68,14 @@ def profiling_single_op(
         "UNIFORM_TERNARY",
         rescaleTech,
         save_dir=save_dir,
-        autoLoadAndSetConfig=True,
-        mode=mode,
+        config=config,
     )
     log_encode_slot = logBsSlots_list[0]
     encode_slots = 1 << log_encode_slot
 
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_encode_slot)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(log_encode_slot, cryptoContext)
+    cryptoContext.load_rotation_keys(log_encode_slot)
 
     values = [
         0.111111,

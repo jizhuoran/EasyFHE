@@ -138,8 +138,7 @@ def try_load_context(
     secretKeyDist,
     rescaleTech,
     save_dir,
-    autoLoadAndSetConfig,
-    mode,
+    config
 ):
 
     NO_BS=False
@@ -187,7 +186,7 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and mode == "debug"
+        not os.path.exists(debug_load_path) and config.mode == "debug"
     ):
         gen_contexts(
             maxLevelsRemaining=maxLevelsRemaining,
@@ -201,30 +200,31 @@ def try_load_context(
             secretKeyDist=secretKeyDist,
             rescaleTech=rescaleTech,
             save_dir=save_dir,
-            mode=mode,
+            mode=config.mode,
         )
 
     with open(load_path, "rb") as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
-    if mode == "debug":
+    if config.mode == "debug":
         if not os.path.exists(debug_load_path):
             print("ERROR: There is no debug context file! Please regenerate context!")
         with open(debug_load_path, "rb") as file:
             debug_keys = pickle.load(file)
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers, autoLoadAndSetConfig)
+    cryptoContext = Context(BsContextMembers, gpufheMembers, config)
     openfhe_context = client.OpenFHEContext(openfheMembers)
-    if cryptoContext.autoLoadAndSetConfig:
+    openfhe_context.config = cryptoContext.config
+    if cryptoContext.config.autoLoadAndSetConfig:
         if rotIndex_list is not None and rotIndex_list != []:
-            load_rotation_keys("app", cryptoContext)
+            cryptoContext.load_rotation_keys("app")
         if NO_BS == False:
             for logBsSlots in logBsSlots_list:
                 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
                 cryptoContext.BsContext.to_cuda()
-                load_rotation_keys(logBsSlots, cryptoContext)
+                cryptoContext.load_rotation_keys(logBsSlots)
 
-    if mode == "debug":
+    if config.mode == "debug":
         openfhe_boot_contexts = {}
         if NO_BS == False:
             for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
@@ -246,25 +246,3 @@ def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
-
-def load_rotation_keys(key_name, cryptoContext):
-    if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (
-        not cryptoContext.slots_left_rot_key_map[str(key_name)]
-    ):
-        print("Warning: slots_left_rot_key_map[", key_name, "] is not in", cryptoContext.slots_left_rot_key_map.keys())
-        return
-    for key in cryptoContext.slots_left_rot_key_map[str(key_name)]:
-        if key not in cryptoContext.left_rot_key_map:
-            cryptoContext.left_rot_key_map[key] = [
-                torch.tensor(v, dtype=torch.uint64, device="cuda")
-                for v in cryptoContext.total_left_rot_key_map[key]
-            ]
-    for key, value in cryptoContext.slots_precompute_auto_map[str(key_name)].items():
-        cryptoContext.precompute_auto_map[key] = torch.tensor(
-            value, dtype=torch.int32, device="cuda"
-        )
-
-def load_bootstrapping_context(logBsSlots, cryptoContext):
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    cryptoContext.BsContext.to_cuda()
-    load_rotation_keys(logBsSlots, cryptoContext)
