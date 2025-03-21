@@ -430,7 +430,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
-    if cryptoContext.autoLoadAndSetConfig == True:
+    if cryptoContext.config.autoLoadAndSetConfig == True:
         cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)

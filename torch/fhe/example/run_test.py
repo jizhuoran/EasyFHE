@@ -6,21 +6,22 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
-# import torch.fhe.compiler.bs_compilered as COMPILE
 
 DATA_DIR = os.environ["DATA_DIR"]
 
 maxLevelsRemaining = 3
-logBsSlots_list = [12, 13, 14]
-logN = 16
+logBsSlots_list = [12]
+logN = 14
 dnum = 3
 dcrtBits = 59
 firstMod = 60
-levelBudget_list = [[4, 4],[4, 4],[4, 4]]
+levelBudget_list = [[4, 4]]
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = DATA_DIR
 mode = "debug"  # "debug" or "release"
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+
+config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),
@@ -34,8 +35,7 @@ cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     secretKeyDist,
     rescaleTech,
     save_dir=path,
-    autoLoadAndSetConfig=True,
-    mode="debug",
+    config=config,
 )
 
 logBsSlots = logBsSlots_list[0]
@@ -54,23 +54,23 @@ values = [
 x = np.array([values[i % len(values)] for i in range((1 << logBsSlots))])
 x = torch.tensor(x, device="cuda")
 cipher, cipher_openfhe = openfhe_context.encrypt(
-    x, 1, openfhe_context.depth - 1, (1 << logBsSlots), mode
+    x, 1, openfhe_context.depth - 1, (1 << logBsSlots)
 )  # specify the slots value explicitly
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
 
-keyset1 = list()
-for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[0])]:
-    keyset1.append(key)
-keyset2 = set()
-for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[1])]:
-    keyset2.add(key)
-keyset3 = set()
-for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[2])]:
-    keyset3.add(key)
+# keyset1 = list()
+# for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[0])]:
+#     keyset1.append(key)
+# keyset2 = set()
+# for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[1])]:
+#     keyset2.add(key)
+# keyset3 = set()
+# for key in cryptoContext.slots_left_rot_key_map[str(logBsSlots_list[2])]:
+#     keyset3.add(key)
 
-exit(0)
+# exit(0)
 
 # print("num of keys in keyset1:", len(keyset1))
 # print("L", cryptoContext.L)
@@ -79,7 +79,7 @@ exit(0)
 # print("num of smae keys:", len(keyset1.intersection(keyset2.intersection(keyset3))))
 
 
-utils.load_rotation_keys(logBsSlots, cryptoContext)
+cryptoContext.load_rotation_keys(logBsSlots)
 
 # with torch.profiler.profile(
 #         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],

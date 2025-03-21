@@ -26,7 +26,7 @@ def modup_to_ext(cipher, cryptoContext):
 def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     assert digits.is_ext == True
     norm_index = cryptoContext.norm_rot_index(index)
-    swk = cryptoContext.left_rot_key_map[norm_index]
+    swk = cryptoContext.get_rotation_key(norm_index)
     sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
                                  swk_bx=swk[0], swk_ax=swk[1])
     return digits.cipher_like(sum_mult, is_ext=True)

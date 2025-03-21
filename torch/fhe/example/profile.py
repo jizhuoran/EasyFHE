@@ -54,6 +54,8 @@ def profiling_single_op(
     mode="release",  # "debug" or "release"
 ):
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+
     cryptoContext, openfhe_context = utils.try_load_context(
         maxLevelsRemaining,
         appRotIndex_list,
@@ -66,15 +68,14 @@ def profiling_single_op(
         "UNIFORM_TERNARY",
         rescaleTech,
         save_dir=save_dir,
-        autoLoadAndSetConfig=True,
-        mode=mode,
+        config=config,
     )
     log_encode_slot = logBsSlots_list[0]
     encode_slots = 1 << log_encode_slot
 
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_encode_slot)]
     cryptoContext.BsContext.to_cuda()
-    utils.load_rotation_keys(log_encode_slot, cryptoContext)
+    cryptoContext.load_rotation_keys(log_encode_slot)
 
     values = [
         0.111111,
@@ -88,8 +89,8 @@ def profiling_single_op(
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
-    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots, mode)
+    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots)
     plaintext = openfhe_context.encode(values, 1, 0, encode_slots)
 
     for limb in range(1, cipher.cur_limbs + 1):

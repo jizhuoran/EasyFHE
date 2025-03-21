@@ -27,26 +27,27 @@ def app_without_bs_example_debug(
         mode = "debug" # "debug" or "release"
 ):
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               autoLoadAndSetConfig=False, mode=mode))
+                               config=config))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys("app", cryptoContext)
+    cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 5, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-    if mode == "debug":
+    if config.mode == "debug":
         cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
         cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
         cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
@@ -71,24 +72,25 @@ def app_example_debug(
         mode = "debug" # "debug" or "release"
 ):
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               autoLoadAndSetConfig=False, mode=mode))
+                               config=config))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    utils.load_rotation_keys("app", cryptoContext)
+    cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-    if mode == "debug":
+    if config.mode == "debug":
         cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
         cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
         is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
@@ -98,12 +100,12 @@ def app_example_debug(
             print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
-    utils.load_bootstrapping_context(str(logBsSlots_list[0]), cryptoContext)
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
-    if mode == "debug":
+    if config.mode == "debug":
         cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
@@ -122,13 +124,13 @@ def app_example_debug(
         result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    utils.load_bootstrapping_context(str(logBsSlots_list[1]), cryptoContext)
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[1]))
     result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
     # compute golden answer
-    if mode == "debug":
+    if config.mode == "debug":
         # do some multiplication to consume some limbs
         for i in range(drop_limbs):
             openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
@@ -157,25 +159,28 @@ def app_example_release(
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR,
+        onDemandLoad=False,
         mode="release"  # "debug" or "release"
 ):
 
-
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, ON_DEMAND_LOAD=onDemandLoad, mode=mode)
     cryptoContext, openfhe_context = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               autoLoadAndSetConfig=True, mode=mode))
+                               config=config))
+
+    print("Current allocated memory (GB):", torch.cuda.memory_allocated() / 1024 / 1024 / 1024)
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
+    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
     x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
     x1 = torch.tensor(x1, device="cuda")
-    cipher1 = openfhe_context.encrypt(x1, 1, 0, encode_slots, mode)
+    cipher1 = openfhe_context.encrypt(x1, 1, 0, encode_slots)
 
     # do the application computation
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
@@ -236,50 +241,17 @@ def encode_test_case(
     ## test 1 ##
     ############
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               autoLoadAndSetConfig=False, mode=mode))
+                               config=config))
     ############
     ## test 1 ##
     ############
-
-    x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
-    plaintext        = homo_ops.encode(x, None, None, None, use_gpu_fft=False, cryptoContext=cryptoContext)
-    plaintext_golden = openfhe_context.encode(x)
-
-    all_correct = True
-    attributes = [
-        ('slots', plaintext.slots, plaintext_golden.slots),
-        ('noise_deg', plaintext.noise_deg, plaintext_golden.noise_deg),
-        ('scaling_factor', plaintext.scaling_factor, plaintext_golden.scaling_factor),
-        ('cur_limbs', plaintext.cur_limbs, plaintext_golden.cur_limbs),
-        ('len', len(plaintext.cv), len(plaintext_golden.cv)),
-    ]
-
-    # Compare attributes
-    for attr_name, attr_value, golden_value in attributes:
-        if attr_value != golden_value:
-            all_correct = False
-            print(f"{attr_name}: {attr_value} != {golden_value}")
-
-    # Compare cv values
-    for i in range(len(plaintext.cv)):
-        if not torch.equal(plaintext.cv[i], plaintext_golden.cv[i]):
-            all_correct = False
-            break
-
-    if all_correct:
-        print("encode with default values: Test passed!")
-    else:
-        print_failed("encode with default values: Test failed!")
-
-    ############
-    ## test 2 ##
-    ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=False, cryptoContext=cryptoContext)
+    plaintext = homo_ops.encode(x, 1, 0, encode_slots, False, cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -309,14 +281,14 @@ def encode_test_case(
         print_failed("encode with specify slots Test failed!")
 
     ############
-    ## test 3 ##
+    ## test 2 ##
     ############
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
-    encoded = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    encoded = homo_ops.encode(x, 1, 0, encode_slots, True, cryptoContext)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -330,14 +302,14 @@ def encode_test_case(
         print("data", ground_truth)
 
     ############
-    ## test 4 ##
+    ## test 3 ##
     ############
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array(values)
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
-    encoded = homo_ops.encode(x, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    encoded = homo_ops.encode(x, 1, 0, encode_slots, True, cryptoContext)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -364,16 +336,17 @@ def ct_pt_test_case(
         mode = "debug" # "debug" or "release"
 ):
 
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
-                               autoLoadAndSetConfig=False, mode=mode))
+                               config=config))
 
     encode_slots=(1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
     encoded = openfhe_context.encode(values, 1, 0, encode_slots)
 
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
@@ -435,8 +408,10 @@ if __name__ == "__main__":
         app_without_bs_example_debug(rescaleTech = rescaleTech, mode="debug")
         print("==========={}============".format('app_example_debug'))
         app_example_debug(rescaleTech = rescaleTech, mode="debug")
-        print("==========={}============".format('app_example_release'))
-        app_example_release(rescaleTech = rescaleTech, mode="release")
+        print("==========={}============".format('app_example_release all load'))
+        app_example_release(rescaleTech = rescaleTech, mode="release", onDemandLoad=False)
+        print("==========={}============".format('app_example_release onDemandLoad'))
+        app_example_release(rescaleTech = rescaleTech, mode="release", onDemandLoad=True)
         print("==========={}============".format('encode_test_case'))
         encode_test_case(rescaleTech = rescaleTech, mode="debug")
         print("==========={}============".format('ct_pt_test_case'))
