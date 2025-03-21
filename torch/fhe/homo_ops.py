@@ -183,7 +183,7 @@ def fixed_adjust_to(
                     cryptoContext,
                     inplace=True,
                     printInfo=False,
-                )
+                    )
             cipher = homo_rescale_internal(
                 cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
             )
@@ -204,7 +204,7 @@ def fixed_adjust_to(
                         cryptoContext,
                         inplace=True,
                         printInfo=False,
-                    )
+                        )
                 cipher = homo_rescale_internal(
                     cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False
                 )
@@ -964,15 +964,56 @@ def fft_special_inv(vals, M, rotGroup, ksiPows):
         vals[i] /= vals_size
     return vals
 
+
+def dump_encode_middle(inverse,
+                       slots,
+                       scaling_factor,
+                       cryptocontext,):
+    inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
+
+    # Resize the inverse to fit the slot size.
+    # note that default: slots value should be greater than size of input data list x
+    inverse_complex = np.pad(
+        inverse_complex,
+        pad_width=(0, slots - len(inverse)),
+        mode="constant",
+        constant_values=complex(0.0, 0.0),
+    )
+    arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
+    complex_arr = arr[0::2] + arr[1::2]*1j
+    inverse_complex = fft_special_inv(
+        inverse_complex,
+        cryptocontext.M,
+        cryptocontext.encode_params_rotGroup.cpu().numpy(),
+        complex_arr,
+    )
+    logc = 0
+    for i in range(slots):
+        inverse[i] *= scaling_factor
+        if inverse[i].real != 0:
+            logci = int(math.ceil(math.log2(abs(inverse[i].real))))
+            logc = max(logc, logci)
+        if inverse[i].imag != 0:
+            logci = int(math.ceil(math.log2(abs(inverse[i].imag))))
+            logc = max(logc, logci)
+
+    if logc < 0:
+        raise ValueError("Too small scaling factor")
+
+    log_valid = min(logc, MAX_BITS_IN_WORD)
+    log_approx = logc - log_valid
+    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
+    return inverse_array, log_approx
+
 def ptx_encode_cuda(
-    x,
-    slots,
-    type_flag,
-    scaling_factor,
-    cur_limbs,
-    noise_scale_deg,
-    use_gpu_fft,
-    cryptocontext,
+        x,
+        slots,
+        type_flag,
+        scaling_factor,
+        cur_limbs,
+        noise_scale_deg,
+        use_gpu_fft,
+        cryptocontext,
 ):
     inverse = x
     pt_encode = []
@@ -1028,15 +1069,39 @@ def ptx_encode_cuda(
 
     return pt_encode
 
+def ptx_encode_middle_cuda(
+        inverse_internal,
+        slots,
+        type_flag,
+        scaling_factor,
+        log_approx,
+        cur_limbs,
+        noise_scale_deg,
+        cryptocontext,
+):
+    pt_encode = torch.encode_middle(
+        inverse_internal= inverse_internal,
+        primes=cryptocontext.primes,
+        N=cryptocontext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        noise_scale_deg=noise_scale_deg,
+        scaling_factor=scaling_factor,
+        log_approx=log_approx,
+        power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
+        power_of_roots=cryptocontext.power_of_roots,
+    )
+    return pt_encode
+
 
 def encode(
-    x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None,
+        x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None, use_middle=False, inverse_internal=None, log_approx=None
 ):
     if cryptoContext is None:
         raise ValueError("Error: cryptoContext is not set.")
     if not (
-        (scale_deg is None and level is None and slots is None)
-        or (scale_deg is not None and level is not None and slots is not None)
+            (scale_deg is None and level is None and slots is None)
+            or (scale_deg is not None and level is not None and slots is not None)
     ):
         raise ValueError(
             "Error: check if scale_deg, level, and slots are set correctly."
@@ -1056,9 +1121,33 @@ def encode(
     else:
         scFact = cryptoContext.GetScalingFactorReal(cur_limb)
 
-    encoded_vector_dcrt_elements_cuda = ptx_encode_cuda(
-        x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext
-    )
+    if not use_middle:
+        encoded_vector_dcrt_elements_cuda = ptx_encode_cuda(
+            x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext
+        )
+        mv = [encoded_vector_dcrt_elements_cuda]
+        return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+    else:
+        if(inverse_internal != None and log_approx !=None):
+            encoded_vector_dcrt_elements_cuda = ptx_encode_middle_cuda(
+                inverse_internal, slots, "IsDCRTPoly", scFact, log_approx, cur_limb, scale_deg, cryptoContext
+            )
+            mv = [encoded_vector_dcrt_elements_cuda]
+            return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+        else:
+            inverse_internal = torch.encode_fft(inverse = x,
+                                                precompute_rotgroups=cryptoContext.encode_params_rotGroup,
+                                                precompute_ksipows=cryptoContext.encode_params_ksiPows,
+                                                M=cryptoContext.M,
+                                                slots=slots,)
+            log_approx = torch.encode_log_approx(inverse_internal = inverse_internal,
+                                                 slots=slots,
+                                                 cur_limbs=cur_limb,
+                                                 scaling_factor=scFact)
+            log_approx = int(log_approx.cpu()[0])
 
-    mv = [encoded_vector_dcrt_elements_cuda]
-    return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+            encoded_vector_dcrt_elements_cuda = ptx_encode_middle_cuda(
+                inverse_internal, slots, "IsDCRTPoly", scFact, log_approx, cur_limb, scale_deg, cryptoContext
+            )
+            mv = [encoded_vector_dcrt_elements_cuda]
+            return inverse_internal, log_approx, Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
