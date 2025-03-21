@@ -630,7 +630,6 @@ def _cipher_automorphism(in0, index, cryptoContext):
     return in0.cipher_like(cv)
 
 
-@call_counter
 @frontend
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
@@ -640,14 +639,12 @@ def homo_add(in0, in1, cryptoContext):
         return _cipher_add(in0, in1, cryptoContext)
 
 
-@call_counter
 @frontend
 def homo_sub(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_sub(in0, in1, cryptoContext)
 
 
-@call_counter
 @frontend
 def homo_rescale(
     ct, levels, cryptoContext
@@ -659,7 +656,6 @@ def homo_rescale(
 
 
 @frontend
-@call_counter
 def homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
     if levels == 0:
@@ -687,7 +683,6 @@ def homo_rescale_internal(ct, levels, cryptoContext):
     )
 
 
-@call_counter
 @frontend
 def homo_mul(in0, in1, cryptoContext):
     # note: AdjustForMultInPlace in rns-leveledshe.cpp
@@ -706,7 +701,6 @@ def homo_mul(in0, in1, cryptoContext):
     return _cipher_add(res, tmp, cryptoContext)
 
 
-@call_counter
 @frontend
 def homo_square(in0, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
@@ -751,7 +745,6 @@ def homo_mul_scalar_int(in0, scalar, cryptoContext):
 
 
 # note: EvalMultInPlace in ckksrns-leveledshe.cpp
-@call_counter
 @frontend
 def homo_mul_scalar_double(in0, cnst, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:

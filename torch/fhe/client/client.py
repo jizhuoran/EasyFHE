@@ -74,7 +74,7 @@ class OpenFHEContext:
             mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
             return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
 
-    def encrypt(self, x, scale_deg=None, level=None, slots= None, mode = "release"):
+    def encrypt(self, x, scale_deg=None, level=None, slots= None):
         if not ((scale_deg is None and level is None and slots is None) or
                 (scale_deg is not None and level is not None and slots is not None)):
             raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
@@ -87,10 +87,11 @@ class OpenFHEContext:
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
-        if mode == "debug":
-            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
+        gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
+        if self.config.mode == "debug":
+            return gpufhe_cipher, cipher
         else:
-            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
+            return gpufhe_cipher
 
     def decrypt(self, x):
         assert len(x.cv) == 2

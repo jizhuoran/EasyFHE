@@ -213,8 +213,6 @@ def try_load_context(
             debug_keys = pickle.load(file)
 
     cryptoContext = Context(BsContextMembers, gpufheMembers, config)
-    openfhe_context = client.OpenFHEContext(openfheMembers)
-    openfhe_context.config = cryptoContext.config
     if cryptoContext.config.autoLoadAndSetConfig:
         if rotIndex_list is not None and rotIndex_list != []:
             cryptoContext.load_rotation_keys("app")
@@ -224,6 +222,8 @@ def try_load_context(
                 cryptoContext.BsContext.to_cuda()
                 cryptoContext.load_rotation_keys(logBsSlots)
 
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    openfhe_context.config = cryptoContext.config
     if config.mode == "debug":
         openfhe_boot_contexts = {}
         if NO_BS == False:

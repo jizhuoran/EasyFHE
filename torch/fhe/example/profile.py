@@ -89,8 +89,8 @@ def profiling_single_op(
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots, mode)
-    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots, mode)
+    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots)
     plaintext = openfhe_context.encode(values, 1, 0, encode_slots)
 
     for limb in range(1, cipher.cur_limbs + 1):

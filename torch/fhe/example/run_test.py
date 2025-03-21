@@ -54,7 +54,7 @@ values = [
 x = np.array([values[i % len(values)] for i in range((1 << logBsSlots))])
 x = torch.tensor(x, device="cuda")
 cipher, cipher_openfhe = openfhe_context.encrypt(
-    x, 1, openfhe_context.depth - 1, (1 << logBsSlots), mode
+    x, 1, openfhe_context.depth - 1, (1 << logBsSlots)
 )  # specify the slots value explicitly
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
