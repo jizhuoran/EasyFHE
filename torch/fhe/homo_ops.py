@@ -1088,23 +1088,18 @@ def ptx_encode_middle_cuda(
 
 
 def encode(
-        x, scale_deg=None, level=None, slots=None, use_gpu_fft=True, cryptoContext=None, use_middle=False, inverse_internal=None, log_approx=None
+    x,
+    scale_deg,
+    level,
+    slots,
+    use_gpu_fft,
+    cryptoContext,
+    use_middle=False,
+    inverse_internal=None,
+    log_approx=None,
 ):
-    if cryptoContext is None:
-        raise ValueError("Error: cryptoContext is not set.")
-    if not (
-            (scale_deg is None and level is None and slots is None)
-            or (scale_deg is not None and level is not None and slots is not None)
-    ):
-        raise ValueError(
-            "Error: check if scale_deg, level, and slots are set correctly."
-        )
 
-    slots = (
-        cryptoContext.Nh if slots is None else slots
-    )  # note: default slots is N/2, which is Nh
-    scale_deg = 1 if scale_deg is None else scale_deg
-    cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
+    cur_limb = cryptoContext.L - level
     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
         scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
         # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
@@ -1116,31 +1111,60 @@ def encode(
 
     if not use_middle:
         encoded_vector_dcrt_elements_cuda = ptx_encode_cuda(
-            x, slots, "IsDCRTPoly", scFact, cur_limb, scale_deg, use_gpu_fft, cryptoContext
+            x,
+            slots,
+            "IsDCRTPoly",
+            scFact,
+            cur_limb,
+            scale_deg,
+            use_gpu_fft,
+            cryptoContext,
         )
         mv = [encoded_vector_dcrt_elements_cuda]
         return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
     else:
-        if(inverse_internal != None and log_approx !=None):
+        if inverse_internal != None and log_approx != None:
             encoded_vector_dcrt_elements_cuda = ptx_encode_middle_cuda(
-                inverse_internal, slots, "IsDCRTPoly", scFact, log_approx, cur_limb, scale_deg, cryptoContext
+                inverse_internal,
+                slots,
+                "IsDCRTPoly",
+                scFact,
+                log_approx,
+                cur_limb,
+                scale_deg,
+                cryptoContext,
             )
             mv = [encoded_vector_dcrt_elements_cuda]
             return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
         else:
-            inverse_internal = torch.encode_fft(inverse = x,
-                                                precompute_rotgroups=cryptoContext.encode_params_rotGroup,
-                                                precompute_ksipows=cryptoContext.encode_params_ksiPows,
-                                                M=cryptoContext.M,
-                                                slots=slots,)
-            log_approx = torch.encode_log_approx(inverse_internal = inverse_internal,
-                                                 slots=slots,
-                                                 cur_limbs=cur_limb,
-                                                 scaling_factor=scFact)
+            inverse_internal = torch.encode_fft(
+                inverse=x,
+                precompute_rotgroups=cryptoContext.encode_params_rotGroup,
+                precompute_ksipows=cryptoContext.encode_params_ksiPows,
+                M=cryptoContext.M,
+                slots=slots,
+            )
+            log_approx = torch.encode_log_approx(
+                inverse_internal=inverse_internal,
+                slots=slots,
+                cur_limbs=cur_limb,
+                scaling_factor=scFact,
+            )
             log_approx = int(log_approx.cpu()[0])
 
             encoded_vector_dcrt_elements_cuda = ptx_encode_middle_cuda(
-                inverse_internal, slots, "IsDCRTPoly", scFact, log_approx, cur_limb, scale_deg, cryptoContext
+                inverse_internal,
+                slots,
+                "IsDCRTPoly",
+                scFact,
+                log_approx,
+                cur_limb,
+                scale_deg,
+                cryptoContext,
             )
             mv = [encoded_vector_dcrt_elements_cuda]
-            return inverse_internal, log_approx, Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+            return (
+                inverse_internal,
+                log_approx,
+                Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False),
+            )
