@@ -131,7 +131,7 @@ def inner_eval_chebyshev_ps(coefficients,
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            cu = homo_ops.drop_last_elements(cu, cu.cur_limbs - T2[m - 1].cur_limbs, cryptoContext, inplace=True)
+            cu = homo_ops.adjust_to(cu, T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor, cryptoContext)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -177,7 +177,7 @@ def inner_eval_chebyshev_ps(coefficients,
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            su = homo_ops.drop_last_elements(su, 1, cryptoContext, inplace=True)
+            su = homo_ops.adjust_to(su, su.cur_limbs - 1, 1, None, cryptoContext)
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -348,15 +348,8 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
-
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
-        for i in range(1, k):
-            T[i - 1] = homo_ops.drop_last_elements(T[i - 1], T[i - 1].cur_limbs - T[k - 1].cur_limbs, cryptoContext, inplace=True)
-    else:
-        for i in range(1, k):
-            T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+    for i in range(k):
+        T[i] = homo_ops.adjust_to(T[i], T[-1].cur_limbs, T[-1].noise_deg, T[-1].scaling_factor, cryptoContext)
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder

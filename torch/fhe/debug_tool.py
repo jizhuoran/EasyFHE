@@ -9,7 +9,6 @@ def auto_sync(func):
         torch.cpu.synchronize()
         torch.cuda.synchronize()
         return result
-
     return wrapper
 
 

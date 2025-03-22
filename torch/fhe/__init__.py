@@ -13,5 +13,5 @@ __all__ = [
     'extract_cv',
     'encode',
     'try_load_context',
-    'drop_last_elements'
+    'adjust_to'
 ]
