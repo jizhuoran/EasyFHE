@@ -159,21 +159,13 @@ def _fixed_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_fact
     return cipher
 
 
-# def flex_adjust_to(
-#     cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
-# ):
-#     assert cipher.cur_limbs >= target_limbs
-#     while cipher.cur_limbs > target_limbs:
-#         if cipher.noise_deg == 1:
-#             cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
-#         cipher = homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext, printInfo=False)
-#     if cipher.noise_deg < target_noise_deg:
-#         res = _eval_mult_core(cipher, 1.0, cryptoContext)
-#     else:
-#         res = cipher
-#     assert res.cur_limbs == target_limbs and res.noise_deg == target_noise_deg
-#     return res
-
+def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
+        return flex_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    elif cryptoContext.rescaleTech == "FIXEDAUTO":
+        return _fixed_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    else:
+        raise ValueError 
 
 # drop last elem is a inplace operation now
 @decorator_factory
@@ -202,17 +194,9 @@ def adjust_levels_and_depth(ct1, ct2, cryptoContext):
         target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
         target_scaling_factor = None
         # print("case3", target_limbs, target_noise_deg, target_scaling_factor)
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
-        return flex_adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), flex_adjust_to(
-            ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
-        )
-    elif cryptoContext.rescaleTech == "FIXEDAUTO":
-        return _fixed_adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), _fixed_adjust_to(
-            ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
-        )
-    else:
-        raise ValueError
-
+    return adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), adjust_to(
+        ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+    )
 
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):

@@ -7,34 +7,20 @@ from .utils import profile_python_function, profile_pytorch_function
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
+
 # @profile_python_function
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
-    input_size = len(constants)
-
     if cryptoContext.rescaleTech != "FIXEDMANUAL":
-        # Check to see if input ciphertexts are of same level
-        # and adjust if needed to the max level among them
-        minLimbs = ciphertexts[0].cur_limbs
-        minIdx = 0
-        for i in range(1, input_size):
-            if (ciphertexts[i].cur_limbs < minLimbs or
-                    (ciphertexts[i].cur_limbs == minLimbs)
-                    and ciphertexts[i].noise_deg == 2):
-                minLimbs = ciphertexts[i].cur_limbs
-                minIdx = i
-        for i in range(minIdx):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
-        for i in range(minIdx + 1, input_size):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
-
-        if ciphertexts[minIdx].noise_deg == 2:
-            for i in range(0, input_size):
-                ciphertexts[i] = homo_ops.homo_rescale_internal(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
+        if ciphertexts[target_idx].noise_deg == 2:
+            ciphertexts[target_idx] = homo_ops.homo_rescale_internal(ciphertexts[target_idx], 1, cryptoContext)
+        for i in range(len(ciphertexts)):
+            ciphertexts[i] = homo_ops.adjust_to(
+                ciphertexts[i], ciphertexts[target_idx].cur_limbs, ciphertexts[target_idx].noise_deg, ciphertexts[target_idx].scaling_factor, cryptoContext
+            )
 
     wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
-    for i in range(1, input_size):
+    for i in range(1, len(constants)):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
     wsum = homo_ops.homo_rescale(wsum, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
