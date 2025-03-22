@@ -18,7 +18,7 @@ unary_cnst_op = {
     "homo_rotate": "homo_ops.",
     "homo_mul_scalar_int": "homo_ops.",
     "homo_add_scalar_double": "homo_ops.",
-    "_cipher_automorphism": "homo_ops.",
+    "cipher_automorphism": "homo_ops.",
     "mult_rot_key_and_sum_ext": "hybrid_keyswitch.",
 }
 

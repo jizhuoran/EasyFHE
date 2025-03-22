@@ -152,7 +152,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_cv0 = homo_ops.extract_cv(inner, 0, cryptoContext)
                     inner_cv1 = homo_ops.extract_cv(inner, 1, cryptoContext)
 
-                    first = homo_ops._cipher_automorphism(
+                    first = homo_ops.cipher_automorphism(
                         inner_cv0, rot_out[s][i], cryptoContext
                     )
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)

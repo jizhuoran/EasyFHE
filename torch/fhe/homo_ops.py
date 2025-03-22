@@ -495,7 +495,7 @@ def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cry
 
 # todo: input len of in0.cv could be 1
 @decorator_factory
-def _cipher_automorphism(in0, index, cryptoContext):
+def cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
     cv = [F.cv_automorphism_transform(cv, limbs, norm_index, cryptoContext) for cv in in0.cv]
@@ -628,7 +628,7 @@ def homo_rotate(in0, index, cryptoContext):
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
-    res = _cipher_automorphism(res, index, cryptoContext, printInfo=False)
+    res = cipher_automorphism(res, index, cryptoContext, printInfo=False)
 
     return res
 
@@ -664,7 +664,7 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
             inplace=True,
         )
 
-    result = _cipher_automorphism(result, index, cryptoContext, printInfo=False)
+    result = cipher_automorphism(result, index, cryptoContext, printInfo=False)
 
     return result
 
