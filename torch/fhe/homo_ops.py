@@ -973,7 +973,10 @@ def encode(
             cryptoContext,
         )
         mv = [encoded_vector_dcrt_elements_cuda]
-        return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+        gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+        if cryptoContext.config.PTX_TWIN:
+            gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
+        return gpufhe_cipher
     else:
         if inverse_internal != None and log_approx != None:
             encoded_vector_dcrt_elements_cuda = _ptx_encode_middle_cuda(
@@ -987,7 +990,10 @@ def encode(
                 cryptoContext,
             )
             mv = [encoded_vector_dcrt_elements_cuda]
-            return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+            gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+            if cryptoContext.config.PTX_TWIN:
+                gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+            return gpufhe_cipher
         else:
             inverse_internal = torch.encode_fft(
                 inverse=x,
@@ -1015,8 +1021,12 @@ def encode(
                 cryptoContext,
             )
             mv = [encoded_vector_dcrt_elements_cuda]
+            gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
+            if cryptoContext.config.PTX_TWIN:
+                gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
             return (
                 inverse_internal,
                 log_approx,
-                Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False),
+                gpufhe_cipher
             )
+

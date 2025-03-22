@@ -2,7 +2,7 @@ import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch.fhe.homo_ops as homo_ops
-from torch.fhe.bootstrapping import eval_bootstrap
+from torch.fhe.bootstrapping import eval_bootstrap, homo_bootstrap
 import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
@@ -101,7 +101,7 @@ def app_example_debug(
 
     # bootstrapping
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
@@ -125,7 +125,7 @@ def app_example_debug(
 
     # bootstrapping
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[1]))
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+    result1 = eval_bootstrap(result, cryptoContext.L, logBsSlots_list[1], cryptoContext)
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -188,8 +188,7 @@ def app_example_release(
     print("homo_rotate done!")
 
     # bootstrapping
-    result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    result = homo_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -207,8 +206,7 @@ def app_example_release(
         result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    result1 = eval_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
-    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
+    result1 = homo_bootstrap(result, cryptoContext.L, logBsSlots_list[1], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -333,10 +331,11 @@ def ct_pt_test_case(
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR,
+        plaintext_twin = False,
         mode = "debug" # "debug" or "release"
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode, PTX_TWIN = plaintext_twin)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -352,6 +351,8 @@ def ct_pt_test_case(
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    if plaintext_twin:
+        clear_result = np.array(result.ptx_twin).reshape(-1)[:len(values)]
     ground_truth = np.array(values) + np.array(values)
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt Test passed!")
@@ -365,6 +366,8 @@ def ct_pt_test_case(
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(values) * np.array(values)
+    if plaintext_twin:
+        clear_result = np.array(result.ptx_twin).reshape(-1)[:len(values)]
     if np.allclose(clear_result,ground_truth):
         print("homo_mul_pt Test passed!")
     else:
@@ -377,6 +380,8 @@ def ct_pt_test_case(
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(ground_truth) + np.array(values)
+    if plaintext_twin:
+        clear_result = np.array(result.ptx_twin).reshape(-1)[:len(values)]
     if np.allclose(clear_result, ground_truth):
         print("homo_add_pt second Test passed!")
     else:
@@ -388,6 +393,8 @@ def ct_pt_test_case(
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(ground_truth) * np.array(values)
+    if plaintext_twin:
+        clear_result = np.array(result.ptx_twin).reshape(-1)[:len(values)]
     if np.allclose(clear_result, ground_truth):
         print("homo_mul_pt second Test passed!")
     else:
@@ -415,5 +422,7 @@ if __name__ == "__main__":
         print("==========={}============".format('encode_test_case'))
         encode_test_case(rescaleTech = rescaleTech, mode="debug")
         print("==========={}============".format('ct_pt_test_case'))
-        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug")
+        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug", plaintext_twin = False)
+        print("==========={}============".format('test_plaintext_twin'))
+        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug", plaintext_twin = True)
         print("************************************".format(rescaleTech))

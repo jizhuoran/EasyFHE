@@ -1,3 +1,4 @@
+import functools
 from ..ciphertext import Cipher
 
 unary_op = {
@@ -33,6 +34,7 @@ COMPILE = "OFF"
 
 
 def omitFrontend(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if "printInfo" in kwargs:
             del kwargs["printInfo"]
@@ -44,7 +46,8 @@ def omitFrontend(func):
 def compilerFrontend(func):
 
     if func.__name__ in unary_cnst_op:
-
+        
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ct, val, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -78,6 +81,7 @@ def compilerFrontend(func):
 
     if func.__name__ in binary_op:
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, in1, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -115,6 +119,7 @@ def compilerFrontend(func):
 
     if func.__name__ in unary_op:
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -146,6 +151,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "eval_fast_rotate":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             digits, cipher, index, need_KS_add, need_moddown, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -189,6 +195,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "extract_cv":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, index, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -225,6 +232,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "adjust_to":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -258,6 +266,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "eval_bootstrap":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ciphertext, L0, logBsSlots, cryptoContext = args
             if True: #in application
