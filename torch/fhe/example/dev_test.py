@@ -2,7 +2,7 @@ import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch.fhe.homo_ops as homo_ops
-from torch.fhe.bootstrapping import eval_bootstrap, homo_bootstrap
+from torch.fhe.bootstrapping import eval_bootstrap, homo_double_bootstrap, homo_bootstrap
 import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
@@ -87,7 +87,7 @@ def app_example_debug(
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-   
+
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
     is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
@@ -102,7 +102,7 @@ def app_example_debug(
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
-   
+
     cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
@@ -398,6 +398,55 @@ def ct_pt_test_case(
 
 
 
+
+def double_bs_debug(
+        maxLevelsRemaining=3,
+        appRotIndex_list = [],
+        logBsSlots_list=[11],
+        logN=14,
+        dnum=3,
+        dcrtBits=52,
+        firstMod=56,
+        levelBudget_list=[[3, 3]],
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir=DATA_DIR,
+        mode = "debug" # "debug" or "release"
+):
+
+    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+    cryptoContext, openfhe_context, openfhe_boot_contexts = (
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               config=config))
+
+    openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
+    encode_slots = (1 << 11)
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+
+    precision = 17
+
+    # bootstrapping
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = homo_double_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], precision=precision, cryptoContext=cryptoContext)
+    print("gpu bootstrapp done!")
+    clear_result = openfhe_boot_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    print("clear result ", clear_result[:10])
+    # compute golden answer
+    if config.mode == "debug":
+        openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
+        num_iter = 2
+        openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe, num_iter, precision)
+        openfhe_boot = openfhe_boot_context.cc.ModReduce(openfhe_boot)
+        is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+        if is_euqal:
+            print("BootstrapTest_logBsSlots11: Test passed!")
+        else:
+            print_failed("BootstrapTest_logBsSlots11: Test failed!")
+
 ##############
 ## run tests #
 ##############
@@ -419,4 +468,6 @@ if __name__ == "__main__":
         ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
         print("==========={}============".format('test_plaintext_twin'))
         ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+        print("==========={}============".format('double_bs_debug'))
+        double_bs_debug(rescaleTech = rescaleTech)
         print("************************************".format(rescaleTech))

@@ -436,3 +436,58 @@ def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
     result = homo_ops.homo_rescale(result, result.noise_deg - 1, cryptoContext)
 
     return result
+
+def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
+
+    if cryptoContext.config.autoLoadAndSetConfig == True:
+        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+
+    initSizeQ = cipher.cur_limbs
+
+    # Step 1: Get the input.
+    powerOfTwoModulus = 1 << precision
+
+    # Step 2: Scale up by powerOfTwoModulus, and extend the modulus to powerOfTwoModulus * q.
+    # Note that we extend the modulus implicitly without any code calls because the value always stays 0.
+    ctScaledUp = cipher.deep_copy()
+    # We multiply by powerOfTwoModulus, and leave the last CRT value to be 0 (mod powerOfTwoModulus). #todp:??
+    ctScaledUp = homo_ops.homo_mul_scalar_int(ctScaledUp, powerOfTwoModulus, cryptoContext)
+
+
+    # Step 3: Bootstrap the initial ciphertext.
+    ctInitialBootstrap = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
+    ctInitialBootstrap = homo_ops.homo_rescale_internal(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1,
+                                                        cryptoContext)
+
+    # Step 4: Scale up by powerOfTwoModulus.
+    ctInitialBootstrap = homo_ops.homo_mul_scalar_int(ctInitialBootstrap, powerOfTwoModulus, cryptoContext)
+
+    # Step 5: Mod-down to powerOfTwoModulus * q
+    # We mod down, and leave the last CRT value to be 0 because it's divisible by powerOfTwoModulus.
+    ctBootstrappedScaledDown = ctInitialBootstrap.deep_copy()
+    bootstrappingSizeQ = ctBootstrappedScaledDown.cur_limbs
+    # If we start with more towers, than we obtain from bootstrapping, return the original ciphertext.
+    if bootstrappingSizeQ <= initSizeQ:
+        return cipher.deep_copy()
+    ctBootstrappedScaledDown.cur_limbs = cipher.cur_limbs # note: hard adjust, drop limbs regardless of the rescaleTech
+
+
+    # Step 6 and 7: Calculate the bootstrapping error by subtracting the original ciphertext from the bootstrapped ciphertext. Mod down to q is done implicitly.
+    ctBootstrappingError = homo_ops.homo_sub(ctBootstrappedScaledDown, ctScaledUp, cryptoContext)
+
+    # Step 8: Bootstrap the error.
+    ctBootstrappingError = eval_bootstrap(ctBootstrappingError, L0, logBsSlots, cryptoContext)
+    ctBootstrappingError = homo_ops.homo_rescale_internal(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP,
+                                                          cryptoContext)
+
+    # Step 9: Subtract the bootstrapped error from the initial bootstrap to get even lower error.
+    finalCiphertext = homo_ops.homo_sub(ctInitialBootstrap, ctBootstrappingError, cryptoContext)
+
+    # Step 10: Scale back down by powerOfTwoModulus to get the original message.
+    finalCiphertext = homo_ops.homo_mul_scalar_double(finalCiphertext, 1.0 / powerOfTwoModulus, cryptoContext)
+
+    # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
+    finalCiphertext = homo_ops.homo_rescale(finalCiphertext, finalCiphertext.noise_deg - 1, cryptoContext)
+
+    return finalCiphertext
+
