@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 class Cipher:
     _id_counter = 0
@@ -29,7 +30,7 @@ class Cipher:
         is_ext=None,
         cipher_id="copy",
     ):
-        return Cipher(
+        res = Cipher(
             cv,
             self.cur_limbs if cur_limbs == None else cur_limbs,
             self.scaling_factor if scaling_factor == None else scaling_factor,
@@ -38,6 +39,9 @@ class Cipher:
             self.is_ext if is_ext == None else is_ext,
             self.cipher_id if cipher_id == "copy" else cipher_id,
         )
+        if 'ptx_twin' in self.__dict__:
+            res.ptx_twin = np.copy(self.ptx_twin)
+        return res
 
     def deep_copy(self):
         return self.cipher_like([x.clone() for x in self.cv], cipher_id="assign")

@@ -1,11 +1,10 @@
-from .ciphertext import Cipher
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import approx as approx
 from . import hybrid_keyswitch
 from . import utils
-from .compiler.compiler import frontend
+from .decorator_factory import decorator_factory
 
 
 Tensor = torch.Tensor
@@ -14,7 +13,7 @@ BASE_NUM_LEVELS_TO_DROP = 1
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 
-@frontend
+@decorator_factory
 def assign_scaling_factor(cipher, target_sf, cryptoContext):
     cipher.scaling_factor = target_sf
     return cipher    
@@ -196,7 +195,7 @@ def eval_linear_transform(A, ct, scheme):
                   
 
 # @profile_python_function
-@frontend
+@decorator_factory
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
         torch.mod_raise(
@@ -220,7 +219,7 @@ def mod_raise(cipher, L0, cryptoContext):
 
 
 # @profile_python_function
-@frontend
+@decorator_factory
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
@@ -229,7 +228,7 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
-@frontend
+@decorator_factory
 def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N

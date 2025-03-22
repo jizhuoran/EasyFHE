@@ -45,18 +45,6 @@ def print_execution_times():
     print(f"Total execution time profiled: {total_time:.6f} seconds.")
 
 
-def check_meta_equal(func):
-    def wrapper(*args, **kwargs):
-        in0, in1 = args[0], args[1]
-        # assert len(in0.cv) == len(in1.cv)
-        # assert in0.cur_limbs == in1.cur_limbs
-        # assert in0.scaling_factor == in1.scaling_factor
-        # assert in0.noise_deg == in1.noise_deg
-        # assert in0.is_ext == in1.is_ext
-        # assert in0.slots == in1.slots
-        return func(*args, **kwargs)
-
-    return wrapper
 
 
 def check_cipher_len(func):
