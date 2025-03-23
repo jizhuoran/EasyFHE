@@ -437,7 +437,8 @@ static void encode_fft_template(
             reinterpret_cast<DTYPE2*>(precompute_ksipows.data_ptr<DTYPE>());
         auto rotGroups = reinterpret_cast<int64_t*>(
             precompute_rotgroups.data_ptr<int64_t>());
-        convert_inverse(inverse_ptr, inverse_internal_ptr, slots);
+        auto inverse_size = inverse.numel();
+        convert_inverse(inverse_ptr, inverse_internal_ptr, inverse_size, slots);
         fft_special_inv_cuda(
             inverse_internal_ptr, rotGroups, precompute_ksipows_ptr, M, slots);
         cudaDeviceSynchronize();
