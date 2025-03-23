@@ -8,7 +8,6 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 
 import torch.fhe as fhe
-import torch.fhe.homo_ops as homo_ops
 import numpy as np
 import torch
 import os
@@ -49,7 +48,7 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, cryptoContext):
         # rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, shift, cryptoContext)
         # rotated = fhe.moddown_from_ext(rotated_innerp, cryptoContext)
         # rotated.cv[0] = F.cv_add(rotated.cv[0], cipher_product.cv[0], cryptoContext.moduliQ, rotated.cur_limbs)
-        # rotated = homo_ops._cipher_automorphism(rotated, cryptoContext.norm_rot_index(shift), cryptoContext, printInfo=False)
+        # rotated = fhe.cipher_automorphism(rotated, cryptoContext.norm_rot_index(shift), cryptoContext, printInfo=False)
 
         # ver3
         rotated_modup = fhe.modup_to_ext(ax, cryptoContext)
@@ -59,8 +58,8 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, cryptoContext):
         tmp_bxExt = fhe.homo_add(fhe.extract_cv(rotated_innerp,0, cryptoContext), bxExt, cryptoContext)
         tmp_ax    = fhe.moddown_from_ext(fhe.extract_cv(rotated_innerp,1, cryptoContext), cryptoContext)
 
-        tmp_bxExt = homo_ops._cipher_automorphism(tmp_bxExt, norm_index, cryptoContext)
-        tmp_ax  = homo_ops._cipher_automorphism(tmp_ax, norm_index, cryptoContext)
+        tmp_bxExt = fhe.cipher_automorphism(tmp_bxExt, norm_index, cryptoContext)
+        tmp_ax  = fhe.cipher_automorphism(tmp_ax, norm_index, cryptoContext)
 
         bxExt = fhe.homo_add(tmp_bxExt, bxExt, cryptoContext)
         ax    = fhe.homo_add(tmp_ax, ax, cryptoContext)
@@ -88,24 +87,25 @@ autoLoadAndSetConfig = True # note: currently only support True
 
 DATA_DIR = os.environ["DATA_DIR"]
 
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR,
-                         autoLoadAndSetConfig=True, mode=mode))
+                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR, config=config))
 
 
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 encode_slots = (1 << 11)
 x = np.array([values[i % len(values)] for i in range(encode_slots)])
 x = torch.tensor(x, device="cuda")
-cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
+cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
 x1 = torch.tensor(x1, device="cuda")
-ptx = fhe.encode(x1, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
-cipher1 = openfhe_context.encrypt(x1, 1, openfhe_context.depth - 1, encode_slots, mode)
+ptx = fhe.encode(x1, 1, 0, encode_slots, False, cryptoContext)
+cipher1 = openfhe_context.encrypt(x1, 1, openfhe_context.depth - 1, encode_slots)
 
+cipher_inner_product = homo_inner_product(cipher,cipher1,cryptoContext)
 torch.cpu.synchronize()
 torch.cuda.synchronize()
 start_time = time.time()
@@ -116,8 +116,10 @@ print("time: ", time.time() - start_time)
 print("homo_inner_product done!")
 clear_result = openfhe_context.decrypt(cipher_inner_product)
 clear_result = clear_result.cpu().numpy().reshape(-1)
-print("HE decryption result: ", clear_result[0])
+print("HE decryption result: ", clear_result[0], "\n\n")
 
+
+cipher_inner_product_hoisting = homo_inner_product_hoisting(cipher,cipher1,cryptoContext)
 torch.cpu.synchronize()
 torch.cuda.synchronize()
 start_time = time.time()

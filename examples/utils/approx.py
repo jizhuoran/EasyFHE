@@ -5,33 +5,20 @@ import numpy as np
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
-def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
-    input_size = len(constants)
 
-    # if cryptoContext.rescaleTech != "FIXEDMANUAL":
-    #     # Check to see if input ciphertexts are of same level
-    #     # and adjust if needed to the max level among them
-    #     minLimbs = ciphertexts[0].cur_limbs
-    #     minIdx = 0
-    #     for i in range(1, input_size):
-    #         if (ciphertexts[i].cur_limbs < minLimbs or
-    #                 (ciphertexts[i].cur_limbs == minLimbs)
-    #                 and ciphertexts[i].noise_deg == 2):
-    #             minLimbs = ciphertexts[i].cur_limbs
-    #             minIdx = i
-    #     for i in range(minIdx):
-    #         ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-    #                                                                                cryptoContext)
-    #     for i in range(minIdx + 1, input_size):
-    #         ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-    #                                                                                cryptoContext)
-    #
-    #     if ciphertexts[minIdx].noise_deg == 2:
-    #         for i in range(0, input_size):
-    #             ciphertexts[i] = homo_ops.homo_rescale_internal(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+
+def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
+    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+        target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
+        if ciphertexts[target_idx].noise_deg == 2:
+            ciphertexts[target_idx] = fhe.homo_rescale_internal(ciphertexts[target_idx], 1, cryptoContext)
+        for i in range(len(ciphertexts)):
+            ciphertexts[i] = fhe.adjust_to(
+                ciphertexts[i], ciphertexts[target_idx].cur_limbs, ciphertexts[target_idx].noise_deg, ciphertexts[target_idx].scaling_factor, cryptoContext
+            )
 
     wsum = fhe.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
-    for i in range(1, input_size):
+    for i in range(1, len(constants)):
         tmp = fhe.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = fhe.homo_add(wsum, tmp, cryptoContext)
     wsum = fhe.homo_rescale(wsum, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -141,8 +128,8 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = fhe.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        # if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        #     cu = homo_ops.drop_last_elements(cu, cu.cur_limbs - T2[m - 1].cur_limbs, inplace=True)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            cu = fhe.adjust_to(cu, T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor, cryptoContext)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -187,8 +174,8 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = fhe.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        # if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        #     su = homo_ops.drop_last_elements(su, 1, inplace=True)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            su = fhe.adjust_to(su, su.cur_limbs - 1, 1, None, cryptoContext)
 
     if flag_c:
         result = fhe.homo_add(T2[m - 1], cu, cryptoContext)
@@ -359,15 +346,10 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = fhe.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
-    # fixme: Commenting this code will lead to inconsistencies with openfhe's polynomials result. the decryption result should be fine.
-    # if cryptoContext.rescaleTech == "FIXEDMANUAL":
-    #     # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
-    #     for i in range(1, k):
-    #         T[i - 1] = homo_ops.drop_last_elements(T[i - 1], T[i - 1].cur_limbs - T[k - 1].cur_limbs, inplace=True)
-    # else:
-    #     for i in range(1, k):
-    #         T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+    assert T[-1].cur_limbs == min(
+        t.cur_limbs for t in T), "T[-1].cur_limbs is not the minimum; it should be adjusted to the minimum value."
+    for i in range(k):
+        T[i] = fhe.adjust_to(T[i], T[-1].cur_limbs, T[-1].noise_deg, T[-1].scaling_factor, cryptoContext)
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder

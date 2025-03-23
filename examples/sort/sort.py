@@ -49,17 +49,17 @@ def Sort(input_length=8):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
     # generate context
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                       levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
-                       autoLoadAndSetConfig=True, mode="release"))
+                       levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
 
     total_steps = int((1+math.log2(input_length))*math.log2(input_length)/2)
     print("Total steps: {}".format(total_steps))
 
     # input preparation
     input_msg = np.random.uniform(3, 4, input_length)  # Generate a random number within the range
-    input_ct = openfhe_context.encrypt(input_msg, 1, 0, input_length, "release")
+    input_ct = openfhe_context.encrypt(input_msg, 1, 0, input_length)
     # print("Generated input vector: ", input_msg)
     print("Initial number of mult depth remaining: ", input_ct.cur_limbs-1)
 
@@ -99,11 +99,10 @@ def Sort(input_length=8):
             mask2 = torch.tensor(mask2, dtype=torch.float64).cuda()
             mask3 = torch.tensor(mask3, dtype=torch.float64).cuda()
             mask4 = torch.tensor(mask4, dtype=torch.float64).cuda()
-            # fixme: note that the following encode with use_gpu_fft=True may lead to larger error
-            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1, 1, 0, input_length, use_gpu_fft=True, cryptoContext=cryptoContext), cryptoContext)
-            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2, 1, 0, input_length, use_gpu_fft=True, cryptoContext=cryptoContext), cryptoContext)
-            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3, 1, 0, input_length, use_gpu_fft=True, cryptoContext=cryptoContext), cryptoContext)
-            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4, 1, 0, input_length, use_gpu_fft=True, cryptoContext=cryptoContext), cryptoContext)
+            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1, 1, 0, input_length, True, cryptoContext), cryptoContext)
+            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2, 1, 0, input_length, True, cryptoContext), cryptoContext)
+            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3, 1, 0, input_length, True, cryptoContext), cryptoContext)
+            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4, 1, 0, input_length, True, cryptoContext), cryptoContext)
             arr5_1 = fhe.homo_rotate(arr1,-j,cryptoContext)
             arr5_2 = fhe.homo_rotate(arr3,-j,cryptoContext)
             arr6_1 = fhe.homo_rotate(arr2,j,cryptoContext)

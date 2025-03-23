@@ -362,19 +362,20 @@ def resnet20( ):
     firstMod = 60
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-    rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
     he_res20_context_ = HE_res20_context(DATA_DIR)
 
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                        levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
-                       autoLoadAndSetConfig=True, mode="release"))
+                       config=config))
 
-    cryptoContext.PRELOAD_ALL = False # poor workaround, should be fixed in the future, need to be set to False/True now
+    cryptoContext.PRELOAD_ALL = True # poor workaround, should be fixed in the future, need to be set to False/True now
 
     encode_weight_path = (
         he_res20_context_.weight_dir
