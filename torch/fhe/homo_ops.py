@@ -643,7 +643,7 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
     if index == 0:
         return cipher.deep_copy()
 
-    result = hybrid_keyswitch.mult_rot_key_and_sum_ext(digits, index, cryptoContext)
+    result = hybrid_keyswitch._mult_rot_key_and_sum_ext(digits, index, cryptoContext)
 
     if need_KS_add:
         if need_moddown:
