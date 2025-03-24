@@ -23,12 +23,11 @@ def app_without_bs_example_debug(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir=DATA_DIR,
-        mode = "debug" # "debug" or "release"
+        save_dir=DATA_DIR
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
-    cryptoContext, openfhe_context, openfhe_boot_contexts = (
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
+    cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                config=config))
@@ -47,16 +46,15 @@ def app_without_bs_example_debug(
     cipher = homo_ops.homo_rotate(cipher, 5, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-    if config.mode == "debug":
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
-        is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
-        if is_euqal:
-            print("homo_rotate: Test passed!")
-        else:
-            print_failed("homo_rotate: Test failed!")
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
+    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+    if is_euqal:
+        print("homo_rotate: Test passed!")
+    else:
+        print_failed("homo_rotate: Test failed!")
 
 def app_example_debug(
         maxLevelsRemaining=3,
@@ -68,11 +66,10 @@ def app_example_debug(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir=DATA_DIR,
-        mode = "debug" # "debug" or "release"
+        save_dir=DATA_DIR
 ):
 
-    config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, autoLoadAndSetConfig=False, mode=mode) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
+    config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -90,14 +87,14 @@ def app_example_debug(
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-    if config.mode == "debug":
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
-        cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-        is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
-        if is_euqal:
-            print("homo_rotate: Test passed!")
-        else:
-            print_failed("homo_rotate: Test failed!")
+   
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
+    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+    if is_euqal:
+        print("homo_rotate: Test passed!")
+    else:
+        print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
@@ -105,16 +102,16 @@ def app_example_debug(
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
-    if config.mode == "debug":
-        cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
-        openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
-        openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
-        openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
-        is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
-        if is_euqal:
-            print("BootstrapTest_logBsSlots11: Test passed!")
-        else:
-            print_failed("BootstrapTest_logBsSlots11: Test failed!")
+   
+    cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
+    openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
+    openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+    openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    if is_euqal:
+        print("BootstrapTest_logBsSlots11: Test passed!")
+    else:
+        print_failed("BootstrapTest_logBsSlots11: Test failed!")
 
     # do some multiplication to consume some limbs
     result.slots =  (1 << 12) # This assignment is for testing purposes only
@@ -129,23 +126,21 @@ def app_example_debug(
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
-    # compute golden answer
-    if config.mode == "debug":
-        # do some multiplication to consume some limbs
-        for i in range(drop_limbs):
-            openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
-            openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
+    # do some multiplication to consume some limbs
+    for i in range(drop_limbs):
+        openfhe_boot = openfhe_context.cc.EvalSquare(openfhe_boot)
+        openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
 
-        openfhe_boot.SetSlots((1 << logBsSlots_list[1])) # to cheat openfhe boot with bs_slots = (1<<logBsSlots_list[1])
-        openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[1])]
-        openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
-        openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
+    openfhe_boot.SetSlots((1 << logBsSlots_list[1])) # to cheat openfhe boot with bs_slots = (1<<logBsSlots_list[1])
+    openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[1])]
+    openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
+    openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
 
-        is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
-        if is_euqal:
-            print("BootstrapTest_logBsSlots12: Test passed!")
-        else:
-            print_failed("BootstrapTest_logBsSlots12: Test failed!")
+    is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
+    if is_euqal:
+        print("BootstrapTest_logBsSlots12: Test passed!")
+    else:
+        print_failed("BootstrapTest_logBsSlots12: Test failed!")
 
 
 def app_example_release(
@@ -159,11 +154,10 @@ def app_example_release(
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR,
-        onDemandLoad=False,
-        mode="release"  # "debug" or "release"
+        AUTO_LOAD_KEYS=True
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, ON_DEMAND_LOAD=onDemandLoad, mode=mode)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=AUTO_LOAD_KEYS)
     cryptoContext, openfhe_context = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -232,14 +226,13 @@ def encode_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-        save_dir=DATA_DIR,
-        mode = "debug" # "debug" or "release"
+        save_dir=DATA_DIR
 ):
     ############
     ## test 1 ##
     ############
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -331,11 +324,10 @@ def ct_pt_test_case(
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR,
-        plaintext_twin = False,
-        mode = "debug" # "debug" or "release"
+        plaintext_twin = False
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode, PTX_TWIN = plaintext_twin)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, PTX_TWIN = plaintext_twin)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -414,17 +406,17 @@ if __name__ == "__main__":
     for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
         print("***********{}***********".format(rescaleTech))
         print("==========={}============".format('app_without_bs_example_debug'))
-        app_without_bs_example_debug(rescaleTech = rescaleTech, mode="debug")
+        app_without_bs_example_debug(rescaleTech = rescaleTech)
         print("==========={}============".format('app_example_debug'))
-        app_example_debug(rescaleTech = rescaleTech, mode="debug")
-        print("==========={}============".format('app_example_release all load'))
-        app_example_release(rescaleTech = rescaleTech, mode="release", onDemandLoad=False)
-        print("==========={}============".format('app_example_release onDemandLoad'))
-        app_example_release(rescaleTech = rescaleTech, mode="release", onDemandLoad=True)
+        app_example_debug(rescaleTech = rescaleTech)
+        print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+        print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
         print("==========={}============".format('encode_test_case'))
-        encode_test_case(rescaleTech = rescaleTech, mode="debug")
+        encode_test_case(rescaleTech = rescaleTech)
         print("==========={}============".format('ct_pt_test_case'))
-        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug", plaintext_twin = False)
+        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
         print("==========={}============".format('test_plaintext_twin'))
-        ct_pt_test_case(rescaleTech = rescaleTech, mode="debug", plaintext_twin = True)
+        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
         print("************************************".format(rescaleTech))

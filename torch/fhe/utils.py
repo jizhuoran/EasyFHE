@@ -155,7 +155,7 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and config.mode == "debug"
+        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == "debug"
     ):
         gen_contexts(
             maxLevelsRemaining=maxLevelsRemaining,
@@ -169,20 +169,20 @@ def try_load_context(
             secretKeyDist=secretKeyDist,
             rescaleTech=rescaleTech,
             save_dir=save_dir,
-            mode=config.mode,
+            config=config,
         )
 
     with open(load_path, "rb") as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
-    if config.mode == "debug":
+    if config.COMPARE_WITH_OPENFHE:
         if not os.path.exists(debug_load_path):
             print("ERROR: There is no debug context file! Please regenerate context!")
         with open(debug_load_path, "rb") as file:
             debug_keys = pickle.load(file)
 
     cryptoContext = Context(BsContextMembers, gpufheMembers, config)
-    if cryptoContext.config.autoLoadAndSetConfig:
+    if cryptoContext.config.AUTO_LOAD_KEYS:
         if rotIndex_list is not None and rotIndex_list != []:
             cryptoContext.load_rotation_keys("app")
         if NO_BS == False:
@@ -194,7 +194,7 @@ def try_load_context(
     openfhe_context = client.OpenFHEContext(openfheMembers)
     openfhe_context.config = cryptoContext.config
     cryptoContext.openfhe_context = openfhe_context
-    if config.mode == "debug":
+    if config.COMPARE_WITH_OPENFHE:
         openfhe_boot_contexts = {}
         if NO_BS == False:
             for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):

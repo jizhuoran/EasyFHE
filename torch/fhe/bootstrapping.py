@@ -428,8 +428,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 @decorator_factory
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
-    if cryptoContext.config.autoLoadAndSetConfig == True:
-        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
 

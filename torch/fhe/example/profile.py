@@ -50,11 +50,10 @@ def profiling_single_op(
     firstMod=60,
     levelBudget_list=[[4, 4]],
     rescaleTech="FIXEDMANUAL",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-    save_dir=DATA_DIR,
-    mode="release",  # "debug" or "release"
+    save_dir=DATA_DIR
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
 
     cryptoContext, openfhe_context = utils.try_load_context(
         maxLevelsRemaining,

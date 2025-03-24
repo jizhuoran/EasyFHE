@@ -259,8 +259,8 @@ class Context:
         assert False and "Key not found in precompute_auto_map"
 
     def load_rotation_keys(self, key_name):
-        if self.config.ON_DEMAND_LOAD:
-            print("On demand load is enabled. Do not call this function.")
+        if not self.config.AUTO_LOAD_KEYS:
+            print("AUTO_LOAD_KEYS is disabled. Do not call this function.")
             return
         assert str(key_name) in self.slots_left_rot_key_map
         assert str(key_name) in self.slots_precompute_auto_map

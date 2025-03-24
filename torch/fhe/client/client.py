@@ -73,7 +73,7 @@ class OpenFHEContext:
         gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
         if self.config.PTX_TWIN:
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
-        if self.config.mode == "debug":
+        if self.config.COMPARE_WITH_OPENFHE:
             return gpufhe_cipher, cipher
         else:
             return gpufhe_cipher
