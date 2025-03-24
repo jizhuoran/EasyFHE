@@ -8,51 +8,37 @@ from .client.gen_context import gen_contexts
 from .context import *
 import torch
 
-
-
-
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
 
 # Registry to keep track of function call counts
 call_registry = {}
 
-
 def call_counter(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         wrapper.count += 1  # Increment the call count
         return func(*args, **kwargs)
-
     wrapper.count = 0  # Initialize the call count
     call_registry[func.__name__] = wrapper  # Register the function
     return wrapper
 
-
-# @atexit.register
+@atexit.register
 def print_call_counts():
-    print("\nFunction Call Counts:")
-    for func_name, wrapper in call_registry.items():
-        print(f"Function '{func_name}' was called {wrapper.count} times.")
+    if len(call_registry) > 0:
+        print("\nFunction Call Counts:")
+        for func_name, wrapper in call_registry.items():
+            print(f"Function '{func_name}' was called {wrapper.count} times.")
 
 
-# @atexit.register
+@atexit.register
 def print_execution_times():
-    total_time = sum(execution_times.values())
-    print("\nExecution Times:")
-    for func_name, exec_time in execution_times.items():
-        print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
-    print(f"Total execution time profiled: {total_time:.6f} seconds.")
-
-
-
-
-def check_cipher_len(func):
-    def wrapper(*args, **kwargs):
-        assert len(args[0].cv) == 2
-        return func(*args, **kwargs)
-
-    return wrapper
+    if len(execution_times) > 0:
+        total_time = sum(execution_times.values())
+        print("\nExecution Times:")
+        for func_name, exec_time in execution_times.items():
+            print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
+        print(f"Total execution time profiled: {total_time:.6f} seconds.")
 
 
 def profile_python_function(func):
@@ -64,18 +50,13 @@ def profile_python_function(func):
         torch.cpu.synchronize()
         torch.cuda.synchronize()
         end_time = time.time()
-
         # Calculate the execution time for this call
         exec_time = end_time - start_time
-
         # Update the global dictionary with the accumulated time for this function
         if func.__name__ not in execution_times:
             execution_times[func.__name__] = 0
         execution_times[func.__name__] += exec_time
-
-        # print(f"Function {func.__name__} executed in {exec_time:.6f} seconds")
         return result
-
     return wrapper
 
 
@@ -212,6 +193,7 @@ def try_load_context(
 
     openfhe_context = client.OpenFHEContext(openfheMembers)
     openfhe_context.config = cryptoContext.config
+    cryptoContext.openfhe_context = openfhe_context
     if config.mode == "debug":
         openfhe_boot_contexts = {}
         if NO_BS == False:

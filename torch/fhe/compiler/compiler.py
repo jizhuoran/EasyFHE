@@ -30,20 +30,7 @@ binary_op = {
     "homo_mul_pt": "homo_ops.",
 }
 
-COMPILE = "OFF"
-
-
-def omitFrontend(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        if "printInfo" in kwargs:
-            del kwargs["printInfo"]
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def compilerFrontend(func):
+def frontend(func):
 
     if func.__name__ in unary_cnst_op:
         
@@ -324,6 +311,3 @@ def compilerFrontend(func):
             return res
 
         return wrapper
-
-
-frontend = compilerFrontend if COMPILE == "ON" else omitFrontend

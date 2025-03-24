@@ -18,7 +18,7 @@ def assign_scaling_factor(cipher, target_sf, cryptoContext):
     cipher.scaling_factor = target_sf
     return cipher    
 
-# @profile_python_function
+
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     rescale_tech = cryptoContext.rescaleTech
 
@@ -62,7 +62,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     return ciphertext
 
 
-# @profile_python_function
+
 def apply_double_angle_iterations(ciphertext, cryptoContext):
     if cryptoContext.secretKeyDist == "UNIFORM_TERNARY":
         r = R_UNIFORM
@@ -178,23 +178,23 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
     return result
 
 
-# @profile_python_function
+
 def eval_coeffs_to_slots(A, ctxt, cryptoContext):
     return coeffs_slots_conversion(A, ctxt, "C2S", cryptoContext)
 
 
-# @profile_python_function
+
 def eval_slots_to_coeffs(A, ctxt, cryptoContext):
     return coeffs_slots_conversion(A, ctxt, "S2C", cryptoContext)
 
 
-# @profile_python_function
+
 def eval_linear_transform(A, ct, scheme):
     # TODO: to be implemented
     pass
                   
 
-# @profile_python_function
+
 @decorator_factory
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
@@ -218,7 +218,7 @@ def mod_raise(cipher, L0, cryptoContext):
     return cipher.cipher_like(cv, L0)
 
 
-# @profile_python_function
+
 @decorator_factory
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
@@ -226,9 +226,8 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
-# @profile_python_function
+
 # note: EvalBootstrap in ckksrns-fhe.cpp
-@decorator_factory
 def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
@@ -426,7 +425,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
     return ctxtDec
 
-
+@decorator_factory
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
     if cryptoContext.config.autoLoadAndSetConfig == True:

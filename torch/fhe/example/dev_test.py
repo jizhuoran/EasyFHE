@@ -72,7 +72,7 @@ def app_example_debug(
         mode = "debug" # "debug" or "release"
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=False, mode=mode)
+    config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, autoLoadAndSetConfig=False, mode=mode) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -375,7 +375,9 @@ def ct_pt_test_case(
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
+    # encoded = homo_ops._drop_last_elements(encoded, 1, cryptoContext, False)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    encoded = homo_ops.adjust_to(encoded, result.cur_limbs, result.noise_deg, result.scaling_factor, cryptoContext)
     result = homo_ops.homo_add_pt(result, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
