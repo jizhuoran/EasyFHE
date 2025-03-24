@@ -6,7 +6,9 @@ class Config:
         CHECK_CIPHER=False,
         AUTO_SYNC=False,
         COMPILER=False,
-        COMPARE_WITH_OPENFHE=False
+        COMPARE_WITH_OPENFHE=False,
+        TIME_OPS=False,
+        COUNT_OPS=False,
     ):
         self.AUTO_LOAD_KEYS = AUTO_LOAD_KEYS
         self.PTX_TWIN = PTX_TWIN
@@ -14,3 +16,5 @@ class Config:
         self.AUTO_SYNC = AUTO_SYNC
         self.COMPILER = COMPILER
         self.COMPARE_WITH_OPENFHE = COMPARE_WITH_OPENFHE
+        self.TIME_OPS=TIME_OPS
+        self.COUNT_OPS=COUNT_OPS

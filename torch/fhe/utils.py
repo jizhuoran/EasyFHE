@@ -14,15 +14,6 @@ execution_times = {}
 # Registry to keep track of function call counts
 call_registry = {}
 
-def call_counter(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        wrapper.count += 1  # Increment the call count
-        return func(*args, **kwargs)
-    wrapper.count = 0  # Initialize the call count
-    call_registry[func.__name__] = wrapper  # Register the function
-    return wrapper
-
 @atexit.register
 def print_call_counts():
     if len(call_registry) > 0:
@@ -40,8 +31,17 @@ def print_execution_times():
             print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
         print(f"Total execution time profiled: {total_time:.6f} seconds.")
 
+def call_counter(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        wrapper.count += 1  # Increment the call count
+        return func(*args, **kwargs)
+    wrapper.count = 0  # Initialize the call count
+    call_registry[func.__name__] = wrapper  # Register the function
+    return wrapper
 
 def profile_python_function(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
         torch.cpu.synchronize()
         torch.cuda.synchronize()

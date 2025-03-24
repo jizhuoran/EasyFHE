@@ -1,7 +1,7 @@
 import functools
 from .compiler.compiler import frontend
 from .debug_tool import *
-
+from .utils import call_counter, profile_python_function
 
 def decorator_factory(func):
     @functools.wraps(func)
@@ -14,7 +14,11 @@ def decorator_factory(func):
         else: # not in BS
             config = cryptoContext.config
             func1 = func
-            decorators = [pass_checker]
+            decorators = []
+            if config.COUNT_OPS:
+                decorators.append(call_counter)
+            if config.TIME_OPS:
+                decorators.append(profile_python_function)
             if config.AUTO_SYNC:
                 decorators.append(auto_sync)
             if config.PTX_TWIN:
