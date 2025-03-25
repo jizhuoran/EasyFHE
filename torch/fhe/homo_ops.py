@@ -646,28 +646,39 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
     result = hybrid_keyswitch._mult_rot_key_and_sum_ext(digits, index, cryptoContext)
 
     if need_KS_add:
-        if need_moddown:
-            result = hybrid_keyswitch.moddown_from_ext(result, cryptoContext)
-            cipher_cv0 = cipher.cv[0]
-        else:
-            cipher_cv0 = F.cv_mul_scalar(
+        # if need_moddown ==False, we don't care cipher.is_ext
+        # if need_moddown ==True, cipher.is_ext should be False
+        assert not(need_moddown==True and cipher.is_ext==True), "contradict input"
+        if cipher.is_ext ==True:
+            result.cv[0] = F.cv_add(
+                result.cv[0],
                 cipher.cv[0],
-                cryptoContext.PModq,
-                cryptoContext.moduliQ,
-                cryptoContext.q_mu,
-                cipher.cur_limbs,
-            )  # PModUp
+                cryptoContext.QplusP_map[cipher.cur_limbs],
+                cipher.cur_limbs + cryptoContext.K,
+            )
+        else:
+            if need_moddown:
+                result = hybrid_keyswitch.moddown_from_ext(result, cryptoContext)
+                cipher_cv0 = cipher.cv[0]
+            else:
+                cipher_cv0 = F.cv_mul_scalar(
+                    cipher.cv[0],
+                    cryptoContext.PModq,
+                    cryptoContext.moduliQ,
+                    cryptoContext.q_mu,
+                    cipher.cur_limbs,
+                )  # PModUp
 
-        # post add after ks
-        # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
-        # so the `inplace` can't be removed trivially
-        result.cv[0] = F.cv_add(
-            result.cv[0],
-            cipher_cv0,
-            cryptoContext.moduliQ,
-            cipher.cur_limbs,
-            inplace=True,
-        )
+            # post add after ks
+            # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
+            # so the `inplace` can't be removed trivially
+            result.cv[0] = F.cv_add(
+                result.cv[0],
+                cipher_cv0,
+                cryptoContext.moduliQ,
+                cipher.cur_limbs,
+                inplace=True,
+            )
 
     result = cipher_automorphism(result, index, cryptoContext)
 
