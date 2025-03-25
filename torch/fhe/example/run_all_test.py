@@ -52,8 +52,7 @@ cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,
-    autoLoadAndSetConfig=True,
-    mode = "debug")
+    XXXX")
 
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
 cryptoContext.BsContext.to_cuda()

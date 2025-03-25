@@ -1,3 +1,4 @@
+import functools
 from ..ciphertext import Cipher
 
 unary_op = {
@@ -18,7 +19,7 @@ unary_cnst_op = {
     "homo_rotate": "homo_ops.",
     "homo_mul_scalar_int": "homo_ops.",
     "homo_add_scalar_double": "homo_ops.",
-    "_cipher_automorphism": "homo_ops.",
+    "cipher_automorphism": "homo_ops.",
     "mult_rot_key_and_sum_ext": "hybrid_keyswitch.",
 }
 
@@ -29,22 +30,11 @@ binary_op = {
     "homo_mul_pt": "homo_ops.",
 }
 
-COMPILE = "OFF"
-
-
-def omitFrontend(func):
-    def wrapper(*args, **kwargs):
-        if "printInfo" in kwargs:
-            del kwargs["printInfo"]
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def compilerFrontend(func):
+def frontend(func):
 
     if func.__name__ in unary_cnst_op:
-
+        
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ct, val, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -78,6 +68,7 @@ def compilerFrontend(func):
 
     if func.__name__ in binary_op:
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, in1, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -115,6 +106,7 @@ def compilerFrontend(func):
 
     if func.__name__ in unary_op:
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -146,6 +138,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "eval_fast_rotate":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             digits, cipher, index, need_KS_add, need_moddown, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -189,6 +182,7 @@ def compilerFrontend(func):
 
     if func.__name__ == "extract_cv":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             in0, index, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
@@ -223,52 +217,46 @@ def compilerFrontend(func):
 
         return wrapper
 
-    if func.__name__ == "adjust_levels_and_depth":
+    if func.__name__ == "adjust_to":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            ct1, ct2, cryptoContext = args
+            ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext = args
             if "printInfo" in kwargs and kwargs["printInfo"] == False:
                 del kwargs["printInfo"]
                 return func(*args, **kwargs)
             if cryptoContext.inBS == True:
                 return func(*args, **kwargs)
             ct1_node_id = ct1.cipher_id
-            ct2_node_id = ct2.cipher_id
             out1_node_id = Cipher.get_next_id()
-            out2_node_id = Cipher.get_next_id()
-            out1, out2 = func(*args)
+            out1 = func(*args)
             out1.cipher_id = out1_node_id
-            out2.cipher_id = out2_node_id
             print(
-                "NODE{}, NODE{} = homo_ops.adjust_levels_and_depth(NODE{}, NODE{}, cryptoContext) #out0: limb={}, noise={}, sf={}, #out1: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}, in1: limb={}, noise={}, sf={}".format(
+                "NODE{} = homo_ops.adjust_to(NODE{}, {}, {}, {}, cryptoContext) #out: limb={}, noise={}, sf={}, in0: limb={}, noise={}, sf={}".format(
                     out1_node_id,
-                    out2_node_id,
                     ct1_node_id,
-                    ct2_node_id,
+                    repr(target_limbs),
+                    repr(target_noise_deg),
+                    repr(target_scaling_factor),
                     out1.cur_limbs,
                     out1.noise_deg,
                     out1.scaling_factor,
-                    out2.cur_limbs,
-                    out2.noise_deg,
-                    out2.scaling_factor,
                     ct1.cur_limbs,
                     ct1.noise_deg,
-                    ct1.scaling_factor,
-                    ct2.cur_limbs,
-                    ct2.noise_deg,
-                    ct2.scaling_factor,
+                    ct1.scaling_factor
                 )
             )
 
-            return out1, out2
+            return out1
 
         return wrapper
 
     if func.__name__ == "eval_bootstrap":
 
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ciphertext, L0, logBsSlots, cryptoContext = args
-            if False: #in application
+            if True: #in application
                 m_U0hatTPreFFT = cryptoContext.BsContext.m_U0hatTPreFFT
                 m_U0PreFFT = cryptoContext.BsContext.m_U0PreFFT
                 for i in range(len(m_U0hatTPreFFT)):
@@ -323,6 +311,3 @@ def compilerFrontend(func):
             return res
 
         return wrapper
-
-
-frontend = compilerFrontend if COMPILE == "ON" else omitFrontend

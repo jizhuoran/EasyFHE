@@ -136,7 +136,7 @@ def calculate_metadata(graph, metadata, adjust_record, node):
     operation = graph.nodes[node].get("operation")
     inputs = graph.nodes[node].get("inputs")
 
-    if operation in['assignment', 'homo_rotate', 'extract_cv', 'key_switch_P_ext', 'modup_to_ext', 'eval_fast_rotate', 'moddown_from_ext', '_cipher_automorphism', 'homo_add_scalar_double', 'homo_mul_scalar_int', 'assign_scaling_factor']:
+    if operation in['assignment', 'homo_rotate', 'extract_cv', 'key_switch_P_ext', 'modup_to_ext', 'eval_fast_rotate', 'moddown_from_ext', 'cipher_automorphism', 'homo_add_scalar_double', 'homo_mul_scalar_int', 'assign_scaling_factor']:
         CT0 = metadata[inputs[0]]
         return MetaInfo(CT0.cur_limbs, CT0.noise_deg)
     elif operation in ['homo_add', 'homo_sub', 'adjust_levels_and_depth']:

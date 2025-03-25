@@ -16,7 +16,7 @@ def gen_contexts(
     secretKeyDist,
     rescaleTech,
     save_dir,
-    mode,
+    config,
     dim1=[0, 0],
 ):
 
@@ -149,7 +149,7 @@ def gen_contexts(
             }
             boot_cnst_map[str(logBsSlots)] = boot_key
 
-    if mode == "debug":
+    if config.COMPARE_WITH_OPENFHE:
         debugKeys = {}
         debugKeys["mul_key"] = openfhe.SerializeEvalMultKeyString(openfhe.BINARY)
         debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(

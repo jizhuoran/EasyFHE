@@ -8,7 +8,6 @@ from .. import ciphertext as Cipher
 import numpy as np
 
 from ..ciphertext import Plaintext
-from .. import homo_ops
 
 MAX_BITS_IN_WORD = 61
 MAX_64BIT_VALUE = (1 << 63) - (1 << 9) - 1 # openfhetodo: the var must be renamed
@@ -52,45 +51,32 @@ class OpenFHEContext:
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
 
-    def encode(self, x, scale_deg=None, level=None, slots=None):
-        if not ((scale_deg is None and level is None and slots is None) or
-                (scale_deg is not None and level is not None and slots is not None)):
-            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+    def encode(self, x, scale_deg, level, slots):
+        if isinstance(x, (np.ndarray, torch.Tensor)):
+            x = x.tolist()
+        ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+        ptx.Encode()
+        data = ptx.GetVectorOfData()
+        mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+        gpufhe_cipher = Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
+        if self.config.PTX_TWIN:
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        return gpufhe_cipher
 
-        if level is None and scale_deg is None and slots is None:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist())
-            ptx.Encode()
-            data = ptx.GetVectorOfData()
-            mv = [
-                torch.tensor(data, device="cuda", dtype=torch.uint64)]  # fixme: shall we set device = "cuda" directly?
-            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
-        else:
-            if isinstance(x, (np.ndarray, torch.Tensor)):
-                ptx = self.cc.MakeCKKSPackedPlaintext(x.tolist(), scale_deg, level, None, slots)
-            else:
-                ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
-            ptx.Encode()
-            data = ptx.GetVectorOfData()
-            mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
-            return Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
-
-    def encrypt(self, x, scale_deg=None, level=None, slots= None, mode = "release"):
-        if not ((scale_deg is None and level is None and slots is None) or
-                (scale_deg is not None and level is not None and slots is not None)):
-            raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
+    def encrypt(self, x, scale_deg, level, slots):
         if isinstance(x, (np.ndarray, torch.Tensor)):
             x= x.tolist()
-        if level is None and scale_deg is None and slots is None:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x) # note: default slots is N/2 in openFHE
-        else:
-            ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+        ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
         cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
-        if mode == "debug":
-            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False), cipher
+        gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
+        if self.config.PTX_TWIN:
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        if self.config.COMPARE_WITH_OPENFHE:
+            return gpufhe_cipher, cipher
         else:
-            return Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
+            return gpufhe_cipher
 
     def decrypt(self, x):
         assert len(x.cv) == 2
@@ -110,30 +96,6 @@ class OpenFHEContext:
         )
 
 
-    # def encode_gpu(self, cryptoContext, x, scale_deg=None, level=None, slots=None, use_gpu_fft=True):
-    #     if not ((scale_deg is None and level is None and slots is None) or
-    #             (scale_deg is not None and level is not None and slots is not None)):
-    #         raise ValueError("Error: check if scale_deg, level, and slots are set correctly.")
-    #
-    #     slots = cryptoContext.Nh if slots is None else slots # note: default slots is N/2, which is Nh
-    #     scale_deg = 1 if scale_deg is None else scale_deg
-    #     cur_limb = cryptoContext.L if level is None else cryptoContext.L - level
-    #     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" :
-    #         scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
-    #         # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
-    #         # in our encoding function, so we set it to 1 to make sure it
-    #         # has no effect on the encoding.
-    #         scale_deg = 1
-    #     else:
-    #         scFact = cryptoContext.GetScalingFactorReal(cur_limb)
-    #
-    #     encoded_vector_dcrt_elements_cuda = (
-    #         self.ptx_encode_cuda(x, cryptoContext, slots, 'IsDCRTPoly', scFact, cur_limb, scale_deg, use_gpu_fft))
-    #
-    #     mv = [encoded_vector_dcrt_elements_cuda]
-    #     return Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
-    #
-    #
     def bit_reverse(self, vals):
         size = len(vals)
         vals = np.array(vals, dtype=np.complex128)  # 转为 numpy 复数数组
@@ -297,8 +259,11 @@ class OpenFHEContext:
             crt_pow_p = [llround(pow_p)] * num_towers
             curr_pow_p = crt_pow_p
 
+            def crt_mult(xs, ys, mods):
+                return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
+
             for i in range(2, noise_scale_deg):
-                curr_pow_p = homo_ops.crt_mult(curr_pow_p, crt_pow_p, moduli)
+                curr_pow_p = crt_mult(curr_pow_p, crt_pow_p, moduli)
 
             if noise_scale_deg > 1:
                 for i in range(len(curr_pow_p)):
@@ -316,7 +281,7 @@ class OpenFHEContext:
                     log_step = log_approx if ( log_approx <= max_log_step) else max_log_step
                     int_step = 1 << log_step
                     crt_sf = [int_step] * num_towers
-                    crt_approx = homo_ops.crt_mult(crt_approx, crt_sf, moduli)
+                    crt_approx = crt_mult(crt_approx, crt_sf, moduli)
                     log_approx -= log_step
 
                 # mul_mod =  (a * b) % modulus
@@ -327,46 +292,4 @@ class OpenFHEContext:
             print("Only DCRTPoly is supported for CKKS.")
 
         return encoded_vector_dcrt_elements
-    #
-    # def ptx_encode_cuda(self, x, cryptocontext, slots, type_flag, scaling_factor, cur_limbs, noise_scale_deg=1, use_fft = False):
-    #     inverse = x
-    #     pt_encode = []
-    #
-    #     if slots < len(inverse):
-    #         raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
-    #     # Clears all imaginary values as CKKS for complex numbers
-    #     inverse = np.array([complex(v.real, 0.0) for v in inverse])
-    #
-    #     # Resize the inverse to fit the slot size.
-    #     # note that default: slots value should be greater than size of input data list x
-    #     inverse = np.pad(inverse, pad_width=(0, slots-len(inverse)), mode='constant', constant_values=complex(0.0, 0.0))
-    #     if type_flag == 'IsDCRTPoly':
-    #         if not use_fft:
-    #             inverse = self.fft_special_inv(inverse, cryptocontext.M, cryptocontext.encode_params_rotGroup.cpu().numpy(), cryptocontext.encode_params_ksiPows)
-    #
-    #         #move precompute&inverse to cuda
-    #         inverse_real = torch.tensor(inverse.real.astype(np.double), device="cuda")
-    #         inverse_imag = torch.tensor(inverse.imag.astype(np.double),device="cuda")
-    #
-    #         pt_encode = torch.encode(cryptocontext.encode_out,
-    #                                  inverse_real=inverse_real,
-    #                                  inverse_imag=inverse_imag,
-    #                                  temp=cryptocontext.encode_temp,
-    #                                  primes=cryptocontext.primes,
-    #                                  precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-    #                                  precompute_ksipows_real=cryptocontext.encode_params_ksiPows_real,
-    #                                  precompute_ksipows_imag=cryptocontext.encode_params_ksiPows_imag,
-    #                                  M=cryptocontext.M,
-    #                                  N=cryptocontext.N,
-    #                                  cur_limbs=cur_limbs,
-    #                                  slots=slots,
-    #                                  noise_scale_deg = noise_scale_deg,
-    #                                  scaling_factor=scaling_factor,
-    #                                  power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-    #                                  power_of_roots=cryptocontext.power_of_roots,
-    #                                  use_fft=use_fft)
-    #     else:
-    #         print("Only DCRTPoly is supported for CKKS.")
-    #     return pt_encode
-
-
+    

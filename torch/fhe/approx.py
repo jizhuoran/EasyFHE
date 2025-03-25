@@ -3,38 +3,23 @@ from .context import *
 from .bs_context import *
 from . import homo_ops
 import numpy as np
-from .utils import profile_python_function, profile_pytorch_function
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
-# @profile_python_function
+
+
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
-    input_size = len(constants)
-
     if cryptoContext.rescaleTech != "FIXEDMANUAL":
-        # Check to see if input ciphertexts are of same level
-        # and adjust if needed to the max level among them
-        minLimbs = ciphertexts[0].cur_limbs
-        minIdx = 0
-        for i in range(1, input_size):
-            if (ciphertexts[i].cur_limbs < minLimbs or
-                    (ciphertexts[i].cur_limbs == minLimbs)
-                    and ciphertexts[i].noise_deg == 2):
-                minLimbs = ciphertexts[i].cur_limbs
-                minIdx = i
-        for i in range(minIdx):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
-        for i in range(minIdx + 1, input_size):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
-
-        if ciphertexts[minIdx].noise_deg == 2:
-            for i in range(0, input_size):
-                ciphertexts[i] = homo_ops.homo_rescale_internal(ciphertexts[i], BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
+        if ciphertexts[target_idx].noise_deg == 2:
+            ciphertexts[target_idx] = homo_ops.homo_rescale_internal(ciphertexts[target_idx], 1, cryptoContext)
+        for i in range(len(ciphertexts)):
+            ciphertexts[i] = homo_ops.adjust_to(
+                ciphertexts[i], ciphertexts[target_idx].cur_limbs, ciphertexts[target_idx].noise_deg, ciphertexts[target_idx].scaling_factor, cryptoContext
+            )
 
     wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
-    for i in range(1, input_size):
+    for i in range(1, len(constants)):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
     wsum = homo_ops.homo_rescale(wsum, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -52,7 +37,7 @@ def degree(lst):
 # division f/g. longDiv is a struct that contains the vectors of coefficients for the
 # quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
 # the same format.
-# @profile_python_function
+
 def long_division_chebyshev(f, g):
     assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
     n, k = len(f) - 1, len(g) - 1
@@ -145,7 +130,7 @@ def inner_eval_chebyshev_ps(coefficients,
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            cu = homo_ops.drop_last_elements(cu, cu.cur_limbs - T2[m - 1].cur_limbs, cryptoContext, inplace=True)
+            cu = homo_ops.adjust_to(cu, T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor, cryptoContext)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -191,7 +176,7 @@ def inner_eval_chebyshev_ps(coefficients,
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            su = homo_ops.drop_last_elements(su, 1, cryptoContext, inplace=True)
+            su = homo_ops.adjust_to(su, su.cur_limbs - 1, 1, None, cryptoContext)
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -293,7 +278,7 @@ def ComputeDegreesPS(n):
         return [klist[min_index], mlist[min_index]]
 
 
-# @profile_python_function
+
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
@@ -362,15 +347,8 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T.append(tmp)
 
-
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
-        for i in range(1, k):
-            T[i - 1] = homo_ops.drop_last_elements(T[i - 1], T[i - 1].cur_limbs - T[k - 1].cur_limbs, cryptoContext, inplace=True)
-    else:
-        for i in range(1, k):
-            T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
-
+    for i in range(k):
+        T[i] = homo_ops.adjust_to(T[i], T[-1].cur_limbs, T[-1].noise_deg, T[-1].scaling_factor, cryptoContext)
 
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder

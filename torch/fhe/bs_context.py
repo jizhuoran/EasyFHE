@@ -51,12 +51,12 @@ class BsContext:
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].cv = torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)
+                self.m_U0hatTPreFFT[i][j].cv = [torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)]
                 Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT[i][j].cipher_id)
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].cv = torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)
+                self.m_U0PreFFT[i][j].cv = [torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)]
                 Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT[i][j].cipher_id)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
@@ -131,8 +131,8 @@ class BsContext:
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].cv = self.m_U0hatTPreFFT[i][j].cv.cuda()
+                self.m_U0hatTPreFFT[i][j].cv = [self.m_U0hatTPreFFT[i][j].cv[0].cuda()]
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].cv = self.m_U0PreFFT[i][j].cv.cuda()
+                self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]
