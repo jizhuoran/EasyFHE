@@ -91,8 +91,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
                 tokens = f.read().split()
             for i in range(fh * fw * ci * co):
                 val = float(tokens[i])
-                # print(fh * fw * ci * co)
-                # print(len(conv_weight[num_c]))
+
                 conv_weight[num_c].append(val)
             num_c += 1
             if j==1:
@@ -258,7 +257,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
 
     pi=input.p
     logn=input.logn
-    print("tiwei",ki,hi,wi,ci,ti,pi,logn)
+    #print("tiwei",ki,hi,wi,ci,ti,pi,logn)
     ko=ho=wo=to=po=0
     encode_slots=(1<<15)#Todo:uncertain
     if(st!=1 and st!=2): raise ValueError(f"supported st is only 1 or 2")
@@ -368,11 +367,11 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
     for i9 in range(q):
         for i1 in range(fh):
             for i2 in range(fw):
-                # value = torch.tensor(compact_weight_vec[i1][i2][i9], dtype=torch.float64, device="cuda")
-                # ptx = fhe.encode(value,  use_gpu_fft=True, cryptoContext=cryptoContext)
-                x = torch.tensor(compact_weight_vec[i1][i2][i9], dtype=torch.float64, device="cuda")
-                value = openfhe_context.encrypt(x, mode="release")
-                temp=fhe.homo_mul(ctxt_rot[i1][i2],value,cryptoContext)
+                value = torch.tensor(compact_weight_vec[i1][i2][i9], dtype=torch.float64, device="cuda")
+                value = fhe.encode(value,  use_gpu_fft=False, cryptoContext=cryptoContext)
+                # x = torch.tensor(compact_weight_vec[i1][i2][i9], dtype=torch.float64, device="cuda")
+                # value = openfhe_context.encrypt(x, mode="release")
+                temp=fhe.homo_mul_pt(ctxt_rot[i1][i2],value,cryptoContext)
                 # temptest1111 = openfhe_context.decrypt(temp)
                 # temptest1111 = temptest1111.cpu().numpy().reshape(-1)
                 # print(temptest1111[:55])
@@ -398,7 +397,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             temp=var.deep_copy()
             temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*wi,cryptoContext)
             var=fhe.homo_add(var,temp,cryptoContext)
-        print("c的值为：",c)
+        #print("c的值为：",c)
         if(c==-1):
             sum=ct_zero.deep_copy()
             #print("------------",ti,"----------------")
@@ -421,13 +420,13 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             if(j4>=co):raise ValueError(f"the value of j4 is out of range!")
             temp=var
             temp = fhe.homo_rotate(temp,  int(n/pi)*(j4%pi) - j4%ko - int(j4/(ko*ko))*ko*ko*ho*wo - (int((j4%(ko*ko))/ko))*ko*wo, cryptoContext)
-            x = torch.tensor(select_one_vec[j4], dtype=torch.float64, device="cuda")
-            value = openfhe_context.encrypt(x, mode="release")
-            temp = fhe.homo_mul(temp, value, cryptoContext)
+            # x = torch.tensor(select_one_vec[j4], dtype=torch.float64, device="cuda")
+            # value = openfhe_context.encrypt(x, mode="release")
+            # temp = fhe.homo_mul(temp, value, cryptoContext)
             #
-            # value = torch.tensor(select_one_vec[j4], dtype=torch.float64, device="cuda")
-            # value = fhe.encode(value,  use_gpu_fft=True, cryptoContext=cryptoContext)
-            # temp = fhe.homo_mul_pt(temp, value, cryptoContext)
+            value = torch.tensor(select_one_vec[j4], dtype=torch.float64, device="cuda")
+            value = fhe.encode(value,  use_gpu_fft=False, cryptoContext=cryptoContext)
+            temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(i8==0 and i9==0):
                 total_sum=temp.deep_copy()
             else:
@@ -528,11 +527,11 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
     co=ci
     to=ti
     ct=input.cipher
-    for x in range (int(math.log2(wi))):
+    for x in range (log2_long(wi)):
         temp=ct
         temp=fhe.homo_rotate(temp,math.pow(2,x)*ki,cryptoContext)
         ct=fhe.homo_add(ct,temp,cryptoContext)
-    for x in range (int(math.log2(hi))):
+    for x in range (log2_long(hi)):
         temp=ct
         temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*ki*wi,cryptoContext)
         ct=fhe.homo_add(ct,temp,cryptoContext)
@@ -544,17 +543,25 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
             p=ki*u+s
             temp=ct
             temp=fhe.homo_rotate(temp,-p*ki + ki*ki*hi*wi*u + ki*wi*s,cryptoContext)
-            select_one=zero
+            select_one=[0.0 for _ in range(1<<logn)]
             for i in range(ki):
                 select_one[(ki*u+s)*ki+i]=B/(hi*wi)
-            x = torch.tensor(select_one, dtype=torch.float64, device="cuda")
-            value = openfhe_context.encrypt(x, mode="release")
-            temp = fhe.homo_mul(temp, value, cryptoContext)
+            # x = torch.tensor(select_one, dtype=torch.float64, device="cuda")
+            # value = openfhe_context.encrypt(x, mode="release")
+            # temp = fhe.homo_mul(temp, value, cryptoContext)
+            # if (s==0 and u==1):
+            #     temptest1111 = openfhe_context.decrypt(temp)
+            #     temptest1111 = temptest1111.cpu().numpy().reshape(-1)
+            #     print(temptest1111[:55])
+            value = torch.tensor(select_one, dtype=torch.float64, device="cuda")
+            value = fhe.encode(value, 1,0,slots=1<<logn, use_gpu_fft=False, cryptoContext=cryptoContext)
+            temp = fhe.homo_mul_pt(temp, value, cryptoContext)
+            # temptest1111 = openfhe_context.decrypt(temp)
+            # temptest1111 = temptest1111.cpu().numpy().reshape(-1)
+            # if (s==0 and u==1):
+            #     print(temptest1111[:55])
 
-            # value = torch.tensor(select_one, dtype=torch.float64, device="cuda")
-            # value = fhe.encode(value,  use_gpu_fft=True, cryptoContext=cryptoContext)
-            # temp = fhe.homo_mul_pt(temp, value, cryptoContext)
-            if(u==0 or s==0):
+            if(u==0 and s==0):
                 sum=temp
             else:
                 sum=fhe.homo_add(sum, temp, cryptoContext)
@@ -593,6 +600,7 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
     ct=input.cipher
     for s in range(q+r-1):
         temp=ct
+        temp = fhe.homo_rotate(temp, r-1-s, cryptoContext)
 
         x = torch.tensor(W[s], dtype=torch.float64, device="cuda")
         value = openfhe_context.encrypt(x, mode="release")
@@ -602,6 +610,7 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
         # value = fhe.encode(value, use_gpu_fft=True, cryptoContext=cryptoContext)
         # temp = fhe.homo_mul_pt(temp, value, cryptoContext)
         if s==0:
+
             sum=temp
         else:
             sum=fhe.homo_add(sum, temp, cryptoContext)
@@ -717,26 +726,29 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     logn_3 = 12
     logp = 46
     logq = 51
-    # rotation_kinds=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
-	# 	,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61
-	# 	,62,63,64,66,84,124,128,132,256,512,959,960,990,991,1008,1023,1024,1036,1064,1092,1952,1982,1983,2016,2044,2047,2048,2072,2078,2100,3007,3024,3040,3052,3070,3071,3072,3080,3108,4031
-	# 	,4032,4062,4063,4095,4096,5023,5024,5054,5055,5087,5118,5119,5120,6047,6078,6079,6111,6112,6142,6143,6144,7071,7102,7103,7135
-	# 	,7166,7167,7168,8095,8126,8127,8159,8190,8191,8192,9149,9183,9184,9213,9215,9216,10173,10207,10208,10237,10239,10240,11197,11231
-	# 	,11232,11261,11263,11264,12221,12255,12256,12285,12287,12288,13214,13216,13246,13278,13279,13280,13310,13311,13312,14238,14240
-	# 	,14270,14302,14303,14304,14334,14335,15262,15264,15294,15326,15327,15328,15358,15359,15360,16286,16288,16318,16350,16351,16352
-	# 	,16382,16383,16384,17311,17375,18335,18399,18432,19359,19423,20383,20447,20480,21405,21406,21437,21469,21470,21471,21501,21504
-	# 	,22429,22430,22461,22493,22494,22495,22525,22528,23453,23454,23485,23517,23518,23519,23549,24477,24478,24509,24541,24542,24543
-	# 	,24573,24576,25501,25565,25568,25600,26525,26589,26592,26624,27549,27613,27616,27648,28573,28637,28640,28672,29600,29632,29664
-	# 	,29696,30624,30656,30688,30720,31648,31680,31712,31743,31744,31774,32636,32640,32644,32672,32702,32704,32706,32735
-	# 	,32736,32737,32759,32760,32761,32762,32763,32764,32765,32766,32767]
+    rotation_kinds=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
+		,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61
+		,62,63,64,66,84,124,128,132,256,512,959,960,990,991,1008,1023,1024,1036,1064,1092,1952,1982,1983,2016,2044,2047,2048,2072,2078,2100,3007,3024,3040,3052,3070,3071,3072,3080,3108,4031
+		,4032,4062,4063,4095,4096,5023,5024,5054,5055,5087,5118,5119,5120,6047,6078,6079,6111,6112,6142,6143,6144,7071,7102,7103,7135
+		,7166,7167,7168,8095,8126,8127,8159,8190,8191,8192,9149,9183,9184,9213,9215,9216,10173,10207,10208,10237,10239,10240,11197,11231
+		,11232,11261,11263,11264,12221,12255,12256,12285,12287,12288,13214,13216,13246,13278,13279,13280,13310,13311,13312,14238,14240
+		,14270,14302,14303,14304,14334,14335,15262,15264,15294,15326,15327,15328,15358,15359,15360,16286,16288,16318,16350,16351,16352
+		,16382,16383,16384,17311,17375,18335,18399,18432,19359,19423,20383,20447,20480,21405,21406,21437,21469,21470,21471,21501,21504
+		,22429,22430,22461,22493,22494,22495,22525,22528,23453,23454,23485,23517,23518,23519,23549,24477,24478,24509,24541,24542,24543
+		,24573,24576,25501,25565,25568,25600,26525,26589,26592,26624,27549,27613,27616,27648,28573,28637,28640,28672,29600,29632,29664
+		,29696,30624,30656,30688,30720,31648,31680,31712,31743,31744,31774,32636,32640,32644,32672,32702,32704,32706,32735
+		,32736,32737,32759,32760,32761,32762,32763,32764,32765,32766,32767]
 
-    rotation_kinds=[32735, 32736, 32737, 32767, 1, 31, 32, 33, 1024, 2048, 3072, 6144, 9216, 12288, 15360, 18432, 21504,
-                    1024, 2048, 24576, 27648, 30720, 1024, 4096, 7168, 10240, 13312, 16384,0]
+    #rotation_kinds=[0, 1, 31, 32, 33, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, 11264, 12288, 13312, 15360, 16384, 18432, 20480, 21504, 22528, 24576, 26624, 27648, 28672, 30720, 32735, 32736, 32737, 32767]
+    rotation_kinds=[0,1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,61,60,59,58,57,56,55,54,53,52,51,50,49,48,47,46,45,44,43,42,41,40,39,38,37,36,35,34,33, 62, 63,64, 128, 256, 512, 1023, 2046,20480,  21504, 22528, 24576, 26624, 27648, 28672, 30720, 32735, 32736, 32737, 32759, 32760, 32761, 32762, 32763, 32764, 32765, 32766, 32767]
+
+        #[0, 1, 31, 32, 33, 1024, 2048, 3072, 4096, 5120, 6144, 7168, 8192, 9216, 10240, 11264, 12288, 13312, 15360, 16384,
+     #18432, 20480, 21504, 22528, 24576, 26624, 27648, 28672, 30720, 32735, 32736, 32737, 32767]
 
     #rotation_kinds = [3]
     log_special_prime = 51
     log_integer_part = logq - logp - loge + 5
-    remaining_level = 16 + 1
+    remaining_level = 16 + 1 + 1
     boot_level = 14
     total_level = remaining_level + boot_level
     logBsSlots_list = [14,13,12]
@@ -823,15 +835,35 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         # for i in range(20):
         #     print(vec[i])
         # print("-------------------------------")
-        cipher_temp= openfhe_context.encrypt(x,  mode="release")#Todo:scale？
+        cipher_temp= openfhe_context.encrypt(x,1,0,1<<logn , mode="release")#Todo:scale？
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
-
+        temptest123=openfhe_context.decrypt(cnn.cipher)
+        temptest123=temptest123.cpu().numpy().reshape(-1)
+        blist=[]
+        for i in range(len(temptest123)):
+            if (temptest123[i]>0.0001):
+                blist.append(i)
         #test
+
         temptest=openfhe_context.decrypt(cnn.cipher)
         temptest=temptest.cpu().numpy().reshape(-1)
-        print(temptest[:15])
+        print(temptest[:50])
 
+        for i in range(200):
+            if temptest123[i]<-0.0001:
+                print(i,"wei",temptest123[i])
+        cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext)
+        temptest123=openfhe_context.decrypt(cnn.cipher)
+        temptest123=temptest123.cpu().numpy().reshape(-1)
+        print(temptest123[:50])
 
+        alist=[]
+        for i in range(len(temptest123)):
+            if (temptest123[i]>0.0001):
+                alist.append(i)
+        diff1 = set(alist) - set(blist)
+        print("list1 独有元素:", diff1)
+        return 0
         #test end
         #ctxt=cnn.cipher
         #for i in range(boot_level-3):
@@ -841,75 +873,105 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         # layer 0:
 
 
-        cnn=multiplexed_parallel_convolution_print(openfhe_context,cryptoContext,cnn,16,1,fh,fw,conv_weight[stage],bn_running_var[stage],bn_weight[stage],epsilon,cipher_pool,end=False)
-        #print(type(cnn))
-        print(cnn.k,cnn.h,cnn.w,cnn.c,cnn.t,cnn.p)
-        temptest1=openfhe_context.decrypt(cnn.cipher)
-        temptest1=temptest1.cpu().numpy().reshape(-1)
-        print(temptest1[:15])
-
-        cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
-        temptest12=openfhe_context.decrypt(cnn.cipher)
-        temptest12=temptest12.cpu().numpy().reshape(-1)
-        print(temptest12[:15])
-
-        scale=1.7
-        #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        cnn.cipher=homo_relu(cnn.cipher,B,29,cryptoContext)
-        temptest123=openfhe_context.decrypt(cnn.cipher)
-        temptest123=temptest123.cpu().numpy().reshape(-1)
-        print(temptest123[:15])
-        return 0
-        print("first success")
-        for j in range (3):
-            #print(j)
-            if j==0:
-                co=16
-            elif j==1:
-                co=32
-            elif j==2:
-                co=64
-            for k in range(end_num+1):
-                stage=2*((end_num+1)*j+k)+1
-                temp=cnn
-                if j>=1 and k==0:
-                    st=2
-                else:
-                    st=1
-                #print("end_num:",end_num,k,end="\n")
-                cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
-                                                             conv_weight[stage], bn_running_var[stage],
-                                                             bn_weight[stage], epsilon, cipher_pool,end=False)
-                cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
-                if j==0:
-                    fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
-                elif j==1:
-                    fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
-                elif j==2:
-                    fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
-                #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                cnn.cipher = homo_relu(cnn.cipher, B, 29, cryptoContext) # fixme: everything is fine if we skip this relu
-
-                stage=2*((end_num+1)*j+k)+2
-                st=1
-                cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
-                                                             conv_weight[stage], bn_running_var[stage],
-                                                             bn_weight[stage], epsilon, cipher_pool,end=False)
-                cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
-                if j>=1 and k==0:
-                    temp=multiplexed_parallel_downsampling_seal_print(openfhe_context,cryptoContext,temp)
-                cnn.cipher=fhe.homo_add(temp.cipher,cnn.cipher,cryptoContext)
-                if j==0:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
-                elif j==1:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
-                elif j==2:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
-                #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                cnn.cipher = homo_relu(cnn.cipher, B, 29, cryptoContext)
+        # cnn=multiplexed_parallel_convolution_print(openfhe_context,cryptoContext,cnn,16,1,fh,fw,conv_weight[stage],bn_running_var[stage],bn_weight[stage],epsilon,cipher_pool,end=False)
+        # #print(type(cnn))
+        # print(cnn.k,cnn.h,cnn.w,cnn.c,cnn.t,cnn.p)
+        # temptest1=openfhe_context.decrypt(cnn.cipher)
+        # temptest1=temptest1.cpu().numpy().reshape(-1)
+        # print(temptest1[:15])
+        # #
+        # cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
+        # temptest12=openfhe_context.decrypt(cnn.cipher)
+        # temptest12=temptest12.cpu().numpy().reshape(-1)
+        # alist=[]
+        # for i in range(len(temptest12)):
+        #     if (temptest12[i]>0.001):
+        #         alist.append(i)
+        # print(temptest12[:15])
+        #
+        # scale=1.7
+        # #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
+        # # cnn.cipher=homo_relu(cnn.cipher,B,59,cryptoContext)
+        # # temptest123=openfhe_context.decrypt(cnn.cipher)
+        # # temptest123=temptest123.cpu().numpy().reshape(-1)
+        # #print(temptest123[:100])
+        # blist=[]
+        # # for i in range(len(temptest123)):
+        # #     if (temptest123[i]>0.001 or temptest123[i]<-0.001):
+        # #         blist.append(i)
+        # #         print(i)
+        # # diff1 = set(alist) - set(blist)
+        # # print("list1 独有元素:", diff1)
+        # # return 0
+        # print("first success")
+        # for j in range (3):
+        #     #print(j)
+        #     if j==0:
+        #         co=16
+        #     elif j==1:
+        #         co=32
+        #     elif j==2:
+        #         co=64
+        #     for k in range(end_num+1):
+        #         stage=2*((end_num+1)*j+k)+1
+        #         temp=cnn
+        #         if j>=1 and k==0:
+        #             st=2
+        #         else:
+        #             st=1
+        #         #print("end_num:",end_num,k,end="\n")
+        #         cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
+        #                                                      conv_weight[stage], bn_running_var[stage],
+        #                                                      bn_weight[stage], epsilon, cipher_pool,end=False)
+        #         temptest123 = openfhe_context.decrypt(cnn.cipher)
+        #         temptest123 = temptest123.cpu().numpy().reshape(-1)
+        #         print(temptest123[:100])
+        #         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
+        #         temptest123 = openfhe_context.decrypt(cnn.cipher)
+        #         temptest123 = temptest123.cpu().numpy().reshape(-1)
+        #         print(temptest123[:100])
+        #         # return 0
+        #
+        #         if j==0:
+        #             cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
+        #         elif j==1:
+        #             cnn.cipher= fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
+        #         elif j==2:
+        #             cnn.cipher= fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
+        #         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
+        #         cnn.cipher = homo_relu(cnn.cipher, B, 59, cryptoContext) # fixme: everything is fine if we skip this relu
+        #
+        #         stage=2*((end_num+1)*j+k)+2
+        #         st=1
+        #         cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
+        #                                                      conv_weight[stage], bn_running_var[stage],
+        #                                                      bn_weight[stage], epsilon, cipher_pool,end=False)
+        #         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
+        #         if j>=1 and k==0:
+        #             temp=multiplexed_parallel_downsampling_seal_print(openfhe_context,cryptoContext,temp)
+        #         cnn.cipher=fhe.homo_add(temp.cipher,cnn.cipher,cryptoContext)
+        #         if j==0:
+        #             cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
+        #         elif j==1:
+        #             cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
+        #         elif j==2:
+        #             cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
+        #         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
+        #         cnn.cipher = homo_relu(cnn.cipher, B, 59, cryptoContext)
 
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
+        temptest123 = openfhe_context.decrypt(cnn.cipher)
+        temptest123 = temptest123.cpu().numpy().reshape(-1)
+        print(temptest123[:15])
+        # for i in range(len(temptest123)):
+        #     if temptest123[i]>0.001 or temptest123[i]<-0.001:
+        #         print(i,"wei")
+        #         print(temptest123[i])
+
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
+        temptest123 = openfhe_context.decrypt(cnn.cipher)
+        temptest123 = temptest123.cpu().numpy().reshape(-1)
+        print(temptest123[:100])
         temp_time4=time.time()
         print("完成一次的时间为：",temp_time3-temp_time4)
 
