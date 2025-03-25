@@ -731,8 +731,8 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             )
         moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
         mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
-        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
-        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv, moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
         return cipher.cipher_like(
             [cv0, cv1],
             scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
