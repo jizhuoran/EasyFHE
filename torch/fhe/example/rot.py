@@ -5,7 +5,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch
 import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
-
+from torch.fhe import homo_ops, hoisting_keyswitch,ciphertext
 logN = 16
 logSlots_list = [12]
 maxLevelsRemaining = 11
@@ -28,7 +28,7 @@ secretKeyDist = "UNIFORM_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 # firstMod = 60
 
 logN = 14
-logSlots_list = [4]
+logSlots_list = [10]
 maxLevelsRemaining = 3
 levelBudget_list = [[4, 4]]
 dnum = 1
@@ -54,7 +54,7 @@ cryptoContext, openfhe_contexts = utils.try_load_context(
     int(dcrtBits),
     int(firstMod),
     int(approxModDepth),
-    [],
+    [2],
     secretKeyDist,
     rescaleTech,
     save_dir=path,
@@ -74,25 +74,28 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 
 
 
-
 cryptoContext.load_rotation_keys(logSlots)
 cryptoContext.BsContext.cuda()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+# result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
 
 cipher.cv = [cv.cpu() for cv in cipher.cv]
 cryptoContext.cpu()
 cryptoContext.load_rotation_keys(logSlots)
 cryptoContext.BsContext.cpu()
-
+# result=homo_ops.homo_mul( cipher, cipher, cryptoContext)
+result=homo_ops.homo_rotate( cipher, 2, cryptoContext)
 
 # result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
 
 start_time = time.time()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
-print("Time taken for bootstrapping:", time.time() - start_time)
-start_time1 = time.time()
-openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
-print("Time taken for openfhe bootstrapping:", time.time() - start_time1)
+#result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+# result=homo_ops.homo_mul( cipher, cipher, cryptoContext)
+result=homo_ops.homo_rotate( cipher, 2, cryptoContext)
+print("Time taken for rot:", time.time() - start_time)
+start_time = time.time()
+openfhe_result = openfhe_context.cc.EvalRotate(cipher_openfhe, 2)
+# openfhe_result = openfhe_context.cc.EvalMult(cipher_openfhe,cipher_openfhe)
+print("Time taken for openfhe:", time.time() - start_time)
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
 if is_equal:

@@ -1,5 +1,5 @@
 import warnings
-
+from . import utils
 from .ciphertext import Cipher
 from . import functional as F
 from .ciphertext import Plaintext as Plaintext
@@ -579,7 +579,7 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
     factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
     return _cipher_mul_scalar_double(in0, factors, cryptoContext)
 
-
+#@utils.profile_pytorch_function
 def homo_rotate(in0, index, cryptoContext):
     auto_index = cryptoContext.find_auto_index(index)
     swk = cryptoContext.left_rot_key_map[str(auto_index)]

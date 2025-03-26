@@ -9,7 +9,7 @@
 #include <ATen/ops/zeros.h>
 #include <immintrin.h>
 #include "ATen/native/fhe/cpu/NttImpl.h"
-
+#include<iostream>
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
@@ -43,7 +43,7 @@ uint128_t4 accumulate_in_modup(
     const uint64_t* ptr,
     const int degree,
     const uint64_t* hat_mod_end,
-    const int start_length,
+    const int start_length,//sizeP
     const int degree_idx,
     const int hat_mod_end_idx) {
   uint128_t4 accum{0};
@@ -86,7 +86,7 @@ uint128_t4 accumulate_in_modup(
 void modup_step_two_kernel(
     const uint64_t* ptr,
     const int begin_idx,
-    const int degree,
+    const int degree,//ringDim
     const int alpha,
     const int curr_limbs,
     const int level,
@@ -95,8 +95,8 @@ void modup_step_two_kernel(
     const uint64_t* barrett_Ks,
     const uint64_t* hat_mod_end,
     const int hat_mod_end_size,
-    const uint64_t start_length,
-    const uint64_t end_length,
+    const uint64_t start_length,//sizeP
+    const uint64_t end_length,//sizeQ
     uint64_t* to) {
   constexpr const int unroll_number = 4;
   std::vector<uint64_t> s_hat_mod_end_vec(hat_mod_end_size);
@@ -107,8 +107,8 @@ void modup_step_two_kernel(
   __syncthreads();
   STRIDED_LOOP_START(
       (degree * end_length + unroll_number - 1) / unroll_number, i);
-  const int degree_idx = unroll_number * (i / end_length);
-  const int hat_mod_end_idx = i % end_length;
+  const int degree_idx = unroll_number * (i / end_length);//ringDim*4
+  const int hat_mod_end_idx = i % end_length;//j
   const int out_idx =
       hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
   uint128_t4 accum = accumulate_in_modup(
@@ -293,26 +293,26 @@ void switch_modulus_(
     const uint64_t* primes,
     const uint64_t* ptr,
     uint64_t* to) {
-  STRIDED_LOOP_START(batch * degree, i)
-  auto old_modulus_by_two = primes[old_prime_idx] >> 1;
-  auto old_modulus = primes[old_prime_idx];
-  auto new_modulus_idx = i / degree;
-  auto diff = (old_modulus > primes[new_modulus_idx])
-      ? (old_modulus - primes[new_modulus_idx])
-      : (primes[new_modulus_idx] - old_modulus);
-  int input_idx = i % degree;
-  auto tmp = (ptr[input_idx] > old_modulus_by_two) ? diff : 0;
-  if (primes[new_modulus_idx] >= old_modulus) {
-    to[i] = tmp + ptr[input_idx];
-  } else {
-    if (ptr[input_idx] >= tmp) {
-      to[i] = ptr[input_idx] - tmp;
-    } else {
-      to[i] = primes[new_modulus_idx] - (tmp - ptr[input_idx]);
-    }
-    // to[i] = to[i] % primes[new_modulus_idx];
-  }
-  STRIDED_LOOP_END;
+        for(int i=0;i<batch * degree;i++)
+        {auto old_modulus_by_two = primes[old_prime_idx] >> 1;
+        auto old_modulus = primes[old_prime_idx];
+        auto new_modulus_idx = i / degree;
+        auto nm=primes[new_modulus_idx];
+        auto diff = (old_modulus > nm)
+        ? ( nm-(old_modulus % nm ))
+        : (nm - old_modulus);
+        int input_idx = i % degree;
+        auto tmp = (ptr[input_idx] > old_modulus_by_two) ? diff : 0;
+        if (nm > old_modulus) {
+          to[i] = tmp + ptr[input_idx];
+        } else {
+          
+            to[i] = ptr[input_idx] + tmp;
+           if(to[i]>=nm) {
+            to[i] = to[i]%nm;
+          }
+        }}
+        
 }
 
 } // namespace fhe
@@ -461,6 +461,16 @@ Tensor& NTT_cpu_out(
   return res;
 }
 
+int myGetMSB(int64_t x) {
+    if (x == 0) return -1; // No set bit, return -1
+
+    int position = 0;
+    while (x > 0) {
+        x >>= 1;   // Shift right by 1 bit
+        position++;  // Increment the position
+    }
+    return position ; // The MSB is 1 less than the number of shifts
+}
 static void NTT_except_some_range_impl(
     uint64_t* op_ptr,
     int64_t start_prime_idx,
@@ -474,13 +484,6 @@ static void NTT_except_some_range_impl(
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
   auto excluded_range_end = excluded_range_start + excluded_range_size;
-  size_t grid(2048);
-  size_t block(256);
-  const int per_thread_ntt_size = 8;
-  const int first_stage_radix_size = 256;
-  const int second_radix_size = param_degree / first_stage_radix_size;
-  const int pad = 4;
-  const int per_thread_storage = block * per_thread_ntt_size * sizeof(uint64_t);
   AT_DISPATCH_V2(
       kUInt64,
       "NTT_except_some_range_impl",
@@ -492,45 +495,52 @@ static void NTT_except_some_range_impl(
         auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
             param_power_of_roots.data_ptr<uint64_t>());
         int gap = level - curr_limbs;
-        fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange(
-            op_ptr,
-            1,
-            batch,
-            param_degree,
-            start_prime_idx,
-            excluded_range_start,
-            excluded_range_end,
-            curr_limbs,
-            gap,
-            pad,
-            first_stage_radix_size / per_thread_ntt_size,
-            param_power_of_roots_ptr,
-            param_power_of_roots_shoup_ptr,
-            param_primes_ptr,
-            grid,
-            (first_stage_radix_size / 8) * pad,
-            (first_stage_radix_size + pad + 1) * pad);
-        fhe::Ntt8PointPerThreadPhase2ExcludeSomeRange(
-            op_ptr,
-            first_stage_radix_size,
-            batch,
-            param_degree,
-            start_prime_idx,
-            excluded_range_start,
-            excluded_range_end,
-            curr_limbs,
-            gap,
-            second_radix_size / per_thread_ntt_size,
-            param_power_of_roots_ptr,
-            param_power_of_roots_shoup_ptr,
-            param_primes_ptr,
-            grid,
-            block,
-            per_thread_storage / sizeof(uint64_t));
+        const int64_t n = param_degree >> 1;
+        for (int bach = 0; bach < batch; ++bach) {
+            uint64_t primeidx = batch - 1 - bach; + start_prime_idx;
+        if (primeidx >= excluded_range_start && primeidx < excluded_range_end)
+          continue;
+            uint64_t prime_idx =primeidx + ((primeidx >= 0 && primeidx < curr_limbs) ? 0 : gap);
+            uint64_t modulus=param_primes_ptr[prime_idx];
+            uint64_t base_prime_idx=prime_idx*param_degree;
+            uint64_t base=primeidx*param_degree;
+          for (uint32_t m = 1, t = n, logt = myGetMSB(t); m < n;
+               m <<= 1, t >>= 1, --logt) {
+            for (uint32_t i = 0; i < m; ++i) {
+              auto omega = param_power_of_roots_ptr[i + m + base_prime_idx]; // S
+              auto preconOmega = param_power_of_roots_shoup_ptr
+                  [i + m + base_prime_idx]; // NEEDED IN COMPUTE F[j+t]*S MOD Q
+              for (uint32_t j1 = (i << logt), j2 = j1 + t; j1 < j2; ++j1) {
+                uint64_t a1 = (op_ptr)[j1 + 0 + base];
+                uint64_t b1 = (op_ptr)[j1 + t + base];
+                fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+                (op_ptr)[j1 + 0 + base] = a1;
+                (op_ptr)[j1 + t + base] = b1;
+              }
+            }
+          }
+          for (uint32_t i = 0; i < (n << 1); i += 2) {
+            auto omega = param_power_of_roots_ptr[(i >> 1) + n + base_prime_idx];
+            auto preconOmega =
+                param_power_of_roots_shoup_ptr[(i >> 1) + n + base_prime_idx];
+            uint64_t a1 = (op_ptr)[i + 0 + base];
+            uint64_t b1 = (op_ptr)[i + 1 + base];
+            fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+            for (int a = 0; a < 3; a++) {
+              if (b1 > modulus) {
+                b1 -= modulus;
+              }
+              if (a1 > modulus) {
+                a1 -= modulus;
+              }
+            }
+            (op_ptr)[i + 0 + base] = a1;
+            (op_ptr)[i + 1 + base] = b1;
+          }
+        }
       }),
       kUInt64);
 }
-
 void const_mult_batch_(
     uint64_t* op1_ptr,
     const Tensor& op2,
@@ -589,7 +599,6 @@ static void modup_matmul_(
   int grid_dim{(int)param_degree_ * end_length / 256 / unroll_factor};
   int block_dim{256};
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_j__[beta_idx];
-
   AT_DISPATCH_V2(
       kUInt64,
       "modup_matmul_",
@@ -677,8 +686,7 @@ static void modup_impl_(
       param_degree_,
       to_ptr,
       param_primes__);
-
-  modup_matmul_(
+   modup_matmul_(
       to_ptr + param_degree_ * begin_idx,
       idx,
       to_ptr,
@@ -1057,6 +1065,7 @@ Tensor& moddown_core_cpu_out(
 }
 
 static void moddown_cpu_template(
+    //aten::moddown
     const Tensor& from,
     int64_t curr_limbs,
     int64_t level,
@@ -1283,6 +1292,7 @@ void switch_modulus(
 }
 
 static void drop_last_element_scale_template(
+  //aten::drop_last_element_and_scale
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,
@@ -1332,7 +1342,6 @@ static void drop_last_element_scale_template(
       param_degree,
       to_ptr,
       param_primes);
-
   NTT_impl(
       to_ptr,
       0,

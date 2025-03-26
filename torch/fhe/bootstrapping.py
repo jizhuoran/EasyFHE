@@ -176,6 +176,7 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 # @profile_python_function
 # note: EvalBootstrap in ckksrns-fhe.cpp
+@utils.profile_pytorch_function
 def eval_bootstrap(ciphertext, L0, logslots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
