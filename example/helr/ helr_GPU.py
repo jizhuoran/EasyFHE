@@ -25,7 +25,7 @@ class Params:
 
         self.kdeg = 3
         
-        self.encode_slots = (1 << 11)
+        self.encode_slots = (1 << 12)
 
         self.f_num_bits = int(np.ceil(np.log2(factor_num)))
         self.s_num_bits = int(np.ceil(np.log2(sample_num)))
@@ -247,8 +247,8 @@ class SecureML:
             # 计算加密数据的级别差异
             enc_w_data[i] = enc_w_data[i].deep_copy()
 
-            print(enc_w_data[i].slots)
-            print(enc_grad[i].slots)
+            # print(enc_w_data[i].slots)
+            # print(enc_grad[i].slots)
             # 加法更新
             enc_w_data[i] = fhe.homo_add(enc_w_data[i], enc_grad[i], cryptoContext)
             # dec_w_data = openfhe_context.decrypt(enc_w_data[i] )
@@ -262,7 +262,7 @@ class SecureML:
             enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext) 
 
             # 确保加密级别一致
-            enc_v_data[i] = fhe.homo_rescale(tmp2, 1, cryptoContext)
+            tmp2 = fhe.homo_rescale(tmp2, 1, cryptoContext)
             enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp2, cryptoContext)
 
             # 确保加密级别一致
@@ -590,12 +590,12 @@ logN = 14
 dnum = 3
 dcrtBits = 59
 firstMod = 60
-levelBudget_list = [[3, 3]]
+levelBudget_list = [[4, 4]]
 rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
 save_dir = "/home/cys/PNP/GPU-FHE/example/helr/data"
 mode = "release"  # "debug" or "release"
 autoLoadAndSetConfig = True # note: currently only support True
-encode_slots = (1 << 11)
+encode_slots = (1 << 12)
 
 if not os.path.exists(save_dir):
     raise ValueError(f"Directory {save_dir} does not exist!")
@@ -610,7 +610,7 @@ def test(file, file_test, is_first, num_iter, learning_rate, num_thread, is_encr
     z_data = SecureML.shuffle_z_data(z_data, factor_num, sample_num)
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
 
-    slots = encode_slots # 1 << 11
+    slots = encode_slots 
     params = Params(z_data.shape[1] - 1, z_data.shape[0], num_iter, learning_rate, num_thread, slots)
     depth = cryptoContext.L - 1
     params.depth = depth
