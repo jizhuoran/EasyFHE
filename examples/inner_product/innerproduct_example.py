@@ -42,30 +42,6 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, n, cryptoContext):
     bxExt = fhe.key_switch_P_ext(fhe.extract_cv(cipher_product,0, cryptoContext), cryptoContext)
     ax = fhe.extract_cv(cipher_product,1, cryptoContext)
     for shift in shifts:
-        # ver1
-        # rotated = fhe.homo_rotate(cipher_product, shift, cryptoContext)
-
-        # ver2
-        # rotated_modup = fhe.modup_to_ext(fhe.extract_cv(cipher_product, 1, cryptoContext), cryptoContext)
-        # rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, shift, cryptoContext)
-        # rotated = fhe.moddown_from_ext(rotated_innerp, cryptoContext)
-        # rotated.cv[0] = F.cv_add(rotated.cv[0], cipher_product.cv[0], cryptoContext.moduliQ, rotated.cur_limbs)
-        # rotated = fhe.cipher_automorphism(rotated, cryptoContext.norm_rot_index(shift), cryptoContext, printInfo=False)
-
-        # ver3
-        # rotated_modup = fhe.modup_to_ext(ax, cryptoContext)
-        # norm_index = cryptoContext.norm_rot_index(shift)
-        # rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, norm_index, cryptoContext)
-        #
-        # tmp_bxExt = fhe.homo_add(fhe.extract_cv(rotated_innerp,0, cryptoContext), bxExt, cryptoContext)
-        # tmp_ax    = fhe.moddown_from_ext(fhe.extract_cv(rotated_innerp,1, cryptoContext), cryptoContext)
-        #
-        # tmp_bxExt = fhe.cipher_automorphism(tmp_bxExt, norm_index, cryptoContext)
-        # tmp_ax  = fhe.cipher_automorphism(tmp_ax, norm_index, cryptoContext)
-        #
-        # bxExt = fhe.homo_add(tmp_bxExt, bxExt, cryptoContext)
-        # ax    = fhe.homo_add(tmp_ax, ax, cryptoContext)
-
         # ver4
         rotated_modup = fhe.modup_to_ext(ax, cryptoContext)
         tmp = fhe.eval_fast_rotate(rotated_modup, bxExt, shift, True, False, cryptoContext)
@@ -86,42 +62,6 @@ def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     assert cryptoContext.rescaleTech != "FIXEDMANUAL", "cannot deal with manual rescale"
     log_n = int(math.log2(n))
 
-    # ver1
-    # cipher_product = fhe.homo_mul(cipher_A, cipher_B, cryptoContext)
-    # cipher_product = fhe.homo_rescale(cipher_product, 1, cryptoContext)
-
-    # ver2
-    # in0=cipher_A
-    # in1=cipher_B
-    # in0, in1 = homo_ops._adjust_for_mult(in0, in1, cryptoContext)
-    # res = homo_ops._cipher_mul(in0, in1, cryptoContext)
-    # digits = fhe.modup_to_ext(in0.cipher_like([res.cv[2]]), cryptoContext)
-
-    # swk = [cryptoContext.swk_bx, cryptoContext.swk_ax,]
-    # sum_mult = digits.cipher_like(F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
-    #                                      swk_bx=swk[0], swk_ax=swk[1]), is_ext=True)
-    # tmp = fhe.moddown_from_ext(sum_mult, cryptoContext)
-    # res.cv = res.cv[:2]
-    # cipher_product = homo_ops._cipher_add(res, tmp, cryptoContext)
-
-    # ver3
-    # in0=cipher_A
-    # in1=cipher_B
-    # in0, in1 = homo_ops._adjust_for_mult(in0, in1, cryptoContext)
-    # res = homo_ops._cipher_mul(in0, in1, cryptoContext)
-    # digits = fhe.modup_to_ext(in0.cipher_like([res.cv[2]]), cryptoContext)
-    # swk = [cryptoContext.swk_bx, cryptoContext.swk_ax,]
-    # sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
-    #                                                 swk_bx=swk[0], swk_ax=swk[1])
-    # tmp0 = F.cv_moddown(sum_mult[0], cipher.cur_limbs, cryptoContext)
-    # tmp1 = F.cv_moddown(sum_mult[1], cipher.cur_limbs, cryptoContext)
-    # tmp0 = F.cv_add(tmp0, res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
-    # tmp1 = F.cv_add(tmp1, res.cv[1], cryptoContext.moduliQ, in0.cur_limbs)
-    # cipher_product = res.cipher_like([tmp0, tmp1])
-    #
-    # bxExt = fhe.key_switch_P_ext(fhe.extract_cv(cipher_product,0, cryptoContext), cryptoContext)
-    # ax = fhe.extract_cv(cipher_product,1, cryptoContext)
-
     # ver4 correct
     in0=cipher_A
     in1=cipher_B
@@ -137,50 +77,6 @@ def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     tmp1 = F.cv_add(tmp1, res.cv[1], cryptoContext.moduliQ, in0.cur_limbs)
     ax = res.cipher_like([tmp1])
 
-
-    # try: correct
-    # tmp0 = F.cv_moddown(sum_mult[0], cipher.cur_limbs, cryptoContext)
-    # tmp0 = F.cv_add(tmp0, res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
-    # bxExt = fhe.key_switch_P_ext(res.cipher_like([tmp0]), cryptoContext)
-
-
-    # try: correct
-    #
-    # # bxExt = fhe.key_switch_P_ext(fhe.extract_cv(res,0, cryptoContext), cryptoContext)
-    # # cv = [F.cv_add(sum_mult[0], bxExt.cv[0], cryptoContext.QplusP_map[in0.cur_limbs], in0.cur_limbs + cryptoContext.K,)]
-    # bxExt_cv0 =  torch.cat((
-    #     F.cv_mul_scalar(res.cv[0], cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-    #     torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
-    # ), dim=0)
-    # cv = [F.cv_add(sum_mult[0], bxExt_cv0, cryptoContext.QplusP_map[in0.cur_limbs], in0.cur_limbs + cryptoContext.K,)]
-    # bxExt = sum_mult_ct.cipher_like(cv)
-    #
-    # tmp0=fhe.moddown_from_ext(bxExt, cryptoContext)
-    #
-    # cipher_product = res.cipher_like([tmp0.cv[0], tmp1])
-    # shifts = [2**i for i in range(log_n)]
-    # for shift in shifts:
-    #     rotated = fhe.homo_rotate(cipher_product, shift, cryptoContext)
-    #     cipher_product = fhe.homo_add(cipher_product, rotated, cryptoContext)
-    #
-    # return cipher_product
-
-
-    # try: correct
-    # # bxExt = fhe.key_switch_P_ext(fhe.extract_cv(res,0, cryptoContext), cryptoContext)
-    # # cv = [F.cv_add(sum_mult[0], bxExt.cv[0], cryptoContext.QplusP_map[in0.cur_limbs], in0.cur_limbs + cryptoContext.K,)]
-    # bxExt_cv0 =  torch.cat((
-    #     F.cv_mul_scalar(res.cv[0], cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-    #     torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
-    # ), dim=0)
-    # cv = [F.cv_add(sum_mult[0], bxExt_cv0, cryptoContext.QplusP_map[in0.cur_limbs], in0.cur_limbs + cryptoContext.K,)]
-    # bxExt = sum_mult_ct.cipher_like(cv)
-    #
-    # tmp0=fhe.moddown_from_ext(bxExt, cryptoContext)
-    #
-    # cipher_product = res.cipher_like([tmp0.cv[0], tmp1])
-    # bxExt=fhe.key_switch_P_ext(fhe.extract_cv(cipher_product,0, cryptoContext),cryptoContext)
-
     # try: correct
     bxExt_cv0 =  torch.cat((
         F.cv_mul_scalar(res.cv[0], cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
@@ -194,29 +90,14 @@ def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     shifts = [2 ** i for i in range(log_n)]
 
     for shift in shifts:
-        # ver1
-        # rotated = fhe.homo_rotate(cipher_product, shift, cryptoContext)
-
-        # ver2
-        # rotated_modup = fhe.modup_to_ext(fhe.extract_cv(cipher_product, 1, cryptoContext), cryptoContext)
-        # rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, shift, cryptoContext)
-        # rotated = fhe.moddown_from_ext(rotated_innerp, cryptoContext)
-        # rotated.cv[0] = F.cv_add(rotated.cv[0], cipher_product.cv[0], cryptoContext.moduliQ, rotated.cur_limbs)
-        # rotated = fhe.cipher_automorphism(rotated, cryptoContext.norm_rot_index(shift), cryptoContext, printInfo=False)
-
-        # ver3
+        # ver4
         rotated_modup = fhe.modup_to_ext(ax, cryptoContext)
-        norm_index = cryptoContext.norm_rot_index(shift)
-        rotated_innerp = fhe.mult_rot_key_and_sum_ext(rotated_modup, norm_index, cryptoContext)
-
-        tmp_bxExt = fhe.homo_add(fhe.extract_cv(rotated_innerp,0, cryptoContext), bxExt, cryptoContext)
-        tmp_ax    = fhe.moddown_from_ext(fhe.extract_cv(rotated_innerp,1, cryptoContext), cryptoContext)
-
-        tmp_bxExt = fhe.cipher_automorphism(tmp_bxExt, norm_index, cryptoContext)
-        tmp_ax  = fhe.cipher_automorphism(tmp_ax, norm_index, cryptoContext)
+        tmp = fhe.eval_fast_rotate(rotated_modup, bxExt, shift, True, False, cryptoContext)
+        tmp_bxExt = fhe.extract_cv(tmp, 0, cryptoContext)
+        tmp_ax = fhe.moddown_from_ext(fhe.extract_cv(tmp, 1, cryptoContext), cryptoContext)
 
         bxExt = fhe.homo_add(tmp_bxExt, bxExt, cryptoContext)
-        ax    = fhe.homo_add(tmp_ax, ax, cryptoContext)
+        ax = fhe.homo_add(tmp_ax, ax, cryptoContext)
 
     bx = fhe.moddown_from_ext(bxExt, cryptoContext)
     cipher_product = res.cipher_like([bx.cv[0], ax.cv[0]])
