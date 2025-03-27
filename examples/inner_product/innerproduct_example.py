@@ -57,6 +57,7 @@ def homo_inner_product_hoisting(cipher_A, cipher_B, n, cryptoContext):
     return cipher_product
 
 
+@fhe.utils.profile_python_function
 def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     assert (n & (n - 1)) == 0, "n must be a power of two"
     assert cryptoContext.rescaleTech != "FIXEDMANUAL", "cannot deal with manual rescale"
@@ -72,19 +73,14 @@ def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
                                  swk_bx=swk[0], swk_ax=swk[1])
 
+    ax = fhe.extract_cv(res,1, cryptoContext)
+    sum_mult_ax = fhe.moddown_from_ext(digits.cipher_like([sum_mult[1]]),cryptoContext)
+    ax = fhe.homo_add(ax, sum_mult_ax, cryptoContext)
 
-    tmp1 = F.cv_moddown(sum_mult[1], cipher.cur_limbs, cryptoContext)
-    tmp1 = F.cv_add(tmp1, res.cv[1], cryptoContext.moduliQ, in0.cur_limbs)
-    ax = res.cipher_like([tmp1])
+    bxExt = fhe.key_switch_P_ext(fhe.extract_cv(res,0, cryptoContext), cryptoContext)
+    sum_mult_bxExt = digits.cipher_like([sum_mult[0]])
+    bxExt = fhe.homo_add(sum_mult_bxExt, bxExt, cryptoContext)
 
-    # try: correct
-    bxExt_cv0 =  torch.cat((
-        F.cv_mul_scalar(res.cv[0], cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-        torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device="cuda").reshape(-1, cryptoContext.N)
-    ), dim=0)
-    cv = [F.cv_add(sum_mult[0], bxExt_cv0, cryptoContext.QplusP_map[in0.cur_limbs], in0.cur_limbs + cryptoContext.K,)]
-    bxExt = res.cipher_like(cv)
-    bxExt.is_ext = True
 
 
     shifts = [2 ** i for i in range(log_n)]
