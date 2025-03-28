@@ -3,11 +3,13 @@ import torch.fhe as fhe
 from torch.fhe.bootstrapping import eval_bootstrap
 import numpy as np
 import torch
-import torch.fhe.client.openfhe as openfhe
+import openfhe as openfhe
 from torch.fhe.ciphertext import Cipher
 import random
 import math
 import os
+
+DATA_DIR = os.environ["DATA_DIR"]
 
 class Params:
     def __init__(self, factor_num, sample_num, iter_num, alpha, num_thread, slots):
@@ -44,8 +46,8 @@ class Params:
         self.depth = 0
 
         self.is_first = True
-        self.path_to_file = "/home/cys/PNP/GPU-FHE/example/helr/data/MNIST_test.txt"
-        self.path_to_test_file = "/home/cys/PNP/GPU-FHE/example/helr/data/MNIST_train.txt"
+        self.path_to_file = DATA_DIR + "MNIST_test.txt"
+        self.path_to_test_file = DATA_DIR + "MNIST_train.txt"
 
         # 时间相关的参数
         self.start_time_val = None
@@ -82,7 +84,7 @@ class SecureML:
             pvals[i] = 1.0  # Set every `params.batch` element to 1.0
         # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
         # self.dummy = openfhe_context.encode_gpu_fhe(cryptoContext,pvals)
-        self.dummy = fhe.encode(pvals, 1, 0, self.params.encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        self.dummy = fhe.encode(pvals, 1, 0, self.params.encode_slots, True, cryptoContext)
 
         # todo: 为了支持fixedmanual模式，每个乘法(包括明密文和密密文)后面都要调用一个homo_rescale 
 
@@ -197,7 +199,7 @@ class SecureML:
                 enc_z_data = openfhe_context.cc.Encrypt(openfhe_context.publicKey, ptxt)
 
                 # 生成文件名
-                file_name = f"/home/cys/PNP/GPU-FHE/example/helr/encData/{block_id + 1}_{j + 1}_cipher.txt"
+                file_name = DATA_DIR + f"/helr/encData/{block_id + 1}_{j + 1}_cipher.txt"
                 
                 # todo: 序列化加密数据并保存到文件
                 if not openfhe.SerializeToFile(file_name, enc_z_data, openfhe.BINARY):
@@ -213,7 +215,7 @@ class SecureML:
 
         # 反序列化加密数据
         for i in range(self.params.cnum):
-            file_name = f"/home/cys/PNP/GPU-FHE/example/helr/encData/{block_id + 1}_{i + 1}_cipher.txt"
+            file_name = DATA_DIR + f"/helr/encData/{block_id + 1}_{i + 1}_cipher.txt"
 
             # 检查文件是否存在
             if not os.path.exists(file_name):
@@ -271,6 +273,7 @@ class SecureML:
 
         print("Update finished!")
 
+    @fhe.utils.profile_pytorch_function
     def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array):
         # 加密数据的容器
         enc_v_data = [None] * self.params.cnum
@@ -279,7 +282,7 @@ class SecureML:
         zero_vec = np.zeros(self.params.slots, dtype=complex)
         input_vec = zero_vec  # 在 Python 中，可以直接使用零向量
 
-        # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+        # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, True, cryptoContext)
 
         for i in range(self.params.cnum):
             enc_w_data[i] = openfhe_context.encrypt(input_vec, 1, 0, encode_slots)
@@ -290,7 +293,7 @@ class SecureML:
         w_data = np.zeros(self.params.factor_num)
         # 初始化参数
         alpha0 = 0.01
-        alpha1 = (1. + np.sqrt(1. + 4.0 * alpha0 * alpha0)) / 2.0
+        alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
         gamma = self.params.alpha / self.params.block_size
 
         dw_data = np.zeros(factor_num)
@@ -349,7 +352,7 @@ class SecureML:
 
             # 更新alpha值
             alpha0 = alpha1
-            alpha1 = (1. + np.sqrt(1. + 4.0 * alpha0 * alpha0)) / 2.0
+            alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
 
             # 执行Bootstrapping
             if iter % self.params.iter_per_boot == self.params.iter_per_boot - 1 and iter < self.params.iter_num - 1:
@@ -359,10 +362,10 @@ class SecureML:
 
                 # 对 encWData 和 encVData 中的每个密文执行引导操作
                 for i in range(self.params.cnum):
-                    # result = eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
-                    enc_w_data[i] = eval_bootstrap(enc_w_data[i], L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+                    # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    enc_w_data[i] = eval_bootstrap(enc_w_data[i], cryptoContext.L, logBsSlots_list[0], cryptoContext)
                 for i in range(self.params.cnum):
-                    enc_v_data[i] = eval_bootstrap(enc_v_data[i], L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+                    enc_v_data[i] = eval_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
                 elapsed_time = self.params.end_time()  # 记录结束时间并计算时间差
                 self.params.print_time("bootstrapping", elapsed_time)  # 打印自定义的时间信息
@@ -591,19 +594,18 @@ dnum = 3
 dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]
+secretKeyDist = "SPARSE_TERNARY"
 rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-save_dir = "/home/cys/PNP/GPU-FHE/example/helr/data"
-mode = "release"  # "debug" or "release"
-autoLoadAndSetConfig = True # note: currently only support True
-encode_slots = (1 << 12)
 
-if not os.path.exists(save_dir):
-    raise ValueError(f"Directory {save_dir} does not exist!")
+encode_slots = (1 << (logN-1))
 
+if not os.path.exists(DATA_DIR):
+    raise ValueError(f"Directory {DATA_DIR} does not exist!")
+
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                        levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir=save_dir,
-                        autoLoadAndSetConfig=True, mode=mode))
+                        levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
 
 def test(file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted):
     z_data, factor_num, sample_num = SecureML.z_data_from_file(file, is_first)
@@ -644,14 +646,14 @@ def test(file, file_test, is_first, num_iter, learning_rate, num_thread, is_encr
         secure_ml.plain_training(cryptoContext, w_data, z_data, factor_num, sample_num)
 
     if is_encrypted:
-        secure_ml.decrypt_w_data_and_save(cryptoContext, enc_w_data, factor_num, "dwData.csv")
+        secure_ml.decrypt_w_data_and_save(cryptoContext, enc_w_data, factor_num, DATA_DIR + "helr/dwData.csv")
 
     
 
 
 def main():
-    file1 = "/home/cys/PNP/GPU-FHE/example/helr/data/MNIST_train.txt"
-    file2 = "/home/cys/PNP/GPU-FHE/example/helr/data/MNIST_test.txt"
+    file1 = DATA_DIR + "helr/MNIST_train.txt"
+    file2 = DATA_DIR + "helr/MNIST_test.txt"
     is_first = True
     is_encrypted = True
     num_iter = 30
