@@ -1,3 +1,4 @@
+import itertools
 import subprocess
 from pathlib import Path
 import csv
@@ -689,6 +690,50 @@ def BERT_Tiny():
     # plain_pooled generated above is available
     # 实现BERT-TINY的分类器(明文版)
 
+def classifier():
+    """
+    本函数实现明文状态下的分类器，输入输出均为double数组
+    :return:
+    C++源代码如下：
+    vector<double> weight = controller.read_plain_input_vector("../weights-sst2/classifier_weight.txt");
+    vector<double> bias = controller.read_plain_expanded_input_vector("../weights-sst2/classifier_bias.txt");
+    vector<double> output = controller.mult(input, weight);
+    output = controller.rotsum(output, 128, 1);
+    output = controller.add(output, bias);
+    std::cout<<"done3!"<<std::endl;
+    vector<double> mask;
+    for (int i = 0; i < controller.num_slots; i++) {
+        mask.push_back(0);
+    }
+    mask[0] = 1;
+    mask[128] = 1;
+    output = controller.mult(output, mask);
+    std::cout<<"done4!"<<std::endl;
+    output = controller.add(output, controller.rotate(controller.rotate(output, -1), 128));
+    return output;
+    """
+    #1.读取文件
+    weight = read_plain_input("../weights-sst2/classifier_weight.txt")
+    bias = read_plain_expanded_input("../weights-sst2/classifier_bias.txt")
+
+
+def read_plain_input(filename: str) -> list[float]:
+        # 读取文件内容并转换为浮点数列表
+        with open(filename, 'r') as f:
+            input_data = [float(line.strip()) for line in f if line.strip()]
+        input_size = len(input_data)
+        if input_size == 0:
+            return []
+        # 使用itertools.cycle创建无限循环迭代器，优化循环填充逻辑
+        cycled_input = itertools.cycle(input_data)
+        return [next(cycled_input) for _ in range(global_num_slots)]
+
+def read_plain_expanded_input(filename: str) -> list[float]:
+    with open(filename, 'r') as f:
+        input = [float(line.strip()) for line in f if line.strip()]
+    # 扩展阶段
+    repeated = [val for val in input for _ in range(128)]
+    return  repeated
 
 def setup_environment(text:str):
     """
