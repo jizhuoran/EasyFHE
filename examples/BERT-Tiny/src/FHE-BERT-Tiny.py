@@ -1,9 +1,15 @@
+import subprocess
 from pathlib import Path
 import csv
 import torch.fhe as fhe
 import numpy as np
 import torch
 import os,time
+import shutil
+
+from triton.profiler.flags import command_line
+
+# 备注：
 DATA_DIR = os.environ["DATA_DIR"]
 
 from utils import *
@@ -614,7 +620,10 @@ def pooler(input,cryptoContext,openfhe_context):
 
 def BERT_Tiny():
     #todo: add setup_environment function
-
+    #  根据BERT-TINT C++版本的代码改写为Python版本
+    #
+    text = 'this is a good moive'
+    setup_environment(text)
     global_num_slots = 1<<14
 
     # generate context
@@ -677,7 +686,58 @@ def BERT_Tiny():
 
 
     # todo: implement the plain classifier and post process here
-    #plain_pooled generated above is available
+    # plain_pooled generated above is available
+    # 实现BERT-TINY的分类器(明文版)
+
+
+def setup_environment(text:str):
+    """
+    本函数为BERT-TINY复现项目下从C++版本移植为Python版本：
+    C++版本如下：
+    void setup_environment(string text) {
+        string command;
+        filesystem::remove_all("../src/tmp_embeddings");
+        system("mkdir ../src/tmp_embeddings");
+        input_folder = "../src/tmp_embeddings/";
+        text = "[CLS] " + text + " [SEP]";
+        cout << "\nCLIENT-SIDE\nTokenizing the following sentence: '" << text << "'" << endl;
+        command = "python3 ../src/python/ExtractEmbeddings.py \"" + text + "\"";
+        system(command.c_str());
+        verbose = false;
+        return;
+    """
+    # Todo：修改脚本目录
+    # 1. 清理并重建临时目录
+    tmp_dir = "../src/tmp_embeddings"
+    if os.path.exists(tmp_dir):
+        shutil.rmtree(tmp_dir)  # 递归删除目录
+    os.makedirs(tmp_dir, exist_ok=True)  # 自动创建多级目录
+    input_folder = tmp_dir + "/"
+    # 2. 文本预处理
+    processed_text = f"[CLS] {text} [SEP]"
+    print(f"\nCLIENT-SIDE\nTokenizing the following sentence: '{processed_text}'")
+    # 3. 调用Python脚本
+    script_path = "../src/python/ExtractEmbeddings.py"
+    command = ["python3", script_path, processed_text]
+    try:
+        # 使用subprocess.run调用脚本
+        result = subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            print(f"Script execution failed: {result.stderr}")
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing script: {str(e)}")
+
+
+
+
+
+
+
 
 if __name__ == "__main__":
     BERT_Tiny()
