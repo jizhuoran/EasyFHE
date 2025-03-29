@@ -3,11 +3,14 @@ import csv
 import torch.fhe as fhe
 import numpy as np
 import torch
+import os,time
+DATA_DIR = os.environ["DATA_DIR"]
+
+from utils import *
+import examples.resnet20.convs
 from examples.resnet20.utils import mask_first_n
 from examples.utils.approx import eval_chebyshev_function
 
-
-import examples.resnet20.convs
 global_num_slots = 0
 input_folder="../src/tmp_embeddings/"
 global_circuit_depth=0
@@ -499,7 +502,7 @@ def encoder2(inputs,cryptoContext):
 
     value_w = read_plain_input("../weights-sst2/layer1_attself_value_weight.txt", cryptoContext.L -inputs[0].curlimb)
     value_b = read_plain_repeated_input("../weights-sst2/layer1_attself_value_bias.txt",
-                                        cryptoContext.L - inputs.curlimb )
+                                        cryptoContext.L - inputs[0].curlimb )
     V = matmulRE(inputs, value_w, value_b, cryptoContext)
     V_wrapped = wrapUpRepeated(V, cryptoContext)
     output = matmulRE(unwrapped_scores, V_wrapped, 128, 128, cryptoContext)
@@ -607,3 +610,74 @@ def pooler(input,cryptoContext,openfhe_context):
                                    cryptoContext=cryptoContext)
     output=eval_tanh_function(output,-1,1,tanhScale,300,cryptoContext)
     return output
+
+
+def BERT_Tiny():
+    #todo: add setup_environment function
+
+    global_num_slots = 1<<14
+
+    # generate context
+    levelsUsedBeforeBootstrap = 12+4
+    rotate_index_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, -1, -2, -4, -8, -16, -32, -64]
+
+    maxLevelsRemaining = 14
+    logBsSlots_list = [12, 13, 14]
+    logN = 16
+    dnum = 4
+    dcrtBits = 57
+    firstMod = 60
+    levelBudget_list = [[3,3]]
+    secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    cryptoContext, openfhe_context = (
+        fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                       levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                       config=config))
+
+    cryptoContext.PRELOAD_ALL = True  # poor workaround, should be fixed in the future, need to be set to False/True now
+
+    print("Context Done")
+
+
+    # todo: copy res-20 work around implementation
+    # encode_weight_path = (
+    #     DATA_DIR
+    #     + "/weight.pkl"
+    # )
+    #
+    # load_weight(encode_weight_path, cryptoContext)
+
+    print("\nSERVER-SIDE\nThe evaluation of the circuit started.")
+
+    start = time.time()
+
+    if not os.path.exists(input_folder):
+        raise ValueError(f"Directory {input_folder} does not exist!")
+
+    encoder1output=[]
+    encoder2output=None
+
+    encoder1output = encoder1(cryptoContext, openfhe_context)
+    # encoder1output = controller.load_vector("../checkpoint/encoder1output.bin"); #todo: we dont save checkpoint now, therefore omit deserialization
+    encoder2output = encoder2(encoder1output,cryptoContext)
+
+    pooled = pooler(encoder2output, cryptoContext, openfhe_context)
+
+    #todo: use homo_classifier in the future
+
+    try:
+        plain_pooled = openfhe_context.decrypt(pooled)
+        plain_pooled = plain_pooled.cpu().numpy().reshape(-1)
+    except RuntimeError as e:
+        print(f"Decryption failed: {e}")
+        plain_pooled = None
+
+
+    # todo: implement the plain classifier and post process here
+    #plain_pooled generated above is available
+
+if __name__ == "__main__":
+    BERT_Tiny()
