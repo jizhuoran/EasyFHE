@@ -81,6 +81,27 @@ def read_plain_repeated_input(filename,level=0,scale=1):
     x = torch.tensor(repeated, device="cuda")
     return fhe.encode(x, 1, level, global_num_slots, "release")
 
+def read_plain_expanded_input(filename, level=0, scale=1, num_inputs=None):
+    input_values = read_values_from_file(filename)
+    repeated = []
+
+    for j in range(128):
+        if num_inputs is None:
+            for i in range(128):
+                repeated.append(input_values[j])
+        else:
+            for i in range(num_inputs):
+                repeated.append(input_values[j])
+            for i in range(128 - num_inputs):
+                repeated.append(0)
+
+    if scale != 1:
+        repeated = [x * scale for x in repeated]
+
+    x = torch.tensor(repeated, device="cuda")
+    return fhe.encode(x, 1, level, global_num_slots, "release")
+
+
 def log2_int(x):
     import math
 
@@ -112,6 +133,7 @@ def mask_block(c,fro,to,mask_value,cryptoContext):
     x = torch.tensor(mask, device="cuda")
     temp=fhe.encode(x,1,cryptoContext.L-c.cur_limb,global_num_slots, "release")#Todo
     return fhe.homo_mul_pt(c,temp,cryptoContext)
+
 
 def wrapUpRepeated(vectors,cryptoContext):
     masked=[]
@@ -178,6 +200,8 @@ def eval_exp(c,inputs_number,cryptoContext):
     x = torch.tensor(mask, device="cuda")
     temp=fhe.encode(x,1,cryptoContext.L-res.cur_limb,global_num_slots, "release")#Todo
     return fhe.homo_add_pt(res,temp,cryptoContext)
+
+
 func = lambda x: 1 / x
 def eval_inverse_naive(c,min,max,cryptoContext):
     return eval_chebyshev_function(func,c,min,max,119,cryptoContext)
@@ -239,25 +263,7 @@ def unwrapScoresExpanded(c,inputs_num,cryptoContext):
 #             repeated[i]=repeated[i]*scale
 #     x = torch.tensor(repeated, device="cuda")
 #     return fhe.encode(x, 1, level, global_num_slots, "release")
-def read_plain_expanded_input(filename, level=0, scale=1, num_inputs=None):
-    input_values = read_values_from_file(filename)
-    repeated = []
 
-    for j in range(128):
-        if num_inputs is None:
-            for i in range(128):
-                repeated.append(input_values[j])
-        else:
-            for i in range(num_inputs):
-                repeated.append(input_values[j])
-            for i in range(128 - num_inputs):
-                repeated.append(0)
-
-    if scale != 1:
-        repeated = [x * scale for x in repeated]
-
-    x = torch.tensor(repeated, device="cuda")
-    return fhe.encode(x, 1, level, global_num_slots, "release")
 def wrapUpExpanded(vectors,cryptoContext):
     masked=mask_mod_n(vectors[vectors[len(vectors)-1],128,cryptoContext])
     for i in range(len(vectors)-2,-1,-1):
@@ -336,16 +342,7 @@ def slicing(arr,X,Y):
     return result
 import math
 
-def mask_block(c,fro,to,mask_value,cryptoContext):
-    mask=[]
-    for i in range(global_num_slots):
-        if i >=fro and i<to:
-            mask.append(mask_value)
-        else:
-            mask.append(0)
-    x = torch.tensor(mask, device="cuda")
-    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, "release")  # Todo
-    return fhe.homo_mul_pt(c, temp, cryptoContext)
+
 
 def custom_function(x, mult):
     return 0.5 * (x * (1 / mult)) * (1 + math.erf((x * (1 / mult)) / 1.41421356237))
