@@ -9,6 +9,9 @@ encoded_weight = {}
 NEW_VERSION = False
 
 if NEW_VERSION:
+
+
+
     def load_weight(encode_weight_path, cryptoContext):
         with open(encode_weight_path, 'rb') as f:
             pre_encoded = pickle.load(f)
@@ -17,6 +20,33 @@ if NEW_VERSION:
                 pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
                 # print("NODE{} = pre_encoded[{}]".format(pre_encoded[key].node_id, key))
         cryptoContext.pre_encoded = pre_encoded
+
+
+    def read_values_from_file(filename, scale=1):
+        values = []
+        with open(filename, "r", encoding="utf-8") as file:
+            reader = csv.reader(file)
+            for row in reader:
+                for value in row:
+                    try:
+                        num = float(value)
+                        values.append(num * scale)
+                    except ValueError:
+                        print(f"Can not convert: {value}")
+        return values
+
+    def read_expanded_input(openfhe_context,filename,slots,scale=1):
+        input=read_values_from_file(filename)
+        repeated=[]
+        for j in range(128):
+            for i in range(128):
+                repeated.append(input[j])
+        size=len(repeated)
+        if scale!=1:
+            for i in range(size):
+                repeated[i]=repeated[i]*scale
+        x = torch.tensor(repeated, device="cuda")
+        return openfhe_context.encrypt(x, 0, 1, slots, "release")
 
 
     def read_values_from_file(filename, scale=1):
@@ -177,16 +207,6 @@ else:
                         print(f"Can not convert: {value}")
         return values
 
-        values = torch.tensor(values, dtype=torch.float64).cuda()
-        encoded = fhe.encode(values, scale_deg, level, slots, False, cryptoContext)
-        encoded.cv[0].cpu().numpy()
-        key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
-        encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
-
-        return encoded
-
 
     def read_plain_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
         values = []
@@ -299,6 +319,20 @@ else:
         key = "mask_heads_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
         encoded_weight[key] = encoded
         return temp
+
+    def read_expanded_input(openfhe_context,filename,slots,scale=1):
+        input=read_values_from_file(filename)
+        repeated=[]
+        for j in range(128):
+            for i in range(128):
+                repeated.append(input[j])
+        size=len(repeated)
+        if scale!=1:
+            for i in range(size):
+                repeated[i]=repeated[i]*scale
+        x = torch.tensor(repeated, device="cuda")
+        return openfhe_context.encrypt(x, 0, 1, slots, "release")
+
 
 
     def eval_mult_many(ciphertexts, cryptoContext):
