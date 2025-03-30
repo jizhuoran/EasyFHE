@@ -2,6 +2,7 @@ import itertools
 import subprocess
 from pathlib import Path
 import csv
+
 import torch.fhe as fhe
 import numpy as np
 import torch
@@ -619,16 +620,16 @@ def pooler(input,cryptoContext,openfhe_context):
     return output
 
 
-def BERT_Tiny():
-    #todo: add setup_environment function
+def BERT_Tiny(text_input):
     #  根据BERT-TINT C++版本的代码改写为Python版本
-    #
-    text = 'this is a good moive'
+    text = text_input
+    # text = 'this is a good moive'
+    # Todo：缺少生成密钥部分
     setup_environment(text)
     global_num_slots = 1<<14
 
     # generate context
-    levelsUsedBeforeBootstrap = 12+4
+    levelsUsedBeforeBootstrap = 12+1+3
     rotate_index_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, -1, -2, -4, -8, -16, -32, -64]
 
     maxLevelsRemaining = 14
@@ -685,12 +686,20 @@ def BERT_Tiny():
         print(f"Decryption failed: {e}")
         plain_pooled = None
 
-
-    # todo: implement the plain classifier and post process here
+    # implement the plain classifier and post process here
     # plain_pooled generated above is available
-    # 实现BERT-TINY的分类器(明文版)
+    # 实现 pooler->解密->classified->判断
+    classifier_result = classifier_tensor(plain_pooled)
+    # 判断逻辑
+    print("Outcome: ", end='')
+    if classifier_result[0].item() > classifier_result[1].item():
+        print(f"\033[92mnegative\033[0m sentiment!")  # 使用ANSI颜色代码
+    else:
+        print(f"\033[92mpositive\033[0m sentiment!")
 
-def classifier():
+
+
+def classifier_tensor(input):
     """
     本函数实现明文状态下的分类器，输入输出均为double数组
     :return:
@@ -713,27 +722,62 @@ def classifier():
     return output;
     """
     #1.读取文件
-    weight = read_plain_input("../weights-sst2/classifier_weight.txt")
-    bias = read_plain_expanded_input("../weights-sst2/classifier_bias.txt")
+    weight = read_plain_input_tensor("../weights-sst2/classifier_weight.txt")
+    bias = read_plain_expanded_input_tensor("../weights-sst2/classifier_bias.txt")
+    output = torch.mul(input, weight)
+    output = rotsum(output, 128, 1)
+    output =torch.add(output,bias)
+    mask = torch.zeros(global_num_slots, dtype=torch.double)
+    # 设置索引0和128的位置为1
+    mask[0] = 1.0
+    mask[128] = 1.0
+    output = torch.mul(output, mask)
+    output = torch.add(output, rotate(rotate(output, -1), 128))
+    return output
 
 
-def read_plain_input(filename: str) -> list[float]:
-        # 读取文件内容并转换为浮点数列表
-        with open(filename, 'r') as f:
-            input_data = [float(line.strip()) for line in f if line.strip()]
-        input_size = len(input_data)
-        if input_size == 0:
-            return []
-        # 使用itertools.cycle创建无限循环迭代器，优化循环填充逻辑
-        cycled_input = itertools.cycle(input_data)
-        return [next(cycled_input) for _ in range(global_num_slots)]
 
-def read_plain_expanded_input(filename: str) -> list[float]:
-    with open(filename, 'r') as f:
-        input = [float(line.strip()) for line in f if line.strip()]
+def rotsum(input,slots, padding):
+    result=input.deep_copy()
+    for i in range(log2_int(slots)):
+        temp  = rotate(result, padding * pow(2, i))
+        result = torch.add(result, temp)
+    return result
+
+def rotate(input, shift):
+    assert input.dim() == 1, "输入必须是1维张量"
+    length = input.size(0)
+    if length == 0:
+        return input.clone()
+    # 计算有效移位量（处理负数和越界）
+    effective_shift = shift % length
+    if effective_shift == 0:
+        return input.clone()
+    # 实现循环移位
+    return torch.cat([
+        input[effective_shift:],  # 后半部分
+        input[:effective_shift]  # 前半部分
+    ])
+
+def read_plain_input_tensor(filename,scale=1):
+    input=read_values_from_file(filename)
+    size=len(input)
+    if scale!=1:
+        for i in range(size):
+            input[i]=input[i]*scale
+
+    cycled_input = itertools.cycle(input)
+    temp = [next(cycled_input) for _ in range(global_num_slots)]
+    x = torch.tensor(temp, device="cuda")
+    return x
+
+def read_plain_expanded_input_tensor(filename):
+    input_values = read_values_from_file(filename)
     # 扩展阶段
-    repeated = [val for val in input for _ in range(128)]
-    return  repeated
+    repeated = [val for val in input_values for _ in range(128)]
+    x = torch.tensor(repeated, device="cuda")
+    return  x
+
 
 def setup_environment(text:str):
     """
@@ -751,7 +795,9 @@ def setup_environment(text:str):
         verbose = false;
         return;
     """
+
     # Todo：修改脚本目录
+
     # 1. 清理并重建临时目录
     tmp_dir = "../src/tmp_embeddings"
     if os.path.exists(tmp_dir):
@@ -785,4 +831,4 @@ def setup_environment(text:str):
 
 
 if __name__ == "__main__":
-    BERT_Tiny()
+    BERT_Tiny("this is a good movie")
