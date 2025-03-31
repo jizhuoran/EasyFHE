@@ -4,7 +4,15 @@ from . import functional as F
 from .utils import check_meta_equal
 import torch
 
+def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
+    assert digits.is_ext == True
+    auto_index = cryptoContext.find_auto_index(index)
 
+    # Inner Product
+    swk = cryptoContext.left_rot_key_map[str(auto_index)]
+    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), digits.cur_limbs, swk[0], swk[1], cryptoContext)
+    sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
+    return digits.cipher_like(sum_mult, is_ext=True)
 #todo: it is ct*pt in extent form, refactor?
 def eval_mult_ext(cipher, pt, cryptoContext):
     moduli = cryptoContext.BsContext.QplusP_map[cipher.cur_limbs]

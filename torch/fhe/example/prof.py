@@ -4,11 +4,10 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from functools import partial
 from collections import defaultdict
 import numpy as np
-from torch.fhe.bs_context import *
-from torch.fhe import homo_ops, hybrid_keyswitch, homo_bootstrap
+import torch
+from torch.fhe.bs_context  import * 
+from torch.fhe import homo_ops, hoisting_keyswitch, bootstrapping,ciphertext
 from torch.fhe import utils
-
-DATA_DIR = os.environ["DATA_DIR"]
 
 perf_result = defaultdict(dict)
 
@@ -41,37 +40,54 @@ def print_profiling_result():
 
 
 def profiling_single_op(
-    maxLevelsRemaining=20,
+    maxLevelsRemaining=3,
     appRotIndex_list=[-1, 2],
-    logBsSlots_list=[14],
-    logN=16,
-    dnum=3,
+    logBsSlots_list=[4],
+    logN=14,
+    dnum=1,
     dcrtBits=59,
     firstMod=60,
     levelBudget_list=[[4, 4]],
-    rescaleTech="FIXEDMANUAL",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-    save_dir=DATA_DIR
+    rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    save_dir="data",
+    mode="debug",  # "debug" or "release"
 ):
-
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
-
+    if not os.path.exists(save_dir):
+        raise ValueError(f"Directory {save_dir} does not exist!")
+    
+    # cryptoContext, openfhe_context = utils.try_load_context(
+    #     logN,
+    #     logBsSlots_list,       
+    #     maxLevelsRemaining,
+    #     levelBudget_list,
+    #     dnum,
+    #     dcrtBits,
+    #     firstMod,
+    #     9,
+    #     [],
+    #     "UNIFORM_TERNARY",
+    #     rescaleTech,
+    #     save_dir=save_dir,
+    #     mode=mode,
+    # )
     cryptoContext, openfhe_context = utils.try_load_context(
-        maxLevelsRemaining,
-        appRotIndex_list,
-        logBsSlots_list,
         logN,
-        dnum,
+        [12],       
+        20,
+        levelBudget_list,
+        3,
         dcrtBits,
         firstMod,
-        levelBudget_list,
+        9,
+        [],
         "UNIFORM_TERNARY",
         rescaleTech,
         save_dir=save_dir,
-        config=config,
+        mode=mode,
     )
-    log_encode_slot = logBsSlots_list[0]
+    log_encode_slot = 12
     encode_slots = 1 << log_encode_slot
-
+    openfhe_context = openfhe_context[str(log_encode_slot)]
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_encode_slot)]
     cryptoContext.BsContext.to_cuda()
     cryptoContext.load_rotation_keys(log_encode_slot)
@@ -88,49 +104,40 @@ def profiling_single_op(
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots)
-    plaintext = openfhe_context.encode(values, 1, 0, encode_slots)
-
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 6, (1<<log_encode_slot))
+    cipher_rescale,cipher_openfhe_rescale = openfhe_context.encrypt(x, 2, 6, (1<<log_encode_slot))
+    print('openfhe_context.depth is ',openfhe_context.depth - 1)
     for limb in range(1, cipher.cur_limbs + 1):
-        tmp_ct = homo_ops.drop_last_elements(cipher, cipher.cur_limbs - limb, cryptoContext)
-        tmp_ct_rescale = homo_ops.drop_last_elements(cipher_rescale, cipher_rescale.cur_limbs - max(limb, 2), cryptoContext)
-        tmp_cv = homo_ops.extract_cv(tmp_ct, 0, cryptoContext)
-        tmp_cv_ext = hybrid_keyswitch.modup_to_ext(tmp_cv, cryptoContext)
-        tmp_pt = homo_ops.drop_last_elements(plaintext, plaintext.cur_limbs - limb, cryptoContext)
-
-        # perf(partial(homo_ops.encode, x, 1, limb, encode_slots, True, cryptoContext), "encode", limb, repeat_time=10)
+        tmp_ct=cipher.deep_copy()
+        tmp_ct.drop_last_elements(tmp_ct.cur_limbs - limb)
+        tmp_ct_rescale=cipher_rescale.deep_copy()
+        tmp_ct_rescale.drop_last_elements( tmp_ct_rescale.cur_limbs - max(limb, 2))
+        tmp_cv = tmp_ct.cipher_like([tmp_ct.cv[0], torch.zeros_like(tmp_ct.cv[0])])# ciphertext.py 的 cipher_like
+        tmp_ct.cipher_like([tmp_ct.cv[0], torch.zeros_like(tmp_ct.cv[0])])
+        tmp_cv_ext = hoisting_keyswitch.modup_to_ext(tmp_cv, cryptoContext)
+        
         perf(partial(homo_ops.homo_add, tmp_ct, tmp_ct, cryptoContext), "homo_add", limb)
         perf(partial(homo_ops.homo_sub, tmp_ct, tmp_ct, cryptoContext), "homo_sub", limb)
-    #     perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
-    #     perf(partial(homo_ops.homo_square, tmp_ct, cryptoContext), "homo_square", limb)
-    #     perf(partial(homo_ops.homo_rescale_internal, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
-    #     perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
-    #     perf(partial(homo_ops.homo_add_scalar_int, tmp_ct, 1, cryptoContext), "homo_add_scalar_int", limb)
-    #     perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
-    #     perf(partial(homo_ops.homo_mul_scalar_int, tmp_ct, 1, cryptoContext), "homo_mul_scalar_int", limb)
-    #     perf(partial(homo_ops.homo_rotate, tmp_ct, 2, cryptoContext), "homo_rotate", limb)
-    #     perf(partial(homo_ops.homo_mul_pt, tmp_ct, tmp_pt, cryptoContext), "homo_mul_pt", limb)
-    #     perf(partial(homo_ops.homo_add_pt, tmp_ct, tmp_pt, cryptoContext), "homo_add_pt", limb)
+        perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
+        perf(partial(homo_ops.homo_square, tmp_ct, cryptoContext), "homo_square", limb)
+        perf(partial(homo_ops.homo_rescale, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
+        perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
+        perf(partial(homo_ops.homo_add_scalar_int, tmp_ct, 1, cryptoContext), "homo_add_scalar_int", limb)
+        perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
+        perf(partial(homo_ops.homo_mul_scalar_int, tmp_ct, 1, cryptoContext), "homo_mul_scalar_int", limb)
+        perf(partial(homo_ops.homo_rotate, tmp_ct, -1, cryptoContext), "homo_rotate", limb)
 
-    #     perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
-    #     perf(partial(hybrid_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
-    #     perf(partial(hybrid_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
-    #     perf(partial(hybrid_keyswitch.key_switch_P_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
-    #     perf(partial(hybrid_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, 2, cryptoContext), "mult_rot_key_and_sum_ext", limb)
 
-    # cipher_last = homo_ops._drop_last_elements(cipher, cipher.cur_limbs - 2, cryptoContext)
-    # perf(
-    #     partial(
-    #         homo_bootstrap, cipher_last, cryptoContext.L, log_encode_slot, cryptoContext
-    #     ),
-    #     "homo_bootstrap",
-    #     1,
-    #     repeat_time=3,
-    # )
+        # perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
+        perf(partial(hoisting_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
+        perf(partial(hoisting_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
+        perf(partial(hoisting_keyswitch.key_switch_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
+        perf(partial(hoisting_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, -1, cryptoContext), "mult_rot_key_and_sum_ext", limb) #偷一个
+    cipher_last=cipher.deep_copy()
+    cipher_last.drop_last_elements(cipher_last.cur_limbs - 2)
+    perf( partial(bootstrapping.eval_bootstrap, cipher_last, cryptoContext.L, log_encode_slot, cryptoContext),"eval_bootstrap",1, repeat_time=3,)
 
     print_profiling_result()
-
 
 if __name__ == "__main__":
     profiling_single_op()

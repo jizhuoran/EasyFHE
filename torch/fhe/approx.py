@@ -394,7 +394,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
             T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"T时间:{min_interval:.2f} μs")
+    #print(f"T时间:{min_interval:.2f} μs")
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
     start = time.perf_counter()
@@ -408,7 +408,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2.append(tmp)
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"T2时间:{min_interval:.2f} μs")
+    #print(f"T2时间:{min_interval:.2f} μs")
     # computes T_{k(2*m - 1)}(y)
     start = time.perf_counter()
     T2km1 = T2[0]
@@ -421,7 +421,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"T2km1时间:{min_interval:.2f} μs")
+    #print(f"T2km1时间:{min_interval:.2f} μs")
     dc = degree(divcs_q)
     flag_c = False
     start = time.perf_counter()
@@ -443,7 +443,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         flag_c = True
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"cu时间:{min_interval:.2f} μs")
+    #print(f"cu时间:{min_interval:.2f} μs")
     start = time.perf_counter()
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     if degree(divqr_q) > k:
@@ -471,7 +471,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # Will only get here when m = 2, so the number of levels of qu and T2[m-1] will be the same.
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"qu时间:{min_interval:.2f} μs")
+    #print(f"qu时间:{min_interval:.2f} μs")
     start = time.perf_counter()
     # Evaluate s2 at u
     deg_s2 = degree(s2)
@@ -496,7 +496,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         # Will only get here when m = 2, so need to reduce the number of levels by 1.
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"su时间:{min_interval:.2f} μs")
+    #print(f"su时间:{min_interval:.2f} μs")
     start = time.perf_counter()
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -511,7 +511,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
     end = time.perf_counter()
     min_interval = (end - start) * 1_000_000
-    print(f"result时间:{min_interval:.2f} μs")
+    #print(f"result时间:{min_interval:.2f} μs")
     return result
 
 def eval_chebyshev_coefficients(func, a, b, degree):

@@ -1789,10 +1789,8 @@ void iNTT_impl(
   const Tensor& inverse_power_of_roots_div_two,
   const Tensor& param_primes,
   const Tensor& inverse_scaled_power_of_roots_div_two) {
-AT_DISPATCH_V2(
-    kUInt64,
-    "iNTT",
-    AT_WRAP([&]() {
+    const int max_threads = omp_get_max_threads();  
+    omp_set_num_threads(max_threads); 
       const uint64_t n=param_degree;
       auto inverse_power_of_roots_div_two_ptr = reinterpret_cast<uint64_t*>(inverse_power_of_roots_div_two.data_ptr<uint64_t>());
       auto param_primes_ptr =reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
@@ -1833,6 +1831,7 @@ AT_DISPATCH_V2(
     //             }
     //           }
 //gpufhe version
+#pragma omp parallel for schedule(static)num_threads(max_threads)
               for(int bach=0;bach<batch;++bach)
               {
                 uint64_t primeidx=start_prime_idx+bach;
@@ -1882,67 +1881,10 @@ AT_DISPATCH_V2(
                   (op_ptr)[j1 + j2 + base] = hiVal;
                 }
               }
-    }),
-    kUInt64);
+ 
 }
 
 
-// void NTT_impl(
-//   uint64_t* op_ptr,
-//   int64_t start_prime_idx,
-//   int64_t batch,
-//   int64_t param_degree,
-//   const Tensor& param_power_of_roots_shoup,
-//   const Tensor& param_primes,
-//   const Tensor& param_power_of_roots) {
-// size_t gridDim(2048);
-// size_t blockDim(256);
-// const int per_thread_ntt_size = 8;
-// const int first_stage_radix_size = 256;
-// const int second_radix_size = param_degree / first_stage_radix_size;
-// const int pad = 4;
-// const int per_thread_storage =
-//     blockDim * per_thread_ntt_size * sizeof(uint64_t);
-// AT_DISPATCH_V2(
-//     kUInt64,
-//     "NTT",
-//     AT_WRAP([&]() {
-//       auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
-//           param_power_of_roots_shoup.data_ptr<uint64_t>());
-//       auto param_primes_ptr =
-//           reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-//       auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
-//           param_power_of_roots.data_ptr<uint64_t>());
-//       fhe::Ntt8PointPerThreadPhase1(
-//           op_ptr,
-//           1,
-//           batch,
-//           param_degree,
-//           start_prime_idx,
-//           pad,
-//           first_stage_radix_size / per_thread_ntt_size,
-//           param_power_of_roots_ptr,
-//           param_power_of_roots_shoup_ptr,
-//           param_primes_ptr,
-//           gridDim,
-//           (first_stage_radix_size / 8) * pad,
-//           (first_stage_radix_size + pad + 1) * pad);
-//       fhe::Ntt8PointPerThreadPhase2(
-//           op_ptr,
-//           first_stage_radix_size,
-//           batch,
-//           param_degree,
-//           start_prime_idx,
-//           second_radix_size / per_thread_ntt_size,
-//           param_power_of_roots_ptr,
-//           param_power_of_roots_shoup_ptr,
-//           param_primes_ptr,
-//           gridDim,
-//           blockDim,
-//           per_thread_storage / sizeof(uint64_t));
-//     }),
-//     kUInt64);
-// }
 int GetMSB(int64_t x) {
     if (x == 0) return -1; // No set bit, return -1
 
@@ -1961,10 +1903,8 @@ void NTT_impl(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
-  AT_DISPATCH_V2(
-      kUInt64,
-      "NTT",
-      AT_WRAP([&]() {
+      const int max_threads = omp_get_max_threads();  
+  omp_set_num_threads(max_threads); 
         auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
             param_power_of_roots_shoup
                 .data_ptr<uint64_t>()); // preconrootOfUnityTable
@@ -1973,12 +1913,12 @@ void NTT_impl(
         auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
             param_power_of_roots.data_ptr<uint64_t>()); // rootOfUnityTable
         const int64_t n = param_degree >> 1;
+        #pragma omp parallel for schedule(static)num_threads(max_threads)
         for (int bach = 0; bach < batch; ++bach) {
           auto modulus = param_primes_ptr[start_prime_idx + bach];
           auto primeidx = (start_prime_idx + bach);
-          auto base = primeidx * param_degree;
-          for (uint32_t m = 1, t = n, logt = GetMSB(t); m < n;
-               m <<= 1, t >>= 1, --logt) {
+          auto base = primeidx * param_degree;       
+          for (uint32_t m = 1, t = n, logt = GetMSB(t); m < n; m <<= 1, t >>= 1, --logt) {
             for (uint32_t i = 0; i < m; ++i) {
               auto omega = param_power_of_roots_ptr[i + m + base]; // S
               auto preconOmega = param_power_of_roots_shoup_ptr
@@ -1992,6 +1932,7 @@ void NTT_impl(
               }
             }
           }
+          #pragma omp parallel for schedule(static)num_threads(max_threads)
           for (uint32_t i = 0; i < (n << 1); i += 2) {
             auto omega = param_power_of_roots_ptr[(i >> 1) + n + base];
             auto preconOmega =
@@ -2011,8 +1952,7 @@ void NTT_impl(
             (op_ptr)[i + 1 + base] = b1;
           }
         }
-      }),
-      kUInt64);
+
 }
 
 } // end native namespace

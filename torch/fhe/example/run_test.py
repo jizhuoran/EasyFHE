@@ -77,7 +77,7 @@ cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1
 
 cryptoContext.load_rotation_keys(logSlots)
 cryptoContext.BsContext.cuda()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
+#result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots, cryptoContext=cryptoContext)
 
 cipher.cv = [cv.cpu() for cv in cipher.cv]
 cryptoContext.cpu()
