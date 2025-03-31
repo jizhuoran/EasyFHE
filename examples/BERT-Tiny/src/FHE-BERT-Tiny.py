@@ -19,6 +19,7 @@ from examples.resnet20.utils import mask_first_n
 from examples.utils.approx import eval_chebyshev_function
 
 global_num_slots = 0
+origin_input_folder = "../src/tmp_embeddings/"
 input_folder="../src/tmp_embeddings/"
 global_circuit_depth=0
 logBsSlots_list=[11,12]
@@ -619,13 +620,13 @@ def pooler(input,cryptoContext,openfhe_context):
     return output
 
 
-def BERT_Tiny(input_text):
+def BERT_Tiny():
     #todo: add setup_environment function
     #  根据BERT-TINT C++版本的代码改写为Python版本
     #
     
-    text = input_text
-    setup_environment(text)
+    # text = input_text
+    # setup_environment(text)
     global_num_slots = 1<<14
 
     # generate context
@@ -825,12 +826,9 @@ def setup_environment(text:str):
     #     print(f"Error executing script: {str(e)}")
 
 
-
-
-
-
-
-
 if __name__ == "__main__":
-    print(hasattr(torch._C, "_distributed_c10d"))
-    BERT_Tiny("this is a good movie")
+    data_dirs = [entry.name for entry in os.scandir('./tmp_embeddings') if entry.is_dir()]
+    data_dirs.sort(key=int)
+    for data_dir in data_dirs:
+        input_folder = origin_input_folder+data_dir+'/'
+        BERT_Tiny()
