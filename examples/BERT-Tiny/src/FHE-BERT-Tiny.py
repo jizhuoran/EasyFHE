@@ -69,7 +69,7 @@ def read_plain_input(filename,level=0,scale=1):
     x = torch.tensor(input, device="cuda")
     return fhe.encode(x, 1, level, global_num_slots, False)
 
-def read_plain_repeated_input(filename,level=0,scale=1):
+def read_plain_repeated_input(filename,cryptoContext,level=0,scale=1):
     input=read_values_from_file(filename)
     repeated=[]
     for j in range(128):
@@ -79,8 +79,8 @@ def read_plain_repeated_input(filename,level=0,scale=1):
     if scale!=1:
         for i in range(size):
             repeated[i]=repeated[i]*scale
-    x = torch.tensor(repeated, device="cuda")
-    return fhe.encode(x, 1, level, global_num_slots, False)
+    x = torch.tensor(repeated, dtype=torch.float64, device="cuda")
+    return fhe.encode(x, 1, level, global_num_slots, False,cryptoContext)
 
 def log2_int(x):
     import math
@@ -257,7 +257,7 @@ def read_plain_expanded_input(filename, level=0, scale=1, num_inputs=None):
     if scale != 1:
         repeated = [x * scale for x in repeated]
 
-    x = torch.tensor(repeated, device="cuda")
+    x = torch.tensor(repeated, dtype=torch.float64, device="cuda")
     return fhe.encode(x, 1, level, global_num_slots, False)
 def wrapUpExpanded(vectors,cryptoContext):
     masked=mask_mod_n(vectors[vectors[len(vectors)-1],128,cryptoContext])
@@ -769,14 +769,14 @@ def read_plain_input_tensor(filename,scale=1):
 
     cycled_input = itertools.cycle(input)
     temp = [next(cycled_input) for _ in range(global_num_slots)]
-    x = torch.tensor(temp, device="cuda")
+    x = torch.tensor(temp, dtype=torch.float64, device="cuda")
     return x
 
 def read_plain_expanded_input_tensor(filename):
     input_values = read_values_from_file(filename)
     # 扩展阶段
     repeated = [val for val in input_values for _ in range(128)]
-    x = torch.tensor(repeated, device="cuda")
+    x = torch.tensor(repeated, dtype=torch.float64, device="cuda")
     return  x
 
 
