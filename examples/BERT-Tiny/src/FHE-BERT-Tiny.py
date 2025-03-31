@@ -7,8 +7,8 @@ import numpy as np
 import torch
 import os,time
 import shutil
-
-from triton.profiler.flags import command_line
+from python.ExtractEmbeddings import ExtractEmbeddings
+# from triton.profiler.flags import command_line
 
 # 备注：
 DATA_DIR = os.environ["DATA_DIR"]
@@ -57,7 +57,7 @@ def read_expanded_input(openfhe_context,filename,scale=1):
         for i in range(size):
             repeated[i]=repeated[i]*scale
     x = torch.tensor(repeated, device="cuda")
-    return openfhe_context.encrypt(x, 0, 1, global_num_slots, "release")
+    return openfhe_context.encrypt(x, 0, 1, global_num_slots, False)
 
 def read_plain_input(filename,level=0,scale=1):
     input=read_values_from_file(filename)
@@ -66,7 +66,7 @@ def read_plain_input(filename,level=0,scale=1):
         for i in range(size):
             input[i]=input[i]*scale
     x = torch.tensor(input, device="cuda")
-    return fhe.encode(x, 1, level, global_num_slots, "release")
+    return fhe.encode(x, 1, level, global_num_slots, False)
 
 def read_plain_repeated_input(filename,level=0,scale=1):
     input=read_values_from_file(filename)
@@ -79,7 +79,7 @@ def read_plain_repeated_input(filename,level=0,scale=1):
         for i in range(size):
             repeated[i]=repeated[i]*scale
     x = torch.tensor(repeated, device="cuda")
-    return fhe.encode(x, 1, level, global_num_slots, "release")
+    return fhe.encode(x, 1, level, global_num_slots, False)
 
 def log2_int(x):
     import math
@@ -110,7 +110,7 @@ def mask_block(c,fro,to,mask_value,cryptoContext):
         else:
             mask.append(0)
     x = torch.tensor(mask, device="cuda")
-    temp=fhe.encode(x,1,cryptoContext.L-c.cur_limb,global_num_slots, "release")#Todo
+    temp=fhe.encode(x,1,cryptoContext.L-c.cur_limb,global_num_slots, False)#Todo
     return fhe.homo_mul_pt(c,temp,cryptoContext)
 
 def wrapUpRepeated(vectors,cryptoContext):
@@ -136,7 +136,7 @@ def mask_heads(c,mask_value,cryptoContext):
         else:
             mask.append(0)
     x = torch.tensor(mask, device="cuda")
-    temp=fhe.encode(x,1,cryptoContext.L-c.cur_limb,global_num_slots, "release")#Todo
+    temp=fhe.encode(x,1,cryptoContext.L-c.cur_limb,global_num_slots, False)#Todo
     return fhe.homo_mul_pt(c,temp,cryptoContext)
 
 def matmulScores(queries,key,cryptoContext):
@@ -176,7 +176,7 @@ def eval_exp(c,inputs_number,cryptoContext):
             mask.append(1)
 
     x = torch.tensor(mask, device="cuda")
-    temp=fhe.encode(x,1,cryptoContext.L-res.cur_limb,global_num_slots, "release")#Todo
+    temp=fhe.encode(x,1,cryptoContext.L-res.cur_limb,global_num_slots, False)#Todo
     return fhe.homo_add_pt(res,temp,cryptoContext)
 func = lambda x: 1 / x
 def eval_inverse_naive(c,min,max,cryptoContext):
@@ -190,7 +190,7 @@ def mask_mod_n(c,n,padding,max_slots,cryptoContext):
         else:
             mask.append(0)
     x = torch.tensor(mask, device="cuda")
-    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, "release")  # Todo
+    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, False)  # Todo
     return fhe.homo_add_pt(c, temp, cryptoContext)
 
 def repeat(input,slots,cryptoContext,padding=1):
@@ -223,7 +223,7 @@ def unwrapScoresExpanded(c,inputs_num,cryptoContext):
 #         for i in range(size):
 #             repeated[i]=repeated[i]*scale
 #     x = torch.tensor(repeated, device="cuda")
-#     return fhe.encode(x, 1, level, global_num_slots, "release")
+#     return fhe.encode(x, 1, level, global_num_slots,False)
 #
 # def read_plain_expanded_input(filename,level,scale,num_inputs):
 #     input=read_values_from_file(filename)
@@ -238,7 +238,7 @@ def unwrapScoresExpanded(c,inputs_num,cryptoContext):
 #         for i in range(size):
 #             repeated[i]=repeated[i]*scale
 #     x = torch.tensor(repeated, device="cuda")
-#     return fhe.encode(x, 1, level, global_num_slots, "release")
+#     return fhe.encode(x, 1, level, global_num_slots, False)
 def read_plain_expanded_input(filename, level=0, scale=1, num_inputs=None):
     input_values = read_values_from_file(filename)
     repeated = []
@@ -257,7 +257,7 @@ def read_plain_expanded_input(filename, level=0, scale=1, num_inputs=None):
         repeated = [x * scale for x in repeated]
 
     x = torch.tensor(repeated, device="cuda")
-    return fhe.encode(x, 1, level, global_num_slots, "release")
+    return fhe.encode(x, 1, level, global_num_slots, False)
 def wrapUpExpanded(vectors,cryptoContext):
     masked=mask_mod_n(vectors[vectors[len(vectors)-1],128,cryptoContext])
     for i in range(len(vectors)-2,-1,-1):
@@ -284,7 +284,7 @@ def mask_first_n(c,n,mask_value,cryptoContext):
         else:
             mask.append(0)
     x = torch.tensor(mask, device="cuda")
-    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, "release")  # Todo
+    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, False)  # Todo
     return fhe.homo_add_pt(c, temp, cryptoContext)
 
 def matmulRElarge(inputs,weights,bias,mask_val,cryptoContext):
@@ -344,7 +344,7 @@ def mask_block(c,fro,to,mask_value,cryptoContext):
         else:
             mask.append(0)
     x = torch.tensor(mask, device="cuda")
-    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, "release")  # Todo
+    temp = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, global_num_slots, False)  # Todo
     return fhe.homo_mul_pt(c, temp, cryptoContext)
 
 def custom_function(x, mult):
@@ -594,7 +594,7 @@ def classifier(input,cryptoContext,openfhe_context):
     mask[0]=1
     mask[128]=1
     x = torch.tensor(mask, device="cuda")
-    temp=openfhe_context.encrypt(x, 0, cryptoContext.L - output.curlimb, global_num_slots, "release")
+    temp=openfhe_context.encrypt(x, 0, cryptoContext.L - output.curlimb, global_num_slots, False)
     output=fhe.homo_mul(output,temp,cryptoContext)
 
     output=fhe.homo_add(output,fhe.homo_rotate(fhe.homo_rotate(output,-1,cryptoContext),128,cryptoContext),cryptoContext)
@@ -619,11 +619,12 @@ def pooler(input,cryptoContext,openfhe_context):
     return output
 
 
-def BERT_Tiny():
+def BERT_Tiny(input_text):
     #todo: add setup_environment function
     #  根据BERT-TINT C++版本的代码改写为Python版本
     #
-    text = 'this is a good moive'
+    
+    text = input_text
     setup_environment(text)
     global_num_slots = 1<<14
 
@@ -805,20 +806,23 @@ def setup_environment(text:str):
     processed_text = f"[CLS] {text} [SEP]"
     print(f"\nCLIENT-SIDE\nTokenizing the following sentence: '{processed_text}'")
     # 3. 调用Python脚本
-    script_path = "../src/python/ExtractEmbeddings.py"
-    command = ["python3", script_path, processed_text]
-    try:
-        # 使用subprocess.run调用脚本
-        result = subprocess.run(
-            command,
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        if result.returncode != 0:
-            print(f"Script execution failed: {result.stderr}")
-    except subprocess.CalledProcessError as e:
-        print(f"Error executing script: {str(e)}")
+    ExtractEmbeddings(processed_text)
+    # script_path = "../src/python/ExtractEmbeddings.py"
+    # command = ["python3", script_path, processed_text]
+    # try:
+    #     # 使用subprocess.run调用脚本
+    #     result = subprocess.run(
+    #         command,
+    #         check=True,
+    #         capture_output=True,
+    #         text=True
+    #     )
+    #     if result.returncode != 0:
+    #         print(f"Script execution failed: {result.stderr}")
+    #
+    # except subprocess.CalledProcessError as e:
+    #
+    #     print(f"Error executing script: {str(e)}")
 
 
 
@@ -828,4 +832,5 @@ def setup_environment(text:str):
 
 
 if __name__ == "__main__":
+    print(hasattr(torch._C, "_distributed_c10d"))
     BERT_Tiny("this is a good movie")
