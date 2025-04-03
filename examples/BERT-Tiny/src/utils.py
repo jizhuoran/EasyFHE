@@ -103,16 +103,17 @@ if NEW_VERSION:
             return ptx
 
 
-    def mask_block(c, fro, to, mask_value,level, cryptoContext):
+    def mask_block(c, fro, to, mask_value, cryptoContext):
+        level =  0
         if cryptoContext.PRELOAD_ALL:
 
             encoded=cryptoContext.pre_encoded[
-                "mask_block_{}_{}_{}_{}".format( level, fro,to, c.cur_num_slots)]
+                "mask_block_{}_{}_{}_{}".format( level, fro,to, c.slots)]
             temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
             return temp
         else:
             ptx = cryptoContext.pre_encoded[
-                "mask_block_{}_{}_{}_{}".format(level, fro, to, c.cur_num_slots)
+                "mask_block_{}_{}_{}_{}".format(level, fro, to, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
             return fhe.homo_mul_pt(c, ptx, cryptoContext)
@@ -120,14 +121,14 @@ if NEW_VERSION:
     def mask_heads(c, mask_value, cryptoContext):
         if cryptoContext.PRELOAD_ALL:
             encoded=cryptoContext.pre_encoded[
-                "mask_heads_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+                "mask_heads_{}_{}_{}".format(0, mask_value, c.slots)
             ]
             temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
             return temp
 
         else:
             ptx = cryptoContext.pre_encoded[
-                "mask_heads_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+                "mask_heads_{}_{}_{}".format(0, mask_value, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
             return fhe.homo_mul_pt(c, ptx, cryptoContext)
@@ -148,13 +149,13 @@ if NEW_VERSION:
     def eval_exp(c, inputs_number, cryptoContext):
         if cryptoContext.PRELOAD_ALL:
             encoded=cryptoContext.pre_encoded[
-                "eval_exp_{}_{}_{}".format(cryptoContext.L - c.cur_limb, inputs_number, c.cur_num_slots)
+                "eval_exp_{}_{}_{}".format(0, inputs_number, c.slots)
             ]
             temp = fhe.homo_add_pt(c, encoded, cryptoContext)
             return temp
         else:
             ptx = cryptoContext.pre_encoded[
-                "eval_exp_{}_{}_{}".format(cryptoContext.L - c.cur_limb, inputs_number, c.cur_num_slots)
+                "eval_exp_{}_{}_{}".format(0, inputs_number, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
             return fhe.homo_add_pt(c, ptx, cryptoContext)
@@ -162,14 +163,14 @@ if NEW_VERSION:
     def mask_mod_n(c, n, padding, max_slots, cryptoContext):
         if cryptoContext.PRELOAD_ALL:
             encoded=cryptoContext.pre_encoded[
-                "mask_mod_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, padding, c.cur_num_slots)
+                "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
             ]
             temp=fhe.homo_add_pt(c, encoded, cryptoContext)
             return temp
 
         else:
             ptx = cryptoContext.pre_encoded[
-                "mask_mod_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, padding, c.cur_num_slots)
+                "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
             return fhe.homo_add_pt(c, ptx, cryptoContext)
@@ -177,13 +178,13 @@ if NEW_VERSION:
     def mask_first_n(c, n, mask_value, cryptoContext):
         if cryptoContext.PRELOAD_ALL:
             encoded=cryptoContext.pre_encoded[
-                "mask_first_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+                "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
             ]
             temp=fhe.homo_add_pt(c, encoded, cryptoContext)
             return temp
         else:
             ptx = cryptoContext.pre_encoded[
-                "mask_first_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+                "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
             return fhe.homo_add_pt(c, ptx, cryptoContext)
@@ -211,7 +212,7 @@ else:
     def read_plain_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
         values = []
         val_name = filename
-        filename = DATA_DIR  + filename
+        # filename = DATA_DIR  + filename
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -231,7 +232,7 @@ else:
     def read_plain_repeated_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
         values = []
         val_name = filename
-        filename = DATA_DIR  + filename
+        # filename = DATA_DIR  + filename
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -286,18 +287,19 @@ else:
         return  encoded
 
 
-    def mask_block(c, fro, to, mask_value,level, cryptoContext):
+    def mask_block(c, fro, to, mask_value, cryptoContext):
+        level =  0
         mask = []
-        for i in range(c.cur_num_slots):
+        for i in range(c.slots):
             if i >= fro and i < to:
                 mask.append(mask_value)
             else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded=fhe.encode(x, 1, level, c.cur_num_slots, False, cryptoContext)
+        encoded=fhe.encode(x, 1, level, c.slots, False, cryptoContext)
         temp=fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
-        key = "mask_block_{}_{}_{}_{}".format( level, fro,to, c.cur_num_slots)
+        key = "mask_block_{}_{}_{}_{}".format( level, fro,to, c.slots)
         encoded_weight[key] = encoded
 
         return temp
@@ -307,16 +309,16 @@ else:
 
     def mask_heads(c, mask_value, cryptoContext):
         mask = []
-        for i in range(c.cur_num_slots):
+        for i in range(c.slots):
             if i % 64 == 0:
                 mask.append(mask_value)
             else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, c.cur_num_slots, False, cryptoContext)
+        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
         temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
-        key = "mask_heads_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+        key = "mask_heads_{}_{}_{}".format(0, mask_value, c.slots)
         encoded_weight[key] = encoded
         return temp
 
@@ -331,7 +333,7 @@ else:
             for i in range(size):
                 repeated[i]=repeated[i]*scale
         x = torch.tensor(repeated, device="cuda")
-        return openfhe_context.encrypt(x, 0, 1, slots, "release")
+        return openfhe_context.encrypt(x, 1, 0, slots)
 
 
 
@@ -349,54 +351,54 @@ else:
         # Todo:    Ctxt res = context->EvalPoly(c, {1, 1, 1/(2.0), 1/(6.0), 1/(24.0), 1/(120.0), 1/(720.0)});
         res = c
 
-        if cryptoContext.L - res.cur_limb + 4 > global_circuit_depth:
+        if cryptoContext.L - res.cur_limbs + 4 > global_circuit_depth:
             res = fhe.homo_bootstrap(res, L0=cryptoContext.L, logBsSlots=14,
                                      cryptoContext=cryptoContext)
         res = eval_mult_many([res, res, res, res, res, res, res, res], cryptoContext)
         mask = []
-        for i in range(c.cur_num_slots):
+        for i in range(c.slots):
             if i % 64 < inputs_number and i < (128 * inputs_number):
                 mask.append(0)
             else:
                 mask.append(1)
 
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, c.cur_num_slots, False, cryptoContext)
+        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
         temp = fhe.homo_add_pt(res, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
-        key = "eval_exp_{}_{}_{}".format(cryptoContext.L - c.cur_limb, inputs_number, c.cur_num_slots)
+        key = "eval_exp_{}_{}_{}".format(0, inputs_number, c.slots)
         encoded_weight[key] = encoded
         return temp
 
 
     def mask_mod_n(c, n, padding, max_slots, cryptoContext):
         mask = []
-        for i in range(c.cur_num_slots):
+        for i in range(c.slots):
             if i % n == padding:
                 mask.append(1)
             else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, c.cur_num_slots, False, cryptoContext)
+        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
         temp = fhe.homo_add_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
-        key = "mask_mod_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, padding, c.cur_num_slots)
+        key = "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
         encoded_weight[key] = encoded
         return temp
 
 
     def mask_first_n(c, n, mask_value, cryptoContext):
         mask = []
-        for i in range(c.cur_num_slots):
+        for i in range(c.slots):
             if i < n:
                 mask.append(mask_value)
             else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, cryptoContext.L - c.cur_limb, c.cur_num_slots, False, cryptoContext)
+        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
         temp = fhe.homo_add_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
-        key = "mask_first_n_{}_{}_{}".format(cryptoContext.L - c.cur_limb, mask_value, c.cur_num_slots)
+        key = "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
         encoded_weight[key] = encoded
         return temp
 
