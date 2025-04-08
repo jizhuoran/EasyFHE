@@ -1,19 +1,18 @@
-import time
-import torch.fhe as fhe
-from torch.fhe.bootstrapping import eval_bootstrap
-import numpy as np
+import os, sys, time
+sys.path.append("/".join(os.getcwd().split("/")[:-5]))
+sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 import torch
+import torch.fhe as fhe
 import openfhe as openfhe
-from torch.fhe.ciphertext import Cipher
-import random
-import math
-import os
+import numpy as np
+import random, math
+from torch.fhe.ciphertext import Cipher #todo: to be removed
 
 DATA_DIR = os.environ["DATA_DIR"]
+encData_DIR = DATA_DIR + "/helr/encData/"
 
 class Params:
     def __init__(self, factor_num, sample_num, iter_num, alpha, num_thread, slots):
-        # 初始化参数
         self.factor_num = 1 << int(np.ceil(np.log2(factor_num)))
         self.iter_num = iter_num
         self.num_thread = num_thread
@@ -46,16 +45,19 @@ class Params:
         self.depth = 0
 
         self.is_first = True
-        self.path_to_file = DATA_DIR + "MNIST_test.txt"
-        self.path_to_test_file = DATA_DIR + "MNIST_train.txt"
+        self.path_to_file = None
+        self.path_to_test_file = None
 
-        # 时间相关的参数
+
         self.start_time_val = None
         self.end_time_val = None
 
+        # gpu-fhe params
+        cryptoContext = None
+        openfhe_context = None
+        logBsSlots_list=None
 
-        openfhe_context = None # todo: bad assignment, to be removed
-        # 打印初始化参数
+
         print("***********************************")
         print("Secure Machine Learning Parameters")
         print("***********************************")
@@ -81,9 +83,8 @@ class SecureML:
         # Generate a special vector and use it to create the dummy plaintext
         pvals = np.zeros(self.params.slots, dtype=complex) 
         for i in range(0, self.params.slots, self.params.batch):
-            pvals[i] = 1.0  # Set every `params.batch` element to 1.0
+            pvals[i] = 1.0
         # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
-        # self.dummy = openfhe_context.encode_gpu_fhe(cryptoContext,pvals)
         pvals = torch.tensor(pvals, dtype=torch.float64).cuda()
         self.dummy = fhe.encode(pvals, 1, 0, self.params.encode_slots, False, cryptoContext)
 
@@ -180,35 +181,28 @@ class SecureML:
                     for l in range(self.params.batch):
                         if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(z_data[0]):
                             pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][self.params.batch * j + l]
-                # enc_z_data = openfhe_context.encrypt(pz_data, 1, 0, encode_slots)
-                ptxt = openfhe_context.cc.MakeCKKSPackedPlaintext(pz_data.tolist(), 1, 0, None, encode_slots)
+                # enc_z_data = self.params.openfhe_context.encrypt(pz_data, 1, 0, encode_slots)
+                ptxt = self.params.openfhe_context.cc.MakeCKKSPackedPlaintext(pz_data.tolist(), 1, 0, None, self.params.encode_slots)
                 ptxt.SetLength(self.params.slots)
-                enc_z_data = openfhe_context.cc.Encrypt(openfhe_context.publicKey, ptxt)
+                enc_z_data = self.params.openfhe_context.cc.Encrypt(self.params.openfhe_context.publicKey, ptxt)
 
-                # 生成文件名
-                file_name = DATA_DIR + f"/helr/encData/{block_id + 1}_{j + 1}_cipher.txt"
+                file_name = encData_DIR + f"/{block_id + 1}_{j + 1}_cipher.txt"
                 
                 # todo: 序列化加密数据并保存到文件
                 if not openfhe.SerializeToFile(file_name, enc_z_data, openfhe.BINARY):
                     raise IOError(f"Error writing serialization of ciphertext to {file_name}")
-                
-                # 清理
+
                 del pz_data
 
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
-        # 初始化存储反序列化数据的列表
         enc_data = []
 
-        # 反序列化加密数据
         for i in range(self.params.cnum):
-            file_name = DATA_DIR + f"/helr/encData/{block_id + 1}_{i + 1}_cipher.txt"
-
-            # 检查文件是否存在
+            file_name = encData_DIR + f"/{block_id + 1}_{i + 1}_cipher.txt"
             if not os.path.exists(file_name):
                 raise FileNotFoundError(f"File {file_name} not found.")
             
             try:
-                # 反序列化文件中的加密数据
                 enc_ciphertext, res = openfhe.DeserializeCiphertext(file_name, openfhe.BINARY)
                 if not res:
                     raise IOError(f"Could not read the ciphertext from {file_name}")
@@ -219,10 +213,9 @@ class SecureML:
             except Exception as e:
                 raise IOError(f"Error deserializing {file_name}: {e}")
             
-        # 计算内积
+
         enc_ip = self.inner_product(cryptoContext, enc_data, enc_v_data)
 
-        # 创建存储梯度的加密数据
         enc_grad = [None] * self.params.cnum
         self.sigmoid(cryptoContext, enc_grad, enc_data, enc_ip, gamma)
 
@@ -261,13 +254,13 @@ class SecureML:
         # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, False, cryptoContext) #todo: ??
 
         for i in range(self.params.cnum):
-            enc_w_data[i] = openfhe_context.encrypt(input_vec, 1, 0, encode_slots)
-            enc_v_data[i] = openfhe_context.encrypt(input_vec, 1, 0, encode_slots)
+            enc_w_data[i] = self.params.openfhe_context.encrypt(input_vec, 1, 0, self.params.encode_slots)
+            enc_v_data[i] = self.params.openfhe_context.encrypt(input_vec, 1, 0, self.params.encode_slots)
 
-        # 初始化vData和wData
+        # init params
         v_data = np.zeros(self.params.factor_num)
         w_data = np.zeros(self.params.factor_num)
-        # 初始化参数
+
         alpha0 = 0.01
         alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
         gamma = self.params.alpha / self.params.block_size
@@ -283,72 +276,45 @@ class SecureML:
             print(f"blockid: {block_id}")
             print("** un-encrypted")
             
-            # Plaintext更新
-            
+            # plain update
             self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
             self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
 
-            # 加密更新
-            self.params.start_time()  # 记录开始时间
-            self.update(cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id)  # 执行加密更新操作
-            elapsed_time = self.params.end_time()  # 记录结束时间并计算时间差
-            self.params.print_time("Encrypted Update", elapsed_time)  # 打印自定义的时间信息
+            # encrypted update
+            self.params.start_time()
+            self.update(cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id)
+            elapsed_time = self.params.end_time()
+            self.params.print_time("Encrypted Update", elapsed_time)
 
-            # # 计算内积
-            # enc_ip = self.inner_product(cryptoContext, enc_w_data, enc_v_data)
-            # dw_data = openfhe_context.decrypt(enc_ip)
-            # z_block_data = np.zeros((self.params.block_size, self.params.factor_num))
-            # for i in range(self.params.block_size):
-            #     for j in range(self.params.factor_num):
-            #         # 计算当前样本的索引
-            #         index = block_id * self.params.block_size + i
-            #         # 确保 index 和 j 不越界
-            #         if index < sample_num and j < len(z_data[0]):
-            #             z_block_data[i, j] = z_data[index, j]
-            #         else:
-            #             z_block_data[i, j] = 0.0
-            # ip = np.zeros(self.params.block_size)
-
-            # Compute Inner Product and Sigmoid
-            # self.plain_inner_product(ip, z_block_data, v_data, self.params.factor_num, self.params.block_size)
-            # print(ip[:10])
-            # elapsed_time = self.params.end_time()  # 记录结束时间并计算时间差
-            # self.params.print_time("Encryption Update", elapsed_time)  # 打印自定义的时间信息
-
-            # 解密并计算AUC
             dw_data = self.decrypt_w_data(cryptoContext, enc_w_data, factor_num)
             self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, dw_data, self.params.is_first)
 
-            # 更新alpha值
+            # update alpha
             alpha0 = alpha1
             alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
 
-            # 执行Bootstrapping
             if iter % self.params.iter_per_boot == self.params.iter_per_boot - 1 and iter < self.params.iter_num - 1:
                 print("\nBootstrapping START!!!")
 
-                self.params.start_time()  # 记录开始时间
+                self.params.start_time()
 
-                # 对 encWData 和 encVData 中的每个密文执行引导操作
+                # bootstrap encWData and encVData
                 for i in range(self.params.cnum):
-                    # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-                    enc_w_data[i] = eval_bootstrap(enc_w_data[i], cryptoContext.L, logBsSlots_list[0], cryptoContext)
-                for i in range(self.params.cnum):
-                    enc_v_data[i] = eval_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    enc_w_data[i] = fhe.homo_bootstrap(enc_w_data[i], cryptoContext.L, self.params.logBsSlots_list[0], cryptoContext)
+                    enc_v_data[i] = fhe.homo_bootstrap(enc_v_data[i], cryptoContext.L, self.params.logBsSlots_list[0], cryptoContext)
 
-                elapsed_time = self.params.end_time()  # 记录结束时间并计算时间差
-                self.params.print_time("bootstrapping", elapsed_time)  # 打印自定义的时间信息
+                elapsed_time = self.params.end_time()
+                self.params.print_time("bootstrapping", elapsed_time)
                 print("Bootstrapping END!!!")
 
-                # 解密更新后的权重数据
+                # decrypt the updated weight vector
                 dwdata = self.decrypt_w_data(cryptoContext,  enc_w_data, factor_num)
 
-                # 计算模型的性能指标
+                # compute performance metrics of models
                 self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, dwdata, self.params.is_first)
 
 
     def plain_training(self, cryptoContext, w_data, z_data, factor_num, sample_num):
-        # 设置初始化参数
         gamma = 0
         eta = 0
         alpha0 = 0.01
@@ -361,7 +327,7 @@ class SecureML:
         auc, accuracy = 0, 0
 
 
-        # 从文件加载测试数据
+        # read in data
         z_data_test, factor_num_test, sample_num_test = self.z_data_from_file(self.params.path_to_test_file,self.params.isfirst)
         self.normalize_z_data(z_data_test,factor_num_test,sample_num_test)
 
@@ -371,22 +337,17 @@ class SecureML:
             print(f"\n{iter + 1}-th iteration started (plain)!!!")
 
             eta = (1 - alpha0) / alpha1
-            self.params.start_time()  # 记录开始时间
 
-
-            # 更新 w_data 和 v_data
+            self.params.start_time()
+            # update w_data and v_data
             block_id = random.randint(0, block_num - 1)
             self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
-            
+            elapsed_time = self.params.end_time()
+            self.params.print_time("Plain Update", elapsed_time)
 
-            elapsed_time = self.params.end_time()  # 记录结束时间并计算时间差
-            self.params.print_time("Plain Update", elapsed_time)  # 打印自定义的时间信息
-
-            # 评估 AUROC 和准确度
             # self.test_auroc(self, auc, accuracy, z_data_test, factor_num_test, sample_num_test, w_data, self.params.isfirst)
             self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
 
-            # 更新 alpha0 和 alpha1
             alpha0 = alpha1
             alpha1 = (1.0 + math.sqrt(1.0 + 4.0 * alpha0 ** 2)) / 2.0
 
@@ -395,9 +356,8 @@ class SecureML:
         z_block_data = np.zeros((self.params.block_size, self.params.factor_num))
         for i in range(self.params.block_size):
             for j in range(self.params.factor_num):
-                # 计算当前样本的索引
                 index = block_id * self.params.block_size + i
-                # 确保 index 和 j 不越界
+                # ensure index and j is not out of bound
                 if index < sample_num and j < len(z_data[0]):
                     z_block_data[i, j] = z_data[index, j]
                 else:
@@ -423,7 +383,7 @@ class SecureML:
         # Decrypt the weights
         w_data = np.zeros(factor_num)
         for i in range(self.params.cnum):
-            result= openfhe_context.decrypt(enc_w_data[i])
+            result= self.params.openfhe_context.decrypt(enc_w_data[i])
             for j in range(self.params.batch):
                 if self.params.batch * i + j < factor_num:
                     w_data[self.params.batch * i + j] = result[j]
@@ -433,7 +393,7 @@ class SecureML:
         # 初始化wData数组
         w_data = np.zeros(factor_num)
         for i in range(self.params.cnum):
-            result = openfhe_context.decrypt(enc_w_data[i])
+            result = self.params.openfhe_context.decrypt(enc_w_data[i])
 
             # 接口确认，同时假设解密后的 result 是一个具有 `get_real_packed_value` 方法的对象
             # dcw = result.GetRealPackedValue()
@@ -443,13 +403,12 @@ class SecureML:
                 if self.params.batch * i + j < factor_num:
                     w_data[self.params.batch* i + j] = result[j]
 
-        # 将解密后的数据写入文件
         with open(file_name, 'w') as file:
             for i in range(factor_num):
                 file.write(f"{i + 1}, {w_data[i]}\n")
 
     def decrypt_and_print(self, cryptoContext, msg, cipher):
-        result = openfhe_context.decrypt(cipher)
+        result = self.params.openfhe_context.decrypt(cipher)
         #  cc.decrypt接口确认 line 435
         # dp = result.GetRealPackedValue()
         print(f"{msg} = [{', '.join(map(str, result[:10]))}]")
@@ -483,14 +442,9 @@ class SecureML:
     
     @staticmethod
     def normalize_z_data(z_data, factor_dim, sample_dim):
-        # 将 z_data 转换为 numpy 数组，以确保数据是 numpy 格式
         z_data = np.array(z_data)
-        
         for i in range(factor_dim):
-            # 计算该列的最大绝对值
             m = np.max(np.abs(z_data[:, i]))
-            
-            # 如果最大值大于 1e-10，进行归一化
             if m > 1e-10:
                 z_data[:, i] /= m
         return z_data
@@ -552,12 +506,15 @@ class SecureML:
         return auc, accuracy
 
 
-def test(file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted):
+def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted):
     z_data, factor_num, sample_num = SecureML.z_data_from_file(file, is_first)
     z_data = SecureML.shuffle_z_data(z_data, factor_num, sample_num)
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
 
     params = Params(z_data.shape[1] - 1, z_data.shape[0], num_iter, learning_rate, num_thread, encode_slots)
+    params.cryptoContext = cryptoContext
+    params.openfhe_context = openfhe_context
+    params.logBsSlots_list = logBsSlots_list
     depth = cryptoContext.L - 1
     params.depth = depth
 
@@ -597,35 +554,10 @@ def test(file, file_test, is_first, num_iter, learning_rate, num_thread, is_encr
     if save_dwData:
         secure_ml.decrypt_w_data_and_save(cryptoContext, enc_w_data, factor_num, DATA_DIR + "/helr/dwData.csv")
 
-    
-maxLevelsRemaining = 30
-logBsSlots_list = [8] # todo: should be 8 for mnist data
-logN = 16
-dnum = 3
-dcrtBits = 59
-firstMod = 60
-levelBudget_list = [[4, 4]]
-secretKeyDist = "SPARSE_TERNARY"
-rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-
-encode_slots = (1 << (logN-1))
-appRotIndex_list = []
-i = 1
-while i < encode_slots:
-    appRotIndex_list.append(i)
-    i*=2
-
-if not os.path.exists(DATA_DIR):
-    raise ValueError(f"Directory {DATA_DIR} does not exist!")
-
-config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
-cryptoContext, openfhe_context = (
-    fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                        levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
 
 def main():
-    file1 = "./data/MNIST_train.txt"
-    file2 = "./data/MNIST_test.txt"
+    file1 = "../../data/MNIST_train.txt"
+    file2 = "../../data/MNIST_test.txt"
     is_first = True
     is_encrypted = True
     num_iter = 30
@@ -633,12 +565,39 @@ def main():
     num_thread = 1
 
     type = "HELR" if is_encrypted else "LR"
-    print(f"{type} Test with thread {num_thread}, "
+    print(f"{type} Test with thread {num_thread}. "
           f"the var thread is aligned with the one in AAAI'19, currently is set to 1 in most case")
     print(f"Training Data = {file1}")
     print(f"Testing Data = {file2}")
 
-    test(file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted)
+    maxLevelsRemaining = 30
+    logBsSlots_list = [8]  # todo: should be 8 for mnist data
+    logN = 16
+    dnum = 3
+    dcrtBits = 59
+    firstMod = 60
+    levelBudget_list = [[4, 4]]
+    secretKeyDist = "SPARSE_TERNARY"
+    rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+
+    encode_slots = (1 << (logN - 1))
+    appRotIndex_list = []
+    i = 1
+    while i < encode_slots:
+        appRotIndex_list.append(i)
+        i *= 2
+
+    if not os.path.exists(DATA_DIR):
+        raise ValueError(f"Directory {DATA_DIR} does not exist!")
+    if not os.path.exists(encData_DIR):
+        raise ValueError(f"Directory {encData_DIR} does not exist!")
+
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    cryptoContext, openfhe_context = (
+        fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
+
+    test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted)
 
 if __name__ == "__main__":
     main()
