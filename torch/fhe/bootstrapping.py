@@ -439,7 +439,7 @@ def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
 def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
 
-    if cryptoContext.config.autoLoadAndSetConfig == True:
+    if cryptoContext.config.AUTO_LOAD_KEYS == True:
         cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     initSizeQ = cipher.cur_limbs

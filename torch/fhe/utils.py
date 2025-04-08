@@ -118,6 +118,8 @@ def try_load_context(
         levelBudget_list = [[0, 0]]
         NO_BS = True
     else:
+        assert len(logBsSlots_list) == len(levelBudget_list), \
+            "ERROR: logBsSlots_list and levelBudget_list must have the same length!"
         sorted_pairs = sorted(
             zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0]
         )

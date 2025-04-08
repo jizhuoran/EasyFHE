@@ -413,7 +413,7 @@ def double_bs_debug(
         mode = "debug" # "debug" or "release"
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -436,7 +436,7 @@ def double_bs_debug(
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     print("clear result ", clear_result[:10])
     # compute golden answer
-    if config.mode == "debug":
+    if config.COMPARE_WITH_OPENFHE == True:
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         num_iter = 2
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe, num_iter, precision)

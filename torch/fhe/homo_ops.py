@@ -530,6 +530,7 @@ def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in 
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
+    assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
     if levels == 0:
         return ct.deep_copy()
 
