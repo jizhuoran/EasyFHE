@@ -179,7 +179,7 @@ def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
         target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
         target_scaling_factor = None
         # print("case3", target_limbs, target_noise_deg, target_scaling_factor)
-    return adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), adjust_to(
+    return _adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), _adjust_to(
         ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
     )
 
@@ -481,8 +481,7 @@ def _cipher_neg(in0, cryptoContext):
     cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
     return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
-@decorator_factory
-def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
     assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
     if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
         return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
@@ -492,6 +491,13 @@ def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cry
         return _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
     else:
         raise ValueError 
+    
+@decorator_factory
+def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    return _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+
+
+
 
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
@@ -633,7 +639,7 @@ def homo_rotate(in0, index, cryptoContext):
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
-    res = cipher_automorphism(res, index, cryptoContext)
+    res = _cipher_automorphism(res, index, cryptoContext)
 
     return res
 
@@ -669,7 +675,7 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
             inplace=True,
         )
 
-    result = cipher_automorphism(result, index, cryptoContext)
+    result = _cipher_automorphism(result, index, cryptoContext)
 
     return result
 
