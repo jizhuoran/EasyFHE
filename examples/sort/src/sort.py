@@ -1,6 +1,6 @@
 import os, sys
+sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
-sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from examples.utils import approx
 import torch.fhe as fhe
 import torch
