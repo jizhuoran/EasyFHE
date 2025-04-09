@@ -398,3 +398,9 @@ android/pytorch_android_torchvision/.cxx
 .arcconfig
 .stable_pyre_client
 .pyre_client
+
+
+# app data
+!GPU-FHE/
+!GPU-FHE/examples/
+!GPU-FHE/examples/*.bin
