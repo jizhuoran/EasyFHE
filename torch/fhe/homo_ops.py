@@ -579,6 +579,105 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
     factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
     return _cipher_mul_scalar_double(in0, factors, cryptoContext)
 
+def _homo_rescale_internal(ct, levels, cryptoContext):
+    assert levels == 1 or levels == 0 and "Only support these two cases"
+    assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
+    if levels == 0:
+        return ct.deep_copy()
+
+    def _rescale_n_times(cv, levels):
+        for l in range(levels):
+            cv = F.cv_drop_last_element_and_scale(cv, ct.cur_limbs, l, cryptoContext)
+        return cv
+
+    res_cv = [_rescale_n_times(_cv, levels) for _cv in ct.cv]
+
+    scFactor = ct.scaling_factor
+    for l in range(levels):
+        modReduceFactor = cryptoContext.GetModReduceFactor(
+            ct.cur_limbs - 1 - l
+        )  # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
+        scFactor = scFactor / modReduceFactor
+
+    return ct.cipher_like(
+        res_cv,
+        cur_limbs=ct.cur_limbs - levels,
+        scaling_factor=scFactor,
+        noise_deg=ct.noise_deg - levels,
+    )
+
+# note: EvalMultInPlace in ckksrns-leveledshe.cpp
+
+def homo_rescale_internal(ct, levels, cryptoContext):
+    return _homo_rescale_internal(ct, levels, cryptoContext)
+
+def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
+    return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    
+def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert cipher.cur_limbs >= target_limbs
+    if cipher.cur_limbs == target_limbs:
+        if cipher.noise_deg < target_noise_deg:
+            return _eval_mult_core(cipher, 1.0, cryptoContext)
+        else:
+            return cipher.shallow_copy()
+    else:  # cur_limbs > target_limbs
+        if cipher.noise_deg == 2 and target_noise_deg == 2:
+            # if both degree 2, mul the higher to a factor, then rescale, then drop
+            # interesting, ct1 actually has a noise_deg == 2, but can still do a rescale
+            scf1 = cipher.scaling_factor
+            scf2 = target_scaling_factor
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            if cipher.cur_limbs > target_limbs:
+                cipher.drop_last_elements(cipher.cur_limbs - target_limbs)
+            cipher.scaling_factor = target_scaling_factor
+            # so the output has noise_deg2, and the same cur_limb
+        elif cipher.noise_deg == 1 and target_noise_deg == 1:
+            # if both degree 1, mul the higher to a factor, then drop, then rescale
+            # interesting, here we can do drop first...
+            scf1 = cipher.scaling_factor
+            scf2 = cryptoContext.GetScalingFactorRealBig(target_limbs + 1)
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
+            if cipher.cur_limbs > target_limbs + 1:
+                cipher.drop_last_elements(cipher.cur_limbs - target_limbs-1)
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            cipher.scaling_factor = target_scaling_factor
+            # so the output has noise_deg 1, and the same cur_limb
+        elif cipher.noise_deg == 2 and target_noise_deg == 1:
+            # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
+            if cipher.cur_limbs == target_limbs + 1:
+                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            else:
+                # otherwise, mul the higher with scale factor, rescale, drop, rescale.
+                # the last rescale is to make sure both has degree 1
+                scf1 = cipher.scaling_factor
+                scf2 = cryptoContext.GetScalingFactorRealBig(cryptoContext.L - (cryptoContext.L - target_limbs - 1))
+                scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+                q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
+                cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                if cipher.cur_limbs > target_limbs + 1:
+                    cipher.drop_last_elements(cipher.cur_limbs - target_limbs-1)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher.scaling_factor = target_scaling_factor
+        elif cipher.noise_deg == 1 and target_noise_deg == 2:
+            scf1 = cipher.scaling_factor
+            scf2 = target_scaling_factor
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
+            cipher.drop_last_elements(cipher.cur_limbs - target_limbs)
+            cipher.scaling_factor = scf2
+        else:
+            print("noise_deg", cipher.noise_deg, target_noise_deg)
+            raise ValueError
+
+    return cipher
+
 #@utils.profile_pytorch_function
 def homo_rotate(in0, index, cryptoContext):
     auto_index = cryptoContext.find_auto_index(index)

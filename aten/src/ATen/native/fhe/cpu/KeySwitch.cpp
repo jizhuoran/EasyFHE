@@ -191,9 +191,7 @@ void negateInplace_(
     size_t log_degree,
     size_t batch,
     const uint64_t* primes,
-    uint64_t* op) {
-      const int max_threads = omp_get_max_threads();  
-      omp_set_num_threads(max_threads); 
+    uint64_t* op) { 
   for(int i=0;i<batch * degree;i++){
   const int prime_idx = i >> log_degree;
   const uint64_t prime = primes[prime_idx];
@@ -208,8 +206,6 @@ void subInplace_(
     const uint64_t* primes,
     uint64_t* op1,
     const uint64_t* op2) {
-      const int max_threads = omp_get_max_threads();  
-      omp_set_num_threads(max_threads); 
   for(int i=0;i<batch * degree;i++){
   const int prime_idx = i / degree;
   const uint64_t prime = primes[prime_idx];
@@ -232,6 +228,7 @@ void vec_add_mod_batch_(
     uint64_t* to) {
       const int max_threads = omp_get_max_threads();  
       omp_set_num_threads(max_threads); 
+      #pragma omp parallel for schedule(static) num_threads(max_threads)
   for(int i=0;i<batch * degree_;i++){
   // const int degree_idx = unroll_number * (i / end_length);
   const int out_prime_idx = i / degree_;
@@ -1332,6 +1329,7 @@ void switch_modulus(
 
 static void drop_last_element_scale_template(
     // aten::drop_last_element_and_scale
+
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,
@@ -1370,6 +1368,7 @@ static void drop_last_element_scale_template(
 
   int start_op2_idx = (level - curr_limbs + l) * (level - 1);
 
+  
   const_mult_batch_(
       to_ptr,
       qlql_inv_mod_ql_div_ql_mod_q,
