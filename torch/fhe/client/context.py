@@ -60,7 +60,8 @@ class __FOR_SAVE_ONLY_Context:
         qRootPows = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
         self.mult_key_map = None
-        self.slots_left_rot_key_map = {} #fixme: why adding prefix slots_ ?
+        self.slots_left_rot_key_map = {} 
+        self.total_left_rot_key_map = {} 
         self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
@@ -440,9 +441,7 @@ class __FOR_SAVE_ONLY_Context:
             self.encode_params_ksiPows.append(cmath.exp(1j * angle))
         self.encode_params_ksiPows.append(self.encode_params_ksiPows[0])
 
-        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128)
-        self.encode_params_ksiPows_real = self.encode_params_ksiPows.real.astype(np.double)
-        self.encode_params_ksiPows_imag = self.encode_params_ksiPows.imag.astype(np.double)
+        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
         self.encode_params_rotGroup = np.array(self.encode_params_rotGroup)
 
 
@@ -525,10 +524,7 @@ class __FOR_SAVE_ONLY_Context:
                 [0] * (2 * self.Nh),
                 dtype=np.int64,
                 )
-            self.encode_out = np.array(
-                [0] * (self.L * self.N),
-                dtype=np.uint64,
-                )
+            self.encode_inverse = np.array( [0]*2*self.N, dtype=np.double)
 
             power_of_roots = qRootPows + pRootPows
             inverse_power_of_roots = qRootPowsInv + pRootPowsInv
@@ -707,14 +703,16 @@ class __FOR_SAVE_ONLY_Context:
         key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
         self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
+        #half_key
         for key, ROT_SWK in rot_swk_map.items():
-            left_rot_key_map = {}
+            left_rot_key_map = []
             precompute_auto_map = {}
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
-                if int(rotIdx)<0:
+                if int(rotIdx)<0:    # the same as `norm_rot_index(self, i)` in class Context
                     rotIdx = self.N//2 + rotIdx
-                left_rot_key_map[int(rotIdx)] = [
+                left_rot_key_map.append(int(rotIdx))
+                self.total_left_rot_key_map[int(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
@@ -724,15 +722,21 @@ class __FOR_SAVE_ONLY_Context:
             self.slots_left_rot_key_map[key] = left_rot_key_map
             self.slots_precompute_auto_map[key] = precompute_auto_map
 
+        self.QplusP_map = {}
+        self.QmuplusPmu_map = {}
+        for cur_limbs in range(len(moduliQ_scalar)):
+            self.QplusP_map[cur_limbs] = np.array(
+                np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
+            )
+            self.QmuplusPmu_map[cur_limbs] = np.array(
+                np.concatenate((self.q_mu[0:cur_limbs], self.p_mu[:K])), dtype=np.uint64
+            )
         # init bs_context
         if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:
             for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
-                    self.moduliQ_scalar,
                     self.moduliP_scalar,
-                    self.q_mu,
-                    self.p_mu,
                     0,
                     self.secretKeyDist,
                     boot_cnst_map[str(logBsSlots)]

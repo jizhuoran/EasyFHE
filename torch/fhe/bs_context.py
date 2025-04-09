@@ -25,8 +25,6 @@ class CKKS_Boot_Params:
 class BsContext:
     def __init__(self, content_map):
         self.M = get_item("M", content_map)
-        self.QmuplusPmu_map = get_item("QmuplusPmu_map", content_map)
-        self.QplusP_map = get_item("QplusP_map", content_map)
         self.C2S_rot_in = get_item("C2S_rot_in", content_map)
         self.C2S_rot_out = get_item("C2S_rot_out", content_map)
         self.S2C_rot_in = get_item("S2C_rot_in", content_map)
@@ -51,19 +49,14 @@ class BsContext:
         self.paramsDec = get_item("paramsDec", content_map)
         self.paramsEnc = get_item("paramsEnc", content_map)
 
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
-
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].cv = torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)
+                self.m_U0hatTPreFFT[i][j].cv = [torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)]
                 Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT[i][j].cipher_id)
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].cv = torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)
+                self.m_U0PreFFT[i][j].cv = [torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)]
                 Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT[i][j].cipher_id)
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
@@ -131,15 +124,15 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = value.cuda()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = value.cuda()
+        # for key, value in self.QplusP_map.items():
+        #     self.QplusP_map[key] = value.cuda()
+        # for key, value in self.QmuplusPmu_map.items():
+        #     self.QmuplusPmu_map[key] = value.cuda()
 
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].cv = self.m_U0hatTPreFFT[i][j].cv.cuda()
+                self.m_U0hatTPreFFT[i][j].cv = [self.m_U0hatTPreFFT[i][j].cv[0].cuda()]
 
         for i in range(len(self.m_U0PreFFT)):
             for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].cv = self.m_U0PreFFT[i][j].cv.cuda()
+                self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]

@@ -1,5 +1,6 @@
 from enum import Enum
 from .bs_context import *
+from .config import *
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
@@ -11,7 +12,7 @@ class LargeScalingFactorConstants(Enum):
 
 
 class Context:
-    def __init__(self, BsContext_content_map, gpufhe_content_map, autoLoadAndSetConfig):
+    def __init__(self, BsContext_content_map, gpufhe_content_map, config):
         self.L = get_item("L", gpufhe_content_map)
         self.dnum = get_item("dnum", gpufhe_content_map)
         self.alpha = get_item("alpha", gpufhe_content_map)
@@ -68,6 +69,7 @@ class Context:
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
         self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
         self.primes = get_item("primes", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
@@ -89,17 +91,17 @@ class Context:
         self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
         self.swk_ax = get_item("swk_ax", gpufhe_content_map)
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
+        self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
+        self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
         self.BsContext_map = {}
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
                 _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
-        self.encode_params_ksiPows_real = get_item("encode_params_ksiPows_real", gpufhe_content_map)
-        self.encode_params_ksiPows_imag = get_item("encode_params_ksiPows_imag", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
-        self.encode_out = get_item("encode_out", gpufhe_content_map)
+        self.encode_inverse = get_item("encode_inverse", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -133,18 +135,23 @@ class Context:
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
         self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = torch.tensor(self.encode_params_ksiPows_real, dtype = torch.double)
-        self.encode_params_ksiPows_imag = torch.tensor(self.encode_params_ksiPows_imag, dtype = torch.double)
+        self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
-        self.encode_out = torch.tensor(self.encode_out, dtype = torch.uint64)
+        self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
+
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
 
         self.to_cuda()
         self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
 
-        self.autoLoadAndSetConfig=autoLoadAndSetConfig
+        self.config = config
+        self.inBS = False
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()
@@ -180,24 +187,25 @@ class Context:
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
         self.mult_key_map = [v.cuda() for v in self.mult_key_map]
-        self.encode_params_ksiPows_real = self.encode_params_ksiPows_real.cuda()
-        self.encode_params_ksiPows_imag = self.encode_params_ksiPows_imag.cuda()
+        self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
-        self.encode_out = self.encode_out.cuda()
-
-        # self.encode_params_rotGroup_cuda = torch.tensor(self.encode_params_rotGroup_cuda, dtype = torch.int64, device = "cuda")
+        self.encode_inverse = self.encode_inverse.cuda()
+        for key, value in self.QplusP_map.items():
+            self.QplusP_map[key] = value.cuda()
+        for key, value in self.QmuplusPmu_map.items():
+            self.QmuplusPmu_map[key] = value.cuda()
 
     def norm_rot_index(self, i):
         if i < 0:
             i = self.N // 2 + i
         return i
 
-   #  Method to retrieve the scaling factor of level l.
-   #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
-   #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
-   #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
-   #  @return the scaling factor.
+    #  Method to retrieve the scaling factor of level l.
+    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
+    #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
+    #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
+    #  @return the scaling factor.
     def GetScalingFactorReal(self, cur_limbs= None):
         if cur_limbs is None:
             cur_limbs = self.L
@@ -232,3 +240,42 @@ class Context:
             return self.dmoduliQ[l]
         return self.approxSF
 
+    def get_rotation_key(self, rot_index):
+        if rot_index in self.left_rot_key_map:
+            return self.left_rot_key_map[rot_index]
+        else:
+            return [
+                torch.tensor(v, dtype=torch.uint64, device="cuda")
+                for v in self.total_left_rot_key_map[rot_index]
+            ]
+
+    def get_precompute_auto(self, key):
+        if key in self.precompute_auto_map:
+            return self.precompute_auto_map[key]
+        else:
+            for k, v in self.slots_precompute_auto_map.items():
+                if key in v:
+                    return torch.tensor(v[key], dtype=torch.int32, device="cuda")
+        assert False and "Key not found in precompute_auto_map"
+
+    def load_rotation_keys(self, key_name):
+        if not self.config.AUTO_LOAD_KEYS:
+            print("AUTO_LOAD_KEYS is disabled. Do not call this function.")
+            return
+        assert str(key_name) in self.slots_left_rot_key_map
+        assert str(key_name) in self.slots_precompute_auto_map
+        for key in self.slots_left_rot_key_map[str(key_name)]:
+            if key not in self.left_rot_key_map:
+                self.left_rot_key_map[key] = [
+                    torch.tensor(v, dtype=torch.uint64, device="cuda")
+                    for v in self.total_left_rot_key_map[key]
+                ]
+        for key, value in self.slots_precompute_auto_map[str(key_name)].items():
+            self.precompute_auto_map[key] = torch.tensor(
+                value, dtype=torch.int32, device="cuda"
+            )
+
+    def load_bootstrapping_context(self, logBsSlots):
+        self.BsContext = self.BsContext_map[str(logBsSlots)]
+        self.BsContext.to_cuda()
+        self.load_rotation_keys(logBsSlots)

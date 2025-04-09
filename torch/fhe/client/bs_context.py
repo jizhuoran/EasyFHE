@@ -46,10 +46,7 @@ class BsContext:
     def __init__(
         self,
         N,
-        moduliQ_scalar,
         moduliP_scalar,
-        q_mu,
-        p_mu,
         correctionFactor,
         secretKeyDist,
         BOOT_CNST
@@ -195,16 +192,6 @@ class BsContext:
         else:
             self.coefficients = np.copy(coefficientsUniform)
             self.k = K_UNIFORM
-
-        self.QplusP_map = {}
-        self.QmuplusPmu_map = {}
-        for cur_limbs in range(len(moduliQ_scalar)):
-            self.QplusP_map[cur_limbs] = np.array(
-                np.concatenate((moduliQ_scalar[0:cur_limbs], moduliP_scalar[0:K])), dtype=np.uint64
-            )
-            self.QmuplusPmu_map[cur_limbs] = np.array(
-                np.concatenate((q_mu[0:cur_limbs], p_mu[:K])), dtype=np.uint64
-            )
 
     def compute_C2S_rot(self, slots, M):
         level_budget = self.paramsEnc.level_budget

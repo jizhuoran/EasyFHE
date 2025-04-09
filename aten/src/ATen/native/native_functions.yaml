@@ -7073,6 +7073,12 @@
   dispatch:
     CUDA: _scaled_mm_out_cuda
 
+
+- func: _scaled_grouped_mm(Tensor self, Tensor mat2, Tensor scale_a, Tensor scale_b, Tensor? offs=None, Tensor? bias=None, Tensor? scale_result=None, ScalarType? out_dtype=None, bool use_fast_accum=False) -> Tensor
+  variants: function
+  dispatch:
+    CUDA: _scaled_grouped_mm_cuda
+
 # NOTE [ Sparse: autograd and API ]
 #
 #
@@ -10403,7 +10409,7 @@
     #QuantizedCPU: cat_quantized_cpu
 
     #- func: _cat.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
-    #dispatch:
+  #dispatch:
   #CPU: _cat_out_cpu
   #CUDA: cat_out_cuda
   #QuantizedCPU: cat_out_quantized_cpu
@@ -14061,7 +14067,7 @@
 - func: _linalg_slogdet.sign(Tensor A, *, Tensor(a!) sign, Tensor(b!) logabsdet, Tensor(c!) LU, Tensor(d!) pivots) -> (Tensor(a!) sign, Tensor(b!) logabsdet, Tensor(c!) LU, Tensor(d!) pivots)
   structured: True
   dispatch:
-    CPU, CUDA: _linalg_slogdet_out
+    CPU, CUDA, MPS: _linalg_slogdet_out
 
 - func: linalg_slogdet(Tensor A) -> (Tensor sign, Tensor logabsdet)
   python_module: linalg
@@ -14841,6 +14847,7 @@
     Meta: _fused_sdp_choice_meta
     CPU, NestedTensorCPU: _fused_sdp_choice_cpp
     CUDA, NestedTensorCUDA: _fused_sdp_choice_cuda
+    XPU: _fused_sdp_choice_xpu
   tags: nondeterministic_seeded
 
 - func: _scaled_dot_product_attention_math(Tensor query, Tensor key, Tensor value, Tensor? attn_mask=None, float dropout_p=0.0, bool is_causal=False, Tensor? dropout_mask=None, *, float? scale=None, bool enable_gqa=False) -> (Tensor, Tensor)
@@ -14866,6 +14873,7 @@
 - func: _scaled_dot_product_fused_attention_overrideable(Tensor query, Tensor key, Tensor value, Tensor? attn_bias=None, float dropout_p=0.0, bool is_causal=False, bool return_debug_mask=False, *, float? scale=None) -> (Tensor output, Tensor logsumexp, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, Tensor philox_seed, Tensor philox_offset, Tensor debug_attn_mask)
   dispatch:
     CompositeExplicitAutograd: _scaled_dot_product_fused_attention_overrideable
+    XPU: _scaled_dot_product_fused_attention_overrideable_xpu
   tags: nondeterministic_seeded
 
 - func: _scaled_dot_product_flash_attention_backward(Tensor grad_out, Tensor query, Tensor key, Tensor value, Tensor out, Tensor logsumexp, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, float dropout_p, bool is_causal, Tensor philox_seed, Tensor philox_offset, *, float? scale=None) -> (Tensor grad_query, Tensor grad_key, Tensor grad_value)
@@ -14902,6 +14910,7 @@
 - func: _scaled_dot_product_cudnn_attention(Tensor query, Tensor key, Tensor value, Tensor? attn_bias, bool compute_log_sumexp, float dropout_p=0.0, bool is_causal=False, bool return_debug_mask=False, *, float? scale=None) -> (Tensor output, Tensor logsumexp, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, Tensor philox_seed, Tensor philox_offset, Tensor debug_attn_mask)
   dispatch:
     CUDA: _scaled_dot_product_cudnn_attention_cuda
+    NestedTensorCUDA: _scaled_dot_product_cudnn_attention_nestedtensor_cuda
   tags: nondeterministic_seeded
 
 - func: _scaled_dot_product_cudnn_attention_backward(Tensor grad_out, Tensor query, Tensor key, Tensor value, Tensor out, Tensor logsumexp, Tensor philox_seed, Tensor philox_offset, Tensor attn_bias, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, float dropout_p, bool is_causal, *, float? scale=None) -> (Tensor, Tensor, Tensor)
@@ -14933,6 +14942,11 @@
   variants: function
   dispatch:
     CUDA: _efficient_attention_backward
+
+- func: _cudnn_attention_forward(Tensor query, Tensor key, Tensor value, Tensor? attn_bias, Tensor? cum_seq_q, Tensor? cum_seq_k, SymInt max_q, SymInt max_k, bool compute_log_sumexp, float dropout_p=0.0, bool is_causal=False, bool return_debug_mask=False, *, float? scale=None) -> (Tensor output, Tensor logsumexp, Tensor cum_seq_q, Tensor cum_seq_k, SymInt max_q, SymInt max_k, Tensor philox_seed, Tensor philox_offset, Tensor debug_attn_mask)
+  dispatch:
+    CUDA: _cudnn_attention_forward
+  tags: nondeterministic_seeded
 
 - func: _triton_scaled_dot_attention(Tensor q, Tensor k, Tensor v, float dropout_p=0.0) -> Tensor
   variants: function
@@ -15808,7 +15822,7 @@
 - func: neg_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: neg_mod_cuda_
+    CUDA: neg_mod_cuda_
 
 - func: neg_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15823,7 +15837,7 @@
 - func: add_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: add_mod_cuda_
+    CUDA: add_mod_cuda_
 
 - func: add_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15838,7 +15852,7 @@
 - func: sub_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: sub_mod_cuda_
+    CUDA: sub_mod_cuda_
 
 - func: sub_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15853,7 +15867,7 @@
 - func: mul_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: mul_mod_cuda_
+    CUDA: mul_mod_cuda_
 
 - func: mul_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15868,7 +15882,7 @@
 - func: add_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: add_scalar_mod_cuda_
+    CUDA: add_scalar_mod_cuda_
 
 - func: add_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15883,7 +15897,7 @@
 - func: sub_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: sub_scalar_mod_cuda_
+    CUDA: sub_scalar_mod_cuda_
 
 - func: sub_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15898,7 +15912,7 @@
 - func: mul_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-     CUDA: mul_scalar_mod_cuda_
+    CUDA: mul_scalar_mod_cuda_
 
 - func: mul_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
@@ -15960,8 +15974,22 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor inverse_real, Tensor inverse_imag, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows_real, Tensor precompute_ksipows_imag, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
+- func: encode(Tensor inverse, Tensor inverse_internal, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
 
+- func: encode_middle(Tensor inverse_internal, Tensor primes, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, int log_approx, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: encode_middle_cuda
+
+- func: encode_fft(Tensor inverse, Tensor precompute_rotgroups, Tensor precompute_ksipows, int M, int slots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: encode_fft_cuda
+
+- func: encode_log_approx(Tensor inverse_internal, int slots, int cur_limbs, float scaling_factor) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: encode_log_approx_cuda

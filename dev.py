@@ -15,16 +15,14 @@ dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[3, 3], [4, 4]]
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-save_dir = "torch/fhe/data/"
 mode = "release"  # "debug" or "release"
 autoLoadAndSetConfig = True # note: currently only support True
 
-if not os.path.exists(save_dir):
-    raise ValueError(f"Directory {save_dir} does not exist!")
+DATA_DIR = os.environ["DATA_DIR"]
 
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                         levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR,
                          autoLoadAndSetConfig=True, mode=mode))
 
 

@@ -8,80 +8,55 @@ from .client.gen_context import gen_contexts
 from .context import *
 import torch
 
-
-
-
 # Global dictionary to accumulate execution time for each function
 execution_times = {}
 
 # Registry to keep track of function call counts
 call_registry = {}
 
+@atexit.register
+def print_call_counts():
+    if len(call_registry) > 0:
+        print("\nFunction Call Counts:")
+        for func_name, wrapper in call_registry.items():
+            print(f"Function '{func_name}' was called {wrapper.count} times.")
+
+
+@atexit.register
+def print_execution_times():
+    if len(execution_times) > 0:
+        total_time = sum(execution_times.values())
+        print("\nExecution Times:")
+        for func_name, exec_time in execution_times.items():
+            print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
+        print(f"Total execution time profiled: {total_time:.6f} seconds.")
 
 def call_counter(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         wrapper.count += 1  # Increment the call count
         return func(*args, **kwargs)
-
     wrapper.count = 0  # Initialize the call count
     call_registry[func.__name__] = wrapper  # Register the function
     return wrapper
 
-
-# @atexit.register
-def print_call_counts():
-    print("\nFunction Call Counts:")
-    for func_name, wrapper in call_registry.items():
-        print(f"Function '{func_name}' was called {wrapper.count} times.")
-
-
-# @atexit.register
-def print_execution_times():
-    print("\nExecution Times:")
-    for func_name, exec_time in execution_times.items():
-        print(f"Function '{func_name}' executed in {exec_time:.6f} seconds.")
-
-
-def check_meta_equal(func):
-    def wrapper(*args, **kwargs):
-        in0, in1 = args[0], args[1]
-        # assert len(in0.cv) == len(in1.cv)
-        # assert in0.cur_limbs == in1.cur_limbs
-        # assert in0.scaling_factor == in1.scaling_factor
-        # assert in0.noise_deg == in1.noise_deg
-        # assert in0.is_ext == in1.is_ext
-        # assert in0.slots == in1.slots
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
-def check_cipher_len(func):
-    def wrapper(*args, **kwargs):
-        assert len(args[0].cv) == 2
-        return func(*args, **kwargs)
-
-    return wrapper
-
-
 def profile_python_function(func):
+    @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        torch.cpu.synchronize()
+        torch.cuda.synchronize()
         start_time = time.time()
         result = func(*args, **kwargs)
+        torch.cpu.synchronize()
+        torch.cuda.synchronize()
         end_time = time.time()
-
         # Calculate the execution time for this call
         exec_time = end_time - start_time
-
         # Update the global dictionary with the accumulated time for this function
         if func.__name__ not in execution_times:
             execution_times[func.__name__] = 0
         execution_times[func.__name__] += exec_time
-
-        # print(f"Function {func.__name__} executed in {exec_time:.6f} seconds")
         return result
-
     return wrapper
 
 
@@ -132,8 +107,7 @@ def try_load_context(
     secretKeyDist,
     rescaleTech,
     save_dir,
-    autoLoadAndSetConfig,
-    mode,
+    config
 ):
 
     NO_BS=False
@@ -181,7 +155,7 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and mode == "debug"
+        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == "debug"
     ):
         gen_contexts(
             maxLevelsRemaining=maxLevelsRemaining,
@@ -195,30 +169,32 @@ def try_load_context(
             secretKeyDist=secretKeyDist,
             rescaleTech=rescaleTech,
             save_dir=save_dir,
-            mode=mode,
+            config=config,
         )
 
     with open(load_path, "rb") as file:
         gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
 
-    if mode == "debug":
+    if config.COMPARE_WITH_OPENFHE:
         if not os.path.exists(debug_load_path):
             print("ERROR: There is no debug context file! Please regenerate context!")
         with open(debug_load_path, "rb") as file:
             debug_keys = pickle.load(file)
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers, autoLoadAndSetConfig)
-    openfhe_context = client.OpenFHEContext(openfheMembers)
-    if cryptoContext.autoLoadAndSetConfig:
+    cryptoContext = Context(BsContextMembers, gpufheMembers, config)
+    if cryptoContext.config.AUTO_LOAD_KEYS:
         if rotIndex_list is not None and rotIndex_list != []:
-            load_rotation_keys("app", cryptoContext)
+            cryptoContext.load_rotation_keys("app")
         if NO_BS == False:
             for logBsSlots in logBsSlots_list:
                 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
                 cryptoContext.BsContext.to_cuda()
-                load_rotation_keys(logBsSlots, cryptoContext)
+                cryptoContext.load_rotation_keys(logBsSlots)
 
-    if mode == "debug":
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    openfhe_context.config = cryptoContext.config
+    cryptoContext.openfhe_context = openfhe_context
+    if config.COMPARE_WITH_OPENFHE:
         openfhe_boot_contexts = {}
         if NO_BS == False:
             for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
@@ -228,6 +204,8 @@ def try_load_context(
                 openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
                     debug_keys, 1 << logBsSlots, level_budget
                 )
+                openfhe_boot_contexts[str(logBsSlots)].config = cryptoContext.config
+        
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
@@ -235,29 +213,8 @@ def try_load_context(
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array(
-        [bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]
+        [bs_cipher.cv[0][:bs_cipher.cur_limbs].cpu().numpy(), bs_cipher.cv[1][:bs_cipher.cur_limbs].cpu().numpy()]
     ).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
-
-def load_rotation_keys(key_name, cryptoContext):
-    if (str(key_name) not in cryptoContext.slots_left_rot_key_map) or (
-        not cryptoContext.slots_left_rot_key_map[str(key_name)]
-    ):
-        print("Warning: slots_left_rot_key_map[", key_name, "] is None")
-        return
-    for key, value in cryptoContext.slots_left_rot_key_map[str(key_name)].items():
-        cryptoContext.left_rot_key_map[key] = [
-            torch.tensor(v, dtype=torch.uint64, device="cuda") for v in value
-        ]
-    for key, value in cryptoContext.slots_precompute_auto_map[str(key_name)].items():
-        cryptoContext.precompute_auto_map[key] = torch.tensor(
-            value, dtype=torch.int32, device="cuda"
-        )
-
-
-def load_bootstrapping_context(logBsSlots, cryptoContext):
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    cryptoContext.BsContext.to_cuda()
-    load_rotation_keys(logBsSlots, cryptoContext)
