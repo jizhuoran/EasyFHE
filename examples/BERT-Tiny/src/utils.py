@@ -229,7 +229,7 @@ else:
         return  encoded
 
 
-    def read_plain_repeated_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
+    def read_plain_repeated_input(cryptoContext, filename, level, scale_deg, scale, slots):
         values = []
         val_name = filename
         # filename = DATA_DIR  + filename
@@ -258,7 +258,7 @@ else:
 
         values = []
         val_name = filename
-        filename = DATA_DIR + filename
+        # filename = DATA_DIR + filename
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values

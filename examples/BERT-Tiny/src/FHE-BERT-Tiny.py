@@ -125,8 +125,25 @@ def unwrapScoresExpanded(c,inputs_num,cryptoContext):
         result.append(fhe.homo_add(i_th_1,i_th_2,cryptoContext))
     return result
 
+def mask_mod_n2(ciphertext, n, cryptoContext):
+    num_slots = ciphertext.slots # todo: check if they are equal
+    mask = []
+    for i in range(num_slots):
+        if i%n==0:
+            mask.append(1.0)
+        else:
+            mask.append(0.0)
+    mask = torch.tensor(mask, dtype=torch.float64).cuda()
+    pt = fhe.encode(mask,1, cryptoContext.L - ciphertext.cur_limbs - 2, num_slots, False, cryptoContext)
+    return fhe.homo_mul_pt(ciphertext, pt, cryptoContext)
+
+
 def wrapUpExpanded(vectors,cryptoContext):
-    masked=mask_mod_n2(vectors[vectors[len(vectors)-1],128,cryptoContext])
+    masked=mask_mod_n2(vectors[-1],128,cryptoContext)
+
+    if len(vectors) > 1:
+        masked = fhe.homo_rotate(masked, -1, cryptoContext)
+
     for i in range(len(vectors)-2,-1,-1):
         masked=fhe.homo_add(masked,mask_mod_n2(vectors[i],128,cryptoContext),cryptoContext)
         if i>0:
@@ -255,10 +272,10 @@ def encoder1(cryptoContext,openfhe_context):
     for i in range(inputs_count):
         inputs.append(read_expanded_input(openfhe_context,f"{input_folder}input_{i}.txt",global_num_slots))
     query_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_query_weight.txt",0,1,global_num_slots)
-    query_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_query_bias.txt",0,1,global_num_slots)
+    query_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_query_bias.txt",0,1,1.0,global_num_slots)
 
     key_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_key_weight.txt",0,1,global_num_slots)
-    key_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_key_bias.txt",0,1,global_num_slots)
+    key_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_key_bias.txt",0, 1, 1.0,global_num_slots)
     Q=matmulRE1(inputs,query_w,query_b,cryptoContext)
     K=matmulRE1(inputs,key_w,key_b,cryptoContext)
     K_wrapped=wrapUpRepeated(K,cryptoContext)
@@ -269,32 +286,32 @@ def encoder1(cryptoContext,openfhe_context):
     scores=fhe.homo_mul(scores,scores_denominator,cryptoContext)
     unwrapped_scores=unwrapScoresExpanded(scores,len(inputs),cryptoContext)
     value_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_value_weight.txt",cryptoContext.L-scores.cur_limbs-2,1,global_num_slots)
-    value_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_value_bias.txt",cryptoContext.L-scores.cur_limbs-1,1,global_num_slots)
-    V=matmulRE1(inputs,value_w,value_b,cryptoContext)
+    value_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_value_bias.txt",cryptoContext.L-scores.cur_limbs-1,1,1.0,global_num_slots)
+    V=matmulRE1(inputs,value_w,value_b,cryptoContext) #fixme: 250410, yhh debug uptil here
     V_wrapped=wrapUpRepeated(V,cryptoContext)
     output=matmulRE2(unwrapped_scores,V_wrapped,128,128,cryptoContext)
-    dense_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_weight.txt",cryptoContext.L-output[0].cur_limbs,1,global_num_slots)
-    dense_b=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_bias.txt",cryptoContext.L-output[0].cur_limbs+1,1,global_num_slots)
+    dense_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_weight.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
+    dense_b=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_bias.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
     output=matmulCR2(output,dense_w,dense_b,cryptoContext)
     for i in range(len(output)):
         output[i]=fhe.homo_add(output[i],inputs[i],cryptoContext)
     wrappedOutput=wrapUpExpanded(output,cryptoContext)
-    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_selfoutput_mean.txt",cryptoContext.L-wrappedOutput.cur_limbs,-1,1,global_num_slots)
+    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_selfoutput_mean.txt",cryptoContext.L-wrappedOutput.cur_limbs,1, -1.0, global_num_slots)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,precomputed_mean,cryptoContext)
     vy=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_vy.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput=fhe.homo_mul_pt(wrappedOutput,vy,cryptoContext)
-    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,num_inputs=(inputs))
+    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
     wrappedOutput=fhe.homo_bootstrap(wrappedOutput,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
     output_copy=wrappedOutput.deepcopy()
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
     GELU_max_abs_value = 1 / 13.5
-    intermediate_w_1=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight1.txt",cryptoContext.L-wrappedOutput.cur_limbs,GELU_max_abs_value,global_num_slots)
-    intermediate_w_2=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight2.txt",cryptoContext.L-wrappedOutput.cur_limbs,GELU_max_abs_value,global_num_slots)
-    intermediate_w_3=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight3.txt",cryptoContext.L-wrappedOutput.cur_limbs,GELU_max_abs_value,global_num_slots)
-    intermediate_w_4=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight4.txt",cryptoContext.L-wrappedOutput.cur_limbs,GELU_max_abs_value,global_num_slots)
+    intermediate_w_1=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight1.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_2=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight2.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_3=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight3.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_4=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight4.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
     dense_weights=list[intermediate_w_1, intermediate_w_2, intermediate_w_3, intermediate_w_4]
-    intermediate_bias=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_bias.txt",cryptoContext.L-output[0].cur_limbs+1,GELU_max_abs_value,global_num_slots)
+    intermediate_bias=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_bias.txt",cryptoContext.L-output[0].cur_limbs-1,1,global_num_slots,GELU_max_abs_value)
     output=matmulRElarge(output,dense_weights,intermediate_bias,cryptoContext)# Todo
     output=generate_containers(output,None,cryptoContext)
     for i in range(len(output)):
@@ -309,7 +326,7 @@ def encoder1(cryptoContext,openfhe_context):
     output=matmulCRlarge(unwrappedLargeOutput,[output_w_1, output_w_2, output_w_3, output_w_4],output_bias,cryptoContext)
     wrappedOutput=wrapUpExpanded(output,cryptoContext)
     wrappedOutput=fhe.homo_add(wrappedOutput,output_copy,cryptoContext)
-    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_output_mean.txt",cryptoContext.L-wrappedOutput.cur_limbs,-1,global_num_slots)
+    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_output_mean.txt", cryptoContext.L-wrappedOutput.cur_limbs-1, 1, -1.0, global_num_slots)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,precomputed_mean,cryptoContext)
     vy=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_vy.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,vy,cryptoContext)
@@ -330,9 +347,9 @@ def eval_inverse_naive2(c,min,max,mult,cryptoContext):
 
 def encoder2(inputs,cryptoContext):
     query_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_query_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
-    query_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_query_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
+    query_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_query_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1, 1.0,global_num_slots)
     key_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_key_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
-    key_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_key_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
+    key_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_key_bias.txt",cryptoContext.L-inputs[0].cur_limbs, 1, 1.0,global_num_slots)
     Q = matmulRE1(inputs, query_w, query_b, cryptoContext)
     K = matmulRE1(inputs, key_w, key_b, cryptoContext)
     K_wrapped = wrapUpRepeated(K, cryptoContext)
@@ -356,7 +373,7 @@ def encoder2(inputs,cryptoContext):
 
     value_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_value_weight.txt", cryptoContext.L -inputs[0].cur_limbs,1,global_num_slots)
     value_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_value_bias.txt",
-                                        cryptoContext.L - inputs[0].cur_limbs,1,global_num_slots )
+                                        cryptoContext.L - inputs[0].cur_limbs, 1, 1.0,global_num_slots )
     V = matmulRE1(inputs, value_w, value_b, cryptoContext)
     V_wrapped = wrapUpRepeated(V, cryptoContext)
     output = matmulRE2(unwrapped_scores, V_wrapped, 128, 128, cryptoContext)
@@ -373,7 +390,7 @@ def encoder2(inputs,cryptoContext):
         output[i] = fhe.homo_add(output[i], inputs[i], cryptoContext)
     wrappedOutput = wrapUpExpanded(output, cryptoContext)
     precomputed_mean = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_selfoutput_mean.txt",
-                                                 cryptoContext.L - wrappedOutput.cur_limbs, -1)
+                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1, -1.0, global_num_slots)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, precomputed_mean, cryptoContext)
     vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
@@ -385,16 +402,16 @@ def encoder2(inputs,cryptoContext):
     output = unwrapExpanded(wrappedOutput, len(inputs), cryptoContext)
     GELU_max_abs_value = 1 / 17.0
     intermediate_w_1 = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_weight1.txt",
-                                        cryptoContext.L - wrappedOutput.cur_limbs, GELU_max_abs_value,global_num_slots)
+                                        cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots, GELU_max_abs_value)
     intermediate_w_2 = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_weight2.txt",
-                                        cryptoContext.L - wrappedOutput.cur_limbs, GELU_max_abs_value,global_num_slots)
+                                        cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots, GELU_max_abs_value)
     intermediate_w_3 = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_weight3.txt",
-                                        cryptoContext.L - wrappedOutput.cur_limbs, GELU_max_abs_value,global_num_slots)
+                                        cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots, GELU_max_abs_value)
     intermediate_w_4 = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_weight4.txt",
-                                        cryptoContext.L - wrappedOutput.cur_limbs, GELU_max_abs_value,global_num_slots)
+                                        cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots, GELU_max_abs_value)
     dense_weights = list[intermediate_w_1, intermediate_w_2, intermediate_w_3, intermediate_w_4]
     intermediate_bias = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_bias.txt",
-                                         cryptoContext.L - output[0].cur_limbs + 1, GELU_max_abs_value,global_num_slots)
+                                         cryptoContext.L - output[0].cur_limbs + 1, 1,global_num_slots, GELU_max_abs_value)
     output = matmulRElarge(output, dense_weights, intermediate_bias, cryptoContext)
     output = generate_containers(output, None, cryptoContext)
     for i in range(len(output)):
@@ -417,7 +434,7 @@ def encoder2(inputs,cryptoContext):
     wrappedOutput = wrapUpExpanded(output, cryptoContext)
     wrappedOutput = fhe.homo_add(wrappedOutput, output_copy, cryptoContext)
     precomputed_mean = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_output_mean.txt",
-                                                 cryptoContext.L - wrappedOutput.cur_limbs, -1,1,global_num_slots)
+                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1,-1.0,global_num_slots)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, precomputed_mean, cryptoContext)
     vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_output_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, vy, cryptoContext)
@@ -455,8 +472,8 @@ def eval_tanh_function(c,min,max,mult,degree,cryptoContext):
     return eval_chebyshev_function(tanh_function,c,min,max,degree,cryptoContext)
 def pooler(input,cryptoContext,openfhe_context):
     tanhScale=1/30.0
-    weight = read_plain_input(cryptoContext,"../weights-sst2/pooler_dense_weight.txt", cryptoContext.L - input.cur_limbs,tanhScale,global_num_slots)
-    bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/pooler_dense_bias.txt", cryptoContext.L - input.cur_limbs,tanhScale,global_num_slots)
+    weight = read_plain_input(cryptoContext,"../weights-sst2/pooler_dense_weight.txt", cryptoContext.L - input.cur_limbs,1,global_num_slots,tanhScale)
+    bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/pooler_dense_bias.txt", cryptoContext.L - input.cur_limbs,1,tanhScale, global_num_slots)
     output = fhe.homo_mul_pt(input, weight, cryptoContext)
     output = rotsum(output, 128, 128, cryptoContext)
     output = fhe.homo_add_pt(output, bias, cryptoContext)
@@ -479,7 +496,7 @@ def BERT_Tiny():
     levelsUsedBeforeBootstrap = 12+4
     rotate_index_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, -1, -2, -4, -8, -16, -32, -64]
 
-    maxLevelsRemaining = 18
+    maxLevelsRemaining = 19
     logBsSlots_list = [12, 13, 14]
     logN = 16
     dnum = 4
