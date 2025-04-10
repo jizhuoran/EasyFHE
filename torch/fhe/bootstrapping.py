@@ -1,11 +1,10 @@
-from .ciphertext import Cipher
 from .bs_context import *
 from . import functional as F
 from . import homo_ops
 from . import approx as approx
 from . import hybrid_keyswitch
 from . import utils
-from .compiler.compiler import frontend
+from .decorator_factory import decorator_factory
 
 
 Tensor = torch.Tensor
@@ -14,12 +13,12 @@ BASE_NUM_LEVELS_TO_DROP = 1
 R_UNIFORM = 6  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be static because it is used in a static function.
 
-@frontend
+@decorator_factory
 def assign_scaling_factor(cipher, target_sf, cryptoContext):
     cipher.scaling_factor = target_sf
     return cipher    
 
-# @profile_python_function
+
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     rescale_tech = cryptoContext.rescaleTech
 
@@ -63,7 +62,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     return ciphertext
 
 
-# @profile_python_function
+
 def apply_double_angle_iterations(ciphertext, cryptoContext):
     if cryptoContext.secretKeyDist == "UNIFORM_TERNARY":
         r = R_UNIFORM
@@ -153,7 +152,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     inner_cv0 = homo_ops.extract_cv(inner, 0, cryptoContext)
                     inner_cv1 = homo_ops.extract_cv(inner, 1, cryptoContext)
 
-                    first = homo_ops._cipher_automorphism(
+                    first = homo_ops.cipher_automorphism(
                         inner_cv0, rot_out[s][i], cryptoContext
                     )
                     first_acc = homo_ops.homo_add(first_acc, first, cryptoContext)
@@ -179,24 +178,24 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
     return result
 
 
-# @profile_python_function
+
 def eval_coeffs_to_slots(A, ctxt, cryptoContext):
     return coeffs_slots_conversion(A, ctxt, "C2S", cryptoContext)
 
 
-# @profile_python_function
+
 def eval_slots_to_coeffs(A, ctxt, cryptoContext):
     return coeffs_slots_conversion(A, ctxt, "S2C", cryptoContext)
 
 
-# @profile_python_function
+
 def eval_linear_transform(A, ct, scheme):
     # TODO: to be implemented
     pass
                   
 
-# @profile_python_function
-@frontend
+
+@decorator_factory
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
         torch.mod_raise(
@@ -219,17 +218,16 @@ def mod_raise(cipher, L0, cryptoContext):
     return cipher.cipher_like(cv, L0)
 
 
-# @profile_python_function
-@frontend
+
+@decorator_factory
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
     return cipher
 
 
-# @profile_python_function
+
 # note: EvalBootstrap in ckksrns-fhe.cpp
-@frontend
 def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
@@ -427,11 +425,10 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
     return ctxtDec
 
-
+@decorator_factory
 def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
 
-    if cryptoContext.autoLoadAndSetConfig == True:
-        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
 
@@ -439,3 +436,58 @@ def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
     result = homo_ops.homo_rescale(result, result.noise_deg - 1, cryptoContext)
 
     return result
+
+def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
+
+    if cryptoContext.config.autoLoadAndSetConfig == True:
+        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+
+    initSizeQ = cipher.cur_limbs
+
+    # Step 1: Get the input.
+    powerOfTwoModulus = 1 << precision
+
+    # Step 2: Scale up by powerOfTwoModulus, and extend the modulus to powerOfTwoModulus * q.
+    # Note that we extend the modulus implicitly without any code calls because the value always stays 0.
+    ctScaledUp = cipher.deep_copy()
+    # We multiply by powerOfTwoModulus, and leave the last CRT value to be 0 (mod powerOfTwoModulus). #todp:??
+    ctScaledUp = homo_ops.homo_mul_scalar_int(ctScaledUp, powerOfTwoModulus, cryptoContext)
+
+
+    # Step 3: Bootstrap the initial ciphertext.
+    ctInitialBootstrap = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
+    ctInitialBootstrap = homo_ops.homo_rescale_internal(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1,
+                                                        cryptoContext)
+
+    # Step 4: Scale up by powerOfTwoModulus.
+    ctInitialBootstrap = homo_ops.homo_mul_scalar_int(ctInitialBootstrap, powerOfTwoModulus, cryptoContext)
+
+    # Step 5: Mod-down to powerOfTwoModulus * q
+    # We mod down, and leave the last CRT value to be 0 because it's divisible by powerOfTwoModulus.
+    ctBootstrappedScaledDown = ctInitialBootstrap.deep_copy()
+    bootstrappingSizeQ = ctBootstrappedScaledDown.cur_limbs
+    # If we start with more towers, than we obtain from bootstrapping, return the original ciphertext.
+    if bootstrappingSizeQ <= initSizeQ:
+        return cipher.deep_copy()
+    ctBootstrappedScaledDown.cur_limbs = cipher.cur_limbs # note: hard adjust, drop limbs regardless of the rescaleTech
+
+
+    # Step 6 and 7: Calculate the bootstrapping error by subtracting the original ciphertext from the bootstrapped ciphertext. Mod down to q is done implicitly.
+    ctBootstrappingError = homo_ops.homo_sub(ctBootstrappedScaledDown, ctScaledUp, cryptoContext)
+
+    # Step 8: Bootstrap the error.
+    ctBootstrappingError = eval_bootstrap(ctBootstrappingError, L0, logBsSlots, cryptoContext)
+    ctBootstrappingError = homo_ops.homo_rescale_internal(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP,
+                                                          cryptoContext)
+
+    # Step 9: Subtract the bootstrapped error from the initial bootstrap to get even lower error.
+    finalCiphertext = homo_ops.homo_sub(ctInitialBootstrap, ctBootstrappingError, cryptoContext)
+
+    # Step 10: Scale back down by powerOfTwoModulus to get the original message.
+    finalCiphertext = homo_ops.homo_mul_scalar_double(finalCiphertext, 1.0 / powerOfTwoModulus, cryptoContext)
+
+    # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
+    finalCiphertext = homo_ops.homo_rescale(finalCiphertext, finalCiphertext.noise_deg - 1, cryptoContext)
+
+    return finalCiphertext
+

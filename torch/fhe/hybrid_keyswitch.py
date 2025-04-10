@@ -1,8 +1,9 @@
-from . import functional as F
 import torch
-from .compiler.compiler import frontend
+from . import functional as F
+from .decorator_factory import decorator_factory
 
-@frontend
+
+@decorator_factory
 def key_switch_P_ext(cipher, cryptoContext):
     assert cipher.is_ext == False
     cv = [
@@ -14,25 +15,27 @@ def key_switch_P_ext(cipher, cryptoContext):
     ]
     return cipher.cipher_like(cv, is_ext=True)
 
-@frontend
+@decorator_factory
 def modup_to_ext(cipher, cryptoContext):
     assert cipher.is_ext == False
     assert len(cipher.cv) == 1
     cv = [F.cv_modup(cipher.cv[0], cipher.cur_limbs, cryptoContext)]
     return cipher.cipher_like(cv, is_ext=True)
 
-#todo: do we need to support mult key, considering that hoisting is only for rotation
-@frontend
-def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
+
+def _mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     assert digits.is_ext == True
     norm_index = cryptoContext.norm_rot_index(index)
-    swk = cryptoContext.left_rot_key_map[norm_index]
+    swk = cryptoContext.get_rotation_key(norm_index)
     sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
                                  swk_bx=swk[0], swk_ax=swk[1])
     return digits.cipher_like(sum_mult, is_ext=True)
+#todo: do we need to support mult key, considering that hoisting is only for rotation
+@decorator_factory
+def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
+    return _mult_rot_key_and_sum_ext(digits, index, cryptoContext)
 
-
-@frontend
+@decorator_factory
 def moddown_from_ext(cipher, cryptoContext):
     assert cipher.is_ext == True
     cv = [

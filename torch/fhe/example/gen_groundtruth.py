@@ -57,7 +57,6 @@ levelBudget_list = [[{4}, {5}]]
 secretKeyDist = "UNIFORM_TERNARY"
 rescaleTech = "{6}"
 save_dir = "{7}"
-mode = "debug"
 dim1 = [0, 0]  # Default value for dim1
 
 gen_contexts(
@@ -72,7 +71,6 @@ gen_contexts(
     secretKeyDist="UNIFORM_TERNARY",
     rescaleTech=rescaleTech,
     save_dir="{7}",
-    mode="debug",
     dim1=[0, 0],  # Default value for dim1
 )
 """.format(maxLevelsRemaining, logBsSlots, logN, dnum, levelBudget[0], levelBudget[1], rescaleTech, path)

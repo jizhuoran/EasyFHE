@@ -1,5 +1,6 @@
 from enum import Enum
 from .bs_context import *
+from .config import *
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
@@ -11,7 +12,7 @@ class LargeScalingFactorConstants(Enum):
 
 
 class Context:
-    def __init__(self, BsContext_content_map, gpufhe_content_map, autoLoadAndSetConfig):
+    def __init__(self, BsContext_content_map, gpufhe_content_map, config):
         self.L = get_item("L", gpufhe_content_map)
         self.dnum = get_item("dnum", gpufhe_content_map)
         self.alpha = get_item("alpha", gpufhe_content_map)
@@ -149,7 +150,7 @@ class Context:
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
 
-        self.autoLoadAndSetConfig=autoLoadAndSetConfig
+        self.config = config
         self.inBS = False
 
     def to_cuda(self):
@@ -200,11 +201,11 @@ class Context:
             i = self.N // 2 + i
         return i
 
-   #  Method to retrieve the scaling factor of level l.
-   #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
-   #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
-   #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
-   #  @return the scaling factor.
+    #  Method to retrieve the scaling factor of level l.
+    #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
+    #  @param l For FLEXIBLEAUTO scaling technique the level whose scaling factor we want to learn.
+    #  Levels start from 0 (no scaling done - all towers) and go up to K-1, where K is the number of towers supported.
+    #  @return the scaling factor.
     def GetScalingFactorReal(self, cur_limbs= None):
         if cur_limbs is None:
             cur_limbs = self.L
@@ -239,3 +240,42 @@ class Context:
             return self.dmoduliQ[l]
         return self.approxSF
 
+    def get_rotation_key(self, rot_index):
+        if rot_index in self.left_rot_key_map:
+            return self.left_rot_key_map[rot_index]
+        else:
+            return [
+                torch.tensor(v, dtype=torch.uint64, device="cuda")
+                for v in self.total_left_rot_key_map[rot_index]
+            ]
+
+    def get_precompute_auto(self, key):
+        if key in self.precompute_auto_map:
+            return self.precompute_auto_map[key]
+        else:
+            for k, v in self.slots_precompute_auto_map.items():
+                if key in v:
+                    return torch.tensor(v[key], dtype=torch.int32, device="cuda")
+        assert False and "Key not found in precompute_auto_map"
+
+    def load_rotation_keys(self, key_name):
+        if not self.config.AUTO_LOAD_KEYS:
+            print("AUTO_LOAD_KEYS is disabled. Do not call this function.")
+            return
+        assert str(key_name) in self.slots_left_rot_key_map
+        assert str(key_name) in self.slots_precompute_auto_map
+        for key in self.slots_left_rot_key_map[str(key_name)]:
+            if key not in self.left_rot_key_map:
+                self.left_rot_key_map[key] = [
+                    torch.tensor(v, dtype=torch.uint64, device="cuda")
+                    for v in self.total_left_rot_key_map[key]
+                ]
+        for key, value in self.slots_precompute_auto_map[str(key_name)].items():
+            self.precompute_auto_map[key] = torch.tensor(
+                value, dtype=torch.int32, device="cuda"
+            )
+
+    def load_bootstrapping_context(self, logBsSlots):
+        self.BsContext = self.BsContext_map[str(logBsSlots)]
+        self.BsContext.to_cuda()
+        self.load_rotation_keys(logBsSlots)
