@@ -4,7 +4,7 @@ import warnings
 from .ciphertext import *
 from . import functional as F
 from . import hybrid_keyswitch
-from .decorator_factory import decorator_factory
+from .dev_tools.decorator_factory import decorator_factory
 
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
@@ -491,7 +491,8 @@ def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cr
         return _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
     else:
         raise ValueError 
-    
+
+
 @decorator_factory
 def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
     return _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
@@ -866,7 +867,6 @@ def pre_encode(x, slots):
     import cmath
 
     inverse = x
-    pt_encode = []
 
     N = 1 << 16
     M = N << 1
@@ -915,7 +915,7 @@ def pre_encode(x, slots):
     inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64)
     max_encoded_value = np.max(np.abs(inverse_array))
 
-    pre_encode = PreEncodeValues(
+    encoded_val = PreEncodeValues(
         np.pad(
             x,
             pad_width=(0, slots - len(x)),
@@ -926,12 +926,13 @@ def pre_encode(x, slots):
         inverse_array,
         max_encoded_value,
     )
-    return pre_encode
+    return encoded_val
 
 
 @decorator_factory
 def encode(
     x,
+    name,
     level,
     slots,
     cryptoContext

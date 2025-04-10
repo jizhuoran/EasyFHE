@@ -204,6 +204,8 @@ def try_load_context(
                 openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
                     debug_keys, 1 << logBsSlots, level_budget
                 )
+                openfhe_boot_contexts[str(logBsSlots)].config = cryptoContext.config # todo: update homo_double_bs? and homo_bootstrap?
+
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
@@ -211,7 +213,7 @@ def try_load_context(
 
 def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array(
-        [bs_cipher.cv[0].cpu().numpy(), bs_cipher.cv[1].cpu().numpy()]
+        [bs_cipher.cv[0][:bs_cipher.cur_limbs].cpu().numpy(), bs_cipher.cv[1][:bs_cipher.cur_limbs].cpu().numpy()]
     ).reshape(-1)
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)

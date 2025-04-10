@@ -87,7 +87,7 @@ def app_example_debug(
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
     # compute golden answer
-   
+
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
     is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
@@ -102,7 +102,7 @@ def app_example_debug(
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
-   
+
     cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
@@ -228,7 +228,7 @@ def encode_test_case(
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR
 ):
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=True)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -238,7 +238,7 @@ def encode_test_case(
     ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = homo_ops.encode(x, 0, encode_slots, cryptoContext)
+    plaintext = homo_ops.encode(x, "test1", 0, encode_slots, cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -313,11 +313,12 @@ def encode_test_case(
     ############
     ## test 4 ##
     ############
+    cryptoContext.config.SAVE_MIDDLE = False
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
     pre_encode_value = homo_ops.pre_encode(x, encode_slots)
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
-    plaintext = homo_ops.encode(pre_encode_value, 0, encode_slots, cryptoContext)
+    plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, cryptoContext)
 
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 

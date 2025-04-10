@@ -4,7 +4,7 @@ from . import homo_ops
 from . import approx as approx
 from . import hybrid_keyswitch
 from . import utils
-from .decorator_factory import decorator_factory
+from .dev_tools.decorator_factory import decorator_factory
 
 
 Tensor = torch.Tensor
