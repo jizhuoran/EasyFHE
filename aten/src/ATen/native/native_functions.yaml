@@ -15974,7 +15974,7 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor inverse, Tensor inverse_internal, Tensor temp, Tensor primes, Tensor precompute_rotgroups, Tensor precompute_ksipows, int M, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, Tensor power_of_roots_shoup, Tensor power_of_roots, bool use_fft=False) -> Tensor
+- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda

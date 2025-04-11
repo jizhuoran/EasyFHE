@@ -207,7 +207,7 @@ def try_load_context(
                     debug_keys, 1 << logBsSlots, level_budget
                 )
                 openfhe_boot_contexts[str(logBsSlots)].config = cryptoContext.config
-        
+
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context

@@ -61,3 +61,10 @@ class Cipher:
         return s
 
 Plaintext = Cipher
+
+class PreEncodeValues:
+    def __init__(self, values, slots, encoded_values, max_encoded_value):
+        self.values = values
+        self.slots = slots
+        self.encoded_values = encoded_values
+        self.max_encoded_value = max_encoded_value
