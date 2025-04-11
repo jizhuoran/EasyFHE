@@ -1,9 +1,8 @@
 import os, sys, time
-sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 import torch
 import torch.fhe as fhe
-import openfhe as openfhe
+from torch.fhe.client import openfhe as openfhe
 import numpy as np
 import random, math
 from torch.fhe.ciphertext import Cipher #todo: to be removed
@@ -80,6 +79,7 @@ class Params:
 class SecureML:
     def __init__(self, params, cryptoContext):
         self.params = params
+        self.enc_data_cache = {} 
         # Generate a special vector and use it to create the dummy plaintext
         pvals = np.zeros(self.params.slots, dtype=complex) 
         for i in range(0, self.params.slots, self.params.batch):
@@ -169,8 +169,31 @@ class SecureML:
             for j in range(len(z_data[0])):
                 grad[j] += tmp * z_data[i][j]
 
+    def load_and_encrypt_data(self, cryptoContext, block_array):
+        # 在初始化时一次性读取并反序列化所有密文数据
+        for iter in range(self.params.iter_num):
+            block_id = block_array[iter]
+            enc_data = [] 
+            for i in range(self.params.cnum):
+                file_name = encData_DIR + f"/{block_id + 1}_{i + 1}_cipher.txt"
+                if not os.path.exists(file_name):
+                    raise FileNotFoundError(f"File {file_name} not found.")
+                
+                try:
+                    enc_ciphertext, res = openfhe.DeserializeCiphertext(file_name, openfhe.BINARY)
+                    if not res:
+                        raise IOError(f"Could not read the ciphertext from {file_name}")
+                    data = enc_ciphertext.GetVectorOfData()
+                    cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data]
+                    enc_ciphertext = Cipher(cv, cv[0].shape[0], enc_ciphertext.GetScalingFactor(), enc_ciphertext.GetNoiseScaleDeg(), enc_ciphertext.GetSlots(), is_ext=False)
+                    enc_data.append(enc_ciphertext) 
+                except Exception as e:
+                    raise IOError(f"Error deserializing {file_name}: {e}")
+                self.enc_data_cache[block_id] = enc_data
+
+
     def encrypt_z_data(self, cryptoContext, z_data, block_array, num_iter):
-        for i in range(num_iter):  # 迭代次数
+        for i in range(self.params.iter_num):  # 迭代次数
             block_id = block_array[i]
             for j in range(self.params.cnum):
                 # 创建用于存储加密数据的复数数组
@@ -181,7 +204,7 @@ class SecureML:
                     for l in range(self.params.batch):
                         if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(z_data[0]):
                             pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][self.params.batch * j + l]
-                # enc_z_data = self.params.openfhe_context.encrypt(pz_data, 1, 0, encode_slots)
+                
                 ptxt = self.params.openfhe_context.cc.MakeCKKSPackedPlaintext(pz_data.tolist(), 1, 0, None, self.params.encode_slots)
                 ptxt.SetLength(self.params.slots)
                 enc_z_data = self.params.openfhe_context.cc.Encrypt(self.params.openfhe_context.publicKey, ptxt)
@@ -195,23 +218,10 @@ class SecureML:
                 del pz_data
 
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
-        enc_data = []
-
-        for i in range(self.params.cnum):
-            file_name = encData_DIR + f"/{block_id + 1}_{i + 1}_cipher.txt"
-            if not os.path.exists(file_name):
-                raise FileNotFoundError(f"File {file_name} not found.")
-            
-            try:
-                enc_ciphertext, res = openfhe.DeserializeCiphertext(file_name, openfhe.BINARY)
-                if not res:
-                    raise IOError(f"Could not read the ciphertext from {file_name}")
-                data = enc_ciphertext.GetVectorOfData()
-                cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data]
-                enc_ciphertext = Cipher(cv, cv[0].shape[0], enc_ciphertext.GetScalingFactor(), enc_ciphertext.GetNoiseScaleDeg(), enc_ciphertext.GetSlots(), is_ext=False)
-                enc_data.append(enc_ciphertext)
-            except Exception as e:
-                raise IOError(f"Error deserializing {file_name}: {e}")
+        # 从缓存中获取密文数据，而不是每次都反序列化
+        enc_data = self.enc_data_cache.get(block_id)
+        if enc_data is None:
+            raise ValueError(f"Encrypted data for block {block_id} not found.")
             
 
         enc_ip = self.inner_product(cryptoContext, enc_data, enc_v_data)
@@ -535,6 +545,7 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, fi
     if is_encrypted:
         print("Encrypting data...")
         secure_ml.encrypt_z_data(cryptoContext, z_data, block_array, num_iter)
+        secure_ml.load_and_encrypt_data(cryptoContext, block_array)
         print("Encryption finished!")
     elapsed_time = time.time() - start_time
     print(f"Encryption time: {elapsed_time:.4f} seconds")
