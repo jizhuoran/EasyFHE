@@ -97,7 +97,6 @@ class Context:
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
                 _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
-                _BsContext.config = config #todo: check if necessary?
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
