@@ -5,7 +5,6 @@ import torch.fhe as fhe
 from torch.fhe.client import openfhe as openfhe
 import numpy as np
 import random, math
-from torch.fhe.ciphertext import Cipher #todo: to be removed
 
 DATA_DIR = os.environ["DATA_DIR"]
 encData_DIR = DATA_DIR + "/helr/encData/"
@@ -157,8 +156,8 @@ class SecureML:
         for iter in range(self.params.iter_num):
             block_id = block_array[iter]
             if block_id in self.enc_data_cache:
-                continue  # 如果已经加密过，则跳过
-                
+                continue  
+                    
             enc_data = []
             for j in range(self.params.cnum):
                 pz_data = np.zeros(self.params.slots, dtype=np.complex128)
@@ -168,17 +167,10 @@ class SecureML:
                         if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(z_data[0]):
                             pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][self.params.batch * j + l]
                 
-                ptxt = openfhe_context.cc.MakeCKKSPackedPlaintext(pz_data.tolist(), 1, 0, None, self.params.encode_slots)
-                ptxt.SetLength(self.params.slots)
-                enc_z = openfhe_context.cc.Encrypt(openfhe_context.publicKey, ptxt)
-                
-                # 转换为Cipher对象
-                data = enc_z.GetVectorOfData()
-                cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data]
-                enc_ciphertext = Cipher(cv, cv[0].shape[0], enc_z.GetScalingFactor(), enc_z.GetNoiseScaleDeg(), enc_z.GetSlots(), is_ext=False)
-                
-                enc_data.append(enc_ciphertext)
-                
+                pz_data_tensor = torch.tensor(pz_data, dtype=torch.float64).cuda()             
+                enc_z = openfhe_context.encrypt(pz_data_tensor, 1, 0, self.params.encode_slots)
+                enc_data.append(enc_z)
+                    
             self.enc_data_cache[block_id] = enc_data
 
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
