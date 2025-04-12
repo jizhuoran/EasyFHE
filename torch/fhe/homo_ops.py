@@ -969,7 +969,7 @@ def encode(
     else:
         scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
-    assert math.log2(int(middle_value.max_encoded_value * scaling_factor)) < 61 #MAX_BITS_IN_WORD
+    assert middle_value.max_encoded_value < 1e-20 or math.log2(int(middle_value.max_encoded_value * scaling_factor)) < 61 #MAX_BITS_IN_WORD
 
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
