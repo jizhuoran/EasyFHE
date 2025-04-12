@@ -136,7 +136,6 @@ class SecureML:
                 tmp = fhe.homo_rotate(enc_grad[i], 1 << l, cryptoContext)
                 enc_grad[i] = fhe.homo_add(enc_grad[i], tmp, cryptoContext)
 
-
     def innerproduct(self, vec1, vec2, size):
         ip = 0.0
         for i in range(size):  
@@ -146,8 +145,7 @@ class SecureML:
     def plain_inner_product(self, ip, z_data, v_data, factor_num, block_size):
         for i in range(block_size):
             ip[i] = self.innerproduct(v_data, z_data[i][:factor_num], factor_num)  
-
-    
+  
     def plain_sigmoid(self, grad, z_data, ip, gamma, factor_num, sample_num):
         for i in range(sample_num):
             tmp = self.params.degree3[0] + self.params.degree3[1] * ip[i] + self.params.degree3[3] * ip[i] ** 3
@@ -155,31 +153,13 @@ class SecureML:
             for j in range(len(z_data[0])):
                 grad[j] += tmp * z_data[i][j]
 
-    def load_and_encrypt_data(self, cryptoContext, block_array):
+    def load_and_encrypt_data(self, cryptoContext, block_array, z_data, openfhe_context):
         for iter in range(self.params.iter_num):
             block_id = block_array[iter]
-            enc_data = [] 
-            for i in range(self.params.cnum):
-                file_name = encData_DIR + f"/{block_id + 1}_{i + 1}_cipher.txt"
-                if not os.path.exists(file_name):
-                    raise FileNotFoundError(f"File {file_name} not found.")
+            if block_id in self.enc_data_cache:
+                continue  # 如果已经加密过，则跳过
                 
-                try:
-                    enc_ciphertext, res = openfhe.DeserializeCiphertext(file_name, openfhe.BINARY)
-                    if not res:
-                        raise IOError(f"Could not read the ciphertext from {file_name}")
-                    data = enc_ciphertext.GetVectorOfData()
-                    cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data]
-                    enc_ciphertext = Cipher(cv, cv[0].shape[0], enc_ciphertext.GetScalingFactor(), enc_ciphertext.GetNoiseScaleDeg(), enc_ciphertext.GetSlots(), is_ext=False)
-                    enc_data.append(enc_ciphertext) 
-                except Exception as e:
-                    raise IOError(f"Error deserializing {file_name}: {e}")
-                self.enc_data_cache[block_id] = enc_data
-
-
-    def encrypt_z_data(self, cryptoContext, z_data, block_array, num_iter,openfhe_context):
-        for i in range(self.params.iter_num):  
-            block_id = block_array[i]
+            enc_data = []
             for j in range(self.params.cnum):
                 pz_data = np.zeros(self.params.slots, dtype=np.complex128)
                 
@@ -190,14 +170,16 @@ class SecureML:
                 
                 ptxt = openfhe_context.cc.MakeCKKSPackedPlaintext(pz_data.tolist(), 1, 0, None, self.params.encode_slots)
                 ptxt.SetLength(self.params.slots)
-                enc_z_data = openfhe_context.cc.Encrypt(openfhe_context.publicKey, ptxt)
-
-                file_name = encData_DIR + f"/{block_id + 1}_{j + 1}_cipher.txt"
+                enc_z = openfhe_context.cc.Encrypt(openfhe_context.publicKey, ptxt)
                 
-                if not openfhe.SerializeToFile(file_name, enc_z_data, openfhe.BINARY):
-                    raise IOError(f"Error writing serialization of ciphertext to {file_name}")
-
-                del pz_data
+                # 转换为Cipher对象
+                data = enc_z.GetVectorOfData()
+                cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data]
+                enc_ciphertext = Cipher(cv, cv[0].shape[0], enc_z.GetScalingFactor(), enc_z.GetNoiseScaleDeg(), enc_z.GetSlots(), is_ext=False)
+                
+                enc_data.append(enc_ciphertext)
+                
+            self.enc_data_cache[block_id] = enc_data
 
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
         enc_data = self.enc_data_cache.get(block_id)
@@ -505,8 +487,9 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, fi
     start_time = time.time()
     if is_encrypted:
         print("Encrypting data...")
-        secure_ml.encrypt_z_data(cryptoContext, z_data, block_array, num_iter, openfhe_context)
-        secure_ml.load_and_encrypt_data(cryptoContext, block_array)
+        # secure_ml.encrypt_z_data(cryptoContext, z_data, block_array, num_iter, openfhe_context)
+        # secure_ml.load_and_encrypt_data(cryptoContext, block_array)
+        secure_ml.load_and_encrypt_data(cryptoContext, block_array, z_data, openfhe_context)
         print("Encryption finished!")
     elapsed_time = time.time() - start_time
     print(f"Encryption time: {elapsed_time:.4f} seconds")
