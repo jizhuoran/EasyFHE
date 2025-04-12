@@ -1,4 +1,4 @@
-import os, sys, datetime
+import os, sys, datetime, time
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 from examples.resnet20.src.convs import *
@@ -320,11 +320,13 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         )
 
         print("start processing image ", i, "time: ", datetime.datetime.now())
+        start_time = time.time()
         firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext)
         resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext)
         resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext)
         resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext)
         finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext)
+        print("time: ", time.time() - start_time)
         print("after processing image ", i, "time: ", datetime.datetime.now())
         try:
             clear_result = openfhe_context.decrypt(finalRes)
@@ -375,13 +377,10 @@ def resnet20( ):
                        levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
                        config=config))
 
-    cryptoContext.PRELOAD_ALL = True # poor workaround, should be fixed in the future, need to be set to False/True now
-
-    encode_weight_path = (
-        he_res20_context_.weight_dir
-        + "/weight.pkl"
-    )
-
+    # encode_weight_path = (he_res20_context_.weight_dir + "/weight.pkl")
+    # cryptoContext.pre_encode_type = "end"
+    encode_weight_path = (he_res20_context_.weight_dir + "/encode_20250412_221730.pkl")
+    cryptoContext.pre_encode_type = "middle"
     load_weight(encode_weight_path, cryptoContext)
 
     print("start executeResNet20")
