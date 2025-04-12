@@ -49,7 +49,7 @@ def Sort(input_length=8):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
     # generate context
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                        levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
@@ -95,14 +95,10 @@ def Sort(input_length=8):
                     else:
                         mask3[i] = 1
                         mask4[l] = 1
-            mask1 = torch.tensor(mask1, dtype=torch.float64).cuda()
-            mask2 = torch.tensor(mask2, dtype=torch.float64).cuda()
-            mask3 = torch.tensor(mask3, dtype=torch.float64).cuda()
-            mask4 = torch.tensor(mask4, dtype=torch.float64).cuda()
-            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1, 1, 0, input_length, True, cryptoContext), cryptoContext)
-            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2, 1, 0, input_length, True, cryptoContext), cryptoContext)
-            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3, 1, 0, input_length, True, cryptoContext), cryptoContext)
-            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4, 1, 0, input_length, True, cryptoContext), cryptoContext)
+            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1,"mask1", 0, input_length, cryptoContext), cryptoContext)
+            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2,"mask2", 0, input_length, cryptoContext), cryptoContext)
+            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3,"mask3", 0, input_length, cryptoContext), cryptoContext)
+            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4,"mask4", 0, input_length, cryptoContext), cryptoContext)
             arr5_1 = fhe.homo_rotate(arr1,-j,cryptoContext)
             arr5_2 = fhe.homo_rotate(arr3,-j,cryptoContext)
             arr6_1 = fhe.homo_rotate(arr2,j,cryptoContext)

@@ -87,7 +87,7 @@ autoLoadAndSetConfig = True # note: currently only support True
 
 DATA_DIR = os.environ["DATA_DIR"]
 
-config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=False)
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                          levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR, config=config))
@@ -101,9 +101,9 @@ cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
-x1 = torch.tensor(x1, device="cuda")
-ptx = fhe.encode(x1, 1, 0, encode_slots, False, cryptoContext)
+ptx = fhe.encode(x1, "x1", 0, encode_slots, cryptoContext)
 cipher1 = openfhe_context.encrypt(x1, 1, openfhe_context.depth - 1, encode_slots)
+x1 = torch.tensor(x1, device="cuda")
 
 cipher_inner_product = homo_inner_product(cipher,cipher1,cryptoContext)
 torch.cpu.synchronize()

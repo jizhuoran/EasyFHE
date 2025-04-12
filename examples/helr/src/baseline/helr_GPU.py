@@ -85,8 +85,7 @@ class SecureML:
         for i in range(0, self.params.slots, self.params.batch):
             pvals[i] = 1.0
         # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
-        pvals = torch.tensor(pvals, dtype=torch.float64).cuda()
-        self.dummy = fhe.encode(pvals, 1, 0, self.params.encode_slots, False, cryptoContext)
+        self.dummy = fhe.encode(pvals, "dummy", 0, self.params.encode_slots, cryptoContext)
 
         # todo: 为了支持fixedmanual模式，每个乘法(包括明密文和密密文)后面都要调用一个homo_rescale 
 
@@ -251,7 +250,7 @@ class SecureML:
         zero_vec = np.zeros(self.params.slots, dtype=complex)
         input_vec = zero_vec
 
-        # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, False, cryptoContext) #todo: ??
+        # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, False, cryptoContext) #todo: ?? (deprecated api
 
         for i in range(self.params.cnum):
             enc_w_data[i] = self.params.openfhe_context.encrypt(input_vec, 1, 0, self.params.encode_slots)
