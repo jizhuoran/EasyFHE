@@ -1,7 +1,8 @@
 import functools
-from .compiler.compiler import frontend
 from .debug_tool import *
-from .utils import call_counter, profile_python_function
+from .encode_tool import save_encode
+from ..compiler.compiler import frontend
+from ..utils import call_counter, profile_python_function
 
 def decorator_factory(func):
     @functools.wraps(func)

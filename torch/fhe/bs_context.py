@@ -124,11 +124,6 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-        # for key, value in self.QplusP_map.items():
-        #     self.QplusP_map[key] = value.cuda()
-        # for key, value in self.QmuplusPmu_map.items():
-        #     self.QmuplusPmu_map[key] = value.cuda()
-
         for i in range(len(self.m_U0hatTPreFFT)):
             for j in range(len(self.m_U0hatTPreFFT[i])):
                 self.m_U0hatTPreFFT[i][j].cv = [self.m_U0hatTPreFFT[i][j].cv[0].cuda()]

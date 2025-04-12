@@ -8,6 +8,7 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 
 DATA_DIR = os.environ["DATA_DIR"]
+LOG_DIR = os.environ["LOG_DIR"]
 
 maxLevelsRemaining = 3
 logBsSlots_list = [12]
@@ -20,7 +21,7 @@ rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = DATA_DIR
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
-config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True)
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True, COMPILER=True)
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),
@@ -83,7 +84,7 @@ cryptoContext.load_rotation_keys(logBsSlots)
 # with torch.profiler.profile(
 #         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
 #         on_trace_ready=torch.profiler.tensorboard_trace_handler(
-#             "/home/zrji/log"
+#             LOG_DIR
 #         ),
 #         record_shapes=True,
 #         profile_memory=True,
