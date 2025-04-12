@@ -563,7 +563,7 @@ def _homo_rescale_internal(ct, levels, cryptoContext):
     )
 
 @decorator_factory
-def homo_rescale_internal(ct, levels, cryptoContext):
+def force_rescale(ct, levels, cryptoContext):
     return _homo_rescale_internal(ct, levels, cryptoContext)
 
 @decorator_factory

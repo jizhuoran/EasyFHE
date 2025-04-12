@@ -46,9 +46,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
         ciphertext = homo_ops.homo_mul_scalar_double(
             ciphertext, adjustment_factor, cryptoContext
         )
-        ciphertext = homo_ops.homo_rescale_internal(
-            ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-        )
+        ciphertext = homo_ops.force_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ciphertext = assign_scaling_factor(ciphertext, target_sf, cryptoContext)
 
     else:
@@ -56,9 +54,7 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
         # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
         cnst = math.pow(2, -correction)
         ciphertext = homo_ops.homo_mul_scalar_double(ciphertext, cnst, cryptoContext)
-        ciphertext = homo_ops.homo_rescale_internal(
-            ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-        )
+        ciphertext = homo_ops.force_rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return ciphertext
 
 
@@ -101,9 +97,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
 
     for s in loop_range:
         if not s == loop_range[0]:
-            result = homo_ops.homo_rescale_internal(
-                result, BASE_NUM_LEVELS_TO_DROP, cryptoContext
-            )
+            result = homo_ops.force_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         if s == loop_range[-1] and params.layers_rem:
             g = params.giant_step_rem
             b = params.baby_step_rem
@@ -277,7 +271,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     # Increasing the modulus
 
     tmp = ciphertext
-    tmp = homo_ops.homo_rescale_internal(tmp, tmp.noise_deg - 1, cryptoContext)
+    tmp = homo_ops.force_rescale(tmp, tmp.noise_deg - 1, cryptoContext)
     tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
 
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
@@ -295,7 +289,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
     if slots == M // 4:  # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
-        raised = homo_ops.homo_rescale_internal(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
@@ -308,8 +302,8 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         ctxtEncI = mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
 
         if ctxtEnc.noise_deg == 2: # noise_deg of ctxtEnc and ctxtEncI should be the same
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.homo_rescale_internal(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEncI = homo_ops.force_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -323,8 +317,8 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         )
 
         if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.homo_rescale_internal(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEncI = homo_ops.force_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
         ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
 
@@ -341,7 +335,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # In the case of FLEXIBLEAUTO, we need one extra tower
         # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
         if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
@@ -360,7 +354,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------
         # Running CoeffsToSlots
         # ---------------------
-        raised = homo_ops.homo_rescale_internal(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
 
 
@@ -378,7 +372,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
 
         if ctxtEnc.noise_deg ==2 :
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, 1, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, 1, cryptoContext)
 
 
 
@@ -393,7 +387,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
 
         if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
 
 
@@ -409,7 +403,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # In the case of FLEXIBLEAUTO, we need one extra tower
         # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
         if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.homo_rescale_internal(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
@@ -456,8 +450,7 @@ def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
 
     # Step 3: Bootstrap the initial ciphertext.
     ctInitialBootstrap = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
-    ctInitialBootstrap = homo_ops.homo_rescale_internal(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1,
-                                                        cryptoContext)
+    ctInitialBootstrap = homo_ops.force_rescale(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1, cryptoContext)
 
     # Step 4: Scale up by powerOfTwoModulus.
     ctInitialBootstrap = homo_ops.homo_mul_scalar_int(ctInitialBootstrap, powerOfTwoModulus, cryptoContext)
@@ -477,8 +470,7 @@ def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
 
     # Step 8: Bootstrap the error.
     ctBootstrappingError = eval_bootstrap(ctBootstrappingError, L0, logBsSlots, cryptoContext)
-    ctBootstrappingError = homo_ops.homo_rescale_internal(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP,
-                                                          cryptoContext)
+    ctBootstrappingError = homo_ops.force_rescale(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
     # Step 9: Subtract the bootstrapped error from the initial bootstrap to get even lower error.
     finalCiphertext = homo_ops.homo_sub(ctInitialBootstrap, ctBootstrappingError, cryptoContext)
