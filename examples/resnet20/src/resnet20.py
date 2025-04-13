@@ -1,11 +1,13 @@
 import os, sys, datetime, time
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
-from examples.resnet20.src.convs import *
-import torch.fhe as fhe
-from examples.utils import approx
 import torch
 import numpy as np
+import torch.fhe as fhe
+from examples.utils import approx
+from examples.resnet20.src.convs import *
+from huggingface_hub import hf_hub_download
+import zipfile
 
 DATA_DIR = os.environ["DATA_DIR"]
 
@@ -345,6 +347,37 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         print("ground truth: ", label, "prediction: ", max_element_idx)
 
 
+def load_encode_pkl(file_name, he_res20_context_):
+    repo_id = "catslab/res20-ver_LowMem_encode_middle"
+    hf_token = "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"
+    pkl_path = os.path.join(he_res20_context_.weight_dir, file_name+".pkl")
+    zip_path = os.path.join(he_res20_context_.weight_dir, file_name+".zip")
+
+    if os.path.exists(pkl_path):
+        print(">> Found cached pkl, skipping download.")
+        return
+
+    if os.path.exists(zip_path):
+        print(">> Found cached encode zip.")
+    else:
+        print(f">> {file_name}.pkl not found, downloading zip from Hugging Face private repo...")
+
+        zip_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=file_name + ".zip",
+            repo_type="model",
+            token=hf_token,
+            local_dir=he_res20_context_.weight_dir,
+            # local_dir_use_symlinks=False
+        )
+        print(">> Download complete.")
+
+    print(">> Extracting zip...")
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(he_res20_context_.weight_dir)
+    os.remove(zip_path)
+    print(">> Extraction complete.")
+
 
 def resnet20( ):
     # generate context
@@ -354,7 +387,7 @@ def resnet20( ):
         diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
         maxLevelsRemaining +=diff
     rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
-                            1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+                         1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
 
     maxLevelsRemaining = 14
     logBsSlots_list = [12, 13, 14]
@@ -374,14 +407,18 @@ def resnet20( ):
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                       levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
-                       config=config))
+                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                             config=config))
 
-    # encode_weight_path = (he_res20_context_.weight_dir + "/weight.pkl")
-    # cryptoContext.pre_encode_type = "end"
-    encode_weight_path = (he_res20_context_.weight_dir + "/encode_20250412_221730.pkl")
+
+
     cryptoContext.pre_encode_type = "middle"
-    load_weight(encode_weight_path, cryptoContext)
+    pkl_path = None
+    if config.SAVE_MIDDLE==False:
+        file_name = "encode_20250412_221730"
+        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        load_encode_pkl(file_name, he_res20_context_)
+    load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
     executeResNet20(he_res20_context_, cryptoContext, openfhe_context)
