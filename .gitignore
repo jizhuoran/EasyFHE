@@ -8,12 +8,6 @@
 
 ## PyTorch
 
-torch/fhe/data
-torch/fhe/example/data
-
-.history
-
-
 .coverage
 coverage.xml
 .dmypy.json
@@ -155,7 +149,6 @@ torchgen/packaged/*
 .ipynb_checkpoints
 
 # Editor temporaries
-*.pkl
 *.swa
 *.swb
 *.swc
@@ -396,3 +389,6 @@ android/pytorch_android_torchvision/.cxx
 .arcconfig
 .stable_pyre_client
 .pyre_client
+
+# GPU-FHE pickle files
+*.pkl

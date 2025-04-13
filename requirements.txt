@@ -21,4 +21,4 @@ sympy>=1.13.3
 types-dataclasses
 typing-extensions>=4.10.0
 termcolor>=1.1.0
-gpufhe-wrapper==0.0.5
+gpufhe-wrapper
