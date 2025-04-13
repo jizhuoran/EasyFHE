@@ -113,28 +113,46 @@ def pre_encode(x, slots):
     )
     return encoded_val
 
-encoded_vals = {}
+middle_encoded_vals = {}
+end_encoded_vals = {}
 
-def save_encode(func):
+def save_middle_encode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if func.__name__ == "encode":
             input, name, _, slots, _ = args
             assert isinstance(input, list) or isinstance(input, np.ndarray)
             encoded_val = pre_encode(input, slots)
-            encoded_vals[name] = encoded_val
+            middle_encoded_vals[name] = encoded_val
         return func(*args, **kwargs)
     return wrapper
 
+def save_end_encode(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        res = func(*args, **kwargs)
+        if func.__name__ == "encode":
+            input, name, _, slots, _ = args
+            end_encoded_vals[name] = res
+        return res
+        
+    return wrapper
 
 @atexit.register
 def save_encoded_vals():
-    if len(encoded_vals) > 0:
+    if len(middle_encoded_vals) > 0:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_path = DATA_DIR + f"/encode_{timestamp}.pkl"
         print("saving pre-encoded vals to {}".format(file_path))
         with open(file_path, "wb") as f:
-            pickle.dump(encoded_vals, f)
+            pickle.dump(middle_encoded_vals, f)
+    
+    if len(end_encoded_vals) > 0:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        file_path = DATA_DIR + f"/full_encode_{timestamp}.pkl"
+        print("saving pre-encoded vals to {}".format(file_path))
+        with open(file_path, "wb") as f:
+            pickle.dump(end_encoded_vals, f)
 
 
 
