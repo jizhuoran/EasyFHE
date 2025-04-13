@@ -1,7 +1,7 @@
 import functools
-from .debug_tool import *
-from .encode_tool import save_encode
 from ..compiler.compiler import frontend
+from .debug_tool import *
+from .encode_tool import save_middle_encode, save_end_encode
 from ..utils import call_counter, profile_python_function
 
 def decorator_factory(func):
@@ -28,6 +28,10 @@ def decorator_factory(func):
                 decorators.append(frontend)
             if config.CHECK_CIPHER:
                 decorators.append(check_meta_equal)
+            if config.SAVE_MIDDLE:
+                decorators.append(save_middle_encode)
+            if config.SAVE_END:
+                decorators.append(save_end_encode)
             for dec in decorators:
                 func1 = dec(func1)
         result = func1(*args, **kwargs)

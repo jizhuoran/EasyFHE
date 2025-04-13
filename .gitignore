@@ -8,12 +8,6 @@
 
 ## PyTorch
 
-torch/fhe/data
-torch/fhe/example/data
-
-.history
-
-
 .coverage
 coverage.xml
 .dmypy.json
@@ -68,9 +62,7 @@ test/forward_backward_compatibility/nightly_schemas.txt
 dropout_model.pt
 test/generated_type_hints_smoketest.py
 test/htmlcov
-test/cpp_extensions/install/
-test/cpp_extensions/open_registration_extension/install
-test/cpp_extensions/libtorch_agnostic_extension/install
+test/cpp_extensions/**/install
 test/kernel.errors.txt
 third_party/build/
 third_party/nccl/
@@ -157,7 +149,6 @@ torchgen/packaged/*
 .ipynb_checkpoints
 
 # Editor temporaries
-*.pkl
 *.swa
 *.swb
 *.swc
@@ -399,6 +390,8 @@ android/pytorch_android_torchvision/.cxx
 .stable_pyre_client
 .pyre_client
 
+# GPU-FHE pickle files
+*.pkl
 
 # app data
 !GPU-FHE/
