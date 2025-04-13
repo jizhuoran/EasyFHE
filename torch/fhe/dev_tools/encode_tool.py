@@ -135,7 +135,6 @@ def save_end_encode(func):
             input, name, _, slots, _ = args
             end_encoded_vals[name] = res
         return res
-        
     return wrapper
 
 @atexit.register

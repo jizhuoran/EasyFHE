@@ -12,7 +12,7 @@ unary_op = {
 unary_cnst_op = {
     "drop_last_elements": "homo_ops.",
     "homo_rescale": "homo_ops.",
-    "homo_rescale_internal": "homo_ops.",
+    "force_rescale": "homo_ops.",
     "homo_mul_scalar_double": "homo_ops.",
     "mod_raise": "",
     "assign_scaling_factor": "",
@@ -44,7 +44,6 @@ def print_call_counts():
 def frontend(func):
 
     if func.__name__ in unary_cnst_op:
-        print(func.__name__)
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             ct, val, cryptoContext = args
