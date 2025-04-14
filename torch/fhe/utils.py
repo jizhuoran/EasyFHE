@@ -157,7 +157,7 @@ def try_load_context(
     )
 
     if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == "debug"
+        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == True
     ):
         gen_contexts(
             maxLevelsRemaining=maxLevelsRemaining,
@@ -212,7 +212,7 @@ def try_load_context(
         return cryptoContext, openfhe_context
 
 
-def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
+def compare_gpufhe_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array(
         [bs_cipher.cv[0][:bs_cipher.cur_limbs].cpu().numpy(), bs_cipher.cv[1][:bs_cipher.cur_limbs].cpu().numpy()]
     ).reshape(-1)

@@ -211,7 +211,7 @@ else:
     clear_result = clear_result.cpu().numpy().reshape(-1)
     print("HE decryption result: ", clear_result[:10])
 
-    is_equal = utils.compare_bs_ct_with_openfhe(result, openfhe_result)
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_result)
     if is_equal:
         print("Test passed!")
     else:
