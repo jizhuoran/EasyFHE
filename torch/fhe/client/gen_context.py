@@ -35,8 +35,8 @@ def gen_contexts(
     )
 
     GPUFHE_path = save_dir + "/GPU-FHE-CONTEXT" + save_path_meta
-    debug_save_path = save_dir + "/DEBUG-GPU-FHE-CONTEXT" + save_path_meta
-    OPENFHE_path = save_dir + "/OPEN-FHE-CONTEXT" + save_path_meta
+    DEBUG_save_path = save_dir + "/DEBUG-GPU-FHE-CONTEXT" + save_path_meta
+    # OPENFHE_path = save_dir + "/OPEN-FHE-CONTEXT" + save_path_meta
 
 
     SecretKeyDist_MAP = {
@@ -117,9 +117,9 @@ def gen_contexts(
     openfheMembers["app_rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
         openfhe.BINARY
     )
-    with open(OPENFHE_path, "wb") as file:
-        pickle.dump(openfheMembers, file)
-    del openfheMembers
+    # with open(OPENFHE_path, "wb") as file:
+    #     pickle.dump(openfheMembers, file)
+    # del openfheMembers
 
     boot_cnst_map = {}
     if NO_BS == False: # need to do BS
@@ -155,7 +155,7 @@ def gen_contexts(
         debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
             openfhe.BINARY
         )
-        with open(debug_save_path, "wb") as file:
+        with open(DEBUG_save_path, "wb") as file:
             pickle.dump(debugKeys, file)
         del debugKeys
 
@@ -212,7 +212,7 @@ def gen_contexts(
         ):
             gpufheMembers[item] = getattr(gpufhe_context, item)
 
-    with open(OPENFHE_path, "rb") as file:
-        openfheMembers = pickle.load(file)
+    # with open(OPENFHE_path, "rb") as file:
+    #     openfheMembers = pickle.load(file)
     with open(GPUFHE_path, "wb") as file:
         pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)

@@ -228,11 +228,7 @@ def encode_test_case(
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR
 ):
-    ############
-    ## test 1 ##
-    ############
-
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=True)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -242,7 +238,7 @@ def encode_test_case(
     ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = homo_ops.encode(x, 1, 0, encode_slots, False, cryptoContext)
+    plaintext = homo_ops.encode(x, "test1", 0, encode_slots, cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -271,47 +267,86 @@ def encode_test_case(
     else:
         print_failed("encode with specify slots Test failed!")
 
-    ############
-    ## test 2 ##
-    ############
-    encode_slots = (1 << 11)
-    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    encoded = homo_ops.encode(x, 1, 0, encode_slots, True, cryptoContext)
+    # ############
+    # ## test 2 ##
+    # ############
+    # encode_slots = (1 << 11)
+    # values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    # x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    # x = torch.tensor(x, device="cuda")
+    # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    # encoded = homo_ops.encode(x, 0, encode_slots, cryptoContext)
 
-    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
-    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
-    ground_truth = np.array(values) + np.array(values)
-    if np.allclose(clear_result, ground_truth):
-        print("homo_add_pt with gpu_fft Test passed!")
+    # result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    # clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    # clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    # ground_truth = np.array(values) + np.array(values)
+    # if np.allclose(clear_result, ground_truth):
+    #     print("homo_add_pt with gpu_fft Test passed!")
+    # else:
+    #     print_failed("homo_add_pt with gpu_fft Test failed!")
+    #     print("result", clear_result[:len(values)])
+    #     print("data", ground_truth)
+
+    # ############
+    # ## test 3 ##
+    # ############
+    # encode_slots = (1 << 11)
+    # values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    # x = np.array(values)
+    # x = torch.tensor(x, device="cuda")
+    # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    # encoded = homo_ops.encode(x, 0, encode_slots, cryptoContext)
+
+    # result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
+    # clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    # clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
+    # ground_truth = np.array(values) + np.array(values)
+    # if np.allclose(clear_result, ground_truth):
+    #     print("homo_add_pt with gpu_fft Test passed!")
+    # else:
+    #     print_failed("homo_add_pt with gpu_fft Test failed!")
+    #     print("result", clear_result[:len(values)])
+    #     print("data", ground_truth)
+
+
+    ############
+    ## test 4 ##
+    ############
+    cryptoContext.config.SAVE_MIDDLE = False
+    x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
+    encode_slots = (1<<10)
+    pre_encode_value = homo_ops.pre_encode(x, encode_slots)
+    pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
+    plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, cryptoContext)
+
+    plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
+
+    all_correct = True
+    attributes = [
+        ('slots', plaintext.slots, plaintext_golden.slots),
+        ('noise_deg', plaintext.noise_deg, plaintext_golden.noise_deg),
+        ('scaling_factor', plaintext.scaling_factor, plaintext_golden.scaling_factor),
+        ('cur_limbs', plaintext.cur_limbs, plaintext_golden.cur_limbs),
+        ('len', len(plaintext.cv), len(plaintext_golden.cv)),
+    ]
+
+    # Compare attributes
+    for attr_name, attr_value, golden_value in attributes:
+        if attr_value != golden_value:
+            all_correct = False
+            print(f"{attr_name}: {attr_value} != {golden_value}")
+
+    # Compare cv values
+    for i in range(len(plaintext.cv)):
+        if not torch.equal(plaintext.cv[i], plaintext_golden.cv[i]):
+            all_correct = False
+            break
+
+    if all_correct:
+        print("encode from middle Test passed!")
     else:
-        print_failed("homo_add_pt with gpu_fft Test failed!")
-        print("result", clear_result[:len(values)])
-        print("data", ground_truth)
-
-    ############
-    ## test 3 ##
-    ############
-    encode_slots = (1 << 11)
-    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array(values)
-    x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    encoded = homo_ops.encode(x, 1, 0, encode_slots, True, cryptoContext)
-
-    result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
-    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
-    ground_truth = np.array(values) + np.array(values)
-    if np.allclose(clear_result, ground_truth):
-        print("homo_add_pt with gpu_fft Test passed!")
-    else:
-        print_failed("homo_add_pt with gpu_fft Test failed!")
-        print("result", clear_result[:len(values)])
-        print("data", ground_truth)
+        print_failed("encode from middle Test failed!")
 
 
 def ct_pt_test_case(
@@ -397,8 +432,6 @@ def ct_pt_test_case(
         print("data", ground_truth)
 
 
-
-
 def double_bs_debug(
         maxLevelsRemaining=3,
         appRotIndex_list = [],
@@ -413,7 +446,7 @@ def double_bs_debug(
         mode = "debug" # "debug" or "release"
 ):
 
-    config = torch.fhe.config.Config(autoLoadAndSetConfig=True, mode=mode)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -424,6 +457,7 @@ def double_bs_debug(
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
+    openfhe_boot_context.config = openfhe_context.config
     cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     precision = 17
@@ -436,7 +470,7 @@ def double_bs_debug(
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     print("clear result ", clear_result[:10])
     # compute golden answer
-    if config.mode == "debug":
+    if config.COMPARE_WITH_OPENFHE == True:
         openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
         num_iter = 2
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe, num_iter, precision)

@@ -118,6 +118,8 @@ def try_load_context(
         levelBudget_list = [[0, 0]]
         NO_BS = True
     else:
+        assert len(logBsSlots_list) == len(levelBudget_list), \
+            "ERROR: logBsSlots_list and levelBudget_list must have the same length!"
         sorted_pairs = sorted(
             zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0]
         )
@@ -204,8 +206,7 @@ def try_load_context(
                 openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
                     debug_keys, 1 << logBsSlots, level_budget
                 )
-                openfhe_boot_contexts[str(logBsSlots)].config = cryptoContext.config
-        
+
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context

@@ -43,8 +43,8 @@ def print_profiling_result():
 def profiling_single_op(
     maxLevelsRemaining=20,
     appRotIndex_list=[-1, 2],
-    logBsSlots_list=[14],
-    logN=16,
+    logBsSlots_list=[12],
+    logN=15,
     dnum=3,
     dcrtBits=59,
     firstMod=60,
@@ -87,6 +87,8 @@ def profiling_single_op(
         0.888888,
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    pre_encode_value = homo_ops.pre_encode(x, encode_slots)
+    pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
     x = torch.tensor(x, device="cuda")
     cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
     cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots)
@@ -99,25 +101,26 @@ def profiling_single_op(
         tmp_cv_ext = hybrid_keyswitch.modup_to_ext(tmp_cv, cryptoContext)
         tmp_pt = homo_ops._drop_last_elements(plaintext, plaintext.cur_limbs - limb, cryptoContext)
 
-        # perf(partial(homo_ops.encode, x, 1, limb, encode_slots, True, cryptoContext), "encode", limb, repeat_time=10)
-        perf(partial(homo_ops.homo_add, tmp_ct, tmp_ct, cryptoContext), "homo_add", limb)
-        perf(partial(homo_ops.homo_sub, tmp_ct, tmp_ct, cryptoContext), "homo_sub", limb)
-    #     perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
-    #     perf(partial(homo_ops.homo_square, tmp_ct, cryptoContext), "homo_square", limb)
-    #     perf(partial(homo_ops.homo_rescale_internal, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
-    #     perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
-    #     perf(partial(homo_ops.homo_add_scalar_int, tmp_ct, 1, cryptoContext), "homo_add_scalar_int", limb)
-    #     perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
-    #     perf(partial(homo_ops.homo_mul_scalar_int, tmp_ct, 1, cryptoContext), "homo_mul_scalar_int", limb)
-    #     perf(partial(homo_ops.homo_rotate, tmp_ct, 2, cryptoContext), "homo_rotate", limb)
-    #     perf(partial(homo_ops.homo_mul_pt, tmp_ct, tmp_pt, cryptoContext), "homo_mul_pt", limb)
-    #     perf(partial(homo_ops.homo_add_pt, tmp_ct, tmp_pt, cryptoContext), "homo_add_pt", limb)
+        # perf(partial(homo_ops.encode, x, 1, cipher.cur_limbs-limb, encode_slots, True, cryptoContext), "encode", limb, repeat_time=10)
+        perf(partial(homo_ops.encode, pre_encode_value, cipher.cur_limbs-limb, encode_slots, cryptoContext), "encode_new", limb, repeat_time=10)
+        # perf(partial(homo_ops.homo_add, tmp_ct, tmp_ct, cryptoContext), "homo_add", limb)
+        # perf(partial(homo_ops.homo_sub, tmp_ct, tmp_ct, cryptoContext), "homo_sub", limb)
+        # perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
+        # perf(partial(homo_ops.homo_square, tmp_ct, cryptoContext), "homo_square", limb)
+        # perf(partial(homo_ops.homo_rescale_internal, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
+        # perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
+        # perf(partial(homo_ops.homo_add_scalar_int, tmp_ct, 1, cryptoContext), "homo_add_scalar_int", limb)
+        # perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
+        # perf(partial(homo_ops.homo_mul_scalar_int, tmp_ct, 1, cryptoContext), "homo_mul_scalar_int", limb)
+        # perf(partial(homo_ops.homo_rotate, tmp_ct, 2, cryptoContext), "homo_rotate", limb)
+        # perf(partial(homo_ops.homo_mul_pt, tmp_ct, tmp_pt, cryptoContext), "homo_mul_pt", limb)
+        # perf(partial(homo_ops.homo_add_pt, tmp_ct, tmp_pt, cryptoContext), "homo_add_pt", limb)
 
-    #     perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
-    #     perf(partial(hybrid_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
-    #     perf(partial(hybrid_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
-    #     perf(partial(hybrid_keyswitch.key_switch_P_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
-    #     perf(partial(hybrid_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, 2, cryptoContext), "mult_rot_key_and_sum_ext", limb)
+        # perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
+        # perf(partial(hybrid_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
+        # perf(partial(hybrid_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
+        # perf(partial(hybrid_keyswitch.key_switch_P_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
+        # perf(partial(hybrid_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, 2, cryptoContext), "mult_rot_key_and_sum_ext", limb)
 
     # cipher_last = homo_ops._drop_last_elements(cipher, cipher.cur_limbs - 2, cryptoContext)
     # perf(

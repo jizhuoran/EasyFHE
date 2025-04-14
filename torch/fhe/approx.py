@@ -12,7 +12,7 @@ def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
     if cryptoContext.rescaleTech != "FIXEDMANUAL":
         target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
         if ciphertexts[target_idx].noise_deg == 2:
-            ciphertexts[target_idx] = homo_ops.homo_rescale_internal(ciphertexts[target_idx], 1, cryptoContext)
+            ciphertexts[target_idx] = homo_ops.force_rescale(ciphertexts[target_idx], 1, cryptoContext)
         for i in range(len(ciphertexts)):
             ciphertexts[i] = homo_ops.adjust_to(
                 ciphertexts[i], ciphertexts[target_idx].cur_limbs, ciphertexts[target_idx].noise_deg, ciphertexts[target_idx].scaling_factor, cryptoContext

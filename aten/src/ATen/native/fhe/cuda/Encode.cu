@@ -11,6 +11,9 @@
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
 
+#define FLOAT_TYPE double
+#define FLOAT_TYPE2 double2
+
 #include <algorithm>
 #include <vector>
 
@@ -19,6 +22,9 @@
 #define DTYPE double
 #define DTYPE2 double2
 #define MAKE_DTYPE2 make_double2
+
+
+#define BLOCK_SIZE 256
 
 namespace fhe {
 __device__ DTYPE2 mul(DTYPE2 a, DTYPE2 b) {
@@ -141,6 +147,8 @@ __global__ void scaleAndCheckOverflow(
   temp[i + slots] = (im < 0) ? (MAX_64BIT_VALUE + im) : im;
 }
 
+
+
 __global__ void compute_log_approx(
     DTYPE2* inverse,
     int slots,
@@ -185,8 +193,8 @@ __global__ void fit_to_native_vector_with_approx_kernel(
   int approx_factor = 1 << log_approx;
   val.x = val.x * scaling_factor / approx_factor;
   val.y = val.y * scaling_factor / approx_factor;
-  long long re = llround(val.x);
-  long long im = llround(val.y);
+  long long re = llroundf(val.x);
+  long long im = llroundf(val.y);
 
   re = (re < 0) ? (MAX_64BIT_VALUE + re) : re;
   im = (im < 0) ? (MAX_64BIT_VALUE + im) : im;
@@ -199,6 +207,7 @@ __global__ void fit_to_native_vector_with_approx_kernel(
                                    : (n % native_modulus[l]);
   native_vec[l * N + gap * slot] = result;
 }
+
 
 __global__ void fit_to_native_vector_kernel(
     int64_t* vec,
@@ -232,7 +241,66 @@ __global__ void mul_mod_kernel(
       moduliQ[l]; // use utils mul_mod, maybe better
 }
 
+template <typename DDTYPE>
+__global__ void new_fit_to_native_vector_kernel(
+  DDTYPE* inverse,
+  double scaling_factor,
+  int64_t big_bound,
+  int64_t bigValueHf,
+  uint64_t* native_vec,
+  uint64_t* native_modulus,
+  uint64_t* barret_ratio_ptr,
+  uint64_t* barret_k_ptr,
+  int N,
+  int slots,
+  int gap) {
+
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if(i < slots) {
+    const int l = blockIdx.y;
+    const int64_t diff = big_bound - native_modulus[l];
+    // const auto n = inverse[i];
+    int64_t re = llround(inverse[2*i] * scaling_factor);
+    int64_t im = llround(inverse[2*i + 1] * scaling_factor);
+
+    re = (re < 0) ? (MAX_64BIT_VALUE + re) : re;
+    im = (im < 0) ? (MAX_64BIT_VALUE + im) : im;
+
+    uint64_t re_ = re;
+    uint64_t im_ = im;
+
+    re_ = re_ > bigValueHf? (re_ - diff) : re_;
+    im_ = im_ > bigValueHf? (im_ - diff) : im_;
+    barret_reduction_64_64(re_, re_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
+    barret_reduction_64_64(im_, im_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
+    native_vec[l * N + gap * i] = re_;
+    native_vec[l * N + gap * (i + slots)] = im_;
+  }
+}
+
 } // namespace fhe
+
+template <typename DDTYPE>
+void new_fit_to_native_vector(
+  DDTYPE* d_vec,
+  double scaling_factor,
+  int64_t big_bound,
+  uint64_t* d_native_vec,
+    uint64_t* native_modulus,
+    uint64_t* barret_ratio_ptr,
+  uint64_t* barret_k_ptr,
+  int slots,
+  int gap,
+  int cur_limbs,
+  int N) {
+if (cur_limbs == 0)
+  return;
+auto stream = at::cuda::getCurrentCUDAStream();
+dim3 block(BLOCK_SIZE);
+dim3 grid((slots + block.x - 1) / block.x, cur_limbs);
+fhe::new_fit_to_native_vector_kernel<<<grid, block, 0, stream>>>(
+    d_vec, scaling_factor, big_bound, big_bound>>1, d_native_vec, native_modulus, barret_ratio_ptr, barret_k_ptr, N, slots, gap);
+}
 
 namespace at::native {
 static std::vector<uint64_t> crt_mult(
@@ -287,6 +355,8 @@ static void fft_special_inv_cuda(
       inverse, vals_size, factor);
   cudaDeviceSynchronize();
 }
+
+
 
 void fit_to_native_vector(
     int64_t* d_vec,
@@ -544,151 +614,155 @@ static void encode_middle_template(
       kUInt64);
 }
 
-static void encode_template(
-    const Tensor& inverse,
-    const Tensor& inverse_internal,
-    const Tensor& temp,
-    const Tensor& primes,
-    const Tensor& precompute_rotgroups,
-    const Tensor& precompute_ksipows,
-    int64_t M,
-    int64_t N,
-    int64_t cur_limbs,
-    int64_t slots,
-    int64_t noise_scale_deg,
-    DTYPE scaling_factor,
-    const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots,
-    bool use_fft,
-    Tensor& res) {
-  AT_DISPATCH_V2(
-      res.scalar_type(),
-      "encode_impl",
-      AT_WRAP([&]() {
-        auto inverse_ptr =
-            reinterpret_cast<DTYPE*>(inverse.data_ptr<DTYPE>());
-        auto inverse_internal_ptr =
-            reinterpret_cast<DTYPE2*>(inverse_internal.data_ptr<DTYPE>());
-        auto precompute_ksipows_ptr =
-            reinterpret_cast<DTYPE2*>(precompute_ksipows.data_ptr<DTYPE>());
-        auto rotGroups = reinterpret_cast<int64_t*>(
-            precompute_rotgroups.data_ptr<int64_t>());
-        auto elements_ptr =
-            reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
-        auto inverse_size = inverse.numel();
-        if (use_fft) {
-          convert_inverse(inverse_ptr, inverse_internal_ptr, inverse_size, slots);
-          fft_special_inv_cuda(
-              inverse_internal_ptr,
-              rotGroups,
-              precompute_ksipows_ptr,
-              M,
-              slots);
-        }
-        cudaDeviceSynchronize();
-        auto stream = at::cuda::getCurrentCUDAStream();
-        const int blockDim2 = 256;
-        const int gridDim2 = (slots + blockDim2 - 1) / blockDim2;
-        const int temp_size = 2 * slots;
-        int64_t* d_log_approx;
-        cudaMalloc(&d_log_approx, sizeof(int64_t));
-        fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
-            inverse_internal_ptr,
-            slots,
-            scaling_factor,
-            temp_ptr,
-            d_log_approx);
-        cudaDeviceSynchronize();
-        int* h_log_approx = new int[1];
-        cudaMemcpy(
-            h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
-        int log_approx = h_log_approx[0];
-        int gap = N / temp_size;
-        fit_to_native_vector(
-            temp_ptr,
-            MAX_64BIT_VALUE,
-            elements_ptr,
-            primes_ptr,
-            temp_size,
-            gap,
-            cur_limbs,
-            N);
-        cudaDeviceSynchronize();
-        if (noise_scale_deg > 1) {
-          // todo: need optimize
-          scale_noise_degree_vector(
-              elements_ptr,
-              primes_ptr,
-              primes.cpu().data_ptr<uint64_t>(),
-              cur_limbs,
-              N,
-              noise_scale_deg,
-              scaling_factor);
-        }
-        if (log_approx > 0) {
-          // todo: need optimize
-          scale_log_approx_vector(
-              elements_ptr,
-              primes_ptr,
-              primes.cpu().data_ptr<uint64_t>(),
-              log_approx,
-              cur_limbs,
-              N);
-        }
-        cudaDeviceSynchronize();
-        NTT_impl(
-            elements_ptr,
-            elements_ptr,
-            cur_limbs,
-            N,
-            power_of_roots_shoup.data_ptr<uint64_t>(),
-            primes.data_ptr<uint64_t>(),
-            power_of_roots.data_ptr<uint64_t>());
-        cudaDeviceSynchronize();
-        C10_CUDA_KERNEL_LAUNCH_CHECK();
-      }),
-      kUInt64);
-}
+// static void encode_template(
+//     const Tensor& inverse,
+//     const Tensor& inverse_internal,
+//     const Tensor& temp,
+//     const Tensor& primes,
+//     const Tensor& precompute_rotgroups,
+//     const Tensor& precompute_ksipows,
+//     int64_t M,
+//     int64_t N,
+//     int64_t cur_limbs,
+//     int64_t slots,
+//     int64_t noise_scale_deg,
+//     DTYPE scaling_factor,
+//     const Tensor& power_of_roots_shoup,
+//     const Tensor& power_of_roots,
+//     bool use_fft,
+//     Tensor& res) {
+//   AT_DISPATCH_V2(
+//       res.scalar_type(),
+//       "encode_impl",
+//       AT_WRAP([&]() {
+//         auto inverse_ptr =
+//             reinterpret_cast<DTYPE*>(inverse.data_ptr<DTYPE>());
+//         auto inverse_internal_ptr =
+//             reinterpret_cast<DTYPE2*>(inverse_internal.data_ptr<DTYPE>());
+//         auto precompute_ksipows_ptr =
+//             reinterpret_cast<DTYPE2*>(precompute_ksipows.data_ptr<DTYPE>());
+//         auto rotGroups = reinterpret_cast<int64_t*>(
+//             precompute_rotgroups.data_ptr<int64_t>());
+//         auto elements_ptr =
+//             reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+//         auto primes_ptr =
+//             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+//         auto temp_ptr = reinterpret_cast<int64_t*>(temp.data_ptr<int64_t>());
+//         auto inverse_size = inverse.numel();
+//         if (use_fft) {
+//           convert_inverse(inverse_ptr, inverse_internal_ptr, inverse_size, slots);
+//           fft_special_inv_cuda(
+//               inverse_internal_ptr,
+//               rotGroups,
+//               precompute_ksipows_ptr,
+//               M,
+//               slots);
+//         }
+//         cudaDeviceSynchronize();
+//         auto stream = at::cuda::getCurrentCUDAStream();
+//         const int blockDim2 = 256;
+//         const int gridDim2 = (slots + blockDim2 - 1) / blockDim2;
+//         const int temp_size = 2 * slots;
+//         int64_t* d_log_approx;
+//         cudaMalloc(&d_log_approx, sizeof(int64_t));
+//         fhe::scaleAndCheckOverflow<<<gridDim2, blockDim2, 0, stream>>>(
+//             inverse_internal_ptr,
+//             slots,
+//             scaling_factor,
+//             temp_ptr,
+//             d_log_approx);
+//         cudaDeviceSynchronize();
+//         int* h_log_approx = new int[1];
+//         cudaMemcpy(
+//             h_log_approx, d_log_approx, sizeof(int), cudaMemcpyDeviceToHost);
+//         int log_approx = h_log_approx[0];
+//         int gap = N / temp_size;
+//         fit_to_native_vector(
+//             temp_ptr,
+//             MAX_64BIT_VALUE,
+//             elements_ptr,
+//             primes_ptr,
+//             temp_size,
+//             gap,
+//             cur_limbs,
+//             N);
+//         cudaDeviceSynchronize();
+//         if (noise_scale_deg > 1) {
+//           // todo: need optimize
+//           scale_noise_degree_vector(
+//               elements_ptr,
+//               primes_ptr,
+//               primes.cpu().data_ptr<uint64_t>(),
+//               cur_limbs,
+//               N,
+//               noise_scale_deg,
+//               scaling_factor);
+//         }
+//         if (log_approx > 0) {
+//           // todo: need optimize
+//           scale_log_approx_vector(
+//               elements_ptr,
+//               primes_ptr,
+//               primes.cpu().data_ptr<uint64_t>(),
+//               log_approx,
+//               cur_limbs,
+//               N);
+//         }
+//         cudaDeviceSynchronize();
+//         NTT_impl(
+//             elements_ptr,
+//             elements_ptr,
+//             cur_limbs,
+//             N,
+//             power_of_roots_shoup.data_ptr<uint64_t>(),
+//             primes.data_ptr<uint64_t>(),
+//             power_of_roots.data_ptr<uint64_t>());
+//         cudaDeviceSynchronize();
+//         C10_CUDA_KERNEL_LAUNCH_CHECK();
+//       }),
+//       kUInt64);
+// }
 
-Tensor encode_cuda(
-    const Tensor& inverse,
-    const Tensor& inverse_internal,
-    const Tensor& temp,
-    const Tensor& primes,
-    const Tensor& precompute_rotgroups,
-    const Tensor& precompute_ksipows,
-    int64_t M,
-    int64_t N,
-    int64_t cur_limbs,
-    int64_t slots,
-    int64_t noise_scale_deg,
-    DTYPE scaling_factor,
-    const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots,
-    bool use_fft) {
-  Tensor out = at::zeros({cur_limbs, N}, primes.options());
-  encode_template(
-      inverse,
-      inverse_internal,
-      temp,
-      primes,
-      precompute_rotgroups,
-      precompute_ksipows,
-      M,
-      N,
-      cur_limbs,
-      slots,
-      noise_scale_deg,
-      scaling_factor,
-      power_of_roots_shoup,
-      power_of_roots,
-      use_fft,
-      out);
-  return out;
-}
+
+
+
+
+// Tensor encode_cuda(
+//     const Tensor& inverse,
+//     const Tensor& inverse_internal,
+//     const Tensor& temp,
+//     const Tensor& primes,
+//     const Tensor& precompute_rotgroups,
+//     const Tensor& precompute_ksipows,
+//     int64_t M,
+//     int64_t N,
+//     int64_t cur_limbs,
+//     int64_t slots,
+//     int64_t noise_scale_deg,
+//     DTYPE scaling_factor,
+//     const Tensor& power_of_roots_shoup,
+//     const Tensor& power_of_roots,
+//     bool use_fft) {
+//   Tensor out = at::zeros({cur_limbs, N}, primes.options());
+//   encode_template(
+//       inverse,
+//       inverse_internal,
+//       temp,
+//       primes,
+//       precompute_rotgroups,
+//       precompute_ksipows,
+//       M,
+//       N,
+//       cur_limbs,
+//       slots,
+//       noise_scale_deg,
+//       scaling_factor,
+//       power_of_roots_shoup,
+//       power_of_roots,
+//       use_fft,
+//       out);
+//   return out;
+// }
 
 Tensor encode_middle_cuda(
     const Tensor& inverse_internal,
@@ -743,6 +817,89 @@ Tensor encode_log_approx_cuda(
   encode_log_approx_template(
       inverse_internal, slots, cur_limbs, scaling_factor, log_approx);
   return log_approx;
+}
+
+static void encode_template(
+    const Tensor& input,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    int64_t N,
+    int64_t cur_limbs,
+    int64_t slots,
+    double scaling_factor,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    Tensor& res) {
+  auto elements_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto barret_ratio_ptr =
+      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+  auto barret_k_ptr =
+      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
+
+  AT_DISPATCH_V2(
+      input.scalar_type(),
+      "encode_impl",
+      AT_WRAP([&]() {
+        auto input_ptr =
+            reinterpret_cast<scalar_t*>(input.data_ptr<scalar_t>());
+        int gap = N / (slots * 2);
+        auto stream = at::cuda::getCurrentCUDAStream();
+        dim3 block(BLOCK_SIZE);
+        dim3 grid((slots + block.x - 1) / block.x, cur_limbs);
+        fhe::new_fit_to_native_vector_kernel<<<grid, block, 0, stream>>>(
+            input_ptr,
+            scaling_factor,
+            MAX_64BIT_VALUE,
+            MAX_64BIT_VALUE >> 1,
+            elements_ptr,
+            primes_ptr,
+            barret_ratio_ptr,
+            barret_k_ptr,
+            N,
+            slots,
+            gap);
+      }),
+      kFloat,
+      kDouble);
+
+  NTT_impl(
+      elements_ptr,
+      elements_ptr,
+      cur_limbs,
+      N,
+      power_of_roots_shoup.data_ptr<uint64_t>(),
+      primes.data_ptr<uint64_t>(),
+      power_of_roots.data_ptr<uint64_t>());
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+Tensor encode_cuda(
+    const Tensor& inverse_internal,
+    int64_t N,
+    int64_t cur_limbs,
+    int64_t slots,
+    double scaling_factor,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots) {
+  Tensor out = at::zeros({cur_limbs, N}, primes.options());
+  encode_template(
+      inverse_internal,
+      primes,
+      barret_ratio,
+      barret_k,
+      N,
+      cur_limbs,
+      slots,
+      scaling_factor,
+      power_of_roots_shoup,
+      power_of_roots,
+      out);
+  return out;
 }
 
 } // namespace at::native
