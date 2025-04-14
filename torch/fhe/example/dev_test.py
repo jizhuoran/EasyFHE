@@ -481,27 +481,73 @@ def double_bs_debug(
         else:
             print_failed("BootstrapTest_logBsSlots11: Test failed!")
 
+
+def gen_CoeffSlots_matrix_test_case(
+        maxLevelsRemaining=1,
+        logBsSlots_list=[13],
+        logN=14,
+        dnum=1,
+        dcrtBits=52,
+        firstMod=56,
+        levelBudget_list=[[3,3]], # fixme: should check if levelBudget_list is too large as in eval_bootstrap_setup
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir=DATA_DIR
+):
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
+    cryptoContext, openfhe_context, _ = (
+        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               config=config))
+    # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
+    # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
+
+    precom = cryptoContext.BsContext_map["13"]
+
+    K_SPARSE = 28
+    K_UNIFORM = 512
+
+    import math
+    q = cryptoContext.moduliQ[0]
+    q_double = float(q)
+    factor = 1 << int(round(math.log2(q_double)))
+    pre = q_double / factor
+    k = K_SPARSE if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 1.0
+    scaleEnc = pre / k
+    # scaleDec = 1 / pre
+
+    lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
+    lDec = cryptoContext.L - (9 + precom.paramsEnc.level_budget + precom.paramsDec.level_budget)
+    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(scaleEnc, lEnc, cryptoContext)
+    # note: c2s_matrix should be same as m_U0hatTPreFFT
+
+
+
+
 ##############
 ## run tests #
 ##############
 
 if __name__ == "__main__":
-    for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
-        print("***********{}***********".format(rescaleTech))
-        print("==========={}============".format('app_without_bs_example_debug'))
-        app_without_bs_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_debug'))
-        app_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-        print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-        print("==========={}============".format('encode_test_case'))
-        encode_test_case(rescaleTech = rescaleTech)
-        print("==========={}============".format('ct_pt_test_case'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-        print("==========={}============".format('test_plaintext_twin'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-        print("==========={}============".format('double_bs_debug'))
-        double_bs_debug(rescaleTech = rescaleTech)
-        print("************************************".format(rescaleTech))
+    gen_CoeffSlots_matrix_test_case()
+
+
+
+    # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
+    #     print("***********{}***********".format(rescaleTech))
+    #     print("==========={}============".format('app_without_bs_example_debug'))
+    #     app_without_bs_example_debug(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('app_example_debug'))
+    #     app_example_debug(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+    #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+    #     print("==========={}============".format('encode_test_case'))
+    #     encode_test_case(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('ct_pt_test_case'))
+    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+    #     print("==========={}============".format('test_plaintext_twin'))
+    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+    #     print("==========={}============".format('double_bs_debug'))
+    #     double_bs_debug(rescaleTech = rescaleTech)
+    #     print("************************************".format(rescaleTech))
