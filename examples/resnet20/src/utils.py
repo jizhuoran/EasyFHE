@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = True
+DIRECT_LOAD = False
 
 
 if DIRECT_LOAD:
@@ -146,7 +146,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = DATA_DIR + '/weights/' + filename + '.bin'
+        filename = DATA_DIR + '/weights_Aespa/' + filename + '.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -180,7 +180,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = DATA_DIR + '/weights/fc.bin'
+        filename = DATA_DIR + '/weights_Aespa/fc.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -682,3 +682,12 @@ def rotsum_padded(input,slots,cryptoContext):
 
 def repeat(input,slots,cryptoContext):
     return fhe.homo_rotate(rotsum(input,slots,cryptoContext),-slots+1,cryptoContext)
+
+if __name__ == '__main__':
+    DATA_DIR = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa'
+    filename = 'conv1bn1-bias'
+    filename = '' + DATA_DIR + '/weights_Aespa/' + filename + '.bin'
+    if not os.path.isfile(filename):
+        print(f"无法打开文件: {filename}")
+    else:
+        print(f"success: {filename}")

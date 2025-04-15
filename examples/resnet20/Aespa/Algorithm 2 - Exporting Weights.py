@@ -2402,17 +2402,14 @@ def generate_resnet20_Aespa_bin_files():
                             np.roll(altalena(np.repeat(b.detach().numpy(), 1024)), -16384 + 1))[:16384]
     bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
-    a2_corrected016 = altalena(np.repeat(A2.detach().numpy()[:16], 1024))
-    a2_corrected1632 = altalena(np.repeat(A2.detach().numpy()[16:32], 1024))
-    a1_corrected016 = altalena(np.repeat(A.detach().numpy()[:16], 1024))
-    a1_corrected1632 = altalena(np.repeat(A.detach().numpy()[16:32], 1024))
+
 
     np.savetxt('weights_Aespa/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-a2-1.bin'.format(i), a2_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-a2-2.bin'.format(i), a2_corrected1632, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-a1-1.bin'.format(i), a1_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-a1-2.bin'.format(i), a1_corrected1632, delimiter=',')
+
+    np.savetxt('weights_Aespa/layer4-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer4-conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer4-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 256), delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 DX
 
@@ -2937,16 +2934,12 @@ def generate_resnet20_Aespa_bin_files():
                             np.roll(altalena2(np.repeat(b.detach().numpy(), 256)), -8192 + 1))[:8192]
     bias_corrected016 = altalena2(np.repeat(b.detach().numpy()[:32], 256))
     bias_corrected1632 = altalena2(np.roll(np.repeat(b.detach().numpy()[32:64], 256), -1))
-    a2_corrected016 = altalena2(np.repeat(A2.detach().numpy()[:32], 256))
-    a2_corrected1632 = altalena2(np.roll(np.repeat(A2.detach().numpy()[32:64], 256), -1))
-    a1_corrected016 = altalena2(np.repeat(A.detach().numpy()[:32], 256))
-    a1_corrected1632 = altalena2(np.roll(np.repeat(A.detach().numpy()[32:64], 256), -1))
+
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-a2-1.bin'.format(i), a2_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-a2-2.bin'.format(i), a2_corrected1632, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-a1-1.bin'.format(i), a1_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-a1-2.bin'.format(i), a1_corrected1632, delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[0]: Conv1+Bn1 DX
 
     A = model.layer3[0].downsample[1].weight / torch.sqrt(

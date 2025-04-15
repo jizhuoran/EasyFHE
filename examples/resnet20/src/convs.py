@@ -1,4 +1,5 @@
 import torch.fhe as fhe
+from torch.fhe import Cipher, Plaintext
 from utils import *
 
 
@@ -78,7 +79,6 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext):
         input = fhe.force_rescale(input, 1, cryptoContext)
     img_width=32
     padding=1
-
     digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
 
     c_rotations=[]
@@ -219,7 +219,9 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
 
     bias1=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1",cryptoContext.L-input.cur_limbs,1,16384,scale)
     bias2=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2",cryptoContext.L-input.cur_limbs,1,16384,scale)
-
+    if he_res20_ctx.aespa:
+        bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias",
+                                      cryptoContext.L - input.cur_limbs, 1, 16384, scale)
 
     for j in range(16):
         k_rows016=[]
@@ -246,7 +248,7 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
             finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
             finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
     if he_res20_ctx.aespa:
-        return finalsum016, finalsum1632,bias1,bias2
+        return finalsum016, finalsum1632,bias
     else:
         finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
         finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
@@ -285,13 +287,9 @@ def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext):
             finalsum016  = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
             finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
             finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
-
-    if he_res20_ctx.aespa:
-        return finalsum016, finalsum1632, bias1, bias2
-    else:
-        finalsum016 = fhe.homo_add_pt(finalsum016, bias1, cryptoContext)
-        finalsum1632 = fhe.homo_add_pt(finalsum1632, bias2, cryptoContext)
-        return finalsum016, finalsum1632
+    finalsum016 = fhe.homo_add_pt(finalsum016, bias1, cryptoContext)
+    finalsum1632 = fhe.homo_add_pt(finalsum1632, bias2, cryptoContext)
+    return finalsum016, finalsum1632
 
 @fhe.utils.profile_python_function
 def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
@@ -316,6 +314,8 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
 
     bias1 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     bias2 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
+    if he_res20_ctx.aespa:
+        bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     for j in range(32):
         k_rows032=[]
         k_rows3264 = []
@@ -347,7 +347,7 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
 
 
     if he_res20_ctx.aespa:
-        return finalsum032,finalsum3264,bias1,bias2
+        return finalsum032,finalsum3264,bias
     finalsum032 = fhe.homo_add_pt(finalsum032, bias1, cryptoContext)
     finalsum3264 = fhe.homo_add_pt(finalsum3264, bias2, cryptoContext)
     return finalsum032, finalsum3264
