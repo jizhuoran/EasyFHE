@@ -270,10 +270,4 @@ def get_Aespa_MutalChannel_PAF_resnet20():
     model = get_resnet20_HerPN(num_classes=10)
     model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
     model = change_all_HerPN_by_PAF_MutalChannel(model)
-    print(model)
     return model
-
-
-
-if __name__ == '__main__':
-    get_Aespa_MutalChannel_PAF_resnet20()

@@ -3,6 +3,7 @@
 """
 import torch
 import numpy as np
+import  os
 
 def build_mask(starting_padding, ending_padding, window_length, max_length):
     mask = []
@@ -1788,6 +1789,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt('weights_Aespa/conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[0]: Conv1+Bn1
     temp_PAF = model.layer1[0].HerPN1
     A = temp_PAF.a1.detach()
@@ -1860,7 +1862,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer1-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer1-conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer1-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[0]: Conv2+Bn2
     temp_PAF = model.layer1[0].HerPN2
     A = temp_PAF.a1.detach()
@@ -1932,7 +1934,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer1-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer1-conv2bn2-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer1-conv2bn2-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv1+Bn1
     temp_PAF = model.layer1[1].HerPN1
     A = temp_PAF.a1.detach()
@@ -2003,6 +2005,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer2-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer2-conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt('weights_Aespa/layer2-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv2+Bn2
 
     temp_PAF = model.layer1[1].HerPN1
@@ -2075,7 +2078,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer2-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer2-conv2bn2-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer2-conv2bn2-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[2]: Conv1+Bn1
     temp_PAF = model.layer1[2].HerPN1
     A = temp_PAF.a1.detach()
@@ -2147,6 +2150,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer3-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer3-conv1bn1-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt('weights_Aespa/layer3-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
 
     ## Layer1[2]: Conv2+Bn2
     temp_PAF = model.layer1[2].HerPN2
@@ -2219,7 +2223,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer3-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     np.savetxt('weights_Aespa/layer3-conv2bn2-a2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer3-conv2bn2-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 SX DownsamplingFast
     # Dispari sempre 0, riempe i primi 32 mod 64
@@ -2400,11 +2404,15 @@ def generate_resnet20_Aespa_bin_files():
     bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
     a2_corrected016 = altalena(np.repeat(A2.detach().numpy()[:16], 1024))
     a2_corrected1632 = altalena(np.repeat(A2.detach().numpy()[16:32], 1024))
+    a1_corrected016 = altalena(np.repeat(A.detach().numpy()[:16], 1024))
+    a1_corrected1632 = altalena(np.repeat(A.detach().numpy()[16:32], 1024))
 
     np.savetxt('weights_Aespa/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
     np.savetxt('weights_Aespa/layer4-conv1bn1-a2-1.bin'.format(i), a2_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer4-conv1bn1-a2-2.bin'.format(i), a2_corrected1632, delimiter=',')
+    np.savetxt('weights_Aespa/layer4-conv1bn1-a1-1.bin'.format(i), a1_corrected016, delimiter=',')
+    np.savetxt('weights_Aespa/layer4-conv1bn1-a1-2.bin'.format(i), a1_corrected1632, delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 DX
 
@@ -2530,7 +2538,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer4-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
     np.savetxt('weights_Aespa/layer4-conv2bn2-a2.bin', np.repeat(A2.detach(), 256), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer4-conv2bn2-a1.bin', np.repeat(A.detach(), 256), delimiter=',')
     ## Layer2[1]: Conv1+Bn1
 
     temp_PAF = model.layer2[1].HerPN1
@@ -2605,7 +2613,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer5-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
     np.savetxt('weights_Aespa/layer5-conv1bn1-a2.bin', np.repeat(A2.detach(), 256), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer5-conv1bn1-a1.bin', np.repeat(A.detach(), 256), delimiter=',')
     ## Layer2[1]: Conv2+Bn2
 
     temp_PAF = model.layer2[1].HerPN2
@@ -2680,6 +2688,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer5-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
     np.savetxt('weights_Aespa/layer5-conv2bn2-a2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer5-conv2bn2-a1.bin', np.repeat(A.detach(), 256), delimiter=',')
     ## Layer2[2]: Conv1+Bn1
 
     temp_PAF = model.layer2[2].HerPN1
@@ -2754,7 +2763,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer6-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
     np.savetxt('weights_Aespa/layer6-conv1bn1-a2.bin', np.repeat(A2.detach(), 256), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer6-conv1bn1-a1.bin', np.repeat(A.detach(), 256), delimiter=',')
     ## Layer2[2]: Conv2+Bn2
 
     temp_PAF = model.layer2[2].HerPN2
@@ -2829,7 +2838,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer6-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
     np.savetxt('weights_Aespa/layer6-conv2bn2-a2.bin', np.repeat(A2.detach(), 256), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer6-conv2bn2-a1.bin', np.repeat(A.detach(), 256), delimiter=',')
     ## Layer3[0]: Conv1+Bn1 SX
 
     img_width = 16
@@ -2930,11 +2939,14 @@ def generate_resnet20_Aespa_bin_files():
     bias_corrected1632 = altalena2(np.roll(np.repeat(b.detach().numpy()[32:64], 256), -1))
     a2_corrected016 = altalena2(np.repeat(A2.detach().numpy()[:32], 256))
     a2_corrected1632 = altalena2(np.roll(np.repeat(A2.detach().numpy()[32:64], 256), -1))
-
+    a1_corrected016 = altalena2(np.repeat(A.detach().numpy()[:32], 256))
+    a1_corrected1632 = altalena2(np.roll(np.repeat(A.detach().numpy()[32:64], 256), -1))
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv1bn1-a2-1.bin'.format(i), a2_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv1bn1-a2-2.bin'.format(i), a2_corrected1632, delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-a1-1.bin'.format(i), a1_corrected016, delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-a1-2.bin'.format(i), a1_corrected1632, delimiter=',')
     ## Layer3[0]: Conv1+Bn1 DX
 
     A = model.layer3[0].downsample[1].weight / torch.sqrt(
@@ -3058,7 +3070,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer7-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv2bn2-a2.bin', np.repeat(A2.detach(), 64), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer7-conv2bn2-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[1]: Conv1+Bn1
 
     temp_PAF = model.layer3[1].HerPN1
@@ -3132,7 +3144,8 @@ def generate_resnet20_Aespa_bin_files():
         np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
     np.savetxt('weights_Aespa/layer8-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv1bn1-bias.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv1bn1-a2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv1bn1-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[1]: Conv2+Bn2
 
     temp_PAF = model.layer3[1].HerPN1
@@ -3207,7 +3220,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer8-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
     np.savetxt('weights_Aespa/layer8-conv2bn2-a2.bin', np.repeat(A2.detach(), 64), delimiter=',')
-
+    np.savetxt('weights_Aespa/layer8-conv2bn2-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[2]: Conv1+Bn1
 
     temp_PAF = model.layer3[2].HerPN1
@@ -3282,6 +3295,7 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer9-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
     np.savetxt('weights_Aespa/layer9-conv1bn1-a2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer9-conv1bn1-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[2]: Conv2+Bn2
 
     temp_PAF = model.layer3[2].HerPN2
@@ -3356,9 +3370,13 @@ def generate_resnet20_Aespa_bin_files():
 
     np.savetxt('weights_Aespa/layer9-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
     np.savetxt('weights_Aespa/layer9-conv2bn2-a2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt('weights_Aespa/layer9-conv2bn2-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Fully Connected Layer
 
     np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
 
 if __name__ == '__main__':
+    path = './weights_Aespa'
+    if not os.path.exists(path):
+        os.mkdir(path)
     generate_resnet20_Aespa_bin_files()

@@ -67,9 +67,9 @@ def convbn_initial(input, scale, he_res20_ctx, cryptoContext):
         else:
             finalsum = fhe.homo_add(finalsum, res, cryptoContext)
             finalsum = fhe.homo_rotate(finalsum, 1024, cryptoContext)
-
+    if he_res20_ctx.aespa:
+        return finalsum, bias
     finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
-
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -109,8 +109,9 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext):
         else:
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-1024,cryptoContext)
+    if he_res20_ctx.aespa:
+        return finalsum, bias
     finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
-
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -151,7 +152,8 @@ def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext):
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-256,cryptoContext)
     finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
-
+    if he_res20_ctx.aespa:
+        return finalsum, bias
     return finalsum
 @fhe.utils.profile_python_function
 def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):
@@ -188,7 +190,10 @@ def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-64,cryptoContext)
 
-    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
+
+    if he_res20_ctx.aespa:
+        return finalsum, bias
+    finalsum = fhe.homo_add_pt(finalsum, bias, cryptoContext)
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -240,11 +245,12 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
             finalsum016 = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
             finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
             finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
-
-    finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
-    finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
-
-    return finalsum016, finalsum1632
+    if he_res20_ctx.aespa:
+        return finalsum016, finalsum1632,bias1,bias2
+    else:
+        finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
+        finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
+        return finalsum016, finalsum1632
 
 @fhe.utils.profile_python_function
 def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext):
@@ -280,10 +286,12 @@ def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext):
             finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
             finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
 
-    finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
-    finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
-
-    return finalsum016, finalsum1632
+    if he_res20_ctx.aespa:
+        return finalsum016, finalsum1632, bias1, bias2
+    else:
+        finalsum016 = fhe.homo_add_pt(finalsum016, bias1, cryptoContext)
+        finalsum1632 = fhe.homo_add_pt(finalsum1632, bias2, cryptoContext)
+        return finalsum016, finalsum1632
 
 @fhe.utils.profile_python_function
 def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
@@ -337,9 +345,11 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
             finalsum3264 = fhe.homo_add(finalsum3264, sum3264, cryptoContext)
             finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
 
-    finalsum032=fhe.homo_add_pt(finalsum032,bias1,cryptoContext)
-    finalsum3264=fhe.homo_add_pt(finalsum3264,bias2,cryptoContext)
 
+    if he_res20_ctx.aespa:
+        return finalsum032,finalsum3264,bias1,bias2
+    finalsum032 = fhe.homo_add_pt(finalsum032, bias1, cryptoContext)
+    finalsum3264 = fhe.homo_add_pt(finalsum3264, bias2, cryptoContext)
     return finalsum032, finalsum3264
 
 @fhe.utils.profile_python_function
