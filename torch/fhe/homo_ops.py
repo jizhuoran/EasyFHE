@@ -1511,10 +1511,18 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
     #     element_params.pop_last_param()
 
     moduliQ_tmp = cryptoContext.moduliQ.clone()
-    rootsQ_tmp = cryptoContext.power_of_roots.clone()
+    # rootsQ_tmp = cryptoContext.power_of_roots.clone()
+    power_of_rootsQ = cryptoContext.power_of_roots.clone()
+    power_of_rootsQ_shoup = cryptoContext.power_of_roots_shoup.clone()
+    barret_ratio_Q = cryptoContext.barret_ratio.clone()
+    barret_k_Q = cryptoContext.barret_k.clone()
     if lRemain != 0:
         moduliQ_tmp = moduliQ_tmp[:lRemain+level_budget]
-        rootsQ_tmp = rootsQ_tmp[:lRemain+level_budget]
+        # rootsQ_tmp = rootsQ_tmp[:lRemain+level_budget]
+        power_of_rootsQ = power_of_rootsQ[:(lRemain+level_budget)*cryptoContext.N]
+        power_of_rootsQ_shoup = power_of_rootsQ_shoup[:(lRemain+level_budget)*cryptoContext.N]
+        barret_ratio_Q = barret_ratio_Q[:lRemain+level_budget]
+        barret_k_Q = barret_k_Q[:lRemain+level_budget]
 
     level0 = cryptoContext.L - lRemain - 1
 
@@ -1524,16 +1532,24 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
     size_q = lRemain+level_budget
     size_p = cryptoContext.K
     primes = torch.cat((params_q, params_p), dim=0)
+    power_of_rootsP = cryptoContext.power_of_roots[(cryptoContext.L + 1)* cryptoContext.N:].clone()
+    power_of_roots  =torch.cat((power_of_rootsQ, power_of_rootsP), dim= 0)
+    power_of_rootsP_shoup =cryptoContext.power_of_roots_shoup[(cryptoContext.L + 1)* cryptoContext.N:].clone()
+    power_of_roots_shoup  =torch.cat((power_of_rootsQ_shoup, power_of_rootsP_shoup), dim= 0)
+    barret_ratio_P =cryptoContext.barret_ratio[cryptoContext.L + 1:].clone()
+    barret_ratio  =torch.cat((barret_ratio_Q, barret_ratio_P), dim= 0)
+    barret_k_P =cryptoContext.barret_k[cryptoContext.L + 1:].clone()
+    barret_k  =torch.cat((barret_k_Q, barret_k_P), dim= 0)
 
-    roots_q = rootsQ_tmp
-    roots_p = cryptoContext.power_of_roots.clone()[cryptoContext.L:]
-    roots = torch.cat((roots_q, roots_p), dim=0)
+    # roots_q = rootsQ_tmp
+    # roots_p = cryptoContext.power_of_roots.clone()[cryptoContext.L:]
+    # roots = torch.cat((roots_q, roots_p), dim=0)
 
     # primes = cryptoContext.primes,
-    barret_ratio = cryptoContext.barret_ratio.clone()
-    barret_k = cryptoContext.barret_k.clone()
-    power_of_roots_shoup = cryptoContext.power_of_roots_shoup.clone()
-    power_of_roots = cryptoContext.power_of_roots.clone()
+    # barret_ratio = cryptoContext.barret_ratio.clone()
+    # barret_k = cryptoContext.barret_k.clone()
+    # power_of_roots_shoup = cryptoContext.power_of_roots_shoup.clone()
+    # power_of_roots = cryptoContext.power_of_roots.clone()
 
     params_vector = [None] * (level_budget - stop)
 
@@ -1541,7 +1557,7 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
         # Store a *copy* of moduli and roots at current level
         params_vector[s - stop] = {
             "primes": primes.clone(),
-            "roots": roots.clone(),
+            # "roots": roots.clone(),
             "barret_ratio": barret_ratio.clone(),
             "barret_k": barret_k.clone(),
             "power_of_roots_shoup": power_of_roots_shoup.clone(),
@@ -1551,11 +1567,11 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
         # Remove the (size_q - 1)-th element
         index = size_q - 1
         primes = torch.cat((primes[:index], primes[index + 1:]), dim=0)
-        roots = torch.cat((roots[:index], roots[index + 1:]), dim=0)
+        # roots = torch.cat((roots[:index], roots[index + 1:]), dim=0)
         barret_ratio = torch.cat((barret_ratio[:index], barret_ratio[index + 1:]), dim=0)
         barret_k = torch.cat((barret_k[:index], barret_k[index + 1:]), dim=0)
-        power_of_roots_shoup = torch.cat((power_of_roots_shoup[:index], power_of_roots_shoup[index + 1:]), dim=0)
-        power_of_roots = torch.cat((power_of_roots[:index], power_of_roots[index + 1:]), dim=0)
+        power_of_roots_shoup = torch.cat((power_of_roots_shoup[:index * cryptoContext.N], power_of_roots_shoup[(index + 1)* cryptoContext.N:]), dim=0)
+        power_of_roots = torch.cat((power_of_roots[:index * cryptoContext.N], power_of_roots[(index + 1) * cryptoContext.N:]), dim=0)
         size_q -= 1
 
 
