@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = False
+DIRECT_LOAD = True
 
 
 if DIRECT_LOAD:
@@ -167,7 +167,6 @@ else:
 
         values = np.array(values, dtype=np.double)
         name = "{}_{}".format(val_name, slots)
-        print(name)
         encoded = fhe.encode(values, name, level, slots, cryptoContext)
         # encoded.cv[0].cpu().numpy()
         # key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
