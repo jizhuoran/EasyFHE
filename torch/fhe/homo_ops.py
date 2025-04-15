@@ -986,7 +986,7 @@ def encode(
 
     gpufhe_cipher = Plaintext([pt_encode], pt_encode.shape[0], scaling_factor, 1, slots, False)
     if cryptoContext.config.PTX_TWIN:
-        gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
+        gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
     return gpufhe_cipher
 
 

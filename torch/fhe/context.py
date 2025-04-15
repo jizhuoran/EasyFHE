@@ -152,6 +152,7 @@ class Context:
 
         self.config = config
         self.inBS = False
+        self.in_check_period = False
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()
