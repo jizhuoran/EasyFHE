@@ -507,7 +507,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
-    for i in range(50):
+    for i in range(1):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
@@ -637,11 +637,10 @@ def resnet20( ):
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-    DATA_DIR = '/home/fyh/PNP/GPU-FHE/examples/resnet20/src'
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
-    he_res20_context_ = HE_res20_context("./weights_Aespa",True)
+    he_res20_context_ = HE_res20_context("../weights_Aespa",True)
 
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,SAVE_MIDDLE=False, PTX_TWIN=False)
@@ -656,9 +655,10 @@ def resnet20( ):
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         # file_name = "encode_20250412_221730" # baseline
-        file_name = "encode_20250417_164545" #  Aespa pkl
-        pkl_path = os.path.join("/home/fyh/PNP/GPU-FHE/examples/resnet20/src", file_name + ".pkl")
         # load_encode_pkl(file_name, he_res20_context_)
+        file_name = "encode_20250417_164545" #  Aespa pkl
+        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        #todo: add pkl to hugging face after fixing the encode bug in the last aespa block
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
@@ -750,7 +750,7 @@ def Aespa(x,filename,cryptoContext):
 def read_aespa_value(filename,target_len, scale=1.0):
     values = []
     val_name = filename
-    filename = DATA_DIR + '/weights_Aespa/' + filename + '.bin'
+    filename = '../weights_Aespa/' + filename + '.bin'
     if not os.path.isfile(filename):
         print(f"无法打开文件: {filename}")
         return values

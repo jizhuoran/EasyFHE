@@ -8,6 +8,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 
 encoded_weight = {}
 
+# baseline:
 # Normalized deltas (trained by CIFAR-10 test data)
 # normalized_deltas = [
 #     [0.30245313974658655, 0, 0, 0, 0, 0],
@@ -36,6 +37,8 @@ encoded_weight = {}
 #         0.053238969339825734,
 #     ],
 # ]
+
+# aespa
 normalized_deltas = [
     [1, 1, 1, 1, 1, 1],
     [
@@ -710,7 +713,7 @@ def repeat(input,slots,cryptoContext):
     return fhe.homo_rotate(rotsum(input,slots,cryptoContext),-slots+1,cryptoContext)
 
 if __name__ == '__main__':
-    DATA_DIR = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa'
+    DATA_DIR = '../Aespa'
     filename = 'conv1bn1-bias'
     filename = '' + DATA_DIR + '/weights_Aespa/' + filename + '.bin'
     if not os.path.isfile(filename):
