@@ -40,14 +40,16 @@ class BasicBlock_HerPN(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         identity = x
-
-        out = self.conv1(x)
-        out = self.HerPN1(out)
-
-        out = self.conv2(out)
         if self.downsample is not None:
             identity = self.downsample(x)
+        out = self.conv1(x)
+        print('conv1',torch.max(out))
+        out = self.HerPN1(out)
+        print('herPN',torch.max(out))
+        out = self.conv2(out)
+        print('conv2', torch.max(out))
         out += identity
+        print('sum', torch.max(out))
         out = self.HerPN2(out)
 
         return out
@@ -87,18 +89,39 @@ class ResNet20_HerPN(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
-        x = self.conv1(x)
-        x = self.HerPN1(x)
+    def forward(self, x, fea_out=False):
+        if fea_out:
+            fea = []
+            x = self.conv1(x)
+            x = self.HerPN1(x)
+            fea.append(x)
 
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
+            x = self.layer1(x)
+            fea.append(x)
 
-        x = self.avgpool(x)
-        x = x.view(x.size(0), -1)
-        x = self.fc(x)
-        return x
+            x = self.layer2(x)
+            fea.append(x)
+
+            x = self.layer3(x)
+            fea.append(x)
+
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            return x, fea
+        else:
+
+            x = self.conv1(x)
+            x = self.HerPN1(x)
+
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            return x
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1) -> nn.Conv2d:
     """3x3 convolution with padding"""
@@ -205,14 +228,18 @@ class MultiChannelPoloActFunction(Function):
         """
         # 保存输入和参数，以便在反向传播时使用
         ctx.save_for_backward(input, a2, a1, a0)
+        # print(input)
+
 
         # 将 a2, a1, a0 扩展为与 input 相同的形状
         a2 = a2.view(1, -1, 1, 1)  # 形状变为 (1, num_channels, 1, 1)
         a1 = a1.view(1, -1, 1, 1)  # 形状变为 (1, num_channels, 1, 1)
         a0 = a0.view(1, -1, 1, 1)  # 形状变为 (1, num_channels, 1, 1)
+        part1= a1 * input
+        part2 = a2 * input.pow(2)
 
         # 计算正向传播
-        output = a2 * input.pow(2) + a1 * input + a0
+        output = part2 + part1 + a0
         return output
 
 def change_HerPN2d_into_PAF_MutalChannel(model:HerPN2d):

@@ -151,9 +151,10 @@ def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext):
         else:
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-256,cryptoContext)
-    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
+
     if he_res20_ctx.aespa:
         return finalsum, bias
+    finalsum = fhe.homo_add_pt(finalsum, bias, cryptoContext)
     return finalsum
 @fhe.utils.profile_python_function
 def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):

@@ -1709,7 +1709,8 @@ def generate_resnet20_Aespa_bin_files():
     A = model.HerPN1.a1.detach()
     b = model.HerPN1.a0.detach()
     # a2设置为原本的a2/a1^2方便下一步计算
-    A2  = model.HerPN1.a2.detach() * (A ** -2)
+    a2 = model.HerPN1.a2.detach()
+    A2  = a2
     print("A: {}\n\nb: {}".format(A, b))
     print("A2: {}".format(A2))
 
@@ -1756,15 +1757,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A[i].detach(), 16384))
-        k2 = np.multiply(k2, np.repeat(A[i].detach(), 16384))
-        k3 = np.multiply(k3, np.repeat(A[i].detach(), 16384))
-        k4 = np.multiply(k4, np.repeat(A[i].detach(), 16384))
-        k5 = np.multiply(k5, np.repeat(A[i].detach(), 16384))
-        k6 = np.multiply(k6, np.repeat(A[i].detach(), 16384))
-        k7 = np.multiply(k7, np.repeat(A[i].detach(), 16384))
-        k8 = np.multiply(k8, np.repeat(A[i].detach(), 16384))
-        k9 = np.multiply(k9, np.repeat(A[i].detach(), 16384))
+        # k1 = np.multiply(k1, np.repeat(A[i].detach(), 16384))
+        # k2 = np.multiply(k2, np.repeat(A[i].detach(), 16384))
+        # k3 = np.multiply(k3, np.repeat(A[i].detach(), 16384))
+        # k4 = np.multiply(k4, np.repeat(A[i].detach(), 16384))
+        # k5 = np.multiply(k5, np.repeat(A[i].detach(), 16384))
+        # k6 = np.multiply(k6, np.repeat(A[i].detach(), 16384))
+        # k7 = np.multiply(k7, np.repeat(A[i].detach(), 16384))
+        # k8 = np.multiply(k8, np.repeat(A[i].detach(), 16384))
+        # k9 = np.multiply(k9, np.repeat(A[i].detach(), 16384))
 
         """
         mul1 = np.roll(k1, 1024 * i)
@@ -1794,8 +1795,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer1[0].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -1830,15 +1832,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -1867,8 +1869,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer1[0].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -1902,15 +1905,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -1939,8 +1942,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer1[1].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
     for i in range(16):
         k1 = np.array([])
         k2 = np.array([])
@@ -1973,15 +1977,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -2008,11 +2012,12 @@ def generate_resnet20_Aespa_bin_files():
     np.savetxt('weights_Aespa/layer2-conv1bn1-a1.bin'.format(i), np.repeat(A.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv2+Bn2
 
-    temp_PAF = model.layer1[1].HerPN1
+    temp_PAF = model.layer1[1].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -2046,15 +2051,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -2083,8 +2088,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer1[2].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -2118,15 +2124,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -2156,8 +2162,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer1[2].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -2191,15 +2198,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 1024))
 
         mul1 = np.roll(k1, 1024 * i)
         mul2 = np.roll(k2, 1024 * i)
@@ -2321,8 +2328,9 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[0].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     channels = []
 
@@ -2358,15 +2366,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, altalena(np.tile(bin_mask8, 2)))
         k9 = np.multiply(k9, altalena(np.tile(bin_mask9, 2)))
 
-        k1 = np.multiply(k1, np.repeat(A.detach().numpy(), 1024))
-        k2 = np.multiply(k2, np.repeat(A.detach().numpy(), 1024))
-        k3 = np.multiply(k3, np.repeat(A.detach().numpy(), 1024))
-        k4 = np.multiply(k4, np.repeat(A.detach().numpy(), 1024))
-        k5 = np.multiply(k5, np.repeat(A.detach().numpy(), 1024))
-        k6 = np.multiply(k6, np.repeat(A.detach().numpy(), 1024))
-        k7 = np.multiply(k7, np.repeat(A.detach().numpy(), 1024))
-        k8 = np.multiply(k8, np.repeat(A.detach().numpy(), 1024))
-        k9 = np.multiply(k9, np.repeat(A.detach().numpy(), 1024))
+        # k1 = np.multiply(k1, np.repeat(A.detach().numpy(), 1024))
+        # k2 = np.multiply(k2, np.repeat(A.detach().numpy(), 1024))
+        # k3 = np.multiply(k3, np.repeat(A.detach().numpy(), 1024))
+        # k4 = np.multiply(k4, np.repeat(A.detach().numpy(), 1024))
+        # k5 = np.multiply(k5, np.repeat(A.detach().numpy(), 1024))
+        # k6 = np.multiply(k6, np.repeat(A.detach().numpy(), 1024))
+        # k7 = np.multiply(k7, np.repeat(A.detach().numpy(), 1024))
+        # k8 = np.multiply(k8, np.repeat(A.detach().numpy(), 1024))
+        # k9 = np.multiply(k9, np.repeat(A.detach().numpy(), 1024))
 
         # Affianco CH1[0]-CH16[0]-CH1[1]-CH16[1]-CH1[2]...
         k1 = np.add(k1, np.roll(k1, -16384 + 1))[:16384]
@@ -2418,6 +2426,7 @@ def generate_resnet20_Aespa_bin_files():
     b = -(model.layer2[0].downsample[1].weight * model.layer2[0].downsample[1].running_mean / torch.sqrt(
         model.layer2[0].downsample[1].running_var + model.layer2[0].downsample[1].eps)) + model.layer2[0].downsample[1].bias
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(16):
         k1 = np.array([])
@@ -2433,17 +2442,17 @@ def generate_resnet20_Aespa_bin_files():
         # Affianco CH1[0]-CH16[0]-CH1[1]-CH16[1]-CH1[2]...
         k1 = np.add(k1, np.roll(k1, -16384 + 1))[:16384]
 
-        print(k1[0])
+        # print(k1[0])
 
         np.savetxt('weights_Aespa/layer4dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
         np.savetxt('weights_Aespa/layer4dx-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
+    # Todo:2个版本尝试
     bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
+    # bias_corrected1632 = altalena(np.roll(np.repeat(b.detach().numpy()[16:32], 1024), -1))
     # bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(),1024)), np.roll(altalena(np.repeat(b.detach().numpy(),1024)), -16384 + 1))[:16384]
-    # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
-    # bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
     np.savetxt('weights_Aespa/layer4dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer4dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
@@ -2466,7 +2475,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[0].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -2503,15 +2512,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 256))
 
         mul1 = np.roll(k1, 256 * i)
         mul2 = np.roll(k2, 256 * i)
@@ -2541,7 +2550,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[1].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -2578,15 +2587,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 256))
 
         mul1 = np.roll(k1, 256 * i)
         mul2 = np.roll(k2, 256 * i)
@@ -2616,7 +2625,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[1].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -2653,15 +2662,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 256))
 
         mul1 = np.roll(k1, 256 * i)
         mul2 = np.roll(k2, 256 * i)
@@ -2691,7 +2700,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[2].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -2728,15 +2737,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 256))
 
         mul1 = np.roll(k1, 256 * i)
         mul2 = np.roll(k2, 256 * i)
@@ -2766,7 +2775,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer2[2].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -2803,15 +2812,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 256))
 
         mul1 = np.roll(k1, 256 * i)
         mul2 = np.roll(k2, 256 * i)
@@ -2854,7 +2863,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer3[0].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     channels = []
 
@@ -2890,15 +2899,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, altalena2(np.tile(bin_mask8, 2)))
         k9 = np.multiply(k9, altalena2(np.tile(bin_mask9, 2)))
 
-        k1 = np.multiply(k1, np.repeat(A.detach().numpy(), 256))
-        k2 = np.multiply(k2, np.repeat(A.detach().numpy(), 256))
-        k3 = np.multiply(k3, np.repeat(A.detach().numpy(), 256))
-        k4 = np.multiply(k4, np.repeat(A.detach().numpy(), 256))
-        k5 = np.multiply(k5, np.repeat(A.detach().numpy(), 256))
-        k6 = np.multiply(k6, np.repeat(A.detach().numpy(), 256))
-        k7 = np.multiply(k7, np.repeat(A.detach().numpy(), 256))
-        k8 = np.multiply(k8, np.repeat(A.detach().numpy(), 256))
-        k9 = np.multiply(k9, np.repeat(A.detach().numpy(), 256))
+        # k1 = np.multiply(k1, np.repeat(A.detach().numpy(), 256))
+        # k2 = np.multiply(k2, np.repeat(A.detach().numpy(), 256))
+        # k3 = np.multiply(k3, np.repeat(A.detach().numpy(), 256))
+        # k4 = np.multiply(k4, np.repeat(A.detach().numpy(), 256))
+        # k5 = np.multiply(k5, np.repeat(A.detach().numpy(), 256))
+        # k6 = np.multiply(k6, np.repeat(A.detach().numpy(), 256))
+        # k7 = np.multiply(k7, np.repeat(A.detach().numpy(), 256))
+        # k8 = np.multiply(k8, np.repeat(A.detach().numpy(), 256))
+        # k9 = np.multiply(k9, np.repeat(A.detach().numpy(), 256))
 
         # Affianco CH1[0]-CH16[0]-CH1[1]-CH16[1]-CH1[2]...
         k1 = np.add(k1, np.roll(k1, -8192 + 1))[:8192]
@@ -2947,6 +2956,7 @@ def generate_resnet20_Aespa_bin_files():
     b = -(model.layer3[0].downsample[1].weight * model.layer3[0].downsample[1].running_mean / torch.sqrt(
         model.layer3[0].downsample[1].running_var + model.layer3[0].downsample[1].eps)) + model.layer3[0].downsample[1].bias
     print("A: {}\n\nb: {}".format(A, b))
+    print("A2: {}".format(A2))
 
     for i in range(32):
         k1 = np.array([])
@@ -2961,7 +2971,7 @@ def generate_resnet20_Aespa_bin_files():
         # Affianco CH1[0]-CH16[0]-CH1[1]-CH16[1]-CH1[2]...
         k1 = np.add(k1, np.roll(k1, -8192 + 1))[:8192]
 
-        print(k1[0])
+        # print(k1[0])
 
         np.savetxt('weights_Aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
         np.savetxt('weights_Aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)),
@@ -2994,7 +3004,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer3[0].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -3031,15 +3041,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 64))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 64))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 64))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 64))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 64))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 64))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 64))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 64))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 64))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 64))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 64))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 64))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 64))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 64))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 64))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 64))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 64))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 64))
 
         mul1 = np.roll(k1, 64 * i)
         mul2 = np.roll(k2, 64 * i)
@@ -3069,7 +3079,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer3[1].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -3106,15 +3116,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 64))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 64))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 64))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 64))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 64))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 64))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 64))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 64))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 64))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 64))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 64))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 64))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 64))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 64))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 64))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 64))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 64))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 64))
 
         mul1 = np.roll(k1, 64 * i)
         mul2 = np.roll(k2, 64 * i)
@@ -3141,10 +3151,10 @@ def generate_resnet20_Aespa_bin_files():
     np.savetxt('weights_Aespa/layer8-conv1bn1-a1.bin', np.repeat(A.detach(), 64), delimiter=',')
     ## Layer3[1]: Conv2+Bn2
 
-    temp_PAF = model.layer3[1].HerPN1
+    temp_PAF = model.layer3[1].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -3181,15 +3191,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 64))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 64))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 64))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 64))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 64))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 64))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 64))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 64))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 64))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 64))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 64))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 64))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 64))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 64))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 64))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 64))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 64))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 64))
 
         mul1 = np.roll(k1, 64 * i)
         mul2 = np.roll(k2, 64 * i)
@@ -3219,7 +3229,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer3[2].HerPN1
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -3256,15 +3266,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 64))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 64))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 64))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 64))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 64))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 64))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 64))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 64))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 64))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 64))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 64))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 64))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 64))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 64))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 64))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 64))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 64))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 64))
 
         mul1 = np.roll(k1, 64 * i)
         mul2 = np.roll(k2, 64 * i)
@@ -3294,7 +3304,7 @@ def generate_resnet20_Aespa_bin_files():
     temp_PAF = model.layer3[2].HerPN2
     A = temp_PAF.a1.detach()
     b = temp_PAF.a0.detach()
-    A2 = temp_PAF.a2.detach() * (A ** -2)
+    A2 = temp_PAF.a2.detach()
 
     ks = []
 
@@ -3331,15 +3341,15 @@ def generate_resnet20_Aespa_bin_files():
         k8 = np.multiply(k8, bin_mask8)
         k9 = np.multiply(k9, bin_mask9)
 
-        k1 = np.multiply(k1, np.repeat(A.detach(), 64))
-        k2 = np.multiply(k2, np.repeat(A.detach(), 64))
-        k3 = np.multiply(k3, np.repeat(A.detach(), 64))
-        k4 = np.multiply(k4, np.repeat(A.detach(), 64))
-        k5 = np.multiply(k5, np.repeat(A.detach(), 64))
-        k6 = np.multiply(k6, np.repeat(A.detach(), 64))
-        k7 = np.multiply(k7, np.repeat(A.detach(), 64))
-        k8 = np.multiply(k8, np.repeat(A.detach(), 64))
-        k9 = np.multiply(k9, np.repeat(A.detach(), 64))
+        # k1 = np.multiply(k1, np.repeat(A.detach(), 64))
+        # k2 = np.multiply(k2, np.repeat(A.detach(), 64))
+        # k3 = np.multiply(k3, np.repeat(A.detach(), 64))
+        # k4 = np.multiply(k4, np.repeat(A.detach(), 64))
+        # k5 = np.multiply(k5, np.repeat(A.detach(), 64))
+        # k6 = np.multiply(k6, np.repeat(A.detach(), 64))
+        # k7 = np.multiply(k7, np.repeat(A.detach(), 64))
+        # k8 = np.multiply(k8, np.repeat(A.detach(), 64))
+        # k9 = np.multiply(k9, np.repeat(A.detach(), 64))
 
         mul1 = np.roll(k1, 64 * i)
         mul2 = np.roll(k2, 64 * i)
@@ -3373,3 +3383,4 @@ if __name__ == '__main__':
     if not os.path.exists(path):
         os.mkdir(path)
     generate_resnet20_Aespa_bin_files()
+    print('success')
