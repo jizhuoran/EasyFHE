@@ -87,7 +87,13 @@ class SecureML:
         self.dummy = fhe.encode(pvals, "dummy", 0, self.params.encode_slots, cryptoContext)
 
         # todo: 为了支持fixedmanual模式，每个乘法(包括明密文和密密文)后面都要调用一个homo_rescale 
+        self.z_data_test, self.factor_num_test, self.sample_num_test = \
+            self.z_data_from_file(params.path_to_test_file, True)
+        self.z_data_test = self.normalize_z_data(
+            self.z_data_test, self.factor_num_test, self.sample_num_test
+        )
 
+    @fhe.utils.profile_python_function
     def inner_product(self, cryptoContext, enc_z_data, enc_v_data):
         enc_ip_vec = []
         for i in range(self.params.cnum):
@@ -116,6 +122,7 @@ class SecureML:
 
         return enc_ip
 
+    @fhe.utils.profile_python_function
     def sigmoid(self, cryptoContext, enc_grad, enc_z_data, enc_ip, gamma):
         enc_ip_sqr = fhe.homo_square(enc_ip, cryptoContext)
         enc_ip_sqr = fhe.homo_add_scalar_double(enc_ip_sqr, self.params.degree3[1] / self.params.degree3[3], cryptoContext)
@@ -173,7 +180,7 @@ class SecureML:
                 enc_data.append(enc_z)
                     
             self.enc_data_cache[block_id] = enc_data
-
+    
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
         enc_data = self.enc_data_cache.get(block_id)
         if enc_data is None:
@@ -202,8 +209,8 @@ class SecureML:
 
         print("Update finished!")
 
-    # @fhe.utils.profile_pytorch_function
-    def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots):
+    @fhe.utils.profile_python_function
+    def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots, print_all=False):
         enc_v_data = [None] * self.params.cnum
 
         zero_vec = np.zeros(self.params.slots, dtype=complex)
@@ -223,9 +230,6 @@ class SecureML:
         alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
         gamma = self.params.alpha / self.params.block_size
 
-        z_data_test, factor_num_test, sample_num_test = self.z_data_from_file(self.params.path_to_test_file, True)
-        z_data_test = self.normalize_z_data(z_data_test, factor_num_test, sample_num_test)
-
         for iter in range(self.params.iter_num):
             print(f"\n{iter + 1}-th iteration started !!!")
 
@@ -234,9 +238,9 @@ class SecureML:
             print(f"blockid: {block_id}")
             print("** un-encrypted")
             
-            # plain update
-            self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
-            self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
+            # # plain update
+            # self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
+            # self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
 
             # encrypted update
             self.params.start_time()
@@ -244,8 +248,11 @@ class SecureML:
             elapsed_time = self.params.end_time()
             self.params.print_time("Encrypted Update", elapsed_time)
 
-            dw_data = self.decrypt_w_data(cryptoContext, enc_w_data, factor_num, openfhe_context)
-            self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, dw_data, self.params.is_first)
+            
+            # Decide whether to print based on the value of print_all
+            if print_all or iter == self.params.iter_num - 1:
+                dw_data = self.decrypt_w_data(cryptoContext, enc_w_data, factor_num, openfhe_context)
+                self.test_auroc(self,self.z_data_test,self.factor_num_test,self.sample_num_test,dw_data,self.params.is_first)
 
             # update alpha
             alpha0 = alpha1
@@ -265,11 +272,11 @@ class SecureML:
                 self.params.print_time("bootstrapping", elapsed_time)
                 print("Bootstrapping END!!!")
 
-                # decrypt the updated weight vector
-                dwdata = self.decrypt_w_data(cryptoContext,  enc_w_data, factor_num, openfhe_context)
-
-                # compute performance metrics of models
-                self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, dwdata, self.params.is_first)
+                # if print_all or iter == self.params.iter_num - 1:
+                #     # decrypt the updated weight vector
+                #     dwdata = self.decrypt_w_data(cryptoContext,  enc_w_data, factor_num, openfhe_context)
+                #     # compute performance metrics of models
+                #     self.test_auroc(self,self.z_data_test,self.factor_num_test,self.sample_num_test,dw_data,self.params.is_first)
 
 
     def plain_training(self, cryptoContext, w_data, z_data, factor_num, sample_num):
@@ -457,7 +464,7 @@ class SecureML:
         return auc, accuracy
 
 
-def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted):
+def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=False):
     z_data, factor_num, sample_num = SecureML.z_data_from_file(file, is_first)
     z_data = SecureML.shuffle_z_data(z_data, factor_num, sample_num)
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
@@ -494,7 +501,7 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, fi
 
     start_time = time.time()
     if is_encrypted:
-        secure_ml.training(cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list)
+        secure_ml.training(cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list,print_all=print_all)
     else:
         secure_ml.plain_training(cryptoContext, w_data, z_data, factor_num, sample_num)
     elapsed_time = time.time() - start_time
@@ -506,6 +513,7 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, fi
 
 
 def main():
+    PRINT_ALL = False 
     file1 = "../../data/MNIST_train.txt"
     file2 = "../../data/MNIST_test.txt"
     is_first = True
@@ -547,7 +555,7 @@ def main():
         fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
 
-    test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted)
+    test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=PRINT_ALL)
 
 if __name__ == "__main__":
     main()
