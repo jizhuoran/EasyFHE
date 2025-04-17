@@ -519,7 +519,7 @@ def gen_CoeffSlots_matrix_test_case(
     lDec = cryptoContext.L - (9 + precom.paramsEnc.level_budget + precom.paramsDec.level_budget)
     c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(scaleEnc, lEnc, cryptoContext)
     # note: c2s_matrix should be same as m_U0hatTPreFFT
-    cryptoContext.BsContext_map["13"].m_U0hatTPreFFT = c2s_matrix
+
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
@@ -533,21 +533,27 @@ def gen_CoeffSlots_matrix_test_case(
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
-    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result = clear_result.cpu().numpy().reshape(-1)
-    print("HE decryption result: ", clear_result[:10])
+    clear_result1 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result1 = clear_result1.cpu().numpy().reshape(-1)
+    print("HE decryption result(golden): ", clear_result1[:10])
 
+    print("\n\n")
+    cryptoContext.BsContext_map["13"].m_U0hatTPreFFT = c2s_matrix
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    print("gpu bootstrapp done!")
 
-    # cipher_openfhe.SetSlots((1<<logBsSlots_list[0]))
-    # openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
-    # openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
-    # openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
-    # is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
-    # if is_euqal:
-    #     print("BootstrapTest_logBsSlots11: Test passed!")
-    # else:
-    #     print_failed("BootstrapTest_logBsSlots11: Test failed!")
+    clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    print("HE decryption result: ", clear_result2[:10])
 
+    diff = np.abs(clear_result1 - clear_result2)
+    max_diff = np.max(diff)
+    mean_diff = np.mean(diff)
+
+    print(f"Max diff: {max_diff:.5e}")
+    print(f"Mean diff: {mean_diff:.5e}")
 
 
 

@@ -1414,10 +1414,10 @@ def encode_bsMatrix(
 
     cur_limbs = cryptoContext.L - level
 
-    # if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
-    #     scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
-    # else:
-    scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+        scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    else:
+        scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
     assert middle_value.max_encoded_value < 1e-20 or math.log2(
         int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
@@ -1618,5 +1618,4 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
                         cryptoContext.encode_params = params_vector[0]
                         result[stop][g_rem * i + j] = encode_bsMatrix(rotate_temp, f"clear_temp_{i}_{j}_{rot}",
                                                                level0, len(rotate_temp), cryptoContext)
-    print("temp")
     return result
