@@ -43,13 +43,13 @@ class BasicBlock_HerPN(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
         out = self.conv1(x)
-        print('conv1',torch.max(out))
+        # print('conv1',torch.max(out))
         out = self.HerPN1(out)
-        print('herPN',torch.max(out))
+        # print('herPN',torch.max(out))
         out = self.conv2(out)
-        print('conv2', torch.max(out))
+        # print('conv2', torch.max(out))
         out += identity
-        print('sum', torch.max(out))
+        # print('sum', torch.max(out))
         out = self.HerPN2(out)
 
         return out

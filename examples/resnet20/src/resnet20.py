@@ -507,7 +507,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
-    for i in range(1):
+    for i in range(10):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
@@ -648,7 +648,7 @@ def resnet20( ):
     he_res20_context_ = HE_res20_context("./weights_Aespa",True)
 
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False,SAVE_MIDDLE=True, PTX_TWIN=False)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,SAVE_MIDDLE=False, PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
@@ -660,7 +660,7 @@ def resnet20( ):
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         # file_name = "encode_20250412_221730" # baseline
-        file_name = "encode_20250416_224643" #  Aespa pkl
+        file_name = "encode_20250417_164545" #  Aespa pkl
         pkl_path = os.path.join("/home/fyh/PNP/GPU-FHE/examples/resnet20/src", file_name + ".pkl")
         # load_encode_pkl(file_name, he_res20_context_)
     load_weight(pkl_path, cryptoContext)
@@ -668,21 +668,21 @@ def resnet20( ):
     print("start executeResNet20")
     executeResNet20(he_res20_context_, cryptoContext, openfhe_context)
 
-def homo_aespa(a1_x,a2,a0,cryptoContext):
-    # get (a1x)^2
-    a1_x2 = fhe.homo_square(a1_x, cryptoContext)
-    # get a2_x^2
-    a2_x2 = fhe.homo_mul_pt(a1_x2,a2,cryptoContext)
-
-    res = fhe.homo_add(a2_x2,a1_x,cryptoContext)
-    print('name:res_1', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
-    print('name:res_1_size', np.size(cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1)))
-
-    res = fhe.homo_add_pt(res, a0, cryptoContext)
-
-    print('name:res_2', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
-
-    return res
+# def homo_aespa(a1_x,a2,a0,cryptoContext):
+#     # get (a1x)^2
+#     a1_x2 = fhe.homo_square(a1_x, cryptoContext)
+#     # get a2_x^2
+#     a2_x2 = fhe.homo_mul_pt(a1_x2,a2,cryptoContext)
+#
+#     res = fhe.homo_add(a2_x2,a1_x,cryptoContext)
+#     print('name:res_1', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
+#     print('name:res_1_size', np.size(cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1)))
+#
+#     res = fhe.homo_add_pt(res, a0, cryptoContext)
+#
+#     print('name:res_2', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
+#
+#     return res
 
 def homo_aespa_a0(a1_x,a2,a0_filename,he_res20_ctx,cryptoContext):
     # get (a1x)^2
@@ -708,24 +708,31 @@ def homo_aespa_a0(a1_x,a2,a0_filename,he_res20_ctx,cryptoContext):
 
 def homo_Aespa(x,filename,cryptoContext):
     # 读取三个数据
-    a1_filename = filename + '-a1'
     a2_filename = filename + '-a2'
+    a1_filename = filename + '-a1'
     a0_filename = filename + '-bias'
     slots = x.slots
     scale = 1
-    a1 = read_values_from_file(cryptoContext, a1_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
     a2 = read_values_from_file(cryptoContext, a2_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    a1 = read_values_from_file(cryptoContext, a1_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
     a0 = read_values_from_file(cryptoContext, a0_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+
     x2 = fhe.homo_square(x, cryptoContext)
     a2x2 = fhe.homo_mul_pt(x2, a2, cryptoContext)
     a1x = fhe.homo_mul_pt(x,a1,cryptoContext)
     res = fhe.homo_add(a2x2,a1x,cryptoContext)
-    res = fhe.homo_add_pt(res, a0, cryptoContext)
+    # fixme:check layer9 a0 encode bug
+    if a0_filename == 'layer9-conv2bn2-bias':
+        a0 = torch.tensor(read_aespa_value(a0_filename, slots))
+        a0_encode = cryptoContext.openfhe_context.encode(a0, 1, 0, slots)
+        res = fhe.homo_add_pt(res, a0_encode, cryptoContext)
+    else:
+        res = fhe.homo_add_pt(res, a0, cryptoContext)
     return res
 
 def Aespa(x,filename,cryptoContext):
-    a1_filename = filename + '-a1'
     a2_filename = filename + '-a2'
+    a1_filename = filename + '-a1'
     a0_filename = filename + '-bias'
     # 明文x
     slots = x.slots
@@ -734,8 +741,8 @@ def Aespa(x,filename,cryptoContext):
     x = x[:slots]
     x = torch.tensor(x)
 
-    a1 = torch.tensor(read_aespa_value(a1_filename, slots))
     a2 = torch.tensor(read_aespa_value(a2_filename,slots))
+    a1 = torch.tensor(read_aespa_value(a1_filename, slots))
     a0 = torch.tensor(read_aespa_value(a0_filename, slots))
     part1 = a2 * (x**2)
     part2 = a1 * x
