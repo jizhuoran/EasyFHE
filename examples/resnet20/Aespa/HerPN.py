@@ -293,7 +293,7 @@ def change_all_HerPN_by_PAF_MutalChannel(model):
 
 
 def get_Aespa_MutalChannel_PAF_resnet20():
-    model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet20_Aespa.pth'
+    model_path = './ResNet20_Aespa.pth'
     model = get_resnet20_HerPN(num_classes=10)
     model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
     model = change_all_HerPN_by_PAF_MutalChannel(model)
