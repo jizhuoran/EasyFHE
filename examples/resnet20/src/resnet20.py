@@ -680,27 +680,6 @@ def resnet20( ):
 #
 #     return res
 
-def homo_aespa_a0(a1_x,a2,a0_filename,he_res20_ctx,cryptoContext):
-    # get (a1x)^2
-    a1_x2 = fhe.homo_square(a1_x, cryptoContext)
-    # get a2_x^2
-    a2_x2 = fhe.homo_mul_pt(a1_x2,a2,cryptoContext)
-
-    res = fhe.homo_add(a2_x2,a1_x,cryptoContext)
-    res = cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1)
-
-    a0 = read_aespa_value(a0_filename,np.size(res.reshape(-1)))
-    res = res + a0
-
-    res = cryptoContext.openfhe_context.encrypt(
-        res,
-        1,
-        cryptoContext.L - 11,
-        he_res20_ctx.cur_num_slots,
-    )
-    print('name:res_2', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
-    return res
-
 
 def homo_Aespa(x,filename,cryptoContext):
     # 读取三个数据
