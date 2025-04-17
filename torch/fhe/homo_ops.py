@@ -880,7 +880,7 @@ def pre_encode(x, slots):
 
     inverse = x
 
-    N = 1 << 16
+    N = 1 << 14 #todo: need flexible N
     M = N << 1
     Nh = N >> 1
 
@@ -906,8 +906,10 @@ def pre_encode(x, slots):
         raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
 
     # Clears all imaginary values as CKKS for complex numbers
-    inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
-
+    if all(isinstance(x, complex) for x in inverse):
+        inverse_complex = inverse
+    else:
+        inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
     # Resize the inverse to fit the slot size.
     # note that default: slots value should be greater than size of input data list x
     inverse_complex = np.pad(
@@ -1247,7 +1249,7 @@ def coeff_encoding_one_level(pows, rot_group, flag_i):
 
     # Initialize the coefficient matrix
     # coeff = [[np.zeros(slots, dtype=np.complex128) for _ in range(3 * int(log2(slots)))]]
-    coeff = [[0j] * slots for _ in range(int(3 * math.log2(slots)))]
+    coeff = [[0.0j] * slots for _ in range(int(3 * math.log2(slots)))]
 
     m = slots
     while m > 1:
@@ -1279,9 +1281,9 @@ def coeff_encoding_one_level(pows, rot_group, flag_i):
 
 def reduce_rotation(index, slots):
     islots = int(slots)
+    index = int(index)
 
-    # If slots is a power of 2
-    if (slots & (slots - 1)) == 0:
+    if (int(slots) & int(slots - 1)) == 0:
         n = int(math.log2(slots))
         if index >= 0:
             return index - ((index >> n) << n)
@@ -1412,10 +1414,10 @@ def encode_bsMatrix(
 
     cur_limbs = cryptoContext.L - level
 
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
-        scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
-    else:
-        scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+    # if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+    #     scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    # else:
+    scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
     assert middle_value.max_encoded_value < 1e-20 or math.log2(
         int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
@@ -1423,7 +1425,7 @@ def encode_bsMatrix(
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
         N=cryptoContext.N,
-        cur_limbs=cur_limbs,
+        cur_limbs=cryptoContext.encode_params["primes"].size()[0],
         slots=slots,
         scaling_factor=scaling_factor,
         primes=cryptoContext.encode_params["primes"],
@@ -1433,11 +1435,10 @@ def encode_bsMatrix(
         power_of_roots=cryptoContext.encode_params["power_of_roots"]
     )
 
-    gpufhe_cipher = Plaintext([pt_encode], pt_encode.shape[0], scaling_factor, 1, slots, False)
+    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, True)
     if cryptoContext.config.PTX_TWIN:
         gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
     return gpufhe_cipher
-
 
 def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
     import copy
@@ -1504,21 +1505,13 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
         else:
             result[i] = [None] * num_rotations
 
-    # towers_to_drop = 0
-    # if lRemain != 0:
-    #     towers_to_drop = cryptoContext.L - lRemain - level_budget
-    # for _ in range(towers_to_drop):
-    #     element_params.pop_last_param()
-
     moduliQ_tmp = cryptoContext.moduliQ.clone()
-    # rootsQ_tmp = cryptoContext.power_of_roots.clone()
     power_of_rootsQ = cryptoContext.power_of_roots.clone()
     power_of_rootsQ_shoup = cryptoContext.power_of_roots_shoup.clone()
     barret_ratio_Q = cryptoContext.barret_ratio.clone()
     barret_k_Q = cryptoContext.barret_k.clone()
     if lRemain != 0:
         moduliQ_tmp = moduliQ_tmp[:lRemain+level_budget]
-        # rootsQ_tmp = rootsQ_tmp[:lRemain+level_budget]
         power_of_rootsQ = power_of_rootsQ[:(lRemain+level_budget)*cryptoContext.N]
         power_of_rootsQ_shoup = power_of_rootsQ_shoup[:(lRemain+level_budget)*cryptoContext.N]
         barret_ratio_Q = barret_ratio_Q[:lRemain+level_budget]
@@ -1528,28 +1521,18 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
 
     #combine the two tensors params_q and params_p
     params_q = moduliQ_tmp
-    params_p = cryptoContext.primes[cryptoContext.L + 1:].clone()
+    params_p = cryptoContext.primes[cryptoContext.L:].clone()
     size_q = lRemain+level_budget
     size_p = cryptoContext.K
     primes = torch.cat((params_q, params_p), dim=0)
-    power_of_rootsP = cryptoContext.power_of_roots[(cryptoContext.L + 1)* cryptoContext.N:].clone()
+    power_of_rootsP = cryptoContext.power_of_roots[(cryptoContext.L)* cryptoContext.N:].clone()
     power_of_roots  =torch.cat((power_of_rootsQ, power_of_rootsP), dim= 0)
-    power_of_rootsP_shoup =cryptoContext.power_of_roots_shoup[(cryptoContext.L + 1)* cryptoContext.N:].clone()
+    power_of_rootsP_shoup =cryptoContext.power_of_roots_shoup[(cryptoContext.L)* cryptoContext.N:].clone()
     power_of_roots_shoup  =torch.cat((power_of_rootsQ_shoup, power_of_rootsP_shoup), dim= 0)
-    barret_ratio_P =cryptoContext.barret_ratio[cryptoContext.L + 1:].clone()
+    barret_ratio_P =cryptoContext.barret_ratio[cryptoContext.L:].clone()
     barret_ratio  =torch.cat((barret_ratio_Q, barret_ratio_P), dim= 0)
-    barret_k_P =cryptoContext.barret_k[cryptoContext.L + 1:].clone()
+    barret_k_P =cryptoContext.barret_k[cryptoContext.L:].clone()
     barret_k  =torch.cat((barret_k_Q, barret_k_P), dim= 0)
-
-    # roots_q = rootsQ_tmp
-    # roots_p = cryptoContext.power_of_roots.clone()[cryptoContext.L:]
-    # roots = torch.cat((roots_q, roots_p), dim=0)
-
-    # primes = cryptoContext.primes,
-    # barret_ratio = cryptoContext.barret_ratio.clone()
-    # barret_k = cryptoContext.barret_k.clone()
-    # power_of_roots_shoup = cryptoContext.power_of_roots_shoup.clone()
-    # power_of_roots = cryptoContext.power_of_roots.clone()
 
     params_vector = [None] * (level_budget - stop)
 
@@ -1557,7 +1540,6 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
         # Store a *copy* of moduli and roots at current level
         params_vector[s - stop] = {
             "primes": primes.clone(),
-            # "roots": roots.clone(),
             "barret_ratio": barret_ratio.clone(),
             "barret_k": barret_k.clone(),
             "power_of_roots_shoup": power_of_roots_shoup.clone(),
@@ -1567,7 +1549,6 @@ def eval_coeffs_to_slots_precompute(scale, lRemain, cryptoContext):
         # Remove the (size_q - 1)-th element
         index = size_q - 1
         primes = torch.cat((primes[:index], primes[index + 1:]), dim=0)
-        # roots = torch.cat((roots[:index], roots[index + 1:]), dim=0)
         barret_ratio = torch.cat((barret_ratio[:index], barret_ratio[index + 1:]), dim=0)
         barret_k = torch.cat((barret_k[:index], barret_k[index + 1:]), dim=0)
         power_of_roots_shoup = torch.cat((power_of_roots_shoup[:index * cryptoContext.N], power_of_roots_shoup[(index + 1)* cryptoContext.N:]), dim=0)
