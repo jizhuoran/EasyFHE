@@ -467,7 +467,7 @@ def read_image(index):
             if not label:
                 raise ValueError("Failed to read label.")
             label = int.from_bytes(label, byteorder="big")
-            print(f"Label: {label}")
+            # print(f"Label: {label}")
             image_data = file.read(IMAGE_SIZE)
             if not image_data or len(image_data) != 3072:
                 raise ValueError("Failed to read image data.")
@@ -497,24 +497,24 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 1, 0, 2**14)
 
     # 准备明文模型，测速时可以删除
-    model = get_resnet20_HerPN(num_classes=10)
-    device = torch.device("cuda:0")
-    model.to(device)
-    model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet20_Aespa.pth'
-    stict = torch.load(model_path, map_location='cuda:0')
-    model.load_state_dict(stict, strict=False)
-    model.eval()
-    model = change_all_HerPN_by_PAF_MutalChannel(model)
+    # model = get_resnet20_HerPN(num_classes=10)
+    # device = torch.device("cuda:0")
+    # model.to(device)
+    # model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet20_Aespa.pth'
+    # stict = torch.load(model_path, map_location='cuda:0')
+    # model.load_state_dict(stict, strict=False)
+    # model.eval()
+    # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
-    for i in range(10):
+    for i in range(50):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
-        # 明文模型输出
-        input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
-        input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
-        x , fea = model(input,fea_out=True)
+        # # 明文模型输出
+        # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
+        # input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
+        # x , fea = model(input,fea_out=True)
 
         in_ct = openfhe_context.encrypt(
             image_vector,
@@ -522,7 +522,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
             cryptoContext.L - 11,
             he_res20_ctx.cur_num_slots,
         )
-        print("start processing image ", i, "time: ", datetime.datetime.now())
+        # print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
 
         cryptoContext.openfhe_context = openfhe_context
@@ -533,49 +533,45 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext)
         finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext)
 
-        print("time: ", time.time() - start_time)
+        # print("time: ", time.time() - start_time)
 
-        # 对比明密文loss
-        conv_init = fea[0].flatten().reshape(-1)
-        init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
-        init_out = torch.from_numpy(init_out).to(device)
-        loss = torch.sum((conv_init - init_out) ** 2)
-        print("loss: ", loss)
-
-        temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
-        print('name:resLayer1', temp)
-        fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
-        print('fea1', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer1', loss)
-
-        temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
-        print('name:resLayer2', temp)
-        fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
-        print('fea2', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer2',loss)
-
-        temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
-        print('name:resLayer3', temp)
-        fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
-        print('fea3', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer3',loss)
-
-
-
-
-        print("after processing image ", i, "time: ", datetime.datetime.now())
+        # # 对比明密文loss
+        # conv_init = fea[0].flatten().reshape(-1)
+        # init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
+        # init_out = torch.from_numpy(init_out).to(device)
+        # loss = torch.sum((conv_init - init_out) ** 2)
+        # print("loss: ", loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
+        # print('name:resLayer1', temp)
+        # fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
+        # print('fea1', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer1', loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
+        # print('name:resLayer2', temp)
+        # fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
+        # print('fea2', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer2',loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
+        # print('name:resLayer3', temp)
+        # fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
+        # print('fea3', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer3',loss)
+        # print("after processing image ", i, "time: ", datetime.datetime.now())
         try:
             clear_result = openfhe_context.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
             clear_result = clear_result[:10]
-            print(clear_result)
-            print('x:',x)
+            # print(clear_result)
+            # print('x:',x)
             max_element_idx = np.argmax(clear_result)
         except RuntimeError as e:
             print(f"Decryption failed: {e}")
