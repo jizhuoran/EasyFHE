@@ -53,11 +53,9 @@ def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
     if he_res20_ctx.aespa:
         res,bias = convbn_initial(input, scale, he_res20_ctx, cryptoContext)
-        print('===================Aespa1====================')
-        # res = homo_aespa(res,a2,bias,cryptoContext)
-        res = Aespa(res,"conv1bn1",cryptoContext)
+        # res = Aespa(res,"conv1bn1",cryptoContext)
+        res = homo_Aespa(res, "conv1bn1", cryptoContext)
         return res
-
     else:
         res = convbn_initial(input, scale, he_res20_ctx, cryptoContext)
         res = homo_relu(res, scale, he_res20_ctx.relu_degree, cryptoContext)
@@ -69,11 +67,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
     # layer[0],block[0],conv1
     if he_res20_ctx.aespa:
         res1,bias1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext)
-        # a2 = read_values_from_file(cryptoContext,  f"layer{1}-conv{1}bn{1}-a2",cryptoContext.L-input.cur_limbs,1,16384,scale)
-        print('===================Aespa2====================')
-        # res1 = homo_aespa(res1,a2,bias1,cryptoContext)
-        # res1 = homo_aespa_a0(res1, a2, f"layer{1}-conv{1}bn{1}-bias",he_res20_ctx, cryptoContext)
-        res1 = Aespa(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
+        # res1 = Aespa(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
+        res1 = homo_Aespa(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
     else:
         res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext)
         res1 = fhe.homo_bootstrap(
@@ -93,9 +88,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
         res1 = fhe.homo_bootstrap(
             res1, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
         )
-        print('===================Aespa3====================')
-        # res1 = homo_aespa(res1,a2,bias1,cryptoContext)
-        res1 = Aespa(res1, f"layer{1}-conv{2}bn{2}",  cryptoContext)
+        # res1 = Aespa(res1, f"layer{1}-conv{2}bn{2}",  cryptoContext)
+        res1 = homo_Aespa(res1, f"layer{1}-conv{2}bn{2}", cryptoContext)
     else:
         res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext)
         res1 = fhe.homo_add(
@@ -113,9 +107,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
         )
-        print('===================Aespa4====================')
-        # res1 = homo_aespa(res1,a2,bias2,cryptoContext)
-        res2 = Aespa(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
+        # res2 = Aespa(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
+        res2 = homo_Aespa(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
     else:
         res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_bootstrap(
@@ -126,23 +119,15 @@ def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][3]
     if he_res20_ctx.aespa:
         res2,bias2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext)
-
         # a1 = read_values_from_file(cryptoContext,  f"layer{2}-conv{2}bn{2}-a1",cryptoContext.L-res2.cur_limbs,1,16384,scale)
         # a1y = fhe.homo_mul_pt(res1, a1, cryptoContext)
-        print('max:res2', np.max(cryptoContext.openfhe_context.decrypt(res2).cpu().numpy().reshape(-1)))
-        print('max:res1', np.max(cryptoContext.openfhe_context.decrypt(res1).cpu().numpy().reshape(-1)))
         res2 = fhe.homo_add(res2, res1,cryptoContext)
-        print('max:res2', np.max(cryptoContext.openfhe_context.decrypt(res2).cpu().numpy().reshape(-1)))
         # a2 = read_values_from_file(cryptoContext,  f"layer{2}-conv{2}bn{2}-a2",cryptoContext.L-res2.cur_limbs,1,16384,scale)
-
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
         )
-        print('===================Aespa5====================')
-        # res2 = homo_aespa(res2, a2, bias2,cryptoContext)
-        res2 = Aespa(res2, f"layer{2}-conv{2}bn{2}", cryptoContext )
-        print('max:res2.1', np.max(cryptoContext.openfhe_context.decrypt(res2).cpu().numpy().reshape(-1)))
-
+        # res2 = Aespa(res2, f"layer{2}-conv{2}bn{2}", cryptoContext )
+        res2 = homo_Aespa(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
     else:
         res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_add(
@@ -157,18 +142,11 @@ def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][4]
     if he_res20_ctx.aespa:
         res3,bias3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext)
-        print('max:res3', np.max(cryptoContext.openfhe_context.decrypt(res3).cpu().numpy().reshape(-1)))
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
         )
-
-        # a2 = read_values_from_file(cryptoContext,  f"layer{3}-conv{1}bn{1}-a2",cryptoContext.L-res2.cur_limbs,1,16384,scale)
-        print('===================Aespa6====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        # res3 = homo_aespa_a0(res3, a2, f"layer{3}-conv{1}bn{1}-bias",he_res20_ctx, cryptoContext)
-        res3 = Aespa(res3, f"layer{3}-conv{1}bn{1}",  cryptoContext)
-        print('res3,max', np.max(cryptoContext.openfhe_context.decrypt(res3).cpu().numpy().reshape(-1)))
-
+        # res3 = Aespa(res3, f"layer{3}-conv{1}bn{1}",  cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{3}-conv{1}bn{1}", cryptoContext)
     else:
         res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext)
         res3 = fhe.homo_bootstrap(
@@ -179,17 +157,14 @@ def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][5]
     if he_res20_ctx.aespa:
         res3, bias3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext)
-        print('res3,max', np.max(cryptoContext.openfhe_context.decrypt(res3).cpu().numpy().reshape(-1)))
         # a1 = read_values_from_file(cryptoContext,  f"layer{3}-conv{2}bn{2}-a1",cryptoContext.L-res3.cur_limbs,1,16384,scale)
         # a1y = fhe.homo_mul_pt(res2, a1, cryptoContext)
         res3 = fhe.homo_add(res3, res2,cryptoContext)
-        # a2 = read_values_from_file(cryptoContext,  f"layer{3}-conv{2}bn{2}-a2",cryptoContext.L-res3.cur_limbs,1,16384,scale)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
         )
-        print('===================Aespa7====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        res3 = Aespa(res3, f"layer{3}-conv{2}bn{2}",  cryptoContext)
+        # res3 = Aespa(res3, f"layer{3}-conv{2}bn{2}",  cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{3}-conv{2}bn{2}", cryptoContext)
     else:
         res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext)
         res3 = fhe.homo_add(
@@ -201,11 +176,9 @@ def layer1(input, he_res20_ctx, cryptoContext):
         res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
     return res3
 
-
 def layer2(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[2][0]
     scaleDx = normalized_deltas[2][1]
-    #scaleDx = 0.20468562391210693
     boot_in = fhe.homo_bootstrap(
         input, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
     )
@@ -225,10 +198,6 @@ def layer2(input, he_res20_ctx, cryptoContext):
         boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext
     )
     fullpackSx = downsample1024to256(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext)
-
-    x = np.array(cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1))
-    print('Max-conv1', x)
-
     fullpackDx = downsample1024to256(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext)
 
 
@@ -236,32 +205,20 @@ def layer2(input, he_res20_ctx, cryptoContext):
         fullpackSx, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
     )
     if he_res20_ctx.aespa:
-        print('===================Aespa8====================')
-        # fullpackSx = homo_aespa(fullpackSx, a2, bias,cryptoContext)
-        fullpackSx = Aespa(fullpackSx, f"layer{4}-conv{1}bn{1}",  cryptoContext)
-        x = np.array(cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1))
-        print('Max-HerPN1', x)
+        # fullpackSx = Aespa(fullpackSx, f"layer{4}-conv{1}bn{1}",  cryptoContext)
+        fullpackSx = homo_Aespa(fullpackSx, f"layer{4}-conv{1}bn{1}", cryptoContext)
     else:
         fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
 
     he_res20_ctx.cur_num_slots = 8192
     if he_res20_ctx.aespa:
         fullpackSx, bias = convbn2(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext)
-        x = np.array(cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1))
-        print('Max-conv2', x)
-        # Todo:check a1 is mix with downsample's BN
+        # Todo:check a1 can mix with downsample's BN
         # a1 = read_values_from_file(cryptoContext,  f"layer{4}-conv{2}bn{2}-a1",cryptoContext.L-fullpackSx.cur_limbs,1,8192,scaleSx)
         # fullpackDx = fhe.homo_mul_pt(fullpackDx, a1,cryptoContext)
         res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-        x = np.array(cryptoContext.openfhe_context.decrypt(res1).cpu().numpy().reshape(-1))
-        print('Max-sum', x)
-        # a2 = read_values_from_file(cryptoContext,  f"layer{4}-conv{2}bn{2}-a2",cryptoContext.L-fullpackSx.cur_limbs,1,8192,scaleSx)
-        # res1 = fhe.homo_bootstrap(
-        #     res1, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
-        # )
-        print('===================Aespa9====================')
-        # res1 = homo_aespa(res1,a2,bias,cryptoContext)
-        res1 = Aespa(res1, f"layer{4}-conv{2}bn{2}",  cryptoContext)
+        # res1 = Aespa(res1, f"layer{4}-conv{2}bn{2}",  cryptoContext)
+        res1 = homo_Aespa(res1, f"layer{4}-conv{2}bn{2}", cryptoContext)
     else:
         fullpackSx = convbn2(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext)
         res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
@@ -273,14 +230,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[2][2]
     if he_res20_ctx.aespa:
         res2,bias2 = convbn2(res1, 5, 1, scale, he_res20_ctx, cryptoContext)
-        a2 = read_values_from_file(cryptoContext,  f"layer{5}-conv{1}bn{1}-a2",cryptoContext.L-res1.cur_limbs,1,8192,scale)
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
         )
-        print('===================Aespa10====================')
-        # res2 = homo_aespa(res2, a2, bias2,cryptoContext)
-        # res2 = homo_aespa_a0(res2, a2, f"layer{5}-conv{1}bn{1}-bias", he_res20_ctx, cryptoContext)
-        res2 = Aespa(res2, f"layer{5}-conv{1}bn{1}",  cryptoContext)
+        # res2 = Aespa(res2, f"layer{5}-conv{1}bn{1}",  cryptoContext)
+        res2 = homo_Aespa(res2, f"layer{5}-conv{1}bn{1}", cryptoContext)
     else:
         res2 = convbn2(res1, 5, 1, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_bootstrap(
@@ -294,13 +248,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
         # a1 = read_values_from_file(cryptoContext,  f"layer{5}-conv{2}bn{2}-a1",cryptoContext.L-res2.cur_limbs,1,8192,scale)
         # a1y = fhe.homo_mul_pt(res1,a1,cryptoContext)
         res2 = fhe.homo_add(res2,res1,cryptoContext)
-        # a2 = read_values_from_file(cryptoContext,  f"layer{5}-conv{2}bn{2}-a2",cryptoContext.L-res2.cur_limbs,1,8192,scale)
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
         )
-        print('===================Aespa11====================')
-        # res2 = homo_aespa(res2, a2, bias2,cryptoContext)
-        res2 = Aespa(res2, f"layer{5}-conv{2}bn{2}", cryptoContext)
+        # res2 = Aespa(res2, f"layer{5}-conv{2}bn{2}", cryptoContext)
+        res2 = homo_Aespa(res2, f"layer{5}-conv{2}bn{2}", cryptoContext)
     else:
         res2 = convbn2(res2, 5, 2, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_add(
@@ -314,14 +266,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[2][4]
     if he_res20_ctx.aespa:
         res3,bias3 = convbn2(res2, 6, 1, scale, he_res20_ctx, cryptoContext)
-        a2 = read_values_from_file(cryptoContext,  f"layer{6}-conv{1}bn{1}-a2",cryptoContext.L-res2.cur_limbs,1,8192,scale)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
         )
-        print('===================Aespa12====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        # res3 = homo_aespa_a0(res3, a2, f"layer{6}-conv{1}bn{1}-bias", he_res20_ctx, cryptoContext)
-        res3 = Aespa(res3, f"layer{6}-conv{1}bn{1}",  cryptoContext)
+        # res3 = Aespa(res3, f"layer{6}-conv{1}bn{1}",  cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{6}-conv{1}bn{1}", cryptoContext)
     else:
         res3 = convbn2(res2, 6, 1, scale, he_res20_ctx, cryptoContext)
         res3 = fhe.homo_bootstrap(
@@ -335,13 +284,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
         # a1 = read_values_from_file(cryptoContext,  f"layer{6}-conv{2}bn{2}-a1",cryptoContext.L-res3.cur_limbs,1,8192,scale)
         # a1y = fhe.homo_mul_pt(res2, a1, cryptoContext)
         res3 = fhe.homo_add(res3, res2,cryptoContext)
-        # a2 = read_values_from_file(cryptoContext,  f"layer{6}-conv{2}bn{2}-a2",cryptoContext.L-res3.cur_limbs,1,8192,scale)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
         )
-        print('===================Aespa13====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        res3 = Aespa(res3, f"layer{6}-conv{2}bn{2}",  cryptoContext)
+        # res3 = Aespa(res3, f"layer{6}-conv{2}bn{2}",  cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{6}-conv{2}bn{2}", cryptoContext)
     else:
         res3 = convbn2(res3, 6, 2, scale, he_res20_ctx, cryptoContext)
         res3 = fhe.homo_add(
@@ -380,16 +327,12 @@ def layer3(input, he_res20_ctx, cryptoContext):
     fullpackSx = downsample256to64(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext)
     fullpackDx = downsample256to64(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext)
 
-
     fullpackSx = fhe.homo_bootstrap(
         fullpackSx, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
     )
     if he_res20_ctx.aespa:
-        a2 = read_values_from_file(cryptoContext, f"layer{7}-conv{1}bn{1}-a2",
-                                      cryptoContext.L - boot_in.cur_limbs, 1, 8192, scaleSx)
-        print('===================Aespa14====================')
-        # fullpackSx = homo_aespa(fullpackSx, a2, bias,cryptoContext)
-        fullpackSx = Aespa(fullpackSx, f"layer{7}-conv{1}bn{1}",  cryptoContext)
+        # fullpackSx = Aespa(fullpackSx, f"layer{7}-conv{1}bn{1}",  cryptoContext)
+        fullpackSx = homo_Aespa(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     else:
         fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -399,13 +342,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
         # a1 = read_values_from_file(cryptoContext, f"layer{7}-conv{2}bn{2}-a1",cryptoContext.L-fullpackSx.cur_limbs,1,4096,scaleDx)
         # fullpackDx = fhe.homo_mul_pt(fullpackDx, a1,cryptoContext)
         res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-        # a2 = read_values_from_file(cryptoContext, f"layer{7}-conv{2}bn{2}-a2",cryptoContext.L-fullpackSx.cur_limbs,1,4096,scaleDx)
         res1 = fhe.homo_bootstrap(
             res1, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
-        print('===================Aespa15====================')
-        # res1 = homo_aespa(res1, a2, bias,cryptoContext)
-        res1 = Aespa(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
+        # res1 = Aespa(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
+        res1 = homo_Aespa(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
     else:
         fullpackSx = convbn3(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext)
         res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
@@ -417,14 +358,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[3][2]
     if he_res20_ctx.aespa:
         res2,bias2 = convbn3(res1, 8, 1, scale, he_res20_ctx, cryptoContext)
-        a2 = read_values_from_file(cryptoContext, f"layer{8}-conv{1}bn{1}-a2",cryptoContext.L-res1.cur_limbs,1,4096,scale)
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
-        print('===================Aespa16====================')
-        # res2 = homo_aespa(res2, a2, bias2,cryptoContext)
-        # res2 = homo_aespa_a0(res2, a2, f"layer{8}-conv{1}bn{1}-bias", he_res20_ctx, cryptoContext)
-        res2 = Aespa(res2, f"layer{8}-conv{1}bn{1}",  cryptoContext)
+        # res2 = Aespa(res2, f"layer{8}-conv{1}bn{1}",  cryptoContext)
+        res2 = homo_Aespa(res2, f"layer{8}-conv{1}bn{1}", cryptoContext)
     else:
         res2 = convbn3(res1, 8, 1, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_bootstrap(
@@ -438,13 +376,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
         # a1 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-a1",cryptoContext.L-res2.cur_limbs,1,4096,scale)
         # a1y = fhe.homo_mul_pt(res1, a1, cryptoContext)
         res2 = fhe.homo_add(res2, res1,cryptoContext)
-        # a2 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-a2",cryptoContext.L-res2.cur_limbs,1,4096,scale)
         res2 = fhe.homo_bootstrap(
             res2, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
-        print('===================Aespa17====================')
-        # res2 = homo_aespa(res2, a2, bias2,cryptoContext)
-        res2 = Aespa(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
+        # res2 = Aespa(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
+        res2 = homo_Aespa(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
     else:
         res2 = convbn3(res2, 8, 2, scale, he_res20_ctx, cryptoContext)
         res2 = fhe.homo_add(
@@ -458,14 +394,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[3][4]
     if he_res20_ctx.aespa:
         res3, bias3 = convbn3(res2, 9, 1, scale, he_res20_ctx, cryptoContext)
-        a2 = read_values_from_file(cryptoContext, f"layer{9}-conv{1}bn{1}-a2",cryptoContext.L-res2.cur_limbs,1,4096,scale)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
-        print('===================Aespa18====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        # res3 = homo_aespa_a0(res3, a2, f"layer{9}-conv{1}bn{1}-bias", he_res20_ctx, cryptoContext)
-        res3 = Aespa(res3, f"layer{9}-conv{1}bn{1}", cryptoContext)
+        # res3 = Aespa(res3, f"layer{9}-conv{1}bn{1}", cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{9}-conv{1}bn{1}", cryptoContext)
     else:
         res3 = convbn3(res2, 9, 1, scale, he_res20_ctx, cryptoContext)
         res3 = fhe.homo_bootstrap(
@@ -479,13 +412,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
         # a1 =read_values_from_file(cryptoContext, f"layer{9}-conv{2}bn{2}-a1",cryptoContext.L-res3.cur_limbs,1,4096,scale)
         # a1y = fhe.homo_mul_pt(res2, a1, cryptoContext)
         res3 = fhe.homo_add(res3, res2,cryptoContext)
-        a2 = read_values_from_file(cryptoContext, f"layer{9}-conv{2}bn{2}-a2",cryptoContext.L-res3.cur_limbs,1,4096,scale)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
-        print('===================Aespa19====================')
-        # res3 = homo_aespa(res3, a2, bias3,cryptoContext)
-        res3 = Aespa(res3, f"layer{9}-conv{2}bn{2}", cryptoContext)
+        # res3 = Aespa(res3, f"layer{9}-conv{2}bn{2}", cryptoContext)
+        res3 = homo_Aespa(res3, f"layer{9}-conv{2}bn{2}", cryptoContext)
         res3 = fhe.homo_bootstrap(
             res3, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
         )
@@ -565,22 +496,23 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), 1, 0, 2**15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 1, 0, 2**14)
 
-    print("=====================================================")
-    for i in range(100):
-        he_res20_ctx.cur_num_slots = 1 << 14
+    # 准备明文模型，测速时可以删除
+    model = get_resnet20_HerPN(num_classes=10)
+    device = torch.device("cuda:0")
+    model.to(device)
+    model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet20_Aespa.pth'
+    stict = torch.load(model_path, map_location='cuda:0')
+    model.load_state_dict(stict, strict=False)
+    model.eval()
+    model = change_all_HerPN_by_PAF_MutalChannel(model)
 
+    print("=====================================================")
+    for i in range(1):
+        he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
-        #
+        # 明文模型输出
         input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
-        model = get_resnet20_HerPN(num_classes=10)
-        device = torch.device("cuda:0")
-        model.to(device)
-        model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet20_Aespa.pth'
-        stict = torch.load(model_path, map_location='cuda:0')
-        model.load_state_dict(stict, strict=False)
-        model.eval()
-        model = change_all_HerPN_by_PAF_MutalChannel(model)
         input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
         x , fea = model(input,fea_out=True)
 
@@ -590,50 +522,53 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
             cryptoContext.L - 11,
             he_res20_ctx.cur_num_slots,
         )
-
-        conv_init = fea[0]
-        conv_init= conv_init.flatten().reshape(-1)
         print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
 
         cryptoContext.openfhe_context = openfhe_context
-
+        # 密文推理
         firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext)
-        conv1_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
-        conv1_out = torch.from_numpy(conv1_out).to(device)
-        loss = torch.sum((conv_init-conv1_out)**2)
-        print("loss: ", loss)
-
         resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext)
-        temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
-        print('name:resLayer1',temp)
-        print('fea1', fea[1].flatten().reshape(-1))
-        fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer1',loss)
-
         resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext)
-        temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
-        print('name:resLayer2', temp)
-        print('fea2', fea[2].flatten().reshape(-1))
-        fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print(loss)
-
         resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext)
-        temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
-        print('name:resLayer3', temp)
-        print('fea3', fea[3].flatten().reshape(-1))
-        fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print(loss)
-
         finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext)
 
         print("time: ", time.time() - start_time)
+
+        # 对比明密文loss
+        conv_init = fea[0].flatten().reshape(-1)
+        init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
+        init_out = torch.from_numpy(init_out).to(device)
+        loss = torch.sum((conv_init - init_out) ** 2)
+        print("loss: ", loss)
+
+        temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
+        print('name:resLayer1', temp)
+        fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
+        print('fea1', fea_out)
+        temp = torch.tensor(temp, device="cuda:0")
+        loss = torch.sum((fea_out - temp) ** 2)
+        print('resLayer1', loss)
+
+        temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
+        print('name:resLayer2', temp)
+        fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
+        print('fea2', fea_out)
+        temp = torch.tensor(temp, device="cuda:0")
+        loss = torch.sum((fea_out - temp) ** 2)
+        print('resLayer2',loss)
+
+        temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
+        print('name:resLayer3', temp)
+        fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
+        print('fea3', fea_out)
+        temp = torch.tensor(temp, device="cuda:0")
+        loss = torch.sum((fea_out - temp) ** 2)
+        print('resLayer3',loss)
+
+
+
+
         print("after processing image ", i, "time: ", datetime.datetime.now())
         try:
             clear_result = openfhe_context.decrypt(finalRes)
@@ -713,7 +648,7 @@ def resnet20( ):
     he_res20_context_ = HE_res20_context("./weights_Aespa",True)
 
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False,SAVE_MIDDLE=False, PTX_TWIN=False)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False,SAVE_MIDDLE=True, PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
@@ -725,8 +660,7 @@ def resnet20( ):
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         # file_name = "encode_20250412_221730" # baseline
-        # file_name= "encode_20250415_215214"  # todo: add aespa pkl
-        file_name = "encode_20250416_224643"
+        file_name = "encode_20250416_224643" #  Aespa pkl
         pkl_path = os.path.join("/home/fyh/PNP/GPU-FHE/examples/resnet20/src", file_name + ".pkl")
         # load_encode_pkl(file_name, he_res20_context_)
     load_weight(pkl_path, cryptoContext)
@@ -771,18 +705,23 @@ def homo_aespa_a0(a1_x,a2,a0_filename,he_res20_ctx,cryptoContext):
     print('name:res_2', cryptoContext.openfhe_context.decrypt(res).cpu().numpy().reshape(-1))
     return res
 
-# def Aespa(a1_x,a2_filename,a0_filename,he_res20_ctx,cryptoContext):
-#     #     明文下的aespa，首先是将密文状态下的a1_x解密为一个tensor，然后用对应的运算
-#     slots = a1_x.slots
-#     a1_x = np.array(cryptoContext.openfhe_context.decrypt(a1_x).cpu().numpy().reshape(-1))
-#     a1_x = a1_x[:slots]
-#     a1_x = torch.tensor(a1_x)
-#     a2 = torch.tensor(read_aespa_value(a2_filename,a1_x.size()[0]))
-#     a0 = torch.tensor(read_aespa_value(a0_filename, a1_x.size()[0]))
-#     a2_x2 = a2 * (a1_x**2)
-#     res = a2_x2 + a1_x + a0
-#     res = cryptoContext.openfhe_context.encrypt(res,1,0,slots)
-#     return res
+
+def homo_Aespa(x,filename,cryptoContext):
+    # 读取三个数据
+    a1_filename = filename + '-a1'
+    a2_filename = filename + '-a2'
+    a0_filename = filename + '-bias'
+    slots = x.slots
+    scale = 1
+    a1 = read_values_from_file(cryptoContext, a1_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    a2 = read_values_from_file(cryptoContext, a2_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    a0 = read_values_from_file(cryptoContext, a0_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    x2 = fhe.homo_square(x, cryptoContext)
+    a2x2 = fhe.homo_mul_pt(x2, a2, cryptoContext)
+    a1x = fhe.homo_mul_pt(x,a1,cryptoContext)
+    res = fhe.homo_add(a2x2,a1x,cryptoContext)
+    res = fhe.homo_add_pt(res, a0, cryptoContext)
+    return res
 
 def Aespa(x,filename,cryptoContext):
     a1_filename = filename + '-a1'
@@ -831,21 +770,8 @@ def read_aespa_value(filename,target_len, scale=1.0):
     n = len(values)
     if target_len % n != 0:
         raise ValueError(f"target_len ({target_len}) must be a multiple of the original array's length ({n})")
-
     k = target_len // n
     return np.repeat(values, k)
 
 if __name__ == "__main__":
     resnet20()
-
-"""
-当前这个程序有什么问题？
-（1）无法正确解密：
-部分aespa在密文add a0时出现误差过大（bug1），导致无法解密。
-解法:将这部分aespa（2，6，10，12，14，18）中的加a0的部分转换为明文加法
-（2）与明文模型输出不匹配：
-主要现象为输出同质化过于严重，检查后表现为在aespa中的x过小，导致输出基本等于a0，所以输出/预测严重同质化；
-原因：输入
-
-
-"""
