@@ -586,11 +586,12 @@ def resnet20( ):
     cryptoContext.pre_encode_type = "middle"
     pkl_path = None
     if config.SAVE_MIDDLE==False:
-        # file_name = "encode_20250412_221730" # baseline
-        # load_encode_pkl(file_name, he_res20_context_)
-        file_name = "encode_20250418_112039" #  Aespa pkl
+        if he_res20_context_.aespa:
+            file_name = "encode_20250418_224930" #  Aespa pkl
+        else:
+            file_name = "encode_20250412_221730" # baseline pkl
         pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
-        #todo: add pkl to hugging face after fixing the encode bug in the last aespa block
+        load_encode_pkl(file_name, he_res20_context_)
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
@@ -599,7 +600,6 @@ def resnet20( ):
 
 
 def homo_Aespa(x,filename,cryptoContext):
-    # 读取三个数据
     a2_filename = filename + '-a2'
     a1_filename = filename + '-a1'
     a0_filename = filename + '-bias'
@@ -613,13 +613,15 @@ def homo_Aespa(x,filename,cryptoContext):
     a2x2 = fhe.homo_mul_pt(x2, a2, cryptoContext)
     a1x = fhe.homo_mul_pt(x,a1,cryptoContext)
     res = fhe.homo_add(a2x2,a1x,cryptoContext)
-    # fixme:check layer9 a0 encode bug
-    if a0_filename == 'layer9-conv2bn2-bias':
-        a0 = torch.tensor(read_aespa_value(a0_filename, slots))
-        a0_encode = cryptoContext.openfhe_context.encode(a0, 1, 0, slots)
-        res = fhe.homo_add_pt(res, a0_encode, cryptoContext)
-    else:
-        res = fhe.homo_add_pt(res, a0, cryptoContext)
+    res = fhe.homo_add_pt(res, a0, cryptoContext)
+
+    # # fixme:check layer9-conv2bn2-bias(a0) encode bug with weights in commit: 69557db2
+    # if a0_filename == 'layer9-conv2bn2-bias':
+    #     a0 = torch.tensor(read_aespa_value(a0_filename, slots))
+    #     a0_encode = cryptoContext.openfhe_context.encode(a0, 1, 0, slots)
+    #     res = fhe.homo_add_pt(res, a0_encode, cryptoContext)
+    # else:
+    #     res = fhe.homo_add_pt(res, a0, cryptoContext)
     return res
 
 def homo_Aespa_reduce_mult(x,filename,cryptoContext):
