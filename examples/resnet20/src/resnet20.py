@@ -50,7 +50,7 @@ def homo_relu(ciphertext, scale, degree, cryptoContext):
 
 def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
-    res = convbn_initial(input, scale, he_res20_ctx, cryptoContext)
+    res = convbn_initial(input, scale, he_res20_ctx, cryptoContext, 32, 1)
     res = homo_relu(res, scale, he_res20_ctx.relu_degree, cryptoContext)
     return res
 
@@ -58,54 +58,42 @@ def initial_layer(input, he_res20_ctx, cryptoContext):
 def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][0]
 
-    res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext)
-    res1 = fhe.homo_bootstrap(
-        res1, cryptoContext.L, 14, cryptoContext
-    )
+    res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
     res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][1]
-    res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext)
+    res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     res1 = fhe.homo_add(
         res1, fhe.homo_mul_scalar_double(input, scale, cryptoContext), cryptoContext
     )
-    res1 = fhe.homo_bootstrap(
-        res1, cryptoContext.L, 14, cryptoContext
-    )
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
     res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][2]
-    res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext)
-    res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 14, cryptoContext
-    )
+    res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, 14, cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][3]
-    res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
-    res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 14, cryptoContext
-    )
+    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, 14, cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][4]
-    res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext)
-    res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 14, cryptoContext
-    )
+    res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, 14, cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][5]
-    res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
-    res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 14, cryptoContext
-    )
+    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, 14, cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     return res3
@@ -117,17 +105,20 @@ def layer2(input, he_res20_ctx, cryptoContext):
     boot_in = fhe.homo_bootstrap(
         input, cryptoContext.L, 14, cryptoContext
     )
-    res1sx = [None, None]
-    res1dx = [None, None]
-    res1sx[0], res1sx[1] = convbn1632sx(
-        boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext
-    )
-    res1dx[0], res1dx[1] = convbn1632dx(
-        boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext
+
+    res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
+    res1sx1 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 16, "2")
+
+    res1dx0 = convbn_dx(
+        boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext, 16384, 16, -1024, 0, "1"
     )
 
-    fullpackSx = downsample1024to256(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext)
-    fullpackDx = downsample1024to256(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext)
+    res1dx1 = convbn_dx(
+        boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext, 16384, 16, -1024, 16, "2"
+    )
+
+    fullpackSx = downsample1024to256(res1sx0, res1sx1, he_res20_ctx, cryptoContext)
+    fullpackDx = downsample1024to256(res1dx0, res1dx1, he_res20_ctx, cryptoContext)
 
     he_res20_ctx.cur_num_slots = 8192
 
@@ -135,7 +126,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
         fullpackSx, cryptoContext.L, 13, cryptoContext
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
-    fullpackSx = convbn2(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext)
+    fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
         res1, cryptoContext.L, 13, cryptoContext
@@ -143,14 +134,14 @@ def layer2(input, he_res20_ctx, cryptoContext):
     res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][2]
-    res2 = convbn2(res1, 5, 1, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res1, 5, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res2 = fhe.homo_bootstrap(
         res2, cryptoContext.L, 13, cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][3]
-    res2 = convbn2(res2, 5, 2, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res2, 5, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
@@ -160,14 +151,14 @@ def layer2(input, he_res20_ctx, cryptoContext):
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][4]
-    res3 = convbn2(res2, 6, 1, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res2, 6, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res3 = fhe.homo_bootstrap(
         res3, cryptoContext.L, 13, cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][5]
-    res3 = convbn2(res3, 6, 2, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res3, 6, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
@@ -186,17 +177,20 @@ def layer3(input, he_res20_ctx, cryptoContext):
     boot_in = fhe.homo_bootstrap(
         input, cryptoContext.L, 13, cryptoContext
     )
-    res1sx = [None, None]
-    res1dx = [None, None]
-    res1sx[0], res1sx[1] = convbn3264sx(
-        boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext
-    )
-    res1dx[0], res1dx[1] = convbn3264dx(
-        boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext
+
+    res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
+    res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
+
+    res1dx0 = convbn_dx(
+        boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, 8192, 32, -256, 0, "1"
     )
 
-    fullpackSx = downsample256to64(res1sx[0], res1sx[1], he_res20_ctx, cryptoContext)
-    fullpackDx = downsample256to64(res1dx[0], res1dx[1], he_res20_ctx, cryptoContext)
+    res1dx1 = convbn_dx(
+        boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, 8192, 32, -256, 32, "2"
+    )
+
+    fullpackSx = downsample256to64(res1sx0, res1sx1, he_res20_ctx, cryptoContext)
+    fullpackDx = downsample256to64(res1dx0, res1dx1, he_res20_ctx, cryptoContext)
 
     he_res20_ctx.cur_num_slots = 4096
 
@@ -204,7 +198,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
         fullpackSx, cryptoContext.L, 12, cryptoContext
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
-    fullpackSx = convbn3(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext)
+    fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
         res1, cryptoContext.L, 12, cryptoContext
@@ -212,14 +206,14 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][2]
-    res2 = convbn3(res1, 8, 1, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res1, 8, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res2 = fhe.homo_bootstrap(
         res2, cryptoContext.L, 12, cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][3]
-    res2 = convbn3(res2, 8, 2, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res2, 8, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
@@ -229,14 +223,14 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][4]
-    res3 = convbn3(res2, 9, 1, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res2, 9, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res3 = fhe.homo_bootstrap(
         res3, cryptoContext.L, 12, cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][5]
-    res3 = convbn3(res3, 9, 2, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res3, 9, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
@@ -312,7 +306,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 1, 0, 2**14)
 
     print("=====================================================")
-    for i in range(1):
+    for i in range(10):
         he_res20_ctx.cur_num_slots = 1 << 14
 
         image_vector, label, _ = read_image(i)
@@ -395,7 +389,7 @@ def resnet20( ):
     maxLevelsRemaining = 14
     logBsSlots_list = [12, 13, 14]
     logN = 16
-    dnum = 1
+    dnum = 3
     dcrtBits = 59
     firstMod = 60
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
