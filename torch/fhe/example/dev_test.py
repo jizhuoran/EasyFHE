@@ -484,7 +484,7 @@ def double_bs_debug(
 
 def gen_CoeffSlots_matrix_test_case(
         maxLevelsRemaining=1,
-        logBsSlots_list=[13],
+        logBsSlots_list=[12],
         logN=14,
         dnum=1,
         dcrtBits=52,
