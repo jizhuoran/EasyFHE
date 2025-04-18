@@ -484,7 +484,7 @@ def double_bs_debug(
 
 def gen_CoeffSlots_matrix_test_case(
         maxLevelsRemaining=1,
-        logBsSlots_list=[12],
+        logBsSlots_list=[13],
         logN=14,
         dnum=1,
         dcrtBits=52,
@@ -513,15 +513,19 @@ def gen_CoeffSlots_matrix_test_case(
     pre = q_double / factor
     k = K_SPARSE if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 1.0
     scaleEnc = pre / k
-    # scaleDec = 1 / pre
+    scaleDec = 1 / pre
 
     lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
-    lDec = cryptoContext.L - (9 + precom.paramsEnc.level_budget + precom.paramsDec.level_budget)
-    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
+    lDec = maxLevelsRemaining + 1
+
     # note: c2s_matrix should be same as m_U0hatTPreFFT
+    # note: s2c_matrix should be same as m_U0PreFFT
+    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
+    s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
 
 
-    encode_slots = (1 << 11)
+
+    encode_slots = (1 << 13)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
@@ -538,10 +542,12 @@ def gen_CoeffSlots_matrix_test_case(
     print("HE decryption result(golden): ", clear_result1[:10])
 
     print("\n")
+    m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup #recover the context
     print("gpu bootstrapp done!")
 
     clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -552,9 +558,28 @@ def gen_CoeffSlots_matrix_test_case(
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
 
-    print(f"Max diff: {max_diff:.5e}")
-    print(f"Mean diff: {mean_diff:.5e}")
+    print(f"c2s_matrix Max diff: {max_diff:.5e}")
+    print(f"c2s_matrix Mean diff: {mean_diff:.5e}")
 
+    print("\n")
+    m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
+    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
+    print("gpu bootstrapp done!")
+
+    clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    print("HE decryption result: ", clear_result2[:10])
+
+    diff = np.abs(clear_result1 - clear_result2)
+    max_diff = np.max(diff)
+    mean_diff = np.mean(diff)
+
+    print(f"s2c_matrix Max diff: {max_diff:.5e}")
+    print(f"s2c_matrix Mean diff: {mean_diff:.5e}")
 
 
 ##############

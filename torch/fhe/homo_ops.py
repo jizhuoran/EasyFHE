@@ -1467,7 +1467,7 @@ def eval_coeffs_to_slots_precompute(logBsSlots, scale, lRemain, cryptoContext):
         encode_params_ksiPows.append(cmath.exp(1j * angle))
     encode_params_ksiPows.append(encode_params_ksiPows[0])
 
-    # encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist() #fixme: why it is correct previously
+    # encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist() #fixme: why it is correct in `pre_encode`
     encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128)
     encode_params_rotGroup = np.array(encode_params_rotGroup)
 
@@ -1617,4 +1617,312 @@ def eval_coeffs_to_slots_precompute(logBsSlots, scale, lRemain, cryptoContext):
                         cryptoContext.encode_params = params_vector[0]
                         result[stop][g_rem * i + j] = encode_bsMatrix(rotate_temp, f"clear_temp_{i}_{j}_{rot}",
                                                                level0, len(rotate_temp), cryptoContext)
+    return result
+
+
+def coeff_decoding_one_level(pows, rot_group, flag_i):
+    M_PI = 3.14159265358979323846
+
+    dim = len(pows) - 1
+    slots = len(rot_group)
+
+    # Initialize the coefficient matrix
+    # coeff = [[np.zeros(slots, dtype=np.complex128) for _ in range(3 * int(log2(slots)))]]
+    coeff = [[0.0j] * slots for _ in range(int(3 * math.log2(slots)))]
+
+    m = 2
+    while m <= slots:
+        s = int(log2(m)) - 1
+
+        for k in range(0, slots, m):
+            lenh = m >> 1
+            lenq = m << 2
+
+            for j in range(lenh):
+                j_twiddle = (rot_group[j] % lenq) * (dim // lenq)
+
+                if flag_i and (m == 2):
+                    w = np.exp(M_PI / 2 * 1j) * pows[j_twiddle]
+                    coeff[s + int(math.log2(slots))][j + k] = np.exp(M_PI / 2 * 1j)  # not shifted
+                    coeff[s + 2 * int(math.log2(slots))][j + k] = w  # shifted left
+                    coeff[s + int(math.log2(slots))][j + k + lenh] = -w  # not shifted
+                    coeff[s][j + k + lenh] = np.exp(M_PI / 2 * 1j)  # shifted right
+                else:
+                    w = pows[j_twiddle]
+                    coeff[s + int(log2(slots))][j + k] = 1  # not shifted
+                    coeff[s + 2 * int(log2(slots))][j + k] = w  # shifted left
+                    coeff[s + int(log2(slots))][j + k + lenh] = -w  # not shifted
+                    coeff[s][j + k + lenh] = 1  # shifted right
+        m <<= 1
+
+    return coeff
+
+
+def coeff_decoding_collapse(pows, rot_group, level_budget, flag_i):
+    slots = len(rot_group)
+
+    # Compute how many layers are collapsed in each level from the budget
+    dims = select_layers(log2(slots), level_budget)
+    layers_collapse = dims[0]
+    rows_collapse = dims[1]
+    rem_collapse = dims[2]
+
+    dim_collapse = level_budget
+    flag_rem = 0
+
+    if rem_collapse == 0:
+        flag_rem = 0
+    else:
+        flag_rem = 1
+
+    num_rotations = (1 << (layers_collapse + 1)) - 1
+    num_rotations_rem = (1 << (rem_collapse + 1)) - 1
+
+    # Compute the coefficients for decoding for the given level budget
+    coeff1 = coeff_decoding_one_level(pows, rot_group, flag_i)
+
+    # Coeff stores the coefficients for the given budget of levels
+    coeff = []
+    for i in range(dim_collapse):
+        if flag_rem:
+            if i < level_budget - 1:
+                # before remainder
+                coeff.append([[0j] * slots for _ in range(num_rotations)])
+            else:
+                # Remainder corresponds to the first index in encoding and to the last one in decoding
+                coeff.append([[0j] * slots for _ in range(num_rotations_rem)])
+        else:
+            coeff.append([[0j] * slots for _ in range(num_rotations)])
+
+    for s in range(rows_collapse):
+        for l in range(layers_collapse):
+            if l == 0:
+                coeff[s][0] = coeff1[s * layers_collapse]
+                coeff[s][1] = coeff1[s * layers_collapse + int(log2(slots))]
+                coeff[s][2] = coeff1[s * layers_collapse + 2 * int(log2(slots))]
+            else:
+                temp = coeff[s]
+                zeros = [[0.0] * slots for _ in range(num_rotations)]
+                coeff[s] = zeros
+
+                for t in range(3):
+                    for u in range((1 << (l + 1)) - 1):
+                        for k in range(slots):
+                            if t == 0:
+                                coeff[s][u][k] += coeff1[s * layers_collapse + l][k] * temp[u][k]
+                            elif t == 1:
+                                coeff[s][u + (1 << l)][k] += coeff1[s * layers_collapse + l + int(math.log2(slots))][k] * \
+                                                             temp[u][k]
+                            elif t == 2:
+                                coeff[s][u + (1 << (l + 1))][k] += \
+                                coeff1[s * layers_collapse + l + 2 * int(math.log2(slots))][k] * temp[u][k]
+
+    if flag_rem:
+        s = rows_collapse
+        for l in range(rem_collapse):
+            if l == 0:
+                coeff[s][0] = coeff1[s * layers_collapse]
+                coeff[s][1] = coeff1[s * layers_collapse + int(log2(slots))]
+                coeff[s][2] = coeff1[s * layers_collapse + 2 * int(log2(slots))]
+            else:
+                temp = coeff[s]
+                zeros = [[0j] * slots for _ in range(num_rotations_rem)]
+                coeff[s] = zeros
+
+                for t in range(3):
+                    for u in range((1 << (l + 1)) - 1):
+                        for k in range(slots):
+                            if t == 0:
+                                coeff[s][u][k] += coeff1[s * layers_collapse + l][k] * temp[u][k]
+                            elif t == 1:
+                                coeff[s][u + (1 << l)][k] += coeff1[s * layers_collapse + l + int(math.log2(slots))][k] * \
+                                                             temp[u][k]
+                            elif t == 2:
+                                coeff[s][u + (1 << (l + 1))][k] += \
+                                coeff1[s * layers_collapse + l + 2 * int(math.log2(slots))][k] * temp[u][k]
+    return coeff
+
+
+def eval_slots_to_coeffs_precompute(logBsSlots, scale, lRemain, cryptoContext):
+    slots = (1 << logBsSlots)
+
+    import copy
+    # copied from pre_encode
+    import cmath
+
+    # compute encode params
+    M_PI = 3.14159265358979323846
+    fivePows = 1
+
+    encode_params_ksiPows = []
+    encode_params_rotGroup = []
+
+    m = 4 * slots
+    for i in range(slots):
+        encode_params_rotGroup.append(fivePows)
+        fivePows = (fivePows * 5) % m
+
+    # m_ksiPows stores the complex roots of unity
+    for j in range((4 * slots + 1)):
+        angle = 2.0 * M_PI * j / m
+        encode_params_ksiPows.append(cmath.exp(1j * angle))
+    encode_params_ksiPows.append(encode_params_ksiPows[0])
+
+    # encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist() #fixme: why it is correct in `pre_encode
+    encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128)
+    encode_params_rotGroup = np.array(encode_params_rotGroup)
+
+    # construction ends
+
+    flag_i = False  # align with openfhe
+
+    if str(int(math.log2(slots))) not in cryptoContext.BsContext_map:
+        error_msg = f"Precomputations for {slots} slots were not generated. Need to call EvalBootstrapSetup to proceed."
+        raise ValueError(error_msg)
+    precom = cryptoContext.BsContext_map[str(logBsSlots)]
+    level_budget = precom.paramsDec.level_budget
+    layers_collapse = precom.paramsDec.layers_coll
+    rem_collapse = precom.paramsDec.layers_rem
+    num_rotations = precom.paramsDec.num_rotations
+    b = precom.paramsDec.baby_step
+    g = precom.paramsDec.giant_step
+    num_rotations_rem = precom.paramsDec.num_rotations_rem
+    b_rem = precom.paramsDec.baby_step_rem
+    g_rem = precom.paramsDec.giant_step_rem
+
+    flag_rem = 0
+
+    if rem_collapse != 0:
+        flag_rem = 1
+
+    # result is the rotated plaintext version of coeff
+    result = [[] for _ in range(level_budget)]
+    for i in range(level_budget):
+        if flag_rem == 1 and i == (level_budget - 1):
+            result[i] = [None] * num_rotations_rem
+        else:
+            result[i] = [None] * num_rotations
+
+    moduliQ_tmp = cryptoContext.moduliQ.clone()
+    power_of_rootsQ = cryptoContext.power_of_roots.clone()
+    power_of_rootsQ_shoup = cryptoContext.power_of_roots_shoup.clone()
+    barret_ratio_Q = cryptoContext.barret_ratio.clone()
+    barret_k_Q = cryptoContext.barret_k.clone()
+    if lRemain != 0:
+        moduliQ_tmp = moduliQ_tmp[:lRemain + level_budget]
+        power_of_rootsQ = power_of_rootsQ[:(lRemain + level_budget) * cryptoContext.N]
+        power_of_rootsQ_shoup = power_of_rootsQ_shoup[:(lRemain + level_budget) * cryptoContext.N]
+        barret_ratio_Q = barret_ratio_Q[:lRemain + level_budget]
+        barret_k_Q = barret_k_Q[:lRemain + level_budget]
+
+    level0 = cryptoContext.L - lRemain - level_budget
+
+    # combine the two tensors params_q and params_p
+    params_q = moduliQ_tmp
+    params_p = cryptoContext.primes[cryptoContext.L:].clone()
+    size_q = lRemain + level_budget
+    size_p = cryptoContext.K
+    primes = torch.cat((params_q, params_p), dim=0)
+    power_of_rootsP = cryptoContext.power_of_roots[(cryptoContext.L) * cryptoContext.N:].clone()
+    power_of_roots = torch.cat((power_of_rootsQ, power_of_rootsP), dim=0)
+    power_of_rootsP_shoup = cryptoContext.power_of_roots_shoup[(cryptoContext.L) * cryptoContext.N:].clone()
+    power_of_roots_shoup = torch.cat((power_of_rootsQ_shoup, power_of_rootsP_shoup), dim=0)
+    barret_ratio_P = cryptoContext.barret_ratio[cryptoContext.L:].clone()
+    barret_ratio = torch.cat((barret_ratio_Q, barret_ratio_P), dim=0)
+    barret_k_P = cryptoContext.barret_k[cryptoContext.L:].clone()
+    barret_k = torch.cat((barret_k_Q, barret_k_P), dim=0)
+
+    params_vector = [None] * (level_budget - flag_rem + 1)
+
+    for s in range(0, level_budget - flag_rem + 1, 1):
+        # Store a *copy* of moduli and roots at current level
+        params_vector[s] = {
+            "primes": primes.clone(),
+            "barret_ratio": barret_ratio.clone(),
+            "barret_k": barret_k.clone(),
+            "power_of_roots_shoup": power_of_roots_shoup.clone(),
+            "power_of_roots": power_of_roots.clone(),
+        }
+
+        # Remove the (size_q - 1)-th element
+        index = size_q - 1
+        primes = torch.cat((primes[:index], primes[index + 1:]), dim=0)
+        barret_ratio = torch.cat((barret_ratio[:index], barret_ratio[index + 1:]), dim=0)
+        barret_k = torch.cat((barret_k[:index], barret_k[index + 1:]), dim=0)
+        power_of_roots_shoup = torch.cat(
+            (power_of_roots_shoup[:index * cryptoContext.N], power_of_roots_shoup[(index + 1) * cryptoContext.N:]),
+            dim=0)
+        power_of_roots = torch.cat(
+            (power_of_roots[:index * cryptoContext.N], power_of_roots[(index + 1) * cryptoContext.N:]), dim=0)
+        size_q -= 1
+
+    M = cryptoContext.M
+    if slots == M // 4:
+        coeff = coeff_decoding_collapse(encode_params_ksiPows, encode_params_rotGroup, level_budget,
+                                        flag_i)  # the fft values
+
+        for s in range(level_budget - flag_rem):
+            for i in range(b):
+                for j in range(g):
+                    if g * i + j != num_rotations:
+                        rot = reduce_rotation(-g * i * (1 << (s * layers_collapse)), slots)
+                        if flag_rem == 0 and s == level_budget - flag_rem - 1:
+                            for k in range(slots):
+                                coeff[s][g * i + j][k] *= scale
+
+                        rotate_temp = rotate(coeff[s][g * i + j], rot)
+                        cryptoContext.encode_params = copy.deepcopy(params_vector[s])
+                        result[s][g * i + j] = encode_bsMatrix(rotate_temp, f"s2c_coeff[{s}][{g * i + j}]_{rot}",
+                                                               level0 + s, len(rotate_temp), cryptoContext)
+
+        if flag_rem:
+            s = level_budget - flag_rem
+            for i in range(b_rem):
+                for j in range(g_rem):
+                    if g_rem * i + j != num_rotations_rem:
+                        rot = reduce_rotation(-g_rem * i * (1 << (s * layers_collapse)), slots)
+                        for k in range(slots):
+                            coeff[s][g_rem * i + j][k] *= scale
+
+                        rotate_temp = rotate(coeff[s][g_rem * i + j], rot)
+                        cryptoContext.encode_params = params_vector[s]
+                        result[s][g_rem * i + j] = encode_bsMatrix(rotate_temp,
+                                                                   f"s2c_coeff[{s}][{g_rem * i + j}]_{rot}",
+                                                                   level0 + s, len(rotate_temp), cryptoContext)
+
+    else:
+        coeff = coeff_decoding_collapse(encode_params_ksiPows, encode_params_rotGroup, level_budget, False)
+        coeffi = coeff_decoding_collapse(encode_params_ksiPows, encode_params_rotGroup, level_budget, True)
+
+        for s in range(level_budget - flag_rem):
+            for i in range(b):
+                for j in range(g):
+                    if g * i + j != num_rotations:
+                        rot = reduce_rotation(-g * i * (1 << (s * layers_collapse)), M // 4)
+                        clear_temp = coeff[s][g * i + j] + coeffi[s][g * i + j]
+                        if flag_rem == 0 and s == level_budget - flag_rem - 1:
+                            for k in range(len(clear_temp)):
+                                clear_temp[k] *= scale
+
+                        rotate_temp = rotate(clear_temp, rot)
+
+                        cryptoContext.encode_params = params_vector[s]
+                        result[s][g * i + j] = encode_bsMatrix(rotate_temp, f"clear_temp_{s}_{i}_{j}_{rot}",
+                                                               level0 + s, len(rotate_temp), cryptoContext)
+
+        if flag_rem:
+            s = level_budget - flag_rem
+            for i in range(b_rem):
+                for j in range(g_rem):
+                    if g_rem * i + j != num_rotations_rem:
+                        rot = reduce_rotation(-g_rem * i * (1 << (s * layers_collapse)), M // 4)
+                        # concatenate the coefficients horizontally on their third dimension, which corresponds to the # of slots
+                        clear_temp = coeff[s][g_rem * i + j] + coeffi[s][g_rem * i + j]
+                        for k in range(len(clear_temp)):
+                            clear_temp[k] *= scale
+
+                        rotate_temp = rotate(clear_temp, rot)
+                        cryptoContext.encode_params = params_vector[s]
+                        result[s][g_rem * i + j] = encode_bsMatrix(rotate_temp, f"clear_temp_{i}_{j}_{rot}",
+                                                                   level0 + s, len(rotate_temp), cryptoContext)
     return result
