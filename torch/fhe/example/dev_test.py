@@ -501,7 +501,7 @@ def gen_CoeffSlots_matrix_test_case(
     # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
     # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
 
-    precom = cryptoContext.BsContext_map["13"]
+    precom = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
 
     K_SPARSE = 28
     K_UNIFORM = 512
@@ -517,7 +517,7 @@ def gen_CoeffSlots_matrix_test_case(
 
     lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
     lDec = cryptoContext.L - (9 + precom.paramsEnc.level_budget + precom.paramsDec.level_budget)
-    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(scaleEnc, lEnc, cryptoContext)
+    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
     # note: c2s_matrix should be same as m_U0hatTPreFFT
 
 
@@ -537,8 +537,8 @@ def gen_CoeffSlots_matrix_test_case(
     clear_result1 = clear_result1.cpu().numpy().reshape(-1)
     print("HE decryption result(golden): ", clear_result1[:10])
 
-    print("\n\n")
-    cryptoContext.BsContext_map["13"].m_U0hatTPreFFT = c2s_matrix
+    print("\n")
+    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
