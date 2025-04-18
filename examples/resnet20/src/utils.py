@@ -176,7 +176,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = DATA_DIR + '/weights_Aespa/' + filename + '.bin'
+        filename = '../weights_Aespa/' + filename + '.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
@@ -209,7 +209,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = DATA_DIR + '/weights_Aespa/fc.bin'
+        filename = '../weights_Aespa/fc.bin'
         if not os.path.isfile(filename):
             print(f"无法打开文件: {filename}")
             return values
