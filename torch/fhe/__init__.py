@@ -13,5 +13,6 @@ __all__ = [
     'extract_cv',
     'encode',
     'try_load_context',
-    'adjust_to'
+    'adjust_to',
+    'fused_pairwise_mac'
 ]

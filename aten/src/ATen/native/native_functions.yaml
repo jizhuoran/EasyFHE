@@ -16004,3 +16004,13 @@
   device_check: NoCheck
   dispatch:
     CUDA: encode_log_approx_cuda
+
+- func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_pairwise_mac_cuda
+
+# - func: fused_broadcast_mac(Tensor bx, Tensor ax, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+#   device_check: NoCheck
+#   dispatch:
+#     CUDA: fused_broadcast_mac_cuda
