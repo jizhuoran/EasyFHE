@@ -17,6 +17,10 @@ def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
     ct.cur_limbs -= num_levels
     return ct
 
+@decorator_factory
+def drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
+    return _drop_last_elements(ct, num_levels, cryptoContext, inplace)
+
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
 def _adjust_levels(ct1, ct2, cryptoContext):
