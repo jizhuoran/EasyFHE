@@ -133,7 +133,9 @@ def save_end_encode(func):
         res = func(*args, **kwargs)
         if func.__name__ == "encode":
             input, name, _, slots, _ = args
-            end_encoded_vals[name] = res
+            full_encode = res.deep_copy()
+            full_encode.cv = [full_encode.cv[0].cpu().numpy()]
+            end_encoded_vals[name] = full_encode
         return res
     return wrapper
 
