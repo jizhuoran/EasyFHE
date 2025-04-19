@@ -223,9 +223,7 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
 
     bias1=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1",cryptoContext.L-input.cur_limbs,1,16384,scale)
     bias2=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2",cryptoContext.L-input.cur_limbs,1,16384,scale)
-    if he_res20_ctx.aespa:
-        bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias",
-                                      cryptoContext.L - input.cur_limbs, 1, 16384, scale)
+
 
     for j in range(16):
         k_rows016=[]
@@ -318,8 +316,7 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
 
     bias1 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias1", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
     bias2 = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias2", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
-    if he_res20_ctx.aespa:
-        bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias", cryptoContext.L - input.cur_limbs, 1, 8192, scale)
+
     for j in range(32):
         k_rows032=[]
         k_rows3264 = []
