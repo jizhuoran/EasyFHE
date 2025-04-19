@@ -68,11 +68,6 @@ def convbn_initial(input, scale, he_res20_ctx, cryptoContext):
         else:
             finalsum = fhe.homo_add(finalsum, res, cryptoContext)
             finalsum = fhe.homo_rotate(finalsum, 1024, cryptoContext)
-    if he_res20_ctx.aespa:
-        return finalsum
-
-    bias=read_values_from_file(cryptoContext, "conv1bn1-bias", cryptoContext.L-input.cur_limbs, 1, 16384, scale)
-    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -109,11 +104,6 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext):
         else:
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-1024,cryptoContext)
-    if he_res20_ctx.aespa:
-        return finalsum
-    bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias", cryptoContext.L - input.cur_limbs, 1,
-                                 16384, scale)
-    finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -151,12 +141,8 @@ def convbn2(input,layer,n,scale, he_res20_ctx, cryptoContext):
         else:
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-256,cryptoContext)
-
-    if he_res20_ctx.aespa:
-        return finalsum
-    bias=read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias",cryptoContext.L-input.cur_limbs,1,8192,scale)
-    finalsum = fhe.homo_add_pt(finalsum, bias, cryptoContext)
     return finalsum
+
 @fhe.utils.profile_python_function
 def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):
     if input.noise_deg > 1:
@@ -191,14 +177,8 @@ def convbn3(input,layer,n,scale, he_res20_ctx, cryptoContext):
         else:
             finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
             finalsum=fhe.homo_rotate(finalsum,-64,cryptoContext)
-
-
-    if he_res20_ctx.aespa:
-        return finalsum
-    bias = read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-bias", cryptoContext.L - input.cur_limbs, 1,
-                                 4096, scale)
-    finalsum = fhe.homo_add_pt(finalsum, bias, cryptoContext)
     return finalsum
+
 
 @fhe.utils.profile_python_function
 def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
@@ -249,12 +229,9 @@ def convbn1632sx(input, layer, n, scale, he_res20_ctx, cryptoContext):
             finalsum016 = fhe.homo_rotate(finalsum016,-1024,cryptoContext)
             finalsum1632 = fhe.homo_add(finalsum1632, sum1632, cryptoContext)
             finalsum1632 = fhe.homo_rotate(finalsum1632, -1024, cryptoContext)
-    if he_res20_ctx.aespa:
-        return finalsum016, finalsum1632
-    else:
-        finalsum016 =fhe.homo_add_pt(finalsum016,bias1,cryptoContext)
-        finalsum1632=fhe.homo_add_pt(finalsum1632,bias2,cryptoContext)
-        return finalsum016, finalsum1632
+
+    return finalsum016, finalsum1632
+
 
 @fhe.utils.profile_python_function
 def convbn1632dx(input, layer, n, scale, he_res20_ctx, cryptoContext):
@@ -346,12 +323,8 @@ def convbn3264sx(input,layer,n,scale, he_res20_ctx, cryptoContext):
             finalsum3264 = fhe.homo_add(finalsum3264, sum3264, cryptoContext)
             finalsum3264 = fhe.homo_rotate(finalsum3264, -256, cryptoContext)
 
+    return finalsum032,finalsum3264
 
-    if he_res20_ctx.aespa:
-        return finalsum032,finalsum3264
-    finalsum032 = fhe.homo_add_pt(finalsum032, bias1, cryptoContext)
-    finalsum3264 = fhe.homo_add_pt(finalsum3264, bias2, cryptoContext)
-    return finalsum032, finalsum3264
 
 @fhe.utils.profile_python_function
 def convbn3264dx(input,layer,n,scale, he_res20_ctx, cryptoContext):
