@@ -1,4 +1,7 @@
 import os, sys, datetime, time
+
+
+sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 import torch
@@ -328,8 +331,8 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext)
         resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext)
         finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext)
-        print("time: ", time.time() - start_time)
         print("after processing image ", i, "time: ", datetime.datetime.now())
+        print("time: ", time.time() - start_time)
         try:
             clear_result = openfhe_context.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
@@ -411,13 +414,15 @@ def resnet20( ):
                              config=config))
 
 
-
-    cryptoContext.pre_encode_type = "middle"
     pkl_path = None
     if config.SAVE_MIDDLE==False:
-        file_name = "encode_20250412_221730"
-        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        file_name = "encode_20250412_221730" #italian-res20-cifar10 encode middle pkl
+        cryptoContext.pre_encode_type = "middle"
         load_encode_pkl(file_name, he_res20_context_)
+        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+
+        # pkl_path = "" #italian-res20-cifar10 encode end pkl, should be generated from encode middle pkl
+        # cryptoContext.pre_encode_type = "end"
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
