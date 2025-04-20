@@ -17,7 +17,7 @@
 #include <algorithm>
 #include <vector>
 
-#define MAX_64BIT_VALUE 9223372036854775295
+#define MAX_64BIT_VALUE 9223372036854775295LL
 #define MAX_BITS_IN_WORD 61
 #define DTYPE double
 #define DTYPE2 double2
@@ -269,8 +269,8 @@ __global__ void new_fit_to_native_vector_kernel(
     uint64_t re_ = re;
     uint64_t im_ = im;
 
-    re_ = re_ > bigValueHf? (re_ - diff) : re_;
-    im_ = im_ > bigValueHf? (im_ - diff) : im_;
+    re_ = re_ > bigValueHf? sub_mod(re_, diff, native_modulus[l]) : re_;
+    im_ = im_ > bigValueHf? sub_mod(im_, diff, native_modulus[l]) : im_;
     barret_reduction_64_64(re_, re_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
     barret_reduction_64_64(im_, im_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
     native_vec[l * N + gap * i] = re_;
