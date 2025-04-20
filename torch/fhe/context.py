@@ -140,6 +140,8 @@ class Context:
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
         self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
 
+        self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
+
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
         for key, value in self.QmuplusPmu_map.items():
@@ -192,6 +194,7 @@ class Context:
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
         self.encode_inverse = self.encode_inverse.cuda()
+        self.max_int_diffs = self.max_int_diffs.cuda()
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = value.cuda()
         for key, value in self.QmuplusPmu_map.items():

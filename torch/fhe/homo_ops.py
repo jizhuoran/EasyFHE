@@ -918,6 +918,7 @@ def encode(
         slots=slots,
         scaling_factor=scaling_factor,
         primes=cryptoContext.primes,
+        max_int_diffs=cryptoContext.max_int_diffs,
         barret_ratio=cryptoContext.barret_ratio,
         barret_k=cryptoContext.barret_k,
         power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
