@@ -17,6 +17,10 @@ def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
     ct.cur_limbs -= num_levels
     return ct
 
+@decorator_factory
+def drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
+    return _drop_last_elements(ct, num_levels, cryptoContext, inplace)
+
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
 def _adjust_levels(ct1, ct2, cryptoContext):
@@ -875,71 +879,7 @@ def dump_encode_middle(
     inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
     return inverse_array, log_approx
 
-def pre_encode(x, slots):
-    import cmath
-
-    inverse = x
-
-    N = 1 << 16
-    M = N << 1
-    Nh = N >> 1
-
-    # compute encode params
-    M_PI = 3.14159265358979323846
-    fivePows = 1
-    encode_params_ksiPows = []
-    encode_params_rotGroup = []
-    for i in range(Nh):
-        encode_params_rotGroup.append(fivePows)
-        fivePows = (fivePows * 5) % M
-
-    # m_ksiPows stores the complex roots of unity
-    for j in range(M):
-        angle = 2.0 * M_PI * j / M
-        encode_params_ksiPows.append(cmath.exp(1j * angle))
-    encode_params_ksiPows.append(encode_params_ksiPows[0])
-
-    encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
-    encode_params_rotGroup = np.array(encode_params_rotGroup)
-
-    if slots < len(inverse):
-        raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
-
-    # Clears all imaginary values as CKKS for complex numbers
-    inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
-
-    # Resize the inverse to fit the slot size.
-    # note that default: slots value should be greater than size of input data list x
-    inverse_complex = np.pad(
-        inverse_complex,
-        pad_width=(0, slots - len(inverse)),
-        mode="constant",
-        constant_values=complex(0.0, 0.0),
-    )
-    arr = np.array(encode_params_ksiPows, dtype=np.float64)
-    complex_arr = arr[0::2] + arr[1::2] * 1j
-    inverse_complex = _fft_special_inv(
-        inverse_complex,
-        M,
-        np.array(encode_params_rotGroup, dtype=np.int32),
-        complex_arr,
-    )
-    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64)
-    max_encoded_value = np.max(np.abs(inverse_array))
-
-    encoded_val = PreEncodeValues(
-        np.pad(
-            x,
-            pad_width=(0, slots - len(x)),
-            mode="constant",
-            constant_values=0.0,
-        ),
-        slots,
-        inverse_array,
-        max_encoded_value,
-    )
-    return encoded_val
-
+from .dev_tools.encode_tool import pre_encode
 
 @decorator_factory
 def encode(
@@ -978,6 +918,7 @@ def encode(
         slots=slots,
         scaling_factor=scaling_factor,
         primes=cryptoContext.primes,
+        max_int_diffs=cryptoContext.max_int_diffs,
         barret_ratio=cryptoContext.barret_ratio,
         barret_k=cryptoContext.barret_k,
         power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
@@ -986,9 +927,77 @@ def encode(
 
     gpufhe_cipher = Plaintext([pt_encode], pt_encode.shape[0], scaling_factor, 1, slots, False)
     if cryptoContext.config.PTX_TWIN:
-        gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        if isinstance(x, list):
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        else:
+            gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
     return gpufhe_cipher
 
+
+################## FUSED OPS ##################
+def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if len(ctxs) != 9 or len(ptxs) != 9:
+        raise ValueError("The length of ctxs and ptxs must be 9, but got {} and {}".format(len(ctxs), len(ptxs)))
+    
+    ctx_axs, ctx_bxs, ptx_bxs = [], [], []
+
+    for idx in range(len(ctxs)):
+        if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ctxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ctxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ctxs[{idx}].slots != ptxs[0].slots")
+        if ctxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ctxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ctxs[idx].scaling_factor != ctxs[0].scaling_factor:
+            raise ValueError(f"ctxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
+        if ctxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ctxs[{idx}].is_ext != ctxs[0].is_ext")
+        
+        if ptxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ptxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ptxs[{idx}].slots != ctxs[0].slots")
+        if ptxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ptxs[idx].scaling_factor != ctxs[0].scaling_factor:
+            raise ValueError(f"ptxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
+        if ptxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext != ctxs[0].is_ext")
+
+        ctx_bxs.append(ctxs[idx].cv[0])
+        ctx_axs.append(ctxs[idx].cv[1])
+        ptx_bxs.append(ptxs[idx].cv[0])
+    
+    res = F.cipher_fused_pairwise_mac(ctx_bxs, ctx_axs, ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ctx_bxs), ctxs[0].cur_limbs, cryptoContext.N)
+    return ctxs[0].cipher_like([res[0], res[1]], scaling_factor=ctxs[0].scaling_factor * ptxs[0].scaling_factor, noise_deg=ctxs[0].noise_deg + ptxs[0].noise_deg)
+
+def fused_broadcast_mac(ctx, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if not (len(ptxs) == 16 or  len(ptxs) == 32 or len(ptxs) == 64):
+        raise ValueError("The length of ptxs must be 16, 32 or 64, but got {}".format(len(ptxs)))
+    
+    ptx_bxs = []
+
+    for idx in range(len(ptxs)):
+        if ptxs[idx].cur_limbs != ctx.cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctx.cur_limbs")
+        if ptxs[idx].slots != ctx.slots:
+            raise ValueError(f"ptxs[{idx}].slots != ptxs[0].slots")
+        if ptxs[idx].noise_deg != ctx.noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctx.noise_deg")
+        if ptxs[idx].scaling_factor != ctx.scaling_factor:
+            raise ValueError(f"ptxs[{idx}].scaling_factor != ctx.scaling_factor")
+        if ptxs[idx].is_ext != ctx.is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext != ctx.is_ext")
+        ptx_bxs.append(ptxs[idx].cv[0])
+    
+    res = F.cipher_fused_broadcast_mac(ctx.cv[0], ctx.cv[1], ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ptx_bxs), ctx.cur_limbs, cryptoContext.N)
+    return ctx.cipher_like([res[0], res[1]], scaling_factor=ctx.scaling_factor * ptxs[0].scaling_factor, noise_deg=ctx.noise_deg + ptxs[0].noise_deg)
 
 # def encode(
 #     x,

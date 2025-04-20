@@ -11,17 +11,17 @@ DATA_DIR = os.environ["DATA_DIR"]
 LOG_DIR = os.environ["LOG_DIR"]
 
 maxLevelsRemaining = 3
-logBsSlots_list = [12]
-logN = 14
+logBsSlots_list = [12, 13, 14]
+logN = 16
 dnum = 3
 dcrtBits = 59
 firstMod = 60
-levelBudget_list = [[4, 4]]
+levelBudget_list = [[4, 4], [4, 4], [4, 4]]
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = DATA_DIR
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 
-config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True, COMPILER=True)
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True)
 
 cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),

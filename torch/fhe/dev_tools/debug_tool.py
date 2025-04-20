@@ -40,9 +40,21 @@ def check_meta_equal(func):
             assert in0.slots == in1.slots
 
             if cryptoContext.rescaleTech == "FIXEDMANUAL":
-                assert in0.cur_limbs == in1.cur_limbs
-                assert in0.scaling_factor == in1.scaling_factor
+                if not in0.cur_limbs == in1.cur_limbs:
+                    print("cur_limbs not equal! ", in0.cur_limbs, in1.cur_limbs)
+
+                if not in0.noise_deg == in1.noise_deg:
+                    print("noise_deg not equal! ", in0.noise_deg, in1.noise_deg)
+                if in0.noise_deg > 2:
+                    print("noise_deg should not > 2", in0.noise_deg)
+
+                assert in0.noise_deg <= 2
                 assert in0.noise_deg == in1.noise_deg
+                assert in0.cur_limbs == in1.cur_limbs
+
+                # assert in0.cur_limbs == in1.cur_limbs
+                # assert in0.scaling_factor == in1.scaling_factor
+                # assert in0.noise_deg == in1.noise_deg
 
         return func(*args, **kwargs)
 
