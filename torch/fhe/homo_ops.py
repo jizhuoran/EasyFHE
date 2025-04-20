@@ -879,71 +879,7 @@ def dump_encode_middle(
     inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
     return inverse_array, log_approx
 
-def pre_encode(x, slots):
-    import cmath
-
-    inverse = x
-
-    N = 1 << 16
-    M = N << 1
-    Nh = N >> 1
-
-    # compute encode params
-    M_PI = 3.14159265358979323846
-    fivePows = 1
-    encode_params_ksiPows = []
-    encode_params_rotGroup = []
-    for i in range(Nh):
-        encode_params_rotGroup.append(fivePows)
-        fivePows = (fivePows * 5) % M
-
-    # m_ksiPows stores the complex roots of unity
-    for j in range(M):
-        angle = 2.0 * M_PI * j / M
-        encode_params_ksiPows.append(cmath.exp(1j * angle))
-    encode_params_ksiPows.append(encode_params_ksiPows[0])
-
-    encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
-    encode_params_rotGroup = np.array(encode_params_rotGroup)
-
-    if slots < len(inverse):
-        raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
-
-    # Clears all imaginary values as CKKS for complex numbers
-    inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
-
-    # Resize the inverse to fit the slot size.
-    # note that default: slots value should be greater than size of input data list x
-    inverse_complex = np.pad(
-        inverse_complex,
-        pad_width=(0, slots - len(inverse)),
-        mode="constant",
-        constant_values=complex(0.0, 0.0),
-    )
-    arr = np.array(encode_params_ksiPows, dtype=np.float64)
-    complex_arr = arr[0::2] + arr[1::2] * 1j
-    inverse_complex = _fft_special_inv(
-        inverse_complex,
-        M,
-        np.array(encode_params_rotGroup, dtype=np.int32),
-        complex_arr,
-    )
-    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64)
-    max_encoded_value = np.max(np.abs(inverse_array))
-
-    encoded_val = PreEncodeValues(
-        np.pad(
-            x,
-            pad_width=(0, slots - len(x)),
-            mode="constant",
-            constant_values=0.0,
-        ),
-        slots,
-        inverse_array,
-        max_encoded_value,
-    )
-    return encoded_val
-
+from .dev_tools.encode_tool import pre_encode
 
 @decorator_factory
 def encode(

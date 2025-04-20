@@ -47,33 +47,37 @@ def _fft_special_inv(vals, M, rotGroup, ksiPows):
         vals[i] /= vals_size
     return vals
 
+import cmath
+
+N = 1 << 16
+M = N << 1
+Nh = N >> 1
+
+# compute encode params
+M_PI = 3.14159265358979323846
+fivePows = 1
+encode_params_ksiPows = []
+encode_params_rotGroup = []
+for i in range(Nh):
+    encode_params_rotGroup.append(fivePows)
+    fivePows = (fivePows * 5) % M
+
+# m_ksiPows stores the complex roots of unity
+for j in range(M):
+    angle = 2.0 * M_PI * j / M
+    encode_params_ksiPows.append(cmath.exp(1j * angle))
+encode_params_ksiPows.append(encode_params_ksiPows[0])
+
+encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
+encode_params_rotGroup = np.array(encode_params_rotGroup)
 
 def pre_encode(x, slots):
-    import cmath
-
-    inverse = x
 
     N = 1 << 16
     M = N << 1
     Nh = N >> 1
 
-    # compute encode params
-    M_PI = 3.14159265358979323846
-    fivePows = 1
-    encode_params_ksiPows = []
-    encode_params_rotGroup = []
-    for i in range(Nh):
-        encode_params_rotGroup.append(fivePows)
-        fivePows = (fivePows * 5) % M
-
-    # m_ksiPows stores the complex roots of unity
-    for j in range(M):
-        angle = 2.0 * M_PI * j / M
-        encode_params_ksiPows.append(cmath.exp(1j * angle))
-    encode_params_ksiPows.append(encode_params_ksiPows[0])
-
-    encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
-    encode_params_rotGroup = np.array(encode_params_rotGroup)
+    inverse = x
 
     if slots < len(inverse):
         raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
