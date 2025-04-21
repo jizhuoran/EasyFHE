@@ -21,31 +21,31 @@ class HE_res20_context:
         self.relu_degree = None
         self.weight_dir = data_dir
 
-def get_relu_depth(degree):
-    ranges = [
-        (1, 5, 3),
-        (6, 13, 4),
-        (14, 27, 5),
-        (28, 59, 6),
-        (60, 119, 7),
-        (120, 247, 8),
-        (248, 495, 9),
-        (496, 1007, 10),
-        (1008, 2031, 11)
-    ]
+# def get_relu_depth(degree):
+#     ranges = [
+#         (1, 5, 3),
+#         (6, 13, 4),
+#         (14, 27, 5),
+#         (28, 59, 6),
+#         (60, 119, 7),
+#         (120, 247, 8),
+#         (248, 495, 9),
+#         (496, 1007, 10),
+#         (1008, 2031, 11)
+#     ]
 
-    for lower, upper, depth in ranges:
-        if lower <= degree <= upper:
-            return depth
+#     for lower, upper, depth in ranges:
+#         if lower <= degree <= upper:
+#             return depth
 
-    raise ValueError("Set a valid degree for ReLU")
+#     raise ValueError("Set a valid degree for ReLU")
 
-def homo_relu(ciphertext, scale, degree, cryptoContext):
-    def scaled_relu_function(x):
-        return 0 if x < 0 else (1 / scale) * x
+# def homo_relu(ciphertext, scale, degree, cryptoContext):
+#     def scaled_relu_function(x):
+#         return 0 if x < 0 else (1 / scale) * x
 
-    result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
-    return result
+#     result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
+#     return result
 
 
 def initial_layer(input, he_res20_ctx, cryptoContext):
@@ -57,15 +57,14 @@ def initial_layer(input, he_res20_ctx, cryptoContext):
 
 def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][0]
-
+    # layer[0],block[0],conv1
     res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
-    res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
 
     # layer[0],block[0],conv2 and shorcut
     scale = normalized_deltas[1][1]
     # res1 = a1*x,shortcut = input = y
-    res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext)
+    res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     A2 = read_values_from_file(cryptoContext,  f"layer{1}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(input,A2,cryptoContext)
     res1 = fhe.homo_add(res1, A2y, cryptoContext)
@@ -73,12 +72,12 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[1][2]
     # layer[0],block[1],conv1
-    res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
 
     # layer[0],block[1],conv2 and shorcut
     scale = normalized_deltas[1][3]
-    res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext)
+    res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     A2 = read_values_from_file(cryptoContext,  f"layer{2}-conv{2}bn{2}-A2",cryptoContext.L-res2.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y,cryptoContext)
@@ -87,11 +86,11 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     # layer[0],block[2],conv1
     scale = normalized_deltas[1][4]
-    res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     res3 = homo_Aespa_perfect_square(res3, f"layer{3}-conv{1}bn{1}", cryptoContext)
 
     scale = normalized_deltas[1][5]
-    res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext)
+    res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     A2 = read_values_from_file(cryptoContext,  f"layer{3}-conv{2}bn{2}-A2",cryptoContext.L-res3.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(res2, A2, cryptoContext)
     res3 = fhe.homo_add(res3, A2y,cryptoContext)
@@ -105,7 +104,6 @@ def layer2(input, he_res20_ctx, cryptoContext):
     boot_in = fhe.homo_bootstrap(
         input, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
     )
-
     res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 16, "2")
 
@@ -116,8 +114,10 @@ def layer2(input, he_res20_ctx, cryptoContext):
     res1dx1 = convbn_dx(
         boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext, 16384, 16, -1024, 16, "2"
     )
+
     fullpackSx = downsample1024to256(res1sx0, res1sx1, he_res20_ctx, cryptoContext)
     fullpackDx = downsample1024to256(res1dx0, res1dx1, he_res20_ctx, cryptoContext)
+
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{4}-conv{1}bn{1}", cryptoContext)
 
     he_res20_ctx.cur_num_slots = 8192
@@ -131,14 +131,9 @@ def layer2(input, he_res20_ctx, cryptoContext):
     res1 = fhe.homo_bootstrap(
         res1, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
     )
-    res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
-
-    scale = normalized_deltas[2][2]
     res2 = convbn(res1, 5, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
-    res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 13, cryptoContext
-    )
-    res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
+    res2 = homo_Aespa_perfect_square(res2, f"layer{5}-conv{1}bn{1}", cryptoContext)
+
 
     scale = normalized_deltas[2][3]
     res2 = convbn(res2, 5, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
@@ -171,7 +166,6 @@ def layer3(input, he_res20_ctx, cryptoContext):
     boot_in = fhe.homo_bootstrap(
         input, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
     )
-
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
 
@@ -299,7 +293,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     print("=====================================================")
     correct = 0
     total = 20
-    for i in range(total0):
+    for i in range(total):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
@@ -415,11 +409,11 @@ def load_encode_pkl(file_name, he_res20_context_):
 
 def resnet20( ):
     # generate context
-    max_relu_degree = 59
-    maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
-    if max_relu_degree < 59:
-        diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
-        maxLevelsRemaining +=diff
+    # max_relu_degree = 59
+    # maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
+    # if max_relu_degree < 59:
+    #     diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
+    #     maxLevelsRemaining +=diff
     rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
                          1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
 
