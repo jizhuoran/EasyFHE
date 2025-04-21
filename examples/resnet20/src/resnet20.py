@@ -102,7 +102,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[2][0]
     scaleDx = normalized_deltas[2][1]
     boot_in = fhe.homo_bootstrap(
-        input, L0=cryptoContext.L, logBsSlots=14, cryptoContext=cryptoContext
+        input, cryptoContext.L, 14, cryptoContext
     )
     res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 16, "2")
@@ -164,7 +164,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scaleDx = normalized_deltas[3][1]
 
     boot_in = fhe.homo_bootstrap(
-        input, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
+        input, cryptoContext.L, 13, cryptoContext
     )
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
@@ -201,7 +201,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y,cryptoContext)
     res2 = fhe.homo_bootstrap(
-        res2, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
+        res2, cryptoContext.L, 12, cryptoContext
     )
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
 
@@ -548,7 +548,7 @@ def read_aespa_value(filename,target_len, scale=1.0):
     val_name = filename
     filename = '../weights_Aespa/' + filename + '.bin'
     if not os.path.isfile(filename):
-        print(f"无法打开文件: {filename}")
+        print(f"Failed to open file: {filename}")
         return values
 
     try:
