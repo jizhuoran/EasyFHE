@@ -30,7 +30,7 @@ def convbn_initial(input, scale, he_res20_ctx, cryptoContext, img_width, padding
             encoded=read_values_from_file(cryptoContext, f"conv1bn1-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,16384,scale)
             k_rows.append(encoded)
         partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
-
+        partial_sum = fhe.homo_rescale(partial_sum, 1, cryptoContext) #RESCALE ADD BY ZRJI
         sum_rot = fhe.homo_rotate(partial_sum,1024,cryptoContext)
         partial_sum = fhe.homo_add(partial_sum,sum_rot,cryptoContext)
         partial_sum = fhe.homo_add(partial_sum, fhe.homo_rotate(sum_rot, 1024, cryptoContext), cryptoContext)
@@ -63,7 +63,6 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, paddi
 
     # bias = read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias{biasoff}",cryptoContext.L-input.cur_limbs,1,slots,scale)
     # finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
-
     return finalsum
 
 @fhe.utils.profile_python_function
@@ -79,7 +78,8 @@ def convbn_dx(input, layer, n, scale, he_res20_ctx, cryptoContext, slots, num_ch
         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
 
-    bias1 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias"+biasoff, cryptoContext.L - input.cur_limbs,1, slots, scale)
+    finalsum = fhe.homo_rescale(finalsum, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    bias1 = read_values_from_file(cryptoContext, f"layer{layer}dx-conv{n}bn{n}-bias"+biasoff, cryptoContext.L - finalsum.cur_limbs,1, slots, scale)
     finalsum =fhe.homo_add_pt(finalsum,bias1,cryptoContext)
 
     return finalsum
@@ -94,23 +94,26 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
     fullpack=fhe.homo_add(fhe.homo_mul_pt(c1, mask_first_n(16384, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
                           fhe.homo_mul_pt(c2, mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
-
+    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_mul_pt(fhe.homo_add(fullpack,
                                                     fhe.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
                              gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
                              cryptoContext)
+    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
                                                       fhe.homo_rotate(
                                                           fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
                                gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_mul_pt(fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext),
                              gen_mask(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,8,cryptoContext),cryptoContext)
 
-    if fullpack.noise_deg > 1:
-        fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)
-    # zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows = cryptoContext.zero_32K # =openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    assert fullpack.noise_deg == 1
+    downsampledrows = cryptoContext.zero_32K
+    downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    
     for i in range(16):
         masked=fhe.homo_mul_pt(fullpack,
                                mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
@@ -118,11 +121,12 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
         if i<15:
             fullpack=fhe.homo_rotate(fullpack,64-16,cryptoContext)
 
+    downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
 
-    # zeros=[0]*he_res20_ctx.cur_num_slots
-    if downsampledrows.noise_deg > 1:
-        downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
-    downsampledchannels = cryptoContext.zero_32K # =openfhe_context.encrypt(zeros,1,0,he_res20_ctx.cur_num_slots)
+    assert downsampledrows.noise_deg == 1
+
+    downsampledchannels = cryptoContext.zero_32K
+    downsampledchannels = fhe.drop_last_elements(downsampledchannels, downsampledchannels.cur_limbs - downsampledrows.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     for i in range(32):
         masked=fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
         downsampledchannels=fhe.homo_add(downsampledchannels,masked,cryptoContext)
@@ -149,32 +153,34 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
                                           mask_first_n(8192, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
                           fhe.homo_mul_pt(c2, mask_scecond_n(8192, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
+    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_mul_pt(
         fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
         gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),cryptoContext)
+    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack = fhe.homo_mul_pt(
         fhe.homo_add(fullpack,
                           fhe.homo_rotate(
                               fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
         gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_add(fullpack,
                                fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
 
-    # zeros=[0] * he_res20_ctx.cur_num_slots
-    downsampledrows = cryptoContext.zero_16K # = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
+    downsampledrows = cryptoContext.zero_16K
+    downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
 
-    if fullpack.noise_deg > 1:
-        fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)
+    assert fullpack.noise_deg == 1
     for i in range(32):
         masked=fhe.homo_mul_pt(fullpack, mask_first_n_mod2(8, 256, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
         downsampledrows=fhe.homo_add(downsampledrows, masked, cryptoContext)
         if i<31:
             fullpack = fhe.homo_rotate(fullpack, 24, cryptoContext)
 
-    # zeros = [0] * he_res20_ctx.cur_num_slots
-    downsampledchannels = cryptoContext.zero_16K # = openfhe_context.encrypt(zeros, 1, 0, he_res20_ctx.cur_num_slots)
-    if downsampledrows.noise_deg > 1:
-        downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
+    downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    downsampledchannels = cryptoContext.zero_16K
+    downsampledchannels = fhe.drop_last_elements(downsampledchannels, downsampledchannels.cur_limbs - downsampledrows.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    assert downsampledrows.noise_deg == 1
 
     for i in range(64):
         masked=fhe.homo_mul_pt(downsampledrows,
