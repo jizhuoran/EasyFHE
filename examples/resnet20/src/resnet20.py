@@ -462,12 +462,12 @@ def resnet20( ):
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
         file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
-        cryptoContext.pre_encode_type = "end"
-        file_name = "full_encode_20250421_211122" #fix
-        # file_name = "full_encode_20250421_200240" #auto
-        
         load_encode_pkl(file_name, he_res20_context_)
         pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+
+        # cryptoContext.pre_encode_type = "end"
+        # pkl_path = "" # yhh: auto, sparse
+        # pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
 
 
 
