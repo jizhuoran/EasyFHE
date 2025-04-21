@@ -288,7 +288,9 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
-    for i in range(1):
+    correct = 0
+    total = 20
+    for i in range(total):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
@@ -364,6 +366,10 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         # else:
         #     print("Decryption failed, clear_result is None.")
         print("ground truth: ", label, "prediction: ", max_element_idx)
+        if label == max_element_idx:
+            correct += 1
+
+    print(f"\n\ncorrect/total: {correct}/{total}")
 
 
 def load_encode_pkl(file_name, he_res20_context_):
@@ -423,7 +429,7 @@ def resnet20( ):
     he_res20_context_ = HE_res20_context("../weights_Aespa")
 
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,SAVE_MIDDLE=True, PTX_TWIN=False)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,SAVE_MIDDLE=False, PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
@@ -434,9 +440,9 @@ def resnet20( ):
     cryptoContext.pre_encode_type = "middle"
     pkl_path = None
     if config.SAVE_MIDDLE==False:
-        file_name = "" #  Aespa pkl # todo: add aespa pkl(perfect square version) to hugging face
-        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
         load_encode_pkl(file_name, he_res20_context_)
+        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
@@ -480,13 +486,14 @@ def homo_Aespa_reduce_mult(x,filename,cryptoContext):
     a1x2 = fhe.homo_square(x, cryptoContext)
     a2x2 = fhe.homo_mul_pt(a1x2, a2, cryptoContext)
     res = fhe.homo_add(a2x2,x,cryptoContext)
-    # fixme:check layer9 a0 encode bug
-    if a0_filename == 'layer9-conv2bn2-bias':
-        a0 = torch.tensor(read_aespa_value(a0_filename, slots))
-        a0_encode = cryptoContext.openfhe_context.encode(a0, 1, 0, slots)
-        res = fhe.homo_add_pt(res, a0_encode, cryptoContext)
-    else:
-        res = fhe.homo_add_pt(res, a0, cryptoContext)
+    res = fhe.homo_add_pt(res, a0, cryptoContext)
+    # # fixme:check layer9 a0 encode bug
+    # if a0_filename == 'layer9-conv2bn2-bias':
+    #     a0 = torch.tensor(read_aespa_value(a0_filename, slots))
+    #     a0_encode = cryptoContext.openfhe_context.encode(a0, 1, 0, slots)
+    #     res = fhe.homo_add_pt(res, a0_encode, cryptoContext)
+    # else:
+    #     res = fhe.homo_add_pt(res, a0, cryptoContext)
     return res
 
 def homo_Aespa_perfect_square(x,filename,cryptoContext):
@@ -495,13 +502,14 @@ def homo_Aespa_perfect_square(x,filename,cryptoContext):
     slots = x.slots
     scale = 1
     n1 = read_values_from_file(cryptoContext, n1_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
-    if n2_filename == 'layer9-conv2bn2-n2':
-        # fixme:encode bug
-        temp_n2 = torch.tensor(read_aespa_value(n2_filename, slots))
-        n2_encode = cryptoContext.openfhe_context.encode(temp_n2, 1, 0, slots)
-        n2 = n2_encode
-    else:
-        n2 = read_values_from_file(cryptoContext, n2_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    n2 = read_values_from_file(cryptoContext, n2_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
+    # if n2_filename == 'layer9-conv2bn2-n2':
+    #     # fixme:encode bug
+    #     temp_n2 = torch.tensor(read_aespa_value(n2_filename, slots))
+    #     n2_encode = cryptoContext.openfhe_context.encode(temp_n2, 1, 0, slots)
+    #     n2 = n2_encode
+    # else:
+    #     n2 = read_values_from_file(cryptoContext, n2_filename, cryptoContext.L - x.cur_limbs, 1, slots, scale)
     # input x = origin sqrt(a2) * x
     temp1 = fhe.homo_add_pt(x, n1, cryptoContext)
     perfect_squre = fhe.homo_square(temp1, cryptoContext)

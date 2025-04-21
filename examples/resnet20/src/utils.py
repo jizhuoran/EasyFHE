@@ -74,7 +74,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = False
+DIRECT_LOAD = True
 
 
 if DIRECT_LOAD:
