@@ -50,7 +50,7 @@ def app_without_bs_example_debug(
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
-    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
     if is_euqal:
         print("homo_rotate: Test passed!")
     else:
@@ -90,7 +90,7 @@ def app_example_debug(
 
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
     if is_euqal:
         print("homo_rotate: Test passed!")
     else:
@@ -107,7 +107,7 @@ def app_example_debug(
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
-    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_boot)
     if is_euqal:
         print("BootstrapTest_logBsSlots11: Test passed!")
     else:
@@ -136,7 +136,7 @@ def app_example_debug(
     openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
     openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
 
-    is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_boot1)
     if is_euqal:
         print("BootstrapTest_logBsSlots12: Test passed!")
     else:
@@ -475,7 +475,7 @@ def double_bs_debug(
         num_iter = 2
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe, num_iter, precision)
         openfhe_boot = openfhe_boot_context.cc.ModReduce(openfhe_boot)
-        is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
+        is_euqal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_boot)
         if is_euqal:
             print("BootstrapTest_logBsSlots11: Test passed!")
         else:

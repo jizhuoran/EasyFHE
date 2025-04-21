@@ -390,3 +390,22 @@ def cv_mul_by_monomial(
         power_of_roots_shoup=context.power_of_roots_shoup,
         power_of_roots=context.power_of_roots,
     )
+
+def cipher_fused_pairwise_mac(
+    ctx_bxs, ctx_axs, ptx_bxs, primes, barret_mu, len_ctxs, cur_limb, N
+):
+    res = torch.fused_pairwise_mac(
+        ctx_bxs,
+        ctx_axs,
+        ptx_bxs,
+        primes,
+        barret_mu,
+        len_ctxs,
+        cur_limb,
+        N
+    )
+    
+    return res[0].reshape(-1, N), res[1].reshape(-1, N)
+
+
+

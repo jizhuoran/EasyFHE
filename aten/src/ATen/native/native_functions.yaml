@@ -15985,7 +15985,7 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
@@ -16004,3 +16004,13 @@
   device_check: NoCheck
   dispatch:
     CUDA: encode_log_approx_cuda
+
+- func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_pairwise_mac_cuda
+
+# - func: fused_broadcast_mac(Tensor bx, Tensor ax, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+#   device_check: NoCheck
+#   dispatch:
+#     CUDA: fused_broadcast_mac_cuda
