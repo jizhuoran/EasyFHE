@@ -8,62 +8,32 @@ DATA_DIR = os.environ["DATA_DIR"]
 
 encoded_weight = {}
 
-# baseline:
 # Normalized deltas (trained by CIFAR-10 test data)
-# normalized_deltas = [
-#     [0.30245313974658655, 0, 0, 0, 0, 0],
-#     [
-#         0.25771464233502284,
-#         0.17572235969058683,
-#         0.26867995906162545,
-#         0.16879219146810473,
-#         0.32389941065236755,
-#         0.16670296717723732,
-#     ],
-#     [
-#         0.29577777852997955,
-#         0.20468562391210693,
-#         0.45305236761033496,
-#         0.1940840042412194,
-#         0.3655523676384972,
-#         0.13282571451191513,
-#     ],
-#     [
-#         0.3620743161940029,
-#         0.2372317323595584,
-#         0.32624424495604537,
-#         0.13859561075656615,
-#         0.34910082672803205,
-#         0.053238969339825734,
-#     ],
-# ]
-
-# aespa
 normalized_deltas = [
-    [1, 1, 1, 1, 1, 1],
+    [0.30245313974658655, 0, 0, 0, 0, 0],
     [
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
+        0.25771464233502284,
+        0.17572235969058683,
+        0.26867995906162545,
+        0.16879219146810473,
+        0.32389941065236755,
+        0.16670296717723732,
     ],
     [
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
+        0.29577777852997955,
+        0.20468562391210693,
+        0.45305236761033496,
+        0.1940840042412194,
+        0.3655523676384972,
+        0.13282571451191513,
     ],
     [
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
+        0.3620743161940029,
+        0.2372317323595584,
+        0.32624424495604537,
+        0.13859561075656615,
+        0.34910082672803205,
+        0.053238969339825734,
     ],
 ]
 
@@ -89,81 +59,92 @@ if DIRECT_LOAD:
         cryptoContext.pre_encoded = pre_encoded
 
     def read_values_from_file(cryptoContext, val_name, level, scale_deg, slots, scale=1.0):
+        full_name = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format(val_name, slots)
         else:
-            name = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, level, slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, cryptoContext)
 
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
+        full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("fc", slots)
         else:
-            name = "fc_{}_{}_{}".format(level, scale_deg, slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, level, slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, cryptoContext)
 
     def mask_mod(n, cur_limbs, custom_val, he_res20_ctx, cryptoContext):
+        full_name = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_mod_{}_{}_{}".format(n, custom_val, he_res20_ctx.cur_num_slots)
         else:
-            name = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
 
     def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_scecond_n_{}_{}".format(n, he_res20_ctx.cur_num_slots)
         else:
-            name = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
 
     def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_{}_{}".format(n, he_res20_ctx.cur_num_slots)
         else:
-            name = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
 
     def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_from_to_{}_{}_{}".format(from_, to, he_res20_ctx.cur_num_slots)
         else:
-            name = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
 
     def gen_mask(n, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "gen_mask_{}_{}".format(n, he_res20_ctx.cur_num_slots)
         else:
-            name = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext)
 
     def mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext):
+        full_name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 16384*2)
         else:
-            name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, 16384*2, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, cryptoContext)
 
     def mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext):
+        full_name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, 8192*2)
         else:
-            name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, 8192*2, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 8192*2, cryptoContext)
 
     def mask_channel(n, cur_limbs, cryptoContext):
+        full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_channel_{}_{}".format(n, 16384*2)
         else:
-            name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, 16384*2, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, cryptoContext)
 
     def mask_channel2(n, cur_limbs, cryptoContext):
+        full_name = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_channel2_{}_{}".format(n, 8192*2)
         else:
-            name = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
-        return fhe.encode(cryptoContext.pre_encoded[name], name, cryptoContext.L - cur_limbs, 8192*2, cryptoContext)
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 8192*2, cryptoContext)
 
 
 else:
@@ -176,9 +157,9 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = '../weights_Aespa/' + filename + '.bin'
+        filename = '../weights/' + filename + '.bin'
         if not os.path.isfile(filename):
-            print(f"无法打开文件: {filename}")
+            print(f"Failed to open file: {filename}")
             return values
 
         try:
@@ -197,6 +178,7 @@ else:
 
         values = np.array(values, dtype=np.double)
         name = "{}_{}".format(val_name, slots)
+        print(name)
         encoded = fhe.encode(values, name, level, slots, cryptoContext)
         # encoded.cv[0].cpu().numpy()
         # key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
@@ -209,9 +191,9 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = '../weights_Aespa/fc.bin'
+        filename = '../weights/fc.bin'
         if not os.path.isfile(filename):
-            print(f"无法打开文件: {filename}")
+            print(f"Failed to open file: {filename}")
             return values
 
         try:
@@ -449,7 +431,7 @@ else:
 #         val_name = filename
 #         filename = DATA_DIR + '/weights/' + filename + '.bin'
 #         if not os.path.isfile(filename):
-#             print(f"无法打开文件: {filename}")
+#             print(f"Failed to open file: {filename}")
 #             return values
 #
 #         try:
@@ -481,7 +463,7 @@ else:
 #         values = []
 #         filename = DATA_DIR + '/weights/fc.bin'
 #         if not os.path.isfile(filename):
-#             print(f"无法打开文件: {filename}")
+#             print(f"Failed to open file: {filename}")
 #             return values
 #
 #         try:
@@ -711,12 +693,3 @@ def rotsum_padded(input,slots,cryptoContext):
 
 def repeat(input,slots,cryptoContext):
     return fhe.homo_rotate(rotsum(input,slots,cryptoContext),-slots+1,cryptoContext)
-
-if __name__ == '__main__':
-    DATA_DIR = '../Aespa'
-    filename = 'conv1bn1-bias'
-    filename = '' + DATA_DIR + '/weights_Aespa/' + filename + '.bin'
-    if not os.path.isfile(filename):
-        print(f"无法打开文件: {filename}")
-    else:
-        print(f"success: {filename}")
