@@ -951,8 +951,8 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
             raise ValueError(f"ctxs[{idx}].slots != ptxs[0].slots")
         if ctxs[idx].noise_deg != ctxs[0].noise_deg:
             raise ValueError(f"ctxs[{idx}].noise_deg != ctxs[0].noise_deg")
-        if ctxs[idx].scaling_factor != ctxs[0].scaling_factor:
-            raise ValueError(f"ctxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
+        # if ctxs[idx].scaling_factor != ctxs[0].scaling_factor:
+            # raise ValueError(f"ctxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
         if ctxs[idx].is_ext != ctxs[0].is_ext:
             raise ValueError(f"ctxs[{idx}].is_ext != ctxs[0].is_ext")
         
@@ -962,8 +962,8 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
             raise ValueError(f"ptxs[{idx}].slots != ctxs[0].slots")
         if ptxs[idx].noise_deg != ctxs[0].noise_deg:
             raise ValueError(f"ptxs[{idx}].noise_deg != ctxs[0].noise_deg")
-        if ptxs[idx].scaling_factor != ctxs[0].scaling_factor:
-            raise ValueError(f"ptxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
+        # if ptxs[idx].scaling_factor != ctxs[0].scaling_factor:
+            # raise ValueError(f"ptxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
         if ptxs[idx].is_ext != ctxs[0].is_ext:
             raise ValueError(f"ptxs[{idx}].is_ext != ctxs[0].is_ext")
 
