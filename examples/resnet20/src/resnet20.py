@@ -101,9 +101,7 @@ def layer1(input, he_res20_ctx, cryptoContext):
 def layer2(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[2][0]
     scaleDx = normalized_deltas[2][1]
-    boot_in = fhe.homo_bootstrap(
-        input, cryptoContext.L, 14, cryptoContext
-    )
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 14, cryptoContext)
     res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 16, "2")
 
@@ -124,13 +122,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 13, cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{4}-conv{2}bn{2}", cryptoContext)
 
     # layer[2]block[1]
     scale = normalized_deltas[2][2]
-    res1 = fhe.homo_bootstrap(
-        res1, L0=cryptoContext.L, logBsSlots=13, cryptoContext=cryptoContext
-    )
     res2 = convbn(res1, 5, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res2 = homo_Aespa_perfect_square(res2, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
@@ -163,9 +159,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[3][0]
     scaleDx = normalized_deltas[3][1]
 
-    boot_in = fhe.homo_bootstrap(
-        input, cryptoContext.L, 13, cryptoContext
-    )
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 13, cryptoContext)
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
 
@@ -187,12 +181,10 @@ def layer3(input, he_res20_ctx, cryptoContext):
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 12, cryptoContext)
 
     scale = normalized_deltas[3][2]
     res2 = convbn(res1, 8, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
-    res2 = fhe.homo_bootstrap(
-        res2, L0=cryptoContext.L, logBsSlots=12, cryptoContext=cryptoContext
-    )
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{1}bn{1}", cryptoContext)
 
     scale = normalized_deltas[3][3]
@@ -200,9 +192,6 @@ def layer3(input, he_res20_ctx, cryptoContext):
     A2 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-A2",cryptoContext.L-res2.cur_limbs,1,4096,scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y,cryptoContext)
-    res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 12, cryptoContext
-    )
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
 
     scale = normalized_deltas[3][4]
@@ -292,7 +281,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
 
     print("=====================================================")
     correct = 0
-    total = 20
+    total = 1
     for i in range(total):
         he_res20_ctx.cur_num_slots = 1 << 14
         image_vector, label, _ = read_image(i)
@@ -305,7 +294,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         in_ct = openfhe_context.encrypt(
             image_vector,
             1,
-            8,
+            12,
             he_res20_ctx.cur_num_slots,
         )
         print("start processing image ", i, "time: ", datetime.datetime.now())
@@ -417,7 +406,7 @@ def resnet20( ):
     rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
                          1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
 
-    maxLevelsRemaining = 14
+    maxLevelsRemaining = 11
     logBsSlots_list = [12, 13, 14]
     logN = 16
     dnum = 3
@@ -446,7 +435,7 @@ def resnet20( ):
         pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
 
         # cryptoContext.pre_encode_type = "end"
-        # pkl_path = "/data/yhh/data/full_encode_20250421_143547.pkl"
+        # pkl_path = "/data/yhh/data/full_encode_20250421_201246.pkl"
 
     load_weight(pkl_path, cryptoContext)
 
