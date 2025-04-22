@@ -15985,25 +15985,10 @@
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, bool is_ext, int sizeP, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
-
-- func: encode_middle(Tensor inverse_internal, Tensor primes, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, int log_approx, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_middle_cuda
-
-- func: encode_fft(Tensor inverse, Tensor precompute_rotgroups, Tensor precompute_ksipows, int M, int slots) -> Tensor
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_fft_cuda
-
-- func: encode_log_approx(Tensor inverse_internal, int slots, int cur_limbs, float scaling_factor) -> Tensor
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_log_approx_cuda
 
 - func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck

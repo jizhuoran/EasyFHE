@@ -49,7 +49,7 @@ def _fft_special_inv(vals, M, rotGroup, ksiPows):
 
 import cmath
 
-N = 1 << 16
+N = 1 << 17
 M = N << 1
 Nh = N >> 1
 
@@ -73,7 +73,7 @@ encode_params_rotGroup = np.array(encode_params_rotGroup)
 
 def pre_encode(x, slots):
 
-    N = 1 << 16
+    N = 1 << 17
     M = N << 1
     Nh = N >> 1
 
@@ -134,11 +134,15 @@ def save_middle_encode(func):
 def save_end_encode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        if func.__name__ == "encode":
+            _, name, _, _, _, _ = args
+            if name in end_encoded_vals:
+                return end_encoded_vals[name]
         res = func(*args, **kwargs)
         if func.__name__ == "encode":
-            input, name, _, slots, _ = args
+            input, name, _, slots, _, _ = args
             full_encode = res.deep_copy()
-            full_encode.cv = [full_encode.cv[0].cpu().numpy()]
+            # full_encode.cv = [full_encode.cv[0].cpu().numpy()]
             end_encoded_vals[name] = full_encode
         return res
     return wrapper

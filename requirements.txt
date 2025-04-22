@@ -22,3 +22,4 @@ types-dataclasses
 typing-extensions>=4.10.0
 termcolor>=1.1.0
 gpufhe-wrapper
+huggingface_hub>=0.20.0
