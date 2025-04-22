@@ -93,6 +93,9 @@ class Context:
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
         self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
+        self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
+        self.QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
+        self.QmaxdiffplusPmaxdiff_map = get_item("QmaxdiffplusPmaxdiff_map", gpufhe_content_map)
         self.BsContext_map = {}
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
@@ -146,6 +149,12 @@ class Context:
             self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
         for key, value in self.QmuplusPmu_map.items():
             self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QbarretKplusPbarretK_map.items():
+            self.QbarretKplusPbarretK_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
+            self.QbarretRatioplusPbarretRatio_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
+            self.QmaxdiffplusPmaxdiff_map[key] = torch.tensor(value, dtype = torch.uint64)
 
         self.to_cuda()
         self.BsContext = None
@@ -199,6 +208,12 @@ class Context:
             self.QplusP_map[key] = value.cuda()
         for key, value in self.QmuplusPmu_map.items():
             self.QmuplusPmu_map[key] = value.cuda()
+        for key, value in self.QbarretKplusPbarretK_map.items():
+            self.QbarretKplusPbarretK_map[key] = value.cuda()
+        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
+            self.QbarretRatioplusPbarretRatio_map[key] = value.cuda()
+        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
+            self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
 
     def norm_rot_index(self, i):
         if i < 0:
