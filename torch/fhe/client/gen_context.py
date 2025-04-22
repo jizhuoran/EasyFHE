@@ -194,7 +194,7 @@ def gen_contexts(
                 )
             else:
                 gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                    level_budget, dim1, maxLevelsRemaining, 0, gpufhe_context
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
                 )
 
         for logBsSlots in logBsSlots_list:

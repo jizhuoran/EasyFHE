@@ -50,7 +50,7 @@ def app_without_bs_example_debug(
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
+    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
     if is_euqal:
         print("homo_rotate: Test passed!")
     else:
@@ -90,7 +90,7 @@ def app_example_debug(
 
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
     cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
+    is_euqal = utils.compare_bs_ct_with_openfhe(cipher, cipher_openfhe)
     if is_euqal:
         print("homo_rotate: Test passed!")
     else:
@@ -107,7 +107,7 @@ def app_example_debug(
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     openfhe_boot = openfhe_context.cc.ModReduce(openfhe_boot)
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_boot)
+    is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
     if is_euqal:
         print("BootstrapTest_logBsSlots11: Test passed!")
     else:
@@ -136,7 +136,7 @@ def app_example_debug(
     openfhe_boot1 = openfhe_boot_context.cc.EvalBootstrap(openfhe_boot)
     openfhe_boot1 = openfhe_context.cc.ModReduce(openfhe_boot1)
 
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_boot1)
+    is_euqal = utils.compare_bs_ct_with_openfhe(result1, openfhe_boot1)
     if is_euqal:
         print("BootstrapTest_logBsSlots12: Test passed!")
     else:
@@ -238,7 +238,7 @@ def encode_test_case(
     ############
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    plaintext = homo_ops.encode(x, "test1", 0, encode_slots, cryptoContext)
+    plaintext = homo_ops.encode(x, "test1", 0, encode_slots, False, cryptoContext)
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
     all_correct = True
@@ -275,7 +275,7 @@ def encode_test_case(
     # x = np.array([values[i % len(values)] for i in range(encode_slots)])
     # x = torch.tensor(x, device="cuda")
     # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    # encoded = homo_ops.encode(x, 0, encode_slots, cryptoContext)
+    # encoded = homo_ops.encode(x, 0, encode_slots, False, cryptoContext)
 
     # result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     # clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -296,7 +296,7 @@ def encode_test_case(
     # x = np.array(values)
     # x = torch.tensor(x, device="cuda")
     # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    # encoded = homo_ops.encode(x, 0, encode_slots, cryptoContext)
+    # encoded = homo_ops.encode(x, 0, encode_slots, False, cryptoContext)
 
     # result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     # clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -318,7 +318,7 @@ def encode_test_case(
     encode_slots = (1<<10)
     pre_encode_value = homo_ops.pre_encode(x, encode_slots)
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
-    plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, cryptoContext)
+    plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, False, cryptoContext)
 
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
 
@@ -475,7 +475,7 @@ def double_bs_debug(
         num_iter = 2
         openfhe_boot = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe, num_iter, precision)
         openfhe_boot = openfhe_boot_context.cc.ModReduce(openfhe_boot)
-        is_euqal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_boot)
+        is_euqal = utils.compare_bs_ct_with_openfhe(result, openfhe_boot)
         if is_euqal:
             print("BootstrapTest_logBsSlots11: Test passed!")
         else:
@@ -484,7 +484,7 @@ def double_bs_debug(
 
 def gen_CoeffSlots_matrix_test_case(
         maxLevelsRemaining=1,
-        logBsSlots_list=[13],
+        logBsSlots_list=[11],
         logN=14,
         dnum=1,
         dcrtBits=52,
@@ -523,9 +523,22 @@ def gen_CoeffSlots_matrix_test_case(
     c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
     s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
 
+    with open('thisres.py', 'w') as f:
+        pass
+    for i in range(len(c2s_matrix)):
+        for j in range(len(c2s_matrix[i])):
+            with open('thisres.py', 'a') as f:
+                print('A{}_{}='.format(i, j), c2s_matrix[i][j].encoded_values.tolist(), file=f)
+
+    for i in range(len(s2c_matrix)):
+        for j in range(len(s2c_matrix[i])):
+            with open('thisres.py', 'a') as f:
+                print('B{}_{}='.format(i, j), s2c_matrix[i][j].encoded_values.tolist(), file=f)
 
 
-    encode_slots = (1 << 13)
+    print("s2c_matrix", s2c_matrix[0][0].slots)
+
+    encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
