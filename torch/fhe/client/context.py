@@ -729,7 +729,7 @@ class __FOR_SAVE_ONLY_Context:
         self.QbarretKplusPbarretK_map = {}
         self.QbarretRatioplusPbarretRatio_map = {}
         self.QmaxdiffplusPmaxdiff_map = {}
-        for cur_limbs in range(len(moduliQ_scalar)):
+        for cur_limbs in range(1, len(moduliQ_scalar)+1):
             self.QplusP_map[cur_limbs] = np.array(
                 np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
             )
