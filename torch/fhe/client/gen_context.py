@@ -22,7 +22,7 @@ def gen_contexts(
 
     print("Generating context")
 
-    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         '-'.join(map(str, logBsSlots_list)),
         '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -32,6 +32,7 @@ def gen_contexts(
         firstMod,
         secretKeyDist,
         rescaleTech,
+        config.label(),
     )
 
     GPUFHE_path = save_dir + "/GPU-FHE-CONTEXT" + save_path_meta
@@ -188,9 +189,15 @@ def gen_contexts(
     if NO_BS == False:
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             print("BsContext_map: ", logBsSlots)
-            gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-            )
+            if config.ENCODE_BS_FFT:
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
+                )
+            else:
+                assert config.COMPARE_WITH_OPENFHE == False, "Cannot compare with openfhe if not using fully pre-encoded BS FFT"
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
+                )
 
         for logBsSlots in logBsSlots_list:
             BsContextMembers = {}

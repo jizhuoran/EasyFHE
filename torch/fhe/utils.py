@@ -127,7 +127,7 @@ def try_load_context(
         logBsSlots_list = list(logBsSlots_list)
         levelBudget_list = list(levelBudget_list)
 
-    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         "-".join(map(str, logBsSlots_list)),
         "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -137,11 +137,12 @@ def try_load_context(
         firstMod,
         secretKeyDist,
         rescaleTech,
+        config.label(),
     )
 
     debug_load_path = (
         save_dir
-        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             maxLevelsRemaining,
             "-".join(map(str, logBsSlots_list)),
             "-".join(
@@ -153,6 +154,7 @@ def try_load_context(
             firstMod,
             secretKeyDist,
             rescaleTech,
+            config.label(),
         )
     )
 
