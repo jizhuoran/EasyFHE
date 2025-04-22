@@ -32,30 +32,39 @@ class BsContext:
         self.correctionFactor = get_item("correctionFactor", content_map)
         self.dim1 = get_item("dim1", content_map)
         self.k = get_item("k", content_map)
-        self.m_U0PreFFT = get_item("m_U0PreFFT", content_map)
-        self.m_U0hatTPreFFT = get_item("m_U0hatTPreFFT", content_map)
+        self.m_U0PreFFT_ = get_item("m_U0PreFFT", content_map)
+        self.m_U0hatTPreFFT_ = get_item("m_U0hatTPreFFT", content_map)
         self.slots = get_item("slots", content_map)
         self.paramsDec = get_item("paramsDec", content_map)
         self.paramsEnc = get_item("paramsEnc", content_map)
 
-        if isinstance(self.m_U0PreFFT[0][0], Plaintext):
-            for i in range(len(self.m_U0hatTPreFFT)):
-                for j in range(len(self.m_U0hatTPreFFT[i])):
-                    self.m_U0hatTPreFFT[i][j].cv = [torch.tensor(self.m_U0hatTPreFFT[i][j].cv, dtype = torch.uint64)]
-                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT[i][j].cipher_id)
+        if isinstance(self.m_U0PreFFT_[0][0], Plaintext):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].cv = [torch.tensor(self.m_U0hatTPreFFT_[i][j].cv, dtype = torch.uint64)]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT_[i][j].cipher_id)
 
-            for i in range(len(self.m_U0PreFFT)):
-                for j in range(len(self.m_U0PreFFT[i])):
-                    self.m_U0PreFFT[i][j].cv = [torch.tensor(self.m_U0PreFFT[i][j].cv, dtype = torch.uint64)]
-                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT[i][j].cipher_id)
-        elif isinstance(self.m_U0PreFFT[0][0], PreEncodeValues):
-            for i in range(len(self.m_U0hatTPreFFT)):
-                for j in range(len(self.m_U0hatTPreFFT[i])):
-                    self.m_U0hatTPreFFT[i][j].encoded_values = torch.tensor(self.m_U0hatTPreFFT[i][j].encoded_values)
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].cv = [torch.tensor(self.m_U0PreFFT_[i][j].cv, dtype = torch.uint64)]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT_[i][j].cipher_id)
+        elif isinstance(self.m_U0PreFFT_[0][0], PreEncodeValues):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].encoded_values = torch.tensor(self.m_U0hatTPreFFT_[i][j].encoded_values)
 
-            for i in range(len(self.m_U0PreFFT)):
-                for j in range(len(self.m_U0PreFFT[i])):
-                    self.m_U0PreFFT[i][j].encoded_values = torch.tensor(self.m_U0PreFFT[i][j].encoded_values)
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].encoded_values = torch.tensor(self.m_U0PreFFT_[i][j].encoded_values)
+        
+        self.BS_FFT = {}
+        for i in range(len(self.m_U0hatTPreFFT_)):
+            for j in range(len(self.m_U0hatTPreFFT_[i])):
+                self.BS_FFT["{}_{}_{}".format("C2S", i, j)] = self.m_U0hatTPreFFT_[i][j]
+
+        for i in range(len(self.m_U0PreFFT_)):
+            for j in range(len(self.m_U0PreFFT_[i])):
+                self.BS_FFT["{}_{}_{}".format("S2C", i, j)] = self.m_U0PreFFT_[i][j]
 
 
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
@@ -123,17 +132,20 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-        if isinstance(self.m_U0PreFFT[0][0], Plaintext):
-            for i in range(len(self.m_U0hatTPreFFT)):
-                for j in range(len(self.m_U0hatTPreFFT[i])):
-                    self.m_U0hatTPreFFT[i][j].cv = [self.m_U0hatTPreFFT[i][j].cv[0].cuda()]
-            for i in range(len(self.m_U0PreFFT)):
-                for j in range(len(self.m_U0PreFFT[i])):
-                    self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]
-        elif isinstance(self.m_U0PreFFT[0][0], PreEncodeValues):
-            for i in range(len(self.m_U0hatTPreFFT)):
-                for j in range(len(self.m_U0hatTPreFFT[i])):
-                    self.m_U0hatTPreFFT[i][j].encoded_values = self.m_U0hatTPreFFT[i][j].encoded_values.cuda()
-            for i in range(len(self.m_U0PreFFT)):
-                for j in range(len(self.m_U0PreFFT[i])):
-                    self.m_U0PreFFT[i][j].encoded_values = self.m_U0PreFFT[i][j].encoded_values.cuda()
+        for key, value in self.BS_FFT.items():
+            if isinstance(value, Plaintext):
+                self.BS_FFT[key].cv = [self.BS_FFT[key].cv[0].cuda()]
+            elif isinstance(value, PreEncodeValues):
+                self.BS_FFT[key].encoded_values = self.BS_FFT[key].encoded_values.cuda()
+            else:
+                raise TypeError("Unsupported type for BS_FFT value: {}".format(type(value)))
+    
+    # def encode_FFT(self, x):
+    #     self.to_cuda()
+    #     if isinstance(self.m_U0PreFFT[0][0], Plaintext):
+    #         for i in range(len(self.m_U0hatTPreFFT)):
+    #             for j in range(len(self.m_U0hatTPreFFT[i])):
+    #                 self.m_U0hatTPreFFT[i][j] = encode(
+    #         for i in range(len(self.m_U0PreFFT)):
+    #             for j in range(len(self.m_U0PreFFT[i])):
+    #                 self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]

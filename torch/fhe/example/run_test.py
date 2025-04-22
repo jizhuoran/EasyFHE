@@ -11,8 +11,8 @@ DATA_DIR = os.environ["DATA_DIR"]
 LOG_DIR = os.environ["LOG_DIR"]
 
 maxLevelsRemaining = 3
-logBsSlots_list = [12]
-logN = 14
+logBsSlots_list = [14]
+logN = 16
 dnum = 3
 dcrtBits = 59
 firstMod = 60
@@ -63,6 +63,9 @@ cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
 
 cryptoContext.load_rotation_keys(logBsSlots)
+result = BS.eval_bootstrap(
+    cipher, cryptoContext.L, logBsSlots, cryptoContext
+)
 
 start_time = time.time()
 result = BS.eval_bootstrap(

@@ -123,16 +123,18 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
 
         for i in range(b):
             G = g * i
+            name = "{}_{}_{}".format(direction, s, G)
             inner_ext = homo_ops.homo_mul_pt(
                 fast_rotation_ext[0], 
-                homo_ops.encode(A_Ext[s][G], "{}_{}_{}".format(direction, s, G), cryptoContext.L - fast_rotation_ext[0].cur_limbs, A_Ext[s][G].slots, True, cryptoContext),
+                homo_ops.encode(A_Ext[name], name, cryptoContext.L - fast_rotation_ext[0].cur_limbs, A_Ext[name].slots, True, cryptoContext),
                 cryptoContext
             )
             for j in range(1, g):
                 if (G + j) != num_rotations:
+                    name = "{}_{}_{}".format(direction, s, G+j)
                     tmp_ext = homo_ops.homo_mul_pt(
                         fast_rotation_ext[j], 
-                        homo_ops.encode(A_Ext[s][G+j], "{}_{}_{}".format(direction, s, G+j), cryptoContext.L - fast_rotation_ext[j].cur_limbs, A_Ext[s][G+j].slots, True, cryptoContext),
+                        homo_ops.encode(A_Ext[name], name, cryptoContext.L - fast_rotation_ext[j].cur_limbs, A_Ext[name].slots, True, cryptoContext),
                         cryptoContext
                     )
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
@@ -297,7 +299,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(precom.BS_FFT, raised, cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
@@ -343,7 +345,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(precom.BS_FFT, ctxtEnc, cryptoContext)
 
     else:  # SPARSELY PACKED CASE
         # -------------------
@@ -365,7 +367,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(precom.BS_FFT, raised, cryptoContext)
 
 
 
@@ -411,7 +413,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(precom.BS_FFT, ctxtEnc, cryptoContext)
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)

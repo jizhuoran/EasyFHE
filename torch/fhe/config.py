@@ -9,6 +9,7 @@ class Config:
         COMPARE_WITH_OPENFHE=False,
         TIME_OPS=False,
         COUNT_OPS=False,
+        ENCODE_BS_FFT=True,
         SAVE_MIDDLE=False,
         SAVE_END=False
     ):
@@ -20,6 +21,14 @@ class Config:
         self.COMPARE_WITH_OPENFHE = COMPARE_WITH_OPENFHE
         self.TIME_OPS=TIME_OPS
         self.COUNT_OPS=COUNT_OPS
+        self.ENCODE_BS_FFT=ENCODE_BS_FFT
 
         self.SAVE_MIDDLE=SAVE_MIDDLE
         self.SAVE_END=SAVE_END
+
+    def label(self):
+        val = 0
+        if self.COMPARE_WITH_OPENFHE:
+            val += 1
+        if self.ENCODE_BS_FFT:
+            val += 2
