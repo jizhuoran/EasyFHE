@@ -84,7 +84,7 @@ class SecureML:
         for i in range(0, self.params.slots, self.params.batch):
             pvals[i] = 1.0
         # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
-        self.dummy = fhe.encode(pvals, "dummy", 0, self.params.encode_slots, cryptoContext)
+        self.dummy = fhe.encode(pvals, "dummy", 0, self.params.encode_slots, False, cryptoContext)
 
         # todo: 为了支持fixedmanual模式，每个乘法(包括明密文和密密文)后面都要调用一个homo_rescale 
         self.z_data_test, self.factor_num_test, self.sample_num_test = \

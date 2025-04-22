@@ -95,10 +95,10 @@ def Sort(input_length=8):
                     else:
                         mask3[i] = 1
                         mask4[l] = 1
-            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1,"mask1", 0, input_length, cryptoContext), cryptoContext)
-            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2,"mask2", 0, input_length, cryptoContext), cryptoContext)
-            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3,"mask3", 0, input_length, cryptoContext), cryptoContext)
-            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4,"mask4", 0, input_length, cryptoContext), cryptoContext)
+            arr1 = fhe.homo_mul_pt(input_ct, fhe.encode(mask1,"mask1", 0, input_length, False, cryptoContext), cryptoContext)
+            arr2 = fhe.homo_mul_pt(input_ct, fhe.encode(mask2,"mask2", 0, input_length, False, cryptoContext), cryptoContext)
+            arr3 = fhe.homo_mul_pt(input_ct, fhe.encode(mask3,"mask3", 0, input_length, False, cryptoContext), cryptoContext)
+            arr4 = fhe.homo_mul_pt(input_ct, fhe.encode(mask4,"mask4", 0, input_length, False, cryptoContext), cryptoContext)
             arr5_1 = fhe.homo_rotate(arr1,-j,cryptoContext)
             arr5_2 = fhe.homo_rotate(arr3,-j,cryptoContext)
             arr6_1 = fhe.homo_rotate(arr2,j,cryptoContext)
