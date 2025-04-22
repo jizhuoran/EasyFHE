@@ -39,7 +39,7 @@ class HE_res20_context:
         self.firstMod = 60
         self.levelBudget_list = [[4, 4], [4, 4], [4, 4]]
         self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-        self.rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+        self.rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 
         print("rotate_index_list: ", self.rotate_index_list)
         print("maxLevelsRemaining: ", self.maxLevelsRemaining)
@@ -103,7 +103,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][1]
     # res1 = a1*x,shortcut = input = y
     res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
-    input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext,  f"layer{1}-conv{2}bn{2}-A2",cryptoContext.L-input.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(input,A2,cryptoContext)
     res1 = fhe.homo_add(res1, A2y, cryptoContext)
@@ -119,7 +120,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
     # layer[0],block[1],conv2 and shorcut
     scale = normalized_deltas[1][3]
     res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
-    res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext,  f"layer{2}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y,cryptoContext)
@@ -135,7 +137,8 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[1][5]
     res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
-    res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext,  f"layer{3}-conv{2}bn{2}-A2",cryptoContext.L-res2.cur_limbs,1,16384,scale)
     A2y = fhe.homo_mul_pt(res2, A2, cryptoContext)
     res3 = fhe.homo_add(res3, A2y,cryptoContext)
@@ -153,7 +156,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
 
-    boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #RESCALE ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #RESCALE ADD BY ZRJI
     res1dx0 = convbn_dx(
         boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext, 16384, 16, -1024, 0, "1"
     )
@@ -184,7 +188,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][3]
     res2 = convbn(res2, 5, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
-    res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext,  f"layer{5}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,8192,scale)
     A2y = fhe.homo_mul_pt(res1,A2,cryptoContext)
     res2 = fhe.homo_add(res2,A2y,cryptoContext)
@@ -200,7 +205,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][5]
     res3 = convbn(res3, 6, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
-    res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext,  f"layer{6}-conv{2}bn{2}-A2",cryptoContext.L-res2.cur_limbs,1,8192,scale)
     A2y = fhe.homo_mul_pt(res2, A2, cryptoContext)
     res3 = fhe.homo_add(res3, A2y,cryptoContext)
@@ -220,8 +226,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
-
-    boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(
         boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, 8192, 32, -256, 0, "1"
     )
@@ -251,7 +257,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][3]
     res2 = convbn(res2, 8, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
-    res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     A2 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,4096,scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y,cryptoContext)
@@ -265,7 +272,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][5]
     res3 = convbn(res3, 9, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
-    res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext)
+    if cryptoContext.rescaleTech=="FIXEDMANUAL":
+        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext)
     A2 =read_values_from_file(cryptoContext, f"layer{9}-conv{2}bn{2}-A2",cryptoContext.L-res2.cur_limbs,1,4096,scale) #drop_last_elements ADD BY ZRJI
     A2y = fhe.homo_mul_pt(res2, A2, cryptoContext)
     res3 = fhe.homo_add(res3, A2y,cryptoContext)
