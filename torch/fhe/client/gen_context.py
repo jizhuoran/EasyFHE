@@ -188,9 +188,14 @@ def gen_contexts(
     if NO_BS == False:
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             print("BsContext_map: ", logBsSlots)
-            gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-            )
+            if config.COMPARE_WITH_OPENFHE:
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
+                )
+            else:
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                    level_budget, dim1, maxLevelsRemaining, 0, gpufhe_context
+                )
 
         for logBsSlots in logBsSlots_list:
             BsContextMembers = {}

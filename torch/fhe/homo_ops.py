@@ -732,6 +732,10 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             f"slots unequal! cipher.slots = {cipher.slots}, plaintext.slots = {plaintext.slots}",
             Warning,
         )
+        #print call stack
+        import traceback
+        traceback.print_stack()
+
     if cipher.cur_limbs != plaintext.cur_limbs:
         warnings.warn(
             f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
@@ -958,7 +962,7 @@ def encode(
     if isinstance(x, list) or isinstance(x, np.ndarray):
         if isinstance(x, np.ndarray):
             x = x.tolist()
-        middle_value = pre_encode(x, slots, cryptoContext)
+        middle_value = pre_encode(x, slots)
         middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
     elif isinstance(x, PreEncodeValues):
         assert slots == x.slots
@@ -1064,6 +1068,73 @@ def fused_broadcast_mac(ctx, ptxs, cryptoContext):
 
     res = F.cipher_fused_broadcast_mac(ctx.cv[0], ctx.cv[1], ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ptx_bxs), ctx.cur_limbs, cryptoContext.N)
     return ctx.cipher_like([res[0], res[1]], scaling_factor=ctx.scaling_factor * ptxs[0].scaling_factor, noise_deg=ctx.noise_deg + ptxs[0].noise_deg)
+
+
+def encode_bsMatrix(
+        x,
+        name,
+        level,
+        slots,
+        cryptoContext
+    ):
+        if isinstance(x, list) or isinstance(x, np.ndarray):
+            if isinstance(x, np.ndarray):
+                x = x.tolist()
+            middle_value = pre_encode(x, slots)
+            middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+        elif isinstance(x, PreEncodeValues):
+            print("slots", slots, "x.slots", x.slots)
+            assert slots == x.slots
+            middle_value = x
+        elif isinstance(x, Plaintext):
+            return x
+        else:
+            raise ValueError("Invalid input type")
+
+        cur_limbs = cryptoContext.L - level
+
+        if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+            scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+        else:
+            scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+        assert middle_value.max_encoded_value < 1e-20 or math.log2(
+            int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+
+        # pt_encode = torch.encode(
+        #     input=middle_value.encoded_values,
+        #     N=cryptoContext.N,
+        #     cur_limbs=cryptoContext.encode_params["primes"].size()[0],
+        #     slots=slots,
+        #     scaling_factor=scaling_factor,
+        #     primes=cryptoContext.encode_params["primes"],
+        #     barret_ratio=cryptoContext.encode_params["barret_ratio"],
+        #     barret_k=cryptoContext.encode_params["barret_k"],
+        #     power_of_roots_shoup=cryptoContext.encode_params["power_of_roots_shoup"],
+        #     power_of_roots=cryptoContext.encode_params["power_of_roots"]
+        # )
+
+        pt_encode = torch.encode(
+            input=middle_value.encoded_values,
+            N=cryptoContext.N,
+            cur_limbs=cryptoContext.primes.size()[0],
+            slots=slots,
+            scaling_factor=scaling_factor,
+            primes=cryptoContext.primes,
+            max_int_diffs=cryptoContext.max_int_diffs,
+            barret_ratio=cryptoContext.barret_ratio,
+            barret_k=cryptoContext.barret_k,
+            power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
+            power_of_roots=cryptoContext.power_of_roots
+        )
+        
+
+        gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, True)
+        if cryptoContext.config.PTX_TWIN:
+            gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
+        return gpufhe_cipher
+
+
 
 # def encode(
 #     x,
@@ -1467,53 +1538,53 @@ def rotate(a, index):
     return result
 
 
-def encode_bsMatrix(
-    x,
-    name,
-    level,
-    slots,
-    cryptoContext
-):
-    if isinstance(x, list) or isinstance(x, np.ndarray):
-        if isinstance(x, np.ndarray):
-            x = x.tolist()
-        middle_value = pre_encode(x, slots, cryptoContext)
-        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
-    elif isinstance(x, PreEncodeValues):
-        assert slots == x.slots
-        middle_value = x
-    elif isinstance(x, Plaintext):
-        return x
-    else:
-        raise ValueError("Invalid input type")
+# def encode_bsMatrix(
+#     x,
+#     name,
+#     level,
+#     slots,
+#     cryptoContext
+# ):
+#     if isinstance(x, list) or isinstance(x, np.ndarray):
+#         if isinstance(x, np.ndarray):
+#             x = x.tolist()
+#         middle_value = pre_encode(x, slots)
+#         middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+#     elif isinstance(x, PreEncodeValues):
+#         assert slots == x.slots
+#         middle_value = x
+#     elif isinstance(x, Plaintext):
+#         return x
+#     else:
+#         raise ValueError("Invalid input type")
 
-    cur_limbs = cryptoContext.L - level
+#     cur_limbs = cryptoContext.L - level
 
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
-        scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
-    else:
-        scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+#     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+#         scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+#     else:
+#         scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
-    assert middle_value.max_encoded_value < 1e-20 or math.log2(
-        int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+#     assert middle_value.max_encoded_value < 1e-20 or math.log2(
+#         int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
 
-    pt_encode = torch.encode(
-        input=middle_value.encoded_values,
-        N=cryptoContext.N,
-        cur_limbs=cryptoContext.encode_params["primes"].size()[0],
-        slots=slots,
-        scaling_factor=scaling_factor,
-        primes=cryptoContext.encode_params["primes"],
-        barret_ratio=cryptoContext.encode_params["barret_ratio"],
-        barret_k=cryptoContext.encode_params["barret_k"],
-        power_of_roots_shoup=cryptoContext.encode_params["power_of_roots_shoup"],
-        power_of_roots=cryptoContext.encode_params["power_of_roots"]
-    )
+#     pt_encode = torch.encode(
+#         input=middle_value.encoded_values,
+#         N=cryptoContext.N,
+#         cur_limbs=cryptoContext.encode_params["primes"].size()[0],
+#         slots=slots,
+#         scaling_factor=scaling_factor,
+#         primes=cryptoContext.encode_params["primes"],
+#         barret_ratio=cryptoContext.encode_params["barret_ratio"],
+#         barret_k=cryptoContext.encode_params["barret_k"],
+#         power_of_roots_shoup=cryptoContext.encode_params["power_of_roots_shoup"],
+#         power_of_roots=cryptoContext.encode_params["power_of_roots"]
+#     )
 
-    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, True)
-    if cryptoContext.config.PTX_TWIN:
-        gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
-    return gpufhe_cipher
+#     gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, True)
+#     if cryptoContext.config.PTX_TWIN:
+#         gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
+#     return gpufhe_cipher
 
 def eval_coeffs_to_slots_precompute(logBsSlots, scale, lRemain, cryptoContext):
     slots = (1 << logBsSlots)

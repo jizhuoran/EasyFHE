@@ -124,13 +124,16 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
         for i in range(b):
             G = g * i
             inner_ext = homo_ops.homo_mul_pt(
-                fast_rotation_ext[0], A_Ext[s][G], cryptoContext
+                fast_rotation_ext[0], 
+                homo_ops.encode_bsMatrix(A_Ext[s][G], "XXX", cryptoContext.L - fast_rotation_ext[0].cur_limbs, fast_rotation_ext[0].slots, cryptoContext),
+                cryptoContext
             )
-
             for j in range(1, g):
                 if (G + j) != num_rotations:
                     tmp_ext = homo_ops.homo_mul_pt(
-                        fast_rotation_ext[j], A_Ext[s][G + j], cryptoContext
+                        fast_rotation_ext[j], 
+                        homo_ops.encode_bsMatrix(A_Ext[s][G+j], "XXX", cryptoContext.L - fast_rotation_ext[j].cur_limbs, fast_rotation_ext[j].slots, cryptoContext),
+                        cryptoContext
                     )
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
 

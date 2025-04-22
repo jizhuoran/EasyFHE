@@ -736,6 +736,7 @@ class __FOR_SAVE_ONLY_Context:
             for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
+                    logBsSlots,
                     self.moduliP_scalar,
                     0,
                     self.secretKeyDist,
