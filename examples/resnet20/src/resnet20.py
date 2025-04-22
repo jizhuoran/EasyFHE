@@ -11,15 +11,51 @@ from examples.utils import approx
 from examples.resnet20.src.convs import *
 from huggingface_hub import hf_hub_download
 import zipfile
+from termcolor import colored
 
 DATA_DIR = os.environ["DATA_DIR"]
 
 
 class HE_res20_context:
-    def __init__(self, data_dir):
+    def __init__(self, weight_dir,
+                 # total=1000, SAVE_END=False, pre_encode_end=True,
+                 total=1, SAVE_END=True, pre_encode_end=False,
+                 full_encode_pkl_path=""):
         self.cur_num_slots = None
         self.relu_degree = None
-        self.weight_dir = data_dir
+        self.weight_dir = weight_dir
+        self.total = total
+        self.SAVE_END = SAVE_END
+        self.full_encode_pkl_path = full_encode_pkl_path
+        self.pre_encode_end = pre_encode_end
+
+        self.rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
+                             1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+        self.maxLevelsRemaining = 11
+        self.logBsSlots_list = [12, 13, 14]
+        self.logN = 16
+        self.dnum = 3
+        self.dcrtBits = 56
+        self.firstMod = 60
+        self.levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+        self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+        self.rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+
+        print("rotate_index_list: ", self.rotate_index_list)
+        print("maxLevelsRemaining: ", self.maxLevelsRemaining)
+        print("logBsSlots_list: ", self.logBsSlots_list)
+        print("logN: ", self.logN)
+        print("dnum: ", self.dnum)
+        print("dcrtBits: ", self.dcrtBits)
+        print("firstMod: ", self.firstMod)
+        print("levelBudget_list: ", self.levelBudget_list)
+        print("secretKeyDist: ", self.secretKeyDist)
+        print("rescaleTech: ", self.rescaleTech)
+
+
+        print("full_encode_pkl_path: ", self.full_encode_pkl_path)
+        print("\n\n")
+
 
 # def get_relu_depth(degree):
 #     ranges = [
@@ -312,10 +348,10 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
 
     print("=====================================================")
     correct = 0
-    total = 20
+    total = he_res20_ctx.total
     for i in range(total):
         he_res20_ctx.cur_num_slots = 1 << 14
-        image_vector, label, _ = read_image(i)
+        image_vector, label, index = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
         # # 明文模型输出
         # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
@@ -388,9 +424,13 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         #     print(clear_result)
         # else:
         #     print("Decryption failed, clear_result is None.")
-        print("ground truth: ", label, "prediction: ", max_element_idx)
+        print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
         if label == max_element_idx:
             correct += 1
+        if (i+1) % 100 == 0:
+            message=f"\ncorrect/total: {correct}/{(i+1)}"
+            print(colored(message, "red"))
+            print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
 
@@ -434,25 +474,27 @@ def resnet20( ):
     # if max_relu_degree < 59:
     #     diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
     #     maxLevelsRemaining +=diff
-    rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
-                         1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
 
-    maxLevelsRemaining = 11
-    logBsSlots_list = [12, 13, 14]
-    logN = 16
-    dnum = 3
-    dcrtBits = 56
-    firstMod = 60
-    levelBudget_list = [[4, 4], [4, 4], [4, 4]]
-    secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-    rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
     he_res20_context_ = HE_res20_context("../weights_Aespa")
 
+    rotate_index_list = he_res20_context_.rotate_index_list
+    maxLevelsRemaining = he_res20_context_.maxLevelsRemaining
+    logBsSlots_list = he_res20_context_.logBsSlots_list
+    logN = he_res20_context_.logN
+    dnum = he_res20_context_.dnum
+    dcrtBits = he_res20_context_.dcrtBits
+    firstMod = he_res20_context_.firstMod
+    levelBudget_list = he_res20_context_.levelBudget_list
+    secretKeyDist = he_res20_context_.secretKeyDist
+    rescaleTech = he_res20_context_.rescaleTech
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False, SAVE_END=False, PTX_TWIN=False)
+
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
+                                     SAVE_END=he_res20_context_.SAVE_END,
+                                     PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
@@ -465,11 +507,9 @@ def resnet20( ):
         load_encode_pkl(file_name, he_res20_context_)
         pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
 
-        # cryptoContext.pre_encode_type = "end"
-        # pkl_path = "" # yhh: auto, sparse
-        # pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
-
-
+        if he_res20_context_.pre_encode_end:
+            cryptoContext.pre_encode_type = "end"
+            pkl_path = he_res20_context_.full_encode_pkl_path
 
     load_weight(pkl_path, cryptoContext)
 
