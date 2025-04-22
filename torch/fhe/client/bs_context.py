@@ -466,11 +466,11 @@ class BsContext:
         factor = 1 << int(round(math.log2(q_double)))
         pre = q_double / factor
         k = K_SPARSE if context.secretKeyDist == "SPARSE_TERNARY" else 1.0
-        scaleEnc = pre / k
-        scaleDec = 1 / pre
+        scaleEnc = pre / k # k is for homo_mod implemented by eval_chebyshev_series, pre is probably for bs precision issues
+        scaleDec = 1 / pre # pre is probably for bs precision issues (https://openfhe.discourse.group/t/scaling-factor-for-bootstrap-matrices/2002)
 
-        lEnc = context.L - self.paramsEnc.level_budget - 1
-        lDec = maxLevelsRemaining + 1
+        lEnc = context.L - self.paramsEnc.level_budget - 1 # todo: could be set outside to suppor random lRemain
+        lDec = maxLevelsRemaining + 1 # todo: could be set outside to suppor random lRemain
 
         self.m_U0hatTPreFFT = self.eval_coeffs_to_slots_precompute(self.logslot, level_budget, dim1, scaleEnc, lEnc, context)
         self.m_U0PreFFT = self.eval_slots_to_coeffs_precompute(self.logslot, level_budget, dim1, scaleDec, lDec, context)
@@ -881,7 +881,7 @@ class BsContext:
             raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
 
         # Clears all imaginary values as CKKS for complex numbers
-        if all(isinstance(x, complex) for x in inverse):
+        if all(isinstance(x, complex) for x in inverse): #todo: here is different from the pre_encode function in encode_tool.py! should be carefully handled!
             inverse_complex = inverse
         else:
             inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])

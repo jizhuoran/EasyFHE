@@ -49,7 +49,7 @@ def _fft_special_inv(vals, M, rotGroup, ksiPows):
 
 import cmath
 
-N = 17 << 1
+N = 1 << 17
 M = N << 1
 Nh = N >> 1
 
@@ -73,7 +73,7 @@ encode_params_rotGroup = np.array(encode_params_rotGroup)
 
 def pre_encode(x, slots):
 
-    N = 17 << 1
+    N = 1 << 17
     M = N << 1
     Nh = N >> 1
 

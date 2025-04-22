@@ -62,20 +62,132 @@ cipher = openfhe_context.encrypt(
 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 cryptoContext.BsContext.to_cuda()
 
-cryptoContext.load_rotation_keys(logBsSlots)
-result = BS.eval_bootstrap(
-    cipher, cryptoContext.L, logBsSlots, cryptoContext
-)
+# with torch.profiler.profile(
+#         activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+#         on_trace_ready=torch.profiler.tensorboard_trace_handler(
+#             LOG_DIR
+#         ),
+#         record_shapes=True,
+#         profile_memory=True,
+#         with_stack=True,
+#     ) as profiler:
+#         # Start profiling specific functions with torch.profiler.record_function()
+#         result = BS.eval_bootstrap(cipher, cryptoContext.L, logBsSlots=logBsSlots, cryptoContext=cryptoContext)
+#         profiler.step()
 
-start_time = time.time()
-result = BS.eval_bootstrap(
-    cipher, cryptoContext.L, logBsSlots, cryptoContext
-)
-print("Time taken for bootstrapping:", time.time() - start_time)
-# openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
-# openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
-# data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
+# # Get the profiling results
+# profiler_results = profiler.key_averages()
 
-clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-clear_result = clear_result.cpu().numpy().reshape(-1)
-print("HE decryption result: ", clear_result[:10])
+# # Print the profiling summary in a table format
+# print(profiler_results.table(sort_by="self_cuda_time_total"))
+
+
+TEST_COMPILE = False
+
+if TEST_COMPILE:
+    result1 = BS.eval_bootstrap(
+        cipher,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
+    )
+    start_time = time.time()
+    result1 = BS.eval_bootstrap(
+        cipher,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
+    )
+    print("Time taken for NORMAL bootstrapping:", time.time() - start_time)
+    print("=======================")
+    print("=======================")
+    print("=======================")
+    result2 = COMPILE.eval_bootstrap(
+        cipher,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
+    )
+    start_time = time.time()
+    result2 = COMPILE.eval_bootstrap(
+        cipher,
+        cryptoContext.L,
+        logBsSlots_list[0],
+        cryptoContext,
+    )
+    print("Time taken for COMPILE bootstrapping:", time.time() - start_time)
+    print("result1", result1.cv[0].cpu().numpy()[0][:10])
+    print("result2", result2.cv[0].cpu().numpy()[0][:10])
+
+    if np.array_equal(result1.cv[0].cpu().numpy(), result2.cv[0].cpu().numpy()):
+        print("Test passed!")
+        print("Test passed!")
+        print("Test passed!")
+    else:
+        print("Test failed!")
+        print("Test failed!")
+        print("Test failed!")
+
+
+
+    with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                DATA_DIR+"/log"
+            ),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as profiler:
+            # Start profiling specific functions with torch.profiler.record_function()
+            result = BS.eval_bootstrap(cipher, cryptoContext.L, logBsSlots, cryptoContext)
+            profiler.step()
+
+    # Get the profiling results
+    profiler_results = profiler.key_averages()
+
+    # Print the profiling summary in a table format
+    print(profiler_results.table(sort_by="self_cpu_time_total"))
+
+    print("++++++++")
+    print("++++++++")
+    print("++++++++")
+
+    with torch.profiler.profile(
+            activities=[torch.profiler.ProfilerActivity.CPU, torch.profiler.ProfilerActivity.CUDA],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                DATA_DIR+"/log"
+            ),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as profiler:
+            # Start profiling specific functions with torch.profiler.record_function()
+            result = COMPILE.eval_bootstrap(cipher, cryptoContext.L, logBsSlots, cryptoContext)
+            profiler.step()
+
+    # Get the profiling results
+    profiler_results = profiler.key_averages()
+
+    # Print the profiling summary in a table format
+    print(profiler_results.table(sort_by="self_cpu_time_total"))
+
+
+else:
+    cryptoContext.load_rotation_keys(logBsSlots)
+    result = BS.eval_bootstrap(
+        cipher, cryptoContext.L, logBsSlots, cryptoContext
+    )
+
+    start_time = time.time()
+    result = BS.eval_bootstrap(
+        cipher, cryptoContext.L, logBsSlots, cryptoContext
+    )
+    print("Time taken for bootstrapping:", time.time() - start_time)
+    # openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
+    # openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+    # data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
+
+    clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    clear_result = clear_result.cpu().numpy().reshape(-1)
+    print("HE decryption result: ", clear_result[:10])

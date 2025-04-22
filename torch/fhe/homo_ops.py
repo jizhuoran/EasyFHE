@@ -928,9 +928,12 @@ def encode(
         power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
         power_of_roots=cryptoContext.power_of_roots
     )
-    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, True)
+    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext)
     if cryptoContext.config.PTX_TWIN:
-        gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
+        if isinstance(x, list):
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        else:
+            gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
     return gpufhe_cipher
 
 ################## FUSED OPS ##################
@@ -964,7 +967,7 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
         if ptxs[idx].scaling_factor != ctxs[0].scaling_factor:
             raise ValueError(f"ptxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
         if ptxs[idx].is_ext != ctxs[0].is_ext:
-            raise ValueError(f"ptxs[{idx}].is_ext != ctxs[0].is_ext")
+            raise ValueError(f"ptxs[{idx}].is_ext={ptxs[idx].is_ext} != ctxs[0].is_ext={ctxs[0].is_ext}")
 
         ctx_bxs.append(ctxs[idx].cv[0])
         ctx_axs.append(ctxs[idx].cv[1])
