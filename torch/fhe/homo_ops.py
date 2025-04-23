@@ -502,8 +502,6 @@ def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cry
     return _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
 
 
-
-
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
     limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
@@ -946,6 +944,8 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
 
     ctx_axs, ctx_bxs, ptx_bxs = [], [], []
 
+    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K
+
     for idx in range(len(ctxs)):
         if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:
             raise ValueError(f"ctxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
@@ -953,8 +953,6 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
             raise ValueError(f"ctxs[{idx}].slots != ptxs[0].slots")
         if ctxs[idx].noise_deg != ctxs[0].noise_deg:
             raise ValueError(f"ctxs[{idx}].noise_deg != ctxs[0].noise_deg")
-        # if ctxs[idx].scaling_factor != ctxs[0].scaling_factor:
-        #     raise ValueError(f"ctxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
         if ctxs[idx].is_ext != ctxs[0].is_ext:
             raise ValueError(f"ctxs[{idx}].is_ext != ctxs[0].is_ext")
 
@@ -964,8 +962,6 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
             raise ValueError(f"ptxs[{idx}].slots != ctxs[0].slots")
         if ptxs[idx].noise_deg != ctxs[0].noise_deg:
             raise ValueError(f"ptxs[{idx}].noise_deg != ctxs[0].noise_deg")
-        # if ptxs[idx].scaling_factor != ctxs[0].scaling_factor:
-        #     raise ValueError(f"ptxs[{idx}].scaling_factor != ctxs[0].scaling_factor")
         if ptxs[idx].is_ext != ctxs[0].is_ext:
             raise ValueError(f"ptxs[{idx}].is_ext={ptxs[idx].is_ext} != ctxs[0].is_ext={ctxs[0].is_ext}")
 
@@ -973,8 +969,21 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
         ctx_axs.append(ctxs[idx].cv[1])
         ptx_bxs.append(ptxs[idx].cv[0])
 
-    res = F.cipher_fused_pairwise_mac(ctx_bxs, ctx_axs, ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ctx_bxs), ctxs[0].cur_limbs, cryptoContext.N)
-    return ctxs[0].cipher_like([res[0], res[1]], scaling_factor=ctxs[0].scaling_factor * ptxs[0].scaling_factor, noise_deg=ctxs[0].noise_deg + ptxs[0].noise_deg)
+    res = F.cipher_fused_pairwise_mac(
+        ctx_bxs,
+        ctx_axs,
+        ptx_bxs,
+        cryptoContext.QplusP_map[ctxs[0].cur_limbs],
+        cryptoContext.QmuplusPmu_map[ctxs[0].cur_limbs],
+        len(ctx_bxs),
+        ctxs[0].cur_limbs + (cryptoContext.K if ctxs[0].is_ext else 0),
+        cryptoContext.N,
+    )
+    return ctxs[0].cipher_like(
+        [res[0], res[1]],
+        scaling_factor=ctxs[0].scaling_factor * ptxs[0].scaling_factor,
+        noise_deg=ctxs[0].noise_deg + ptxs[0].noise_deg,
+    )
 
 def fused_broadcast_mac(ctx, ptxs, cryptoContext):
     """
