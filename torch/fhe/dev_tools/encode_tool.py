@@ -160,6 +160,8 @@ def save_encoded_vals():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_path = DATA_DIR + f"/full_encode_{timestamp}.pkl"
         print("saving pre-encoded vals to {}".format(file_path))
+        for key, val in end_encoded_vals.items():
+            val.cv = [val.cv[0].cpu().numpy()]
         with open(file_path, "wb") as f:
             pickle.dump(end_encoded_vals, f)
 
