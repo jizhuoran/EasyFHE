@@ -93,6 +93,9 @@ class Context:
         self.swk_bx = get_item("swk_bx", gpufhe_content_map)
         self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
         self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
+        self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
+        self.QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
+        self.QmaxdiffplusPmaxdiff_map = get_item("QmaxdiffplusPmaxdiff_map", gpufhe_content_map)
         self.BsContext_map = {}
         if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
             for logBsSlots in self.logBsSlots_list:
@@ -140,10 +143,18 @@ class Context:
         self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
         self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
 
+        self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
+
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
         for key, value in self.QmuplusPmu_map.items():
             self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QbarretKplusPbarretK_map.items():
+            self.QbarretKplusPbarretK_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
+            self.QbarretRatioplusPbarretRatio_map[key] = torch.tensor(value, dtype = torch.uint64)
+        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
+            self.QmaxdiffplusPmaxdiff_map[key] = torch.tensor(value, dtype = torch.uint64)
 
         self.to_cuda()
         self.BsContext = None
@@ -152,6 +163,7 @@ class Context:
 
         self.config = config
         self.inBS = False
+        self.in_check_period = False
 
     def to_cuda(self):
         self.q_mu = self.q_mu.cuda()
@@ -191,10 +203,17 @@ class Context:
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.encode_temp = self.encode_temp.cuda()
         self.encode_inverse = self.encode_inverse.cuda()
+        self.max_int_diffs = self.max_int_diffs.cuda()
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = value.cuda()
         for key, value in self.QmuplusPmu_map.items():
             self.QmuplusPmu_map[key] = value.cuda()
+        for key, value in self.QbarretKplusPbarretK_map.items():
+            self.QbarretKplusPbarretK_map[key] = value.cuda()
+        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
+            self.QbarretRatioplusPbarretRatio_map[key] = value.cuda()
+        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
+            self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
 
     def norm_rot_index(self, i):
         if i < 0:

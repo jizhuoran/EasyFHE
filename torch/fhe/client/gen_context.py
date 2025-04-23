@@ -22,7 +22,7 @@ def gen_contexts(
 
     print("Generating context")
 
-    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         '-'.join(map(str, logBsSlots_list)),
         '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -32,11 +32,12 @@ def gen_contexts(
         firstMod,
         secretKeyDist,
         rescaleTech,
+        config.label(),
     )
 
     GPUFHE_path = save_dir + "/GPU-FHE-CONTEXT" + save_path_meta
-    debug_save_path = save_dir + "/DEBUG-GPU-FHE-CONTEXT" + save_path_meta
-    OPENFHE_path = save_dir + "/OPEN-FHE-CONTEXT" + save_path_meta
+    DEBUG_save_path = save_dir + "/DEBUG-GPU-FHE-CONTEXT" + save_path_meta
+    # OPENFHE_path = save_dir + "/OPEN-FHE-CONTEXT" + save_path_meta
 
 
     SecretKeyDist_MAP = {
@@ -117,9 +118,9 @@ def gen_contexts(
     openfheMembers["app_rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
         openfhe.BINARY
     )
-    with open(OPENFHE_path, "wb") as file:
-        pickle.dump(openfheMembers, file)
-    del openfheMembers
+    # with open(OPENFHE_path, "wb") as file:
+    #     pickle.dump(openfheMembers, file)
+    # del openfheMembers
 
     boot_cnst_map = {}
     if NO_BS == False: # need to do BS
@@ -155,7 +156,7 @@ def gen_contexts(
         debugKeys["rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
             openfhe.BINARY
         )
-        with open(debug_save_path, "wb") as file:
+        with open(DEBUG_save_path, "wb") as file:
             pickle.dump(debugKeys, file)
         del debugKeys
 
@@ -188,9 +189,15 @@ def gen_contexts(
     if NO_BS == False:
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             print("BsContext_map: ", logBsSlots)
-            gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-            )
+            if config.ENCODE_BS_FFT:
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
+                )
+            else:
+                assert config.COMPARE_WITH_OPENFHE == False, "Cannot compare with openfhe if not using fully pre-encoded BS FFT"
+                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
+                )
 
         for logBsSlots in logBsSlots_list:
             BsContextMembers = {}
@@ -212,7 +219,7 @@ def gen_contexts(
         ):
             gpufheMembers[item] = getattr(gpufhe_context, item)
 
-    with open(OPENFHE_path, "rb") as file:
-        openfheMembers = pickle.load(file)
+    # with open(OPENFHE_path, "rb") as file:
+    #     openfheMembers = pickle.load(file)
     with open(GPUFHE_path, "wb") as file:
         pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)
