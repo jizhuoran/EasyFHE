@@ -16,7 +16,7 @@ def print_failed(message):
 
 def app_without_bs_example_debug_cpu(
         maxLevelsRemaining=3,
-        appRotIndex_list=[-1, 2, -4, 5],
+        appRotIndex_list=[-1],
         logBsSlots_list=[12],
         logN=14,
         dnum=3,
@@ -31,7 +31,7 @@ def app_without_bs_example_debug_cpu(
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
-        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                config=config))
 
@@ -48,8 +48,9 @@ def app_without_bs_example_debug_cpu(
     cryptoContext.load_rotation_keys(logBsSlots)
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.cpu()
-    # cipher1 = homo_ops.homo_rotate(cipher, -1, cryptoContext)
-    result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result1 = homo_ops.homo_add(cipher, cipher, cryptoContext)
+    # result1 = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    # result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     print("computation done!")
 
     cipher.cv = [cv.cuda() for cv in cipher.cv]
@@ -57,15 +58,22 @@ def app_without_bs_example_debug_cpu(
     cryptoContext.load_rotation_keys(logBsSlots)
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.to_cuda()
-    # ciphergpu = homo_ops.homo_rotate(cipher, -1, cryptoContext)
-    result2 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result2 = homo_ops.homo_add(cipher, cipher, cryptoContext)
+    # result2 = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    # result2 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    print("compare_cpufhe_with_gpufhe")
     is_equal = utils.compare_cpufhe_with_gpufhe(result1, result2)
+    print("is_equal", is_equal)
 
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
-    openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
+    openfhe_result = openfhe_context.cc.EvalAdd(cipher_openfhe, cipher_openfhe)
+    # openfhe_result = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+    # openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+    print("compare_gpufhe_ct_with_openfhe")
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
+    print("is_equal", is_equal)
 
 
 

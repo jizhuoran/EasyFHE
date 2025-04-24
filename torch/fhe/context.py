@@ -165,10 +165,10 @@ class Context:
         self.inBS = False
         self.in_check_period = False
 
-        self.device = None
+        self.device = "cpu" # fixme: ??
 
     def to_cuda(self):
-        self.device = "cuda"
+        self.device = "cuda" #fixme: remove?
         self.q_mu = self.q_mu.cuda()
         self.moduliQ = self.moduliQ.cuda()
         self.primes = self.primes.cuda()
@@ -218,10 +218,8 @@ class Context:
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
 
-    def norm_rot_index(self, i):
-        if i < 0:
-            i = self.N // 2 + i
-        return i
+
+    # move to cpu
     def cpu(self):
         self.device = "cpu"
         self.q_mu = self.q_mu.cpu()
@@ -266,6 +264,10 @@ class Context:
         # self.encode_out = self.encode_out.cpu()
 
 
+    def norm_rot_index(self, i):
+        if i < 0:
+            i = self.N // 2 + i
+        return i
 
 
     #  Method to retrieve the scaling factor of level l.
@@ -334,7 +336,7 @@ class Context:
         for key in self.slots_left_rot_key_map[str(key_name)]:
             if key not in self.left_rot_key_map:
                 self.left_rot_key_map[key] = [
-                    torch.tensor(v, dtype=torch.uint64, device=self.device)
+                    torch.tensor(v, dtype=torch.uint64, device=self.device) # fixme:??
                     for v in self.total_left_rot_key_map[key]
                 ]
         for key, value in self.slots_precompute_auto_map[str(key_name)].items():

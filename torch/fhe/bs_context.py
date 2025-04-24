@@ -150,6 +150,7 @@ class BsContext:
     #             for j in range(len(self.m_U0PreFFT[i])):
     #                 self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]
 
+    # move to cpu
     def cpu(self):
         if isinstance(self.m_U0PreFFT_[0][0], Plaintext):
             for i in range(len(self.m_U0hatTPreFFT_)):
