@@ -1779,8 +1779,29 @@ uint64_t modInverse(uint64_t n, uint64_t modulus) {
 
 
 
+void safe_copy(uint64_t* op_ptr, uint64_t* out_ptr, size_t n) {
+  if (op_ptr == nullptr || out_ptr == nullptr || n == 0) return;
+  const bool is_overlap = (out_ptr < op_ptr + n) && (op_ptr < out_ptr + n);
+  if (is_overlap) {
+      if (out_ptr > op_ptr) {
+          for (size_t i = n; i-- > 0;) {
+              out_ptr[i] = op_ptr[i];
+          }
+      } else {
+          for (size_t i = 0; i < n; i++) {
+              out_ptr[i] = op_ptr[i];
+          }
+      }
+  } else {
+      for (size_t i = 0; i < n; i++) {
+          out_ptr[i] = op_ptr[i];
+      }
+  }
+}
+
 void iNTT_impl(
   uint64_t* op_ptr,
+  uint64_t* out_ptr,
   int64_t start_prime_idx,
   int64_t batch,
   int64_t curr_limbs,
@@ -1789,6 +1810,7 @@ void iNTT_impl(
   const Tensor& inverse_power_of_roots_div_two,
   const Tensor& param_primes,
   const Tensor& inverse_scaled_power_of_roots_div_two) {
+  safe_copy(op_ptr, out_ptr, batch * param_degree);
     const int max_threads = omp_get_max_threads();  
     omp_set_num_threads(max_threads); 
       const uint64_t n=param_degree;
@@ -1796,41 +1818,6 @@ void iNTT_impl(
       auto param_primes_ptr =reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
       auto inverse_scaled_power_of_roots_div_two_ptr =reinterpret_cast<uint64_t*>(inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
       int gap = level - curr_limbs;
-      //openfhe version
-    //   for(int bach=0;bach<batch;++bach)
-    // {
-    //   uint64_t primeidx=start_prime_idx+bach;
-    //   uint64_t prime_idx =primeidx + ((primeidx >= 0 && primeidx < curr_limbs) ? 0 : gap);
-    //   uint64_t modulus=param_primes_ptr[prime_idx];
-    //   uint64_t base_prime_idx=prime_idx*param_degree;
-    //   uint64_t base=primeidx*param_degree;
-    //   uint64_t inv=modInverse(n,modulus);
-    // for (uint32_t m=n >> 1, t=1, logt=1; m >=1; m >>= 1, t <<= 1, ++logt) {
-    //   for (uint32_t i=0; i < m; ++i) {
-    //     auto omega=inverse_power_of_roots_div_two_ptr[i + m+base_prime_idx];
-    //       auto preconOmega=inverse_scaled_power_of_roots_div_two_ptr[i + m+base_prime_idx];
-    //       omega=static_cast<__uint128_t>(omega)*static_cast<__uint128_t>(2)% static_cast<__uint128_t>(modulus);
-    //       for (uint32_t j1=i << logt, j2=j1 + t; j1 < j2; ++j1) {
-    //           auto loVal=op_ptr[j1 + 0+base];
-    //           auto hiVal=op_ptr[j1 + t+base];   
-    //     auto omegaFactor=loVal;
-    //           if (omegaFactor < hiVal)
-    //               omegaFactor += modulus;
-    //           omegaFactor -= hiVal;
-    //           loVal += hiVal;
-    //           if (loVal >= modulus)
-    //               loVal -= modulus;
-    //           omegaFactor=(static_cast<__uint128_t>(omegaFactor)  * static_cast<__uint128_t>(omega) )% static_cast<__uint128_t>(modulus);
-    //          op_ptr[j1 + 0+base]=loVal;
-    //          op_ptr[j1 + t+base]=omegaFactor;
-    //         }}}
-    //             for (uint32_t i = 0; i < n; ++i) 
-    //             {
-                  
-    //               op_ptr[i+base] =(static_cast<__uint128_t>(op_ptr[i+base] ) * static_cast<__uint128_t>(inv)) % static_cast<__uint128_t>(modulus);
-    //             }
-    //           }
-//gpufhe version
 #pragma omp parallel for schedule(static)num_threads(max_threads)
               for(int bach=0;bach<batch;++bach)
               {
@@ -1849,12 +1836,12 @@ void iNTT_impl(
                     auto preconOmega = inverse_scaled_power_of_roots_div_two_ptr
                         [i + m + base_prime_idx];
                     for (uint32_t j1 = i << logt, j2 = j1 + t; j1 < j2; ++j1) {
-                      auto loVal = op_ptr[j1 + 0 + base];
-                      auto hiVal = op_ptr[j1 + t + base];
+                      auto loVal = out_ptr[j1 + 0 + base];
+                      auto hiVal = out_ptr[j1 + t + base];
                       fhe::butt_intt_local(
                           loVal, hiVal, omega, preconOmega, modulus);
-                      op_ptr[j1 + 0 + base] = loVal;
-                      op_ptr[j1 + t + base] = hiVal;
+                          out_ptr[j1 + 0 + base] = loVal;
+                          out_ptr[j1 + t + base] = hiVal;
                     }
                   }
                 }
@@ -1865,8 +1852,8 @@ void iNTT_impl(
                     [1 + base_prime_idx];
                 uint32_t j2 = n >> 1;
                 for (uint32_t j1 = 0; j1 < j2; ++j1) {
-                  auto loVal = (op_ptr)[j1 + base];
-                  auto hiVal = (op_ptr)[j1 + j2 + base];
+                  auto loVal = (out_ptr)[j1 + base];
+                  auto hiVal = (out_ptr)[j1 + j2 + base];
                   fhe::butt_intt_local(
                       loVal, hiVal, omega, preconOmega, modulus);
                   for (int i = 0; i < 8; i++) {
@@ -1877,8 +1864,8 @@ void iNTT_impl(
                       hiVal -= modulus;
                     }
                   }
-                  (op_ptr)[j1 + base] = loVal;
-                  (op_ptr)[j1 + j2 + base] = hiVal;
+                  (out_ptr)[j1 + base] = loVal;
+                  (out_ptr)[j1 + j2 + base] = hiVal;
                 }
               }
  
@@ -1897,12 +1884,14 @@ int GetMSB(int64_t x) {
 }
 void NTT_impl(
     uint64_t* op_ptr,
+    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
+      safe_copy(op_ptr, out_ptr, batch * param_degree);
       const int max_threads = omp_get_max_threads();  
   omp_set_num_threads(max_threads); 
         auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
@@ -1924,11 +1913,11 @@ void NTT_impl(
               auto preconOmega = param_power_of_roots_shoup_ptr
                   [i + m + base]; // NEEDED IN COMPUTE F[j+t]*S MOD Q
               for (uint32_t j1 = (i << logt), j2 = j1 + t; j1 < j2; ++j1) {
-                uint64_t a1 = (op_ptr)[j1 + 0 + base];
-                uint64_t b1 = (op_ptr)[j1 + t + base];
+                uint64_t a1 = (out_ptr)[j1 + 0 + base];
+                uint64_t b1 = (out_ptr)[j1 + t + base];
                 fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
-                (op_ptr)[j1 + 0 + base] = a1;
-                (op_ptr)[j1 + t + base] = b1;
+                (out_ptr)[j1 + 0 + base] = a1;
+                (out_ptr)[j1 + t + base] = b1;
               }
             }
           }
@@ -1937,8 +1926,8 @@ void NTT_impl(
             auto omega = param_power_of_roots_ptr[(i >> 1) + n + base];
             auto preconOmega =
                 param_power_of_roots_shoup_ptr[(i >> 1) + n + base];
-            uint64_t a1 = (op_ptr)[i + 0 + base];
-            uint64_t b1 = (op_ptr)[i + 1 + base];
+            uint64_t a1 = (out_ptr)[i + 0 + base];
+            uint64_t b1 = (out_ptr)[i + 1 + base];
             fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
             for (int a = 0; a < 3; a++) {
               if (b1 > modulus) {
@@ -1948,8 +1937,8 @@ void NTT_impl(
                 a1 -= modulus;
               }
             }
-            (op_ptr)[i + 0 + base] = a1;
-            (op_ptr)[i + 1 + base] = b1;
+            (out_ptr)[i + 0 + base] = a1;
+            (out_ptr)[i + 1 + base] = b1;
           }
         }
 

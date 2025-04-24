@@ -4,6 +4,82 @@ import numpy as np
 
 Tensor = torch.Tensor
 
+def cpp_cuda_adaptor(func):
+    def wrapper(*args, **kwargs):
+        args_new = []
+        for i in range(len(args)):
+            if isinstance(args[i], torch.Tensor):
+                args_new.append(args[i].cpu())
+            elif isinstance(args[i], Context):
+                args_new.append(args[i])
+                args_new[-1].cpu()
+                args_new[-1].BsContext.cpu()
+            else:
+                args_new.append(args[i])
+        result = func(*args_new, **kwargs)
+        for i in range(len(args_new)):
+            if isinstance(args_new[i], Context):
+                args_new[i].cuda()
+                args_new[-1].BsContext.cuda()
+
+        if isinstance(result, list):
+            # for r in result:
+            #     if isinstance(r, torch.Tensor):
+            #         print("device of r: ", r.device)
+            #         assert r.device == torch.device("cpu")
+            return [r.cuda() for r in result]
+        elif isinstance(result, torch.Tensor):
+            assert result.device == torch.device("cpu")
+            result = result.cuda()
+        return result
+    return wrapper
+
+def cpp_cuda_compare(func):
+    def wrapper(*args, **kwargs):
+        args_new = []
+        for i in range(len(args)):
+            print("type of args[i]: ", type(args[i]))
+            if isinstance(args[i], torch.Tensor):
+                args_new.append(args[i].clone().cpu())
+            elif isinstance(args[i], Context):
+                args_new.append(args[i])
+                args_new[-1].cpu()
+                args_new[-1].BsContext.cpu()
+            else:
+                print("type of args[i]: ", type(args[i]))
+                args_new.append(args[i])
+        result = func(*args_new, **kwargs)
+        result_gt = func(*args, **kwargs)
+        for i in range(len(args_new)):
+            if isinstance(args_new[i], Context):
+                args_new[i].cuda()
+                args_new[-1].BsContext.cuda()
+
+
+        print("device of result: ", result.device)
+        print("device of result_gt: ", result_gt.device)
+        if result_gt.device == torch.device("cpu"):
+            print("device of result_gt: ", result_gt.device)
+            import sys
+            import traceback
+            traceback.print_stack(file=sys.stdout)
+            exit(1)
+
+        if not torch.allclose(result_gt.cpu(), result):
+            print("Test Failed")
+            print("Expected: ", result_gt)
+            print("Got: ", result)
+            #print stack
+            import sys
+            import traceback
+            traceback.print_stack(file=sys.stdout)
+            exit(1)
+        else:
+            print("Test Passed")
+        return result_gt
+    return wrapper
+
+
 
 def cv_check(x, modulus, cur_limbs):
     if isinstance(x, torch.Tensor):

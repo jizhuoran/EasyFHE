@@ -102,6 +102,7 @@ static void mul_by_monomial_template(
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       res_ptr,
+      res_ptr,
       0,
       l,
       l,
@@ -115,6 +116,7 @@ static void mul_by_monomial_template(
   mul_by_monomial_impl(res_ptr, param_primes, temp, l, N, M, monomialDeg);
 
   NTT_impl(
+      res_ptr,
       res_ptr,
       0,
       l,

@@ -149,3 +149,47 @@ class BsContext:
     #         for i in range(len(self.m_U0PreFFT)):
     #             for j in range(len(self.m_U0PreFFT[i])):
     #                 self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]
+
+    def cpu(self):
+        if isinstance(self.m_U0PreFFT_[0][0], Plaintext):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].cv = [x.to(dtype=torch.uint64, device="cpu") for x in self.m_U0hatTPreFFT_[i][j].cv]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT_[i][j].cipher_id)
+
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].cv = [x.to(dtype=torch.uint64, device="cpu") for x in self.m_U0PreFFT_[i][j].cv]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT_[i][j].cipher_id)
+        elif isinstance(self.m_U0PreFFT_[0][0], PreEncodeValues):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].encoded_values = self.m_U0hatTPreFFT_[i][j].encoded_values.to("cpu")
+
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].encoded_values = self.m_U0PreFFT_[i][j].encoded_values.to("cpu")
+
+
+
+        for key, value in self.BS_FFT.items():
+            if isinstance(value, Plaintext):
+                self.BS_FFT[key].cv = [self.BS_FFT[key].cv[0].cpu()]
+            elif isinstance(value, PreEncodeValues):
+                self.BS_FFT[key].encoded_values = self.BS_FFT[key].encoded_values.cpu()
+            else:
+                raise TypeError("Unsupported type for BS_FFT value: {}".format(type(value)))
+
+        # #fixme: QplusP_map is removed???
+        # for key, value in self.QplusP_map.items():
+        #     self.QplusP_map[key] = self.QplusP_map[key].cpu()
+        # for key, value in self.QmuplusPmu_map.items():
+        #     self.QmuplusPmu_map[key] = self.QmuplusPmu_map[key].cpu()
+        #
+        # for i in range(len(self.m_U0hatTPreFFT)):
+        #     for j in range(len(self.m_U0hatTPreFFT[i])):
+        #         self.m_U0hatTPreFFT[i][j].cv = self.m_U0hatTPreFFT[i][j].cv.cpu()
+        #
+        # for i in range(len(self.m_U0PreFFT)):
+        #     for j in range(len(self.m_U0PreFFT[i])):
+        #         self.m_U0PreFFT[i][j].cv = self.m_U0PreFFT[i][j].cv.cpu()

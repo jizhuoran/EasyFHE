@@ -221,3 +221,9 @@ def compare_gpufhe_ct_with_openfhe(bs_cipher, openfhe_cipher):
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
+def compare_cpufhe_with_gpufhe(cpufhe_ct, gpufhe_ct):
+    gpu_bootstrapping_res = np.array([cpufhe_ct.cv[0].cpu().numpy(), cpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
+    openfhe_cipher_res = np.array([gpufhe_ct.cv[0].cpu().numpy(), gpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
+    print(gpu_bootstrapping_res)
+    print(openfhe_cipher_res)
+    return np.array_equal(gpu_bootstrapping_res, openfhe_cipher_res)

@@ -310,6 +310,7 @@ Tensor iNTT_cpu(
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
+      op_ptr,
       start_prime_idx,
       batch,
       curr_limbs,
@@ -334,6 +335,7 @@ Tensor& iNTT_cpu_(
     int64_t level) {
   auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   iNTT_impl(
+      op_ptr,
       op_ptr,
       start_prime_idx,
       batch,
@@ -361,6 +363,7 @@ Tensor& iNTT_cpu_out(
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
+      op_ptr,
       start_prime_idx,
       batch,
       curr_limbs,
@@ -385,6 +388,7 @@ Tensor NTT_cpu(
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   NTT_impl(
       op_ptr,
+      op_ptr,
       start_prime_idx,
       batch,
       param_degree,
@@ -405,6 +409,7 @@ Tensor& NTT_cpu_(
     const Tensor& param_power_of_roots) {
   auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   NTT_impl(
+      op_ptr,
       op_ptr,
       start_prime_idx,
       batch,
@@ -427,6 +432,7 @@ Tensor& NTT_cpu_out(
     Tensor& res) {
   auto op_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   NTT_impl(
+      op_ptr,
       op_ptr,
       start_prime_idx,
       batch,
@@ -648,6 +654,7 @@ static void modup_impl_(
       8 * in_C_L_len * param_degree_);
 
   iNTT_impl(
+      to_ptr,
       to_ptr,
       begin_idx,
       in_C_L_len,
@@ -1132,6 +1139,7 @@ static void moddown_cpu_template(
 
   iNTT_impl(
       from_ptr,
+      from_ptr,
       end_length,
       start_length,
       curr_limbs,
@@ -1167,6 +1175,7 @@ static void moddown_cpu_template(
       to_ptr);
 
   NTT_impl(
+      to_ptr,
       to_ptr,
       0,
       end_length,
@@ -1352,6 +1361,7 @@ static void drop_last_element_scale_template(
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       from_ptr,
+      from_ptr,
       end_length,
       1,
       curr_limbs,
@@ -1381,6 +1391,7 @@ static void drop_last_element_scale_template(
       to_ptr,
       param_primes);
   NTT_impl(
+      to_ptr,
       to_ptr,
       0,
       end_length,
@@ -1561,6 +1572,7 @@ static void rescale_template(
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       from_ptr,
+      from_ptr,
       end_length,
       1,
       curr_limbs,
@@ -1582,6 +1594,7 @@ static void rescale_template(
       to_ptr);
 
   NTT_impl(
+      to_ptr,
       to_ptr,
       0,
       end_length,

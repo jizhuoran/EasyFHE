@@ -15828,156 +15828,187 @@
 - func: neg_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: neg_mod_cpu
     CUDA: neg_mod_cuda
 
 - func: neg_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: neg_mod_cpu_
     CUDA: neg_mod_cuda_
 
 - func: neg_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: neg_mod_out_cpu
     CUDA: neg_mod_out_cuda
 
 - func: add_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: add_mod_cpu
     CUDA: add_mod_cuda
 
 - func: add_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: add_mod_cpu_
     CUDA: add_mod_cuda_
 
 - func: add_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: add_mod_out_cpu
     CUDA: add_mod_out_cuda
 
 - func: sub_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: sub_mod_cpu
     CUDA: sub_mod_cuda
 
 - func: sub_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: sub_mod_cpu_
     CUDA: sub_mod_cuda_
 
 - func: sub_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: sub_mod_out_cpu
     CUDA: sub_mod_out_cuda
 
 - func: mul_mod(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: mul_mod_cpu
     CUDA: mul_mod_cuda
 
 - func: mul_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: mul_mod_cpu_
     CUDA: mul_mod_cuda_
 
 - func: mul_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: mul_mod_out_cpu
     CUDA: mul_mod_out_cuda
 
 - func: add_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: add_scalar_mod_cpu
     CUDA: add_scalar_mod_cuda
 
 - func: add_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: add_scalar_mod_cpu_
     CUDA: add_scalar_mod_cuda_
 
 - func: add_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: add_scalar_mod_out_cpu
     CUDA: add_scalar_mod_out_cuda
 
 - func: sub_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: sub_scalar_mod_cpu
     CUDA: sub_scalar_mod_cuda
 
 - func: sub_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: sub_scalar_mod_cpu_
     CUDA: sub_scalar_mod_cuda_
 
 - func: sub_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: sub_scalar_mod_out_cpu
     CUDA: sub_scalar_mod_out_cuda
 
 - func: mul_scalar_mod(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: mul_scalar_mod_cpu
     CUDA: mul_scalar_mod_cuda
 
 - func: mul_scalar_mod_(Tensor(a!) self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: mul_scalar_mod_cpu_
     CUDA: mul_scalar_mod_cuda_
 
 - func: mul_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: mul_scalar_mod_out_cpu
     CUDA: mul_scalar_mod_out_cuda
 
 - func: modup(Tensor input, *, int curr_limbs, int L, Tensor hat_inverse_vec, Tensor hat_inverse_vec_shoup, Tensor prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: modup_cpu
     CUDA: modup_cuda
 
 - func: moddown(Tensor input, *, int curr_limbs, int L, int sizeP, int N, int logN, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: moddown_cpu
     CUDA: moddown_cuda
 
 - func: innerproduct(Tensor self, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: innerproduct_cpu
     CUDA: innerproduct_cuda
 
 - func: drop_last_element_and_scale(Tensor self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: drop_last_element_scale_cpu
     CUDA: drop_last_element_scale_cuda
 
 - func: drop_last_element_and_scale_(Tensor(a!) self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: drop_last_element_scale_cpu_
     CUDA: drop_last_element_scale_cuda_
 
 - func: drop_last_element_and_scale.out(Tensor self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: drop_last_element_scale_cpu_out
     CUDA: drop_last_element_scale_cuda_out
 
 - func: automorphism_transform(Tensor self, *, int l, int N, Tensor precomp_vec) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: automorphism_transform_cpu
     CUDA: automorphism_transform_cuda
 
 - func: mod_raise(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: mod_raise_cpu
     CUDA: mod_raise_cuda
 
 - func: mul_by_monomial(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: mul_by_monomial_cpu
     CUDA: mul_by_monomial_cuda
 
 - func: mul_by_monomial_(Tensor(a!) self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
+    CPU: mul_by_monomial_cpu_
     CUDA: mul_by_monomial_cuda_
 
 - func: mul_by_monomial.out(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor(a!) out) -> Tensor(a!)

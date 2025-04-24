@@ -30,6 +30,7 @@ static void switch_modulus_template(
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       op_ptr,
+      op_ptr,
       0,
       1,
       1,
@@ -43,6 +44,7 @@ static void switch_modulus_template(
 
   NTT_impl(
       res_ptr,
+      res_ptr,
       0,
       L0,
       N,
@@ -51,7 +53,7 @@ static void switch_modulus_template(
       param_power_of_roots);
 }
 
-Tensor switch_modulus_cpu(
+Tensor mod_raise_cpu(
     const Tensor& res,
     const Tensor& in,
     const Tensor& moduliQ,
@@ -62,7 +64,10 @@ Tensor switch_modulus_cpu(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots) {
+    const Tensor& param_power_of_roots,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k
+  ) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
   switch_modulus_template(

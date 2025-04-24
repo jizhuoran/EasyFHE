@@ -13,6 +13,64 @@ DATA_DIR = os.environ["DATA_DIR"]
 def print_failed(message):
     print(colored(message, "red"))
 
+
+def app_without_bs_example_debug_cpu(
+        maxLevelsRemaining=3,
+        appRotIndex_list=[-1, 2, -4, 5],
+        logBsSlots_list=[12],
+        logN=14,
+        dnum=3,
+        dcrtBits=59,
+        firstMod=60,
+        levelBudget_list=[[4, 4]],
+        rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        save_dir =DATA_DIR
+):
+    if not os.path.exists(DATA_DIR):
+        raise ValueError(f"Directory {DATA_DIR} does not exist!")
+
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
+    cryptoContext, openfhe_context, openfhe_boot_contexts = (
+        utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               config=config))
+
+    logBsSlots = logBsSlots_list[0]
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = np.array([values[i % len(values)] for i in range(1 << logBsSlots)])
+    x = torch.tensor(x, device="cuda")
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1 << logBsSlots))
+
+    # do the application computation
+
+    cipher.cv = [cv.cpu() for cv in cipher.cv]
+    cryptoContext.cpu()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext.cpu()
+    # cipher1 = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    print("computation done!")
+
+    cipher.cv = [cv.cuda() for cv in cipher.cv]
+    cryptoContext.to_cuda()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext.to_cuda()
+    # ciphergpu = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    result2 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    is_equal = utils.compare_cpufhe_with_gpufhe(result1, result2)
+
+
+    cipher_openfhe.SetSlots((1 << logBsSlots))
+    openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
+    openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
+
+
+
+
+
 def app_without_bs_example_debug(
         maxLevelsRemaining=5,
         appRotIndex_list = [-1, 2, -4, 5],
@@ -587,26 +645,28 @@ def gen_CoeffSlots_matrix_test_case(
 ##############
 
 if __name__ == "__main__":
+    app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
+    # app_without_bs_example_debug(rescaleTech = "FIXEDMANUAL")
 
-    gen_CoeffSlots_matrix_test_case()
-
-
-    for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
-        print("***********{}***********".format(rescaleTech))
-        print("==========={}============".format('app_without_bs_example_debug'))
-        app_without_bs_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_debug'))
-        app_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-        print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-        print("==========={}============".format('encode_test_case'))
-        encode_test_case(rescaleTech = rescaleTech)
-        print("==========={}============".format('ct_pt_test_case'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-        print("==========={}============".format('test_plaintext_twin'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-        print("==========={}============".format('double_bs_debug'))
-        double_bs_debug(rescaleTech = rescaleTech)
-        print("************************************".format(rescaleTech))
+    # gen_CoeffSlots_matrix_test_case()
+    #
+    #
+    # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
+    #     print("***********{}***********".format(rescaleTech))
+    #     print("==========={}============".format('app_without_bs_example_debug'))
+    #     app_without_bs_example_debug(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('app_example_debug'))
+    #     app_example_debug(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+    #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+    #     print("==========={}============".format('encode_test_case'))
+    #     encode_test_case(rescaleTech = rescaleTech)
+    #     print("==========={}============".format('ct_pt_test_case'))
+    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+    #     print("==========={}============".format('test_plaintext_twin'))
+    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+    #     print("==========={}============".format('double_bs_debug'))
+    #     double_bs_debug(rescaleTech = rescaleTech)
+    #     print("************************************".format(rescaleTech))

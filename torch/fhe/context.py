@@ -165,7 +165,10 @@ class Context:
         self.inBS = False
         self.in_check_period = False
 
+        self.device = None
+
     def to_cuda(self):
+        self.device = "cuda"
         self.q_mu = self.q_mu.cuda()
         self.moduliQ = self.moduliQ.cuda()
         self.primes = self.primes.cuda()
@@ -219,6 +222,51 @@ class Context:
         if i < 0:
             i = self.N // 2 + i
         return i
+    def cpu(self):
+        self.device = "cpu"
+        self.q_mu = self.q_mu.cpu()
+        self.moduliQ = self.moduliQ.cpu()
+        self.primes = self.primes.cpu()
+        self.power_of_roots = self.power_of_roots.cpu()
+        self.power_of_roots_shoup = self.power_of_roots_shoup.cpu()
+        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu()
+        self.inverse_scaled_power_of_roots_div_two =  self.inverse_scaled_power_of_roots_div_two.cpu()
+        self.barret_k = self.barret_k.cpu()
+        self.barret_ratio = self.barret_ratio.cpu()
+        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu()
+        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu()
+        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu()
+        self.hat_inverse_vec_moddown =self.hat_inverse_vec_moddown.cpu()
+        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu()
+        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu()
+        self.prod_inv_moddown =  self.prod_inv_moddown.cpu()
+        self.prod_inv_shoup_moddown =  self.prod_inv_shoup_moddown.cpu()
+        self.qlql_inv_mod_ql_div_ql_mod_q =  self.qlql_inv_mod_ql_div_ql_mod_q.cpu()
+        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu()
+        self.q_inv_mod_q = self.q_inv_mod_q.cpu()
+        self.q_inv_mod_q_shoup =self.q_inv_mod_q_shoup.cpu()
+        self.swk_bx = self.swk_bx.cpu()
+        self.swk_ax = self.swk_ax.cpu()
+        self.inner_workspace = self.inner_workspace.cpu()
+        self.inner_out =self.inner_out.cpu()
+        self.moddown_out_ax = self.moddown_out_ax.cpu()
+        self.moddown_out_bx = self.moddown_out_bx.cpu()
+        self.modup_out = self.modup_out.cpu()
+        self.rescale_out = self.rescale_out.cpu()
+        self.automorphism_transform_out = self.automorphism_transform_out.cpu()
+        self.mod_raise_out = self.mod_raise_out.cpu()
+        self.PModq =self.PModq.cpu()
+        self.mult_key_map = [v.cpu() for v in self.mult_key_map]
+
+        # fixme: to be removed
+        # self.encode_params_ksiPows_real = self.encode_params_ksiPows_real.cpu()
+        # self.encode_params_ksiPows_imag = self.encode_params_ksiPows_imag.cpu()
+        self.encode_params_rotGroup = self.encode_params_rotGroup.cpu()
+        self.encode_temp = self.encode_temp.cpu()
+        # self.encode_out = self.encode_out.cpu()
+
+
+
 
     #  Method to retrieve the scaling factor of level l.
     #  For FIXEDMANUAL scaling technique method always returns 2^p, where p corresponds to plaintext modulus
@@ -286,12 +334,12 @@ class Context:
         for key in self.slots_left_rot_key_map[str(key_name)]:
             if key not in self.left_rot_key_map:
                 self.left_rot_key_map[key] = [
-                    torch.tensor(v, dtype=torch.uint64, device="cuda")
+                    torch.tensor(v, dtype=torch.uint64, device=self.device)
                     for v in self.total_left_rot_key_map[key]
                 ]
         for key, value in self.slots_precompute_auto_map[str(key_name)].items():
             self.precompute_auto_map[key] = torch.tensor(
-                value, dtype=torch.int32, device="cuda"
+                value, dtype=torch.int32, device=self.device
             )
 
     def load_bootstrapping_context(self, logBsSlots):
