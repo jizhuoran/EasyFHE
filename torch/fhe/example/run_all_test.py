@@ -1,7 +1,9 @@
-import sys, os
+import sys, os,warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import time, subprocess
+
+warnings.warn("This script has not been tested and may not function as intended. Please remove this message once verified.")
 
 with open("result.txt", "w") as f:
     print("BEGIN", file=f)
@@ -13,9 +15,9 @@ for context_file in os.listdir(path):
     if context_file.endswith(".pkl") and context_file.startswith("GPU-FHE-CONTEXT"):
         print("Testing", context_file)
         context_file = context_file.replace("_UNIFORM_TERNARY_", "_")
-        logN, logSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech = context_file[:-4].split("_")[1:]
+        logN, logBsSlots_str, maxLevelsRemaining, levelBudgets_str, dnum, dcrtBits, firstMod, rescaleTech = context_file[:-4].split("_")[1:]
         try:
-            logSlots_list = [int(logSlots) for logSlots in logSlots_str.split("-")]
+            logBsSlots_list = [int(logBsSlots) for logBsSlots in logBsSlots_str.split("-")]
             levelBudgets_list = []
             for levelBudgets in range(len(levelBudgets_str.split("-")) // 2):
                 levelBudgets_list.append([int(levelBudgets_str.split("-")[2 * levelBudgets]), int(levelBudgets_str.split("-")[2 * levelBudgets + 1])])
@@ -29,49 +31,47 @@ import torch.fhe.bootstrapping as BS
 import torch.fhe.utils as utils
 import time
 context_file = "{}"
-logN = int({})
-logSlots_list = {}
 maxLevelsRemaining = int({})
-levelBudgets_list = {}
+logBsSlots_list = {}
+logN = int({})
 dnum = int({})
 dcrtBits = int({})
 firstMod = int({})
-approxModDepth = int({})
+levelBudgets_list = {}
 rescaleTech = "{}"
 path = "{}"
-cryptoContext, openfhe_contexts = utils.try_load_context(
-    int(logN),
-    logSlots_list,
+cryptoContext, openfhe_context, openfhe_boot_contexts = utils.try_load_context(
     int(maxLevelsRemaining),
-    levelBudgets_list,
+    [],
+    logBsSlots_list,
+    int(logN),
     int(dnum),
     int(dcrtBits),
     int(firstMod),
-    int(approxModDepth),
-    [],
+    levelBudgets_list,
     "UNIFORM_TERNARY",
     rescaleTech,
     save_dir=path,
-    mode = "debug")
+    XXXX")
 
-cryptoContext.BsContext = cryptoContext.BsContext_map[str(logSlots_list[0])]
+cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
 cryptoContext.BsContext.to_cuda()
-utils.load_rotation_keys(cryptoContext, logSlots_list[0])
 
 with open("result.txt", "a") as f:
     print(context_file, file=f)
 
 # Test the correctness of the bootstrapping
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-x = np.array([values[i % len(values)] for i in range((1<<logSlots_list[0]))])
+x = np.array([values[i % len(values)] for i in range((1<<logBsSlots_list[0]))])
 x = torch.tensor(x, device="cuda")
-openfhe_context = openfhe_contexts[str(logSlots_list[0])]
 cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1)
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
 start_time = time.time()
-result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logslots=logSlots_list[0], cryptoContext=cryptoContext)
+result = BS.eval_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
 end_time = time.time()
-openfhe_result = openfhe_context.cc.EvalBootstrap(cipher_openfhe)
+openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
+openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+
 data = np.array(openfhe_result.GetVectorOfData(), dtype=np.uint64)
 with open("result.txt", "a") as f:
     print("Time taken:", end_time - start_time, file=f)
@@ -81,7 +81,7 @@ with open("result.txt", "a") as f:
         print("Test failed!", file=f)
         print("result", result.cv[0].cpu().numpy()[0][:10], file=f)
         print("data", data.reshape(-1)[:10], file=f)
-""".format(context_file, logN, logSlots_list, maxLevelsRemaining, levelBudgets_list, dnum, dcrtBits, firstMod, approxModDepth, rescaleTech, path)
+""".format(context_file, logN, logBsSlots_list, maxLevelsRemaining, levelBudgets_list, dnum, dcrtBits, firstMod, rescaleTech, path)
 
             # Create a temporary file to store the code
             with open("temp_file.py", "w") as temp_file:

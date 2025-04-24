@@ -4,6 +4,7 @@ import copy
 import itertools
 import functools
 import unittest
+import warnings
 from contextlib import nullcontext
 
 try:
@@ -765,7 +766,7 @@ class TestMkldnn(TestCase):
                     y_bf16 = max_pool(x_bf16.to_mkldnn()).to_dense(torch.float32)
                     self.assertEqual(y, y_bf16, atol=0.1, rtol=1e-3)
                 else:
-                    msg = "mkldnn_max_pool%dd: bf16 path needs the cpu support avx512bw, avx512vl and avx512dq" % dim
+                    msg = f"mkldnn_max_pool{dim:d}d: bf16 path needs the cpu support avx512bw, avx512vl and avx512dq"
                     self.assertRaisesRegex(RuntimeError,
                                            msg,
                                            lambda: max_pool(x_bf16.to_mkldnn()))
@@ -883,7 +884,7 @@ class TestMkldnn(TestCase):
                 y_bf16 = avg_pool(x_bf16.to_mkldnn()).to_dense(torch.float)
                 self.assertEqual(y, y_bf16, atol=1e-1, rtol=1e-3)
             else:
-                msg = "mkldnn_avg_pool%dd: bf16 path needs the cpu support avx512bw, avx512vl and avx512dq" % dim
+                msg = f"mkldnn_avg_pool{dim:d}d: bf16 path needs the cpu support avx512bw, avx512vl and avx512dq"
                 self.assertRaisesRegex(RuntimeError,
                                        msg,
                                        lambda: avg_pool(x_bf16.to_mkldnn()))
@@ -1611,6 +1612,16 @@ class TestMkldnn(TestCase):
                 ((1, 300, 1), (1, 1, 300), torch.bmm),
             ]:
                 common(self, shape1, shape2, op, dtype)
+
+    def test_mkldnn_setflags_nowarn(self, device):
+        # Regression test for https://github.com/pytorch/pytorch/issues/149829
+        with warnings.catch_warnings(record=True) as w:
+            rc = torch.backends.mkldnn.set_flags()
+            # torch.backends.mkldnn. returns previously set flags
+            # That one should be able to set back without cauinsg a warning
+            torch.backends.mkldnn.set_flags(*rc)
+        # Above should trigger no warnings regardless of configuration
+        self.assertEqual(len(w), 0)
 
 
 instantiate_device_type_tests(TestMkldnn, globals(), only_for=('cpu',))

@@ -6,7 +6,6 @@
 #include <c10/util/Half.h>
 #include <c10/util/Metaprogramming.h>
 #include <c10/util/complex.h>
-#include <c10/util/string_view.h>
 
 #ifdef __CUDACC__
 #include <cuda.h> // For CUDA_VERSION
@@ -535,11 +534,6 @@ inline at::ScalarType scalar_type(at::ScalarType s) {
 #define AT_DISPATCH_QINT_AND_SUB_BYTE_TYPES(TYPE, NAME, ...) \
   AT_DISPATCH_SWITCH(                                        \
       TYPE, NAME, AT_DISPATCH_CASE_QINT_AND_SUB_BYTE_TYPES(__VA_ARGS__))
-
-#define AT_DISPATCH_CASE_FHE_TYPES(...) AT_DISPATCH_CASE(kUInt64, __VA_ARGS__)
-
-#define AT_DISPATCH_FHE_TYPES(TYPE, NAME, ...) \
-  AT_DISPATCH_SWITCH(TYPE, NAME, AT_DISPATCH_CASE_FHE_TYPES(__VA_ARGS__))
 
 #define AT_DISPATCH_CASE_ALL_TYPES_AND_COMPLEX(...) \
   AT_DISPATCH_CASE_ALL_TYPES(__VA_ARGS__)           \

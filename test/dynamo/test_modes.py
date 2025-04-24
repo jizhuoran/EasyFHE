@@ -207,6 +207,18 @@ class TorchFunctionModeTests(torch._dynamo.test_case.TestCase):
 
         self.assertEqual(_len_torch_function_stack(), 0)
 
+    def test_is_torch_function_all_disabled(self):
+        @torch.compile(fullgraph=True)
+        def fn(x):
+            return (
+                torch._C._is_torch_function_all_disabled(),
+                torch.add(x, 1.0),
+            )
+
+        input = torch.ones(2, 2)
+        res, _ = fn(input)
+        self.assertFalse(res)
+
     def test_error_empty_stack_pop_torch_function_mode(self):
         @torch.compile(fullgraph=True)
         def fn(x):
@@ -489,7 +501,7 @@ class TorchFunctionModeTests(torch._dynamo.test_case.TestCase):
         self.assertEqual(expected, actual)
 
     # Needs larger cache size since we recompile for each op
-    @patch.object(torch._dynamo.config, "cache_size_limit", 48)
+    @patch.object(torch._dynamo.config, "recompile_limit", 48)
     def test_builtin_equivalent_funcs(self):
         from torch._dynamo.variables.torch_function import (
             bin_int_ops,

@@ -4,6 +4,7 @@
 import functools
 import gc
 import math
+import os
 import sys
 import unittest
 
@@ -17,6 +18,7 @@ from torch._dynamo.testing import rand_strided
 from torch._dynamo.utils import same
 from torch._inductor import config
 from torch._inductor.compile_fx import compile_fx_inner
+from torch._inductor.runtime.benchmarking import benchmarker
 from torch._inductor.runtime.hints import DeviceProperties
 from torch._inductor.utils import (
     run_and_get_code,
@@ -28,15 +30,25 @@ from torch.testing import FileCheck
 from torch.testing._internal.common_cuda import (
     PLATFORM_SUPPORTS_FLASH_ATTENTION,
     SM80OrLater,
+    SM90OrLater,
     TEST_MULTIGPU,
 )
 from torch.testing._internal.common_utils import (
     DeterministicGuard,
     freeze_rng_state,
     IS_FBCODE,
-    skipIfRocm,
     TEST_WITH_ASAN,
+    TEST_WITH_ROCM,
+    xfailIfPy312Plus,
 )
+
+
+if TEST_WITH_ROCM:
+    config.force_layout_optimization = 1
+    os.environ["PYTORCH_MIOPEN_SUGGEST_NHWC"] = "1"
+
+
+DO_PERF_TEST = os.environ.get("DO_PERF_TEST") == "1"
 
 
 requires_multigpu = functools.partial(
@@ -149,7 +161,37 @@ class CudaReproTests(TestCase):
         # dont check rng state
         self.assertEqual(out[:2], fn(query, key, value, input_tensor2)[:2])
 
-    @skipIfRocm
+    def test_effn_attn_bias_padding_misaligned(self):
+        seqlen_start = 1008
+
+        for offset in range(-1, 2):
+            seqlen = seqlen_start + offset
+            torch._dynamo.reset()
+
+            bsz = 32
+            q = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            k = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            v = torch.randn(bsz, 16, seqlen, 64, dtype=torch.bfloat16, device="cuda")
+            mask = torch.ones([bsz, 1, seqlen, seqlen], dtype=torch.bool, device="cuda")
+            inputs = [q, k, v, mask]
+
+            def f(q, k, v, mask):
+                return F.scaled_dot_product_attention(
+                    q, k, v, attn_mask=mask, dropout_p=0.0
+                )
+
+            f_compiled = torch.compile(f)
+
+            out, code = run_and_get_code(f_compiled, *inputs)
+            # padded bias should have an expanded dim
+            FileCheck().check("buf0 =").check_same(", 0, ").run(code[0])
+            # single fused padded kernel
+            FileCheck().check("def call").check_count(
+                "empty_strided_cuda", 1, exactly=True
+            ).check("return").run(code[0])
+
+            self.assertEqual(out, f(*inputs))
+
     def test_input_channels_last(self):
         m = torch.nn.Sequential(
             torch.nn.Conv2d(3, 3, 1, 1),
@@ -281,6 +323,86 @@ class CudaReproTests(TestCase):
                     torch.randn((6, 6), device="cuda"),
                 )
                 self.assertTrue(same(fn(*inputs), (inputs[0] + inputs[1], 6)))
+
+    def _test_split_reduction_impl(self, x):
+        def max(x):
+            return torch.max(x)
+
+        max_c = torch.compile(max)
+
+        out, code = run_and_get_code(max_c, x)
+        self.assertEqual(out, max(x))
+
+        if DO_PERF_TEST:
+            ms_c = benchmarker.benchmark_gpu(lambda: max_c(x))
+            ms_eager = benchmarker.benchmark_gpu(lambda: max(x))
+            print(f"compile {ms_c=:.03f}, eager {ms_eager=:.03f}")
+
+    def test_split_reduction_transposed(self):
+        x = torch.randn(4096, 8192, dtype=torch.bfloat16, device="cuda")
+        x = x.t().contiguous().t()
+
+        self._test_split_reduction_impl(x)
+
+    def test_split_reduction_channels_last(self):
+        x = torch.randn(4096, 8192, dtype=torch.bfloat16, device="cuda")
+        x = x.reshape([256, 256, 256, 2]).to(memory_format=torch.channels_last)
+
+        self._test_split_reduction_impl(x)
+
+    @config.patch({"emulate_precision_casts": True})
+    def test_bool_emulate_low_precision(self):
+        from torch import device
+
+        inf = float("inf")
+
+        def forward():
+            full_1 = torch.ops.aten.full.default(
+                [6, 6],
+                1,
+                dtype=torch.float32,
+                layout=torch.strided,
+                device=device(type="cpu"),
+                pin_memory=False,
+            )
+            device_put_3 = torch.ops.prims.device_put.default(
+                full_1, device(type="cuda", index=0)
+            )
+            full_1 = None
+
+            convert_element_type_40 = torch.ops.prims.convert_element_type.default(
+                device_put_3, torch.bool
+            )
+            device_put_3 = None
+            unsqueeze_4 = torch.ops.aten.unsqueeze.default(convert_element_type_40, 1)
+            convert_element_type_40 = None
+            unsqueeze_5 = torch.ops.aten.unsqueeze.default(unsqueeze_4, 3)
+            unsqueeze_4 = None
+            expand = torch.ops.aten.expand.default(unsqueeze_5, [-1, 256, -1, 256])
+            unsqueeze_5 = None
+            clone = torch.ops.aten.clone.default(
+                expand, memory_format=torch.contiguous_format
+            )
+            expand = None
+            view_15 = torch.ops.aten.reshape.default(clone, [1536, 1536])
+            clone = None
+            scalar_tensor = torch.ops.aten.scalar_tensor.default(
+                -inf, dtype=torch.float16, device=device(type="cuda", index=0)
+            )
+            scalar_tensor_1 = torch.ops.aten.scalar_tensor.default(
+                0.0,
+                dtype=torch.float16,
+                layout=torch.strided,
+                device=device(type="cuda", index=0),
+            )
+            where = torch.ops.aten.where.self(view_15, scalar_tensor_1, scalar_tensor)
+            view_15 = scalar_tensor_1 = scalar_tensor = None
+            return where
+
+        from torch._inductor import config
+
+        config.emulate_precision_casts = True
+        self.assertEqual(torch.compile(forward)(), forward())
 
     @config.patch({"emulate_precision_casts": True})
     def test_emulate_low_precision(self):
@@ -463,10 +585,16 @@ class CudaReproTests(TestCase):
         """
         from torch._C import _cuda_getCurrentRawStream as get_cuda_stream
         from torch._inductor.runtime.hints import AttrsDescriptorWrapper, HeuristicType
-        from torch._inductor.runtime.triton_heuristics import CachingAutotuner, grid
+        from torch._inductor.runtime.triton_heuristics import CachingAutotuner
+        from torch._inductor.utils import triton_version_uses_attrs_dict
 
         def autotune(configs, meta):
             def decorator(fn):
+                if triton_version_uses_attrs_dict():
+                    # Newer versions of Triton puts constexpr in signature
+                    # Ref: https://github.com/pytorch/pytorch/pull/145051
+                    meta["signature"]["XBLOCK"] = "constexpr"
+
                 return CachingAutotuner(
                     # force autotune by setting save_cache_hook to False
                     fn,
@@ -477,6 +605,7 @@ class CudaReproTests(TestCase):
                     reset_to_zero_arg_names=[],
                     optimize_mem=True,
                     heuristic_type=HeuristicType.POINTWISE,
+                    inductor_meta={"grid_type": "Grid1D"},
                 )
 
             return decorator
@@ -516,8 +645,8 @@ class CudaReproTests(TestCase):
         inout2 = inout1.clone()
 
         stream0 = get_cuda_stream(0)
-        kernel.run(inout1, in0, xnumel, grid=grid(xnumel), stream=stream0)
-        kernel.run(inout2, in0, xnumel, grid=grid(xnumel), stream=stream0)
+        kernel.run(inout1, in0, xnumel, stream=stream0)
+        kernel.run(inout2, in0, xnumel, stream=stream0)
 
         assert same(
             inout1, inout2, tol=0.001, equal_nan=True
@@ -967,6 +1096,43 @@ class CudaReproTests(TestCase):
 
         self.assertEqual(expect, actual)
 
+    @config.patch(
+        {
+            "max_autotune_gemm_backends": "TRITON",
+            "triton.disallow_failing_autotune_kernels_TESTING_ONLY": True,
+            "compile_threads": 1,
+        }
+    )
+    def test_bucketize_epilogue(self):
+        """
+        See https://github.com/pytorch/pytorch/issues/148764.
+        Make sure that when torch.bucketize appears as an epilogue, the codegen is valid.
+
+        Note: during autotuning, there's also the option to _not_ do the fusion.
+        So if you run the test with standard configs, the fused kernel would fail during
+        autotuning, and another non-fused kernel would be selected (and Inductor would
+        throw some errors, but the test would pass)
+
+        So we set disallow_failing_autotune_kernels_TESTING_ONLY=True to prevent the
+        autotuner from catching failures. And set compile_threads=1 so that compile
+        failures aren't caught by the asyn runner infra.
+        """
+
+        def fn(x: torch.Tensor, y: torch.Tensor, buckets: torch.Tensor) -> torch.Tensor:
+            z = torch.mm(x, y)
+            return torch.bucketize(z, buckets)
+
+        buckets = torch.arange(-100, 100, 10, device="cuda")
+        x = torch.randn(64, 64, device="cuda").clamp(-99, 99)
+        y = torch.randn(64, 64, device="cuda").clamp(-99, 99)
+
+        opt_fn = torch.compile(fn, mode="max-autotune")
+
+        expected = fn(x, y, buckets)
+        actual = opt_fn(x, y, buckets)
+
+        self.assertEqual(expected, actual)
+
     def test_float64_constants(self):
         def fn():
             # NOTE: tensors of all the same value are constant folded, so we
@@ -1161,6 +1327,185 @@ class CudaReproTests(TestCase):
 
         self.assertEqual(ref, res)
 
+    @torch._inductor.config.patch(emulate_precision_casts=True)
+    def test_dont_inplace_disjoint_accesses(self):
+        # TODO - would not need mms if we could annotate donated buffer..
+        def forward(  # noqa: F821, F722
+            arg0_1: "bf16[2048, 2048][2048, 1]cuda:0",  # noqa: F821, F722
+            arg1_1: "bf16[8, 4096, 2048][8388608, 2048, 1]cuda:0",  # noqa: F821, F722
+            arg2_1: "bf16[2048, 2048][2048, 1]cuda:0",  # noqa: F821, F722
+            arg3_1: "bf16[2048, 2048][2048, 1]cuda:0",  # noqa: F821, F722
+            arg4_1: "bf16[2048][1]cuda:0",  # noqa: F821, F722
+            arg5_1: "bf16[2048][1]cuda:0",  # noqa: F821, F722
+            arg6_1: "f32[4096, 128][128, 1]cuda:0",  # noqa: F821, F722
+            arg7_1: "f32[4096, 128][128, 1]cuda:0",  # noqa: F821, F722
+        ):
+            permute = torch.ops.aten.permute.default(arg0_1, [1, 0])
+            arg0_1 = None
+            view = torch.ops.aten.view.default(arg1_1, [32768, 2048])
+            mm = torch.ops.aten.mm.default(view, permute)
+            view = permute = None
+            view_1 = torch.ops.aten.view.default(mm, [8, 4096, 2048])
+            mm = None
+            permute_1 = torch.ops.aten.permute.default(arg2_1, [1, 0])
+            arg2_1 = None
+            view_2 = torch.ops.aten.view.default(arg1_1, [32768, 2048])
+            mm_1 = torch.ops.aten.mm.default(view_2, permute_1)
+            view_2 = permute_1 = None
+            view_3 = torch.ops.aten.view.default(mm_1, [8, 4096, 2048])
+            mm_1 = None
+            permute_2 = torch.ops.aten.permute.default(arg3_1, [1, 0])
+            arg3_1 = None
+            view_4 = torch.ops.aten.view.default(arg1_1, [32768, 2048])
+            arg1_1 = None
+            mm_2 = torch.ops.aten.mm.default(view_4, permute_2)
+            view_4 = permute_2 = None
+            view_5 = torch.ops.aten.view.default(mm_2, [8, 4096, 2048])
+            mm_2 = None
+            convert_element_type_6 = torch.ops.prims.convert_element_type.default(
+                view_1, torch.float32
+            )
+            view_1 = None
+            pow_1 = torch.ops.aten.pow.Tensor_Scalar(convert_element_type_6, 2)
+            mean = torch.ops.aten.mean.dim(pow_1, [-1], True)
+            pow_1 = None
+            add = torch.ops.aten.add.Tensor(mean, 1e-06)
+            mean = None
+            rsqrt = torch.ops.aten.rsqrt.default(add)
+            add = None
+            mul = torch.ops.aten.mul.Tensor(convert_element_type_6, rsqrt)
+            convert_element_type_6 = rsqrt = None
+            convert_element_type_7 = torch.ops.prims.convert_element_type.default(
+                arg4_1, torch.float32
+            )
+            arg4_1 = None
+            mul_1 = torch.ops.aten.mul.Tensor(convert_element_type_7, mul)
+            convert_element_type_7 = mul = None
+            convert_element_type_8 = torch.ops.prims.convert_element_type.default(
+                mul_1, torch.bfloat16
+            )
+            mul_1 = None
+            convert_element_type_9 = torch.ops.prims.convert_element_type.default(
+                view_3, torch.float32
+            )
+            view_3 = None
+            pow_2 = torch.ops.aten.pow.Tensor_Scalar(convert_element_type_9, 2)
+            mean_1 = torch.ops.aten.mean.dim(pow_2, [-1], True)
+            pow_2 = None
+            add_1 = torch.ops.aten.add.Tensor(mean_1, 1e-06)
+            mean_1 = None
+            rsqrt_1 = torch.ops.aten.rsqrt.default(add_1)
+            add_1 = None
+            mul_2 = torch.ops.aten.mul.Tensor(convert_element_type_9, rsqrt_1)
+            convert_element_type_9 = rsqrt_1 = None
+            convert_element_type_10 = torch.ops.prims.convert_element_type.default(
+                arg5_1, torch.float32
+            )
+            arg5_1 = None
+            mul_3 = torch.ops.aten.mul.Tensor(convert_element_type_10, mul_2)
+            convert_element_type_10 = mul_2 = None
+            convert_element_type_11 = torch.ops.prims.convert_element_type.default(
+                mul_3, torch.bfloat16
+            )
+            mul_3 = None
+            view_6 = torch.ops.aten.view.default(
+                convert_element_type_8, [8, 4096, -1, 128]
+            )
+            convert_element_type_8 = None
+            view_7 = torch.ops.aten.view.default(
+                convert_element_type_11, [8, 4096, -1, 128]
+            )
+            convert_element_type_11 = None
+            view_8 = torch.ops.aten.view.default(view_5, [8, 4096, -1, 128])
+            view_5 = None
+            convert_element_type_12 = torch.ops.prims.convert_element_type.default(
+                view_6, torch.float32
+            )
+            view_6 = None
+            convert_element_type_13 = torch.ops.prims.convert_element_type.default(
+                view_7, torch.float32
+            )
+            view_7 = None
+            unsqueeze = torch.ops.aten.unsqueeze.default(arg6_1, 0)
+            unsqueeze_1 = torch.ops.aten.unsqueeze.default(unsqueeze, 2)
+            unsqueeze = None
+            unsqueeze_2 = torch.ops.aten.unsqueeze.default(arg7_1, 0)
+            unsqueeze_3 = torch.ops.aten.unsqueeze.default(unsqueeze_2, 2)
+            unsqueeze_2 = None
+            mul_4 = torch.ops.aten.mul.Tensor(convert_element_type_12, unsqueeze_3)
+            unsqueeze_3 = None
+            view_9 = torch.ops.aten.view.default(
+                convert_element_type_12, [8, 4096, 16, 2, 64]
+            )
+            convert_element_type_12 = None
+            unbind = torch.ops.aten.unbind.int(view_9, -2)
+            view_9 = None
+            getitem = unbind[0]
+            getitem_1 = unbind[1]
+            unbind = None
+            neg = torch.ops.aten.neg.default(getitem_1)
+            getitem_1 = None
+            cat = torch.ops.aten.cat.default([neg, getitem], -1)
+            neg = getitem = None
+            mul_5 = torch.ops.aten.mul.Tensor(cat, unsqueeze_1)
+            cat = unsqueeze_1 = None
+            add_2 = torch.ops.aten.add.Tensor(mul_4, mul_5)
+            mul_4 = mul_5 = None
+            unsqueeze_4 = torch.ops.aten.unsqueeze.default(arg6_1, 0)
+            arg6_1 = None
+            unsqueeze_5 = torch.ops.aten.unsqueeze.default(unsqueeze_4, 2)
+            unsqueeze_4 = None
+            unsqueeze_6 = torch.ops.aten.unsqueeze.default(arg7_1, 0)
+            arg7_1 = None
+            unsqueeze_7 = torch.ops.aten.unsqueeze.default(unsqueeze_6, 2)
+            unsqueeze_6 = None
+            mul_6 = torch.ops.aten.mul.Tensor(convert_element_type_13, unsqueeze_7)
+            unsqueeze_7 = None
+            view_10 = torch.ops.aten.view.default(
+                convert_element_type_13, [8, 4096, 16, 2, 64]
+            )
+            convert_element_type_13 = None
+            unbind_1 = torch.ops.aten.unbind.int(view_10, -2)
+            view_10 = None
+            getitem_2 = unbind_1[0]
+            getitem_3 = unbind_1[1]
+            unbind_1 = None
+            neg_1 = torch.ops.aten.neg.default(getitem_3)
+            getitem_3 = None
+            cat_1 = torch.ops.aten.cat.default([neg_1, getitem_2], -1)
+            neg_1 = getitem_2 = None
+            mul_7 = torch.ops.aten.mul.Tensor(cat_1, unsqueeze_5)
+            cat_1 = unsqueeze_5 = None
+            add_3 = torch.ops.aten.add.Tensor(mul_6, mul_7)
+            mul_6 = mul_7 = None
+            convert_element_type_14 = torch.ops.prims.convert_element_type.default(
+                add_2, torch.bfloat16
+            )
+            add_2 = None
+            convert_element_type_15 = torch.ops.prims.convert_element_type.default(
+                add_3, torch.bfloat16
+            )
+            add_3 = None
+            permute_3 = torch.ops.aten.permute.default(
+                convert_element_type_14, [0, 2, 1, 3]
+            )
+            convert_element_type_14 = None
+            permute_4 = torch.ops.aten.permute.default(
+                convert_element_type_15, [0, 2, 1, 3]
+            )
+            convert_element_type_15 = None
+            permute_5 = torch.ops.aten.permute.default(view_8, [0, 2, 1, 3])
+            view_8 = None
+            return (permute_3, permute_4, permute_5)
+
+        from torch._dynamo.debug_utils import aot_graph_input_parser
+
+        kwargs = aot_graph_input_parser(forward)
+        out, code = run_and_get_code(torch.compile(forward), **kwargs)
+        # ignore tiny values.. prior to this fix absolute error was ~28
+        self.assertEqual(forward(**kwargs), out, atol=0.01, rtol=2)
+        FileCheck().check_not("in_out").run(code[0])
+
     # https://github.com/pytorch/pytorch/issues/104937
     def test_linear_with_zero_infeature_size(self):
         m = nn.Linear(in_features=0, out_features=0, bias=True).to("cuda")
@@ -1241,7 +1586,6 @@ class CudaReproTests(TestCase):
         fn(*args)
         torch.cuda.synchronize()  # shake out Triton Error [CUDA]: misaligned address
 
-    @skipIfRocm
     def test_non_commutative_scan_op(self):
         from torch._higher_order_ops.associative_scan import associative_scan
 
@@ -1288,7 +1632,6 @@ class CudaReproTests(TestCase):
         self.assertEqual(outer_reduce(a), out)
         self.assertTrue("for roffset" not in code)
 
-    @skipIfRocm
     def test_scaled_dot_product_efficient_attention_backward(self):
         from torch import nn, Tensor
 
@@ -1522,6 +1865,118 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
             foo_c = torch.compile(foo)
             torch.testing.assert_allclose(foo(inp), foo_c(inp))
 
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    def test_float8_e8m0fnu(self):
+        device = "cuda"
+        dtype = torch.float8_e8m0fnu
+        hp_dtype = torch.float32  # and torch.bfloat16
+
+        def foo(x0):
+            x1 = x0.to(dtype)
+            x2 = x1.to(hp_dtype)
+            return x2
+
+        x0 = torch.randn(16, 16, device=device, dtype=hp_dtype)
+        foo_c = torch.compile(foo, backend="inductor", fullgraph=True)
+
+        with torch.no_grad():
+            y_c = foo_c(x0)
+
+        self.assertEqual(foo(x0), y_c)
+
+        dtype = torch.float8_e8m0fnu
+
+        def foo(x0):
+            x1 = x0 + 1
+            x2 = x1.view(dtype)
+            return x2
+
+        x0 = torch.randint(0, 255, (16, 16), device=device, dtype=torch.uint8)
+        foo_c = torch.compile(foo, backend="inductor", fullgraph=True)
+
+        with torch.no_grad():
+            y_c = foo_c(x0)
+
+        self.assertEqual(foo(x0), y_c)
+
+    @unittest.skipIf(
+        not config.is_fbcode(),
+        "bfloat16 atomic add is only supported in fbcode today #97016",
+    )
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    def test_atomic_add_bfloat16(self):
+        def f(x, y):
+            return torch.index_select(x, 0, y)
+
+        x = torch.randn(
+            2000, 384, dtype=torch.bfloat16, device="cuda", requires_grad=True
+        )
+        y = torch.ones(713268, dtype=torch.int64, device="cuda")
+        x_ref = x.clone().detach().requires_grad_(True)
+        y_ref = y.clone().detach()
+
+        out, (_, bw_code) = run_fw_bw_and_get_code(lambda: torch.compile(f)(x, y))
+        fc = FileCheck()
+        fc.check("tl.atomic_add")
+        fc.run(bw_code)
+
+        self.assertEqual(f(x_ref, y_ref), out)
+
+    @unittest.skipIf(
+        not config.is_fbcode(),
+        "bfloat16 atomic add is only supported in fbcode today #97016",
+    )
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    @config.patch({"bfloat16_atomic_adds_enabled": False})
+    def test_atomic_add_bfloat16_config(self):
+        def f(x, y):
+            return torch.index_select(x, 0, y)
+
+        x = torch.randn(
+            2000, 384, dtype=torch.bfloat16, device="cuda", requires_grad=True
+        )
+        y = torch.ones(713268, dtype=torch.int64, device="cuda")
+        x_ref = x.clone().detach().requires_grad_(True)
+        y_ref = y.clone().detach()
+
+        out, (_, bw_code) = run_fw_bw_and_get_code(lambda: torch.compile(f)(x, y))
+        fc = FileCheck()
+        fc.check_not("tl.atomic_add")
+        fc.run(bw_code)
+
+        self.assertEqual(f(x_ref, y_ref), out)
+
+    @skipCUDAIf(
+        not SM90OrLater, "uses bfloat16 atomic add instrs which requires SM >= 90"
+    )
+    @unittest.skipIf(
+        config.is_fbcode(),
+        "bfloat16 atomic add is supported in fbcode, so we won't fallback",
+    )
+    def test_index_add_fallback(self):
+        def f(x, y):
+            return torch.index_select(x, 0, y)
+
+        x = torch.randn(
+            2000, 384, dtype=torch.bfloat16, device="cuda", requires_grad=True
+        )
+        y = torch.ones(713268, dtype=torch.int64, device="cuda")
+        x_ref = x.clone().detach().requires_grad_(True)
+        y_ref = y.clone().detach()
+
+        out, (_, bw_code) = run_fw_bw_and_get_code(lambda: torch.compile(f)(x, y))
+        fc = FileCheck()
+        fc.check("aten.index_add")
+        fc.run(bw_code)
+
+        self.assertEqual(f(x_ref, y_ref), out)
+
     @requires_multigpu()
     def test_not_initializing_wrong_device(self):
         device_stats = torch.cuda.memory_stats("cuda:0")
@@ -1567,6 +2022,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         self.assertEqual(result, a + b)
         self.assertIn("znumel", code)
 
+    @xfailIfPy312Plus  # https://github.com/pytorch/pytorch/issues/142032
     def test_repeated_masked_load(self):
         target_size = (8, 2)
         mem_eff_temporal_upsampling_interp_chunks = 2

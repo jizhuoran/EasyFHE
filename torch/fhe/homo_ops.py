@@ -1,135 +1,199 @@
-import warnings
-from . import utils
-from .ciphertext import Cipher
-from . import functional as F
-from .ciphertext import Plaintext as Plaintext
 import math
-import numpy as np
 import torch
-from .utils import check_meta_equal, check_cipher_len, call_counter, profile_python_function
+import warnings
+from .ciphertext import *
+from . import functional as F
+from . import hybrid_keyswitch
+from .dev_tools.decorator_factory import decorator_factory
+
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
+# drop last elem is a inplace operation now
+def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
+    assert num_levels <= ct.cur_limbs and num_levels >= 0
+    if not inplace:
+        ct = ct.deep_copy()
+    ct.cur_limbs -= num_levels
+    return ct
+
+@decorator_factory
+def drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
+    return _drop_last_elements(ct, num_levels, cryptoContext, inplace)
 
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
 def _adjust_levels(ct1, ct2, cryptoContext):
     ct1, ct2 = ct1.shallow_copy(), ct2.shallow_copy()
     if ct1.cur_limbs > ct2.cur_limbs:
-        ct1.drop_last_elements(ct1.cur_limbs - ct2.cur_limbs)
+        ct1 = _drop_last_elements(ct1, ct1.cur_limbs - ct2.cur_limbs, cryptoContext, inplace=True)
     elif ct1.cur_limbs < ct2.cur_limbs:
-        ct2.drop_last_elements(ct2.cur_limbs - ct1.cur_limbs)
+        ct2 = _drop_last_elements(ct2, ct2.cur_limbs - ct1.cur_limbs, cryptoContext, inplace=True)
     return ct1, ct2
 
 
-# note: AdjustLevelsAndDepthToOneInPlace in rns-leveledshe.cpp
-def adjust_levels_and_depth(ct1, ct2, cryptoContext):
-    if ct1.cur_limbs < ct2.cur_limbs:
-        rct1, rct2, swapped = ct2.shallow_copy(), ct1.shallow_copy(), True
-    else:
-        rct1, rct2, swapped = ct1.shallow_copy(), ct2.shallow_copy(), False
-
-    if not rct1.cur_limbs == rct2.cur_limbs:
-        scf1 = rct1.scaling_factor
-        scf2 = cryptoContext.GetScalingFactorRealBig(
-            rct2.cur_limbs + 2 - rct2.noise_deg
-        )
-        scf = cryptoContext.GetScalingFactorReal(rct1.cur_limbs)
-        q1 = (
-            cryptoContext.GetModReduceFactor(rct1.cur_limbs - 1)
-            if rct1.noise_deg == 2
-            else 1
-        )
-        scaling_factor = scf2 / scf1 * q1 / scf
-        if rct1.noise_deg == 2 and not (
-            rct2.noise_deg == 1 and rct1.cur_limbs - rct2.cur_limbs == 1
-        ):
-            rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        elif rct1.noise_deg == 1:
-            rct1 = _eval_mult_core(rct1, scaling_factor, cryptoContext)
+def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert cipher.cur_limbs >= target_limbs
+    if cipher.cur_limbs == target_limbs:
+        if cipher.noise_deg < target_noise_deg:
+            return _eval_mult_core(cipher, 1.0, cryptoContext)
         else:
-            raise ValueError
-        rct1.try_drop_last_elements(
-            rct1.cur_limbs - rct2.cur_limbs + rct2.noise_deg - 2
-        )
-        if rct2.noise_deg == 1:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        rct1.scaling_factor = rct2.scaling_factor
-
-        if swapped:
-            rct1, rct2 = rct2.shallow_copy(), rct1.shallow_copy()
-    else:
-        if rct1.noise_deg < rct2.noise_deg:
-            rct1 = _eval_mult_core(rct1, 1.0, cryptoContext)
-        elif rct2.noise_deg < rct1.noise_deg:
-            rct2 = _eval_mult_core(rct2, 1.0, cryptoContext)
-    return rct1, rct2
-
-
-# AdjustForAddOrSubInPlace in rns-leveledshe.cpp #todo: to check!!
-def _adjust_for_add_or_sub(in0, in1, cryptoContext):
-    rescaleTech = cryptoContext.rescaleTech
-    if rescaleTech == "FIXEDMANUAL":
-        # function `_adjust_levels` doesnt change memory, therefore its fine with a ciphertext morphed form plaintext
-        in0, in1 = _adjust_levels(in0, in1, cryptoContext)
-        if len(in0.cv) == len(in1.cv):
-            return in0, in1
-
-        scFactor = cryptoContext.GetScalingFactorReal(
-            cryptoContext.L
-        )  # openfhe default value is 0, here transfer to the max value of #limb
-        if scFactor == 0.0:
-            raise ValueError("Unsupported scaling factor")
-
-        if len(in0.cv) == 1:
-            ptxt = in0.cv[0]
-            ptxtDepth = in0.noise_deg
-            ctxtDepth = in1.noise_deg
-            sizeQl = in1.cur_limbs
-            moduli = cryptoContext.moduliQ[:sizeQl]
-            ptxtIndex = 0
-        elif len(in1.cv) == 1:
-            ptxt = in1.cv[0]
-            ptxtDepth = in1.noise_deg
-            ctxtDepth = in0.noise_deg
-            sizeQl = in0.cur_limbs
-            moduli = cryptoContext.moduliQ[:sizeQl]
-            ptxtIndex = 1
-
-        if len(in0.cv) == 1 or len(in1.cv) == 1:  # todo: this branch is not tested
-            # Bring to same depth if not already same
-            raise ValueError("Plaintexts are not supported in this version of the library.")
-            if ptxtDepth < ctxtDepth:
-                diffDepth = ctxtDepth - ptxtDepth
-                intSF = int(scFactor + 0.5)  # todo: to check if equivalent to openfhe
-                crtSF = torch.tensor(sizeQl * [intSF], dtype=torch.uint64)
-                crtPowSF = torch.clone(crtSF)
-                for i in range(diffDepth):
-                    crtPowSF = crt_mult(crtPowSF, crtSF, moduli)
-                ptxt = F.cv_mul_scalar(
-                    ptxt,
-                    crtPowSF.cuda(),
-                    cryptoContext.moduliQ_cuda,
-                    cryptoContext.q_mu_cuda,
-                    len(moduli),
-                )  # fixme: crtPowSF should be a tensor for F.cv_mul_scalar? refactor crt_mult?
-
-                if ptxtIndex == 0:
-                    in0.cv[0] = ptxt  # todo: check if correctly assigned
-                    in0.noise_deg = ctxtDepth
-                else:
-                    in1.cv[0] = ptxt  # todo: check if correctly assigned
-                    in1.noise_deg = ctxtDepth
-            elif ptxtDepth > ctxtDepth:
-                raise ValueError(
-                    "plaintext cannot be encoded at a larger depth than that of the ciphertext."
+            return cipher.shallow_copy()
+    else:  # cur_limbs > target_limbs
+        if cipher.noise_deg == 2 and target_noise_deg == 2:
+            # if both degree 2, mul the higher to a factor, then rescale, then drop
+            # interesting, ct1 actually has a noise_deg == 2, but can still do a rescale
+            scf1 = cipher.scaling_factor
+            scf2 = target_scaling_factor
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            if cipher.cur_limbs > target_limbs:
+                cipher = _drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs,
+                    cryptoContext,
+                    inplace=True,
                 )
+            cipher.scaling_factor = target_scaling_factor
+            # so the output has noise_deg2, and the same cur_limb
+        elif cipher.noise_deg == 1 and target_noise_deg == 1:
+            # if both degree 1, mul the higher to a factor, then drop, then rescale
+            # interesting, here we can do drop first...
+            scf1 = cipher.scaling_factor
+            scf2 = cryptoContext.GetScalingFactorRealBig(target_limbs + 1)
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
+            if cipher.cur_limbs > target_limbs + 1:
+                cipher = _drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs - 1,
+                    cryptoContext,
+                    inplace=True,
+                )
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            cipher.scaling_factor = target_scaling_factor
+            # so the output has noise_deg 1, and the same cur_limb
+        elif cipher.noise_deg == 2 and target_noise_deg == 1:
+            # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
+            if cipher.cur_limbs == target_limbs + 1:
+                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            else:
+                # otherwise, mul the higher with scale factor, rescale, drop, rescale.
+                # the last rescale is to make sure both has degree 1
+                scf1 = cipher.scaling_factor
+                scf2 = cryptoContext.GetScalingFactorRealBig(cryptoContext.L - (cryptoContext.L - target_limbs - 1))
+                scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+                q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
+                cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                if cipher.cur_limbs > target_limbs + 1:
+                    cipher = _drop_last_elements(
+                        cipher,
+                        cipher.cur_limbs - target_limbs - 1,
+                        cryptoContext,
+                        inplace=True,
+                    )
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher.scaling_factor = target_scaling_factor
+        elif cipher.noise_deg == 1 and target_noise_deg == 2:
+            # if the higher has a lower degree, mul it with the factor, and then drop
+            # so the output has noise_deg 2, and same cur_limb
+            scf1 = cipher.scaling_factor
+            scf2 = target_scaling_factor
+            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
+            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
+            cipher = _drop_last_elements(cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=True)
+            cipher.scaling_factor = scf2
+        else:
+            print("noise_deg", cipher.noise_deg, target_noise_deg)
+            raise ValueError
 
+    return cipher
+
+
+def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert cipher.cur_limbs >= target_limbs
+    if cipher.cur_limbs == target_limbs:
+        if cipher.noise_deg < target_noise_deg:
+            return _eval_mult_core(cipher, 1.0, cryptoContext)
+        else:
+            return cipher.shallow_copy()
+    else:  # cur_limbs > target_limbs
+        if cipher.noise_deg == 2 and target_noise_deg == 2:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            if cipher.cur_limbs > target_limbs:
+                cipher = _drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs,
+                    cryptoContext,
+                    inplace=False,
+                )
+        elif cipher.noise_deg == 1 and target_noise_deg == 1:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            if cipher.cur_limbs > target_limbs + 1:
+                cipher = _drop_last_elements(
+                    cipher,
+                    cipher.cur_limbs - target_limbs - 1,
+                    cryptoContext,
+                    inplace=True,
+                )
+            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        elif cipher.noise_deg == 2 and target_noise_deg == 1:
+            if cipher.cur_limbs == target_limbs + 1:
+                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            else:
+                cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                if cipher.cur_limbs > target_limbs + 1:
+                    cipher = _drop_last_elements(
+                        cipher,
+                        cipher.cur_limbs - target_limbs - 1,
+                        cryptoContext,
+                        inplace=True,
+                    )
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        elif cipher.noise_deg == 1 and target_noise_deg == 2:
+            cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
+            cipher = _drop_last_elements(cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=True)
+        else:
+            print("noise_deg", cipher.noise_deg, target_noise_deg)
+            raise ValueError
+    return cipher
+
+def _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert cipher.noise_deg == 1 and target_noise_deg == 1
+    return _drop_last_elements(cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=False)
+
+def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
+    if ct1.cur_limbs > ct2.cur_limbs:
+        target_limbs = ct2.cur_limbs
+        target_noise_deg = ct2.noise_deg
+        target_scaling_factor = ct2.scaling_factor
+        # print("case1", target_limbs, target_noise_deg, target_scaling_factor)
+    elif ct1.cur_limbs < ct2.cur_limbs:
+        target_limbs = ct1.cur_limbs
+        target_noise_deg = ct1.noise_deg
+        target_scaling_factor = ct1.scaling_factor
+        # print("case2", target_limbs, target_noise_deg, target_scaling_factor)
     else:
-        in0, in1 = adjust_levels_and_depth(in0, in1, cryptoContext)
+        target_limbs = ct1.cur_limbs
+        target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
+        target_scaling_factor = None
+        # print("case3", target_limbs, target_noise_deg, target_scaling_factor)
+    return _adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), _adjust_to(
+        ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
+    )
 
-    return in0, in1
+# AdjustForAddOrSubInPlace in rns-leveledshe.cpp
+def _adjust_for_add_or_sub(in0, in1, cryptoContext):
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        assert in0.noise_deg == in1.noise_deg
+        return _adjust_levels(in0, in1, cryptoContext)
+    else:
+        return _adjust_levels_and_depth(in0, in1, cryptoContext)
 
 
 def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
@@ -137,10 +201,11 @@ def _adjust_for_mult(ct1: Cipher, ct2: Cipher, cryptoContext):
         rct1, rct2 = _adjust_levels(ct1, ct2, cryptoContext)
     else:
         # inline `AdjustLevelsAndDepthToOneInPlace` in ckksrns-leveledshe.cpp as following
-        rct1, rct2 = adjust_levels_and_depth(ct1, ct2, cryptoContext)
+        rct1, rct2 = _adjust_levels_and_depth(ct1, ct2, cryptoContext)
         if rct1.noise_deg == 2:
-            rct1 = homo_rescale(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            rct2 = homo_rescale(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            rct1 = _homo_rescale_internal(rct1, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        if rct2.noise_deg == 2:  # if rct1's noise_deg is 1, so is rct2
+            rct2 = _homo_rescale_internal(rct2, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return rct1, rct2
 
 
@@ -153,7 +218,7 @@ class LargeScalingFactorConstants(Enum):
 
 
 # CRTMult in ckkspackedencoding.cpp
-def crt_mult(xs, ys, mods):
+def _crt_mult(xs, ys, mods):
     return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
 
 
@@ -189,10 +254,10 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
             log_step = min(log_approx, LargeScalingFactorConstants.MAX_LOG_STEP.value)
             int_step = 2**log_step
             crt_sf = cur_limbs * [int_step]
-            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            crt_approx = _crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ_scalar)
             log_approx -= log_step
 
-        crt_constant = crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ)
+        crt_constant = _crt_mult(crt_constant, crt_approx, cryptoContext.moduliQ_scalar)
 
     # Handle FLEXIBLEAUTOEXT mode at level 0, we don't use the depth to calculate the scaling factor,
     # so we return the value before taking the depth into account.
@@ -204,7 +269,7 @@ def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoConte
     crt_sc_factor = cur_limbs * [int_sc_factor]
 
     for i in range(1, noise_deg):
-        crt_constant = crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ)
+        crt_constant = _crt_mult(crt_constant, crt_sc_factor, cryptoContext.moduliQ_scalar)
 
     return crt_constant
 
@@ -221,9 +286,7 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
     res = math.fabs(constant * sc_factor)
     if res > 0:
         log_sf = int(math.ceil(math.log2(res)))
-        log_valid = (
-            log_sf if log_sf <= MAX_BITS_IN_WORD_LOCAL else MAX_BITS_IN_WORD_LOCAL
-        )
+        log_valid = log_sf if log_sf <= MAX_BITS_IN_WORD_LOCAL else MAX_BITS_IN_WORD_LOCAL
         log_approx = log_sf - log_valid
 
     approx_factor = float(pow(2, log_approx))
@@ -235,68 +298,54 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
     factors = [0] * cur_limbs
     if large_abs >= bound:
         for i in range(cur_limbs):
-            reduced = large % cryptoContext.moduliQ[i]
-            factors[i] = reduced + cryptoContext.moduliQ[i] if reduced < 0 else reduced
+            reduced = large % cryptoContext.moduliQ_scalar[i]
+            factors[i] = reduced + cryptoContext.moduliQ_scalar[i] if reduced < 0 else reduced
     else:
         sc_constant = int(large)
         for i in range(cur_limbs):
-            reduced = sc_constant % int(cryptoContext.moduliQ[i])
-            factors[i] = reduced + cryptoContext.moduliQ[i] if reduced < 0 else reduced
+            reduced = sc_constant % int(cryptoContext.moduliQ_scalar[i])
+            factors[i] = reduced + cryptoContext.moduliQ_scalar[i] if reduced < 0 else reduced
 
     # Scale back up by approxFactor within the CRT multiplications.
     if log_approx > 0:
-        log_step = (
-            log_approx
-            if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value
-            else LargeScalingFactorConstants.MAX_LOG_STEP.value
-        )
+        log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
         int_step = 1 << log_step
         crt_approx = cur_limbs * [int_step]
         log_approx -= log_step
 
         while log_approx > 0:
-            log_step = (
-                log_approx
-                if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value
-                else LargeScalingFactorConstants.MAX_LOG_STEP.value
-            )
+            log_step = log_approx if log_approx <= LargeScalingFactorConstants.MAX_LOG_STEP.value else LargeScalingFactorConstants.MAX_LOG_STEP.value
             int_step = 1 << log_step
             crt_sf = cur_limbs * [int_step]
-            crt_approx = crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ)
+            crt_approx = _crt_mult(crt_approx, crt_sf, cryptoContext.moduliQ_scalar)
             log_approx -= log_step
-        factors = crt_mult(factors, crt_approx, cryptoContext.moduliQ)
+        factors = _crt_mult(factors, crt_approx, cryptoContext.moduliQ_scalar)
 
     return factors
 
 
 # note: EvalMultCoreInPlace in ckksrns-leveledshe.cpp
-# todo: should merge this function with _cipher_mul_scalar_double? or redesign interface
-def _eval_mult_core(cipher, constant, cryptoContext):
-    factors = _get_element_for_eval_mult(constant, cipher.cur_limbs, cryptoContext)
-    return _cipher_mul_scalar_double(cipher, factors, cryptoContext)
+def _eval_mult_core(in0, cnst, cryptoContext):
+    factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
+    return _cipher_mul_scalar_double(in0, factors, cryptoContext)
 
 
-# todo: only support in `FIXEDMANUAL` mode, or `adjust_levels_and_depth` function.
+# todo: only support in `FIXEDMANUAL` mode, or `_adjust_levels_and_depth` function.
 # should not be used directly in other rescale modes!!! except when openfhe directly used it
 # todo: write homo_level_reduce
 
 
-@check_meta_equal
 def _cipher_add(in0, in1, cryptoContext):
-    cv = [
-        F.cv_add(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
-        for cv0, cv1 in zip(in0.cv, in1.cv)
-    ]
+    cv = [F.cv_add(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs) for cv0, cv1 in zip(in0.cv, in1.cv)]
     return in0.cipher_like(cv)
 
 
-@check_meta_equal
 def _cipher_add_ext(in0, in1, cryptoContext):
     cv = [
         F.cv_add(
             cv0,
             cv1,
-            cryptoContext.BsContext.QplusP_map[in0.cur_limbs],
+            cryptoContext.QplusP_map[in0.cur_limbs],
             in0.cur_limbs + cryptoContext.K,
         )
         for cv0, cv1 in zip(in0.cv, in1.cv)
@@ -304,47 +353,42 @@ def _cipher_add_ext(in0, in1, cryptoContext):
     return in0.cipher_like(cv)
 
 
-@check_meta_equal
 def _cipher_sub(in0, in1, cryptoContext):
-    cv = [
-        F.cv_sub(cv0, cv1, cryptoContext.moduliQ_cuda, in0.cur_limbs)
-        for cv0, cv1 in zip(in0.cv, in1.cv)
-    ]
+    cv = [F.cv_sub(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs) for cv0, cv1 in zip(in0.cv, in1.cv)]
     return in0.cipher_like(cv)
 
 
-@check_meta_equal
 def _cipher_mul(in0, in1, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0],
         in1.cv[0],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     ax = F.cv_add(
         F.cv_mul(
             in0.cv[0],
             in1.cv[1],
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         ),
         F.cv_mul(
             in0.cv[1],
             in1.cv[0],
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         ),
-        cryptoContext.moduliQ_cuda,
+        cryptoContext.moduliQ,
         in0.cur_limbs,
     )
     axax = F.cv_mul(
         in0.cv[1],
         in1.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
@@ -355,28 +399,27 @@ def _cipher_mul(in0, in1, cryptoContext):
     )
 
 
-@check_cipher_len
 def _cipher_square(in0, cryptoContext):
     bx = F.cv_mul(
         in0.cv[0],
         in0.cv[0],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     ax = F.cv_mul(
         in0.cv[0],
         in0.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
-    ax = F.cv_add(ax, ax, cryptoContext.moduliQ_cuda, in0.cur_limbs)
+    ax = F.cv_add(ax, ax, cryptoContext.moduliQ, in0.cur_limbs)
     axax = F.cv_mul(
         in0.cv[1],
         in0.cv[1],
-        cryptoContext.moduliQ_cuda,
-        cryptoContext.q_mu_cuda,
+        cryptoContext.moduliQ,
+        cryptoContext.q_mu,
         in0.cur_limbs,
     )
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
@@ -387,27 +430,19 @@ def _cipher_square(in0, cryptoContext):
     )
 
 
-@check_cipher_len
 def _cipher_add_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
-        F.cv_add_scalar(
-            in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
-        ),
+        F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
     ]
     return in0.cipher_like(cv)
 
 
-@check_cipher_len
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
-        F.cv_sub_scalar(
-            in0.cv[0], scalar_mod, cryptoContext.moduliQ_cuda, in0.cur_limbs
-        ),
+        F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
     ]
     return in0.cipher_like(cv)
@@ -415,54 +450,71 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 
 # todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
-# @check_cipher_len #fixme: comment it to support call from homo_mul_pt
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
             cv0,
             scalar_mod,
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         )
         for cv0 in in0.cv
     ]
     scFactor = cryptoContext.GetScalingFactorReal(in0.cur_limbs)
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1
-    )
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor * scFactor, noise_deg=in0.noise_deg + 1)
 
 
-@check_cipher_len
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     cv = [
         F.cv_mul_scalar(
             cv0,
             scalar_mod,
-            cryptoContext.moduliQ_cuda,
-            cryptoContext.q_mu_cuda,
+            cryptoContext.moduliQ,
+            cryptoContext.q_mu,
             in0.cur_limbs,
         )
         for cv0 in in0.cv
     ]
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg
-    )
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
 
-@check_cipher_len
 def _cipher_neg(in0, cryptoContext):
-    cv = [F.cv_neg(cv0, cryptoContext.moduliQ_cuda, in0.cur_limbs) for cv0 in in0.cv]
-    return in0.cipher_like(
-        cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg
-    )
+    cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
+    return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
+
+def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
+        return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    elif cryptoContext.rescaleTech == "FIXEDAUTO":
+        return _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    elif cryptoContext.rescaleTech == "FIXEDMANUAL":
+        return _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+    else:
+        raise ValueError 
 
 
-@call_counter
+@decorator_factory
+def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    return _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+
+
+def _cipher_automorphism(in0, index, cryptoContext):
+    norm_index = cryptoContext.norm_rot_index(index)
+    limbs = in0.cur_limbs if in0.is_ext == False else in0.cur_limbs + cryptoContext.K
+    cv = [F.cv_automorphism_transform(cv, limbs, norm_index, cryptoContext) for cv in in0.cv]
+    return in0.cipher_like(cv)
+
+# todo: input len of in0.cv could be 1
+@decorator_factory
+def cipher_automorphism(in0, index, cryptoContext):
+    return _cipher_automorphism(in0, index, cryptoContext)
+
+
+@decorator_factory
 def homo_add(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
@@ -471,113 +523,19 @@ def homo_add(in0, in1, cryptoContext):
         return _cipher_add(in0, in1, cryptoContext)
 
 
-@call_counter
+@decorator_factory
 def homo_sub(in0, in1, cryptoContext):
     in0, in1 = _adjust_for_add_or_sub(in0, in1, cryptoContext)
     return _cipher_sub(in0, in1, cryptoContext)
 
 
-@call_counter
-def homo_rescale(ct, levels, cryptoContext):
-    ct = ct.deep_copy()
-    assert levels == 1 or levels == 0 and "Only support these two cases"
-    if levels == 0:
+@decorator_factory
+def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in user api for other rescaleTech?
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        return _homo_rescale_internal(ct, levels, cryptoContext)
+    else:
         return ct.deep_copy()
 
-    def rescale_n_times(cv, levels):
-        for l in range(levels):
-            cv = F.cv_drop_last_element_and_scale(cv, ct.cur_limbs, l, cryptoContext)
-        return cv
-    
-    res_cv = [rescale_n_times(_cv, levels) for _cv in ct.cv]
-
-    scFactor = ct.scaling_factor
-    for l in range(levels):
-        modReduceFactor = cryptoContext.GetModReduceFactor(
-            ct.cur_limbs - 1 - l
-        )  # corresponding to openfhe: (sizeQl -1 -i), we need to use the value of input ct
-        scFactor = scFactor / modReduceFactor
-
-    return Cipher(
-        res_cv,
-        ct.cur_limbs - levels,
-        scFactor,
-        ct.noise_deg - levels,
-        ct.slots,
-        ct.is_ext,
-    )
-
-
-@call_counter
-def homo_mul(in0, in1, cryptoContext):
-    # note: AdjustForMultInPlace in rns-leveledshe.cpp
-    in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
-    res = _cipher_mul(in0, in1, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.swk_bx_cuda,
-            cryptoContext.swk_ax_cuda,
-            cryptoContext,
-        )
-    )
-    res.cv = res.cv[:2]
-    return _cipher_add(res, tmp, cryptoContext)
-
-
-@call_counter
-def homo_square(in0, cryptoContext):
-    if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
-        in0 = homo_rescale(in0, 1, cryptoContext)
-    res = _cipher_square(in0, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.swk_bx_cuda,
-            cryptoContext.swk_ax_cuda,
-            cryptoContext,
-        )
-    )
-    res.cv = res.cv[:2]
-    return _cipher_add(res, tmp, cryptoContext)
-
-
-def homo_add_scalar_double(in0, cnst, cryptoContext, precomp = None):
-    if precomp is not None:
-        tmpr = precomp
-    else:
-        tmpr = _get_element_for_eval_add_or_sub(
-            math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext
-        )
-    if cnst < 0:
-        return _cipher_sub_scalar(in0, tmpr, cryptoContext)
-    else:
-        return _cipher_add_scalar(in0, tmpr, cryptoContext)
-
-
-def homo_add_scalar_int(in0, scalar, cryptoContext):
-    return _cipher_add_scalar(in0, scalar, cryptoContext)
-
-
-# note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
-# fixme: do we accept scalar<0?
-def homo_mul_scalar_int(in0, scalar, cryptoContext):
-    res = _cipher_mul_scalar_int(in0, abs(scalar), cryptoContext)
-    if scalar < 0:
-        res = _cipher_neg(res, cryptoContext)
-    return res
-
-
-# note: EvalMultInPlace in ckksrns-leveledshe.cpp
-@profile_python_function
-@call_counter
-def homo_mul_scalar_double(in0, cnst, cryptoContext):
-    if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
-        in0 = homo_rescale(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
-    return _cipher_mul_scalar_double(in0, factors, cryptoContext)
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
@@ -606,130 +564,157 @@ def _homo_rescale_internal(ct, levels, cryptoContext):
         noise_deg=ct.noise_deg - levels,
     )
 
-# note: EvalMultInPlace in ckksrns-leveledshe.cpp
-
-def homo_rescale_internal(ct, levels, cryptoContext):
+@decorator_factory
+def force_rescale(ct, levels, cryptoContext):
     return _homo_rescale_internal(ct, levels, cryptoContext)
 
-def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
-    return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
-    
-def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.cur_limbs >= target_limbs
-    if cipher.cur_limbs == target_limbs:
-        if cipher.noise_deg < target_noise_deg:
-            return _eval_mult_core(cipher, 1.0, cryptoContext)
-        else:
-            return cipher.shallow_copy()
-    else:  # cur_limbs > target_limbs
-        if cipher.noise_deg == 2 and target_noise_deg == 2:
-            # if both degree 2, mul the higher to a factor, then rescale, then drop
-            # interesting, ct1 actually has a noise_deg == 2, but can still do a rescale
-            scf1 = cipher.scaling_factor
-            scf2 = target_scaling_factor
-            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-            q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
-            cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
-            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            if cipher.cur_limbs > target_limbs:
-                cipher.drop_last_elements(cipher.cur_limbs - target_limbs)
-            cipher.scaling_factor = target_scaling_factor
-            # so the output has noise_deg2, and the same cur_limb
-        elif cipher.noise_deg == 1 and target_noise_deg == 1:
-            # if both degree 1, mul the higher to a factor, then drop, then rescale
-            # interesting, here we can do drop first...
-            scf1 = cipher.scaling_factor
-            scf2 = cryptoContext.GetScalingFactorRealBig(target_limbs + 1)
-            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
-            if cipher.cur_limbs > target_limbs + 1:
-                cipher.drop_last_elements(cipher.cur_limbs - target_limbs-1)
-            cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            cipher.scaling_factor = target_scaling_factor
-            # so the output has noise_deg 1, and the same cur_limb
-        elif cipher.noise_deg == 2 and target_noise_deg == 1:
-            # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
-            if cipher.cur_limbs == target_limbs + 1:
-                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            else:
-                # otherwise, mul the higher with scale factor, rescale, drop, rescale.
-                # the last rescale is to make sure both has degree 1
-                scf1 = cipher.scaling_factor
-                scf2 = cryptoContext.GetScalingFactorRealBig(cryptoContext.L - (cryptoContext.L - target_limbs - 1))
-                scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-                q1 = cryptoContext.GetModReduceFactor(cipher.cur_limbs - 1)
-                cipher = _eval_mult_core(cipher, scf2 / scf1 * q1 / scf, cryptoContext)
-                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                if cipher.cur_limbs > target_limbs + 1:
-                    cipher.drop_last_elements(cipher.cur_limbs - target_limbs-1)
-                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-                cipher.scaling_factor = target_scaling_factor
-        elif cipher.noise_deg == 1 and target_noise_deg == 2:
-            scf1 = cipher.scaling_factor
-            scf2 = target_scaling_factor
-            scf = cryptoContext.GetScalingFactorReal(cipher.cur_limbs)
-            cipher = _eval_mult_core(cipher, scf2 / scf1 / scf, cryptoContext)
-            cipher.drop_last_elements(cipher.cur_limbs - target_limbs)
-            cipher.scaling_factor = scf2
-        else:
-            print("noise_deg", cipher.noise_deg, target_noise_deg)
-            raise ValueError
-
-    return cipher
-
-#@utils.profile_pytorch_function
-def homo_rotate(in0, index, cryptoContext):
-    auto_index = cryptoContext.find_auto_index(index)
-    swk = cryptoContext.left_rot_key_map[str(auto_index)]
-
-    if in0.is_ext:
-        sum_mult = F.cv_innerproduct(
-            in0.cv[0].reshape(-1), in0.cur_limbs, swk[0], swk[1], cryptoContext
+@decorator_factory
+def homo_mul(in0, in1, cryptoContext):
+    # note: AdjustForMultInPlace in rns-leveledshe.cpp
+    in0, in1 = _adjust_for_mult(in0, in1, cryptoContext)
+    res = _cipher_mul(in0, in1, cryptoContext)
+    tmp = res.cipher_like(
+        F.cv_keyswitch(
+            res.cv[2],
+            res.cur_limbs,
+            cryptoContext.swk_bx,
+            cryptoContext.swk_ax,
+            cryptoContext,
         )
-        sumbxmult, sumaxmult = sum_mult[0], sum_mult[1]
+    )
+    res.cv = res.cv[:2]
+    return _cipher_add(res, tmp, cryptoContext)
 
-        cv0 = F.cv_automorphism_transform(
-            sumbxmult, in0.cur_limbs + cryptoContext.K, auto_index, cryptoContext
+
+@decorator_factory
+def homo_square(in0, cryptoContext):
+    if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg != 1:
+        in0 = _homo_rescale_internal(in0, 1, cryptoContext)
+    res = _cipher_square(in0, cryptoContext)
+    tmp = res.cipher_like(
+        F.cv_keyswitch(
+            res.cv[2],
+            res.cur_limbs,
+            cryptoContext.swk_bx,
+            cryptoContext.swk_ax,
+            cryptoContext,
         )
-        cv1 = F.cv_automorphism_transform(
-            sumaxmult, in0.cur_limbs + cryptoContext.K, auto_index, cryptoContext
-        )
+    )
+    res.cv = res.cv[:2]
+    return _cipher_add(res, tmp, cryptoContext)
+
+
+@decorator_factory
+def homo_add_scalar_double(in0, cnst, cryptoContext, precomp=None):
+    tmpr = _get_element_for_eval_add_or_sub(math.fabs(cnst), in0.cur_limbs, in0.noise_deg, cryptoContext)
+    if cnst < 0:
+        return _cipher_sub_scalar(in0, tmpr, cryptoContext)
     else:
-        res = F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext)
-        bxrot = F.cv_add(in0.cv[0], res[0], cryptoContext.moduliQ_cuda, in0.cur_limbs)
+        return _cipher_add_scalar(in0, tmpr, cryptoContext)
 
-        cv0 = F.cv_automorphism_transform(
-            bxrot, in0.cur_limbs, auto_index, cryptoContext
-        )
-        cv1 = F.cv_automorphism_transform(
-            res[1], in0.cur_limbs, auto_index, cryptoContext
-        )
 
-    return in0.cipher_like([cv0, cv1])
+def homo_add_scalar_int(in0, scalar, cryptoContext):
+    return _cipher_add_scalar(in0, scalar, cryptoContext)
+
+
+# note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
+# fixme: do we accept scalar<0?
+@decorator_factory
+def homo_mul_scalar_int(in0, scalar, cryptoContext):
+    res = _cipher_mul_scalar_int(in0, abs(scalar), cryptoContext)
+    if scalar < 0:
+        res = _cipher_neg(res, cryptoContext)
+    return res
+
+
+# note: EvalMultInPlace in ckksrns-leveledshe.cpp
+@decorator_factory
+def homo_mul_scalar_double(in0, cnst, cryptoContext):
+    if cryptoContext.rescaleTech != "FIXEDMANUAL" and in0.noise_deg == 2:
+        in0 = _homo_rescale_internal(in0, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    return _eval_mult_core(in0, cnst, cryptoContext)
+
+
+@decorator_factory
+def homo_rotate(in0, index, cryptoContext):
+    norm_index = cryptoContext.norm_rot_index(index)
+    swk = cryptoContext.get_rotation_key(norm_index)
+    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
+
+    res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
+
+    res = _cipher_automorphism(res, index, cryptoContext)
+
+    return res
+
+
+@decorator_factory
+def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoContext):
+    if index == 0:
+        return cipher.deep_copy()
+
+    result = hybrid_keyswitch._mult_rot_key_and_sum_ext(digits, index, cryptoContext)
+
+    if need_KS_add:
+        # if need_moddown ==False, we don't care cipher.is_ext
+        # if need_moddown ==True, cipher.is_ext should be False
+        assert not(need_moddown==True and cipher.is_ext==True), "contradict input"
+        if cipher.is_ext ==True:
+            result.cv[0] = F.cv_add(
+                result.cv[0],
+                cipher.cv[0],
+                cryptoContext.QplusP_map[cipher.cur_limbs],
+                cipher.cur_limbs + cryptoContext.K,
+            )
+        else:
+            if need_moddown:
+                result = hybrid_keyswitch.moddown_from_ext(result, cryptoContext)
+                cipher_cv0 = cipher.cv[0]
+            else:
+                cipher_cv0 = F.cv_mul_scalar(
+                    cipher.cv[0],
+                    cryptoContext.PModq,
+                    cryptoContext.moduliQ,
+                    cryptoContext.q_mu,
+                    cipher.cur_limbs,
+                )  # PModUp
+
+            # post add after ks
+            # if need_moddown = False, operate sumMult.cv[0][:curr_limbs], and sumMult.cv[0][curr_limbs+1:] remain unchanged,
+            # so the `inplace` can't be removed trivially
+            result.cv[0] = F.cv_add(
+                result.cv[0],
+                cipher_cv0,
+                cryptoContext.moduliQ,
+                cipher.cur_limbs,
+                inplace=True,
+            )
+
+    result = _cipher_automorphism(result, index, cryptoContext)
+
+    return result
 
 
 def homo_conjugate(in0, cryptoContext):
     return homo_rotate(in0, 2 * cryptoContext.N - 1, cryptoContext)
 
 
+@decorator_factory
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    res0 = cipher.deep_copy()
-    ctmorphed = Cipher(
-        plaintext.mv,
-        plaintext.cur_limbs,
-        plaintext.scaling_factor,
-        plaintext.noise_deg,
-        plaintext.slots,
-        False,
-    )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_add_or_sub(res0, ctmorphed, cryptoContext)
-    res0.cv[0] = F.cv_add(
-        res0.cv[0], res1.cv[0], cryptoContext.moduliQ_cuda, res0.cur_limbs
-    )
+    # res0 = cipher.deep_copy()
+    ctmorphed = plaintext.cipher_like(plaintext.cv)  # MorphPlaintext in openfhe
+    res0, res1 = _adjust_for_add_or_sub(cipher, ctmorphed, cryptoContext)
+    res0.cv = [
+        F.cv_add(res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs),
+        res0.cv[1],
+    ]
+    # res0.cv[0] = F.cv_add(
+    #     res0.cv[0], res1.cv[0], cryptoContext.moduliQ, res0.cur_limbs
+    # )
     return res0
 
 
+@decorator_factory
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # if (isinstance(cipher, Cipher) and isinstance(plaintext, Plaintext)) :
     #     in_ct, in_pt = cipher, plaintext
@@ -750,24 +735,277 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             f"limbs unequal! cipher.cur_limbs = {cipher.cur_limbs}, plaintext.l = {plaintext.cur_limbs}, call adjust limbs function",
             Warning,
         )
-    res0 = cipher.deep_copy()
-    ctmorphed = Cipher(
-        plaintext.mv,
-        plaintext.cur_limbs,
-        plaintext.scaling_factor,
-        plaintext.noise_deg,
-        plaintext.slots,
-        False,
-    )  # MorphPlaintext in openfhe
-    res0, res1 = _adjust_for_mult(res0, ctmorphed, cryptoContext)
 
-    moduli = cryptoContext.moduliQ_cuda
-    mu = cryptoContext.q_mu_cuda
-    cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
-    cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
+    if cipher.is_ext:
+        if (
+            cipher.cur_limbs != plaintext.cur_limbs
+            or cipher.noise_deg != plaintext.noise_deg
+            or cipher.scaling_factor != plaintext.scaling_factor
+            or cipher.is_ext != plaintext.is_ext
+        ):
+            raise ValueError(
+                f"Unequal values! Cipher and plaintext have mismatched properties:\n"
+                f"  cipher.cur_limbs = {cipher.cur_limbs}, plaintext.cur_limbs = {plaintext.cur_limbs}\n"
+                f"  cipher.noise_deg = {cipher.noise_deg}, plaintext.noise_deg = {plaintext.noise_deg}\n"
+                f"  cipher.scaling_factor = {cipher.scaling_factor}, plaintext.scaling_factor = {plaintext.scaling_factor}\n"
+                f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}"
+            )
+        moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
+        mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
+        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        return cipher.cipher_like(
+            [cv0, cv1],
+            scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
+            noise_deg=cipher.noise_deg + plaintext.noise_deg,
+        )
+    else:
+        ctmorphed = plaintext.cipher_like(plaintext.cv)  # MorphPlaintext in openfhe
+        res0, res1 = _adjust_for_mult(cipher, ctmorphed, cryptoContext)
 
-    return res0.cipher_like(
-        [cv0, cv1],
-        scaling_factor=res0.scaling_factor * res1.scaling_factor,
-        noise_deg=res0.noise_deg + res1.noise_deg,
+        moduli = cryptoContext.moduliQ
+        mu = cryptoContext.q_mu
+        cv0 = F.cv_mul(res0.cv[0], res1.cv[0], moduli, mu, res0.cur_limbs)
+        cv1 = F.cv_mul(res0.cv[1], res1.cv[0], moduli, mu, res0.cur_limbs)
+
+        return res0.cipher_like(
+            [cv0, cv1],
+            scaling_factor=res0.scaling_factor * res1.scaling_factor,
+            noise_deg=res0.noise_deg + res1.noise_deg,
+        )
+
+
+@decorator_factory
+def extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):
+    assert index == 0 or index == 1, "index must be 0 or 1"
+    if append_zeros:
+        if index == 0:
+            return cipher.cipher_like([cipher.cv[0], torch.zeros_like(cipher.cv[0])])
+        else:
+            return cipher.cipher_like([torch.zeros_like(cipher.cv[1]), cipher.cv[1]])
+    else:
+        return cipher.cipher_like([cipher.cv[index]])
+
+
+import numpy as np
+
+MAX_BITS_IN_WORD = 61
+MAX_64BIT_VALUE = (1 << 63) - (1 << 9) - 1  # openfhetodo: the var must be renamed
+
+
+def _fft_special_inv(vals, M, rotGroup, ksiPows):
+
+    def _bit_reverse(vals):
+        size = len(vals)
+        vals = np.array(vals, dtype=np.complex128)  # 转为 numpy 复数数组
+        j = 0
+        for i in range(1, size):
+            bit = size >> 1
+            while j >= bit:
+                j -= bit
+                bit >>= 1
+            j += bit
+            if i < j:
+                vals[i], vals[j] = vals[j], vals[i]  # 交换复数
+        return vals
+
+    vals_size = len(vals)
+
+    # FFT特定的操作
+    len_size = vals_size
+    while len_size >= 1:
+        len_h = len_size >> 1
+        len_q = len_size << 2
+        gap = M // len_q
+
+        for i in range(0, vals_size, len_size):
+            for j in range(len_h):
+                idx = (len_q - (rotGroup[j] % len_q)) * gap
+                u = vals[i + j] + vals[i + j + len_h]
+                v = vals[i + j] - vals[i + j + len_h]
+                v *= ksiPows[idx]
+                vals[i + j] = u
+                vals[i + j + len_h] = v
+        len_size >>= 1
+
+    vals = _bit_reverse(vals)
+
+    for i in range(vals_size):
+        vals[i] /= vals_size
+    return vals
+
+
+def dump_encode_middle(
+    inverse,
+    slots,
+    scaling_factor,
+    cryptocontext,
+):
+    inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
+
+    # Resize the inverse to fit the slot size.
+    # note that default: slots value should be greater than size of input data list x
+    inverse_complex = np.pad(
+        inverse_complex,
+        pad_width=(0, slots - len(inverse)),
+        mode="constant",
+        constant_values=complex(0.0, 0.0),
     )
+    arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
+    complex_arr = arr[0::2] + arr[1::2] * 1j
+    inverse_complex = _fft_special_inv(
+        inverse_complex,
+        cryptocontext.M,
+        cryptocontext.encode_params_rotGroup.cpu().numpy(),
+        complex_arr,
+    )
+    logc = 0
+    for i in range(slots):
+        inverse[i] *= scaling_factor
+        if inverse[i].real != 0:
+            logci = int(math.ceil(math.log2(abs(inverse[i].real))))
+            logc = max(logc, logci)
+        if inverse[i].imag != 0:
+            logci = int(math.ceil(math.log2(abs(inverse[i].imag))))
+            logc = max(logc, logci)
+
+    if logc < 0:
+        raise ValueError("Too small scaling factor")
+
+    log_valid = min(logc, MAX_BITS_IN_WORD)
+    log_approx = logc - log_valid
+    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
+    return inverse_array, log_approx
+
+from .dev_tools.encode_tool import pre_encode
+
+@decorator_factory
+def encode(
+    x,
+    name,
+    level,
+    slots,
+    is_ext,
+    cryptoContext
+):
+    if isinstance(x, list) or isinstance(x, np.ndarray):
+        if isinstance(x, np.ndarray):
+            x = x.tolist()
+        middle_value = pre_encode(x, slots)
+        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+    elif isinstance(x, PreEncodeValues):
+        assert slots == x.slots
+        middle_value = x
+    elif isinstance(x, Plaintext):
+        return x
+    else:
+        raise ValueError("Invalid input type")
+
+    cur_limbs = cryptoContext.L - level
+
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
+        scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
+    else:
+        scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
+
+    assert middle_value.max_encoded_value < 1e-20 or math.log2(
+        int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+
+    pt_encode = torch.encode(
+        input=middle_value.encoded_values,
+        N=cryptoContext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        scaling_factor=scaling_factor,
+        is_ext=is_ext,
+        sizeP=cryptoContext.primes.shape[0] - cryptoContext.L,
+        primes=cryptoContext.QplusP_map[cur_limbs],
+        max_int_diffs=cryptoContext.QmaxdiffplusPmaxdiff_map[cur_limbs],
+        barret_ratio=cryptoContext.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        barret_k=cryptoContext.QbarretKplusPbarretK_map[cur_limbs],
+        power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
+        power_of_roots=cryptoContext.power_of_roots
+    )
+    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext)
+    if cryptoContext.config.PTX_TWIN:
+        if isinstance(x, list):
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+        else:
+            gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
+    return gpufhe_cipher
+
+################## FUSED OPS ##################
+def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if len(ctxs) != 9 or len(ptxs) != 9:
+        raise ValueError("The length of ctxs and ptxs must be 9, but got {} and {}".format(len(ctxs), len(ptxs)))
+
+    ctx_axs, ctx_bxs, ptx_bxs = [], [], []
+
+    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K
+
+    for idx in range(len(ctxs)):
+        if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ctxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ctxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ctxs[{idx}].slots != ptxs[0].slots")
+        if ctxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ctxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ctxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ctxs[{idx}].is_ext != ctxs[0].is_ext")
+
+        if ptxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ptxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ptxs[{idx}].slots != ctxs[0].slots")
+        if ptxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ptxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext={ptxs[idx].is_ext} != ctxs[0].is_ext={ctxs[0].is_ext}")
+
+        ctx_bxs.append(ctxs[idx].cv[0])
+        ctx_axs.append(ctxs[idx].cv[1])
+        ptx_bxs.append(ptxs[idx].cv[0])
+
+    res = F.cipher_fused_pairwise_mac(
+        ctx_bxs,
+        ctx_axs,
+        ptx_bxs,
+        cryptoContext.QplusP_map[ctxs[0].cur_limbs],
+        cryptoContext.QmuplusPmu_map[ctxs[0].cur_limbs],
+        len(ctx_bxs),
+        ctxs[0].cur_limbs + (cryptoContext.K if ctxs[0].is_ext else 0),
+        cryptoContext.N,
+    )
+    return ctxs[0].cipher_like(
+        [res[0], res[1]],
+        scaling_factor=ctxs[0].scaling_factor * ptxs[0].scaling_factor,
+        noise_deg=ctxs[0].noise_deg + ptxs[0].noise_deg,
+    )
+
+def fused_broadcast_mac(ctx, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if not (len(ptxs) == 16 or  len(ptxs) == 32 or len(ptxs) == 64):
+        raise ValueError("The length of ptxs must be 16, 32 or 64, but got {}".format(len(ptxs)))
+
+    ptx_bxs = []
+
+    for idx in range(len(ptxs)):
+        if ptxs[idx].cur_limbs != ctx.cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctx.cur_limbs")
+        if ptxs[idx].slots != ctx.slots:
+            raise ValueError(f"ptxs[{idx}].slots != ptxs[0].slots")
+        if ptxs[idx].noise_deg != ctx.noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctx.noise_deg")
+        if ptxs[idx].scaling_factor != ctx.scaling_factor:
+            raise ValueError(f"ptxs[{idx}].scaling_factor != ctx.scaling_factor")
+        if ptxs[idx].is_ext != ctx.is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext != ctx.is_ext")
+        ptx_bxs.append(ptxs[idx].cv[0])
+
+    res = F.cipher_fused_broadcast_mac(ctx.cv[0], ctx.cv[1], ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ptx_bxs), ctx.cur_limbs, cryptoContext.N)
+    return ctx.cipher_like([res[0], res[1]], scaling_factor=ctx.scaling_factor * ptxs[0].scaling_factor, noise_deg=ctx.noise_deg + ptxs[0].noise_deg)

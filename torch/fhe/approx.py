@@ -3,41 +3,26 @@ from .context import *
 from .bs_context import *
 from . import homo_ops
 import numpy as np
-from .utils import profile_python_function, profile_pytorch_function
-from . import utils
+
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
-@profile_python_function
-def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
-    input_size = len(constants)
-    start = time.perf_counter()
-    if cryptoContext.rescaleTech != "FIXEDMANUAL":
-        # Check to see if input ciphertexts are of same level
-        # and adjust if needed to the max level among them
-        minLimbs = ciphertexts[0].cur_limbs
-        minIdx = 0
-        for i in range(1, input_size):
-            if (ciphertexts[i].cur_limbs < minLimbs or
-                    (ciphertexts[i].cur_limbs == minLimbs)
-                    and ciphertexts[i].noise_deg == 2):
-                minLimbs = ciphertexts[i].cur_limbs
-                minIdx = i
-        for i in range(minIdx):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
-        for i in range(minIdx + 1, input_size):
-            ciphertexts[i], ciphertexts[minIdx] = homo_ops.adjust_levels_and_depth(ciphertexts[i], ciphertexts[minIdx],
-                                                                                   cryptoContext)
 
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"eval_linear_wsum_mutable时间:{min_interval:.2f} μs")
+
+def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
+    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+        target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
+        if ciphertexts[target_idx].noise_deg == 2:
+            ciphertexts[target_idx] = homo_ops.force_rescale(ciphertexts[target_idx], 1, cryptoContext)
+        for i in range(len(ciphertexts)):
+            ciphertexts[i] = homo_ops.adjust_to(
+                ciphertexts[i], ciphertexts[target_idx].cur_limbs, ciphertexts[target_idx].noise_deg, ciphertexts[target_idx].scaling_factor, cryptoContext
+            )
+
     wsum = homo_ops.homo_mul_scalar_double(ciphertexts[0], constants[0], cryptoContext)
-    for i in range(1, input_size):
+    for i in range(1, len(constants)):
         tmp = homo_ops.homo_mul_scalar_double(ciphertexts[i], constants[i], cryptoContext)
         wsum = homo_ops.homo_add(wsum, tmp, cryptoContext)
-    wsum = homo_ops.homo_rescale(wsum, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else wsum
-
+    wsum = homo_ops.homo_rescale(wsum, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     return wsum
 
 
@@ -52,11 +37,11 @@ def degree(lst):
 # division f/g. longDiv is a struct that contains the vectors of coefficients for the
 # quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
 # the same format.
-@profile_python_function
+
 def long_division_chebyshev(f, g):
     assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
     n, k = len(f) - 1, len(g) - 1
-    
+
     if n < k:
         return np.array([1.0]), np.array(f)
 
@@ -133,7 +118,7 @@ def inner_eval_chebyshev_ps(coefficients,
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                cu = homo_ops.homo_rescale(cu, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else cu
+                cu = homo_ops.homo_rescale(cu, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 cu = T[0]
         else:
@@ -145,7 +130,7 @@ def inner_eval_chebyshev_ps(coefficients,
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            cu.drop_last_elements(cu.cur_limbs - T2[m - 1].cur_limbs)
+            cu = homo_ops.adjust_to(cu, T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor, cryptoContext)
         flag_c = True
 
     # Evaluate q and s2 at u
@@ -163,13 +148,13 @@ def inner_eval_chebyshev_ps(coefficients,
             divqr_q[-1] += 1.1
             sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
             # for i in range(int(math.log2(divqr_q[-1]))):
-                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = homo_ops.homo_add(qu, sum, cryptoContext)
         else:
             sum = T[k - 1]
             sum = homo_ops.homo_mul_scalar_int(T[k - 1], 2 ** math.floor(math.log2(divqr_q[-1])), cryptoContext)
             # for i in range(int(math.log2(divqr_q[-1]))):
-                # sum = homo_ops.homo_add(sum, sum, cryptoContext)
+            # sum = homo_ops.homo_add(sum, sum, cryptoContext)
             qu = sum
 
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
@@ -191,7 +176,7 @@ def inner_eval_chebyshev_ps(coefficients,
 
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            su.drop_last_elements(1)
+            su = homo_ops.adjust_to(su, su.cur_limbs - 1, 1, None, cryptoContext)
 
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
@@ -199,7 +184,7 @@ def inner_eval_chebyshev_ps(coefficients,
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
+    result = homo_ops.homo_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
 
     return result
@@ -293,10 +278,9 @@ def ComputeDegreesPS(n):
         return [klist[min_index], mlist[min_index]]
 
 
-# @profile_python_function
+
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 # @profile_pytorch_function
-#@utils.profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
     rescaleTech = cryptoContext.rescaleTech
@@ -348,107 +332,67 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     alpha = 2 / (b - a)
     if not math.isclose(alpha, 1.0):
         T[0] = homo_ops.homo_mul_scalar_double(x, alpha, cryptoContext)
-        T[0] = (
-            homo_ops.homo_rescale(T[0], 1, cryptoContext)
-            if cryptoContext.rescaleTech == "FIXEDMANUAL"
-            else T[0]
-        )
+        T[0] = homo_ops.homo_rescale(T[0], 1, cryptoContext)
     beta = 2 * a / (b - a)
     if not math.isclose(beta, -1.0):
         T[0] = homo_ops.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
-    start = time.perf_counter()
     for i in range(2, k + 1):
         prod = homo_ops.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
-        
-        # if len(T) > 1:
-        #     print("TTT[{}]".format(i), T[1].cv[0].cpu().numpy()[-1][:10])
-
         tmp = homo_ops.homo_add(prod, prod, cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
-
-        # print("tmp1[{}]".format(i), tmp.cv[0].cpu().numpy()[-1][:10])
-
+        tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
         if i & 1 == 1:  # i is odd
             tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
         else:
-            # tmp = homo_ops.homo_sub(tmp, T[0], cryptoContext)
-            # tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext, cryptoContext.constant_minus_one[tmp.cur_limbs, tmp.noise_deg])
             tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
-        # print("tmp2[{}]".format(i), tmp.cv[0].cpu().numpy()[-1][:10])
-        
         T.append(tmp)
 
-    # for idx in range(len(T)):
-    #     print("T[{}]".format(idx), T[idx].cv[0].cpu().numpy()[0][:10])
-    # print("==================")
-    # return T[0]
-
-    # if cryptoContext.rescaleTech == "FIXEDMANUAL":
-    #     # brings all powers of x to the same curlimbs, different to bringing to same level in openfhe
-    #     for i in range(1, k):
-    #         T[i - 1].drop_last_elements(T[i - 1].cur_limbs - T[k - 1].cur_limbs)
-    # else:
-    #     for i in range(1, k):
-    #         T[i - 1], T[k - 1] = homo_ops.adjust_levels_and_depth(T[i - 1], T[k - 1], cryptoContext)
     for i in range(k):
         T[i] = homo_ops.adjust_to(T[i], T[-1].cur_limbs, T[-1].noise_deg, T[-1].scaling_factor, cryptoContext)
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"T时间:{min_interval:.2f} μs")
+
     # Compute the Chebyshev polynomials T_k(y), T_{2k}(y), T_{4k}(y), ... , T_{2^{m-1}k}(y)
     # T2[0] is used as a placeholder
-    start = time.perf_counter()
     T2 = [T[-1]]
     for i in range(1, m):
         tmp = homo_ops.homo_square(T2[i - 1], cryptoContext)
         tmp = homo_ops.homo_add(tmp, tmp, cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL": 
-            tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
+        tmp = homo_ops.homo_rescale(tmp, 1, cryptoContext)
         tmp = homo_ops.homo_add_scalar_double(tmp, -1.0, cryptoContext)
         T2.append(tmp)
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"T2时间:{min_interval:.2f} μs")
+
+
+
     # computes T_{k(2*m - 1)}(y)
-    start = time.perf_counter()
     T2km1 = T2[0]
     for i in range(1, m):
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
         prod = homo_ops.homo_mul(T2km1, T2[i], cryptoContext)
         T2km1 = homo_ops.homo_add(prod, prod, cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
-            T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
+        T2km1 = homo_ops.homo_rescale(T2km1, 1, cryptoContext)
         T2km1 = homo_ops.homo_sub(T2km1, T2[0], cryptoContext)
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"T2km1时间:{min_interval:.2f} μs")
+
+
+
     dc = degree(divcs_q)
     flag_c = False
-    
     if dc >= 1:
         if dc == 1:
             if divcs_q[1] != 1:
                 cu = homo_ops.homo_mul_scalar_double(T[0], divcs_q[1], cryptoContext)
-                if cryptoContext.rescaleTech == "FIXEDMANUAL": 
-                    cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
+                cu = homo_ops.homo_rescale(cu, 1, cryptoContext)
             else:
                 cu = T[0]
         else:
             ctxs = [T[i] for i in range(dc)]
             weights = divcs_q[1:dc + 1]
-
             cu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
-
 
         # adds the free term (at x^0)
         cu = homo_ops.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         flag_c = True
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"cu时间:{min_interval:.2f} μs")
-    start = time.perf_counter()
+
+
+
     # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
     if degree(divqr_q) > k:
         qu = inner_eval_chebyshev_ps(divqr_q, k, m - 1, T, T2, cryptoContext)
@@ -473,10 +417,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         qu = homo_ops.homo_add_scalar_double(qu, divqr_q[0] / 2, cryptoContext)
         # The number of levels of qu is the same as the number of levels of T[k-1] + 1.
         # Will only get here when m = 2, so the number of levels of qu and T2[m-1] will be the same.
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"qu时间:{min_interval:.2f} μs")
-    start = time.perf_counter()
+
     # Evaluate s2 at u
     deg_s2 = degree(s2)
     if deg_s2 > k:
@@ -498,24 +439,23 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         su = homo_ops.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
         # The number of levels of su is the same as the number of levels of T[k-1] + 1.
         # Will only get here when m = 2, so need to reduce the number of levels by 1.
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"su时间:{min_interval:.2f} μs")
-    start = time.perf_counter()
+
     if flag_c:
         result = homo_ops.homo_add(T2[m - 1], cu, cryptoContext)
     else:
         result = homo_ops.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
+
+
     result = homo_ops.homo_mul(result, qu, cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext) if cryptoContext.rescaleTech == "FIXEDMANUAL" else result
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
     result = homo_ops.homo_add(result, su, cryptoContext)
 
 
     result = homo_ops.homo_sub(result, T2km1, cryptoContext)
-    end = time.perf_counter()
-    min_interval = (end - start) * 1_000_000
-    #print(f"result时间:{min_interval:.2f} μs")
+
+
+
     return result
 
 def eval_chebyshev_coefficients(func, a, b, degree):

@@ -1,5 +1,6 @@
 import math
 import torch
+from .ciphertext import Plaintext, Cipher, PreEncodeValues
 
 def get_item(item_name, content_map):
     if item_name in content_map:
@@ -22,38 +23,55 @@ class CKKS_Boot_Params:
 
 class BsContext:
     def __init__(self, content_map):
+        self.M = get_item("M", content_map)
         self.C2S_rot_in = get_item("C2S_rot_in", content_map)
         self.C2S_rot_out = get_item("C2S_rot_out", content_map)
-        self.M = get_item("M", content_map)
-        self.QmuplusPmu_map = get_item("QmuplusPmu_map", content_map)
-        self.QplusP_map = get_item("QplusP_map", content_map)
         self.S2C_rot_in = get_item("S2C_rot_in", content_map)
         self.S2C_rot_out = get_item("S2C_rot_out", content_map)
         self.coefficients = get_item("coefficients", content_map)
         self.correctionFactor = get_item("correctionFactor", content_map)
         self.dim1 = get_item("dim1", content_map)
         self.k = get_item("k", content_map)
-        self.m_U0PreFFT_dim = get_item("m_U0PreFFT_dim", content_map)
-        self.m_U0PreFFT_limbs = get_item("m_U0PreFFT_limbs", content_map)
-        self.m_U0PreFFT_mx = get_item("m_U0PreFFT_mx", content_map)
-        self.m_U0PreFFT_scaling_factor = get_item("m_U0PreFFT_scaling_factor", content_map)
-        self.m_U0hatTPreFFT_dim = get_item("m_U0hatTPreFFT_dim", content_map)
-        self.m_U0hatTPreFFT_limbs = get_item("m_U0hatTPreFFT_limbs", content_map)
-        self.m_U0hatTPreFFT_mx = get_item("m_U0hatTPreFFT_mx", content_map)
-        self.m_U0hatTPreFFT_scaling_factor = get_item("m_U0hatTPreFFT_scaling_factor", content_map)
-        self.m_U0Pre = get_item("m_U0Pre", content_map)
-        self.m_U0PreFFT = get_item("m_U0PreFFT", content_map)
-        self.m_U0hatTPre = get_item("m_U0hatTPre", content_map)
-        self.m_U0hatTPreFFT = get_item("m_U0hatTPreFFT", content_map)
+        self.m_U0PreFFT_ = get_item("m_U0PreFFT", content_map)
+        self.m_U0hatTPreFFT_ = get_item("m_U0hatTPreFFT", content_map)
         self.slots = get_item("slots", content_map)
         self.paramsDec = get_item("paramsDec", content_map)
         self.paramsEnc = get_item("paramsEnc", content_map)
 
+        if isinstance(self.m_U0PreFFT_[0][0], Plaintext):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].cv = [torch.tensor(self.m_U0hatTPreFFT_[i][j].cv, dtype = torch.uint64)]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0hatTPreFFT_[i][j].cipher_id)
+
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].cv = [torch.tensor(self.m_U0PreFFT_[i][j].cv, dtype = torch.uint64)]
+                    Cipher._id_counter = max(Cipher._id_counter, self.m_U0PreFFT_[i][j].cipher_id)
+        elif isinstance(self.m_U0PreFFT_[0][0], PreEncodeValues):
+            for i in range(len(self.m_U0hatTPreFFT_)):
+                for j in range(len(self.m_U0hatTPreFFT_[i])):
+                    self.m_U0hatTPreFFT_[i][j].encoded_values = torch.tensor(self.m_U0hatTPreFFT_[i][j].encoded_values)
+
+            for i in range(len(self.m_U0PreFFT_)):
+                for j in range(len(self.m_U0PreFFT_[i])):
+                    self.m_U0PreFFT_[i][j].encoded_values = torch.tensor(self.m_U0PreFFT_[i][j].encoded_values)
+        
+        self.BS_FFT = {}
+        for i in range(len(self.m_U0hatTPreFFT_)):
+            for j in range(len(self.m_U0hatTPreFFT_[i])):
+                self.BS_FFT["{}_{}_{}".format("C2S", i, j)] = self.m_U0hatTPreFFT_[i][j]
+
+        for i in range(len(self.m_U0PreFFT_)):
+            for j in range(len(self.m_U0PreFFT_[i])):
+                self.BS_FFT["{}_{}_{}".format("S2C", i, j)] = self.m_U0PreFFT_[i][j]
+
+
     # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
-    def SelectLayers(self, logSlots, budget):
-        layers = math.ceil(logSlots / budget)
-        rows = logSlots // layers
-        rem = logSlots % layers
+    def SelectLayers(self, logBsSlots, budget):
+        layers = math.ceil(logBsSlots / budget)
+        rows = logBsSlots // layers
+        rem = logBsSlots % layers
 
         dim = rows
         if rem != 0:
@@ -62,8 +80,8 @@ class BsContext:
         # The above choice ensures dim <= budget
         if dim < budget:
             layers -= 1
-            rows = logSlots // layers
-            rem = logSlots - rows * layers
+            rows = logBsSlots // layers
+            rem = logBsSlots - rows * layers
             dim = rows
 
             if rem != 0:
@@ -72,7 +90,7 @@ class BsContext:
             # The above choice ensures dim >= budget
             while dim != budget:
                 rows -= 1
-                rem = logSlots - rows * layers
+                rem = logBsSlots - rows * layers
                 dim = rows
                 if rem != 0:
                     dim = rows + 1
@@ -114,47 +132,20 @@ class BsContext:
                                 int(numRotationsRem), bRem, gRem)
 
     def to_cuda(self):
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = torch.tensor(value, dtype = torch.uint64, device = "cuda")
-
-        for i in range(len(self.m_U0hatTPreFFT)):
-            for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = torch.tensor(self.m_U0hatTPreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
-
-        for i in range(len(self.m_U0PreFFT)):
-            for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = torch.tensor(self.m_U0PreFFT[i][j].mv, dtype = torch.uint64, device = "cuda")
-
-
-    def cpu(self):
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = self.QplusP_map[key].cpu()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = self.QmuplusPmu_map[key].cpu()
-
-        for i in range(len(self.m_U0hatTPreFFT)):
-            for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cpu()
-
-        for i in range(len(self.m_U0PreFFT)):
-            for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cpu()
-
-    def cuda(self):
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = self.QplusP_map[key].cuda()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = self.QmuplusPmu_map[key].cuda()
-
-        for i in range(len(self.m_U0hatTPreFFT)):
-            for j in range(len(self.m_U0hatTPreFFT[i])):
-                self.m_U0hatTPreFFT[i][j].mv = self.m_U0hatTPreFFT[i][j].mv.cuda()
-
-        for i in range(len(self.m_U0PreFFT)):
-            for j in range(len(self.m_U0PreFFT[i])):
-                self.m_U0PreFFT[i][j].mv = self.m_U0PreFFT[i][j].mv.cuda()
-
-
-
+        for key, value in self.BS_FFT.items():
+            if isinstance(value, Plaintext):
+                self.BS_FFT[key].cv = [self.BS_FFT[key].cv[0].cuda()]
+            elif isinstance(value, PreEncodeValues):
+                self.BS_FFT[key].encoded_values = self.BS_FFT[key].encoded_values.cuda()
+            else:
+                raise TypeError("Unsupported type for BS_FFT value: {}".format(type(value)))
+    
+    # def encode_FFT(self, x):
+    #     self.to_cuda()
+    #     if isinstance(self.m_U0PreFFT[0][0], Plaintext):
+    #         for i in range(len(self.m_U0hatTPreFFT)):
+    #             for j in range(len(self.m_U0hatTPreFFT[i])):
+    #                 self.m_U0hatTPreFFT[i][j] = encode(
+    #         for i in range(len(self.m_U0PreFFT)):
+    #             for j in range(len(self.m_U0PreFFT[i])):
+    #                 self.m_U0PreFFT[i][j].cv = [self.m_U0PreFFT[i][j].cv[0].cuda()]
