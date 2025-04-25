@@ -292,4 +292,3 @@ class OpenFHEContext:
             print("Only DCRTPoly is supported for CKKS.")
 
         return encoded_vector_dcrt_elements
-    

@@ -29,7 +29,7 @@ def app_without_bs_example_debug_cpu(
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
@@ -42,6 +42,19 @@ def app_without_bs_example_debug_cpu(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1 << logBsSlots))
 
     # do the application computation
+    print("start")
+    cipher_cuda = cipher.deep_copy()
+    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    cryptoContext.to_cuda()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext.to_cuda()
+    # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+
+
+
 
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
@@ -49,23 +62,30 @@ def app_without_bs_example_debug_cpu(
     cryptoContext.load_rotation_keys(logBsSlots)
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     cryptoContext.BsContext.cpu()
-    # result1 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
-    # result1 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
-    result1 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    print("computation done!")
+    # result2 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
+    # result2 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
+    result2 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
-    # cipher_cuda = cipher.deep_copy()
-    # cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    # cryptoContext.to_cuda()
-    # cryptoContext.load_rotation_keys(logBsSlots)
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    # cryptoContext.BsContext.to_cuda()
-    # # result2 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
-    # # result2 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
-    # result2 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    # print("compare_cpufhe_with_gpufhe")
-    # is_equal = utils.compare_cpufhe_with_gpufhe(result1, result2)
-    # print("is_equal", is_equal)
+
+    cipher_cuda = cipher.deep_copy()
+    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    cryptoContext.to_cuda()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext.to_cuda()
+    # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+
+    cipher_cpu = cipher.deep_copy()
+    cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
+    cryptoContext.cpu()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    cryptoContext.BsContext.cpu()
+    # result4 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
+    # result4 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
+    result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
@@ -75,6 +95,12 @@ def app_without_bs_example_debug_cpu(
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     print("compare_gpufhe_ct_with_openfhe")
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
+    print("is_equal", is_equal)
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
+    print("is_equal", is_equal)
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
+    print("is_equal", is_equal)
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result4, openfhe_result)
     print("is_equal", is_equal)
 
 

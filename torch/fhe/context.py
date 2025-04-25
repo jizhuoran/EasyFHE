@@ -156,10 +156,11 @@ class Context:
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = torch.tensor(value, dtype = torch.uint64)
 
-        self.to_cuda()
-        self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
+
+        self.to_cuda()
+        self.BsContext = None
 
         self.config = config
         self.inBS = False
@@ -217,7 +218,12 @@ class Context:
             self.QbarretRatioplusPbarretRatio_map[key] = value.cuda()
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
-
+        for key, _ in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [
+                v.cuda() for v in self.left_rot_key_map[key]
+            ]
+        for key, _ in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = self.precompute_auto_map[key].cuda()
 
     # move to cpu
     def cpu(self):
@@ -270,7 +276,12 @@ class Context:
             self.QbarretRatioplusPbarretRatio_map[key] = value.cpu()
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = value.cpu()
-
+        for key, _ in self.left_rot_key_map.items():
+            self.left_rot_key_map[key] = [
+                v.cpu() for v in self.left_rot_key_map[key]
+            ]
+        for key, _ in self.precompute_auto_map.items():
+            self.precompute_auto_map[key] = self.precompute_auto_map[key].cpu()
 
     def norm_rot_index(self, i):
         if i < 0:

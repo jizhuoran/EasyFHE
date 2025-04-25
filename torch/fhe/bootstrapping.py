@@ -371,7 +371,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
 
 
-
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
@@ -414,6 +413,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
             ctxtDec = eval_slots_to_coeffs(precom.BS_FFT, ctxtEnc, cryptoContext)
+
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
