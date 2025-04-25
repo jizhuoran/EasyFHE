@@ -432,6 +432,7 @@ def _cipher_square(in0, cryptoContext):
 
 def _cipher_add_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -441,6 +442,7 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -452,6 +454,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -468,6 +471,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -892,7 +896,7 @@ def encode(
         if isinstance(x, np.ndarray):
             x = x.tolist()
         middle_value = pre_encode(x, slots)
-        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
     elif isinstance(x, PreEncodeValues):
         assert slots == x.slots
         middle_value = x
