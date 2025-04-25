@@ -9,7 +9,7 @@ import math
 DATA_DIR = os.environ["DATA_DIR"]
 
 
-encode_slots = int(1 << (16 - 1)) #todo: to be redesigned? how to assigned
+encode_slots = int(1 << (16 - 1)) #todo: to be redesigned? how to assign
 
 rnn_ih = []
 rnn_hh = []
@@ -20,7 +20,7 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
     # Evaluate tanh(rnn_ih * input + rnn_hh * hidden)
     # tanh() is approximated by x - (x^3) / 3 (Taylor Series, could be optimized)
     # Weights are always within (-1, 1), so an approximation in (-2, 2) is good enough
-    num_slots = (1 << (cryptoContext.logN -1))
+    num_slots = encode_slots
     num_batch = int(num_slots / 128)
     # Rotation are done based on batch size
     hidden_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
@@ -51,7 +51,7 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
 
 def fc_layer(input, fc_bias, cryptoContext, openfhe_context):
     # Evaluate fc_weight * input + bias
-    num_slots = (1 << (cryptoContext.logN -1))
+    num_slots = encode_slots
     num_batch = int(num_slots / 128)
     output_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
     # Matrix-Vector Multiplication
@@ -78,15 +78,14 @@ def fhe_rnn(b_id):
     # Calculate batch size
     batch_size = int(encode_slots // EMBEDDING_SIZE)
 
-    # todo: move inside a func
     logN = 16
     # encode_slots = int(1 << (logN - 1))
     maxLevelsRemaining = 26
     appRotIndex_list = [-(i * int(batch_size)) for i in range(EMBEDDING_SIZE)]
     logBsSlots_list = [int(math.log2(encode_slots))]
     dnum = 1
-    dcrtBits = 46
-    firstMod = 50
+    dcrtBits = 56
+    firstMod = 60
     levelBudget_list = [[4, 4]]
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"
@@ -120,7 +119,7 @@ def fhe_rnn(b_id):
     rnn_ih_pt_vec = []
     rnn_hh_pt_vec = []
     fc_weight_pt_vec = []
-    fc_bias_pt_vec = [0.0]*batch_size*STEP_NUM
+    fc_bias_dat_vec = [0.0]*batch_size*STEP_NUM
 
 # TODO 这里的原有的三层循环被我替换成了向量化操作，但我不确定这样是不是对的
     rnn_ih_t_2d = rnn_ih_t.reshape((EMBEDDING_SIZE, EMBEDDING_SIZE))
@@ -130,16 +129,16 @@ def fhe_rnn(b_id):
         rows = (np.arange(EMBEDDING_SIZE) + i) % EMBEDDING_SIZE
         columns = np.arange(EMBEDDING_SIZE)
         elements = rnn_ih_t_2d[rows, columns]
-        rnn_ih_pt = np.repeat(elements, batch_size)
-        rnn_ih_pt = torch.tensor(rnn_ih_pt, dtype=torch.float64).cuda() # todo: change back to the previous 32 after merging the new encode?
-        rnn_ih.append(fhe.encode(rnn_ih_pt, 1, 0, encode_slots, False, cryptoContext))
+        rnn_ih_dat = np.repeat(elements, batch_size)
+        # rnn_ih_dat = torch.tensor(rnn_ih_dat, dtype=torch.float64).cuda() # todo: should be removed  after merging the new encode
+        rnn_ih.append(fhe.encode(rnn_ih_dat, f"rnn_ih_dat_{rows}_{columns}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
         rows1 = (np.arange(STEP_NUM) + i) % STEP_NUM
         columns1 = np.arange(STEP_NUM)
         elements = rnn_hh_t_2d[rows1, columns1]
-        rnn_hh_pt = np.repeat(elements, batch_size)
-        rnn_hh_pt = torch.tensor(rnn_hh_pt, dtype=torch.float64).cuda() # todo: change back to the previous 32 after merging the new encode?
-        rnn_hh.append(fhe.encode(rnn_hh_pt, 1, 0, encode_slots, False, cryptoContext))
+        rnn_hh_dat = np.repeat(elements, batch_size)
+        # rnn_hh_dat = torch.tensor(rnn_hh_dat, dtype=torch.float64).cuda() # todo: should be removed after merging the new encode
+        rnn_hh.append(fhe.encode(rnn_hh_dat, f"rnn_hh_dat_{rows1}_{columns1}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
     fc_weight_t_2d = fc_weight_t.reshape(2, STEP_NUM)
     for i in range(2):
@@ -148,20 +147,20 @@ def fhe_rnn(b_id):
         columns = np.arange(STEP_NUM)
         # Extract elements and repeat batch_size times
         elements = fc_weight_t_2d[rows, columns]
-        fc_weight_pt = np.repeat(elements, batch_size)
-        fc_weight_pt = torch.tensor(fc_weight_pt, dtype=torch.float64).cuda() # todo: change back to the previous 32 after merging the new encode?
-        fc_weight.append(fhe.encode(fc_weight_pt, 1, 0, encode_slots, False, cryptoContext))
+        fc_weight_dat = np.repeat(elements, batch_size)
+        # fc_weight_dat = torch.tensor(fc_weight_dat, dtype=torch.float64).cuda() # todo: should be removed after merging the new encode
+        fc_weight.append(fhe.encode(fc_weight_dat, f"fc_weight_dat_{rows}_{columns}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
     for j in range(STEP_NUM):
         for k in range(batch_size):
-            fc_bias_pt_vec[j * batch_size + k] = fc_bias_t[j % 2]
-    fc_bias = fhe.encode(fc_bias_pt_vec, 1, 0, encode_slots, False, cryptoContext)
+            fc_bias_dat_vec[j * batch_size + k] = fc_bias_t[j % 2]
+    fc_bias = fhe.encode(fc_bias_dat_vec, "fc_bias_dat_vec", 0, encode_slots, False, cryptoContext)
     print("Finished building RNN weight plaintexts!")
 
     batched_hidden_ct = openfhe_context.encrypt(np.zeros(batch_size * STEP_NUM), 1, 0, encode_slots)
     print(f"Before rnn, batched_hidden_ct's remaining levels: {batched_hidden_ct.cur_limbs- (batched_hidden_ct.noise_deg - 1)}")
 
-    #todo  Perform key generation (if needed)
+
     batch_id = 0
     batched_embedding = np.zeros(batch_size * EMBEDDING_SIZE, dtype=np.float64)
     batched_embedding_ct = openfhe_context.encrypt(batched_embedding, 1, 0, encode_slots)
