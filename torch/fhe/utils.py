@@ -118,6 +118,8 @@ def try_load_context(
         levelBudget_list = [[0, 0]]
         NO_BS = True
     else:
+        assert len(logBsSlots_list) == len(levelBudget_list), \
+            "ERROR: logBsSlots_list and levelBudget_list must have the same length!"
         sorted_pairs = sorted(
             zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0]
         )
@@ -125,7 +127,7 @@ def try_load_context(
         logBsSlots_list = list(logBsSlots_list)
         levelBudget_list = list(levelBudget_list)
 
-    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         "-".join(map(str, logBsSlots_list)),
         "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -135,11 +137,12 @@ def try_load_context(
         firstMod,
         secretKeyDist,
         rescaleTech,
+        config.label(),
     )
 
     debug_load_path = (
         save_dir
-        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
             maxLevelsRemaining,
             "-".join(map(str, logBsSlots_list)),
             "-".join(
@@ -151,11 +154,12 @@ def try_load_context(
             firstMod,
             secretKeyDist,
             rescaleTech,
+            config.label(),
         )
     )
 
     if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == "debug"
+        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == True
     ):
         gen_contexts(
             maxLevelsRemaining=maxLevelsRemaining,
@@ -204,14 +208,13 @@ def try_load_context(
                 openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
                     debug_keys, 1 << logBsSlots, level_budget
                 )
-                openfhe_boot_contexts[str(logBsSlots)].config = cryptoContext.config
-        
+
         return cryptoContext, openfhe_context, openfhe_boot_contexts
     else:
         return cryptoContext, openfhe_context
 
 
-def compare_bs_ct_with_openfhe(bs_cipher, openfhe_cipher):
+def compare_gpufhe_ct_with_openfhe(bs_cipher, openfhe_cipher):
     gpu_bootstrapping_res = np.array(
         [bs_cipher.cv[0][:bs_cipher.cur_limbs].cpu().numpy(), bs_cipher.cv[1][:bs_cipher.cur_limbs].cpu().numpy()]
     ).reshape(-1)

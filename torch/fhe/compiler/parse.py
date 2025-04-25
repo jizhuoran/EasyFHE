@@ -362,8 +362,8 @@ initial_metadata = {
 
 def print_graph_info(graph):
     for node in graph.nodes:
-        if graph.nodes[node].get('operation') != 'None':
-            continue
+        # if graph.nodes[node].get('operation') != 'None':
+        #     continue
         print(f"Node: {node}")
         print(f"  Operation: {graph.nodes[node].get('operation')}")
         print(f"  Inputs: {graph.nodes[node].get('inputs')}")
@@ -499,7 +499,7 @@ def stat_rotate_limb(graph, metadata):
 DATA_DIR = os.environ["DATA_DIR"]
 
 # Sample code string
-with open(DATA_DIR + "/sample_code.txt", "r") as f:
+with open(DATA_DIR + "/compiled_code.txt", "r") as f:
     code = f.read()
 
 # Parse the code and construct the graph
@@ -511,10 +511,11 @@ print_graph_info(graph)
 op_list = count_op_limbs(graph)
 for op, limbs in op_list.items():
     print('"{}" : {}, '.format(op, limbs))
-exit(0)
 
 #save graph to pdf
 draw_graph(graph)
+
+exit(0)
 
 # Process the graph in topological order and calculate metadata
 final_metadata, adjust_record = process_graph_topologically(graph, initial_metadata)

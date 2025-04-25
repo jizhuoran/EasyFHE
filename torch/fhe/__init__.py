@@ -4,7 +4,7 @@ from .bootstrapping import homo_bootstrap
 from .utils import try_load_context
 
 __all__ = [
-    'homo_add', 'homo_sub', 'homo_mul', 'homo_square', 'homo_rescale',
+    'homo_add', 'homo_sub', 'homo_mul', 'homo_square', 'homo_rescale', 'force_rescale', 'drop_last_elements',
     'homo_add_scalar_double', 'homo_add_scalar_int', 'homo_mul_scalar_double', 'homo_mul_scalar_int',
     'homo_rotate', 'eval_fast_rotate', 'homo_conjugate',
     'homo_mul_pt', 'homo_add_pt',
@@ -13,5 +13,6 @@ __all__ = [
     'extract_cv',
     'encode',
     'try_load_context',
-    'adjust_to'
+    'adjust_to',
+    'fused_pairwise_mac'
 ]

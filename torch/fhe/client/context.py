@@ -345,6 +345,8 @@ class __FOR_SAVE_ONLY_Context:
         qRoots = np.array(qRoots, dtype=np.uint64) #todo: remove unused var?
         pRoots = np.array(pRoots, dtype=np.uint64) #todo: remove unused var?
 
+        self.max_int_diffs = np.array([(9223372036854775295 - p) % p for p in np.concat((self.moduliQ_scalar, self.moduliP_scalar)).tolist()], dtype=np.uint64)
+
         #todo: remove duplicated variables?
         # self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         # self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
@@ -724,18 +726,31 @@ class __FOR_SAVE_ONLY_Context:
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
-        for cur_limbs in range(len(moduliQ_scalar)):
+        self.QbarretKplusPbarretK_map = {}
+        self.QbarretRatioplusPbarretRatio_map = {}
+        self.QmaxdiffplusPmaxdiff_map = {}
+        for cur_limbs in range(1, len(moduliQ_scalar)+1):
             self.QplusP_map[cur_limbs] = np.array(
                 np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
             )
             self.QmuplusPmu_map[cur_limbs] = np.array(
                 np.concatenate((self.q_mu[0:cur_limbs], self.p_mu[:K])), dtype=np.uint64
             )
+            self.QbarretKplusPbarretK_map[cur_limbs] = np.array(
+                np.concatenate((self.barret_k[0:cur_limbs], self.barret_k[-K:])), dtype=np.uint64
+            )
+            self.QbarretRatioplusPbarretRatio_map[cur_limbs] = np.array(
+                np.concatenate((self.barret_ratio[0:cur_limbs], self.barret_ratio[-K:])), dtype=np.uint64
+            )
+            self.QmaxdiffplusPmaxdiff_map[cur_limbs] = np.array(
+                np.concatenate((self.max_int_diffs[0:cur_limbs], self.max_int_diffs[-K:])), dtype=np.uint64
+            )
         # init bs_context
         if logBsSlots_list[0] != 0 and levelBudget_list != [[0, 0]]:
             for logBsSlots, levelBudget in zip(self.logBsSlots_list, levelBudget_list):
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
+                    logBsSlots,
                     self.moduliP_scalar,
                     0,
                     self.secretKeyDist,
