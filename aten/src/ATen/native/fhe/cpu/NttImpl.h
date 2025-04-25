@@ -1810,7 +1810,7 @@ void iNTT_impl(
   const Tensor& inverse_power_of_roots_div_two,
   const Tensor& param_primes,
   const Tensor& inverse_scaled_power_of_roots_div_two) {
-  safe_copy(op_ptr, out_ptr, batch * param_degree);
+//  safe_copy(op_ptr, out_ptr, batch * param_degree);
     const int max_threads = omp_get_max_threads();  
     omp_set_num_threads(max_threads); 
       const uint64_t n=param_degree;
@@ -1891,7 +1891,7 @@ void NTT_impl(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
-      safe_copy(op_ptr, out_ptr, batch * param_degree);
+//      safe_copy(op_ptr, out_ptr, batch * param_degree);
       const int max_threads = omp_get_max_threads();  
   omp_set_num_threads(max_threads); 
         auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
