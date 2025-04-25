@@ -1110,6 +1110,7 @@ Tensor& moddown_core_cpu_out(
 static void moddown_cpu_template(
     // aten::moddown
     const Tensor& from,
+    Tensor& workspace,
     int64_t curr_limbs,
     int64_t level,
     int64_t alpha,
@@ -1133,13 +1134,14 @@ static void moddown_cpu_template(
 
   auto hat_inverse_vec = hat_inverse_vec_moddown[0];
   auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
-
+  auto workspace_ptr =reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
+
   iNTT_impl(
-      from_ptr,
-      from_ptr,
+      from,
+      workspace_ptr,
       end_length,
       start_length,
       curr_limbs,
@@ -1150,7 +1152,7 @@ static void moddown_cpu_template(
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch_(
-      from_ptr,
+    workspace_ptr,
       hat_inverse_vec,
       hat_inverse_vec_psinv,
       level,
@@ -1158,11 +1160,11 @@ static void moddown_cpu_template(
       curr_limbs,
       0,
       param_degree,
-      from_ptr,
+      workspace_ptr,
       param_primes);
 
   moddown_impl(
-      from_ptr,
+    workspace_ptr,
       param_degree,
       param_log_degree,
       alpha,
@@ -1226,8 +1228,10 @@ Tensor moddown_cpu(
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   auto from_ = from.clone();
   auto res = at::empty({curr_limbs * param_degree}, from.options());
+  auto workspace = from.clone();
   moddown_cpu_template(
       from_,
+      workspace,
       curr_limbs,
       level,
       alpha,
