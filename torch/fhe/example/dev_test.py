@@ -487,48 +487,48 @@ def gen_CoeffSlots_matrix_test_case(
         logBsSlots_list=[11],
         logN=14,
         dnum=1,
-        dcrtBits=52,
-        firstMod=56,
+        dcrtBits=59,
+        firstMod=60,
         levelBudget_list=[[3,3]], # fixme: should check if levelBudget_list is too large as in eval_bootstrap_setup
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR
 ):
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
-    cryptoContext, openfhe_context, _ = (
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, SAVE_MIDDLE=False, ENCODE_BS_FFT=False)
+    cryptoContext, openfhe_context= (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                config=config))
     # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
     # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
 
-    precom = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
-
-    K_SPARSE = 28
-    K_UNIFORM = 512
-
-    import math
-    q = cryptoContext.moduliQ[0]
-    q_double = float(q)
-    factor = 1 << int(round(math.log2(q_double)))
-    pre = q_double / factor
-    k = K_SPARSE if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 1.0
-    scaleEnc = pre / k
-    scaleDec = 1 / pre
-
-    lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
-    lDec = maxLevelsRemaining + 1
-
-    # note: c2s_matrix should be same as m_U0hatTPreFFT
-    # note: s2c_matrix should be same as m_U0PreFFT
-    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
-    s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
+    # precom = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
+    #
+    # K_SPARSE = 28
+    # K_UNIFORM = 512
+    #
+    # import math
+    # q = cryptoContext.moduliQ[0]
+    # q_double = float(q)
+    # factor = 1 << int(round(math.log2(q_double)))
+    # pre = q_double / factor
+    # k = K_SPARSE if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 1.0
+    # scaleEnc = pre / k
+    # scaleDec = 1 / pre
+    #
+    # lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
+    # lDec = maxLevelsRemaining + 1
+    #
+    # # note: c2s_matrix should be same as m_U0hatTPreFFT
+    # # note: s2c_matrix should be same as m_U0PreFFT
+    # c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
+    # s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
 
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # bootstrapping
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
@@ -538,47 +538,48 @@ def gen_CoeffSlots_matrix_test_case(
     # compute golden answer
     clear_result1 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    print("HE decryption result(golden): ", clear_result1[:10])
+    print("HE decryption result: ", clear_result1[:10])
 
-    print("\n")
-    m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
-    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext)
-    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup #recover the context
-    print("gpu bootstrapp done!")
-
-    clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("HE decryption result: ", clear_result2[:10])
-
-    diff = np.abs(clear_result1 - clear_result2)
-    max_diff = np.max(diff)
-    mean_diff = np.mean(diff)
-
-    print(f"c2s_matrix Max diff: {max_diff:.5e}")
-    print(f"c2s_matrix Mean diff: {mean_diff:.5e}")
-
-    print("\n")
-    m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
-    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    result = homo_ops.homo_rescale(result, 1, cryptoContext)
-    cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
-    print("gpu bootstrapp done!")
-
-    clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("HE decryption result: ", clear_result2[:10])
-
-    diff = np.abs(clear_result1 - clear_result2)
-    max_diff = np.max(diff)
-    mean_diff = np.mean(diff)
-
-    print(f"s2c_matrix Max diff: {max_diff:.5e}")
-    print(f"s2c_matrix Mean diff: {mean_diff:.5e}")
+    # control group
+    # print("\n")
+    # m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
+    # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup #recover the context
+    # print("gpu bootstrapp done!")
+    #
+    # clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    # print("HE decryption result: ", clear_result2[:10])
+    #
+    # diff = np.abs(clear_result1 - clear_result2)
+    # max_diff = np.max(diff)
+    # mean_diff = np.mean(diff)
+    #
+    # print(f"c2s_matrix Max diff: {max_diff:.5e}")
+    # print(f"c2s_matrix Mean diff: {mean_diff:.5e}")
+    #
+    # print("\n")
+    # m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
+    # # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
+    # print("gpu bootstrapp done!")
+    #
+    # clear_result2 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    # print("HE decryption result: ", clear_result2[:10])
+    #
+    # diff = np.abs(clear_result1 - clear_result2)
+    # max_diff = np.max(diff)
+    # mean_diff = np.mean(diff)
+    #
+    # print(f"s2c_matrix Max diff: {max_diff:.5e}")
+    # print(f"s2c_matrix Mean diff: {mean_diff:.5e}")
 
 
 ##############
@@ -586,26 +587,26 @@ def gen_CoeffSlots_matrix_test_case(
 ##############
 
 if __name__ == "__main__":
+
     gen_CoeffSlots_matrix_test_case()
 
 
-
-    # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
-    #     print("***********{}***********".format(rescaleTech))
-    #     print("==========={}============".format('app_without_bs_example_debug'))
-    #     app_without_bs_example_debug(rescaleTech = rescaleTech)
-    #     print("==========={}============".format('app_example_debug'))
-    #     app_example_debug(rescaleTech = rescaleTech)
-    #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-    #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-    #     print("==========={}============".format('encode_test_case'))
-    #     encode_test_case(rescaleTech = rescaleTech)
-    #     print("==========={}============".format('ct_pt_test_case'))
-    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-    #     print("==========={}============".format('test_plaintext_twin'))
-    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-    #     print("==========={}============".format('double_bs_debug'))
-    #     double_bs_debug(rescaleTech = rescaleTech)
-    #     print("************************************".format(rescaleTech))
+    for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
+        print("***********{}***********".format(rescaleTech))
+        print("==========={}============".format('app_without_bs_example_debug'))
+        app_without_bs_example_debug(rescaleTech = rescaleTech)
+        print("==========={}============".format('app_example_debug'))
+        app_example_debug(rescaleTech = rescaleTech)
+        print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+        print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+        print("==========={}============".format('encode_test_case'))
+        encode_test_case(rescaleTech = rescaleTech)
+        print("==========={}============".format('ct_pt_test_case'))
+        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+        print("==========={}============".format('test_plaintext_twin'))
+        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+        print("==========={}============".format('double_bs_debug'))
+        double_bs_debug(rescaleTech = rescaleTech)
+        print("************************************".format(rescaleTech))
