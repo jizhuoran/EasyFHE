@@ -9,12 +9,11 @@ import math
 DATA_DIR = os.environ["DATA_DIR"]
 
 
-encode_slots = int(1 << (16 - 1)) #todo: to be removed
+encode_slots = int(1 << (16 - 1)) #todo: to be redesigned? how to assigned
 
 rnn_ih = []
 rnn_hh = []
 fc_weight = []
-fc_bias = None
 
 
 def rnn_layer(input, hidden, cryptoContext, openfhe_context):
@@ -22,18 +21,18 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
     # tanh() is approximated by x - (x^3) / 3 (Taylor Series, could be optimized)
     # Weights are always within (-1, 1), so an approximation in (-2, 2) is good enough
     num_slots = (1 << (cryptoContext.logN -1))
-    num_batch = num_slots / 128
+    num_batch = int(num_slots / 128)
     # Rotation are done based on batch size
     hidden_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
         # rnn_ih * input
-        rnn_ih_int_0_ct = fhe.homo_mul(rnn_ih[i], input, cryptoContext)
+        rnn_ih_int_0_ct = fhe.homo_mul_pt(input, rnn_ih[i], cryptoContext)
         rnn_ih_int_0_ct = fhe.homo_rescale(rnn_ih_int_0_ct, 1, cryptoContext)
         rnn_ih_int_1_ct = fhe.homo_rotate(rnn_ih_int_0_ct, -(num_batch * i), cryptoContext) 
         hidden_accum_ct = fhe.homo_add(hidden_accum_ct, rnn_ih_int_1_ct, cryptoContext) 
         # rnn_hh * hidden
-        rnn_hh_int_0_ct = fhe.homo_mul(rnn_hh[i], hidden, cryptoContext)
+        rnn_hh_int_0_ct = fhe.homo_mul_pt(hidden, rnn_hh[i], cryptoContext)
         rnn_hh_int_0_ct = fhe.homo_rescale(rnn_hh_int_0_ct, 1, cryptoContext)
         rnn_hh_int_1_ct = fhe.homo_rotate(rnn_hh_int_0_ct, -(num_batch * i), cryptoContext) 
         hidden_accum_ct = fhe.homo_add(hidden_accum_ct, rnn_hh_int_1_ct, cryptoContext) 
@@ -41,24 +40,24 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
     # Apply tanh activation (approximation: （ax + bx^3）)
     x2 = fhe.homo_square(hidden_accum_ct, cryptoContext)
     x2 = fhe.homo_rescale(x2, 1, cryptoContext) # todo: ??
-    x3 = fhe.homo_mul_scalar_double(hidden_accum_ct, -0.10484599)
-    x2 = fhe.homo_rescale(x3, 1, cryptoContext)
-    hidden_accum_ct = fhe.homo_mul_scalar_double(hidden_accum_ct, 0.86501289)
-    hidden_accum_ct = fhe.homo_rescale(hidden_accum_ct, cryptoContext)
+    x3 = fhe.homo_mul_scalar_double(hidden_accum_ct, -0.10484599, cryptoContext)
+    x3 = fhe.homo_rescale(x3, 1, cryptoContext)
+    hidden_accum_ct = fhe.homo_mul_scalar_double(hidden_accum_ct, 0.86501289, cryptoContext)
+    hidden_accum_ct = fhe.homo_rescale(hidden_accum_ct, 1, cryptoContext)
     t_x3 = fhe.homo_mul(x2, x3, cryptoContext)
     t_x3 = fhe.homo_rescale(t_x3, 1, cryptoContext)
-    hidden_accum_ct = fhe.homo_add(hidden_accum_ct, t_x3)
+    hidden_accum_ct = fhe.homo_add(hidden_accum_ct, t_x3, cryptoContext)
     return hidden_accum_ct
 
-def fc_layer(input, cryptoContext, openfhe_context):
+def fc_layer(input, fc_bias, cryptoContext, openfhe_context):
     # Evaluate fc_weight * input + bias
     num_slots = (1 << (cryptoContext.logN -1))
-    num_batch = num_slots / 128
+    num_batch = int(num_slots / 128)
     output_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
         mult_0 = fhe.homo_mul_pt(input, fc_weight[i % 2],  cryptoContext)
-        mult_0 = fhe.homo_rescale(mult_0, cryptoContext)
+        mult_0 = fhe.homo_rescale(mult_0, 1, cryptoContext)
         mult_1 = fhe.homo_rotate(mult_0, -(num_batch * i), cryptoContext) 
         output_accum_ct = fhe.homo_add(output_accum_ct, mult_1, cryptoContext)
     # Add bias to final result
@@ -76,17 +75,20 @@ def fhe_rnn(b_id):
     STEP_NUM = 128
     sample_num = 256
 
+    # Calculate batch size
+    batch_size = int(encode_slots // EMBEDDING_SIZE)
+
     # todo: move inside a func
     logN = 16
     # encode_slots = int(1 << (logN - 1))
     maxLevelsRemaining = 26
-    appRotIndex_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768] # todo: should be computed from input
+    appRotIndex_list = [-(i * int(batch_size)) for i in range(EMBEDDING_SIZE)]
     logBsSlots_list = [int(math.log2(encode_slots))]
     dnum = 1
     dcrtBits = 46
     firstMod = 50
     levelBudget_list = [[4, 4]]
-    rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"
 
     if not os.path.exists(DATA_DIR):
@@ -113,8 +115,6 @@ def fhe_rnn(b_id):
     embedding_in = np.fromfile(embedding_file_name, dtype=np.float32)[:sample_num*STEP_NUM*EMBEDDING_SIZE].reshape(sample_num, STEP_NUM, EMBEDDING_SIZE)
     ground_truth = np.fromfile(ground_truth_file_name, dtype=np.float32)
 
-    # Calculate batch size
-    batch_size = int(encode_slots // EMBEDDING_SIZE)
 
     # Pack the plaintext matrix in diagonal order
     rnn_ih_pt_vec = []
@@ -126,7 +126,6 @@ def fhe_rnn(b_id):
     rnn_ih_t_2d = rnn_ih_t.reshape((EMBEDDING_SIZE, EMBEDDING_SIZE))
     rnn_hh_t_2d = rnn_hh_t.reshape((STEP_NUM, STEP_NUM))
 
-    rnn_ih = []
     for i in range(STEP_NUM):
         rows = (np.arange(EMBEDDING_SIZE) + i) % EMBEDDING_SIZE
         columns = np.arange(EMBEDDING_SIZE)
@@ -160,7 +159,7 @@ def fhe_rnn(b_id):
     print("Finished building RNN weight plaintexts!")
 
     batched_hidden_ct = openfhe_context.encrypt(np.zeros(batch_size * STEP_NUM), 1, 0, encode_slots)
-    print(f"Before rnn, batched_hidden_ct's remaining levels: {cryptoContext.L - batched_hidden_ct.cur_limbs}")
+    print(f"Before rnn, batched_hidden_ct's remaining levels: {batched_hidden_ct.cur_limbs- (batched_hidden_ct.noise_deg - 1)}")
 
     #todo  Perform key generation (if needed)
     batch_id = 0
@@ -172,67 +171,92 @@ def fhe_rnn(b_id):
     # 1. Evaluate RNN layers
     for i in range(STEP_NUM):
         print(f"step {i}/{STEP_NUM}")
-        sample_indices = np.arange(batch_size) + batch_id * batch_size
-        j, k = np.mgrid[0:batch_size, 0:EMBEDDING_SIZE]
-        src_indices = (sample_indices[j] * EMBEDDING_SIZE + i) * EMBEDDING_SIZE + k
-        batched_embedding = embedding_in[src_indices].reshape(EMBEDDING_SIZE, batch_size).T.ravel(order='F') 
+        batched_embedding = np.empty(EMBEDDING_SIZE * batch_size, dtype=np.float64)
+        for j in range(batch_size):
+            for k in range(EMBEDDING_SIZE):
+                sample_index = j + batch_id * batch_size
+                batched_embedding[k * batch_size + j] = embedding_in[sample_index, i, k]
+        # Embeddings are packed as (em_0_0, em_1_0, ... , em_{last_on_in_batch}_0, em_0_1, em_1_1, ... , em_0_127, ... , em_{last_on_in_batch}_127)
+        # Rotations are done in granularity as batch_size
         batched_embedding_ct = openfhe_context.encrypt(batched_embedding, 1, 0, encode_slots)
 
-    if (maxLevelsRemaining - (batched_hidden_ct.L - (batched_hidden_ct.cur_limbs - 1))<= 4):
+    if (maxLevelsRemaining - (cryptoContext.L - (batched_hidden_ct.cur_limbs - 1))<= 4):
         print("Evaluating Bootstrapping!")
-        batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, L0=cryptoContext.L, logBsSlots=8, cryptoContext=cryptoContext)
+        batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, cryptoContext.L, 8, cryptoContext)
         
     batched_hidden_ct = rnn_layer(batched_embedding_ct, batched_hidden_ct, cryptoContext, openfhe_context)
 
     # Run reference RNN computation
-    result_ref = np.zeros((128, batch_size))
-    result_ih = rnn_ih_t @ batched_embedding
-    result_hh = rnn_hh_t @ batched_hidden_ref
+    result_ref = np.zeros(batch_size * STEP_NUM, dtype=np.float64)
 
-    result_ref = np.tanh(result_ih + result_hh)
-    result_ref = result_ref.reshape(-1, order='C') 
+    for j in range(128):
+        for k in range(batch_size):
+            for l in range(128):
+                result_ref[j * batch_size + k] += (
+                        batched_embedding[l * batch_size + k] * rnn_ih_t[j, l]
+                )
+                result_ref[j * batch_size + k] += (
+                        batched_hidden_ref[l * batch_size + k] * rnn_hh_t[j, l]
+                )
+            # Tanh activation
+            result_ref[j * batch_size + k] = activation(result_ref[j * batch_size + k])
+
+    # result_ref = np.zeros((128, batch_size))
+    # result_ih = rnn_ih_t @ batched_embedding
+    # result_hh = rnn_hh_t @ batched_hidden_ref
+    #
+    # result_ref = np.tanh(result_ih + result_hh)
+    # result_ref = result_ref.reshape(-1, order='C')
 
     # See how much accuracy we are losing
     total_error = 0.0
-    print(f"Before decrypt: batched_hidden_ct's true remaining levels: {maxLevelsRemaining - batched_hidden_ct.L - (batched_hidden_ct.cur_limbs - 1)}")
+    print(f"Before decrypt: batched_hidden_ct's true remaining levels: {batched_hidden_ct.cur_limbs - (batched_hidden_ct.noise_deg - 1)}")
     result = openfhe_context.decrypt(batched_hidden_ct)
 
     result_ref_np = np.array(result_ref)
-    ckks_values_np = np.array(result.GetRealPackedValue())
+    ckks_values_np = np.array(result.cpu().numpy().reshape(-1))
 
     diff = result_ref_np - ckks_values_np
     total_error = np.sum(diff ** 2)
 
-    print(f"CT depth: {batched_hidden_ct.L()}/{maxLevelsRemaining}")
+    print(f"CT depth: {cryptoContext.L}/{maxLevelsRemaining}")
     avg_sq_err = total_error / (128 * batch_size)
     print(f"Avg Sq Err: {avg_sq_err}")
 
     batched_hidden_ref = result_ref.copy() 
 
     # 2. Evaluate FC layers
-    fhe_result_pt = openfhe_context.encrypt(fc_layer(batched_hidden_ct, cryptoContext, openfhe_context), 1, 0, encode_slots)
+    batched_hidden_ct=fc_layer(batched_hidden_ct, fc_bias, cryptoContext, openfhe_context)
+    fhe_result_pt = openfhe_context.decrypt(batched_hidden_ct)
+    fhe_result_pt = fhe_result_pt.cpu().numpy().reshape(-1)
     # Run reference FC computation
-    result_ref = np.zeros((2*batch_size), dtype=np.float64)
-    result_fhe = np.zeros((2*batch_size), dtype=np.float64)
-    weighted_sum = fc_weight_t @ batched_hidden_ref
-    weighted_sum += fc_bias_t.reshape(2, 1)  
-    result_ref = 1 / (1 + np.exp(-weighted_sum))
-    fhe_result = fhe_result_pt.reshape(2, batch_size)
-    result_fhe = 1 / (1 + np.exp(-fhe_result))
-    result_ref = result_ref.flatten(order='C')  # shape (2*batch_size,)
-    result_fhe = result_fhe.flatten(order='C') 
+    result_ref = np.zeros(batch_size * 2, dtype=np.float64)
+    result_fhe = np.zeros(batch_size * 2, dtype=np.float64)
 
-    
+    # FC output and sigmoid activation
+    for j in range(2):
+        for k in range(batch_size):
+            for l in range(128):
+                result_ref[j * batch_size + k] += (
+                        batched_hidden_ref[l * batch_size + k] * fc_weight_t[j, l]
+                )
+            result_ref[j * batch_size + k] += fc_bias_t[j]
+            result_ref[j * batch_size + k] = sigmoid(result_ref[j * batch_size + k])
+            result_fhe[j * batch_size + k] = sigmoid(fhe_result_pt[j * batch_size + k])
+
+    # Accuracy comparison
     num_inf = 0
     num_ref_correct = 0
     num_fhe_correct = 0
-
     for k in range(batch_size):
-        print(f"gt: {ground_truth[k]} ref out: [{result_ref[k]} , {result_ref[k + batch_size]}] "
-            f"fhe out: [{result_fhe[k]} , {result_fhe[k + batch_size]}]")
+        gt = ground_truth[batch_id * batch_size + k]
+        print(
+            f"gt: {gt} ref out: [{result_ref[k]} , {result_ref[k + batch_size]}] "
+            f"fhe out: [{result_fhe[k]} , {result_fhe[k + batch_size]}]"
+        )
 
         num_inf += 1
-        if ground_truth[k] == 0:
+        if gt == 0:
             if result_ref[k] > 0.5:
                 num_ref_correct += 1
             if result_fhe[k] > 0.5:
@@ -243,9 +267,44 @@ def fhe_rnn(b_id):
             if result_fhe[k + batch_size] > 0.5:
                 num_fhe_correct += 1
 
-    # 打印准确率
+    # Print accuracy
     print(f"ref accuracy:\t{num_ref_correct}/\t{num_inf}\t{100.0 * num_ref_correct / num_inf:.2f}%")
     print(f"fhe accuracy:\t{num_fhe_correct}/\t{num_inf}\t{100.0 * num_fhe_correct / num_inf:.2f}%")
+
+    # result_ref = np.zeros((2*batch_size), dtype=np.float64)
+    # result_fhe = np.zeros((2*batch_size), dtype=np.float64)
+    # weighted_sum = fc_weight_t @ batched_hidden_ref
+    # weighted_sum += fc_bias_t.reshape(2, 1)
+    # result_ref = 1 / (1 + np.exp(-weighted_sum))
+    # fhe_result = fhe_result_pt.reshape(2, batch_size)
+    # result_fhe = 1 / (1 + np.exp(-fhe_result))
+    # result_ref = result_ref.flatten(order='C')  # shape (2*batch_size,)
+    # result_fhe = result_fhe.flatten(order='C')
+    #
+    #
+    # num_inf = 0
+    # num_ref_correct = 0
+    # num_fhe_correct = 0
+    #
+    # for k in range(batch_size):
+    #     print(f"gt: {ground_truth[k]} ref out: [{result_ref[k]} , {result_ref[k + batch_size]}] "
+    #         f"fhe out: [{result_fhe[k]} , {result_fhe[k + batch_size]}]")
+    #
+    #     num_inf += 1
+    #     if ground_truth[k] == 0:
+    #         if result_ref[k] > 0.5:
+    #             num_ref_correct += 1
+    #         if result_fhe[k] > 0.5:
+    #             num_fhe_correct += 1
+    #     else:
+    #         if result_ref[k + batch_size] > 0.5:
+    #             num_ref_correct += 1
+    #         if result_fhe[k + batch_size] > 0.5:
+    #             num_fhe_correct += 1
+    #
+    # # 打印准确率
+    # print(f"ref accuracy:\t{num_ref_correct}/\t{num_inf}\t{100.0 * num_ref_correct / num_inf:.2f}%")
+    # print(f"fhe accuracy:\t{num_fhe_correct}/\t{num_inf}\t{100.0 * num_fhe_correct / num_inf:.2f}%")
 
 if __name__ == "__main__":
     for b_id in range(1):
