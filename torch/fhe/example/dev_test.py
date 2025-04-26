@@ -26,6 +26,7 @@ def app_without_bs_example_debug_cpu(
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir =DATA_DIR
 ):
+#todo fix none   :  dcrtBits=53,firstMod=55,
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
