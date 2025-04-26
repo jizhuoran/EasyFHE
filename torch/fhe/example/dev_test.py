@@ -43,15 +43,15 @@ def app_without_bs_example_debug_cpu(
 
     # do the application computation
     print("start")
-    cipher_cuda = cipher.deep_copy()
-    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    cryptoContext.to_cuda()
-    cryptoContext.load_rotation_keys(logBsSlots)
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    cryptoContext.BsContext.to_cuda()
-    # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
-    # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
-    result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # cipher_cuda = cipher.deep_copy()
+    # cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    # cryptoContext.to_cuda()
+    # cryptoContext.load_rotation_keys(logBsSlots)
+    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    # cryptoContext.BsContext.to_cuda()
+    # # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    # result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
 
 
@@ -67,15 +67,15 @@ def app_without_bs_example_debug_cpu(
     result2 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
 
-    cipher_cuda = cipher.deep_copy()
-    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    cryptoContext.to_cuda()
-    cryptoContext.load_rotation_keys(logBsSlots)
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    cryptoContext.BsContext.to_cuda()
-    # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
-    # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
-    result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # cipher_cuda = cipher.deep_copy()
+    # cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    # cryptoContext.to_cuda()
+    # cryptoContext.load_rotation_keys(logBsSlots)
+    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    # cryptoContext.BsContext.to_cuda()
+    # # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    # result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
@@ -94,12 +94,12 @@ def app_without_bs_example_debug_cpu(
     # openfhe_result = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     print("compare_gpufhe_ct_with_openfhe")
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
-    print("is_equal", is_equal)
+    # is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
+    # print("is_equal", is_equal)
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
     print("is_equal", is_equal)
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
-    print("is_equal", is_equal)
+    # is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
+    # print("is_equal", is_equal)
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result4, openfhe_result)
     print("is_equal", is_equal)
 

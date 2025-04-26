@@ -26,20 +26,23 @@ void const_mult_batch(
     const int start_op1_idx,
     const int start_op2_idx,
     uint64_t* to) {
-      const int max_threads = omp_get_max_threads();  
-      omp_set_num_threads(max_threads); 
-      #pragma omp parallel for num_threads(max_threads)
- for (int i=0;i<degree * batch;i++){
-  const int op2_idx = start_op2_idx + i / degree;
-  const int prime_idx = i / degree + start_prime_idx;
-  const auto prime = primes[prime_idx];
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < degree * batch; i++) {
+    const int op2_idx = start_op2_idx + i / degree;
+    const int prime_idx = i / degree + start_prime_idx;
+    const auto prime = primes[prime_idx];
 
-  uint64_t out = mul_and_reduce_shoup(
-      op1[start_op1_idx * degree + i], op2[op2_idx], op2_psinv[op2_idx], prime);
+    uint64_t out = mul_and_reduce_shoup(
+        op1[start_op1_idx * degree + i],
+        op2[op2_idx],
+        op2_psinv[op2_idx],
+        prime);
 
-  if (out >= prime)
-    out -= prime;
-  to[start_op1_idx * degree + i] = out;
+    if (out >= prime)
+      out -= prime;
+    to[start_op1_idx * degree + i] = out;
   }
 }
 
@@ -92,50 +95,48 @@ void modup_step_two_kernel(
   constexpr const int unroll_number = 4;
   std::vector<uint64_t> s_hat_mod_end_vec(hat_mod_end_size);
   uint64_t* s_hat_mod_end = s_hat_mod_end_vec.data();
-  const int max_threads = omp_get_max_threads();  
-  omp_set_num_threads(max_threads); 
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
   for (int i = 0; i < hat_mod_end_size; ++i) {
     s_hat_mod_end[i] = hat_mod_end[i];
   }
-  #pragma omp parallel for num_threads(max_threads)
-  for(int i=0;i<(degree * end_length + unroll_number - 1) / unroll_number;i++){
-  const int degree_idx = unroll_number * (i / end_length); 
-  const int hat_mod_end_idx = i % end_length; // j
-  const int out_idx =
-      hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
-  uint128_t4 accum = accumulate_in_modup(
-      ptr, degree, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
-  int gap = level - curr_limbs;
-  int prime_idx = out_idx +
-      (((out_idx >= 0 && out_idx < begin_idx) ||
-        (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
-           ? 0
-           : gap);
-  const auto prime = primes[prime_idx];
-  const auto barret_ratio = barrett_ratios[prime_idx];
-  const auto barret_k = barrett_Ks[prime_idx];
-  {
-    // First store operation
-    uint64_t out1 =
-        barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < (degree * end_length + unroll_number - 1) / unroll_number;
+       i++) {
+    const int degree_idx = unroll_number * (i / end_length);
+    const int hat_mod_end_idx = i % end_length; // j
+    const int out_idx =
+        hat_mod_end_idx + ((hat_mod_end_idx >= begin_idx) ? start_length : 0);
+    uint128_t4 accum = accumulate_in_modup(
+        ptr, degree, s_hat_mod_end, alpha, degree_idx, hat_mod_end_idx);
+    int gap = level - curr_limbs;
+    int prime_idx = out_idx +
+        (((out_idx >= 0 && out_idx < begin_idx) ||
+          (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
+             ? 0
+             : gap);
+    const auto prime = primes[prime_idx];
+    const auto barret_ratio = barrett_ratios[prime_idx];
+    const auto barret_k = barrett_Ks[prime_idx];
+    {
+      // First store operation
+      uint64_t out1 =
+          barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
+      uint64_t out2 =
+          barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
 
-    to[out_idx * degree + degree_idx] = out1;
-    to[out_idx * degree + degree_idx + 1] = out2;
-
+      to[out_idx * degree + degree_idx] = out1;
+      to[out_idx * degree + degree_idx + 1] = out2;
+    }
+    {
+      uint64_t out3 =
+          barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
+      uint64_t out4 =
+          barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
+      to[out_idx * degree + degree_idx + 2] = out3;
+      to[out_idx * degree + degree_idx + 3] = out4;
+    }
   }
-  {
-
-    uint64_t out3 =
-        barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    uint64_t out4 =
-        barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    to[out_idx * degree + degree_idx + 2] = out3;
-    to[out_idx * degree + degree_idx + 3] = out4;
-
-  }
-}
 }
 
 void moddown_kernel(
@@ -153,37 +154,39 @@ void moddown_kernel(
   constexpr const int unroll_number = 4;
   std::vector<uint64_t> s_hat_mod_end_vec(hat_mod_end_size);
   uint64_t* s_hat_mod_end = s_hat_mod_end_vec.data();
-  const int max_threads = omp_get_max_threads();  
-  omp_set_num_threads(max_threads); 
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
   for (int i = 0; i < hat_mod_end_size; ++i) {
     s_hat_mod_end[i] = hat_mod_end[i];
   }
-  #pragma omp parallel for schedule(static) num_threads(max_threads)
-  for( int i=0;i<(degree_ * end_length + unroll_number - 1) / unroll_number;i++){
-  const int degree_idx = unroll_number * (i / end_length);
-  const int out_prime_idx = i % end_length;
-  uint128_t4 accum = accumulate_in_modup(
-      ptr, degree_, s_hat_mod_end, start_length, degree_idx, out_prime_idx);
-  const auto prime = d_primes[out_prime_idx];
-  const auto barret_ratio = d_barret_ratio[out_prime_idx];
-  const auto barret_k = d_barret_k[out_prime_idx];
-  {
-    uint64_t out =
-        barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
-    uint64_t out2 =
-        barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
-    to[out_prime_idx * degree_ + degree_idx] = out;
-    to[out_prime_idx * degree_ + degree_idx + 1] = out2;
+#pragma omp parallel for schedule(static) num_threads(max_threads)
+  for (int i = 0;
+       i < (degree_ * end_length + unroll_number - 1) / unroll_number;
+       i++) {
+    const int degree_idx = unroll_number * (i / end_length);
+    const int out_prime_idx = i % end_length;
+    uint128_t4 accum = accumulate_in_modup(
+        ptr, degree_, s_hat_mod_end, start_length, degree_idx, out_prime_idx);
+    const auto prime = d_primes[out_prime_idx];
+    const auto barret_ratio = d_barret_ratio[out_prime_idx];
+    const auto barret_k = d_barret_k[out_prime_idx];
+    {
+      uint64_t out =
+          barret_reduction_128_64(accum.x, prime, barret_ratio, barret_k);
+      uint64_t out2 =
+          barret_reduction_128_64(accum.y, prime, barret_ratio, barret_k);
+      to[out_prime_idx * degree_ + degree_idx] = out;
+      to[out_prime_idx * degree_ + degree_idx + 1] = out2;
+    }
+    {
+      uint64_t out3 =
+          barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
+      uint64_t out4 =
+          barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
+      to[out_prime_idx * degree_ + degree_idx + 2] = out3;
+      to[out_prime_idx * degree_ + degree_idx + 3] = out4;
+    }
   }
-  {
-    uint64_t out3 =
-        barret_reduction_128_64(accum.z, prime, barret_ratio, barret_k);
-    uint64_t out4 =
-        barret_reduction_128_64(accum.w, prime, barret_ratio, barret_k);
-    to[out_prime_idx * degree_ + degree_idx + 2] = out3;
-    to[out_prime_idx * degree_ + degree_idx + 3] = out4;
-  }
-}
 }
 
 void negateInplace_(
@@ -191,13 +194,13 @@ void negateInplace_(
     size_t log_degree,
     size_t batch,
     const uint64_t* primes,
-    uint64_t* op) { 
-  for(int i=0;i<batch * degree;i++){
-  const int prime_idx = i >> log_degree;
-  const uint64_t prime = primes[prime_idx];
-  if (op[i] != 0)
-    op[i] = prime - op[i];
-    }
+    uint64_t* op) {
+  for (int i = 0; i < batch * degree; i++) {
+    const int prime_idx = i >> log_degree;
+    const uint64_t prime = primes[prime_idx];
+    if (op[i] != 0)
+      op[i] = prime - op[i];
+  }
 }
 
 void subInplace_(
@@ -206,15 +209,15 @@ void subInplace_(
     const uint64_t* primes,
     uint64_t* op1,
     const uint64_t* op2) {
-  for(int i=0;i<batch * degree;i++){
-  const int prime_idx = i / degree;
-  const uint64_t prime = primes[prime_idx];
-  if (op1[i] >= op2[i]) {
-    op1[i] -= op2[i];
-  } else {
-    op1[i] = prime - (op2[i] - op1[i]);
+  for (int i = 0; i < batch * degree; i++) {
+    const int prime_idx = i / degree;
+    const uint64_t prime = primes[prime_idx];
+    if (op1[i] >= op2[i]) {
+      op1[i] -= op2[i];
+    } else {
+      op1[i] = prime - (op2[i] - op1[i]);
+    }
   }
- }
 }
 
 void vec_add_mod_batch_(
@@ -226,19 +229,19 @@ void vec_add_mod_batch_(
     const uint64_t* op2,
     const uint64_t batch,
     uint64_t* to) {
-      const int max_threads = omp_get_max_threads();  
-      omp_set_num_threads(max_threads); 
-      #pragma omp parallel for schedule(static) num_threads(max_threads)
-  for(int i=0;i<batch * degree_;i++){
-  // const int degree_idx = unroll_number * (i / end_length);
-  const int out_prime_idx = i / degree_;
-  // const int in_idx = i % degree_;
-  const auto prime = d_primes[out_prime_idx];
-  const auto barret_ratio = d_barret_ratio[out_prime_idx];
-  const auto barret_k = d_barret_k[out_prime_idx];
-  barret_reduction_64_64(op1[i] + op2[i], to[i], prime, barret_ratio, barret_k);
-
-    }
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
+#pragma omp parallel for schedule(static) num_threads(max_threads)
+  for (int i = 0; i < batch * degree_; i++) {
+    // const int degree_idx = unroll_number * (i / end_length);
+    const int out_prime_idx = i / degree_;
+    // const int in_idx = i % degree_;
+    const auto prime = d_primes[out_prime_idx];
+    const auto barret_ratio = d_barret_ratio[out_prime_idx];
+    const auto barret_k = d_barret_k[out_prime_idx];
+    barret_reduction_64_64(
+        op1[i] + op2[i], to[i], prime, barret_ratio, barret_k);
+  }
 }
 
 void vec_mod_batch_(
@@ -267,29 +270,31 @@ void switch_modulus_(
     const uint64_t* primes,
     const uint64_t* ptr,
     uint64_t* to) {
-      const auto old_modulus = primes[old_prime_idx];
-      const auto old_modulus_by_two = old_modulus >> 1; 
-      const int max_threads = omp_get_max_threads();  
-  omp_set_num_threads(max_threads);   
-  const int total=  batch * degree   ;      
-      #pragma omp parallel for schedule(static) num_threads(max_threads)
-      for (int i = 0; i < total; ++i) { 
-        const auto new_modulus_idx = i / degree;
-        const auto nm = primes[new_modulus_idx];
-        
-        // 计算 diff 的优化版本 (避免分支)
-        const auto modulus_diff = (old_modulus > nm) ? (nm - (old_modulus % nm)) : (nm - old_modulus);
-        
-        const int input_idx = i % degree;
-        const uint64_t tmp = (ptr[input_idx] > old_modulus_by_two) ? modulus_diff : 0;
-    
-        // 计算结果并处理模数
-        uint64_t val = ptr[input_idx] + tmp;
-        if (nm <= old_modulus) {
-          val %= nm; // 当 nm <= old_modulus 时直接取模
-        }
-        to[i] = val;
-      }
+  const auto old_modulus = primes[old_prime_idx];
+  const auto old_modulus_by_two = old_modulus >> 1;
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
+  const int total = batch * degree;
+#pragma omp parallel for schedule(static) num_threads(max_threads)
+  for (int i = 0; i < total; ++i) {
+    const auto new_modulus_idx = i / degree;
+    const auto nm = primes[new_modulus_idx];
+
+    // 计算 diff 的优化版本 (避免分支)
+    const auto modulus_diff =
+        (old_modulus > nm) ? (nm - (old_modulus % nm)) : (nm - old_modulus);
+
+    const int input_idx = i % degree;
+    const uint64_t tmp =
+        (ptr[input_idx] > old_modulus_by_two) ? modulus_diff : 0;
+
+    // 计算结果并处理模数
+    uint64_t val = ptr[input_idx] + tmp;
+    if (nm <= old_modulus) {
+      val %= nm; // 当 nm <= old_modulus 时直接取模
+    }
+    to[i] = val;
+  }
 }
 
 } // namespace fhe
@@ -468,65 +473,62 @@ static void NTT_except_some_range_impl(
     const Tensor& param_primes,
     const Tensor& param_power_of_roots) {
   auto excluded_range_end = excluded_range_start + excluded_range_size;
-  const int max_threads = omp_get_max_threads();  
-  omp_set_num_threads(max_threads); 
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
 
-        auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
-            param_power_of_roots_shoup.data_ptr<uint64_t>());
-        auto param_primes_ptr =
-            reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-        auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
-            param_power_of_roots.data_ptr<uint64_t>());
-        int gap = level - curr_limbs;
-        const int64_t n = param_degree >> 1;
-        #pragma omp parallel for schedule(static)num_threads(max_threads)
-        for (int bach = 0; bach < batch; ++bach) {
-          uint64_t primeidx = batch - 1 - bach;
-          +start_prime_idx;
-          if (primeidx >= excluded_range_start && primeidx < excluded_range_end)
-            continue;
-          uint64_t prime_idx =
-              primeidx + ((primeidx >= 0 && primeidx < curr_limbs) ? 0 : gap);
-          uint64_t modulus = param_primes_ptr[prime_idx];
-          uint64_t base_prime_idx = prime_idx * param_degree;
-          uint64_t base = primeidx * param_degree;
-          for (uint32_t m = 1, t = n, logt = myGetMSB(t); m < n;
-               m <<= 1, t >>= 1, --logt) {
-            for (uint32_t i = 0; i < m; ++i) {
-              auto omega =
-                  param_power_of_roots_ptr[i + m + base_prime_idx]; // S
-              auto preconOmega = param_power_of_roots_shoup_ptr
-                  [i + m + base_prime_idx]; // NEEDED IN COMPUTE F[j+t]*S MOD Q
-              for (uint32_t j1 = (i << logt), j2 = j1 + t; j1 < j2; ++j1) {
-                uint64_t a1 = (op_ptr)[j1 + 0 + base];
-                uint64_t b1 = (op_ptr)[j1 + t + base];
-                fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
-                (op_ptr)[j1 + 0 + base] = a1;
-                (op_ptr)[j1 + t + base] = b1;
-              }
-            }
-          }
-          for (uint32_t i = 0; i < (n << 1); i += 2) {
-            auto omega =
-                param_power_of_roots_ptr[(i >> 1) + n + base_prime_idx];
-            auto preconOmega =
-                param_power_of_roots_shoup_ptr[(i >> 1) + n + base_prime_idx];
-            uint64_t a1 = (op_ptr)[i + 0 + base];
-            uint64_t b1 = (op_ptr)[i + 1 + base];
-            fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
-            for (int a = 0; a < 3; a++) {
-              if (b1 > modulus) {
-                b1 -= modulus;
-              }
-              if (a1 > modulus) {
-                a1 -= modulus;
-              }
-            }
-            (op_ptr)[i + 0 + base] = a1;
-            (op_ptr)[i + 1 + base] = b1;
-          }
+  auto param_power_of_roots_shoup_ptr = reinterpret_cast<uint64_t*>(
+      param_power_of_roots_shoup.data_ptr<uint64_t>());
+  auto param_primes_ptr =
+      reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+  auto param_power_of_roots_ptr =
+      reinterpret_cast<uint64_t*>(param_power_of_roots.data_ptr<uint64_t>());
+  int gap = level - curr_limbs;
+  const int64_t n = param_degree >> 1;
+#pragma omp parallel for schedule(static) num_threads(max_threads)
+  for (int bach = 0; bach < batch; ++bach) {
+    uint64_t primeidx = batch - 1 - bach;
+    +start_prime_idx;
+    if (primeidx >= excluded_range_start && primeidx < excluded_range_end)
+      continue;
+    uint64_t prime_idx =
+        primeidx + ((primeidx >= 0 && primeidx < curr_limbs) ? 0 : gap);
+    uint64_t modulus = param_primes_ptr[prime_idx];
+    uint64_t base_prime_idx = prime_idx * param_degree;
+    uint64_t base = primeidx * param_degree;
+    for (uint32_t m = 1, t = n, logt = myGetMSB(t); m < n;
+         m <<= 1, t >>= 1, --logt) {
+      for (uint32_t i = 0; i < m; ++i) {
+        auto omega = param_power_of_roots_ptr[i + m + base_prime_idx]; // S
+        auto preconOmega = param_power_of_roots_shoup_ptr
+            [i + m + base_prime_idx]; // NEEDED IN COMPUTE F[j+t]*S MOD Q
+        for (uint32_t j1 = (i << logt), j2 = j1 + t; j1 < j2; ++j1) {
+          uint64_t a1 = (op_ptr)[j1 + 0 + base];
+          uint64_t b1 = (op_ptr)[j1 + t + base];
+          fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+          (op_ptr)[j1 + 0 + base] = a1;
+          (op_ptr)[j1 + t + base] = b1;
         }
-     
+      }
+    }
+    for (uint32_t i = 0; i < (n << 1); i += 2) {
+      auto omega = param_power_of_roots_ptr[(i >> 1) + n + base_prime_idx];
+      auto preconOmega =
+          param_power_of_roots_shoup_ptr[(i >> 1) + n + base_prime_idx];
+      uint64_t a1 = (op_ptr)[i + 0 + base];
+      uint64_t b1 = (op_ptr)[i + 1 + base];
+      fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+      for (int a = 0; a < 3; a++) {
+        if (b1 > modulus) {
+          b1 -= modulus;
+        }
+        if (a1 > modulus) {
+          a1 -= modulus;
+        }
+      }
+      (op_ptr)[i + 0 + base] = a1;
+      (op_ptr)[i + 1 + base] = b1;
+    }
+  }
 }
 void const_mult_batch_(
     uint64_t* op1_ptr,
@@ -645,8 +647,8 @@ static void modup_impl_(
       hat_inverse_vec__[idx * param_alpha_ + (in_C_L_len - 1)];
   auto hat_inverse_vec_psinv =
       hat_inverse_vec_shoup__[idx * param_alpha_ + (in_C_L_len - 1)];
-      const int max_threads = omp_get_max_threads();  
-      omp_set_num_threads(max_threads); 
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
 
   memcpy(
       to_ptr + (param_degree_ * begin_idx),
@@ -676,22 +678,26 @@ static void modup_impl_(
   //     param_degree_,
   //     to_ptr,
   //     param_primes__);
-            auto op2_ptr = reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
-            auto op2_psinv_ptr =
-                reinterpret_cast<uint64_t*>(hat_inverse_vec_psinv.data_ptr<uint64_t>());
-            auto primes_ptr =
-                reinterpret_cast<uint64_t*>(param_primes__.data_ptr<uint64_t>());		
-                #pragma omp parallel for num_threads(max_threads)
-          for (int i=0;i<param_degree_ * in_C_L_len;i++){
-      const int op2_idx = 0 + i / param_degree_;
-      const int prime_idx = i / param_degree_ + begin_idx;
-      const auto prime = primes_ptr[prime_idx];
-      uint64_t out = fhe::mul_and_reduce_shoup(
-        to_ptr[begin_idx * param_degree_ + i], op2_ptr[op2_idx], op2_psinv_ptr[op2_idx], prime);
-      if (out >= prime)
-        out -= prime;
-        to_ptr[begin_idx * param_degree_ + i] = out; 
-      }
+  auto op2_ptr =
+      reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
+  auto op2_psinv_ptr =
+      reinterpret_cast<uint64_t*>(hat_inverse_vec_psinv.data_ptr<uint64_t>());
+  auto primes_ptr =
+      reinterpret_cast<uint64_t*>(param_primes__.data_ptr<uint64_t>());
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < param_degree_ * in_C_L_len; i++) {
+    const int op2_idx = 0 + i / param_degree_;
+    const int prime_idx = i / param_degree_ + begin_idx;
+    const auto prime = primes_ptr[prime_idx];
+    uint64_t out = fhe::mul_and_reduce_shoup(
+        to_ptr[begin_idx * param_degree_ + i],
+        op2_ptr[op2_idx],
+        op2_psinv_ptr[op2_idx],
+        prime);
+    if (out >= prime)
+      out -= prime;
+    to_ptr[begin_idx * param_degree_ + i] = out;
+  }
   modup_matmul_(
       to_ptr + param_degree_ * begin_idx,
       idx,
@@ -914,8 +920,8 @@ static void moddown_core_template(
 
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  const int max_threads = omp_get_max_threads();  
-  omp_set_num_threads(max_threads); 
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
   // const_mult_batch_(
   //     from_ptr,
   //     hat_inverse_vec,
@@ -927,22 +933,26 @@ static void moddown_core_template(
   //     param_degree,
   //     from_ptr,
   //     param_primes);
-  auto op2_ptr = reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
+  auto op2_ptr =
+      reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
   auto op2_psinv_ptr =
       reinterpret_cast<uint64_t*>(hat_inverse_vec_psinv.data_ptr<uint64_t>());
   auto primes_ptr =
-      reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());		
-      #pragma omp parallel for num_threads(max_threads)
-for (int i=0;i<param_degree * alpha;i++){
-const int op2_idx = 0 + i / param_degree;
-const int prime_idx = i / param_degree + level;
-const auto prime = primes_ptr[prime_idx];
-uint64_t out = fhe::mul_and_reduce_shoup(
-  from_ptr[curr_limbs * param_degree + i], op2_ptr[op2_idx], op2_psinv_ptr[op2_idx], prime);
-if (out >= prime)
-out -= prime;
-from_ptr[curr_limbs * param_degree + i] = out; 
-}
+      reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < param_degree * alpha; i++) {
+    const int op2_idx = 0 + i / param_degree;
+    const int prime_idx = i / param_degree + level;
+    const auto prime = primes_ptr[prime_idx];
+    uint64_t out = fhe::mul_and_reduce_shoup(
+        from_ptr[curr_limbs * param_degree + i],
+        op2_ptr[op2_idx],
+        op2_psinv_ptr[op2_idx],
+        prime);
+    if (out >= prime)
+      out -= prime;
+    from_ptr[curr_limbs * param_degree + i] = out;
+  }
 
   moddown_impl(
       from_ptr,
@@ -977,24 +987,24 @@ from_ptr[curr_limbs * param_degree + i] = out;
   //     to_ptr,
   //     param_primes);
 
-
-   op2_ptr = reinterpret_cast<uint64_t*>(prod_inv.data_ptr<uint64_t>());
-   op2_psinv_ptr =
+  op2_ptr = reinterpret_cast<uint64_t*>(prod_inv.data_ptr<uint64_t>());
+  op2_psinv_ptr =
       reinterpret_cast<uint64_t*>(prod_inv_psinv.data_ptr<uint64_t>());
-   primes_ptr =
-      reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());		
-      #pragma omp parallel for num_threads(max_threads)
-for (int i=0;i<param_degree * end_length;i++){
-const int op2_idx = 0 + i / param_degree;
-const int prime_idx = i / param_degree + 0;
-const auto prime = primes_ptr[prime_idx];
-uint64_t out = fhe::mul_and_reduce_shoup(
-  to_ptr[0 * param_degree + i], op2_ptr[op2_idx], op2_psinv_ptr[op2_idx], prime);
-if (out >= prime)
-out -= prime;
-to_ptr[0 * param_degree + i] = out; 
-}
-
+  primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < param_degree * end_length; i++) {
+    const int op2_idx = 0 + i / param_degree;
+    const int prime_idx = i / param_degree + 0;
+    const auto prime = primes_ptr[prime_idx];
+    uint64_t out = fhe::mul_and_reduce_shoup(
+        to_ptr[0 * param_degree + i],
+        op2_ptr[op2_idx],
+        op2_psinv_ptr[op2_idx],
+        prime);
+    if (out >= prime)
+      out -= prime;
+    to_ptr[0 * param_degree + i] = out;
+  }
 }
 
 Tensor moddown_core_cpu(
@@ -1051,6 +1061,7 @@ Tensor& moddown_core_cpu_(
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k) {
   to.resize_({curr_limbs * param_degree});
+
   moddown_core_template(
       from,
       curr_limbs,
@@ -1134,13 +1145,13 @@ static void moddown_cpu_template(
 
   auto hat_inverse_vec = hat_inverse_vec_moddown[0];
   auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
-  auto workspace_ptr =reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
+  auto workspace_ptr =
+      reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
-
   iNTT_impl(
-      from,
+      from_ptr,
       workspace_ptr,
       end_length,
       start_length,
@@ -1152,7 +1163,7 @@ static void moddown_cpu_template(
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch_(
-    workspace_ptr,
+      workspace_ptr,
       hat_inverse_vec,
       hat_inverse_vec_psinv,
       level,
@@ -1164,7 +1175,7 @@ static void moddown_cpu_template(
       param_primes);
 
   moddown_impl(
-    workspace_ptr,
+      workspace_ptr,
       param_degree,
       param_log_degree,
       alpha,
@@ -1382,7 +1393,6 @@ static void drop_last_element_scale_template(
 
   int start_op2_idx = (level - curr_limbs + l) * (level - 1);
 
-  
   const_mult_batch_(
       to_ptr,
       qlql_inv_mod_ql_div_ql_mod_q,

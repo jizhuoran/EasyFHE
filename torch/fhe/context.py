@@ -159,14 +159,14 @@ class Context:
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
 
-        self.to_cuda()
+#        self.to_cuda()
         self.BsContext = None
 
         self.config = config
         self.inBS = False
         self.in_check_period = False
 
-        self.device = "cuda" # fixme: ??
+        self.device = "cpu" # fixme: ??
 
     def to_cuda(self):
         self.device = "cuda" #fixme: remove?

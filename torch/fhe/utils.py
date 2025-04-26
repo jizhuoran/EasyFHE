@@ -192,7 +192,7 @@ def try_load_context(
         if NO_BS == False:
             for logBsSlots in logBsSlots_list:
                 cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-                cryptoContext.BsContext.to_cuda()
+                cryptoContext.BsContext.cpu()
                 cryptoContext.load_rotation_keys(logBsSlots)
 
     openfhe_context = client.OpenFHEContext(openfheMembers)
