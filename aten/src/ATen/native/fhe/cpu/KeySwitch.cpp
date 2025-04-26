@@ -774,41 +774,42 @@ static void modup(
 Tensor modup_cpu(
     const Tensor& in,
     int64_t curr_limbs,
-    int64_t level,
-    const Tensor& hat_inverse_vec__,
-    const Tensor& hat_inverse_vec_shoup__,
-    const Tensor& prod_q_i_mod_q_j__,
-    const Tensor& param_primes__,
-    const Tensor& param_barret_ratio__,
-    const Tensor& param_barret_k__,
+    int64_t L,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
     int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto out = at::empty(
-      beta * (curr_limbs + param_alpha_) * param_degree_, in.options());
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  auto out = at::empty(beta * (curr_limbs + sizeP) * N, in.options());
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
   modup(
       in_ptr,
       curr_limbs,
-      level,
-      hat_inverse_vec__,
-      hat_inverse_vec_shoup__,
-      prod_q_i_mod_q_j__,
-      param_primes__,
-      param_barret_ratio__,
-      param_barret_k__,
+      L,
+      hat_inverse_vecs,
+      hat_inverse_vec_shoups,
+      prod_q_i_mod_q_js,
+      primes,
+      barret_ratio,
+      barret_k,
       beta,
-      param_degree_,
-      param_alpha_,
+      N,
+      alpha,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
+      power_of_roots_shoup,
+      power_of_roots,
       out_ptr);
   return out;
 }
@@ -1219,45 +1220,45 @@ static void moddown_cpu_template(
 }
 
 Tensor moddown_cpu(
-    const Tensor& from,
+    const Tensor& in,
     int64_t curr_limbs,
-    int64_t level,
-    int64_t alpha,
-    int64_t param_degree,
-    int64_t param_log_degree,
+    int64_t L,
+    int64_t sizeP,
+    int64_t N,
+    int64_t log_degree,
     const Tensor& hat_inverse_vec_moddown,
     const Tensor& hat_inverse_vec_shoup_moddown,
     const Tensor& prod_q_i_mod_q_j_moddown,
     const Tensor& prod_inv_moddown,
     const Tensor& prod_inv_shoup_moddown,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto from_ = from.clone();
-  auto res = at::empty({curr_limbs * param_degree}, from.options());
-  auto workspace = from.clone();
+  auto from_ = in.clone();
+  auto res = at::empty({curr_limbs * N}, in.options());
+  auto workspace = in.clone();
   moddown_cpu_template(
       from_,
       workspace,
       curr_limbs,
-      level,
-      alpha,
-      param_degree,
-      param_log_degree,
+      L,
+      sizeP,
+      N,
+      log_degree,
       hat_inverse_vec_moddown,
       hat_inverse_vec_shoup_moddown,
       prod_q_i_mod_q_j_moddown,
       prod_inv_moddown,
       prod_inv_shoup_moddown,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
+      primes,
+      barret_ratio,
+      barret_k,
+      power_of_roots_shoup,
+      power_of_roots,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       res);
@@ -1443,8 +1444,8 @@ Tensor drop_last_element_scale_cpu(
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,
-    int64_t level,
-    int64_t param_degree,
+    int64_t L,
+    int64_t N,
     const Tensor& param_primes,
     const Tensor& param_barret_ratio,
     const Tensor& param_barret_k,
@@ -1457,14 +1458,14 @@ Tensor drop_last_element_scale_cpu(
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
   auto res = to.clone();
-  res.resize_({(curr_limbs - 1) * param_degree});
+  res.resize_({(curr_limbs - 1) * N});
 
   drop_last_element_scale_template(
       from,
       curr_limbs,
       l,
-      level,
-      param_degree,
+      L,
+      N,
       param_primes,
       param_barret_ratio,
       param_barret_k,
