@@ -19,19 +19,19 @@
 #define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
 
 namespace fhe {
-  void automorphism_transform_kernel(
+void automorphism_transform_kernel(
     uint64_t* out,
     const uint64_t* in,
     const int l,
     const int N,
     const int* precomp_vec) {
-  for (int i = 0; i < N; i++) {
-    auto precomp_index = precomp_vec[i];
-    for (int j = 0; j < l; j++) {
-      out[j * N + i] = in[j * N + precomp_index];
+  for (int j = 0; j < l; j++) {
+    for (int i = 0; i < N; i++) {
+      out[j * N + i] = in[j * N + precomp_vec[i]];
     }
   }
 }
+
 } // namespace fhe
 
 namespace at::native {
