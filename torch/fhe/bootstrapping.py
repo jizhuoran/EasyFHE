@@ -356,25 +356,15 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------
         raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-
-
-
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
-
-
-
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-
-
         if ctxtEnc.noise_deg ==2 :
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, 1, cryptoContext)
-
-
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -382,20 +372,12 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
 
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
-
-
-
-
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
 
-
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-
-
 
         # --------------------
         # Running SlotToCoeff
@@ -460,6 +442,24 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     pre = 1.0 / post
     scalar = round(post)
 
+    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
+    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
+            precom.paramsDec.level_budget == 1
+    )
+
+    if slots == M//4:
+        if isLTBootstrap:
+            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
+        else:
+            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+    else:
+        if isLTBootstrap:
+            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
+        else:
+            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+
+        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
+        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
     # -------------------
     # raising the modulus
     # -------------------
@@ -469,7 +469,7 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     # it's being raised to.
     # Increasing the modulus
 
-    tmp = ciphertext
+    tmp = ctxtDec
     tmp = homo_ops.force_rescale(tmp, tmp.noise_deg - 1, cryptoContext)
     tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
 
@@ -480,11 +480,11 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     constantEvalMult = pre * (1.0 / (precom.k * N))
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
-    ctxtDec = None  # Initialize decrypted ciphertext
-    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
-            precom.paramsDec.level_budget == 1
-    )
+    # ctxtDec = None  # Initialize decrypted ciphertext
+    # # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
+    # isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
+    #         precom.paramsDec.level_budget == 1
+    # )
 
     if slots == M // 4:  # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
@@ -536,10 +536,10 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
+        # if isLTBootstrap:
+        #     ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
+        # else:
+        #     ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
 
     else:  # SPARSELY PACKED CASE
         # -------------------
@@ -555,25 +555,16 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------
         raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-
-
-
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
             ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
 
-
-
-
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
 
-
         if ctxtEnc.noise_deg ==2 :
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, 1, cryptoContext)
-
-
 
         # ---------------------------------
         # Running Approximate Mod Reduction
@@ -582,19 +573,12 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # Evaluate Chebyshev series for the sine wave
         ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
 
-
-
-
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
 
-
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-
-
 
         # --------------------
         # Running SlotToCoeff
@@ -604,19 +588,19 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
-
-        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
-        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
+        # if isLTBootstrap:
+        #     ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
+        # else:
+        #     ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
+        #
+        # ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
+        # ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     # 64-bit only: scale back the message to its original scale.
     corFactor = 1 << round(correction)
-    ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
+    ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, corFactor, cryptoContext)
 
-    return ctxtDec
+    return ctxtEnc
 
 
 @decorator_factory
