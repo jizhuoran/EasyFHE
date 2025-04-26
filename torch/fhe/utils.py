@@ -68,7 +68,7 @@ def profile_pytorch_function(func):
                 torch.profiler.ProfilerActivity.CPU,
                 torch.profiler.ProfilerActivity.CUDA,
             ],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler("/home/zrji/log"),
+            on_trace_ready=torch.profiler.tensorboard_trace_handler("~"),
             record_shapes=True,
             profile_memory=True,
             with_stack=True,

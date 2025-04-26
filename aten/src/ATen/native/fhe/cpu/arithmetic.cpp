@@ -1,12 +1,12 @@
 #include <ATen/Dispatch_v2.h>
 #include <ATen/TensorOperators.h>
 #include <ATen/core/Tensor.h>
+#include <ATen/native/fhe/cpu/arithmetic.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <ATen/native/fhe/cpu/arithmetic.h>
+#include <omp.h>
 #include <cassert>
-
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 #define WORK_PER_THREAD (1)
@@ -27,20 +27,23 @@ namespace fhe {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu[l * 2], barret_mu[l * 2 + 1]
 
-#define GENERATE_KERNEL(NAME, OP, B_ACCESS, HAS_BARRET)                  \
-  void NAME(                                                             \
-      const size_t L,                                                    \
-      const size_t N,                                                    \
-      uint64_t* c,                                                       \
-      const uint64_t* a,                                                 \
-      const uint64_t* b,                                                 \
-      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                  \
-    for (size_t l = 0; l < L; l++) {                                     \
-      for (size_t i = 0; i < N; i++) {                                   \
-        c[l * N + i] =                                                   \
-            OP(a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET); \
-      }                                                                  \
-    }                                                                    \
+#define GENERATE_KERNEL(NAME, OP, B_ACCESS, HAS_BARRET)                         \
+  void NAME(                                                                    \
+      const size_t L,                                                           \
+      const size_t N,                                                           \
+      uint64_t* c,                                                              \
+      const uint64_t* a,                                                        \
+      const uint64_t* b,                                                        \
+      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                         \
+    const int max_threads = omp_get_max_threads();                              \
+    omp_set_num_threads(max_threads);                                           \
+    _Pragma("omp parallel for schedule(static) num_threads(max_threads)") for ( \
+        size_t l = 0; l < L; l++) {                                             \
+      for (size_t i = 0; i < N; i++) {                                          \
+        c[l * N + i] =                                                          \
+            OP(a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET);        \
+      }                                                                         \
+    }                                                                           \
   }
 
 GENERATE_KERNEL(vadd_kernel, add_mod, b[l * N + i], 0)
@@ -71,22 +74,22 @@ namespace at::native {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu.data_ptr<uint64_t>()
 
-#define GENERATE_KERNEL(NAME, HAS_BARRET)                                      \
-  static void NAME##_template(                                                 \
-      Tensor& c,                                                               \
-      const Tensor& a,                                                         \
-      const Tensor& b,                                                         \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                            \
-      int64_t cur_limbs) {                                                     \
-    TORCH_INTERNAL_ASSERT(a.dim() == 2);                                       \
-    auto N = static_cast<int>(a.sizes()[1]);                                   \
-    fhe::NAME##_kernel(                                                        \
-        cur_limbs,                                                             \
-        N,                                                                     \
-        c.mutable_data_ptr<uint64_t>(),                                        \
-        a.data_ptr<uint64_t>(),                                                \
-        b.data_ptr<uint64_t>(),                                                \
-        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET);                    \
+#define GENERATE_KERNEL(NAME, HAS_BARRET)                   \
+  static void NAME##_template(                              \
+      Tensor& c,                                            \
+      const Tensor& a,                                      \
+      const Tensor& b,                                      \
+      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,         \
+      int64_t cur_limbs) {                                  \
+    TORCH_INTERNAL_ASSERT(a.dim() == 2);                    \
+    auto N = static_cast<int>(a.sizes()[1]);                \
+    fhe::NAME##_kernel(                                     \
+        cur_limbs,                                          \
+        N,                                                  \
+        c.mutable_data_ptr<uint64_t>(),                     \
+        a.data_ptr<uint64_t>(),                             \
+        b.data_ptr<uint64_t>(),                             \
+        mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET); \
   }
 
 GENERATE_KERNEL(vadd, 0)
