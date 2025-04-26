@@ -7,7 +7,7 @@ import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
 from termcolor import colored
-
+import time
 DATA_DIR = os.environ["DATA_DIR"]
 
 def print_failed(message):
@@ -85,14 +85,19 @@ def app_without_bs_example_debug_cpu(
     cryptoContext.BsContext.cpu()
     # result4 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
     # result4 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
+    start_time = time.time()
     result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-
+    elapsed_time = time.time() - start_time
+    print(f"eval_bootstrap 耗时: {elapsed_time:.4f} 秒")
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
     # openfhe_result = openfhe_context.cc.EvalMult(cipher_openfhe, cipher_openfhe)
     # openfhe_result = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
+    start_time = time.time()
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
+    elapsed_time = time.time() - start_time
+    print(f"eval_bootstrap 耗时: {elapsed_time:.4f} 秒")
     print("compare_gpufhe_ct_with_openfhe")
     # is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
     # print("is_equal", is_equal)
