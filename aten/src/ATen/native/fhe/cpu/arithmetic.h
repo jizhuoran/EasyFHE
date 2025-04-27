@@ -1,6 +1,5 @@
 #pragma once
 
-#include <immintrin.h>
 #include <cstdint>
 namespace fhe {
 

@@ -10,6 +10,8 @@
 #include <omp.h>
 #include "ATen/native/fhe/cpu/Utils.h"
 
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
 namespace at::native {
 
 static void innerproduct_template(

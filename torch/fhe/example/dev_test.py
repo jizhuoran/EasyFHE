@@ -1,6 +1,8 @@
 import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
+sys.path.append("/usr/local/lib/")
+
 import torch.fhe.homo_ops as homo_ops
 from torch.fhe.bootstrapping import eval_bootstrap, homo_double_bootstrap, homo_bootstrap
 import torch.fhe.utils as utils
@@ -30,7 +32,7 @@ def app_without_bs_example_debug_cpu(
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=True, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,

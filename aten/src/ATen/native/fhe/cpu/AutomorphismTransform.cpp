@@ -10,6 +10,7 @@
 #include <omp.h>
 
 #include "ATen/native/fhe/cpu/Utils.h"
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
 void automorphism_transform_kernel(

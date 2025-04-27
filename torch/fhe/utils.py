@@ -67,7 +67,7 @@ def profile_pytorch_function(func):
             activities=[
                 torch.profiler.ProfilerActivity.CPU,
                 torch.profiler.ProfilerActivity.CUDA,
-            ],
+            ] if torch.cuda.is_available() else [torch.profiler.ProfilerActivity.CPU],
             on_trace_ready=torch.profiler.tensorboard_trace_handler("~"),
             record_shapes=True,
             profile_memory=True,
@@ -77,7 +77,8 @@ def profile_pytorch_function(func):
             profiler.step()
 
         profiler_results = profiler.key_averages()
-        print(profiler_results.table(sort_by="self_cuda_time_total"))
+        if torch.cuda.is_available():
+            print(profiler_results.table(sort_by="self_cuda_time_total"))
         print(profiler_results.table(sort_by="self_cpu_time_total"))
 
         return result

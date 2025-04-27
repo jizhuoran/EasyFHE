@@ -7,7 +7,6 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <immintrin.h>
 #include <omp.h>
 #include <iostream>
 #include "ATen/native/fhe/cpu/NttImpl.h"

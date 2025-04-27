@@ -112,7 +112,7 @@ void iNTT_impl(
   }
 }
 
-int GetMSB(int64_t x) {
+static int GetMSB(int64_t x) {
   if (x == 0)
     return -1; // No set bit, return -1
 
