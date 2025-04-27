@@ -10,61 +10,6 @@
 #include <omp.h>
 #include "ATen/native/fhe/cpu/Utils.h"
 
-namespace fhe {
-
-template <bool Accum>
-void mult_(
-    const uint64_t* modup_out,
-    const uint64_t* eval_poly_ax,
-    const uint64_t* eval_poly_bx,
-    const int degree,
-    const int length,
-    uint128_t* accum_ptr_ax,
-    uint128_t* accum_ptr_bx,
-    int curr_limbs,
-    int gap) {
-  STRIDED_LOOP_START(degree * length, i);
-  const uint64_t op1 = modup_out[i];
-  const int idx = i / degree;
-  const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
-
-  const uint64_t op2_ax = eval_poly_ax[i + degree * prime_idx];
-  const uint64_t op2_bx = eval_poly_bx[i + degree * prime_idx];
-  const auto mul_ax = mult_64_64_128(op1, op2_ax);
-  const auto mul_bx = mult_64_64_128(op1, op2_bx);
-  if (Accum) {
-    accum_ptr_ax[i] += mul_ax;
-    accum_ptr_bx[i] += mul_bx;
-  } else {
-    accum_ptr_ax[i] = mul_ax;
-    accum_ptr_bx[i] = mul_bx;
-  }
-  STRIDED_LOOP_END;
-}
-
-void Reduce(
-    const uint128_t* accum,
-    const int degree,
-    const int length,
-    const int curr_limbs,
-    const int gap,
-    const uint64_t* primes,
-    const uint64_t* barret_ks,
-    const uint64_t* barret_ratios,
-    uint64_t* res) {
-  STRIDED_LOOP_START(degree * length, i);
-  const int idx = i / degree;
-  const int prime_idx = idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
-  const auto prime = primes[prime_idx];
-  const auto barret_ratio = barret_ratios[prime_idx];
-  const auto barret_k = barret_ks[prime_idx];
-  const auto res_ax =
-      barret_reduction_128_64(accum[i], prime, barret_ratio, barret_k);
-  res[i] = res_ax;
-  STRIDED_LOOP_END;
-}
-} // namespace fhe
-
 namespace at::native {
 
 static void innerproduct_template(
@@ -107,32 +52,34 @@ static void innerproduct_template(
     const uint64_t* d_bx_ptr = bx_ptr + j * param_degree * mult_length;
 
 #pragma omp parallel for schedule(static) num_threads(max_threads)
-    for (uint64_t i = 0; i < param_degree * length; ++i) {
-      const int idx = i / param_degree;
-      const int prime_idx = (idx < curr_limbs) ? 0 : gap;
-      const uint64_t op1 = d2_ptr[i];
-      const uint64_t op2_ax = d_ax_ptr[i + param_degree * prime_idx];
-      const uint64_t op2_bx = d_bx_ptr[i + param_degree * prime_idx];
-      const auto mul_ax = fhe::mult_64_64_128(op1, op2_ax);
-      const auto mul_bx = fhe::mult_64_64_128(op1, op2_bx);
-      if (j == 0) {
-        accum_ax_ptr[i] = mul_ax;
-        accum_bx_ptr[i] = mul_bx;
-      } else {
-        accum_ax_ptr[i] += mul_ax;
-        accum_bx_ptr[i] += mul_bx;
-      }
-      if (j == beta - 1) {
-        const int prime_idx1 = idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
-        const auto prime = primes_ptr[prime_idx1];
-        const auto barret_ratio = barret_ratio_ptr[prime_idx1];
-        const auto barret_k = barret_k_ptr[prime_idx1];
-        const auto res_ax = fhe::barret_reduction_128_64(
-            accum_ax_ptr[i], prime, barret_ratio, barret_k);
-        res_ax_ptr[i] = res_ax;
-        const auto res_bx = fhe::barret_reduction_128_64(
-            accum_bx_ptr[i], prime, barret_ratio, barret_k);
-        res_bx_ptr[i] = res_bx;
+    for (uint64_t idx = 0; idx < length; ++idx) {
+        const int prime_idx = (idx < curr_limbs) ? 0 : gap;
+        for (uint64_t k = 0; k < param_degree; ++k) {
+        auto i = idx * param_degree + k;
+        const uint64_t op1 = d2_ptr[i];
+        const uint64_t op2_ax = d_ax_ptr[i + param_degree * prime_idx];
+        const uint64_t op2_bx = d_bx_ptr[i + param_degree * prime_idx];
+        const auto mul_ax = static_cast<__uint128_t>(op1) * op2_ax;
+        const auto mul_bx = static_cast<__uint128_t>(op1) * op2_bx;
+        if (j == 0) {
+          accum_ax_ptr[i] = mul_ax;
+          accum_bx_ptr[i] = mul_bx;
+        } else {
+          accum_ax_ptr[i] += mul_ax;
+          accum_bx_ptr[i] += mul_bx;
+        }
+        if (j == beta - 1) {
+          const int prime_idx1 = idx + ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
+          const auto prime = primes_ptr[prime_idx1];
+          const auto barret_ratio = barret_ratio_ptr[prime_idx1];
+          const auto barret_k = barret_k_ptr[prime_idx1];
+          const auto res_ax = fhe::barret_reduction_128_64(
+              accum_ax_ptr[i], prime, barret_ratio, barret_k);
+          res_ax_ptr[i] = res_ax;
+          const auto res_bx = fhe::barret_reduction_128_64(
+              accum_bx_ptr[i], prime, barret_ratio, barret_k);
+          res_bx_ptr[i] = res_bx;
+        }
       }
     }
   }

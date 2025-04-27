@@ -159,11 +159,4 @@ GENERATE_FUNCTION(neg, 0)
 #undef BARRET_ARGS_1
 #undef GENERATE_FUNCTION
 
-Tensor set_zero_cpu(const Tensor& self, int64_t N) {
-  auto res = self.clone();
-  auto ptr = res.data_ptr<uint64_t>();
-  memset(ptr, 0, N * sizeof(uint64_t));
-  return res;
-}
-
 } // namespace at::native

@@ -7,16 +7,9 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/stack.h>
 #include <ATen/ops/zeros.h>
+#include <omp.h>
 
 #include "ATen/native/fhe/cpu/Utils.h"
-
-#define WORK_PER_THREAD (1)
-#define WARP_SIZE (32)
-#define NUM_WARPS (8)
-#define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
-#define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
-
-#define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
 
 namespace fhe {
 void automorphism_transform_kernel(
@@ -25,6 +18,10 @@ void automorphism_transform_kernel(
     const int l,
     const int N,
     const int* precomp_vec) {
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
+
+#pragma omp parallel for schedule(static) num_threads(max_threads)
   for (int j = 0; j < l; j++) {
     for (int i = 0; i < N; i++) {
       out[j * N + i] = in[j * N + precomp_vec[i]];
