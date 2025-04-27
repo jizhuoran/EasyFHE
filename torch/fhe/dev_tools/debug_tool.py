@@ -20,7 +20,6 @@ def pass_checker(func):
 def auto_sync(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        print(func.__name__)
         torch.cpu.synchronize()
         if torch.cuda.is_available():
             torch.cuda.synchronize()

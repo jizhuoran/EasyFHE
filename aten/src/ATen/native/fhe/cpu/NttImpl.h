@@ -165,7 +165,6 @@ void NTT_impl(
         }
       }
     }
-#pragma omp parallel for schedule(static) num_threads(max_threads)
     for (uint32_t i = 0; i < (n << 1); i += 2) {
       auto omega = param_power_of_roots_ptr[(i >> 1) + n + base];
       auto preconOmega = param_power_of_roots_shoup_ptr[(i >> 1) + n + base];
