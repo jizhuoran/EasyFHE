@@ -700,7 +700,7 @@ def slim_bs_test_case(
     print(f"slim bs and regular bs Mean diff: {mean_diff:.5e}")
 
 def hybrid_bs_test_case(
-        maxLevelsRemaining=5,
+        maxLevelsRemaining=6,
         logBsSlots_list=[14],
         logN=16,
         dnum=3,
@@ -710,6 +710,8 @@ def hybrid_bs_test_case(
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir=DATA_DIR
 ):
+    import time
+
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC = True, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
@@ -717,47 +719,52 @@ def hybrid_bs_test_case(
                                config=config))
 
     encode_slots = (1 << 13)
-    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    values = [0.444444, 0.444444, 0.444444, 0.444444]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
+
+    values2 = [0.111111, 0.111111, 0.111111, 0.111111]
+    y = np.array([values2[i % len(values2)] for i in range(encode_slots)])
+    y = torch.tensor(y, device="cuda")
+
 
     # add a mult
     # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
     cipher_limbs = cryptoContext.L - 2 - levelBudget_list[0][1] - 1 # one for the following mult
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, cipher_limbs, encode_slots)
-    x = x*x
-    cipher = homo_ops.homo_mul(cipher, cipher, cryptoContext)
-    cipher = homo_ops.force_rescale(cipher, 1, cryptoContext)
+    cipher1, cipher_openfhe = openfhe_context.encrypt(x, 1, cipher_limbs, encode_slots)
+    cipher2, cipher_openfhe2 = openfhe_context.encrypt(y, 1, cipher_limbs, encode_slots)
 
-    import time
-    # bootstrapping golden
+    cipher1 = homo_ops.homo_mul_scalar_double(cipher1, 1.0, cryptoContext)
+    cipher1 = homo_ops.force_rescale(cipher1, 1, cryptoContext)
+
+
+    ##########################
+    # regular bootsrapping ###
+    ##########################
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
     m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
-    result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     start_time = time.time()
-    result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result1 = eval_bootstrap(cipher1, cryptoContext.L, logBsSlots_list[0], cryptoContext)
     end_time = time.time()
     execution_time = end_time - start_time
     print("regular bs execution time: ", execution_time)
-
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
-    print("\noriginal gpu bootstrapp done!")
     # compute golden answer
     clear_result1 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
     clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    print("HE decryption result(golden): ", clear_result1[:10])
+    print("regular bs decryption result(golden): ", clear_result1[:10])
 
-    y = x.cpu().numpy()
-    diff = np.abs(y - clear_result1)
+    z = x.cpu().numpy()
+    diff = np.abs(z - clear_result1)
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
-    print(f"regular bs Max diff: {max_diff:.5e}")
-    print(f"regular bs Mean diff: {mean_diff:.5e}", "\n\n")
+    print(f"regular bs & plain Max diff: {max_diff:.5e}")
+    print(f"regular bs & plain Mean diff: {mean_diff:.5e}", "\n\n")
 
-    ###################
-    #slim bootsrapping#
-    ###################
+    ##########################
+    #slim bootsrapping precom#
+    ##########################
     # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
     # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
     precom = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
@@ -777,9 +784,9 @@ def hybrid_bs_test_case(
     lDec = 2 # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
     lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
 
-    # bootstrapping
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0])) # bootstrapping setup
 
+    # hijack the matrix
     # note: c2s_matrix should be same as m_U0hatTPreFFT
     # note: s2c_matrix should be same as m_U0PreFFT
     c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
@@ -787,9 +794,19 @@ def hybrid_bs_test_case(
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
 
-    # result2 = eval_slim_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    # result1 = homo_ops.homo_mul_scalar_double(result1, 1, cryptoContext)
+    ######################
+    # do some computation#
+    ######################
+    result1 = homo_ops.force_rescale(result1,1, cryptoContext) # deal with the first rescale from evalS2C in bs
+    result1 = homo_ops.homo_mul(result1, cipher2, cryptoContext)
     result1 = homo_ops.force_rescale(result1,1, cryptoContext)
+    clear_result2 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
+    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    print("after some computation HE decryption result: ", clear_result2[:10])
+
+    ###################
+    #slim bootsrapping#
+    ###################
 
     start_time = time.time()
     result2 = eval_slim_bootstrap(result1, cryptoContext.L, logBsSlots_list[0], cryptoContext)
@@ -798,30 +815,34 @@ def hybrid_bs_test_case(
     print("slim bs execution time: ", execution_time)
 
     result2 = homo_ops.homo_rescale(result2, result2.noise_deg-1, cryptoContext) # todo: may not need anymore
-    print("gpu bootstrapp done!")
-    # compute golden answer
     clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
     clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("HE decryption result: ", clear_result2[:10])
-
+    print("slim bootsrapping HE decryption result: ", clear_result2[:10])
 
     # transfer x to numpy on cpu
-    y = x.cpu().numpy()
-    diff = np.abs(y - clear_result2)
+    z = x*y
+    res_plain = z.cpu().numpy()
+    diff = np.abs(res_plain - clear_result2)
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
     print(f"slim bs Max diff: {max_diff:.5e}")
     print(f"slim bs Mean diff: {mean_diff:.5e}", "\n\n")
 
 
+    ######################
+    # do some computation#
+    ######################
 
-    diff = np.abs(clear_result1 - clear_result2)
-    max_diff = np.max(diff)
-    mean_diff = np.mean(diff)
-    print(f"slim bs and regular bs Max diff: {max_diff:.5e}")
-    print(f"slim bs and regular bs Mean diff: {mean_diff:.5e}")
+    result2 = homo_ops.homo_mul(result2, cipher2, cryptoContext)
+    result2 = homo_ops.force_rescale(result2, 1, cryptoContext)
 
+    clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
+    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    print("after some computation HE decryption result: ", clear_result2[:10])
 
+    ##########################
+    # regular bootsrapping ###
+    ##########################
     cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup  # recover the context
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
@@ -831,14 +852,19 @@ def hybrid_bs_test_case(
     end_time = time.time()
     execution_time = end_time - start_time
     print("regular bs execution time: ", execution_time)
-
     result3 = homo_ops.homo_rescale(result3, 1, cryptoContext)
-    print("\noriginal gpu bootstrapp done!")
     # compute golden answer
     clear_result1 = openfhe_context.decrypt(result3)  # decrypt by cc with different slots value should be fine
     clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    print("HE decryption result(last): ", clear_result1[:10])
+    print("regular bootsrapping decryption result(last): ", clear_result1[:10])
 
+    z = x*y*y
+    res_plain = z.cpu().numpy()
+    diff = np.abs(res_plain - clear_result2)
+    max_diff = np.max(diff)
+    mean_diff = np.mean(diff)
+    print(f"regular bs Max diff: {max_diff:.5e}")
+    print(f"regular bs Mean diff: {mean_diff:.5e}", "\n\n")
 
 
 ##############
@@ -847,7 +873,8 @@ def hybrid_bs_test_case(
 
 if __name__ == "__main__":
     # gen_CoeffSlots_matrix_test_case()
-    slim_bs_test_case()
+    # slim_bs_test_case()
+    hybrid_bs_test_case()
 
 
     # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
