@@ -199,7 +199,7 @@ else:
 
     start_time = time.time()
     result = BS.eval_bootstrap(
-        cipher, cryptoContext.L, logBsSlots, cryptoContext
+        cipher, cryptoContext.L, logBsSlots, levelBudget_list[0], cryptoContext
     )
     print("Time taken for bootstrapping:", time.time() - start_time)
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
