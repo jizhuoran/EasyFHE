@@ -302,17 +302,32 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     powP = 2**p
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
-    if deg > int(precom.correctionFactor):
+    if (
+        rescaleTech == "FLEXIBLEAUTO"
+        or rescaleTech == "FLEXIBLEAUTOEXT"
+    ):
+        tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+        if tmp < 7:
+            correctionFactor = 7
+        elif tmp > 13:
+            correctionFactor = 13
+        else:
+            correctionFactor = int(tmp)
+    else:
+        correctionFactor = 9
+
+
+    if deg > int(correctionFactor):
         print(
             "Warning: Degree [",
             deg,
             "] must be less than or equal to the correction factor[",
-            precom.correctionFactor,
+            correctionFactor,
             "].",
         )
 
     correction = (
-            precom.correctionFactor - deg
+            correctionFactor - deg
     )  # fixme: originally a uint32_t in OpenFHE
     post = 2**deg
     pre = 1.0 / post
@@ -334,8 +349,11 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
     # CKKS bootstrapping faster.
     raised = mod_raise(tmp, L0, cryptoContext)
+    k = 1.0 if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 512
+    constantEvalMult = pre * (1.0 / (k * N))
 
-    constantEvalMult = pre * (1.0 / (precom.k * N))
+
+            
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
@@ -364,11 +382,11 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
         # Running Approximate Mod Reduction
         # ---------------------------------
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(
-            ctxtEnc, precom.coefficients, -1, 1, cryptoContext
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(
+            ctxtEnc, -1, 1, cryptoContext
         )
-        ctxtEncI = approx.eval_chebyshev_series_ps(
-            ctxtEncI, precom.coefficients, -1, 1, cryptoContext
+        ctxtEncI = approx.eval_bootstrapping_chebyshev(
+            ctxtEncI, -1, 1, cryptoContext
         )
 
         if rescaleTech != "FIXEDMANUAL":
@@ -436,7 +454,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(ctxtEnc, -1, 1, cryptoContext)
 
 
 
