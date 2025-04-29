@@ -172,6 +172,7 @@ def gen_contexts(
         60,  # auxModSize of openfhe is 60 bits in default
         dnum,
         levelBudget_list,
+        maxLevelsRemaining,
         moduliQ,
         moduliP,
         rootsQ,
@@ -183,32 +184,8 @@ def gen_contexts(
         secretKeyDist,
         rescaleTech,
         dim1,
+        config
     )
-
-    BsContextMembers_dict = {}
-    if NO_BS == False:
-        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-            print("BsContext_map: ", logBsSlots)
-            if config.ENCODE_BS_FFT:
-                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
-                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-                )
-            else:
-                assert config.COMPARE_WITH_OPENFHE == False, "Cannot compare with openfhe if not using fully pre-encoded BS FFT"
-                gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                    gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
-                )
-
-        for logBsSlots in logBsSlots_list:
-            BsContextMembers = {}
-            for item in dir(gpufhe_context.BsContext_map[str(logBsSlots)]):
-                if (
-                    not callable(getattr(gpufhe_context.BsContext_map[str(logBsSlots)], item))
-                ) and not item.startswith("__"):
-                    BsContextMembers[item] = getattr(
-                        gpufhe_context.BsContext_map[str(logBsSlots)], item
-                    )
-            BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -222,4 +199,4 @@ def gen_contexts(
     # with open(OPENFHE_path, "rb") as file:
     #     openfheMembers = pickle.load(file)
     with open(GPUFHE_path, "wb") as file:
-        pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)
+        pickle.dump((gpufheMembers, openfheMembers), file)

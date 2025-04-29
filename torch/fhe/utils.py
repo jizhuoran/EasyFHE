@@ -1,5 +1,5 @@
 from datetime import datetime
-import time, os, pickle
+import time, os, pickle, math
 import numpy as np
 import functools
 import atexit
@@ -177,17 +177,15 @@ def try_load_context(
         )
 
     with open(load_path, "rb") as file:
-        gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
+        gpufheMembers, openfheMembers = pickle.load(file)
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers, config)
-    if cryptoContext.config.AUTO_LOAD_KEYS:
-        if rotIndex_list is not None and rotIndex_list != []:
-            cryptoContext.load_rotation_keys("app")
-        if NO_BS == False:
-            for logBsSlots in logBsSlots_list:
-                cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-                cryptoContext.BsContext.to_cuda()
-                cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext = Context(gpufheMembers, config)
+    # if cryptoContext.config.AUTO_LOAD_KEYS:
+    #     if rotIndex_list is not None and rotIndex_list != []:
+    #         cryptoContext.load_rotation_keys("app")
+    #     if NO_BS == False:
+    #         for logBsSlots in logBsSlots_list:
+    #             cryptoContext.load_rotation_keys(logBsSlots)
 
     openfhe_context = client.OpenFHEContext(openfheMembers)
     openfhe_context.config = cryptoContext.config

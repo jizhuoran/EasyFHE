@@ -1,11 +1,9 @@
-import time
+import time, math
 from .context import *
-from .bs_context import *
 from . import homo_ops
 import numpy as np
 
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
-
 
 
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):
@@ -189,263 +187,187 @@ def inner_eval_chebyshev_ps(coefficients,
 
     return result
 
-
-def PopulateParameterPS(upper_bound_degree):
-    # Initialize the mlist array with zeros
-    mlist = np.zeros(upper_bound_degree, dtype=np.int32)
-
-    # Define the degree ranges and corresponding m values
-    # Each tuple is (start_n, end_n, m)
-    ranges = [
-        (1, 2, 1),  # n in [1,2], m = 1
-        (3, 11, 2),  # n in [3,11], m = 2
-        (12, 13, 3),  # n in [12,13], m = 3
-        (14, 17, 2),  # n in [14,17], m = 2
-        (18, 55, 3),  # n in [18,55], m = 3
-        (56, 59, 4),  # n in [56,59], m = 4
-        (60, 76, 3),  # n in [60,76], m = 3
-        (77, 239, 4),  # n in [77,239], m = 4
-        (240, 247, 5),  # n in [240,247], m = 5
-        (248, 284, 4),  # n in [248,284], m = 4
-        (285, 991, 5),  # n in [285,991], m = 5
-        (992, 1007, 6),  # n in [992,1007], m = 6
-        (1008, 1083, 5),  # n in [1008,1083], m = 5
-        (1084, 2015, 6),  # n in [1084,2015], m = 6
-        (2016, 2031, 7),  # n in [2016,2031], m = 7
-        (2032, 2204, 6)  # n in [2032,2204], m = 6
-    ]
-
-    for start, end, m in ranges:
-        if upper_bound_degree < start:
-            # If the upper bound is less than the start of the current range, no need to continue
-            break
-        # Determine the actual end for slicing to avoid exceeding upper_bound_degree
-        actual_end = min(end, upper_bound_degree)
-        # Set the value m for the slice [start-1, actual_end)
-        # In Python, slicing is end-exclusive
-        mlist[start - 1: actual_end] = m
-
-    return mlist
-
-
-# Compute positive integers k,m such that n < k(2^m-1), k is close to sqrt(n/2)
-# and the depth = ceil(log2(k))+m is minimized. Moreover, for that depth the
-# number of homomorphic multiplications = k+2m+2^(m-1)-4 is minimized.
-# Since finding these parameters involve testing many possible values, we
-# hardcode them for commonly used degrees, and provide a heuristic which
-# minimizes the number of homomorphic multiplications for the rest of the
-# degrees.
-def ComputeDegreesPS(n):
-    if n == 0:
-        raise ValueError("ComputeDegreesPS: The degree is zero. There is no need to evaluate the polynomial.")
-
-    UPPER_BOUND_PS = 2204
-
-    # Index n-1 in the list corresponds to degree n
-    if n <= UPPER_BOUND_PS:
-        mlist = PopulateParameterPS(UPPER_BOUND_PS)
-        m = mlist[n - 1]
-        k = math.floor(n / ((1 << m) - 1)) + 1
-        return [k, m]
+def get_params(secretKeyDist):
+    if secretKeyDist == "SPARSE_TERNARY":
+        k = 7
+        m = 3
+        divqr_q = np.array(
+            [
+                1.5737898213284949e-02,
+                1.4193114896160412e-03,
+                -3.0810788575042383e-03,
+                -2.5281042125897298e-04,
+                5.0216993231661574e-04,
+                3.7889258308067125e-05,
+                -6.9506568432616456e-05,
+                -4.8619736212223649e-06,
+                8.2972549475732493e-06,
+                5.4159666227349137e-07,
+                -8.6490777139797758e-07,
+                -5.2965488429713838e-08,
+                7.9540057542873108e-08,
+                4.5902307115813160e-09,
+                -6.5112052441109981e-09,
+                -3.5382142647853878e-10,
+                5.0918104300813460e-10,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                2.0000000000000000e00,
+            ]
+        )
+        divcs_q = np.array(
+            [
+                -0.9348430720681978,
+                -0.24807246365084598,
+                -0.03360736343811264,
+                0.10485552200765141,
+                0.012171628025753911,
+                -0.031034212401993305,
+                -0.003985828764410408,
+            ]
+        )
+        s2 = np.array(
+            [
+                -0.1788386282880803,
+                0.03907676004440467,
+                -0.20431837545501938,
+                0.02803557926525301,
+                -0.2434613107770007,
+                0.012176766307331699,
+                -0.2701672634577602,
+                -1.0177001300236108,
+                -0.2138490838407006,
+                -0.048556142033877835,
+                -0.013980273064777329,
+                -0.05109888871842223,
+                0.24300459668180657,
+                0.0016549458716776414,
+                0.23316927298939902,
+                0.06469374592818429,
+                -0.1521451141878234,
+                -0.004483722738865048,
+                -0.3477895670236423,
+                -0.037810320617212255,
+                0.6255427281424787,
+                1.0,
+            ]
+        )
     else:
-        klist = []
-        mlist = []
-        multlist = []
-
-        sqrt_half_n = math.sqrt(n / 2)
-        floor_log2_sqrt_half_n = math.floor(math.log2(sqrt_half_n)) if sqrt_half_n > 0 else 0
-
-        for k in range(1, n + 1):
-            # Calculate the upper bound for m to avoid excessive iterations
-            max_m = math.ceil(math.log2(n / k) + 1) + 1
-            for m in range(1, int(max_m) + 1):
-                lhs = n
-                rhs = k * ((1 << m) - 1)
-                if lhs - rhs < 0:
-                    floor_log2_k = math.floor(math.log2(k))
-                    if abs(floor_log2_k - floor_log2_sqrt_half_n) <= 1:
-                        klist.append(k)
-                        mlist.append(m)
-                        mult = k + 2 * m + (1 << (m - 1)) - 4
-                        multlist.append(mult)
-
-        if not multlist:
-            raise ValueError("No valid (k, m) pairs found for the given n.")
-
-        min_mult = min(multlist)
-        min_index = multlist.index(min_mult)
-
-        return [klist[min_index], mlist[min_index]]
-
+        k = 6
+        m = 4
+        divqr_q = np.array(
+            [
+                6.9497600491054290e-01,
+                1.5075659923541847e-02,
+                -5.0233074759606788e-01,
+                -9.4571349359752407e-03,
+                2.7941005703366972e-01,
+                4.7345067850310439e-03,
+                -1.2729880216016740e-01,
+                -1.9798642689796545e-03,
+                4.9195677869633810e-02,
+                7.1106471834114966e-04,
+                -1.6497006061515631e-02,
+                -2.2352368627245097e-04,
+                4.8781149658186527e-03,
+                6.2360769728977259e-05,
+                -1.2874704946877972e-03,
+                -1.5607201790475593e-05,
+                3.0620030291844116e-04,
+                3.5341608360440269e-06,
+                -6.6133688758953800e-05,
+                -7.2921818268558850e-07,
+                1.3055393804350821e-05,
+                1.3791568733237984e-07,
+                -2.3685622375284772e-06,
+                -2.4030266570614624e-08,
+                3.9678679895296662e-07,
+                3.8744091942201708e-09,
+                -6.1630836065047186e-08,
+                -5.8027612677471620e-10,
+                8.9081808596347400e-09,
+                8.1010273395832156e-11,
+                -1.2020982561426954e-09,
+                -1.0574664739365698e-11,
+                1.5188641355870345e-10,
+                1.2935913264412094e-12,
+                -1.8016240185107980e-11,
+                -1.4879389855058450e-13,
+                2.0114846118334488e-12,
+                1.6340237527601039e-14,
+                -2.1223472417710746e-13,
+                -1.7919498594090307e-15,
+                2.2843150592062770e-14,
+                0.0000000000000000e00,
+                2.0000000000000000e00,
+            ]
+        )
+        divcs_q = np.array(
+            [
+                -7.2346249482043945e-01,
+                -5.8624766264825747e-04,
+                -5.0944076707358829e-02,
+                1.0324286361991016e-02,
+                -6.8206402964557211e-02,
+                -1.6291771595364480e-02,
+            ]
+        )
+        s2 = np.array(
+            [
+                3.9925918972600116e-01,
+                4.1145403219203028e-03,
+                -1.8235175231313211e-02,
+                -1.2610653952719340e-02,
+                2.8758646670247762e-01,
+                7.1082491955162096e-03,
+                -8.5570641881432696e-01,
+                -7.9326949369856407e-03,
+                2.4129727753976357e-01,
+                3.3790703055063117e-03,
+                2.0707743824677474e-01,
+                8.0275114432424059e-04,
+                1.7945499861112815e-01,
+                4.8112939341447792e-03,
+                8.5282908239589103e-02,
+                5.2930062046256110e-03,
+                -4.6427041843243977e-02,
+                4.7840515232640164e-03,
+                -1.7718605082654609e-01,
+                1.6077363022353442e-03,
+                -2.2701785866927471e-01,
+                -2.8115966949872331e-03,
+                -1.3123360552644656e-01,
+                -5.6352028739135845e-03,
+                7.8818717503706712e-02,
+                -3.7867513899410860e-03,
+                2.3226543877935715e-01,
+                2.1115426273585532e-03,
+                1.3984859250790091e-01,
+                5.9369332741118662e-03,
+                -1.3915168832121910e-01,
+                1.8563000239210160e-03,
+                -2.3269686348640464e-01,
+                -5.4025808040419360e-03,
+                5.7484353608334406e-02,
+                -3.5538996706805082e-03,
+                2.5424003264451761e-01,
+                2.1906500836275766e-02,
+                3.1205132805949077e-03,
+                -7.8987913855752667e-03,
+                -2.2278168390589351e-01,
+                -5.3763068525559737e-03,
+                1.0000000000000000e00,
+            ]
+        )
+    return k, m, divqr_q, divcs_q, s2
 
 
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 # @profile_pytorch_function
 def eval_bootstrapping_chebyshev(x, a, b, cryptoContext):
-
-
-    coefficientsSparse = np.array(
-            [
-                -0.18646470117093214, 0.036680543700430925, -0.20323558926782626, 0.029327390306199311,
-                -0.24346234149506416, 0.011710240188138248, -0.27023281815251715, -0.017621188001030602,
-                -0.21383614034992021, -0.048567932060728937, -0.013982336571484519, -0.051097367628344978,
-                0.24300487324019346, 0.0016547743046161035, 0.23316923792642233, 0.060707936480887646,
-                -0.18317928363421143, 0.0076878773048247966, -0.24293447776635235, -0.071417413140564698,
-                0.37747441314067182, 0.065154496937795681, -0.24810721693607704, -0.033588418808958603,
-                0.10510660697380972, 0.012045222815124426, -0.032574751830745423, -0.0032761730196023873,
-                0.0078689491066424744, 0.00070965574480802061, -0.0015405394287521192, -0.00012640521062948649,
-                0.00025108496615830787, 0.000018944629154033562, -0.000034753284216308228, -2.4309868106111825e-6,
-                4.1486274737866247e-6, 2.7079833113674568e-7, -4.3245388569898879e-7, -2.6482744214856919e-8,
-                3.9770028771436554e-8, 2.2951153557906580e-9, -3.2556026220554990e-9, -1.7691071323926939e-10,
-                2.5459052150406730e-10
-            ],
-            dtype=np.float64,
-        )
-
-    coefficientsUniform = np.array(
-        [
-            0.15421426400235561,
-            -0.0037671538417132409,
-            0.16032011744533031,
-            -0.0034539657223742453,
-            0.17711481926851286,
-            -0.0027619720033372291,
-            0.19949802549604084,
-            -0.0015928034845171929,
-            0.21756948616367638,
-            0.00010729951647566607,
-            0.21600427371240055,
-            0.0022171399198851363,
-            0.17647500259573556,
-            0.0042856217194480991,
-            0.086174491919472254,
-            0.0054640252312780444,
-            -0.046667988130649173,
-            0.0047346914623733714,
-            -0.17712686172280406,
-            0.0016205080004247200,
-            -0.22703114241338604,
-            -0.0028145845916205865,
-            -0.13123089730288540,
-            -0.0056345646688793190,
-            0.078818395388692147,
-            -0.0037868875028868542,
-            0.23226434602675575,
-            0.0021116338645426574,
-            0.13985510526186795,
-            0.0059365649669377071,
-            -0.13918475289368595,
-            0.0018580676740836374,
-            -0.23254376365752788,
-            -0.0054103844866927788,
-            0.056840618403875359,
-            -0.0035227192748552472,
-            0.25667909012207590,
-            0.0055029673963982112,
-            -0.073334392714092062,
-            0.0027810273357488265,
-            -0.24912792167850559,
-            -0.0069524866497120566,
-            0.21288810409948347,
-            0.0017810057298691725,
-            0.088760951809475269,
-            0.0055957188940032095,
-            -0.31937177676259115,
-            -0.0087539416335935556,
-            0.34748800245527145,
-            0.0075378299617709235,
-            -0.25116537379803394,
-            -0.0047285674679876204,
-            0.13970502851683486,
-            0.0023672533925155220,
-            -0.063649401080083698,
-            -0.00098993213448982727,
-            0.024597838934816905,
-            0.00035553235917057483,
-            -0.0082485030307578155,
-            -0.00011176184313622549,
-            0.0024390574829093264,
-            0.000031180384864488629,
-            -0.00064373524734389861,
-            -7.8036008952377965e-6,
-            0.00015310015145922058,
-            1.7670804180220134e-6,
-            -0.000033066844379476900,
-            -3.6460909134279425e-7,
-            6.5276969021754105e-6,
-            6.8957843666189918e-8,
-            -1.1842811187642386e-6,
-            -1.2015133285307312e-8,
-            1.9839339947648331e-7,
-            1.9372045971100854e-9,
-            -3.0815418032523593e-8,
-            -2.9013806338735810e-10,
-            4.4540904298173700e-9,
-            4.0505136697916078e-11,
-            -6.0104912807134771e-10,
-            -5.2873323696828491e-12,
-            7.5943206779351725e-11,
-            6.4679566322060472e-13,
-            -9.0081200925539902e-12,
-            -7.4396949275292252e-14,
-            1.0057423059167244e-12,
-            8.1701187638005194e-15,
-            -1.0611736208855373e-13,
-            -8.9597492970451533e-16,
-            1.1421575296031385e-14,
-        ],
-        dtype=np.float64,
-    )
-
-    # Coefficients of the Chebyshev series interpolating 1/(2 Pi) Sin(2 Pi K x)
-    if cryptoContext.secretKeyDist == "SPARSE_TERNARY":
-        coefficients = coefficientsSparse
-    else:
-        coefficients = coefficientsUniform
-            
-    n = degree(coefficients)
-    f2 = np.copy(coefficients)
-    # Make sure the coefficients do not have the zero dominant terms
-    if coefficients[- 1] == 0:
-        f2.resize(n + 1, refcheck=False)
-
-    degs = ComputeDegreesPS(n)
-    k = degs[0]
-    m = degs[1]
-
-    # Compute k*2^{m-1}-k because we use it a lot
-    k2m2k = k * (1 << (m - 1)) - k
-
-    f2.resize(2 * k2m2k + k + 1, refcheck=False)
-    f2[-1] = 1
-
-    # Divide f2 by T^{k*2^{m-1}}
-    Tkm = np.zeros(k2m2k + k + 1)
-    Tkm[- 1] = 1
-
-    divqr_q, divqr_r = long_division_chebyshev(f2, Tkm)
-
-    r2 = np.copy(divqr_r)
-    if k2m2k - degree(divqr_r) <= 0:
-        r2[k2m2k] -= 1
-        r2.resize(degree(r2) + 1, refcheck=False)
-    else:
-        r2.resize(k2m2k + 1, refcheck=False)
-        r2[-1] = -1
-
-    # Divide r2 by q
-    divcs_q, divcs_r = long_division_chebyshev(r2, divqr_q)
-
-    # Add x^{k(2^{m-1} - 1)} to s
-    s2 = np.copy(divcs_r)
-    s2.resize(k2m2k + 1, refcheck=False)
-    s2[-1] = 1
-
-    # Evaluate c at u
-    cu = None
-
-    # computes linear transformation y = -1 + 2 (x-a)/(b-a)
-    # consumes one level when a <> -1 && b <> 1
+    k, m, divqr_q, divcs_q, s2 = get_params(cryptoContext.secretKeyDist)
 
     T = [x]
     alpha = 2 / (b - a)
@@ -602,3 +524,272 @@ def eval_chebyshev_coefficients(func, a, b, degree):
         coefficients[i] *= mult_factor
 
     return coefficients
+
+
+
+
+
+# def PopulateParameterPS(upper_bound_degree):
+#     # Initialize the mlist array with zeros
+#     mlist = np.zeros(upper_bound_degree, dtype=np.int32)
+
+#     # Define the degree ranges and corresponding m values
+#     # Each tuple is (start_n, end_n, m)
+#     ranges = [
+#         (1, 2, 1),  # n in [1,2], m = 1
+#         (3, 11, 2),  # n in [3,11], m = 2
+#         (12, 13, 3),  # n in [12,13], m = 3
+#         (14, 17, 2),  # n in [14,17], m = 2
+#         (18, 55, 3),  # n in [18,55], m = 3
+#         (56, 59, 4),  # n in [56,59], m = 4
+#         (60, 76, 3),  # n in [60,76], m = 3
+#         (77, 239, 4),  # n in [77,239], m = 4
+#         (240, 247, 5),  # n in [240,247], m = 5
+#         (248, 284, 4),  # n in [248,284], m = 4
+#         (285, 991, 5),  # n in [285,991], m = 5
+#         (992, 1007, 6),  # n in [992,1007], m = 6
+#         (1008, 1083, 5),  # n in [1008,1083], m = 5
+#         (1084, 2015, 6),  # n in [1084,2015], m = 6
+#         (2016, 2031, 7),  # n in [2016,2031], m = 7
+#         (2032, 2204, 6)  # n in [2032,2204], m = 6
+#     ]
+
+#     for start, end, m in ranges:
+#         if upper_bound_degree < start:
+#             # If the upper bound is less than the start of the current range, no need to continue
+#             break
+#         # Determine the actual end for slicing to avoid exceeding upper_bound_degree
+#         actual_end = min(end, upper_bound_degree)
+#         # Set the value m for the slice [start-1, actual_end)
+#         # In Python, slicing is end-exclusive
+#         mlist[start - 1: actual_end] = m
+
+#     return mlist
+
+
+# # Compute positive integers k,m such that n < k(2^m-1), k is close to sqrt(n/2)
+# # and the depth = ceil(log2(k))+m is minimized. Moreover, for that depth the
+# # number of homomorphic multiplications = k+2m+2^(m-1)-4 is minimized.
+# # Since finding these parameters involve testing many possible values, we
+# # hardcode them for commonly used degrees, and provide a heuristic which
+# # minimizes the number of homomorphic multiplications for the rest of the
+# # degrees.
+# def ComputeDegreesPS(n):
+#     if n == 0:
+#         raise ValueError("ComputeDegreesPS: The degree is zero. There is no need to evaluate the polynomial.")
+
+#     UPPER_BOUND_PS = 2204
+
+#     # Index n-1 in the list corresponds to degree n
+#     if n <= UPPER_BOUND_PS:
+#         mlist = PopulateParameterPS(UPPER_BOUND_PS)
+#         m = mlist[n - 1]
+#         k = math.floor(n / ((1 << m) - 1)) + 1
+#         return [k, m]
+#     else:
+#         klist = []
+#         mlist = []
+#         multlist = []
+
+#         sqrt_half_n = math.sqrt(n / 2)
+#         floor_log2_sqrt_half_n = math.floor(math.log2(sqrt_half_n)) if sqrt_half_n > 0 else 0
+
+#         for k in range(1, n + 1):
+#             # Calculate the upper bound for m to avoid excessive iterations
+#             max_m = math.ceil(math.log2(n / k) + 1) + 1
+#             for m in range(1, int(max_m) + 1):
+#                 lhs = n
+#                 rhs = k * ((1 << m) - 1)
+#                 if lhs - rhs < 0:
+#                     floor_log2_k = math.floor(math.log2(k))
+#                     if abs(floor_log2_k - floor_log2_sqrt_half_n) <= 1:
+#                         klist.append(k)
+#                         mlist.append(m)
+#                         mult = k + 2 * m + (1 << (m - 1)) - 4
+#                         multlist.append(mult)
+
+#         if not multlist:
+#             raise ValueError("No valid (k, m) pairs found for the given n.")
+
+#         min_mult = min(multlist)
+#         min_index = multlist.index(min_mult)
+
+#         return [klist[min_index], mlist[min_index]]
+
+
+# def pre_compute_params_SHOULD_NOT_CALL(secretKeyDist):
+
+#     coefficientsSparse = np.array(
+#             [
+#                 -0.18646470117093214, 0.036680543700430925, -0.20323558926782626, 0.029327390306199311,
+#                 -0.24346234149506416, 0.011710240188138248, -0.27023281815251715, -0.017621188001030602,
+#                 -0.21383614034992021, -0.048567932060728937, -0.013982336571484519, -0.051097367628344978,
+#                 0.24300487324019346, 0.0016547743046161035, 0.23316923792642233, 0.060707936480887646,
+#                 -0.18317928363421143, 0.0076878773048247966, -0.24293447776635235, -0.071417413140564698,
+#                 0.37747441314067182, 0.065154496937795681, -0.24810721693607704, -0.033588418808958603,
+#                 0.10510660697380972, 0.012045222815124426, -0.032574751830745423, -0.0032761730196023873,
+#                 0.0078689491066424744, 0.00070965574480802061, -0.0015405394287521192, -0.00012640521062948649,
+#                 0.00025108496615830787, 0.000018944629154033562, -0.000034753284216308228, -2.4309868106111825e-6,
+#                 4.1486274737866247e-6, 2.7079833113674568e-7, -4.3245388569898879e-7, -2.6482744214856919e-8,
+#                 3.9770028771436554e-8, 2.2951153557906580e-9, -3.2556026220554990e-9, -1.7691071323926939e-10,
+#                 2.5459052150406730e-10
+#             ],
+#             dtype=np.float64,
+#         )
+
+#     coefficientsUniform = np.array(
+#         [
+#             0.15421426400235561,
+#             -0.0037671538417132409,
+#             0.16032011744533031,
+#             -0.0034539657223742453,
+#             0.17711481926851286,
+#             -0.0027619720033372291,
+#             0.19949802549604084,
+#             -0.0015928034845171929,
+#             0.21756948616367638,
+#             0.00010729951647566607,
+#             0.21600427371240055,
+#             0.0022171399198851363,
+#             0.17647500259573556,
+#             0.0042856217194480991,
+#             0.086174491919472254,
+#             0.0054640252312780444,
+#             -0.046667988130649173,
+#             0.0047346914623733714,
+#             -0.17712686172280406,
+#             0.0016205080004247200,
+#             -0.22703114241338604,
+#             -0.0028145845916205865,
+#             -0.13123089730288540,
+#             -0.0056345646688793190,
+#             0.078818395388692147,
+#             -0.0037868875028868542,
+#             0.23226434602675575,
+#             0.0021116338645426574,
+#             0.13985510526186795,
+#             0.0059365649669377071,
+#             -0.13918475289368595,
+#             0.0018580676740836374,
+#             -0.23254376365752788,
+#             -0.0054103844866927788,
+#             0.056840618403875359,
+#             -0.0035227192748552472,
+#             0.25667909012207590,
+#             0.0055029673963982112,
+#             -0.073334392714092062,
+#             0.0027810273357488265,
+#             -0.24912792167850559,
+#             -0.0069524866497120566,
+#             0.21288810409948347,
+#             0.0017810057298691725,
+#             0.088760951809475269,
+#             0.0055957188940032095,
+#             -0.31937177676259115,
+#             -0.0087539416335935556,
+#             0.34748800245527145,
+#             0.0075378299617709235,
+#             -0.25116537379803394,
+#             -0.0047285674679876204,
+#             0.13970502851683486,
+#             0.0023672533925155220,
+#             -0.063649401080083698,
+#             -0.00098993213448982727,
+#             0.024597838934816905,
+#             0.00035553235917057483,
+#             -0.0082485030307578155,
+#             -0.00011176184313622549,
+#             0.0024390574829093264,
+#             0.000031180384864488629,
+#             -0.00064373524734389861,
+#             -7.8036008952377965e-6,
+#             0.00015310015145922058,
+#             1.7670804180220134e-6,
+#             -0.000033066844379476900,
+#             -3.6460909134279425e-7,
+#             6.5276969021754105e-6,
+#             6.8957843666189918e-8,
+#             -1.1842811187642386e-6,
+#             -1.2015133285307312e-8,
+#             1.9839339947648331e-7,
+#             1.9372045971100854e-9,
+#             -3.0815418032523593e-8,
+#             -2.9013806338735810e-10,
+#             4.4540904298173700e-9,
+#             4.0505136697916078e-11,
+#             -6.0104912807134771e-10,
+#             -5.2873323696828491e-12,
+#             7.5943206779351725e-11,
+#             6.4679566322060472e-13,
+#             -9.0081200925539902e-12,
+#             -7.4396949275292252e-14,
+#             1.0057423059167244e-12,
+#             8.1701187638005194e-15,
+#             -1.0611736208855373e-13,
+#             -8.9597492970451533e-16,
+#             1.1421575296031385e-14,
+#         ],
+#         dtype=np.float64,
+#     )
+
+#     # Coefficients of the Chebyshev series interpolating 1/(2 Pi) Sin(2 Pi K x)
+#     if secretKeyDist == "SPARSE_TERNARY":
+#         coefficients = coefficientsSparse
+#     else:
+#         coefficients = coefficientsUniform
+            
+#     n = degree(coefficients)
+#     f2 = np.copy(coefficients)
+#     # Make sure the coefficients do not have the zero dominant terms
+#     if coefficients[- 1] == 0:
+#         f2.resize(n + 1, refcheck=False)
+
+#     degs = ComputeDegreesPS(n)
+#     k = degs[0]
+#     m = int(degs[1])
+
+#     # Compute k*2^{m-1}-k because we use it a lot
+#     k2m2k = k * (1 << (m - 1)) - k
+
+#     f2.resize(2 * k2m2k + k + 1, refcheck=False)
+#     f2[-1] = 1
+
+#     # Divide f2 by T^{k*2^{m-1}}
+#     Tkm = np.zeros(k2m2k + k + 1)
+#     Tkm[- 1] = 1
+
+#     divqr_q, divqr_r = long_division_chebyshev(f2, Tkm)
+
+#     r2 = np.copy(divqr_r)
+#     if k2m2k - degree(divqr_r) <= 0:
+#         r2[k2m2k] -= 1
+#         r2.resize(degree(r2) + 1, refcheck=False)
+#     else:
+#         r2.resize(k2m2k + 1, refcheck=False)
+#         r2[-1] = -1
+
+#     # Divide r2 by q
+#     divcs_q, divcs_r = long_division_chebyshev(r2, divqr_q)
+
+#     # Add x^{k(2^{m-1} - 1)} to s
+#     s2 = np.copy(divcs_r)
+#     s2.resize(k2m2k + 1, refcheck=False)
+#     s2[-1] = 1
+
+#     np.set_printoptions(precision=100, floatmode='unique', linewidth=200)
+
+#     print("k =", repr(k))
+#     print("m =", repr(m))
+#     print("divqr_q =", divqr_q.dtype)
+#     print("divcs_q =", divcs_q.dtype)
+#     print("s2 =", s2.dtype)
+
+
+#     print("k =", repr(k))
+#     print("m =", repr(m))
+#     print("divqr_q =", repr(divqr_q))
+#     print("divcs_q =", repr(divcs_q))
+#     print("s2 =", repr(s2))
+
+#     return k, m, divqr_q, divcs_q, s2
+

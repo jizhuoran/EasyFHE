@@ -1,18 +1,20 @@
 from enum import Enum
-from .bs_context import *
+import torch
+from .ciphertext import Plaintext, Cipher, PreEncodeValues
 from .config import *
 
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
-
-
 class LargeScalingFactorConstants(Enum):
     MAX_BITS_IN_WORD = 61
     MAX_LOG_STEP = 60
 
-
+def get_item(item_name, content_map):
+    if item_name in content_map:
+        return content_map[item_name]
+    return None
 class Context:
-    def __init__(self, BsContext_content_map, gpufhe_content_map, config):
+    def __init__(self, gpufhe_content_map, config):
         self.L = get_item("L", gpufhe_content_map)
         self.dnum = get_item("dnum", gpufhe_content_map)
         self.alpha = get_item("alpha", gpufhe_content_map)
@@ -96,15 +98,16 @@ class Context:
         self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
         self.QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
         self.QmaxdiffplusPmaxdiff_map = get_item("QmaxdiffplusPmaxdiff_map", gpufhe_content_map)
-        self.BsContext_map = {}
-        if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
-            for logBsSlots in self.logBsSlots_list:
-                _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
-                self.BsContext_map[str(logBsSlots)] = _BsContext
+        # self.BsContext_map = {}
+        # if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
+        #     for logBsSlots in self.logBsSlots_list:
+        #         _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
+        #         self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
         self.encode_temp = get_item("encode_temp", gpufhe_content_map)
         self.encode_inverse = get_item("encode_inverse", gpufhe_content_map)
+        self.encode_values = get_item("encode_values", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -156,16 +159,40 @@ class Context:
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = torch.tensor(value, dtype = torch.uint64)
 
-        self.to_cuda()
-        self.BsContext = None
         self.left_rot_key_map = {}
         self.precompute_auto_map = {}
+
+        for key_name in self.slots_left_rot_key_map:
+            for key in self.slots_left_rot_key_map[str(key_name)]:
+                self.left_rot_key_map[key] = [
+                    torch.tensor(v, dtype=torch.uint64)
+                    for v in self.total_left_rot_key_map[key]
+                ]
+        for key_name in self.slots_precompute_auto_map:
+            for key, value in self.slots_precompute_auto_map[str(key_name)].items():
+                self.precompute_auto_map[key] = torch.tensor(
+                    value, dtype=torch.int32
+                )
+
+        for key, value in self.encode_values.items():
+            if isinstance(value, Plaintext):
+                self.encode_values[key].cv = [torch.tensor(value.cv, dtype = torch.uint64)]
+                Cipher._id_counter = max(Cipher._id_counter, value.cipher_id)
+            elif isinstance(value, PreEncodeValues):
+                self.encode_values[key].encoded_values = torch.tensor(value.encoded_values)
 
         self.config = config
         self.inBS = False
         self.in_check_period = False
+        self.device = "cuda"
+        self.to_cuda()
+        # self.BsContext = None
+
+
+
 
     def to_cuda(self):
+        self.device = "cuda"
         self.q_mu = self.q_mu.cuda()
         self.moduliQ = self.moduliQ.cuda()
         self.primes = self.primes.cuda()
@@ -215,6 +242,22 @@ class Context:
         for key, value in self.QmaxdiffplusPmaxdiff_map.items():
             self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
 
+        for key, value in self.encode_values.items():
+            if isinstance(value, Plaintext):
+                self.encode_values[key].cv = [self.encode_values[key].cv[0].cuda()]
+            elif isinstance(value, PreEncodeValues):
+                self.encode_values[key].encoded_values = self.encode_values[key].encoded_values.cuda()
+            else:
+                raise TypeError("Unsupported type for encode_values value: {}".format(type(value)))
+
+        if self.config.AUTO_LOAD_KEYS:
+            for key, value in self.left_rot_key_map.items():
+                self.left_rot_key_map[key] = [
+                    v.cuda() for v in value
+                ]
+            for key, value in self.precompute_auto_map.items():
+                self.precompute_auto_map[key] = value.cuda()
+
     def norm_rot_index(self, i):
         if i < 0:
             i = self.N // 2 + i
@@ -260,41 +303,15 @@ class Context:
         return self.approxSF
 
     def get_rotation_key(self, rot_index):
-        if rot_index in self.left_rot_key_map:
-            return self.left_rot_key_map[rot_index]
+        if self.device == "cuda" and not self.left_rot_key_map[rot_index][0].is_cuda:
+            return [self.left_rot_key_map[rot_index][0].cuda(), self.left_rot_key_map[rot_index][1].cuda()]
         else:
-            return [
-                torch.tensor(v, dtype=torch.uint64, device="cuda")
-                for v in self.total_left_rot_key_map[rot_index]
-            ]
+            return self.left_rot_key_map[rot_index]
+
 
     def get_precompute_auto(self, key):
-        if key in self.precompute_auto_map:
-            return self.precompute_auto_map[key]
+        if self.device == "cuda" and not self.precompute_auto_map[key].is_cuda:
+            return self.precompute_auto_map[key].cuda()
         else:
-            for k, v in self.slots_precompute_auto_map.items():
-                if key in v:
-                    return torch.tensor(v[key], dtype=torch.int32, device="cuda")
-        assert False and "Key not found in precompute_auto_map"
+            return self.precompute_auto_map[key]
 
-    def load_rotation_keys(self, key_name):
-        if not self.config.AUTO_LOAD_KEYS:
-            print("AUTO_LOAD_KEYS is disabled. Do not call this function.")
-            return
-        assert str(key_name) in self.slots_left_rot_key_map
-        assert str(key_name) in self.slots_precompute_auto_map
-        for key in self.slots_left_rot_key_map[str(key_name)]:
-            if key not in self.left_rot_key_map:
-                self.left_rot_key_map[key] = [
-                    torch.tensor(v, dtype=torch.uint64, device="cuda")
-                    for v in self.total_left_rot_key_map[key]
-                ]
-        for key, value in self.slots_precompute_auto_map[str(key_name)].items():
-            self.precompute_auto_map[key] = torch.tensor(
-                value, dtype=torch.int32, device="cuda"
-            )
-
-    def load_bootstrapping_context(self, logBsSlots):
-        self.BsContext = self.BsContext_map[str(logBsSlots)]
-        self.BsContext.to_cuda()
-        self.load_rotation_keys(logBsSlots)

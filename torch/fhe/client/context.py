@@ -15,6 +15,7 @@ class __FOR_SAVE_ONLY_Context:
         specialMod,
         dnum,
         levelBudget_list,
+        maxLevelsRemaining,
         moduliQ_scalar=None,
         moduliP_scalar=None,
         rootsQ=None,
@@ -26,6 +27,7 @@ class __FOR_SAVE_ONLY_Context:
         secretKeyDist=None,
         rescaleTech=None,
         dim1=None,
+        config=None,
         h=64,
         sigma=32,
     ):
@@ -65,6 +67,8 @@ class __FOR_SAVE_ONLY_Context:
         self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
+        self.encode_values = {}
+
         if moduliQ_scalar is None and rootsQ is None:
             while True:
                 prime = (1 << firstMod) + bnd * self.M + 1
@@ -758,6 +762,45 @@ class __FOR_SAVE_ONLY_Context:
                 )
         else:
             assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]
+
+        NO_BS = False
+        if logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]:
+            NO_BS = True
+
+        # BsContextMembers_dict = {}
+        if NO_BS == False:
+            for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+                print("BsContext_map: ", logBsSlots)
+                if config.ENCODE_BS_FFT:
+                    self.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
+                        self, level_budget, dim1, (1 << logBsSlots), 0
+                    )
+                else:
+                    assert config.COMPARE_WITH_OPENFHE == False, "Cannot compare with openfhe if not using fully pre-encoded BS FFT"
+                    self.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                        self, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
+                    )
+                for i in range(len(self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT)):
+                    for j in range(len(self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT[i])):
+                        self.encode_values["{}_{}_{}_{}".format("C2S", logBsSlots, i, j)] = self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT[i][j]
+
+                for i in range(len(self.BsContext_map[str(logBsSlots)].m_U0PreFFT)):
+                    for j in range(len(self.BsContext_map[str(logBsSlots)].m_U0PreFFT[i])):
+                        self.encode_values["{}_{}_{}_{}".format("S2C", logBsSlots, i, j)] = self.BsContext_map[str(logBsSlots)].m_U0PreFFT[i][j]
+
+        self.BsContext_map = None
+
+            # for logBsSlots in logBsSlots_list:
+            #     BsContextMembers = {}
+            #     for item in dir(self.BsContext_map[str(logBsSlots)]):
+            #         if (
+            #             not callable(getattr(self.BsContext_map[str(logBsSlots)], item))
+            #         ) and not item.startswith("__"):
+            #             BsContextMembers[item] = getattr(
+            #                 self.BsContext_map[str(logBsSlots)], item
+            #             )
+            #     BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
+
 
 
     def compute_auto_map(self, k, N):
