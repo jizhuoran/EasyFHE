@@ -14,8 +14,6 @@
 
 namespace fhe {
 
-
-
 __uint128_t accumulate_in_modup(
     const uint64_t* ptr,
     const int degree,
@@ -154,8 +152,8 @@ void vec_add_mod_batch_(
     const auto prime = d_primes[out_prime_idx];
     const auto barret_ratio = d_barret_ratio[out_prime_idx];
     const auto barret_k = d_barret_k[out_prime_idx];
-    to[i] = barret_reduction_64_64(
-        op1[i] + op2[i], prime, barret_ratio, barret_k);
+    to[i] =
+        barret_reduction_64_64(op1[i] + op2[i], prime, barret_ratio, barret_k);
   }
 }
 
@@ -217,36 +215,35 @@ void switch_modulus_(
 namespace at::native {
 
 void const_mult_batch(
-  size_t degree,
-  const uint64_t* primes,
-  uint64_t* op1,
-  const uint64_t* op2,
-  const uint64_t* op2_psinv,
-  const int start_prime_idx,
-  const int batch,
-  const int start_op1_idx,
-  const int start_op2_idx,
-  uint64_t* to) {
-const int max_threads = omp_get_max_threads();
-omp_set_num_threads(max_threads);
+    size_t degree,
+    const uint64_t* primes,
+    uint64_t* op1,
+    const uint64_t* op2,
+    const uint64_t* op2_psinv,
+    const int start_prime_idx,
+    const int batch,
+    const int start_op1_idx,
+    const int start_op2_idx,
+    uint64_t* to) {
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
 #pragma omp parallel for num_threads(max_threads)
-for (int i = 0; i < degree * batch; i++) {
-  const int op2_idx = start_op2_idx + i / degree;
-  const int prime_idx = i / degree + start_prime_idx;
-  const auto prime = primes[prime_idx];
+  for (int i = 0; i < degree * batch; i++) {
+    const int op2_idx = start_op2_idx + i / degree;
+    const int prime_idx = i / degree + start_prime_idx;
+    const auto prime = primes[prime_idx];
 
-  uint64_t out = fhe::mul_and_reduce_shoup(
-      op1[start_op1_idx * degree + i],
-      op2[op2_idx],
-      op2_psinv[op2_idx],
-      prime);
+    uint64_t out = fhe::mul_and_reduce_shoup(
+        op1[start_op1_idx * degree + i],
+        op2[op2_idx],
+        op2_psinv[op2_idx],
+        prime);
 
-  if (out >= prime)
-    out -= prime;
-  to[start_op1_idx * degree + i] = out;
+    if (out >= prime)
+      out -= prime;
+    to[start_op1_idx * degree + i] = out;
+  }
 }
-}
-
 
 void const_mult_batch_(
     uint64_t* op1_ptr,
@@ -384,18 +381,6 @@ static void modup_impl_(
       inverse_power_of_roots_div_two,
       param_primes__,
       inverse_scaled_power_of_roots_div_two);
-
-  // const_mult_batch_(
-  //     to_ptr,
-  //     hat_inverse_vec,
-  //     hat_inverse_vec_psinv,
-  //     begin_idx,
-  //     in_C_L_len,
-  //     begin_idx,
-  //     0,
-  //     param_degree_,
-  //     to_ptr,
-  //     param_primes__);
   auto op2_ptr =
       reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
   auto op2_psinv_ptr =
@@ -614,228 +599,6 @@ static void moddown_impl(
       }),
       kUInt64);
 }
-
-// static void moddown_core_template(
-//     const Tensor& from,
-//     int64_t curr_limbs,
-//     int64_t level,
-//     int64_t alpha,
-//     int64_t param_degree,
-//     int64_t param_log_degree,
-//     const Tensor& hat_inverse_vec_moddown,
-//     const Tensor& hat_inverse_vec_shoup_moddown,
-//     const Tensor& prod_q_i_mod_q_j_moddown,
-//     const Tensor& prod_inv_moddown,
-//     const Tensor& prod_inv_shoup_moddown,
-//     const Tensor& param_primes,
-//     const Tensor& param_barret_ratio,
-//     const Tensor& param_barret_k,
-//     Tensor& res) {
-//   const int start_length = level + alpha - curr_limbs; // tempK len
-//   const int end_length = curr_limbs;
-
-//   auto hat_inverse_vec = hat_inverse_vec_moddown[0];
-//   auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
-
-//   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-//   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-//   const int max_threads = omp_get_max_threads();
-//   omp_set_num_threads(max_threads);
-//   // const_mult_batch_(
-//   //     from_ptr,
-//   //     hat_inverse_vec,
-//   //     hat_inverse_vec_psinv,
-//   //     level,
-//   //     alpha,
-//   //     curr_limbs,
-//   //     0,
-//   //     param_degree,
-//   //     from_ptr,
-//   //     param_primes);
-//   auto op2_ptr =
-//       reinterpret_cast<uint64_t*>(hat_inverse_vec.data_ptr<uint64_t>());
-//   auto op2_psinv_ptr =
-//       reinterpret_cast<uint64_t*>(hat_inverse_vec_psinv.data_ptr<uint64_t>());
-//   auto primes_ptr =
-//       reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-// #pragma omp parallel for num_threads(max_threads)
-//   for (int i = 0; i < param_degree * alpha; i++) {
-//     const int op2_idx = 0 + i / param_degree;
-//     const int prime_idx = i / param_degree + level;
-//     const auto prime = primes_ptr[prime_idx];
-//     uint64_t out = fhe::mul_and_reduce_shoup(
-//         from_ptr[curr_limbs * param_degree + i],
-//         op2_ptr[op2_idx],
-//         op2_psinv_ptr[op2_idx],
-//         prime);
-//     if (out >= prime)
-//       out -= prime;
-//     from_ptr[curr_limbs * param_degree + i] = out;
-//   }
-
-//   moddown_impl(
-//       from_ptr,
-//       param_degree,
-//       param_log_degree,
-//       alpha,
-//       start_length,
-//       end_length,
-//       param_primes,
-//       prod_q_i_mod_q_j_moddown,
-//       param_barret_ratio,
-//       param_barret_k,
-//       to_ptr);
-
-//   const auto& prod_inv = prod_inv_moddown[0];
-//   const auto& prod_inv_psinv = prod_inv_shoup_moddown[0];
-
-//   SubInplace(to_ptr, from_ptr, end_length, param_degree, param_primes);
-
-//   NegateInplace(
-//       to_ptr, end_length, param_primes, param_degree, param_log_degree);
-
-//   // const_mult_batch_(
-//   //     to_ptr,
-//   //     prod_inv,
-//   //     prod_inv_psinv,
-//   //     0,
-//   //     end_length,
-//   //     0,
-//   //     0,
-//   //     param_degree,
-//   //     to_ptr,
-//   //     param_primes);
-
-//   op2_ptr = reinterpret_cast<uint64_t*>(prod_inv.data_ptr<uint64_t>());
-//   op2_psinv_ptr =
-//       reinterpret_cast<uint64_t*>(prod_inv_psinv.data_ptr<uint64_t>());
-//   primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-// #pragma omp parallel for num_threads(max_threads)
-//   for (int i = 0; i < param_degree * end_length; i++) {
-//     const int op2_idx = 0 + i / param_degree;
-//     const int prime_idx = i / param_degree + 0;
-//     const auto prime = primes_ptr[prime_idx];
-//     uint64_t out = fhe::mul_and_reduce_shoup(
-//         to_ptr[0 * param_degree + i],
-//         op2_ptr[op2_idx],
-//         op2_psinv_ptr[op2_idx],
-//         prime);
-//     if (out >= prime)
-//       out -= prime;
-//     to_ptr[0 * param_degree + i] = out;
-//   }
-// }
-
-// Tensor moddown_core_cpu(
-//     const Tensor& to,
-//     const Tensor& from,
-//     int64_t curr_limbs,
-//     int64_t level,
-//     int64_t alpha,
-//     int64_t param_degree,
-//     int64_t param_log_degree,
-//     const Tensor& hat_inverse_vec_moddown,
-//     const Tensor& hat_inverse_vec_shoup_moddown,
-//     const Tensor& prod_q_i_mod_q_j_moddown,
-//     const Tensor& prod_inv_moddown,
-//     const Tensor& prod_inv_shoup_moddown,
-//     const Tensor& param_primes,
-//     const Tensor& param_barret_ratio,
-//     const Tensor& param_barret_k) {
-//   auto res = to.clone();
-//   res.resize_({curr_limbs * param_degree});
-//   moddown_core_template(
-//       from,
-//       curr_limbs,
-//       level,
-//       alpha,
-//       param_degree,
-//       param_log_degree,
-//       hat_inverse_vec_moddown,
-//       hat_inverse_vec_shoup_moddown,
-//       prod_q_i_mod_q_j_moddown,
-//       prod_inv_moddown,
-//       prod_inv_shoup_moddown,
-//       param_primes,
-//       param_barret_ratio,
-//       param_barret_k,
-//       res);
-//   return res;
-// }
-
-// Tensor& moddown_core_cpu_(
-//     Tensor& to,
-//     const Tensor& from,
-//     int64_t curr_limbs,
-//     int64_t level,
-//     int64_t alpha,
-//     int64_t param_degree,
-//     int64_t param_log_degree,
-//     const Tensor& hat_inverse_vec_moddown,
-//     const Tensor& hat_inverse_vec_shoup_moddown,
-//     const Tensor& prod_q_i_mod_q_j_moddown,
-//     const Tensor& prod_inv_moddown,
-//     const Tensor& prod_inv_shoup_moddown,
-//     const Tensor& param_primes,
-//     const Tensor& param_barret_ratio,
-//     const Tensor& param_barret_k) {
-//   to.resize_({curr_limbs * param_degree});
-
-//   moddown_core_template(
-//       from,
-//       curr_limbs,
-//       level,
-//       alpha,
-//       param_degree,
-//       param_log_degree,
-//       hat_inverse_vec_moddown,
-//       hat_inverse_vec_shoup_moddown,
-//       prod_q_i_mod_q_j_moddown,
-//       prod_inv_moddown,
-//       prod_inv_shoup_moddown,
-//       param_primes,
-//       param_barret_ratio,
-//       param_barret_k,
-//       to);
-//   return to;
-// }
-
-// Tensor& moddown_core_cpu_out(
-//     const Tensor& to,
-//     const Tensor& from,
-//     int64_t curr_limbs,
-//     int64_t level,
-//     int64_t alpha,
-//     int64_t param_degree,
-//     int64_t param_log_degree,
-//     const Tensor& hat_inverse_vec_moddown,
-//     const Tensor& hat_inverse_vec_shoup_moddown,
-//     const Tensor& prod_q_i_mod_q_j_moddown,
-//     const Tensor& prod_inv_moddown,
-//     const Tensor& prod_inv_shoup_moddown,
-//     const Tensor& param_primes,
-//     const Tensor& param_barret_ratio,
-//     const Tensor& param_barret_k,
-//     Tensor& res) {
-//   res.resize_({curr_limbs * param_degree});
-//   moddown_core_template(
-//       from,
-//       curr_limbs,
-//       level,
-//       alpha,
-//       param_degree,
-//       param_log_degree,
-//       hat_inverse_vec_moddown,
-//       hat_inverse_vec_shoup_moddown,
-//       prod_q_i_mod_q_j_moddown,
-//       prod_inv_moddown,
-//       prod_inv_shoup_moddown,
-//       param_primes,
-//       param_barret_ratio,
-//       param_barret_k,
-//       res);
-//   return res;
-// }
 
 static void moddown_cpu_template(
     // aten::moddown
@@ -1067,222 +830,6 @@ void switch_modulus(
             (int)degree, batch, old_prime_index, primes_ptr, ptr, res_ptr);
       }),
       kUInt64);
-}
-
-static void drop_last_element_scale_template(
-    // aten::drop_last_element_and_scale
-
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t l,
-    int64_t level,
-    int64_t param_degree,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
-    const Tensor& q_inv_mod_q,
-    const Tensor& q_inv_mod_q_shoup,
-    Tensor& res) {
-  const int end_length = curr_limbs - 1;
-  auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-  auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
-  iNTT_impl(
-      from_ptr,
-      from_ptr,
-      end_length,
-      1,
-      curr_limbs,
-      level,
-      param_degree,
-      inverse_power_of_roots_div_two,
-      param_primes,
-      inverse_scaled_power_of_roots_div_two);
-
-  auto ptr = from_ptr + param_degree * end_length;
-
-  switch_modulus(
-      ptr, to_ptr, param_primes, curr_limbs - 1, curr_limbs - 1, param_degree);
-
-  int start_op2_idx = (level - curr_limbs + l) * (level - 1);
-
-  const_mult_batch_(
-      to_ptr,
-      qlql_inv_mod_ql_div_ql_mod_q,
-      qlql_inv_mod_ql_div_ql_mod_q_shoup,
-      0,
-      curr_limbs - 1,
-      0,
-      start_op2_idx,
-      param_degree,
-      to_ptr,
-      param_primes);
-  NTT_impl(
-      to_ptr,
-      to_ptr,
-      0,
-      end_length,
-      param_degree,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
-
-  start_op2_idx = (curr_limbs - 1) * (level);
-  const_mult_batch_(
-      from_ptr,
-      q_inv_mod_q,
-      q_inv_mod_q_shoup,
-      0,
-      end_length,
-      0,
-      start_op2_idx,
-      param_degree,
-      from_ptr,
-      param_primes);
-
-  vec_add_mod_batch(
-      to_ptr,
-      from_ptr,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      end_length,
-      param_degree,
-      to_ptr);
-}
-
-Tensor drop_last_element_scale_cpu(
-    const Tensor& to,
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t l,
-    int64_t L,
-    int64_t N,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
-    const Tensor& q_inv_mod_q,
-    const Tensor& q_inv_mod_q_shoup) {
-
-      auto res = at::empty((curr_limbs - 1) * N, to.options());
-      auto workspace = from.clone();
-
-  drop_last_element_scale_template(
-    workspace,
-      curr_limbs,
-      l,
-      L,
-      N,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      param_power_of_roots_shoup,
-      param_power_of_roots,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      qlql_inv_mod_ql_div_ql_mod_q,
-      qlql_inv_mod_ql_div_ql_mod_q_shoup,
-      q_inv_mod_q,
-      q_inv_mod_q_shoup,
-      res);
-
-  return res;
-}
-
-Tensor& drop_last_element_scale_cpu_(
-    Tensor& to,
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t l,
-    int64_t level,
-    int64_t param_degree,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
-    const Tensor& q_inv_mod_q,
-    const Tensor& q_inv_mod_q_shoup) {
-  to.resize_({(curr_limbs - 1) * param_degree});
-
-  // drop_last_element_scale_template(
-  //     from,
-  //     curr_limbs,
-  //     l,
-  //     level,
-  //     param_degree,
-  //     param_primes,
-  //     param_barret_ratio,
-  //     param_barret_k,
-  //     param_power_of_roots_shoup,
-  //     param_power_of_roots,
-  //     inverse_power_of_roots_div_two,
-  //     inverse_scaled_power_of_roots_div_two,
-  //     qlql_inv_mod_ql_div_ql_mod_q,
-  //     qlql_inv_mod_ql_div_ql_mod_q_shoup,
-  //     q_inv_mod_q,
-  //     q_inv_mod_q_shoup,
-  //     to);
-
-  return to;
-}
-
-Tensor& drop_last_element_scale_cpu_out(
-    const Tensor& to,
-    const Tensor& from,
-    int64_t curr_limbs,
-    int64_t l,
-    int64_t level,
-    int64_t param_degree,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q,
-    const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
-    const Tensor& q_inv_mod_q,
-    const Tensor& q_inv_mod_q_shoup,
-    Tensor& res) {
-  res.resize_({(curr_limbs - 1) * param_degree});
-
-  // drop_last_element_scale_template(
-  //     from,
-  //     curr_limbs,
-  //     l,
-  //     level,
-  //     param_degree,
-  //     param_primes,
-  //     param_barret_ratio,
-  //     param_barret_k,
-  //     param_power_of_roots_shoup,
-  //     param_power_of_roots,
-  //     inverse_power_of_roots_div_two,
-  //     inverse_scaled_power_of_roots_div_two,
-  //     qlql_inv_mod_ql_div_ql_mod_q,
-  //     qlql_inv_mod_ql_div_ql_mod_q_shoup,
-  //     q_inv_mod_q,
-  //     q_inv_mod_q_shoup,
-  //     res);
-
-  return res;
 }
 
 } // namespace at::native
