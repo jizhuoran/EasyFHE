@@ -18,11 +18,11 @@ namespace at::native {
 static void mod_raise_template(
     Tensor& res,
     const Tensor& in,
-    const Tensor& moduliQ,
     int64_t N,
     int64_t L0,
     int64_t logN,
     int64_t level,
+    const Tensor& moduliQ,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -32,37 +32,37 @@ static void mod_raise_template(
   auto op_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
-      op_ptr,
       res_ptr,
+      op_ptr,
       0,
       1,
       1,
       level,
       N,
-      inverse_power_of_roots_div_two,
       moduliQ,
+      inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
 
-  switch_modulus(res_ptr, res_ptr, moduliQ, barret_ratio, barret_k, 0, L0, N);
+  switch_modulus(res_ptr, res_ptr, 0, L0, N, moduliQ, barret_ratio, barret_k);
 
   NTT_impl(
       res_ptr,
       res_ptr,
       L0,
       N,
-      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       moduliQ.data_ptr<uint64_t>(),
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mod_raise_cuda(
     const Tensor& res,
     const Tensor& in,
-    const Tensor& moduliQ,
     int64_t N,
     int64_t L0,
     int64_t logN,
     int64_t level,
+    const Tensor& moduliQ,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -74,11 +74,11 @@ Tensor mod_raise_cuda(
   mod_raise_template(
       out,
       in,
-      moduliQ,
       N,
       L0,
       logN,
       level,
+      moduliQ,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,

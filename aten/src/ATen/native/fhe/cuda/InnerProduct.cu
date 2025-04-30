@@ -14,20 +14,20 @@
 
 namespace fhe {
 __global__ void sum_reduce_fused(
+    uint64_t* out_ax,
+    uint64_t* out_bx,
     const uint64_t* in_ptr,
+    const uint64_t* eval_ax,
+    const uint64_t* eval_bx,
     const int N,
     const int length,
     const int mult_length,
     const int batch,
-    const uint64_t* eval_ax,
-    const uint64_t* eval_bx,
-    const uint64_t* primes,
-    const uint64_t* barret_ks,
-    const uint64_t* barret_ratios,
     int curr_limbs,
     int gap,
-    uint64_t* out_ax,
-    uint64_t* out_bx) {
+    const uint64_t* primes,
+    const uint64_t* barret_ks,
+    const uint64_t* barret_ratios) {
   const int idx = blockIdx.y;
   const int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
@@ -61,6 +61,7 @@ __global__ void sum_reduce_fused(
 
 namespace at::native {
 static void innerproduct_template(
+    Tensor& out,
     const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
@@ -71,8 +72,7 @@ static void innerproduct_template(
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
-    const Tensor& workspace,
-    Tensor& out) {
+    const Tensor& workspace) {
   const int beta = int((curr_limbs + alpha - 1) / alpha);
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
@@ -94,20 +94,20 @@ static void innerproduct_template(
   auto blockDim = 256;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::sum_reduce_fused<<<gridDim, blockDim, 0, stream>>>(
+      out_ax_ptr,
+      out_bx_ptr,
       in_ptr,
+      ax_ptr,
+      bx_ptr,
       N,
       length,
       mult_length,
       beta,
-      ax_ptr,
-      bx_ptr,
-      primes_ptr,
-      barret_k_ptr,
-      barret_ratio_ptr,
       curr_limbs,
       gap,
-      out_ax_ptr,
-      out_bx_ptr);
+      primes_ptr,
+      barret_k_ptr,
+      barret_ratio_ptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -129,6 +129,7 @@ Tensor innerproduct_cuda(
   int64_t sizeP = sizeQP - L;
   out.resize_({2, (curr_limbs + sizeP) * N});
   innerproduct_template(
+      out,  
       in,
       bx,
       ax,
@@ -139,8 +140,7 @@ Tensor innerproduct_cuda(
       primes,
       barret_ratio,
       barret_k,
-      workspace,
-      out);
+      workspace);
   return out;
 }
 

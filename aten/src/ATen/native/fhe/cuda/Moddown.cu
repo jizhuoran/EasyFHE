@@ -21,11 +21,11 @@ __global__ void moddown_kernel(
     uint64_t* to,
     const uint64_t* ptr,
     const int64_t N,
+    const uint64_t start_length,
+    const uint64_t* hat_mod_end,
     const uint64_t* primes,
     const uint64_t* barret_ratios,
-    const uint64_t* barret_ks,
-    const uint64_t* hat_mod_end,
-    const uint64_t start_length) { // it should be the size of the Auxiliary CRT
+    const uint64_t* barret_ks) { // it should be the size of the Auxiliary CRT
   // basis {P} = {p_1,...,p_k}
 
   const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -80,17 +80,16 @@ static void moddown_impl(
       to_ptr,
       ptr,
       N,
+      sizeP,
+      prod_q_i_mod_q_j_ptr,
       primes_ptr,
       param_barret_ratio_ptr,
-      param_barret_k_ptr,
-      prod_q_i_mod_q_j_ptr,
-      sizeP);
+      param_barret_k_ptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 static void moddown_cuda_template(
     Tensor& res,
-    Tensor& workspace,
     const Tensor& from,
     int64_t curr_limbs,
     int64_t L,
@@ -108,7 +107,8 @@ static void moddown_cuda_template(
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two) {
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    Tensor& workspace) {
   const int start_length = sizeP;
   const int end_length = curr_limbs;
 
@@ -121,15 +121,15 @@ static void moddown_cuda_template(
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
   iNTT_impl(
-      from_ptr,
       workspace_ptr,
+      from_ptr,
       end_length,
       start_length,
       curr_limbs,
       L,
       N,
-      inverse_power_of_roots_div_two,
       primes,
+      inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
@@ -137,9 +137,9 @@ static void moddown_cuda_template(
       workspace_ptr + curr_limbs * N,
       hat_inverse_vec.data_ptr<uint64_t>(),
       hat_inverse_vec_psinv.data_ptr<uint64_t>(),
-      primes.data_ptr<uint64_t>() + L,
       sizeP,
-      N);
+      N,
+      primes.data_ptr<uint64_t>() + L);
 
   moddown_impl(
       to_ptr,
@@ -158,8 +158,8 @@ static void moddown_cuda_template(
       to_ptr,
       end_length,
       N,
-      power_of_roots_shoup.data_ptr<uint64_t>(),
       primes.data_ptr<uint64_t>(),
+      power_of_roots_shoup.data_ptr<uint64_t>(),
       power_of_roots.data_ptr<uint64_t>());
 
   const auto& prod_inv = prod_inv_moddown[0];
@@ -174,9 +174,9 @@ static void moddown_cuda_template(
       to_ptr,
       prod_inv.data_ptr<uint64_t>(),
       prod_inv_psinv.data_ptr<uint64_t>(),
-      primes.data_ptr<uint64_t>(),
       end_length,
-      N);
+      N,
+      primes.data_ptr<uint64_t>());
 }
 
 Tensor moddown_cuda(
@@ -202,7 +202,6 @@ Tensor moddown_cuda(
   auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   moddown_cuda_template(
       out,
-      workspace,
       in,
       curr_limbs,
       L,
@@ -220,7 +219,8 @@ Tensor moddown_cuda(
       power_of_roots_shoup,
       power_of_roots,
       inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two);
+      inverse_scaled_power_of_roots_div_two,
+      workspace);
   return out;
 }
 

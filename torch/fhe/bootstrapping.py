@@ -200,11 +200,11 @@ def mod_raise(cipher, L0, cryptoContext):
         torch.mod_raise(
             cryptoContext.mod_raise_out,
             cv,
-            primes=cryptoContext.primes,
             N=cryptoContext.N,
             L0=L0,
             logN=cryptoContext.logN,
             L=cryptoContext.L,
+            primes=cryptoContext.primes,
             inverse_power_of_roots_div_two=cryptoContext.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=cryptoContext.inverse_scaled_power_of_roots_div_two,
             power_of_roots_shoup=cryptoContext.power_of_roots_shoup,

@@ -67,20 +67,20 @@ __global__ void new_fit_to_native_vector_kernel(
 namespace at::native {
 
 static void encode_template(
+    Tensor& res,
     const Tensor& input,
-    const Tensor& primes,
     const Tensor& max_int_diffs,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
     int64_t N,
     int64_t cur_limbs,
     int64_t slots,
     double scaling_factor,
     bool is_ext,
     int64_t sizeP,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
     const Tensor& power_of_roots_shoup,
-    const Tensor& power_of_roots,
-    Tensor& res) {
+    const Tensor& power_of_roots) {
   auto elements_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
   auto max_int_diffs_ptr =
@@ -120,8 +120,8 @@ static void encode_template(
       elements_ptr,
       cur_limbs,
       N,
-      power_of_roots_shoup.data_ptr<uint64_t>(),
       primes.data_ptr<uint64_t>(),
+      power_of_roots_shoup.data_ptr<uint64_t>(),
       power_of_roots.data_ptr<uint64_t>());
   if (is_ext) {
     auto L = power_of_roots.numel() / N - sizeP;
@@ -130,8 +130,8 @@ static void encode_template(
         elements_ptr + cur_limbs * N,
         sizeP,
         N,
-        power_of_roots_shoup.data_ptr<uint64_t>() + L * N,
         primes.data_ptr<uint64_t>() + cur_limbs,
+        power_of_roots_shoup.data_ptr<uint64_t>() + L * N,
         power_of_roots.data_ptr<uint64_t>() + L * N);
   }
   C10_CUDA_KERNEL_LAUNCH_CHECK();
@@ -154,20 +154,20 @@ Tensor encode_cuda(
   
   Tensor out = at::zeros({cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
   encode_template(
+      out,
       inverse_internal,
-      primes,
       max_int_diffs,
-      barret_ratio,
-      barret_k,
       N,
       cur_limbs,
       slots,
       scaling_factor,
       is_ext,
       sizeP,
+      primes,
+      barret_ratio,
+      barret_k,
       power_of_roots_shoup,
-      power_of_roots,
-      out);
+      power_of_roots);
   return out;
 }
 
