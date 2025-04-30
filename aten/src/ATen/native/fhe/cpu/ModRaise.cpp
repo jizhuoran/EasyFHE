@@ -7,7 +7,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cpu/KeySwitch.h"
+#include "ATen/native/fhe/cpu/CommonOperation.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -66,8 +66,7 @@ Tensor mod_raise_cpu(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     const Tensor& barret_ratio,
-    const Tensor& barret_k
-  ) {
+    const Tensor& barret_k) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
   switch_modulus_template(

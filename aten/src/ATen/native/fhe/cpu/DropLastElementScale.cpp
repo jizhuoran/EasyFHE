@@ -8,7 +8,7 @@
 #include <ATen/ops/zeros.h>
 #include <omp.h>
 #include <iostream>
-#include "ATen/native/fhe/cpu/KeySwitch.h"
+#include "ATen/native/fhe/cpu/CommonOperation.h"
 #include "ATen/native/fhe/cpu/NttImpl.h"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 

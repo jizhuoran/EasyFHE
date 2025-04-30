@@ -7,7 +7,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cpu/KeySwitch.h"
+#include "ATen/native/fhe/cpu/CommonOperation.h"
 #include "ATen/native/fhe/cpu/Utils.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
@@ -73,7 +73,8 @@ static void mul_by_monomial_impl(
       tmp.scalar_type(),
       "mul_by_monomial_impl",
       AT_WRAP([&]() {
-        auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+        auto primes_ptr =
+            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
         const int block_dim = 256;
         const int grid_dim = N * l / block_dim;
