@@ -447,19 +447,20 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
             precom.paramsDec.level_budget == 1
     )
 
-    if slots == M//4:
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
-    else:
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
-
-        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
-        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
+    # if slots == M//4:
+    #     if isLTBootstrap:
+    #         ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
+    #     else:
+    #         ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+    # else:
+    #     if isLTBootstrap:
+    #         ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
+    #     else:
+    #         ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+    #
+    #     ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
+    #     ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
+    ctxtDec = ciphertext
     # -------------------
     # raising the modulus
     # -------------------
