@@ -522,11 +522,6 @@ class __FOR_SAVE_ONLY_Context:
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
             )
-            self.encode_temp = np.array(
-                [0] * (2 * self.Nh),
-                dtype=np.int64,
-                )
-            self.encode_inverse = np.array( [0]*2*self.N, dtype=np.double)
 
             power_of_roots = qRootPows + pRootPows
             inverse_power_of_roots = qRootPowsInv + pRootPowsInv

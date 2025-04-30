@@ -103,8 +103,6 @@ class Context:
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
-        self.encode_temp = get_item("encode_temp", gpufhe_content_map)
-        self.encode_inverse = get_item("encode_inverse", gpufhe_content_map)
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -140,8 +138,6 @@ class Context:
         self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
         self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
-        self.encode_temp = torch.tensor(self.encode_temp, dtype = torch.int64)
-        self.encode_inverse = torch.tensor(self.encode_inverse, dtype = torch.double)
 
         self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
 
@@ -201,8 +197,6 @@ class Context:
         self.mult_key_map = [v.cuda() for v in self.mult_key_map]
         self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
-        self.encode_temp = self.encode_temp.cuda()
-        self.encode_inverse = self.encode_inverse.cuda()
         self.max_int_diffs = self.max_int_diffs.cuda()
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = value.cuda()
