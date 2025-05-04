@@ -141,7 +141,6 @@ def fhe_rnn(b_id):
         columns = np.arange(STEP_NUM)
         elements = rnn_ih_t[rows, columns]  # shape (STEP_NUM,)
         rnn_ih_dat = np.repeat(elements, batch_size)
-        # rnn_ih_dat = torch.tensor(rnn_ih_dat, dtype=torch.float64).cuda() # todo: should be removed  after merging the new encode
         rnn_ih.append(fhe.encode(rnn_ih_dat, f"rnn_ih_dat_{rows}_{columns}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
         # rnn_hh[i]
@@ -149,7 +148,6 @@ def fhe_rnn(b_id):
         columns1 = np.arange(STEP_NUM)
         elements = rnn_hh_t[rows1, columns1]
         rnn_hh_dat = np.repeat(elements, batch_size)
-        # rnn_hh_dat = torch.tensor(rnn_hh_dat, dtype=torch.float64).cuda() # todo: should be removed after merging the new encode
         rnn_hh.append(fhe.encode(rnn_hh_dat, f"rnn_hh_dat_{rows1}_{columns1}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
     fc_weight_t_2d = fc_weight_t.reshape(2, STEP_NUM)
@@ -160,7 +158,6 @@ def fhe_rnn(b_id):
         # Extract elements and repeat batch_size times
         elements = fc_weight_t_2d[rows, columns]
         fc_weight_dat = np.repeat(elements, batch_size)
-        # fc_weight_dat = torch.tensor(fc_weight_dat, dtype=torch.float64).cuda() # todo: should be removed after merging the new encode
         fc_weight.append(fhe.encode(fc_weight_dat, f"fc_weight_dat_{rows}_{columns}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
     for j in range(STEP_NUM):
@@ -169,13 +166,14 @@ def fhe_rnn(b_id):
     fc_bias = fhe.encode(fc_bias_dat_vec, "fc_bias_dat_vec", 0, encode_slots, False, cryptoContext)
     print("Finished building RNN weight plaintexts!")
 
+
+
+
     batched_hidden_ct = openfhe_context.encrypt(np.zeros(batch_size * STEP_NUM), 1, 0, encode_slots)
     print(f"Before rnn, batched_hidden_ct's remaining levels: {batched_hidden_ct.cur_limbs- (batched_hidden_ct.noise_deg - 1)}")
 
 
     batch_id = 0
-    batched_embedding = np.zeros(batch_size * EMBEDDING_SIZE, dtype=np.float64)
-    batched_embedding_ct = openfhe_context.encrypt(batched_embedding, 1, 0, encode_slots)
 
     batched_hidden_ref = np.zeros(batch_size * STEP_NUM, dtype=np.float64)
 
@@ -211,13 +209,6 @@ def fhe_rnn(b_id):
                     )
                 # Tanh activation
                 result_ref[j * batch_size + k] = activation(result_ref[j * batch_size + k])
-
-        # result_ref = np.zeros((128, batch_size))
-        # result_ih = rnn_ih_t @ batched_embedding
-        # result_hh = rnn_hh_t @ batched_hidden_ref
-        #
-        # result_ref = np.tanh(result_ih + result_hh)
-        # result_ref = result_ref.reshape(-1, order='C')
 
         # See how much accuracy we are losing
         total_error = 0.0
@@ -282,40 +273,6 @@ def fhe_rnn(b_id):
     print(f"ref accuracy:\t{num_ref_correct}/\t{num_inf}\t{100.0 * num_ref_correct / num_inf:.2f}%")
     print(f"fhe accuracy:\t{num_fhe_correct}/\t{num_inf}\t{100.0 * num_fhe_correct / num_inf:.2f}%")
 
-    # result_ref = np.zeros((2*batch_size), dtype=np.float64)
-    # result_fhe = np.zeros((2*batch_size), dtype=np.float64)
-    # weighted_sum = fc_weight_t @ batched_hidden_ref
-    # weighted_sum += fc_bias_t.reshape(2, 1)
-    # result_ref = 1 / (1 + np.exp(-weighted_sum))
-    # fhe_result = fhe_result_pt.reshape(2, batch_size)
-    # result_fhe = 1 / (1 + np.exp(-fhe_result))
-    # result_ref = result_ref.flatten(order='C')  # shape (2*batch_size,)
-    # result_fhe = result_fhe.flatten(order='C')
-    #
-    #
-    # num_inf = 0
-    # num_ref_correct = 0
-    # num_fhe_correct = 0
-    #
-    # for k in range(batch_size):
-    #     print(f"gt: {ground_truth[k]} ref out: [{result_ref[k]} , {result_ref[k + batch_size]}] "
-    #         f"fhe out: [{result_fhe[k]} , {result_fhe[k + batch_size]}]")
-    #
-    #     num_inf += 1
-    #     if ground_truth[k] == 0:
-    #         if result_ref[k] > 0.5:
-    #             num_ref_correct += 1
-    #         if result_fhe[k] > 0.5:
-    #             num_fhe_correct += 1
-    #     else:
-    #         if result_ref[k + batch_size] > 0.5:
-    #             num_ref_correct += 1
-    #         if result_fhe[k + batch_size] > 0.5:
-    #             num_fhe_correct += 1
-    #
-    # # 打印准确率
-    # print(f"ref accuracy:\t{num_ref_correct}/\t{num_inf}\t{100.0 * num_ref_correct / num_inf:.2f}%")
-    # print(f"fhe accuracy:\t{num_fhe_correct}/\t{num_inf}\t{100.0 * num_fhe_correct / num_inf:.2f}%")
 
 if __name__ == "__main__":
     for b_id in range(1):
