@@ -17,8 +17,8 @@
 namespace at::native {
 
 static void drop_last_element_scale_template(
+    Tensor& res,
     const Tensor& from,
-    Tensor& workspace,
     int64_t curr_limbs,
     int64_t l,
     int64_t L,
@@ -34,33 +34,33 @@ static void drop_last_element_scale_template(
     const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup,
-    Tensor& res) {
+    Tensor& workspace) {
   const int end_length = curr_limbs - 1;
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto workspace_ptr = reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   
   iNTT_impl(
-      from_ptr,
       workspace_ptr,
+      from_ptr,
       end_length,
       1,
       curr_limbs,
       L,
       N,
-      inverse_power_of_roots_div_two,
       param_primes,
+      inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
 
   switch_modulus(
       to_ptr,
       workspace_ptr + N * end_length,
+      curr_limbs - 1,
+      curr_limbs - 1,
+      N,
       param_primes,
       param_barret_ratio,
-      param_barret_k,
-      curr_limbs - 1,
-      curr_limbs - 1,
-      N);
+      param_barret_k);
 
   int start_op2_idx = (L - curr_limbs + l) * (L - 1);
   const_mult_batch(
@@ -68,17 +68,17 @@ static void drop_last_element_scale_template(
       to_ptr,
       qlql_inv_mod_ql_div_ql_mod_q.data_ptr<uint64_t>() + start_op2_idx,
       qlql_inv_mod_ql_div_ql_mod_q_shoup.data_ptr<uint64_t>() + start_op2_idx,
-      param_primes.data_ptr<uint64_t>(),
       curr_limbs - 1,
-      N);
+      N,
+      param_primes.data_ptr<uint64_t>());
 
   NTT_impl(
       to_ptr,
       to_ptr,
       end_length,
       N,
-      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_primes.data_ptr<uint64_t>(),
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_power_of_roots.data_ptr<uint64_t>());
 
   start_op2_idx = (curr_limbs - 1) * (L);
@@ -87,9 +87,9 @@ static void drop_last_element_scale_template(
       from_ptr,
       q_inv_mod_q.data_ptr<uint64_t>() + start_op2_idx,
       q_inv_mod_q_shoup.data_ptr<uint64_t>() + start_op2_idx,
-      param_primes.data_ptr<uint64_t>(),
       end_length,
-      N);
+      N,
+      param_primes.data_ptr<uint64_t>());
 
 
   vadd_mod(
@@ -134,8 +134,8 @@ Tensor drop_last_element_scale_cuda(
   auto workspace = at::empty(curr_limbs * N, to.options());
 
   drop_last_element_scale_template(
+      res,
       from,
-      workspace,
       curr_limbs,
       l,
       L,
@@ -151,7 +151,7 @@ Tensor drop_last_element_scale_cuda(
       qlql_inv_mod_ql_div_ql_mod_q_shoup,
       q_inv_mod_q,
       q_inv_mod_q_shoup,
-      res);
+      workspace);
 
   return res;
 }

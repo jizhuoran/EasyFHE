@@ -20,9 +20,9 @@ __global__ void const_mult_batch_kernel(
     const uint64_t* op1,
     const uint64_t* op2,
     const uint64_t* op2_psinv,
-    const uint64_t* primes,
     const size_t N,
-    const int batch) {
+    const int batch,
+    const uint64_t* primes) {
   const int op2_idx = blockIdx.y;
   const int prime_idx = blockIdx.y;
   const auto prime = primes[prime_idx];
@@ -41,9 +41,9 @@ __global__ void const_mult_batch_kernel(
 __global__ void switch_modulus_kernel(
     uint64_t* to,
     const uint64_t* ptr,
-    const size_t N,
-    const size_t batch,
     const size_t old_prime_idx,
+    const size_t batch,
+    const size_t N,
     const uint64_t* primes,
     const uint64_t* barret_ratios,
     const uint64_t* barret_ks) {
@@ -84,26 +84,26 @@ void const_mult_batch(
     const uint64_t* op1_ptr,
     const uint64_t* op2_ptr,
     const uint64_t* op2_psinv_ptr,
-    const uint64_t* primes_ptr,
     int64_t batch,
-    int64_t N) {
+    int64_t N,
+    const uint64_t* primes_ptr) {
   auto block_dim = dim3(256);
   auto grid_dim = dim3(N / 256, batch);
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::const_mult_batch_kernel<<<grid_dim, block_dim, 0, stream>>>(
-      out_ptr, op1_ptr, op2_ptr, op2_psinv_ptr, primes_ptr, (int)N, (int)batch);
+      out_ptr, op1_ptr, op2_ptr, op2_psinv_ptr, (int)N, (int)batch, primes_ptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 void switch_modulus(
     uint64_t* out_ptr,
     uint64_t* in_ptr,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
     int64_t old_prime_index,
     int64_t batch,
-    int64_t N) {
+    int64_t N,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
   auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
   auto barret_ratio_ptr =
       reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
@@ -116,9 +116,9 @@ void switch_modulus(
   fhe::switch_modulus_kernel<<<grid_dim, block_dim, 0, stream>>>(
       out_ptr,
       in_ptr,
-      (int)N,
-      batch,
       old_prime_index,
+      batch,
+      (int)N,
       primes_ptr,
       barret_ratio_ptr,
       barret_k_ptr);

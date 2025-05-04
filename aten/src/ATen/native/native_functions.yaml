@@ -15930,7 +15930,7 @@
   dispatch:
     CUDA: mul_scalar_mod_out_cuda
 
-- func: modup(Tensor input, *, int curr_limbs, int L, Tensor hat_inverse_vec, Tensor hat_inverse_vec_shoup, Tensor prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, int beta, int degree, int alpha, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+- func: modup(Tensor input, *, int curr_limbs, int L, int beta, int degree, int alpha, Tensor hat_inverse_vec, Tensor hat_inverse_vec_shoup, Tensor prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: modup_cuda
@@ -15965,42 +15965,37 @@
   dispatch:
     CUDA: automorphism_transform_cuda
 
-- func: mod_raise(Tensor self, Tensor input, *, Tensor primes, int N, int L0, int logN, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
+- func: mod_raise(Tensor self, Tensor input, *, int N, int L0, int logN, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: mod_raise_cuda
 
-- func: mul_by_monomial(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+- func: mul_by_monomial(Tensor self, *, int l, int N, int M, int monomialDeg, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda
 
-- func: mul_by_monomial_(Tensor(a!) self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor(a!)
+- func: mul_by_monomial_(Tensor(a!) self, *, int l, int N, int M, int monomialDeg, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda_
 
-- func: mul_by_monomial.out(Tensor self, *, Tensor primes, int l, int N, int M, int monomialDeg, int L, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor(a!) out) -> Tensor(a!)
+- func: mul_by_monomial.out(Tensor self, *, int l, int N, int M, int monomialDeg, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
     CUDA: mul_by_monomial_cuda_out
 
-- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+- func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, bool is_ext, int sizeP, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CUDA: encode_cuda
 
-- func: encode_middle(Tensor inverse_internal, Tensor primes, int N, int cur_limbs, int slots, int noise_scale_deg, float scaling_factor, int log_approx, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+- func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: encode_middle_cuda
+    CUDA: fused_pairwise_mac_cuda
 
-- func: encode_fft(Tensor inverse, Tensor precompute_rotgroups, Tensor precompute_ksipows, int M, int slots) -> Tensor
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_fft_cuda
-
-- func: encode_log_approx(Tensor inverse_internal, int slots, int cur_limbs, float scaling_factor) -> Tensor
-  device_check: NoCheck
-  dispatch:
-    CUDA: encode_log_approx_cuda
+# - func: fused_broadcast_mac(Tensor bx, Tensor ax, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+#   device_check: NoCheck
+#   dispatch:
+#     CUDA: fused_broadcast_mac_cuda

@@ -22,7 +22,7 @@ def gen_contexts(
 
     print("Generating context")
 
-    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
+    save_path_meta = "_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
         maxLevelsRemaining,
         '-'.join(map(str, logBsSlots_list)),
         '-'.join('-'.join(map(str, levelBudget)) for levelBudget in levelBudget_list),
@@ -32,6 +32,7 @@ def gen_contexts(
         firstMod,
         secretKeyDist,
         rescaleTech,
+        config.label(),
     )
 
     GPUFHE_path = save_dir + "/GPU-FHE-CONTEXT" + save_path_meta
@@ -171,6 +172,7 @@ def gen_contexts(
         60,  # auxModSize of openfhe is 60 bits in default
         dnum,
         levelBudget_list,
+        maxLevelsRemaining,
         moduliQ,
         moduliP,
         rootsQ,
@@ -182,26 +184,8 @@ def gen_contexts(
         secretKeyDist,
         rescaleTech,
         dim1,
+        config
     )
-
-    BsContextMembers_dict = {}
-    if NO_BS == False:
-        for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-            print("BsContext_map: ", logBsSlots)
-            gpufhe_context.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
-                gpufhe_context, level_budget, dim1, (1 << logBsSlots), 0
-            )
-
-        for logBsSlots in logBsSlots_list:
-            BsContextMembers = {}
-            for item in dir(gpufhe_context.BsContext_map[str(logBsSlots)]):
-                if (
-                    not callable(getattr(gpufhe_context.BsContext_map[str(logBsSlots)], item))
-                ) and not item.startswith("__"):
-                    BsContextMembers[item] = getattr(
-                        gpufhe_context.BsContext_map[str(logBsSlots)], item
-                    )
-            BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
 
     gpufheMembers = {}
     for item in dir(gpufhe_context):
@@ -215,4 +199,4 @@ def gen_contexts(
     # with open(OPENFHE_path, "rb") as file:
     #     openfheMembers = pickle.load(file)
     with open(GPUFHE_path, "wb") as file:
-        pickle.dump((gpufheMembers, openfheMembers, BsContextMembers_dict), file)
+        pickle.dump((gpufheMembers, openfheMembers), file)

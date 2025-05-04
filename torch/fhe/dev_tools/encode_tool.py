@@ -47,33 +47,37 @@ def _fft_special_inv(vals, M, rotGroup, ksiPows):
         vals[i] /= vals_size
     return vals
 
+import cmath
+
+N = 1 << 17
+M = N << 1
+Nh = N >> 1
+
+# compute encode params
+M_PI = 3.14159265358979323846
+fivePows = 1
+encode_params_ksiPows = []
+encode_params_rotGroup = []
+for i in range(Nh):
+    encode_params_rotGroup.append(fivePows)
+    fivePows = (fivePows * 5) % M
+
+# m_ksiPows stores the complex roots of unity
+for j in range(M):
+    angle = 2.0 * M_PI * j / M
+    encode_params_ksiPows.append(cmath.exp(1j * angle))
+encode_params_ksiPows.append(encode_params_ksiPows[0])
+
+encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
+encode_params_rotGroup = np.array(encode_params_rotGroup)
 
 def pre_encode(x, slots):
-    import cmath
 
-    inverse = x
-
-    N = 1 << 16
+    N = 1 << 17
     M = N << 1
     Nh = N >> 1
 
-    # compute encode params
-    M_PI = 3.14159265358979323846
-    fivePows = 1
-    encode_params_ksiPows = []
-    encode_params_rotGroup = []
-    for i in range(Nh):
-        encode_params_rotGroup.append(fivePows)
-        fivePows = (fivePows * 5) % M
-
-    # m_ksiPows stores the complex roots of unity
-    for j in range(M):
-        angle = 2.0 * M_PI * j / M
-        encode_params_ksiPows.append(cmath.exp(1j * angle))
-    encode_params_ksiPows.append(encode_params_ksiPows[0])
-
-    encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
-    encode_params_rotGroup = np.array(encode_params_rotGroup)
+    inverse = x
 
     if slots < len(inverse):
         raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
@@ -120,7 +124,7 @@ def save_middle_encode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if func.__name__ == "encode":
-            input, name, _, slots, _ = args
+            input, name, _, slots, _, _ = args
             assert isinstance(input, list) or isinstance(input, np.ndarray)
             encoded_val = pre_encode(input, slots)
             middle_encoded_vals[name] = encoded_val
@@ -130,10 +134,16 @@ def save_middle_encode(func):
 def save_end_encode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        if func.__name__ == "encode":
+            _, name, _, _, _, _ = args
+            if name in end_encoded_vals:
+                return end_encoded_vals[name]
         res = func(*args, **kwargs)
         if func.__name__ == "encode":
-            input, name, _, slots, _ = args
-            end_encoded_vals[name] = res
+            input, name, _, slots, _, _ = args
+            full_encode = res.deep_copy()
+            # full_encode.cv = [full_encode.cv[0].cpu().numpy()]
+            end_encoded_vals[name] = full_encode
         return res
     return wrapper
 
@@ -150,6 +160,8 @@ def save_encoded_vals():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_path = DATA_DIR + f"/full_encode_{timestamp}.pkl"
         print("saving pre-encoded vals to {}".format(file_path))
+        for key, val in end_encoded_vals.items():
+            val.cv = [val.cv[0].cpu().numpy()]
         with open(file_path, "wb") as f:
             pickle.dump(end_encoded_vals, f)
 

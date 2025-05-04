@@ -11,7 +11,7 @@ def decorator_factory(func):
         if func.__name__ == "homo_bootstrap":
             cryptoContext.inBS = True
         if cryptoContext.inBS:
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
         else: # not in BS
             config = cryptoContext.config
             func1 = func
@@ -34,7 +34,7 @@ def decorator_factory(func):
                 decorators.append(save_end_encode)
             for dec in decorators:
                 func1 = dec(func1)
-        result = func1(*args, **kwargs)
+            result = func1(*args, **kwargs)
         if func.__name__ == "homo_bootstrap":
             cryptoContext.inBS = False
         return result

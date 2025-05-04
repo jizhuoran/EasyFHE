@@ -24,9 +24,9 @@
 
 namespace fhe {
 __global__ void mulByMonomialKernel_step1(
+    uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    uint64_t* out,
     const int N) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   out[blockIdx.y * N + tid_x] = qVec[blockIdx.y] - in[blockIdx.y * N + tid_x];
@@ -34,8 +34,8 @@ __global__ void mulByMonomialKernel_step1(
 
 __global__ void mulByMonomialKernel_step2(
     uint64_t* out,
-    const uint64_t* qVec,
     const uint64_t* in,
+    const uint64_t* qVec,
     const int N,
     const int shift) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
@@ -49,8 +49,8 @@ __global__ void mulByMonomialKernel_step2(
 
 __global__ void mulByMonomialKernel_step1_step2(
     uint64_t* out,
-    const uint64_t* qVec,
     const uint64_t* in,
+    const uint64_t* qVec,
     const int N,
     const int shift) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
@@ -68,8 +68,8 @@ namespace at::native {
 
 static void mul_by_monomial_impl(
     uint64_t* out_ptr,
-    const uint64_t* primes_ptr,
     const uint64_t* in_ptr,
+    const uint64_t* primes_ptr,
     const int64_t l,
     const int64_t N,
     const int64_t M,
@@ -81,23 +81,23 @@ static void mul_by_monomial_impl(
   auto shift = monomialDeg % M;
   if (shift < N) {
     fhe::mulByMonomialKernel_step2<<<grid, block, 0, stream>>>(
-      out_ptr, primes_ptr, in_ptr, N, shift);
+      out_ptr, in_ptr, primes_ptr, N, shift);
   } else {
     shift = shift % N;
     fhe::mulByMonomialKernel_step1_step2<<<grid, block, 0, stream>>>(
-        out_ptr, primes_ptr, in_ptr, N, shift);
+        out_ptr, in_ptr, primes_ptr, N, shift);
   }
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 static void mul_by_monomial_inplace_template(
     Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -112,14 +112,14 @@ static void mul_by_monomial_inplace_template(
       l,
       level,
       N,
-      inverse_power_of_roots_div_two,
       param_primes,
+      inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
 
   Tensor temp = at::empty_like(res);
   auto temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
   auto param_primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-  mul_by_monomial_impl(temp_ptr, param_primes_ptr, res_ptr, l, N, M, monomialDeg);
+  mul_by_monomial_impl(temp_ptr, res_ptr, param_primes_ptr, l, N, M, monomialDeg);
   cudaMemcpy(res_ptr, temp_ptr, l * N * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
 
   NTT_impl(
@@ -127,19 +127,19 @@ static void mul_by_monomial_inplace_template(
       res_ptr,
       l,
       N,
-      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_primes.data_ptr<uint64_t>(),
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mul_by_monomial_cuda(
     const Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -151,24 +151,24 @@ Tensor mul_by_monomial_cuda(
 
 Tensor& mul_by_monomial_cuda_(
     Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
   mul_by_monomial_inplace_template(
       res,
-      param_primes,
       l,
       N,
       M,
       monomialDeg,
       level,
+      param_primes,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -178,12 +178,12 @@ Tensor& mul_by_monomial_cuda_(
 
 Tensor& mul_by_monomial_cuda_out(
     const Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,

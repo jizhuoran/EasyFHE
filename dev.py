@@ -32,7 +32,7 @@ cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
-ptx = fhe.encode(x1, "x1", 0, encode_slots, cryptoContext)
+ptx = fhe.encode(x1, "x1", 0, encode_slots, False, cryptoContext)
 
 # do some application computation
 cipher = fhe.homo_rotate(cipher, -1, cryptoContext)
