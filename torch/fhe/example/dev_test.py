@@ -691,17 +691,16 @@ def slim_bs_test_case(
     print(f"slim bs Max diff: {max_diff:.5e}")
     print(f"slim bs Mean diff: {mean_diff:.5e}", "\n\n")
 
-
-
     diff = np.abs(clear_result1 - clear_result2)
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
     print(f"slim bs and regular bs Max diff: {max_diff:.5e}")
     print(f"slim bs and regular bs Mean diff: {mean_diff:.5e}")
 
+
 def hybrid_bs_test_case(
         maxLevelsRemaining=6,
-        logBsSlots_list=[13],
+        logBsSlots_list=[13], #should be `logN -1` if you are not familiar with `encoding, decoding` and `bs` procedure
         logN=14,
         dnum=3,
         dcrtBits=56,
@@ -721,54 +720,34 @@ def hybrid_bs_test_case(
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                config=config))
 
-    encode_slots = (1 << 13)
-    values = [0.0, 0.0, 0.0, 0.0]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    # x[0] = 0.444444
-    # x[1] = 0.444444
-    # x[0] = 0.4
-    # x[4096] = -0.2
-    # x[2048] = -0.2
-    x[0] = 0
-    x[1] = 1
-    # x[2] = 0.1
-    # x[3] = 0.1
-    # x[4] = 0.1
-    print("x", x[:5])
+    # encryption
+    encode_slots = (1<<logBsSlots_list[0]) #should be `logN -1` if you are not familiar with `encoding, decoding` and `bs` procedure
+    Nh = (1<<logN-1)
+    x = np.array([0.0] * Nh)
+    x[0] = 0.4
+    x[4096] = -0.2 # considering the bit reverse
+    print("x", x[:2], x[4096:4096+2])
     x = torch.tensor(x, device="cuda")
 
-    values2 = [0.0, 0.0, 0.0, 0.0]
-    y = np.array([values2[i % len(values2)] for i in range(encode_slots)])
-    # y[0] = 0.222222
-    # y[1] = 0.222222
-    # y[0] = 2
-    # y[4096] = -1
-    # y[2048] = -1
-    y[0] = 0.1
-    y[1] = 0.2
-    y[2] = 0.3
-    y[3] = 0.4
-    # y[4] = 2
-    print("y: ", y[:5])
-    # print all the non-zero values in y
-    for i in range(len(y)):
-        if y[i] != 0:
-            print("y[{}]: {}".format(i, y[i]))
+    y = np.array([0.0] * Nh)
+    y[0] = 2
+    y[4096] = -1 # considering the bit reverse
+    print("y: ", y[:2], y[4096:4096+2])
     y = torch.tensor(y, device="cuda")
 
+    # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
+    cipher_limbs = cryptoContext.L - 2 - levelBudget_list[0][1] - 1 # one for the following mult computation
+    cipher1, cipher_openfhe = openfhe_context.encrypt(x, 1, cipher_limbs, Nh)
+    cipher1.slots = encode_slots
+    cipher2, cipher_openfhe2 = openfhe_context.encrypt(y, 1, cipher_limbs, Nh)
+    cipher2.slots = encode_slots
 
     # add a mult
-    # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
-    cipher_limbs = cryptoContext.L - 2 - levelBudget_list[0][1] - 1 # one for the following mult
-    cipher1, cipher_openfhe = openfhe_context.encrypt(x, 1, cipher_limbs, encode_slots)
-    cipher2, cipher_openfhe2 = openfhe_context.encrypt(y, 1, cipher_limbs, encode_slots)
-    pt_1 = openfhe_context.encode(y, 1, cipher_limbs, encode_slots)
-    # # cipher1 = homo_ops.homo_mul_scalar_double(cipher1, 1.0, cryptoContext)
-    # cipher1 = homo_ops.homo_mul(cipher1, cipher2, cryptoContext)
-    # cipher1 = homo_ops.force_rescale(cipher1, 1, cryptoContext)
-    # clear_result1 = openfhe_context.decrypt(cipher1)  # decrypt by cc with different slots value should be fine
-    # clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    # print("[slots] mult decryption result: ", clear_result1[:6],clear_result1[4096:4096+6])
+    cipher1 = homo_ops.homo_mul(cipher1, cipher2, cryptoContext)
+    cipher1 = homo_ops.force_rescale(cipher1, 1, cryptoContext)
+    clear_result1 = openfhe_context.decrypt(cipher1)  # decrypt by cc with different slots value should be fine
+    clear_result1 = clear_result1.cpu().numpy().reshape(-1)
+    print("[slots] mult decryption result: ", clear_result1[:4],clear_result1[4096:4096+4])
 
 
     ##########################
@@ -779,10 +758,10 @@ def hybrid_bs_test_case(
     m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
 
     result1 = eval_bootstrap(cipher1, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
+    result1 = homo_ops.homo_rescale(result1, result1.noise_deg-1, cryptoContext)
     clear_result1 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
     clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    print("regular bs decryption result: ", clear_result1[:6], clear_result1[4096:4096+6])
+    print("regular bs decryption result: ", clear_result1[:4], clear_result1[4096:4096+4])
 
     # z = x*y
     # z = z.cpu().numpy()
@@ -819,25 +798,23 @@ def hybrid_bs_test_case(
     # hijack the matrix
     # note: c2s_matrix should be same as m_U0hatTPreFFT
     # note: s2c_matrix should be same as m_U0PreFFT
-    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
-    s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
+    c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext) # homo-encoding for bs
+    s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext) # homo-decoding for bs
+    # c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0], 1, lEnc, cryptoContext) # pure homomorphic encoding
+    # s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0], 1, lDec, cryptoContext) # pure homomorphic decoding
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
     cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
 
     ######################
     # do some computation#
     ######################
-    result1 = homo_ops.force_rescale(result1,1, cryptoContext) # deal with the first rescale from evalS2C in bs
-    # clear_result2 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
-    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    # print("[1] HE decryption result: ", clear_result2[:6])
-
-    result_golden = homo_ops.homo_mul(result1, cipher2, cryptoContext)
-    result_golden = homo_ops.force_rescale(result_golden, 1, cryptoContext)
-    clear_result2 = openfhe_context.decrypt(result_golden)  # decrypt by cc with different slots value should be fine
+    result_hadamard = homo_ops.homo_mul(result1, cipher2, cryptoContext)
+    result_hadamard = homo_ops.force_rescale(result_hadamard, 1, cryptoContext)
+    clear_result2 = openfhe_context.decrypt(result_hadamard)  # decrypt by cc with different slots value should be fine
     clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("[slot] mult (hadamard) HE decryption result: ", clear_result2[:6], clear_result2[4096:4096+6], clear_result2[8190:])
+    print("[slot] mult (hadamard) HE decryption result: ", clear_result2[:4], clear_result2[4096:4096+4])
 
+    result1 = homo_ops.force_rescale(result1, result1.noise_deg-1, cryptoContext)
     slots = (1<<logBsSlots_list[0])
     M = cryptoContext.M
     if slots == M//4:
@@ -849,14 +826,10 @@ def hybrid_bs_test_case(
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     result1 = ctxtDec
-    clear_result2 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
-    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("[1] [coeffs] result1 decryption result: ", clear_result2[:6], clear_result2[2048:2048+2], clear_result2[4096:4096+6], clear_result2[8190:])
-    # tolerance = 1e-3
-    # indices = np.where(np.abs(clear_result2 - 0) >= tolerance)[0]
-    # for idx in indices:
-    #     print(f"idx: {idx}, value: {clear_result2[idx]}")
-    # print("finding end")
+    # clear_result2 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
+    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
+    # print("[1] [coeffs] result1 decryption result: ", clear_result2[:6], clear_result2[4096:4096+4])
+
 
     if slots == M//4:
         ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, cipher2, cryptoContext)
@@ -867,132 +840,46 @@ def hybrid_bs_test_case(
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
 
     cipher3 = ctxtDec
-    clear_result2 = openfhe_context.decrypt(cipher3)  # decrypt by cc with different slots value should be fine
-    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("[2] [coeffs] cipher3 decryption result: ", clear_result2[:6], clear_result2[2048:2048+2], clear_result2[4096:4096+6], clear_result2[8190:])
-    tolerance = 1e-3
-    indices = np.where(np.abs(clear_result2 - 0) >= tolerance)[0]
-    # for idx in indices:
-    #     print(f"idx: {idx}, value: {clear_result2[idx]}")
-    # print("finding end")
-    # result_tmp = homo_ops.homo_mul_pt(result1, pt_1, cryptoContext)
-    # result_tmp = homo_ops.force_rescale(result_tmp,1, cryptoContext)
-    # clear_result2 = openfhe_context.decrypt(result_tmp)  # decrypt by cc with different slots value should be fine
+    # clear_result2 = openfhe_context.decrypt(cipher3)  # decrypt by cc with different slots value should be fine
     # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    # print("[3] [coeffs ct*pt] result1 * pt_1 decryption result: ", clear_result2[:6])
+    # print("[2] [coeffs] cipher3 decryption result: ", clear_result2[:2], clear_result2[4096:4096+6])
 
+    print("[3] [coeffs] homo_mult result1 * cipher3")
     result1 = homo_ops.homo_mul(result1, cipher3, cryptoContext)
     result1 = homo_ops.force_rescale(result1,1, cryptoContext)
     clear_result2 = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
     clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("[4] [coeffs homo_mult] result1 * cipher3 decryption result: ", clear_result2[:6], clear_result2[2048:2048+2], clear_result2[4096:4096+6], clear_result2[8190:])
-    # tolerance = 1e-3
-    # indices = np.where(np.abs(clear_result2 - 0) >= tolerance)[0]
-    # for idx in indices:
-    #     print(f"idx: {idx}, value: {clear_result2[idx]}")
+    # print("[3] [coeffs homo_mult] result1 * cipher3 decryption result: ", clear_result2[:4])
+    #
+    # tolerance = 0.007
+    # targets = [1.6, -0.2, -0.1]
+    # for target in targets:
+    #     indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
+    #     for idx in indices:
+    #         print(f"idx: {idx}, value: {clear_result2[idx]}")
     # print("finding end")
     ###################
     #slim bootsrapping#
     ###################
-    # result_tmp = eval_slim_bootstrap(result_tmp, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    # result2 = homo_ops.homo_rescale(result_tmp, result_tmp.noise_deg-1, cryptoContext) # todo: may not need anymore
-    # clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
-    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    # print("[5] [slot] slim_boot(result1 * pt_1) HE decryption result: ", clear_result2[:6])
-
 
     result2 = eval_slim_bootstrap(result1, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    result2 = homo_ops.homo_rescale(result2, result2.noise_deg-1, cryptoContext) # todo: may not need anymore
+    result2 = homo_ops.homo_rescale(result2, result2.noise_deg-1, cryptoContext)
     clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
     clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    print("[6] [slot] slim_boot(result1 * cipher3) HE decryption result: ", clear_result2[:6], clear_result2[2048:2048+2], clear_result2[4096:4096+6], clear_result2[8190:])
+    # print("[4] [slot] slim_boot(result1 * cipher3) HE decryption result: ", clear_result2[:4], clear_result2[2048:2048+4], clear_result2[4096:4096+2])
+    print("[4] [slot] slim_boot(result1 * cipher3) HE decryption result: ")
 
-    # 假设 clear_result2 已经是一个一维的 numpy 数组
-    target = 0.1
-    tolerance = 1e-3
-
-    # 找出符合条件的索引
-    indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
-    # 打印索引和值
-    for idx in indices:
-        print(f"idx: {idx}, value: {clear_result2[idx]}")
+    # After applying S2C (which includes bit reversal), the coefficient-domain multiplication
+    # computes (0.8 + 0.2·x) * (2 - x) = 1.6 - 0.4·x - 0.2·x².
+    # Bit reversal maps the 1st-degree term to index 4096 and the 2nd-degree term to index 2048,
+    # so the final result is: res2[0] = 1.6, res2[4096] = -0.4, res2[2048] = -0.2.
+    tolerance = 0.005
+    targets = [1.6, -0.4, -0.2]
+    for target in targets:
+        indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
+        for idx in indices:
+            print(f"idx: {idx}, value: {clear_result2[idx]}")
     print("finding end")
-
-    target = 0.2
-    indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
-    # 打印索引和值
-    for idx in indices:
-        print(f"idx: {idx}, value: {clear_result2[idx]}")
-    print("finding end")
-
-    target = 0.3
-    indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
-    # 打印索引和值
-    for idx in indices:
-        print(f"idx: {idx}, value: {clear_result2[idx]}")
-    print("finding end")
-
-    target = 0.4
-    indices = np.where(np.abs(clear_result2 - target) <= tolerance)[0]
-    # 打印索引和值
-    for idx in indices:
-        print(f"idx: {idx}, value: {clear_result2[idx]}")
-    print("finding end")
-
-    # transfer x to numpy on cpu
-    # z = x*y
-    # res_plain = z.cpu().numpy()
-    # diff = np.abs(res_plain - clear_result2)
-    # max_diff = np.max(diff)
-    # mean_diff = np.mean(diff)
-    # print(f"slim bs Max diff: {max_diff:.5e}")
-    # print(f"slim bs Mean diff: {mean_diff:.5e}", "\n\n")
-
-
-    # ######################
-    # # do some computation#
-    # ######################
-    #
-    # result2 = homo_ops.homo_mul(result2, cipher2, cryptoContext)
-    # # result2 = homo_ops.homo_mul_scalar_double(result2, 1.0, cryptoContext)
-    # result2 = homo_ops.force_rescale(result2, 1, cryptoContext)
-    #
-    # clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
-    # clear_result2 = clear_result2.cpu().numpy().reshape(-1)
-    # print("[slot]  ct*ct", clear_result2[:6], clear_result2[4096:4096+6], clear_result2[8190:])
-    #
-    # ##########################
-    # # regular bootsrapping ###
-    # ##########################
-    #
-    # # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    # # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup  # recover the context
-    # # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
-    # # result3 = eval_bootstrap(result_tmp, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    # # result3 = homo_ops.homo_rescale(result3, 1, cryptoContext)
-    # # # compute golden answer
-    # # clear_result1 = openfhe_context.decrypt(result3)  # decrypt by cc with different slots value should be fine
-    # # clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    # # print("regular bootsrapping decryption result_tmp(last): ", clear_result1[:6], clear_result1[4096:4096+6], clear_result1[8190:])
-    #
-    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup  # recover the context
-    # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
-    # result3 = eval_bootstrap(result2, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    # result3 = homo_ops.homo_rescale(result3, 1, cryptoContext)
-    # # compute golden answer
-    # clear_result1 = openfhe_context.decrypt(result3)  # decrypt by cc with different slots value should be fine
-    # clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-    # print("regular bootsrapping decryption result(last): ", clear_result1[:6], clear_result1[4096:4096+6], clear_result1[8190:])
-    #
-    # # z = x*y*y
-    # # res_plain = z.cpu().numpy()
-    # # diff = np.abs(res_plain - clear_result2)
-    # # max_diff = np.max(diff)
-    # # mean_diff = np.mean(diff)
-    # # print(f"regular bs Max diff: {max_diff:.5e}")
-    # # print(f"regular bs Mean diff: {mean_diff:.5e}", "\n\n")
-
 
 ##############
 ## run tests #
