@@ -99,7 +99,7 @@ def fhe_rnn(b_id):
     # encode_slots = int(1 << (logN - 1)) # fixme: bad assignment
     maxLevelsRemaining = 10
     appRotIndex_list = [-(i * int(batch_size)) for i in range(EMBEDDING_SIZE)]
-    logBsSlots_list = [int(math.log2(encode_slots))]
+    logBsSlots_list = [int(math.log2(encode_slots))] # fixme: bad assignment
     dnum = 1
     dcrtBits = 46
     firstMod = 50
@@ -125,7 +125,7 @@ def fhe_rnn(b_id):
     rnn_hh_t = np.fromfile("../train/trained_rnn_hh.bin", dtype=np.float32).reshape(STEP_NUM, STEP_NUM)
     fc_weight_t = np.fromfile("../train/trained_fc_weight.bin", dtype=np.float32).reshape(2, STEP_NUM)
     fc_bias_t = np.fromfile("../train/trained_fc_bias.bin", dtype=np.float32)
-    fc_bias_t = fc_bias_t.astype(np.float64) # todo: change back to the previous 32 after merging the new encode?
+    fc_bias_t = fc_bias_t.astype(np.float64)  # same as C++ double
 
     # Load embedding data and ground truth from binary files
     embedding_in = np.fromfile(embedding_file_name, dtype=np.float32)[:sample_num*STEP_NUM*EMBEDDING_SIZE].reshape(sample_num, STEP_NUM, EMBEDDING_SIZE)
@@ -133,26 +133,21 @@ def fhe_rnn(b_id):
 
 
     # Pack the plaintext matrix in diagonal order
-    rnn_ih_pt_vec = []
-    rnn_hh_pt_vec = []
-    fc_weight_pt_vec = []
     fc_bias_dat_vec = [0.0]*batch_size*STEP_NUM
 
-# TODO 这里的原有的三层循环被我替换成了向量化操作，但我不确定这样是不是对的
-    rnn_ih_t_2d = rnn_ih_t.reshape((EMBEDDING_SIZE, EMBEDDING_SIZE))
-    rnn_hh_t_2d = rnn_hh_t.reshape((STEP_NUM, STEP_NUM))
-
     for i in range(STEP_NUM):
-        rows = (np.arange(EMBEDDING_SIZE) + i) % EMBEDDING_SIZE
-        columns = np.arange(EMBEDDING_SIZE)
-        elements = rnn_ih_t_2d[rows, columns]
+        # rnn_ih[i]
+        rows = (np.arange(STEP_NUM) + i) % STEP_NUM
+        columns = np.arange(STEP_NUM)
+        elements = rnn_ih_t[rows, columns]  # shape (STEP_NUM,)
         rnn_ih_dat = np.repeat(elements, batch_size)
         # rnn_ih_dat = torch.tensor(rnn_ih_dat, dtype=torch.float64).cuda() # todo: should be removed  after merging the new encode
         rnn_ih.append(fhe.encode(rnn_ih_dat, f"rnn_ih_dat_{rows}_{columns}_{batch_size}", 0, encode_slots, False, cryptoContext))
 
+        # rnn_hh[i]
         rows1 = (np.arange(STEP_NUM) + i) % STEP_NUM
         columns1 = np.arange(STEP_NUM)
-        elements = rnn_hh_t_2d[rows1, columns1]
+        elements = rnn_hh_t[rows1, columns1]
         rnn_hh_dat = np.repeat(elements, batch_size)
         # rnn_hh_dat = torch.tensor(rnn_hh_dat, dtype=torch.float64).cuda() # todo: should be removed after merging the new encode
         rnn_hh.append(fhe.encode(rnn_hh_dat, f"rnn_hh_dat_{rows1}_{columns1}_{batch_size}", 0, encode_slots, False, cryptoContext))
@@ -196,50 +191,50 @@ def fhe_rnn(b_id):
         # Rotations are done in granularity as batch_size
         batched_embedding_ct = openfhe_context.encrypt(batched_embedding, 1, 0, encode_slots)
 
-    if (maxLevelsRemaining - (cryptoContext.L - (batched_hidden_ct.cur_limbs - 1))<= 4):
-        print("Evaluating Bootstrapping!")
-        batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, cryptoContext.L, 8, cryptoContext)
+        if (maxLevelsRemaining - (cryptoContext.L - (batched_hidden_ct.cur_limbs - 1))<= 4):
+            print("Evaluating Bootstrapping!")
+            batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, cryptoContext.L, logBsSlots_list[0], cryptoContext)
         
-    batched_hidden_ct = rnn_layer(batched_embedding_ct, batched_hidden_ct, cryptoContext, openfhe_context)
+        batched_hidden_ct = rnn_layer(batched_embedding_ct, batched_hidden_ct, cryptoContext, openfhe_context)
 
-    # Run reference RNN computation
-    result_ref = np.zeros(batch_size * STEP_NUM, dtype=np.float64)
+        # Run reference RNN computation
+        result_ref = np.zeros(batch_size * STEP_NUM, dtype=np.float64)
 
-    for j in range(128):
-        for k in range(batch_size):
-            for l in range(128):
-                result_ref[j * batch_size + k] += (
-                        batched_embedding[l * batch_size + k] * rnn_ih_t[j, l]
-                )
-                result_ref[j * batch_size + k] += (
-                        batched_hidden_ref[l * batch_size + k] * rnn_hh_t[j, l]
-                )
-            # Tanh activation
-            result_ref[j * batch_size + k] = activation(result_ref[j * batch_size + k])
+        for j in range(128):
+            for k in range(batch_size):
+                for l in range(128):
+                    result_ref[j * batch_size + k] += (
+                            batched_embedding[l * batch_size + k] * rnn_ih_t[j, l]
+                    )
+                    result_ref[j * batch_size + k] += (
+                            batched_hidden_ref[l * batch_size + k] * rnn_hh_t[j, l]
+                    )
+                # Tanh activation
+                result_ref[j * batch_size + k] = activation(result_ref[j * batch_size + k])
 
-    # result_ref = np.zeros((128, batch_size))
-    # result_ih = rnn_ih_t @ batched_embedding
-    # result_hh = rnn_hh_t @ batched_hidden_ref
-    #
-    # result_ref = np.tanh(result_ih + result_hh)
-    # result_ref = result_ref.reshape(-1, order='C')
+        # result_ref = np.zeros((128, batch_size))
+        # result_ih = rnn_ih_t @ batched_embedding
+        # result_hh = rnn_hh_t @ batched_hidden_ref
+        #
+        # result_ref = np.tanh(result_ih + result_hh)
+        # result_ref = result_ref.reshape(-1, order='C')
 
-    # See how much accuracy we are losing
-    total_error = 0.0
-    print(f"Before decrypt: batched_hidden_ct's true remaining levels: {batched_hidden_ct.cur_limbs - (batched_hidden_ct.noise_deg - 1)}")
-    result = openfhe_context.decrypt(batched_hidden_ct)
+        # See how much accuracy we are losing
+        total_error = 0.0
+        print(f"Before decrypt: batched_hidden_ct's true remaining levels: {batched_hidden_ct.cur_limbs - (batched_hidden_ct.noise_deg - 1)}")
+        result = openfhe_context.decrypt(batched_hidden_ct)
 
-    result_ref_np = np.array(result_ref)
-    ckks_values_np = np.array(result.cpu().numpy().reshape(-1))
+        result_ref_np = np.array(result_ref)
+        ckks_values_np = np.array(result.cpu().numpy().reshape(-1))
 
-    diff = result_ref_np - ckks_values_np
-    total_error = np.sum(diff ** 2)
+        diff = result_ref_np - ckks_values_np
+        total_error = np.sum(diff ** 2)
 
-    print(f"CT depth: {cryptoContext.L}/{maxLevelsRemaining}")
-    avg_sq_err = total_error / (128 * batch_size)
-    print(f"Avg Sq Err: {avg_sq_err}")
+        print(f"CT depth: {cryptoContext.L}/{maxLevelsRemaining}")
+        avg_sq_err = total_error / (128 * batch_size)
+        print(f"Avg Sq Err: {avg_sq_err}")
 
-    batched_hidden_ref = result_ref.copy() 
+        batched_hidden_ref = result_ref.copy()
 
     # 2. Evaluate FC layers
     batched_hidden_ct=fc_layer(batched_hidden_ct, fc_bias, cryptoContext, openfhe_context)
