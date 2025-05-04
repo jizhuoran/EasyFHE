@@ -326,18 +326,18 @@ class __FOR_SAVE_ONLY_Context:
 
                 self.QlQlInvModqlDivqlModq[k][i] = np.uint64(result)
 
-        self.mult_swk = [None, None]
-        if MULT_SWK is None:
-            warnings.warn(
-                "\n------------------------\n"
-                "MULT_SWK needs to be set"
-                "\n------------------------\n",
-                UserWarning,
-            )
-            # todo: set data in numpy array
-        else:
-            self.mult_swk[0] = MULT_SWK[0]
-            self.mult_swk[1] = MULT_SWK[1]
+        # self.mult_swk = [None, None]
+        # if MULT_SWK is None:
+        #     warnings.warn(
+        #         "\n------------------------\n"
+        #         "MULT_SWK needs to be set"
+        #         "\n------------------------\n",
+        #         UserWarning,
+        #     )
+        #     # todo: set data in numpy array
+        # else:
+        #     self.mult_swk[0] = MULT_SWK[0]
+        #     self.mult_swk[1] = MULT_SWK[1]
 
 
         self.moduliQ_scalar = np.array(self.moduliQ_scalar, dtype=np.uint64)
@@ -485,8 +485,7 @@ class __FOR_SAVE_ONLY_Context:
             self.q_inv_mod_q = None
             self.q_inv_mod_q_shoup = None
 
-            self.swk_bx = np.array(self.mult_swk[0].reshape(-1), dtype=np.uint64)
-            self.swk_ax = np.array(self.mult_swk[1].reshape(-1), dtype=np.uint64)
+
 
             # for output & workspace
             self.beta = (int)((self.L+self.alpha-1) / self.alpha)
@@ -694,11 +693,11 @@ class __FOR_SAVE_ONLY_Context:
             self.primes = np.array(self.primes, dtype=np.uint64)
 
 
-        swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
-        swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
-        key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
-        key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
-        self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
+        self.mult_swk_bx = np.array(MULT_SWK[0].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
+        self.mult_swk_ax = np.array(MULT_SWK[1].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
+        # key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
+        # key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
+        # self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
         #half_key
         for key, ROT_SWK in rot_swk_map.items():

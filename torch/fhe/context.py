@@ -54,7 +54,7 @@ class Context:
         self.moduliQ_scalar = get_item("moduliQ_scalar", gpufhe_content_map)
         self.moduliQ = get_item("moduliQ", gpufhe_content_map)
         self.modup_out = get_item("modup_out", gpufhe_content_map)
-        self.mult_swk = get_item("mult_swk", gpufhe_content_map)
+        # self.mult_swk = get_item("mult_swk", gpufhe_content_map)
         self.num_moduli_after_moddown = get_item("num_moduli_after_moddown", gpufhe_content_map)
         self.num_moduli_after_modup = get_item("num_moduli_after_modup", gpufhe_content_map)
         self.num_special_moduli = get_item("num_special_moduli", gpufhe_content_map)
@@ -67,7 +67,7 @@ class Context:
         self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
         self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
         self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
-        self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
+        # self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
         self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
         self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
         self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
@@ -89,8 +89,8 @@ class Context:
         self.secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
         self.sigma = get_item("sigma", gpufhe_content_map)
         self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
-        self.swk_ax = get_item("swk_ax", gpufhe_content_map)
-        self.swk_bx = get_item("swk_bx", gpufhe_content_map)
+        self.mult_swk_ax = get_item("mult_swk_ax", gpufhe_content_map)
+        self.mult_swk_bx = get_item("mult_swk_bx", gpufhe_content_map)
         self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
         self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
         self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
@@ -103,6 +103,7 @@ class Context:
                 self.BsContext_map[str(logBsSlots)] = _BsContext
         self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
         self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
+
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -124,8 +125,8 @@ class Context:
         self.qlql_inv_mod_ql_div_ql_mod_q_shoup = torch.tensor(self.qlql_inv_mod_ql_div_ql_mod_q_shoup, dtype = torch.uint64)
         self.q_inv_mod_q = torch.tensor(self.q_inv_mod_q, dtype = torch.uint64)
         self.q_inv_mod_q_shoup = torch.tensor(self.q_inv_mod_q_shoup, dtype = torch.uint64)
-        self.swk_bx = torch.tensor(self.swk_bx, dtype = torch.uint64)
-        self.swk_ax = torch.tensor(self.swk_ax, dtype = torch.uint64)
+        self.mult_swk_bx = torch.tensor(self.mult_swk_bx, dtype = torch.uint64)
+        self.mult_swk_ax = torch.tensor(self.mult_swk_ax, dtype = torch.uint64)
         self.inner_workspace = torch.tensor(self.inner_workspace, dtype = torch.uint64)
         self.inner_out = torch.tensor(self.inner_out, dtype = torch.uint64)
         self.moddown_out_ax = torch.tensor(self.moddown_out_ax, dtype = torch.uint64)
@@ -135,7 +136,7 @@ class Context:
         self.automorphism_transform_out = torch.tensor(self.automorphism_transform_out, dtype = torch.uint64)
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
-        self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
+        # self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
         self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
 
@@ -183,8 +184,8 @@ class Context:
         self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cuda()
         self.q_inv_mod_q = self.q_inv_mod_q.cuda()
         self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cuda()
-        self.swk_bx = self.swk_bx.cuda()
-        self.swk_ax = self.swk_ax.cuda()
+        self.mult_swk_bx = self.mult_swk_bx.cuda()
+        self.mult_swk_ax = self.mult_swk_ax.cuda()
         self.inner_workspace = self.inner_workspace.cuda()
         self.inner_out = self.inner_out.cuda()
         self.moddown_out_ax = self.moddown_out_ax.cuda()
@@ -194,7 +195,7 @@ class Context:
         self.automorphism_transform_out = self.automorphism_transform_out.cuda()
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
-        self.mult_key_map = [v.cuda() for v in self.mult_key_map]
+        # self.mult_key_map = [v.cuda() for v in self.mult_key_map]
         self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
         self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.max_int_diffs = self.max_int_diffs.cuda()

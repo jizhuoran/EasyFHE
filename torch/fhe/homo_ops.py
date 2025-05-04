@@ -577,8 +577,8 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
+            cryptoContext.mult_swk_bx,
+            cryptoContext.mult_swk_ax,
             cryptoContext,
         )
     )
@@ -595,8 +595,8 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
+            cryptoContext.mult_swk_bx,
+            cryptoContext.mult_swk_ax,
             cryptoContext,
         )
     )
