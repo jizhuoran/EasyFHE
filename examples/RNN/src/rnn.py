@@ -96,13 +96,13 @@ def fhe_rnn(b_id):
     batch_size = int(encode_slots // EMBEDDING_SIZE)
 
     logN = 16
-    # encode_slots = int(1 << (logN - 1))
-    maxLevelsRemaining = 26
+    # encode_slots = int(1 << (logN - 1)) # fixme: bad assignment
+    maxLevelsRemaining = 10
     appRotIndex_list = [-(i * int(batch_size)) for i in range(EMBEDDING_SIZE)]
     logBsSlots_list = [int(math.log2(encode_slots))]
     dnum = 1
-    dcrtBits = 56
-    firstMod = 60
+    dcrtBits = 46
+    firstMod = 50
     levelBudget_list = [[4, 4]]
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"
