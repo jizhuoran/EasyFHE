@@ -1,0 +1,907 @@
+/home/yhh/PNP/.venv/bin/python /home/yhh/PNP/GPU-FHE/examples/RNN/src/rnn.py
+Finished building RNN weight plaintexts!
+Before rnn, batched_hidden_ct's remaining levels: 28
+step 0/128
+Before decrypt: batched_hidden_ct's true remaining levels: 25
+CT depth: 28/10
+Avg Sq Err: 0.0009431677493901316
+step 1/128
+/home/yhh/PNP/GPU-FHE/torch/fhe/homo_ops.py:736: Warning: limbs unequal! cipher.cur_limbs = 26, plaintext.l = 28, call adjust limbs function
+  warnings.warn(
+Before decrypt: batched_hidden_ct's true remaining levels: 22
+CT depth: 28/10
+Avg Sq Err: 0.0016320214374934455
+step 2/128
+Evaluating Bootstrapping!
+/home/yhh/PNP/GPU-FHE/torch/fhe/homo_ops.py:736: Warning: limbs unequal! cipher.cur_limbs = 11, plaintext.l = 28, call adjust limbs function
+  warnings.warn(
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0025237665995272544
+step 3/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.003023245417970285
+step 4/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0033359551699890405
+step 5/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002721493824479033
+step 6/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002083359257894532
+step 7/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021140843096772986
+step 8/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0023230867644609124
+step 9/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002544844919621552
+step 10/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0029525231611094846
+step 11/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0027354650539953675
+step 12/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002708083260891395
+step 13/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002648337088145385
+step 14/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0029739949718183695
+step 15/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0032017110144489016
+step 16/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002761694341240087
+step 17/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0029052028949628915
+step 18/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0027873865301708033
+step 19/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.00242460452967677
+step 20/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002327124332027039
+step 21/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020607248485676535
+step 22/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020718650385362237
+step 23/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0019186735993659881
+step 24/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020960250600826043
+step 25/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002370740644421119
+step 26/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0028061960342135946
+step 27/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0031485181972244636
+step 28/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.003097631555249881
+step 29/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.003439962182068142
+step 30/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0031617251741207202
+step 31/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.003215343212917509
+step 32/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0028077833019711936
+step 33/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002764455578519368
+step 34/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0023752419827931543
+step 35/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002026594056595942
+step 36/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018389740966553985
+step 37/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001844146686826641
+step 38/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017767221235102434
+step 39/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020009686591313243
+step 40/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021056266812170847
+step 41/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002088916402338653
+step 42/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002336888963168545
+step 43/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0023132994846281345
+step 44/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002160392357037506
+step 45/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021843296133636334
+step 46/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001999331480022245
+step 47/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021994081842839014
+step 48/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0022695101221636826
+step 49/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021979685971252657
+step 50/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001905159307447899
+step 51/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017917406252856978
+step 52/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016874827638390603
+step 53/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001809477059699563
+step 54/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018245477796444455
+step 55/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020566650423651093
+step 56/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0022193813045176492
+step 57/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002428371416477369
+step 58/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002392758272216805
+step 59/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0025287886798975403
+step 60/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002764382298559023
+step 61/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0030022503703041
+step 62/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002992395643905338
+step 63/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.00264169511587602
+step 64/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002552331158043093
+step 65/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0022780181616326224
+step 66/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020583800026324718
+step 67/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0019916414506432477
+step 68/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001878540730785821
+step 69/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0019120038730408096
+step 70/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0019137655432843004
+step 71/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002296435056258371
+step 72/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0024593449144102372
+step 73/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002416292131961163
+step 74/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002312445322706049
+step 75/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002444271699318993
+step 76/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0025058586735817803
+step 77/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002407265288805245
+step 78/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0026735447681296124
+step 79/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.002240580508432285
+step 80/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0021073136024097345
+step 81/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001824949674884546
+step 82/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018816565603962635
+step 83/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020014548806410355
+step 84/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001729836597247349
+step 85/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001742421353981739
+step 86/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016961742773569976
+step 87/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017442261315324423
+step 88/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001644604031417045
+step 89/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017143214252832726
+step 90/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016850818925632657
+step 91/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0015801242903845467
+step 92/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0015114628089553431
+step 93/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0015469436690876235
+step 94/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017190095830697891
+step 95/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018036065158442659
+step 96/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0020392603032944067
+step 97/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0019586584715623485
+step 98/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018597596378809695
+step 99/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017238540509583531
+step 100/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001748949652513584
+step 101/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016697609714402318
+step 102/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017841991131261855
+step 103/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001793913880249453
+step 104/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001841678595134989
+step 105/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0015864034504146922
+step 106/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0014777568073800298
+step 107/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0014905644628730864
+step 108/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001471821821035009
+step 109/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0014742253954701185
+step 110/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016346196977036149
+step 111/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017995231364499834
+step 112/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017114792379189269
+step 113/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016800472667078362
+step 114/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016714428472018319
+step 115/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018358121603468719
+step 116/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.00199646892921308
+step 117/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.00190657627964913
+step 118/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018293088186498636
+step 119/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017168712009363353
+step 120/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017784796893371385
+step 121/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0018626454487485691
+step 122/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0017630776483249415
+step 123/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016189271825638894
+step 124/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0015879017790114587
+step 125/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0016500048780080639
+step 126/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.001559031374941951
+step 127/128
+Evaluating Bootstrapping!
+Before decrypt: batched_hidden_ct's true remaining levels: 7
+CT depth: 28/10
+Avg Sq Err: 0.0014567250748384654
+/home/yhh/PNP/GPU-FHE/torch/fhe/homo_ops.py:736: Warning: limbs unequal! cipher.cur_limbs = 8, plaintext.l = 28, call adjust limbs function
+  warnings.warn(
+gt: 1.0 ref out: [0.425334060745736 , 0.5296569757981465] fhe out: [0.4343907091498447 , 0.521041847353786]
+gt: 1.0 ref out: [0.28978999812872736 , 0.7050903992834943] fhe out: [0.30628372720147223 , 0.7017130056040666]
+gt: 1.0 ref out: [0.4665828645414553 , 0.5397070715879273] fhe out: [0.4830270619510894 , 0.5253705262950711]
+gt: 1.0 ref out: [0.6416406373905046 , 0.3252150067043003] fhe out: [0.6412017268065038 , 0.3314717450709831]
+gt: 1.0 ref out: [0.3921605855553321 , 0.6045196335774239] fhe out: [0.399583647001636 , 0.5936831682861826]
+gt: 1.0 ref out: [0.6050241968851435 , 0.4129417601155537] fhe out: [0.610602345515188 , 0.4122487992503966]
+gt: 1.0 ref out: [0.5170435786608196 , 0.4919464072059506] fhe out: [0.5258094555418371 , 0.487797701345438]
+gt: 1.0 ref out: [0.5106966364635934 , 0.5579247126065991] fhe out: [0.529977274225329 , 0.5368454974177685]
+gt: 1.0 ref out: [0.3308259296050912 , 0.6761869330608656] fhe out: [0.3532450063569864 , 0.6546617777804649]
+gt: 1.0 ref out: [0.4893121921574812 , 0.5463042493204192] fhe out: [0.4899148136100306 , 0.5425518273458516]
+gt: 1.0 ref out: [0.43614531677576845 , 0.6339455187963781] fhe out: [0.4433101669817959 , 0.6183256931121188]
+gt: 1.0 ref out: [0.40553978636633736 , 0.7051933228806806] fhe out: [0.4149508487031747 , 0.688396997398485]
+gt: 1.0 ref out: [0.3211300778183299 , 0.6619378141467794] fhe out: [0.33591357541457734 , 0.6545288460579872]
+gt: 1.0 ref out: [0.47043319551485646 , 0.49965203099646704] fhe out: [0.4753062294452294 , 0.4921387829540648]
+gt: 1.0 ref out: [0.4152659805156152 , 0.6128581573830738] fhe out: [0.4301378659336908 , 0.598865477354079]
+gt: 1.0 ref out: [0.36767801964540325 , 0.6186763613222883] fhe out: [0.37756758431784376 , 0.608619533210773]
+gt: 1.0 ref out: [0.3311580068697325 , 0.687138078786511] fhe out: [0.3396209048211924 , 0.6858442341933695]
+gt: 1.0 ref out: [0.552564765720201 , 0.5520737647455163] fhe out: [0.550780685889446 , 0.5447546517629875]
+gt: 1.0 ref out: [0.3995668493326765 , 0.5953809193418717] fhe out: [0.41165139189864874 , 0.5776590892244045]
+gt: 1.0 ref out: [0.2777704243951642 , 0.7453937252375695] fhe out: [0.30036902123181525 , 0.7271529704057261]
+gt: 1.0 ref out: [0.2130631253216446 , 0.7696090359217407] fhe out: [0.23372824300345327 , 0.7492542613423809]
+gt: 1.0 ref out: [0.6747378403802631 , 0.3756481614247277] fhe out: [0.6624564812348218 , 0.3894637558129546]
+gt: 1.0 ref out: [0.24300358602154087 , 0.7464813118942193] fhe out: [0.25219021347919296 , 0.7323959732892288]
+gt: 1.0 ref out: [0.3248598320048824 , 0.7470352988399622] fhe out: [0.34529871231211584 , 0.7315797900446908]
+gt: 1.0 ref out: [0.47688313329767046 , 0.5941407333702254] fhe out: [0.47641092579155625 , 0.5915251160436785]
+gt: 1.0 ref out: [0.33872002199229656 , 0.6859762657978942] fhe out: [0.3662890532973709 , 0.66310947472044]
+gt: 1.0 ref out: [0.630870584881709 , 0.3895790247561048] fhe out: [0.6242878014950345 , 0.3902331658162152]
+gt: 1.0 ref out: [0.21220617755007928 , 0.8033148519815876] fhe out: [0.2268646279570395 , 0.7888194082204484]
+gt: 1.0 ref out: [0.30006441667960954 , 0.750674762836156] fhe out: [0.3195017340689951 , 0.7341115584741472]
+gt: 1.0 ref out: [0.432980294334134 , 0.6022523963767217] fhe out: [0.4441172831491271 , 0.5942775598196326]
+gt: 1.0 ref out: [0.32521617534909364 , 0.6685453665744915] fhe out: [0.34429920253975327 , 0.6515796836703638]
+gt: 1.0 ref out: [0.5196550860921179 , 0.5162932723630423] fhe out: [0.5260481431557921 , 0.5121171930526146]
+gt: 1.0 ref out: [0.5736686166607871 , 0.41874977746542014] fhe out: [0.5775183845639992 , 0.42409021782555817]
+gt: 1.0 ref out: [0.3796970079310327 , 0.5917461281492883] fhe out: [0.39234037009079126 , 0.5821171815416942]
+gt: 1.0 ref out: [0.34016315873083397 , 0.7057770074730104] fhe out: [0.35910930487759796 , 0.6865856532879715]
+gt: 1.0 ref out: [0.5304981371338648 , 0.5336996424920284] fhe out: [0.5333402652242475 , 0.5238465297376451]
+gt: 1.0 ref out: [0.42475983684502566 , 0.4989232083227413] fhe out: [0.43329559343816026 , 0.48695066299862083]
+gt: 1.0 ref out: [0.6354224999010406 , 0.4140891032549048] fhe out: [0.6225888044000707 , 0.4134341675986989]
+gt: 1.0 ref out: [0.37160164083164965 , 0.6524528306855015] fhe out: [0.3882625889562917 , 0.6326080145374251]
+gt: 1.0 ref out: [0.6535593866294064 , 0.3039705450761235] fhe out: [0.6406682299633985 , 0.3154984715567735]
+gt: 1.0 ref out: [0.40040306040753443 , 0.5706270474409353] fhe out: [0.412860313052752 , 0.5565562704655572]
+gt: 1.0 ref out: [0.43407020274382885 , 0.5453730090469827] fhe out: [0.4456632527488812 , 0.5395019764068308]
+gt: 1.0 ref out: [0.1832401063647883 , 0.8207517678569464] fhe out: [0.1996727104581046 , 0.8043449509527888]
+gt: 1.0 ref out: [0.7592200903576105 , 0.196112265821047] fhe out: [0.7488357912784748 , 0.2052751252588704]
+gt: 1.0 ref out: [0.24972141732326555 , 0.7383166186753779] fhe out: [0.2693343730493849 , 0.7204220981791918]
+gt: 1.0 ref out: [0.48319121740344195 , 0.6186553345219873] fhe out: [0.4984658346740812 , 0.6005174736864852]
+gt: 1.0 ref out: [0.36810130365779864 , 0.6745361839763367] fhe out: [0.3844029964608366 , 0.6562013539663427]
+gt: 1.0 ref out: [0.16381663824764206 , 0.8423908788366223] fhe out: [0.17437400191675165 , 0.8359755337642015]
+gt: 1.0 ref out: [0.2692122110845889 , 0.7332168055547763] fhe out: [0.28294361222455 , 0.7154959769436376]
+gt: 1.0 ref out: [0.43532877852203156 , 0.5883949518814361] fhe out: [0.44090349517557187 , 0.5934335265513345]
+gt: 1.0 ref out: [0.336161725454663 , 0.6889415582820798] fhe out: [0.3595924680507923 , 0.6669370215638906]
+gt: 1.0 ref out: [0.4612109450199369 , 0.5357718187650766] fhe out: [0.4738166245304669 , 0.5264528839683619]
+gt: 1.0 ref out: [0.1256324606369258 , 0.8662208524907967] fhe out: [0.13930750268664993 , 0.8534990952884262]
+gt: 1.0 ref out: [0.36641106060006307 , 0.617091814166255] fhe out: [0.38323680499663526 , 0.6008685679345869]
+gt: 1.0 ref out: [0.33835692203820844 , 0.5946443044581216] fhe out: [0.3537601080898723 , 0.5915147549507457]
+gt: 1.0 ref out: [0.36262410257410255 , 0.6480204766279555] fhe out: [0.38365317588211567 , 0.6335478143094777]
+gt: 1.0 ref out: [0.3681868337879599 , 0.6947348819825726] fhe out: [0.38655037195640907 , 0.6845657919379202]
+gt: 1.0 ref out: [0.461922820615036 , 0.48186000942896073] fhe out: [0.4748047682084535 , 0.4734629852389625]
+gt: 1.0 ref out: [0.37789219732693763 , 0.6378297152802562] fhe out: [0.3817605244714279 , 0.6284140496535083]
+gt: 1.0 ref out: [0.27368840301634445 , 0.6744707642515337] fhe out: [0.28828496735069514 , 0.6619045708716418]
+gt: 1.0 ref out: [0.44564681900698455 , 0.5168841079011492] fhe out: [0.4553143195377093 , 0.5100191028194955]
+gt: 1.0 ref out: [0.42762990629341696 , 0.526974175239598] fhe out: [0.4317384435351827 , 0.5218989650927771]
+gt: 1.0 ref out: [0.229962909338754 , 0.7893607473826525] fhe out: [0.24719048430244975 , 0.7765545184543202]
+gt: 1.0 ref out: [0.1553264892133673 , 0.8379673135673443] fhe out: [0.1736423726261308 , 0.8231797188942094]
+gt: 1.0 ref out: [0.5262166926098394 , 0.44481350635536715] fhe out: [0.524390882841725 , 0.4483895884623339]
+gt: 1.0 ref out: [0.4080816370073203 , 0.6105668183607768] fhe out: [0.4143530813144749 , 0.599336099871323]
+gt: 1.0 ref out: [0.5558443846166911 , 0.48377923148442886] fhe out: [0.5534137182580705 , 0.4794696552833564]
+gt: 1.0 ref out: [0.4388525770058988 , 0.5394706280804381] fhe out: [0.44780957571325275 , 0.535368396105611]
+gt: 1.0 ref out: [0.35934175925853074 , 0.6810040227837757] fhe out: [0.37328109473139004 , 0.6678279119129619]
+gt: 1.0 ref out: [0.5648750236745345 , 0.3900051263471045] fhe out: [0.5613328614709477 , 0.39145671123537423]
+gt: 1.0 ref out: [0.4667017364051837 , 0.52807052393226] fhe out: [0.4716379218808948 , 0.5308098107185991]
+gt: 1.0 ref out: [0.36711404214738436 , 0.6358601867427052] fhe out: [0.3807590750617639 , 0.6256579183632254]
+gt: 1.0 ref out: [0.31271274254520964 , 0.6405700219401883] fhe out: [0.3290015829162914 , 0.6258911156932283]
+gt: 1.0 ref out: [0.27674423584718183 , 0.7097666311823442] fhe out: [0.30233959125257226 , 0.6840428808257375]
+gt: 1.0 ref out: [0.5472607665977369 , 0.49624294842720834] fhe out: [0.5463183972730434 , 0.4912001042526829]
+gt: 1.0 ref out: [0.38948160793391773 , 0.6007394560301659] fhe out: [0.4035686823675634 , 0.5826087889147374]
+gt: 1.0 ref out: [0.515080973424316 , 0.4512468194756094] fhe out: [0.5167960255321105 , 0.45226063915083725]
+gt: 1.0 ref out: [0.6101657997938106 , 0.4169335131880722] fhe out: [0.5985941558960284 , 0.42443591162231176]
+gt: 1.0 ref out: [0.393185516999502 , 0.581888882955891] fhe out: [0.39349487425245877 , 0.5868273566608181]
+gt: 1.0 ref out: [0.4920629514411493 , 0.5414621561265612] fhe out: [0.48814076215913504 , 0.5403547818718991]
+gt: 1.0 ref out: [0.34023617216777086 , 0.6839943950356824] fhe out: [0.3562430490135619 , 0.6667549933334637]
+gt: 1.0 ref out: [0.17042229576542137 , 0.8329483892032545] fhe out: [0.17496628645199155 , 0.8257021676808305]
+gt: 1.0 ref out: [0.4287292693372081 , 0.5854213291484627] fhe out: [0.4355547624045423 , 0.5752472169237326]
+gt: 1.0 ref out: [0.22532078203645442 , 0.765265924293789] fhe out: [0.23035840871702082 , 0.7572420341318528]
+gt: 1.0 ref out: [0.3383129042124851 , 0.7059454394807723] fhe out: [0.36182685705435685 , 0.6885046767957614]
+gt: 1.0 ref out: [0.36610459385274496 , 0.6206676933786995] fhe out: [0.377078507713866 , 0.607747926429835]
+gt: 1.0 ref out: [0.5061547923457163 , 0.5622342622611238] fhe out: [0.5138264653175278 , 0.5498845290384243]
+gt: 1.0 ref out: [0.39110458343451265 , 0.6226682720842026] fhe out: [0.4085200948563592 , 0.6182950997677439]
+gt: 1.0 ref out: [0.4454796320866268 , 0.6476578548222824] fhe out: [0.45989902402785504 , 0.6301388190851595]
+gt: 1.0 ref out: [0.46556245086466286 , 0.5364443933454976] fhe out: [0.4864390609340097 , 0.5253128308142617]
+gt: 1.0 ref out: [0.5361033601570808 , 0.46124173272187763] fhe out: [0.536359184186989 , 0.4617846084932074]
+gt: 1.0 ref out: [0.35959311233482705 , 0.6594392197060899] fhe out: [0.3713056367773765 , 0.6499442240192992]
+gt: 1.0 ref out: [0.5575731458007366 , 0.47486584309572344] fhe out: [0.5604779406375642 , 0.4657931447893844]
+gt: 1.0 ref out: [0.3515714069145644 , 0.6148703156938525] fhe out: [0.36257826782135977 , 0.6113516015042828]
+gt: 1.0 ref out: [0.4370307849369967 , 0.5821955963424587] fhe out: [0.4475736500747413 , 0.5665297951375652]
+gt: 1.0 ref out: [0.31715037638303434 , 0.7156279226149992] fhe out: [0.3428578929318101 , 0.6904653095456987]
+gt: 1.0 ref out: [0.5056989046394064 , 0.5313591086171343] fhe out: [0.5109967633672813 , 0.5331748399543637]
+gt: 1.0 ref out: [0.29133312354460644 , 0.7125018729166345] fhe out: [0.30480462601919894 , 0.7004257257274855]
+gt: 1.0 ref out: [0.22771675110823106 , 0.7862447945674674] fhe out: [0.24929760032903756 , 0.772274973427561]
+gt: 1.0 ref out: [0.2728523949452693 , 0.6876936605284487] fhe out: [0.27730485772091035 , 0.6864048196773292]
+gt: 1.0 ref out: [0.3746451362683526 , 0.6522144729645591] fhe out: [0.38178567098636035 , 0.6398738733434014]
+gt: 1.0 ref out: [0.23629551149092656 , 0.7774763425328756] fhe out: [0.2515775381271615 , 0.7605189422150843]
+gt: 1.0 ref out: [0.21509313986273962 , 0.7641188585531963] fhe out: [0.22544099346599836 , 0.7464114712412226]
+gt: 1.0 ref out: [0.2512307206486663 , 0.7582618323806006] fhe out: [0.27126928377200676 , 0.7473873349216251]
+gt: 1.0 ref out: [0.2940968669789096 , 0.6985169037758036] fhe out: [0.3067618068165347 , 0.6824159183810111]
+gt: 1.0 ref out: [0.3044277746870855 , 0.675955192998284] fhe out: [0.31565351362159927 , 0.6641092631558508]
+gt: 1.0 ref out: [0.23147465969445646 , 0.7114447081424943] fhe out: [0.24504426148374123 , 0.7004223263749688]
+gt: 1.0 ref out: [0.5906258325217304 , 0.428285687705765] fhe out: [0.5887334493164301 , 0.4279958036710855]
+gt: 1.0 ref out: [0.41585014223312244 , 0.5773611697128999] fhe out: [0.42003900233372343 , 0.5719905816452815]
+gt: 1.0 ref out: [0.18460372960289462 , 0.8080368796449298] fhe out: [0.19984371415500746 , 0.7928539076804231]
+gt: 1.0 ref out: [0.4074953474571542 , 0.5561263120510785] fhe out: [0.4188366054310317 , 0.5447703407027692]
+gt: 1.0 ref out: [0.5098614204930494 , 0.4426664706960491] fhe out: [0.5181451337333354 , 0.44070131404947244]
+gt: 1.0 ref out: [0.4424486157059064 , 0.5792378957693893] fhe out: [0.4435387585036066 , 0.5687916524186141]
+gt: 1.0 ref out: [0.6337564981955027 , 0.4225140152137269] fhe out: [0.6266819214995689 , 0.4277578640080966]
+gt: 1.0 ref out: [0.44557068954831075 , 0.6101905293830561] fhe out: [0.4541717584258539 , 0.6022389879074466]
+gt: 1.0 ref out: [0.5472721886481811 , 0.4382696802513687] fhe out: [0.5482033588141156 , 0.4414681415156586]
+gt: 1.0 ref out: [0.33536281324688433 , 0.6857629342578766] fhe out: [0.3515369865359666 , 0.6711483603012142]
+gt: 1.0 ref out: [0.3501254757565735 , 0.6392337599017855] fhe out: [0.3619070019289814 , 0.6234857352311944]
+gt: 1.0 ref out: [0.380451320489612 , 0.6191732638049454] fhe out: [0.38784073216978704 , 0.6142830719756398]
+gt: 1.0 ref out: [0.2733067675912124 , 0.7470348842533723] fhe out: [0.28863876252695253 , 0.7333911399783557]
+gt: 1.0 ref out: [0.43971880236053806 , 0.5912778167306711] fhe out: [0.44681008006219797 , 0.5813341396208814]
+gt: 1.0 ref out: [0.2832888168501956 , 0.7408652868972043] fhe out: [0.29407558943871087 , 0.7352023823443121]
+gt: 1.0 ref out: [0.3088240447240637 , 0.6625329505895915] fhe out: [0.32371321573968825 , 0.6572523714803641]
+gt: 1.0 ref out: [0.41553629226197336 , 0.5763173316515154] fhe out: [0.41887316347187276 , 0.5707398618885581]
+gt: 1.0 ref out: [0.4285359888170846 , 0.5839674470774718] fhe out: [0.43394700364046906 , 0.5723145940955386]
+gt: 1.0 ref out: [0.3263611089393668 , 0.6846113631594812] fhe out: [0.34166062594776037 , 0.6805438942079707]
+gt: 1.0 ref out: [0.30693754483969066 , 0.7022649979572692] fhe out: [0.3186586766451293 , 0.6858770537224943]
+gt: 1.0 ref out: [0.3593698778250194 , 0.6092897891868024] fhe out: [0.37012376491808907 , 0.5969862486596849]
+gt: 1.0 ref out: [0.22000280082680465 , 0.69316622892786] fhe out: [0.2328381133836328 , 0.6805770113370272]
+gt: 1.0 ref out: [0.4616002246395821 , 0.6100955224710602] fhe out: [0.4649337415440986 , 0.6030855328720294]
+gt: 1.0 ref out: [0.5540004110827593 , 0.4459565664278779] fhe out: [0.5572648278656644 , 0.44592445764960015]
+gt: 1.0 ref out: [0.47792243395872 , 0.5086321087310285] fhe out: [0.48159936722389174 , 0.5084021970204801]
+gt: 1.0 ref out: [0.35586945638653555 , 0.6053024952035805] fhe out: [0.3673865080980796 , 0.5931322827929199]
+gt: 1.0 ref out: [0.333549779691503 , 0.6623689497483551] fhe out: [0.3472328391494648 , 0.651310445437502]
+gt: 1.0 ref out: [0.5647979727807754 , 0.4367123732879803] fhe out: [0.5644117311062496 , 0.44074032445205025]
+gt: 1.0 ref out: [0.4926978669052683 , 0.48820907177310524] fhe out: [0.4843890163157152 , 0.5003740368001718]
+gt: 1.0 ref out: [0.3873458301768277 , 0.5546191715797469] fhe out: [0.40359890765290524 , 0.5370421882795828]
+gt: 1.0 ref out: [0.45537082147881125 , 0.5603582605501034] fhe out: [0.4718588081718769 , 0.5412495809324079]
+gt: 1.0 ref out: [0.6908841695554008 , 0.4128210125007591] fhe out: [0.682399487548209 , 0.4177730838551055]
+gt: 1.0 ref out: [0.48683002932971714 , 0.5579619169457157] fhe out: [0.48147951923211463 , 0.5634582102168428]
+gt: 1.0 ref out: [0.41455742100291265 , 0.5924096449660428] fhe out: [0.42645522995265056 , 0.5766600043312655]
+gt: 1.0 ref out: [0.2797797669330232 , 0.6912769977293692] fhe out: [0.2903940453336327 , 0.6836182464728893]
+gt: 1.0 ref out: [0.3472360851593174 , 0.6907095660586055] fhe out: [0.35680355492385013 , 0.6776447529693348]
+gt: 1.0 ref out: [0.40677440828728895 , 0.6126759709465066] fhe out: [0.4084385567785828 , 0.6038364095300208]
+gt: 1.0 ref out: [0.22115219751200402 , 0.7873119549428887] fhe out: [0.23819085892109684 , 0.7694712758056401]
+gt: 1.0 ref out: [0.6831856772500711 , 0.2797693093786965] fhe out: [0.6716598735917588 , 0.30015518070042113]
+gt: 1.0 ref out: [0.39928568199726583 , 0.5482893671613109] fhe out: [0.41285762830508715 , 0.5397172076799356]
+gt: 1.0 ref out: [0.440954972612159 , 0.5853706885905132] fhe out: [0.4504230486743486 , 0.5736523073747207]
+gt: 1.0 ref out: [0.5949481553974048 , 0.4863073728295574] fhe out: [0.5883332658273742 , 0.48856894420187325]
+gt: 1.0 ref out: [0.5596184680755147 , 0.4707123669041209] fhe out: [0.5599950170695981 , 0.46292428757430937]
+gt: 1.0 ref out: [0.1458336350714584 , 0.8443132238245931] fhe out: [0.15396018040949894 , 0.8360912637468478]
+gt: 1.0 ref out: [0.4024079724025263 , 0.6352152001309241] fhe out: [0.4099312102255838 , 0.6223571713506963]
+gt: 1.0 ref out: [0.390213920034759 , 0.5895066448993862] fhe out: [0.39425613747640686 , 0.5786781722323606]
+gt: 1.0 ref out: [0.47292018626717 , 0.5858822788263436] fhe out: [0.47912913349129715 , 0.5770703784801983]
+gt: 1.0 ref out: [0.5436603722537777 , 0.4063245033084724] fhe out: [0.5443441179849273 , 0.40965431822851867]
+gt: 1.0 ref out: [0.27157458096932063 , 0.7285761515494685] fhe out: [0.2962334281825995 , 0.704025070791243]
+gt: 1.0 ref out: [0.24045149292083906 , 0.7533633309127165] fhe out: [0.24912218065852587 , 0.7404613148744301]
+gt: 1.0 ref out: [0.4090211677452369 , 0.5627657733790556] fhe out: [0.4173399588615627 , 0.5587265632315511]
+gt: 1.0 ref out: [0.3064416789128803 , 0.6728730954353266] fhe out: [0.32559973739886894 , 0.657364592928551]
+gt: 1.0 ref out: [0.27051328417916837 , 0.7331475225489248] fhe out: [0.28471491665059406 , 0.7153455100169774]
+gt: 1.0 ref out: [0.6734919600102274 , 0.4179504064389368] fhe out: [0.6616531588414619 , 0.40637642283009534]
+gt: 1.0 ref out: [0.25075491719600257 , 0.7014457348269851] fhe out: [0.2682350034115402 , 0.6874369129539448]
+gt: 1.0 ref out: [0.3469039325112137 , 0.6003876854282055] fhe out: [0.36091896653509425 , 0.5906173090537822]
+gt: 1.0 ref out: [0.5479982820953738 , 0.46819837356643024] fhe out: [0.547880207442535 , 0.46890287526151936]
+gt: 1.0 ref out: [0.4037001951273803 , 0.5645381534898801] fhe out: [0.41057826269144476 , 0.5526142367268372]
+gt: 1.0 ref out: [0.597522562069477 , 0.3992244977408777] fhe out: [0.5816253535825457 , 0.41231171688632595]
+gt: 1.0 ref out: [0.2804950418838947 , 0.7019952014364811] fhe out: [0.29372226160602405 , 0.6943753252924092]
+gt: 1.0 ref out: [0.7617117957121378 , 0.27430243106242697] fhe out: [0.7479091413844386 , 0.2948364091942755]
+gt: 1.0 ref out: [0.3704023240338821 , 0.5955929704706932] fhe out: [0.3786385565857736 , 0.5815808350593723]
+gt: 1.0 ref out: [0.38708613679517884 , 0.6321307407252111] fhe out: [0.39966082556056787 , 0.6125461948259444]
+gt: 1.0 ref out: [0.5783987860325811 , 0.44407142361035273] fhe out: [0.5764305261781276 , 0.45363054182068074]
+gt: 1.0 ref out: [0.2636263261680704 , 0.7165986090175002] fhe out: [0.2730654696664135 , 0.7039385560131786]
+gt: 1.0 ref out: [0.37316785017170306 , 0.5827218759770071] fhe out: [0.39595063193613184 , 0.5625728560869911]
+gt: 1.0 ref out: [0.1544667555055033 , 0.8283008749947302] fhe out: [0.17055512321023253 , 0.811799490290336]
+gt: 1.0 ref out: [0.3605829510905813 , 0.660159928068574] fhe out: [0.3668599068747878 , 0.6513038644936368]
+gt: 1.0 ref out: [0.3923133494049487 , 0.5410116915078278] fhe out: [0.4067887500437661 , 0.5301228997872354]
+gt: 1.0 ref out: [0.2780399511477044 , 0.7254984623558584] fhe out: [0.28782623043195305 , 0.7158081684565537]
+gt: 1.0 ref out: [0.5150887319550448 , 0.4306912261620329] fhe out: [0.519721061220983 , 0.4372388370726005]
+gt: 1.0 ref out: [0.5320762438742553 , 0.474358560410288] fhe out: [0.533593160504607 , 0.4790767395695371]
+gt: 1.0 ref out: [0.45457060318689163 , 0.5595970073667581] fhe out: [0.4561204657877165 , 0.5619911061690654]
+gt: 1.0 ref out: [0.26854134606453234 , 0.7397626891743724] fhe out: [0.2843469708067289 , 0.7206527379978439]
+gt: 1.0 ref out: [0.4948158600426091 , 0.5829381638013946] fhe out: [0.4975897553608128 , 0.5744628738906908]
+gt: 1.0 ref out: [0.36485356801443786 , 0.6529122855062395] fhe out: [0.3760917193261099 , 0.6382769848938682]
+gt: 1.0 ref out: [0.5934218152602376 , 0.36180645358352376] fhe out: [0.5898656376323441 , 0.36787478075500646]
+gt: 1.0 ref out: [0.22487568346226877 , 0.804042855719543] fhe out: [0.24094462593117652 , 0.7840878735094331]
+gt: 1.0 ref out: [0.18398984762428752 , 0.8016330272198353] fhe out: [0.19927016990224802 , 0.790775559320434]
+gt: 1.0 ref out: [0.3885934244173409 , 0.6118163277609586] fhe out: [0.4015555650029055 , 0.6019407192802475]
+gt: 1.0 ref out: [0.33087866368857627 , 0.6851370886728309] fhe out: [0.34482545869180203 , 0.6730445645376045]
+gt: 1.0 ref out: [0.24072221362720117 , 0.7324688518862719] fhe out: [0.2584587146722064 , 0.7197145294751331]
+gt: 1.0 ref out: [0.5677538058902946 , 0.41871614832746884] fhe out: [0.5643511502211702 , 0.4259503240330091]
+gt: 1.0 ref out: [0.43690661799766006 , 0.5844136674192469] fhe out: [0.43855152758764854 , 0.5856611467067903]
+gt: 1.0 ref out: [0.35150476442513223 , 0.6305389468852413] fhe out: [0.3652743901569181 , 0.6081968068909509]
+gt: 1.0 ref out: [0.7113910133921033 , 0.3265370295627599] fhe out: [0.703366863744926 , 0.33586202513408125]
+gt: 1.0 ref out: [0.3260027341846519 , 0.7373009926451269] fhe out: [0.3413133959244999 , 0.7212054424871301]
+gt: 1.0 ref out: [0.5152351267544574 , 0.45511781814308344] fhe out: [0.5192823990981101 , 0.44932769856608784]
+gt: 1.0 ref out: [0.6167744075279363 , 0.42400930730434977] fhe out: [0.6138578828499442 , 0.42201923694671906]
+gt: 1.0 ref out: [0.280041174368844 , 0.7487216830705334] fhe out: [0.3006209024754134 , 0.7337647755516181]
+gt: 1.0 ref out: [0.3988714703735646 , 0.5971330804236691] fhe out: [0.41127716119766733 , 0.5897773971459439]
+gt: 1.0 ref out: [0.4196587843555694 , 0.6232305001541579] fhe out: [0.4267292600366628 , 0.6122222849459255]
+gt: 1.0 ref out: [0.44350606927846414 , 0.5036829549623998] fhe out: [0.44974076713200445 , 0.5058063064418489]
+gt: 1.0 ref out: [0.3540061508996854 , 0.5996662680547336] fhe out: [0.38135622034101946 , 0.5803585317493255]
+gt: 1.0 ref out: [0.2888953511002713 , 0.7556820146359403] fhe out: [0.30472734404317553 , 0.732069953160785]
+gt: 1.0 ref out: [0.6094936111010785 , 0.4992250239349281] fhe out: [0.6146246847906074 , 0.4963914555317359]
+gt: 1.0 ref out: [0.5210980954497267 , 0.5621506650499363] fhe out: [0.5202696108813097 , 0.5519801466726669]
+gt: 1.0 ref out: [0.2784734679080723 , 0.7114895544242812] fhe out: [0.28936393007537053 , 0.6983442047728036]
+gt: 1.0 ref out: [0.4158925404785657 , 0.6044448361139112] fhe out: [0.4290997768710509 , 0.5874615451702263]
+gt: 1.0 ref out: [0.5008232773410058 , 0.5217151058217759] fhe out: [0.5019414992701607 , 0.5163250288687627]
+gt: 1.0 ref out: [0.44161951819000544 , 0.6243066252452597] fhe out: [0.45964221905913827 , 0.6001845802134426]
+gt: 1.0 ref out: [0.31712469516661274 , 0.6564301945950162] fhe out: [0.33975420006909535 , 0.6449811247849905]
+gt: 1.0 ref out: [0.4551301197667199 , 0.5263155711344818] fhe out: [0.4615419949825265 , 0.5164401695578408]
+gt: 1.0 ref out: [0.372793987354811 , 0.6222118946187524] fhe out: [0.39227762712225467 , 0.6099810520443321]
+gt: 1.0 ref out: [0.43434530569250684 , 0.501672302966592] fhe out: [0.4480001064874606 , 0.4957154897976377]
+gt: 1.0 ref out: [0.5804100809433931 , 0.4346135555391605] fhe out: [0.5787042065613592 , 0.4335573370056106]
+gt: 1.0 ref out: [0.6831719768719849 , 0.3084351689204979] fhe out: [0.6675237395412773 , 0.31824813979520017]
+gt: 1.0 ref out: [0.3821831000816144 , 0.5581482893098303] fhe out: [0.3948313100691889 , 0.5503948948696431]
+gt: 1.0 ref out: [0.21340647367702223 , 0.7834214042495279] fhe out: [0.23837199009104476 , 0.7571697969018014]
+gt: 1.0 ref out: [0.4270416038296741 , 0.6044355602437017] fhe out: [0.43560570451920017 , 0.5932612948164555]
+gt: 1.0 ref out: [0.2381011406564129 , 0.7602112340995022] fhe out: [0.2587559015232018 , 0.7427459902890798]
+gt: 1.0 ref out: [0.30057759853012594 , 0.709267016798506] fhe out: [0.31054634170929274 , 0.6953751230381978]
+gt: 1.0 ref out: [0.32936926259582466 , 0.6974123546974443] fhe out: [0.34793686748175473 , 0.6800749728523062]
+gt: 1.0 ref out: [0.6569487670399172 , 0.3575340094441946] fhe out: [0.6544957276185055 , 0.354266339751151]
+gt: 1.0 ref out: [0.41394690656885386 , 0.5755813793769397] fhe out: [0.42389983989284474 , 0.5623830931265752]
+gt: 1.0 ref out: [0.3222005434489816 , 0.6911615268329626] fhe out: [0.3301748983499584 , 0.6839992867796929]
+gt: 1.0 ref out: [0.4143390617233831 , 0.5428826416303081] fhe out: [0.41962960816471845 , 0.5457526518624536]
+gt: 1.0 ref out: [0.3745953113944565 , 0.5710073621377053] fhe out: [0.38196912170480385 , 0.5665938289008094]
+gt: 1.0 ref out: [0.3788410273966679 , 0.5939407930910157] fhe out: [0.3882554900780811 , 0.589374229560178]
+gt: 1.0 ref out: [0.4538134981082054 , 0.5029609445848995] fhe out: [0.455278832366153 , 0.4985738020007019]
+gt: 1.0 ref out: [0.3292520737931398 , 0.6692904344583902] fhe out: [0.3477171514930483 , 0.641375799474288]
+gt: 1.0 ref out: [0.22255409510384666 , 0.752674388020571] fhe out: [0.24026518421598622 , 0.7321843653645381]
+gt: 1.0 ref out: [0.3673758822915991 , 0.6363843083612771] fhe out: [0.3808702132468742 , 0.6358567722626025]
+gt: 1.0 ref out: [0.4989332978203798 , 0.44174989106907964] fhe out: [0.49701378840508853 , 0.4469674308033717]
+gt: 1.0 ref out: [0.3977067751652272 , 0.5516728445602138] fhe out: [0.4028778412805724 , 0.5506292779706042]
+gt: 1.0 ref out: [0.22716656610408348 , 0.7698466079451548] fhe out: [0.24464677874789795 , 0.755756290209976]
+gt: 1.0 ref out: [0.3999260985712155 , 0.5900293448706289] fhe out: [0.41885467635259704 , 0.5690354792085897]
+gt: 1.0 ref out: [0.24844477964743134 , 0.7557537234208224] fhe out: [0.2637651907173523 , 0.7402836590275897]
+gt: 1.0 ref out: [0.48285758973067483 , 0.5442881720934503] fhe out: [0.4778832973886424 , 0.5430964908776286]
+gt: 1.0 ref out: [0.2888630170016971 , 0.6896478196602676] fhe out: [0.3012652542039184 , 0.6794870248178123]
+gt: 1.0 ref out: [0.24354047903386783 , 0.7343354270742227] fhe out: [0.2635921435264304 , 0.7142352918504573]
+gt: 1.0 ref out: [0.4512685592392507 , 0.5151646218280359] fhe out: [0.4573496103464876 , 0.5138917134116787]
+gt: 1.0 ref out: [0.41586291295309585 , 0.5304528297385385] fhe out: [0.4230153176199374 , 0.5321392696134369]
+gt: 1.0 ref out: [0.4014335349946011 , 0.5778483720957712] fhe out: [0.4097513479157727 , 0.5775254764190019]
+gt: 1.0 ref out: [0.19359456009261303 , 0.8016213834555371] fhe out: [0.2101879209718415 , 0.7885836515169217]
+gt: 1.0 ref out: [0.46878782597752644 , 0.5584783173479] fhe out: [0.4722162425206853 , 0.5531978014167185]
+gt: 1.0 ref out: [0.67663831568295 , 0.3028444564060067] fhe out: [0.6621292425959561 , 0.32016106106482406]
+gt: 1.0 ref out: [0.31263972328741557 , 0.6916991818499273] fhe out: [0.3318940867901979 , 0.6766857230501789]
+gt: 1.0 ref out: [0.33918259960286923 , 0.6446044686107854] fhe out: [0.3488170122535441 , 0.6267373284211771]
+gt: 1.0 ref out: [0.4335429349227148 , 0.6473418080183505] fhe out: [0.44166433311142667 , 0.6419035553039091]
+gt: 1.0 ref out: [0.332971334501074 , 0.6176750061214129] fhe out: [0.346241455533101 , 0.6020837623257385]
+gt: 1.0 ref out: [0.5367441922536808 , 0.46886293873884055] fhe out: [0.5380621228268744 , 0.4664797212798713]
+gt: 1.0 ref out: [0.44180315746685733 , 0.587659917796782] fhe out: [0.4467516520418476 , 0.5745211297226228]
+gt: 1.0 ref out: [0.4814619237884175 , 0.5525562081757682] fhe out: [0.4873827519595771 , 0.5435349041433599]
+gt: 1.0 ref out: [0.45999773993808224 , 0.6112547066952988] fhe out: [0.4786051775193849 , 0.5939297613195211]
+gt: 1.0 ref out: [0.5216622709991092 , 0.4505696285747696] fhe out: [0.52156390585587 , 0.4497053917134782]
+gt: 1.0 ref out: [0.28352328132245425 , 0.638851357253089] fhe out: [0.29301780255080284 , 0.6289705274762035]
+gt: 1.0 ref out: [0.3964113946845192 , 0.610201353877587] fhe out: [0.40603256303442836 , 0.5987544824039946]
+gt: 1.0 ref out: [0.4015651247600121 , 0.5227139053962596] fhe out: [0.4139998513092764 , 0.5143721899263064]
+ref accuracy:	204/	256	79.69%
+fhe accuracy:	203/	256	79.30%
+
+Process finished with exit code 0
