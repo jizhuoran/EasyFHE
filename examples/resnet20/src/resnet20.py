@@ -51,6 +51,8 @@ def homo_relu(ciphertext, scale, degree, cryptoContext):
 def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
     res = convbn_initial(input, scale, he_res20_ctx, cryptoContext, 32, 1)
+    bias=read_values_from_file(cryptoContext, "conv1bn1-bias", cryptoContext.L-res.cur_limbs, 1, 16384, scale)
+    res=fhe.homo_add_pt(res,bias,cryptoContext)
     res = homo_relu(res, scale, he_res20_ctx.relu_degree, cryptoContext)
     return res
 
@@ -59,11 +61,15 @@ def layer1(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[1][0]
 
     res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext,  f"layer{1}-conv{1}bn{1}-bias",cryptoContext.L-res1.cur_limbs,1,16384,scale)
+    res1 = fhe.homo_add_pt(res1,bias,cryptoContext)
     res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
     res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][1]
     res1 = convbn(res1, 1, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{1}-conv{2}bn{2}-bias",cryptoContext.L-res1.cur_limbs,1,16384,scale)
+    res1 = fhe.homo_add_pt(res1, bias, cryptoContext)
     res1 = fhe.homo_add(
         res1, fhe.homo_mul_scalar_double(input, scale, cryptoContext), cryptoContext
     )
@@ -72,11 +78,15 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[1][2]
     res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{2}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,16384,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_bootstrap(res2, cryptoContext.L, 14, cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][3]
     res2 = convbn(res2, 2, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{2}-conv{2}bn{2}-bias",cryptoContext.L-res2.cur_limbs,1,16384,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
@@ -85,11 +95,15 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[1][4]
     res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{3}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,16384,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_bootstrap(res3, cryptoContext.L, 14, cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][5]
     res3 = convbn(res3, 3, 2, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{3}-conv{2}bn{2}-bias",cryptoContext.L-res3.cur_limbs,1,16384,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
@@ -107,7 +121,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
     )
 
     res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
+    bias = read_values_from_file(cryptoContext, f"layer{4}-conv{1}bn{1}-bias{1}",cryptoContext.L-res1sx0.cur_limbs,1,16384,scaleSx)
+    res1sx0 = fhe.homo_add_pt(res1sx0, bias, cryptoContext)
     res1sx1 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 16, "2")
+    bias = read_values_from_file(cryptoContext, f"layer{4}-conv{1}bn{1}-bias{2}",cryptoContext.L-res1sx1.cur_limbs,1,16384,scaleSx)
+    res1sx1 = fhe.homo_add_pt(res1sx1, bias, cryptoContext)
 
     res1dx0 = convbn_dx(
         boot_in, 4, 1, scaleDx, he_res20_ctx, cryptoContext, 16384, 16, -1024, 0, "1"
@@ -127,6 +145,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
     fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{4}-conv{2}bn{2}-bias",cryptoContext.L-fullpackSx.cur_limbs,1,8192,scaleDx)
+    fullpackSx = fhe.homo_add_pt(fullpackSx, bias, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
         res1, cryptoContext.L, 13, cryptoContext
@@ -135,6 +155,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][2]
     res2 = convbn(res1, 5, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{5}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,8192,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_bootstrap(
         res2, cryptoContext.L, 13, cryptoContext
     )
@@ -142,6 +164,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][3]
     res2 = convbn(res2, 5, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{5}-conv{2}bn{2}-bias",cryptoContext.L-res2.cur_limbs,1,8192,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
@@ -152,6 +176,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][4]
     res3 = convbn(res2, 6, 1, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{6}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,8192,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_bootstrap(
         res3, cryptoContext.L, 13, cryptoContext
     )
@@ -159,6 +185,8 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[2][5]
     res3 = convbn(res3, 6, 2, scale, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{6}-conv{2}bn{2}-bias",cryptoContext.L-res3.cur_limbs,1,8192,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
@@ -179,7 +207,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
     )
 
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
+    bias = read_values_from_file(cryptoContext, f"layer{7}-conv{1}bn{1}-bias{1}",cryptoContext.L-res1sx0.cur_limbs,1,8192,scaleSx)
+    res1sx0 = fhe.homo_add_pt(res1sx0, bias, cryptoContext)
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
+    bias = read_values_from_file(cryptoContext, f"layer{7}-conv{1}bn{1}-bias{2}",cryptoContext.L-res1sx1.cur_limbs,1,8192,scaleSx)
+    res1sx1 = fhe.homo_add_pt(res1sx1, bias, cryptoContext)
 
     res1dx0 = convbn_dx(
         boot_in, 7, 1, scaleDx, he_res20_ctx, cryptoContext, 8192, 32, -256, 0, "1"
@@ -199,6 +231,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{7}-conv{2}bn{2}-bias",cryptoContext.L-fullpackSx.cur_limbs,1,4096,scaleDx)
+    fullpackSx = fhe.homo_add_pt(fullpackSx, bias, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
         res1, cryptoContext.L, 12, cryptoContext
@@ -207,6 +241,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][2]
     res2 = convbn(res1, 8, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{8}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,4096,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_bootstrap(
         res2, cryptoContext.L, 12, cryptoContext
     )
@@ -214,6 +250,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][3]
     res2 = convbn(res2, 8, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-bias",cryptoContext.L-res2.cur_limbs,1,4096,scale)
+    res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
@@ -224,6 +262,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][4]
     res3 = convbn(res2, 9, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{9}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,4096,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_bootstrap(
         res3, cryptoContext.L, 12, cryptoContext
     )
@@ -231,6 +271,8 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     scale = normalized_deltas[3][5]
     res3 = convbn(res3, 9, 2, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
+    bias = read_values_from_file(cryptoContext, f"layer{9}-conv{2}bn{2}-bias",cryptoContext.L-res3.cur_limbs,1,4096,scale)
+    res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
@@ -394,7 +436,7 @@ def resnet20( ):
     firstMod = 60
     levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO" #todo: FIXEDMANUAL is not supported yet!
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
