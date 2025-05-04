@@ -1,10 +1,10 @@
 import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
+import torch
 import torch.fhe.homo_ops as homo_ops
 from torch.fhe.bootstrapping import eval_bootstrap, homo_double_bootstrap, homo_bootstrap
 import torch.fhe.utils as utils
-import torch.fhe.bs_context
 import numpy as np
 from termcolor import colored
 
@@ -39,7 +39,7 @@ def app_without_bs_example_debug(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    cryptoContext.load_rotation_keys("app")
+    # cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
@@ -82,7 +82,7 @@ def app_example_debug(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    cryptoContext.load_rotation_keys("app")
+    # cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
@@ -97,8 +97,8 @@ def app_example_debug(
         print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
@@ -121,8 +121,8 @@ def app_example_debug(
         result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[1]))
-    result1 = eval_bootstrap(result, cryptoContext.L, logBsSlots_list[1], cryptoContext)
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[1]))
+    result1 = eval_bootstrap(result, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext)
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
 
@@ -182,7 +182,7 @@ def app_example_release(
     print("homo_rotate done!")
 
     # bootstrapping
-    result = homo_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    result = homo_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -200,7 +200,7 @@ def app_example_release(
         result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    result1 = homo_bootstrap(result, cryptoContext.L, logBsSlots_list[1], cryptoContext)
+    result1 = homo_bootstrap(result, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -215,6 +215,8 @@ def app_example_release(
         print("app: Test passed!")
     else:
         print_failed("app: Test failed! The code verifies if the first 10 elements of clear_result and approx_plain_val are approximately equal, allowing a maximum difference of 0.01 (1e-2). Please review the results.")
+
+    print("After execution, allocated memory (GB):", torch.cuda.memory_allocated() / 1024 / 1024 / 1024)
 
 
 def encode_test_case(
@@ -463,8 +465,9 @@ def double_bs_debug(
     precision = 17
 
     # bootstrapping
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = homo_double_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], precision=precision, cryptoContext=cryptoContext)
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = homo_double_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], level_budgets=levelBudget_list[0],
+                                    precision=precision, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
     clear_result = openfhe_boot_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
@@ -531,8 +534,8 @@ def gen_CoeffSlots_matrix_test_case(
     cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # bootstrapping
-    cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
-    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
+    result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
     # compute golden answer
@@ -593,20 +596,28 @@ if __name__ == "__main__":
 
     for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
         print("***********{}***********".format(rescaleTech))
+        
         print("==========={}============".format('app_without_bs_example_debug'))
         app_without_bs_example_debug(rescaleTech = rescaleTech)
+        
         print("==========={}============".format('app_example_debug'))
         app_example_debug(rescaleTech = rescaleTech)
+        
         print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
         app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+        
         print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
         app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+        
         print("==========={}============".format('encode_test_case'))
         encode_test_case(rescaleTech = rescaleTech)
+        
         print("==========={}============".format('ct_pt_test_case'))
         ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+        
         print("==========={}============".format('test_plaintext_twin'))
         ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+        
         print("==========={}============".format('double_bs_debug'))
         double_bs_debug(rescaleTech = rescaleTech)
         print("************************************".format(rescaleTech))

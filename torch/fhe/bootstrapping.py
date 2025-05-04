@@ -1,4 +1,5 @@
-from .bs_context import *
+import math
+import torch
 from . import functional as F
 from . import homo_ops
 from . import approx as approx
@@ -17,7 +18,6 @@ R_SPARSE = 3  # number of double-angle iterations in CKKS bootstrapping. Must be
 def assign_scaling_factor(cipher, target_sf, cryptoContext):
     cipher.scaling_factor = target_sf
     return cipher    
-
 
 def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     rescale_tech = cryptoContext.rescaleTech
@@ -58,7 +58,6 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     return ciphertext
 
 
-
 def apply_double_angle_iterations(ciphertext, cryptoContext):
     if cryptoContext.secretKeyDist == "UNIFORM_TERNARY":
         r = R_UNIFORM
@@ -76,32 +75,92 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     return ciphertext
 
 
-def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
+def get_collapsed_fft_params(slots: int, level_budget: int):
+    log_slots = int(math.log2(slots))
+    levels = math.ceil(log_slots / level_budget)
+    rem = log_slots % levels
 
-    if direction == "C2S":
-        params = cryptoContext.BsContext.paramsEnc
-        rot_in = cryptoContext.BsContext.C2S_rot_in
-        rot_out = cryptoContext.BsContext.C2S_rot_out
-        loop_range = list(range(0, params.level_budget))[::-1]
-    elif direction == "S2C":
-        params = cryptoContext.BsContext.paramsDec
-        rot_in = cryptoContext.BsContext.S2C_rot_in
-        rot_out = cryptoContext.BsContext.S2C_rot_out
-        loop_range = list(range(0, params.level_budget))
+    total_rots = (1 << (levels + 1)) - 1
+    shift = 2 if total_rots > 7 else 1
+    giant_step = 1 << (levels // 2 + shift)
+    baby_step = (total_rots + 1) // giant_step
 
-    num_rotations = params.num_rotations
-    b = params.baby_step
-    g = params.giant_step
+    if rem:
+        rem_rots = (1 << (rem + 1)) - 1
+        shift = 2 if rem_rots > 7 else 1
+        rem_giant = 1 << (rem // 2 + shift)
+        rem_baby = (rem_rots + 1) // rem_giant
+    else:
+        rem_rots = rem_baby = rem_giant = 0
 
-    result = ctxt
+    return levels, rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant
+
+
+def compute_parameters(slots: int, level_budget: int, M: int, direction: str):
+    def reduce_rotation(idx: int, size: int):
+        return idx & (size - 1) if (size & (size - 1)) == 0 else idx % size
+
+    levels, rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant = \
+        get_collapsed_fft_params(slots, level_budget)
+    flag_rem = int(rem != 0)
+
+    if direction == 'C2S':
+        exp_fn = lambda s: (s - flag_rem) * levels + rem
+        loop = range(level_budget - 1, -1 + flag_rem, -1)
+        in_div = slots
+        rem_index = 0
+    else:
+        exp_fn = lambda s: s * levels
+        loop = range(level_budget - flag_rem)
+        in_div = M // 4
+        rem_index = level_budget - flag_rem
+
+    center = (total_rots + 1) // 2
+    rem_center = (rem_rots + 1) // 2
+
+    rot_in = []
+    rot_out = [[0] * (baby_step + rem_baby) for _ in range(level_budget)]
+
+    for i in range(level_budget):
+        size = rem_rots + 1 if flag_rem and (
+            (direction == 'C2S' and i == 0) or
+            (direction == 'S2C' and i == level_budget - 1)
+        ) else total_rots + 1
+        rot_in.append([0] * size)
+
+    for s in loop:
+        exp = exp_fn(s)
+        for j in range(giant_step):
+            rot_in[s][j] = reduce_rotation((j - center + 1) << exp, in_div)
+        for k in range(baby_step):
+            rot_out[s][k] = reduce_rotation((giant_step * k) << exp, M // 4)
+
+    if flag_rem:
+        s = rem_index
+        exp = 0 if direction == 'C2S' else exp_fn(s)
+        for j in range(rem_giant):
+            rot_in[s][j] = reduce_rotation((j - rem_center + 1) << exp, in_div)
+        for k in range(rem_baby):
+            rot_out[s][k] = reduce_rotation((rem_giant * k) << exp, M // 4)
+
+    return rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant, rot_in, rot_out
+
+
+def coeffs_slots_conversion(ciphertext, direction: str, slots: int, level_budget: int, cryptoContext):
+    rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant, rot_in, rot_out = \
+        compute_parameters(slots, level_budget, cryptoContext.M, direction)
+    num_rotations = total_rots
+    loop_range = list(range(level_budget) if direction == 'S2C' else reversed(range(level_budget)))
+    result = ciphertext
+    logSlots = int(math.log2(slots))
 
     for s in loop_range:
         if not s == loop_range[0]:
             result = homo_ops.force_rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        if s == loop_range[-1] and params.layers_rem:
-            g = params.giant_step_rem
-            b = params.baby_step_rem
-            num_rotations = params.num_rotations_rem
+        if s == loop_range[-1] and rem:
+            giant_step = rem_giant
+            baby_step = rem_baby
+            num_rotations = rem_rots
 
         digits_ext = hybrid_keyswitch.modup_to_ext(
             homo_ops.extract_cv(result, 1, cryptoContext), cryptoContext
@@ -109,7 +168,7 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
 
         fast_rotation_ext = []
 
-        for j in range(g):
+        for j in range(giant_step):
             if rot_in[s][j] != 0:
                 fast_rotation_ext.append(
                     homo_ops.eval_fast_rotate(
@@ -121,20 +180,20 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
                     hybrid_keyswitch.key_switch_P_ext(result, cryptoContext)
                 )
 
-        for i in range(b):
-            G = g * i
-            name = "{}_{}_{}".format(direction, s, G)
+        for i in range(baby_step):
+            G = giant_step * i
+            name = "{}_{}_{}_{}".format(direction, logSlots, s, G)
             inner_ext = homo_ops.homo_mul_pt(
                 fast_rotation_ext[0],
-                homo_ops.encode(A_Ext[name], name, cryptoContext.L - fast_rotation_ext[0].cur_limbs, A_Ext[name].slots, True, cryptoContext),
+                homo_ops.encode(cryptoContext.encode_values[name], name, cryptoContext.L - fast_rotation_ext[0].cur_limbs, cryptoContext.encode_values[name].slots, True, cryptoContext),
                 cryptoContext
             )
-            for j in range(1, g):
+            for j in range(1, giant_step):
                 if (G + j) != num_rotations:
-                    name = "{}_{}_{}".format(direction, s, G+j)
+                    name = "{}_{}_{}_{}".format(direction, logSlots, s, G+j)
                     tmp_ext = homo_ops.homo_mul_pt(
                         fast_rotation_ext[j],
-                        homo_ops.encode(A_Ext[name], name, cryptoContext.L - fast_rotation_ext[j].cur_limbs, A_Ext[name].slots, True, cryptoContext),
+                        homo_ops.encode(cryptoContext.encode_values[name], name, cryptoContext.L - fast_rotation_ext[j].cur_limbs, cryptoContext.encode_values[name].slots, True, cryptoContext),
                         cryptoContext
                     )
                     inner_ext = homo_ops.homo_add(inner_ext, tmp_ext, cryptoContext)
@@ -177,21 +236,17 @@ def coeffs_slots_conversion(A_Ext, ctxt, direction, cryptoContext):
     return result
 
 
-
-def eval_coeffs_to_slots(A, ctxt, cryptoContext):
-    return coeffs_slots_conversion(A, ctxt, "C2S", cryptoContext)
-
+def eval_coeffs_to_slots(ctxt, slots, level_budget, cryptoContext):
+    return coeffs_slots_conversion(ctxt, "C2S", slots, level_budget, cryptoContext)
 
 
-def eval_slots_to_coeffs(A, ctxt, cryptoContext):
-    return coeffs_slots_conversion(A, ctxt, "S2C", cryptoContext)
+def eval_slots_to_coeffs(ctxt, slots, level_budget, cryptoContext):
+    return coeffs_slots_conversion(ctxt, "S2C", slots, level_budget, cryptoContext)
 
 
-
-def eval_linear_transform(A, ct, scheme):
+def eval_linear_transform(ct, scheme):
     # TODO: to be implemented
     pass
-                  
 
 
 @decorator_factory
@@ -217,7 +272,6 @@ def mod_raise(cipher, L0, cryptoContext):
     return cipher.cipher_like(cv, L0)
 
 
-
 @decorator_factory
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
@@ -225,14 +279,13 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
-
 # note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
+def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
     # cryptoContext.slots = slots #fixme: bad assignment!
-    precom = cryptoContext.BsContext
+    # precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar
     rescaleTech = cryptoContext.rescaleTech
 
@@ -250,17 +303,32 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     powP = 2**p
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
-    if deg > int(precom.correctionFactor):
+    if (
+        rescaleTech == "FLEXIBLEAUTO"
+        or rescaleTech == "FLEXIBLEAUTOEXT"
+    ):
+        tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+        if tmp < 7:
+            correctionFactor = 7
+        elif tmp > 13:
+            correctionFactor = 13
+        else:
+            correctionFactor = int(tmp)
+    else:
+        correctionFactor = 9
+
+
+    if deg > int(correctionFactor):
         print(
             "Warning: Degree [",
             deg,
             "] must be less than or equal to the correction factor[",
-            precom.correctionFactor,
+            correctionFactor,
             "].",
         )
 
     correction = (
-            precom.correctionFactor - deg
+            correctionFactor - deg
     )  # fixme: originally a uint32_t in OpenFHE
     post = 2**deg
     pre = 1.0 / post
@@ -282,15 +350,16 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
     # CKKS bootstrapping faster.
     raised = mod_raise(tmp, L0, cryptoContext)
+    k = 1.0 if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 512
+    constantEvalMult = pre * (1.0 / (k * N))
 
-    constantEvalMult = pre * (1.0 / (precom.k * N))
+
+            
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
     # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
-            precom.paramsDec.level_budget == 1
-    )
+    isLTBootstrap = level_budgets[0] == 1 and level_budgets[1] == 1
 
     if slots == M // 4:  # FULLY PACKED CASE
         # need to call internal modular reduction so it also works for FLEXIBLEAUTO
@@ -299,7 +368,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.BS_FFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
@@ -314,11 +383,11 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # Running Approximate Mod Reduction
         # ---------------------------------
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(
-            ctxtEnc, precom.coefficients, -1, 1, cryptoContext
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(
+            ctxtEnc, -1, 1, cryptoContext
         )
-        ctxtEncI = approx.eval_chebyshev_series_ps(
-            ctxtEncI, precom.coefficients, -1, 1, cryptoContext
+        ctxtEncI = approx.eval_bootstrapping_chebyshev(
+            ctxtEncI, -1, 1, cryptoContext
         )
 
         if rescaleTech != "FIXEDMANUAL":
@@ -345,7 +414,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.BS_FFT, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(ctxtEnc, slots, level_budgets[1], cryptoContext)
 
     else:  # SPARSELY PACKED CASE
         # -------------------
@@ -367,7 +436,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.BS_FFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
 
 
 
@@ -386,7 +455,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(ctxtEnc, -1, 1, cryptoContext)
 
 
 
@@ -413,7 +482,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.BS_FFT, ctxtEnc, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(ctxtEnc, slots, level_budgets[1], cryptoContext)
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
@@ -425,21 +494,21 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     return ctxtDec
 
 @decorator_factory
-def homo_bootstrap(cipher, L0, logBsSlots, cryptoContext):
+def homo_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext):
 
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
-    result = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
+    result = eval_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext)
 
     # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
     result = homo_ops.homo_rescale(result, result.noise_deg - 1, cryptoContext)
 
     return result
 
-def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
+def homo_double_bootstrap(cipher, L0, logBsSlots, level_budgets, precision, cryptoContext):
 
-    if cryptoContext.config.AUTO_LOAD_KEYS == True:
-        cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
+    # if cryptoContext.config.AUTO_LOAD_KEYS == True:
+    #     cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     initSizeQ = cipher.cur_limbs
 
@@ -454,7 +523,7 @@ def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
 
 
     # Step 3: Bootstrap the initial ciphertext.
-    ctInitialBootstrap = eval_bootstrap(cipher, L0, logBsSlots, cryptoContext)
+    ctInitialBootstrap = eval_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext)
     ctInitialBootstrap = homo_ops.force_rescale(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1, cryptoContext)
 
     # Step 4: Scale up by powerOfTwoModulus.
@@ -474,7 +543,7 @@ def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
     ctBootstrappingError = homo_ops.homo_sub(ctBootstrappedScaledDown, ctScaledUp, cryptoContext)
 
     # Step 8: Bootstrap the error.
-    ctBootstrappingError = eval_bootstrap(ctBootstrappingError, L0, logBsSlots, cryptoContext)
+    ctBootstrappingError = eval_bootstrap(ctBootstrappingError, L0, logBsSlots, level_budgets, cryptoContext)
     ctBootstrappingError = homo_ops.force_rescale(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
     # Step 9: Subtract the bootstrapped error from the initial bootstrap to get even lower error.
@@ -487,4 +556,3 @@ def homo_double_bootstrap(cipher, L0, logBsSlots, precision, cryptoContext):
     finalCiphertext = homo_ops.homo_rescale(finalCiphertext, finalCiphertext.noise_deg - 1, cryptoContext)
 
     return finalCiphertext
-
