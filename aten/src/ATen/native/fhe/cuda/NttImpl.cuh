@@ -185,23 +185,26 @@ __global__ void Intt8PointPerThreadPhase2OoP(
 
 __global__ void Intt8PointPerThreadPhase1OoP(
     uint64_t* in,
+    const int m,
     const int num_prime,
     const int N,
     const int start_prime_idx,
     const int ceil_curr_limbs,
     const int gap,
+    int pad,
+    int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
     const uint64_t* primes,
     uint64_t* out) {
   extern __shared__ uint64_t temp[];
-  int Warp_t = threadIdx.x % 4;
-  int WarpID = threadIdx.x / 4;
+  int Warp_t = threadIdx.x % pad;
+  int WarpID = threadIdx.x / pad;
   for (int i = blockIdx.x * blockDim.x + threadIdx.x; i < (N / 8 * num_prime);
        i += blockDim.x * gridDim.x) {
     // size of a block
     uint64_t local[8];
-    int t = N / 2;
+    int t = N / 2 / m;
     // prime idx
     int np_idx = i / (N / 8) + start_prime_idx;
     int prime_idx =
@@ -218,12 +221,14 @@ __global__ void Intt8PointPerThreadPhase1OoP(
     const uint64_t* WInv = base_inv + N * prime_idx;
     const uint64_t* WInv_ = base_inv_ + N * prime_idx;
     uint64_t prime = prime_table[prime_idx];
-    int N_init = 2 * t / 32 * WarpID + Warp_t + 4 * (t_idx / (32 * 4));
+    int N_init =
+        2 * t / radix * WarpID + Warp_t + pad * (t_idx / (radix * pad));
     for (int j = 0; j < 8; j++) {
-      local[j] = *(in_addr + N_init + t / 4 / 32 * j);
+      local[j] = *(in_addr + N_init + t / 4 / radix * j);
     }
-    int tw_idx = 1 + m_idx;
-    int tw_idx2 = 32 * tw_idx + WarpID;
+    int eradix = 8 * radix;
+    int tw_idx = m + m_idx;
+    int tw_idx2 = radix * tw_idx + WarpID;
     for (int j = 0; j < 4; j++) {
       butt_intt_local(
           local[2 * j],
@@ -251,17 +256,19 @@ __global__ void Intt8PointPerThreadPhase1OoP(
           local[j], local[j + 4], WInv[tw_idx2], WInv_[tw_idx2], prime);
     }
     for (int j = 0; j < 8; j++) {
-      temp[Warp_t * (256 + 4) + 8 * WarpID + j] = local[j];
+      temp[Warp_t * (eradix + pad) + 8 * WarpID + j] = local[j];
     }
+    int tail = 0;
     __syncthreads();
-    {
-      int m_idx2 = WarpID / 8;
-      int t_idx2 = WarpID % 8;
+#pragma unroll
+    for (int j = radix / 8, k = 32; j > 0; j >>= 3, k *= 8) {
+      int m_idx2 = WarpID / (k / 4);
+      int t_idx2 = WarpID % (k / 4);
       for (int l = 0; l < 8; l++) {
-        local[l] =
-            temp[(256 + 4) * Warp_t + 2 * m_idx2 * 32 + t_idx2 + 8 * l];
+        local[l] = temp
+            [(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l];
       }
-      int tw_idx2 = 4 * tw_idx + m_idx2;
+      int tw_idx2 = j * tw_idx + m_idx2;
       for (int l = 0; l < 4; l++) {
         butt_intt_local(
             local[2 * l],
@@ -289,29 +296,52 @@ __global__ void Intt8PointPerThreadPhase1OoP(
             local[l], local[l + 4], WInv[tw_idx2], WInv_[tw_idx2], prime);
       }
       for (int l = 0; l < 8; l++) {
-        temp[(256 + 4) * Warp_t + 2 * m_idx2 * 32 + t_idx2 + 8 * l] =
+        temp[(eradix + pad) * Warp_t + 2 * m_idx2 * k + t_idx2 + (k / 4) * l] =
             local[l];
       }
+      if (j == 2)
+        tail = 1;
+      if (j == 4)
+        tail = 2;
       __syncthreads();
     }
+    if (radix < 8)
+      tail = (radix == 4) ? 2 : 1;
     for (int l = 0; l < 8; l++) {
-      local[l] = temp[Warp_t * (256 + 4) + WarpID + 32 * l];
+      local[l] = temp[Warp_t * (eradix + pad) + WarpID + radix * l];
     }
-
-    butt_intt_local(local[0], local[2], WInv[2 * tw_idx], WInv_[2 * tw_idx], prime);
-    butt_intt_local(local[1], local[3], WInv[2 * tw_idx], WInv_[2 * tw_idx], prime);
-    butt_intt_local(local[4], local[6], WInv[2 * tw_idx + 1], WInv_[2 * tw_idx + 1], prime);
-    butt_intt_local(local[5], local[7], WInv[2 * tw_idx + 1], WInv_[2 * tw_idx + 1], prime);
-    butt_intt_local(local[0], local[4], WInv[tw_idx], WInv_[tw_idx], prime);
-    butt_intt_local(local[1], local[5], WInv[tw_idx], WInv_[tw_idx], prime);
-    butt_intt_local(local[2], local[6], WInv[tw_idx], WInv_[tw_idx], prime);
-    butt_intt_local(local[3], local[7], WInv[tw_idx], WInv_[tw_idx], prime);
-
+    if (tail == 1) {
+      butt_intt_local(local[0], local[4], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[1], local[5], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[2], local[6], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[3], local[7], WInv[tw_idx], WInv_[tw_idx], prime);
+    } else if (tail == 2) {
+      butt_intt_local(
+          local[0], local[2], WInv[2 * tw_idx], WInv_[2 * tw_idx], prime);
+      butt_intt_local(
+          local[1], local[3], WInv[2 * tw_idx], WInv_[2 * tw_idx], prime);
+      butt_intt_local(
+          local[4],
+          local[6],
+          WInv[2 * tw_idx + 1],
+          WInv_[2 * tw_idx + 1],
+          prime);
+      butt_intt_local(
+          local[5],
+          local[7],
+          WInv[2 * tw_idx + 1],
+          WInv_[2 * tw_idx + 1],
+          prime);
+      butt_intt_local(local[0], local[4], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[1], local[5], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[2], local[6], WInv[tw_idx], WInv_[tw_idx], prime);
+      butt_intt_local(local[3], local[7], WInv[tw_idx], WInv_[tw_idx], prime);
+    }
     for (int j = 0; j < 8; j++) {
       if (local[j] >= prime)
         local[j] -= prime;
     }
-    N_init = t / 4 / 32 * WarpID + Warp_t + 4 * (t_idx / (32 * 4));
+    N_init = t / 4 / radix * WarpID + Warp_t + pad * (t_idx / (radix * pad));
     for (int j = 0; j < 8; j++) {
       *(out_addr + N_init + t / 4 * j) = local[j];
     }
@@ -1013,7 +1043,7 @@ void iNTT_impl(
         dim3 blockDim(256);
         const int per_thread_ntt_size = 8;
         const int first_stage_radix_size = 256;
-        const int second_radix_size = param_degree / 256;
+        const int second_radix_size = param_degree / first_stage_radix_size;
         const int pad = 4;
         const int per_thread_storage =
             blockDim.x * per_thread_ntt_size * sizeof(uint64_t);
@@ -1033,7 +1063,7 @@ void iNTT_impl(
             per_thread_storage,
             stream>>>(
             in_ptr + param_degree * start_prime_idx,
-            256,
+            first_stage_radix_size,
             batch,
             param_degree,
             start_prime_idx,
@@ -1045,18 +1075,20 @@ void iNTT_impl(
                 param_degree * start_prime_idx,
             param_primes_ptr + start_prime_idx,
             out_ptr + param_degree * start_prime_idx);
-
         fhe::Intt8PointPerThreadPhase1OoP<<<
             gridDim,
-            (256 / 8) * 4,
-            (256 + 4 + 1) * 4 * sizeof(uint64_t),
+            (first_stage_radix_size / 8) * pad,
+            (first_stage_radix_size + pad + 1) * pad * sizeof(uint64_t),
             stream>>>(
             out_ptr,
+            1,
             batch,
             param_degree,
             start_prime_idx,
             curr_limbs,
             gap,
+            pad,
+            first_stage_radix_size / 8,
             inverse_power_of_roots_div_two_ptr,
             inverse_scaled_power_of_roots_div_two_ptr,
             param_primes_ptr,
