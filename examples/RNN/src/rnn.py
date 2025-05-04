@@ -21,11 +21,14 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
     # tanh() is approximated by x - (x^3) / 3 (Taylor Series, could be optimized)
     # Weights are always within (-1, 1), so an approximation in (-2, 2) is good enough
     num_slots = encode_slots
-    num_batch = int(num_slots / 128)
+    num_batch = int(num_slots / 128) # We batch several inputs together
     # Rotation are done based on batch size
+
     hidden_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
+        # Perform Mult and Rotate, and accumulate
+        # Everything is accumulated to hidden_accum_ct, and finally we apply tanh to it
         # rnn_ih * input
         rnn_ih_int_0_ct = fhe.homo_mul_pt(input, rnn_ih[i], cryptoContext)
         rnn_ih_int_0_ct = fhe.homo_rescale(rnn_ih_int_0_ct, 1, cryptoContext)
@@ -37,25 +40,39 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
         rnn_hh_int_1_ct = fhe.homo_rotate(rnn_hh_int_0_ct, -(num_batch * i), cryptoContext) 
         hidden_accum_ct = fhe.homo_add(hidden_accum_ct, rnn_hh_int_1_ct, cryptoContext) 
 
-    # Apply tanh activation (approximation: （ax + bx^3）)
+    # Approximation of tanh
     x2 = fhe.homo_square(hidden_accum_ct, cryptoContext)
-    x2 = fhe.homo_rescale(x2, 1, cryptoContext) # todo: ??
+    x2 = fhe.homo_rescale(x2, 1, cryptoContext)
+    # x3 = fhe.homo_mul(hidden_accum_ct, x2, cryptoContext)
     x3 = fhe.homo_mul_scalar_double(hidden_accum_ct, -0.10484599, cryptoContext)
+    # x5 = fhe.homo_mul(x3, x2, cryptoContext)
     x3 = fhe.homo_rescale(x3, 1, cryptoContext)
+
+    # a  x x  x
+    #  \/   \/
+    #  ax   x^2
+    #     \/
+    #    ax^3
+    # Evaluate polynomial
     hidden_accum_ct = fhe.homo_mul_scalar_double(hidden_accum_ct, 0.86501289, cryptoContext)
     hidden_accum_ct = fhe.homo_rescale(hidden_accum_ct, 1, cryptoContext)
     t_x3 = fhe.homo_mul(x2, x3, cryptoContext)
     t_x3 = fhe.homo_rescale(t_x3, 1, cryptoContext)
     hidden_accum_ct = fhe.homo_add(hidden_accum_ct, t_x3, cryptoContext)
+
+    # Consumes total 4 levels
     return hidden_accum_ct
 
 def fc_layer(input, fc_bias, cryptoContext, openfhe_context):
     # Evaluate fc_weight * input + bias
     num_slots = encode_slots
-    num_batch = int(num_slots / 128)
+    num_batch = int(num_slots / 128) # We batch several inputs together
+    # Rotation are done based on batch size
     output_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
+        # Perform Mult and Rotate, and accumulate
+        # Everything is accumulated to output_accum_ct
         mult_0 = fhe.homo_mul_pt(input, fc_weight[i % 2],  cryptoContext)
         mult_0 = fhe.homo_rescale(mult_0, 1, cryptoContext)
         mult_1 = fhe.homo_rotate(mult_0, -(num_batch * i), cryptoContext) 
