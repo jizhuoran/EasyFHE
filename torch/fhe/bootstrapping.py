@@ -351,6 +351,8 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
     # CKKS bootstrapping faster.
     raised = mod_raise(tmp, L0, cryptoContext)
+
+    # In openFHE, K_UNIFORM = 512, K_SPARSE = 28, K_SPARSE is dealt in bs_matrix precompute
     k = 1.0 if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 512
     constantEvalMult = pre * (1.0 / (k * N))
 
@@ -481,13 +483,12 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     return ctxtDec
 
 
-# note: EvalBootstrap in ckksrns-fhe.cpp
-def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
+def eval_slim_bootstrap(ciphertext, L0, logBsSlots, level_budgets,cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
     # cryptoContext.slots = slots #fixme: bad assignment!
-    precom = cryptoContext.BsContext
+    # precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar
     rescaleTech = cryptoContext.rescaleTech
 
@@ -505,37 +506,51 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     powP = 2**p
     deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
 
-    if deg > int(precom.correctionFactor):
+    if (
+        rescaleTech == "FLEXIBLEAUTO"
+        or rescaleTech == "FLEXIBLEAUTOEXT"
+    ):
+        tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
+        if tmp < 7:
+            correctionFactor = 7
+        elif tmp > 13:
+            correctionFactor = 13
+        else:
+            correctionFactor = int(tmp)
+    else:
+        correctionFactor = 9
+
+
+    if deg > int(correctionFactor):
         print(
             "Warning: Degree [",
             deg,
             "] must be less than or equal to the correction factor[",
-            precom.correctionFactor,
+            correctionFactor,
             "].",
         )
 
     correction = (
-            precom.correctionFactor - deg
+            correctionFactor - deg
     )  # fixme: originally a uint32_t in OpenFHE
     post = 2**deg
     pre = 1.0 / post
     scalar = round(post)
 
+    ctxtDec = None  # Initialize decrypted ciphertext
     # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
-            precom.paramsDec.level_budget == 1
-    )
+    isLTBootstrap = level_budgets[0] == 1 and level_budgets[1] == 1
 
     if slots == M//4:
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+            ctxtDec = eval_slots_to_coeffs(ciphertext, slots, level_budgets[1], cryptoContext)
     else:
         if isLTBootstrap:
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
         else:
-            ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ciphertext, cryptoContext)
+             ctxtDec = eval_slots_to_coeffs(ciphertext, slots, level_budgets[1], cryptoContext)
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
@@ -558,7 +573,9 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
     # CKKS bootstrapping faster.
     raised = mod_raise(tmp, L0, cryptoContext)
 
-    constantEvalMult = pre * (1.0 / (precom.k * N))
+    # In openFHE, K_UNIFORM = 512, K_SPARSE = 28, K_SPARSE is dealt in bs_matrix precompute
+    k = 1.0 if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 512
+    constantEvalMult = pre * (1.0 / (k * N))
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     # ctxtDec = None  # Initialize decrypted ciphertext
@@ -574,7 +591,7 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
@@ -589,11 +606,11 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # Running Approximate Mod Reduction
         # ---------------------------------
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(
-            ctxtEnc, precom.coefficients, -1, 1, cryptoContext
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(
+            ctxtEnc, -1, 1, cryptoContext
         )
-        ctxtEncI = approx.eval_chebyshev_series_ps(
-            ctxtEncI, precom.coefficients, -1, 1, cryptoContext
+        ctxtEncI = approx.eval_bootstrapping_chebyshev(
+            ctxtEncI, -1, 1, cryptoContext
         )
 
         if rescaleTech != "FIXEDMANUAL":
@@ -639,7 +656,7 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         if isLTBootstrap:
             ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
         else:
-            ctxtEnc = eval_coeffs_to_slots(precom.m_U0hatTPreFFT, raised, cryptoContext)
+            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
 
         conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
@@ -652,7 +669,7 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, cryptoContext):
         # ---------------------------------
 
         # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_chebyshev_series_ps(ctxtEnc, precom.coefficients, -1, 1, cryptoContext)
+        ctxtEnc = approx.eval_bootstrapping_chebyshev(ctxtEnc, -1, 1, cryptoContext)
 
         if rescaleTech != "FIXEDMANUAL":
             ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
