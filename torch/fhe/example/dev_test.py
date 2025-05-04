@@ -698,6 +698,7 @@ def slim_bs_test_case(
     print(f"slim bs and regular bs Mean diff: {mean_diff:.5e}")
 
 
+# todo: to be supported, need to comment S2C in eval_slim_bs
 def hybrid_bs_test_case(
         maxLevelsRemaining=6,
         logBsSlots_list=[13], #should be `logN -1` if you are not familiar with `encoding, decoding` and `bs` procedure
@@ -886,9 +887,9 @@ def hybrid_bs_test_case(
 ##############
 
 if __name__ == "__main__":
-    # gen_CoeffSlots_matrix_test_case()
-    # slim_bs_test_case()
-    hybrid_bs_test_case()
+    gen_CoeffSlots_matrix_test_case()
+    slim_bs_test_case()
+    # hybrid_bs_test_case()
 
 
     # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
