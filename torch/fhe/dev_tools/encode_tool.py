@@ -124,7 +124,7 @@ def save_middle_encode(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         if func.__name__ == "encode":
-            input, name, _, slots, _ = args
+            input, name, _, slots, _, _ = args
             assert isinstance(input, list) or isinstance(input, np.ndarray)
             encoded_val = pre_encode(input, slots)
             middle_encoded_vals[name] = encoded_val
@@ -160,6 +160,8 @@ def save_encoded_vals():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_path = DATA_DIR + f"/full_encode_{timestamp}.pkl"
         print("saving pre-encoded vals to {}".format(file_path))
+        for key, val in end_encoded_vals.items():
+            val.cv = [val.cv[0].cpu().numpy()]
         with open(file_path, "wb") as f:
             pickle.dump(end_encoded_vals, f)
 
