@@ -3,13 +3,14 @@ import sys,os
 import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-from torch.fhe.ciphertext import Cipher
+from torch.fhe.ciphertext import Cipher # todo: to be removed
 import torch.fhe as fhe
 import torch
 import os
-sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from examples.utils import approx
 import time
+
+DATA_DIR = os.environ["DATA_DIR"]
 
 def homo_relu(ciphertext, scale, degree, cryptoContext):
     def scaled_relu_function(x):
@@ -231,12 +232,12 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
 
 class TensorCipher:
     def __init__(self, k, h, w, c, t,p,logn, cipher:Cipher):
-        self.k = k
-        self.h = h
-        self.w = w
-        self.c = c
-        self.t = t
-        self.p = p
+        self.k = k  # gap
+        self.h = h  # height
+        self.w = w  # width
+        self.c = c  # number of channels
+        self.t = t  # floor(c / k^2)
+        self.p = p  # 2^log2(nt / k^2 hwt)
         self.logn = logn
         self.cipher = cipher
 
@@ -343,22 +344,25 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             for i2 in range(fw):
 
                 value = np.array(compact_weight_vec[i1][i2][i9], dtype=np.double)
-                value = fhe.encode(value, "yky_temp", 0, 1 << logn, False, cryptoContext)
+                name = f"compact_weight_{i1}_{i2}_{i9}_{cryptoContext.cnt}"
+                cryptoContext.cnt +=1
+                print(name)
+                value = fhe.encode(value, name, 0, 1 << logn, False, cryptoContext)
                 temp=fhe.homo_mul_pt(ctxt_rot[i1][i2],value,cryptoContext)
                 if(i1==0 and i2==0):
                     sum=temp.deep_copy()
                 else:
                     sum=fhe.homo_add(sum,temp,cryptoContext)
-
-        var=sum.deep_copy()
+        sum = fhe.homo_rescale(sum, sum.noise_deg - 1, cryptoContext)
+        var=sum
         d=int(log2_long(ki))
         c=int(log2_long(ti))
         for x in range(d):
-            temp=var.deep_copy()
+            temp=var
             temp=fhe.homo_rotate(temp,math.pow(2,x),cryptoContext)
             var=fhe.homo_add(var,temp,cryptoContext)
         for x in range(d):
-            temp=var.deep_copy()
+            temp=var
             temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*wi,cryptoContext)
             var=fhe.homo_add(var,temp,cryptoContext)
         if(c==-1):
@@ -367,10 +371,10 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
                 temp = var.deep_copy()
                 temp = fhe.homo_rotate(temp, ki * ki * hi * wi*x, cryptoContext)
                 sum = fhe.homo_add(sum, temp, cryptoContext)
-            var=sum.deep_copy()
+            var=sum
         else:
             for x in range(c):
-                temp=var.deep_copy()
+                temp=var
                 temp = fhe.homo_rotate(temp, math.pow(2, x) *ki* ki * hi * wi, cryptoContext)
                 var = fhe.homo_add(var, temp, cryptoContext)
         i8 = 0
@@ -380,21 +384,25 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             temp=var
             temp = fhe.homo_rotate(temp,  int(n/pi)*(j4%pi) - j4%ko - int(j4/(ko*ko))*ko*ko*ho*wo - (int((j4%(ko*ko))/ko))*ko*wo, cryptoContext)
             value=np.array(select_one_vec[j4],dtype=np.double)
-            value = fhe.encode(value, "yky_temp",0,1<<logn, False, cryptoContext)
+            name = f"select_one_{j4}_{cryptoContext.cnt}"
+            cryptoContext.cnt += 1
+            print(name)
+            value = fhe.encode(value, name,0,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(i8==0 and i9==0):
                 total_sum=temp.deep_copy()
             else:
                 total_sum=fhe.homo_add(total_sum,temp,cryptoContext)
             i8+=1
-    var=total_sum.deep_copy()
+    total_sum = fhe.homo_rescale(total_sum, total_sum.noise_deg - 1, cryptoContext)
+    var=total_sum
     if(end == False):
         sum=ct_zero.deep_copy()
         for u6 in range(po):
-            temp=var.deep_copy()
+            temp=var
             temp = fhe.homo_rotate(temp, -u6*int(n/po), cryptoContext)
             sum = fhe.homo_add(sum, temp, cryptoContext)
-        var=sum.deep_copy()
+        var=sum
     output=TensorCipher(ko, ho, wo, co, to, po,logn,var)
     return output
 
@@ -495,13 +503,16 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
             for i in range(ki):
                 select_one[(ki*u+s)*ki+i]=B/(hi*wi)
             value=np.array(select_one,dtype=np.double)
-            value = fhe.encode(value, "yky_temp",0,1<<logn, False, cryptoContext)
+            name = f"select_one_{(ki*u+s)*ki}_{cryptoContext.cnt}"
+            cryptoContext.cnt+=1
+            print(name)
+            value = fhe.encode(value, name,0,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(u==0 and s==0):
                 sum=temp
             else:
                 sum=fhe.homo_add(sum, temp, cryptoContext)
-    #Todo:sum= fhe.homo_rescale(sum,1,cryptoContext)
+    sum= fhe.homo_rescale(sum,sum.noise_deg-1, cryptoContext)
     output=TensorCipher(ko,ho,wo,co,to,1,logn,sum)
     return output
 
@@ -543,6 +554,7 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
             sum=temp
         else:
             sum=fhe.homo_add(sum, temp, cryptoContext)
+    sum = fhe.homo_rescale(sum, sum.noise_deg-1, cryptoContext)
     output=TensorCipher(ko, ho, wo, co, to, po,logn,sum)
     return output
 
@@ -567,6 +579,17 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
     to=int(ti/2)
     co=2*ci
     po = 2 ** math.floor(math.log(n / (ko * ko * ho * wo * to), 2))
+
+    # error check: check if po | n
+    if ti % 8 != 0:
+        raise ValueError("ti is not multiple of 8")
+    if hi % 2 != 0:
+        raise ValueError("hi is not even")
+    if wi % 2 != 0:
+        raise ValueError("wi is not even")
+    if n % po != 0:
+        raise ValueError("n is not divisible by po")
+
     select_one_vec = [[[0.0] * (1 << logn) for _ in range(ti)] for _ in range(ki)]
     ct=input.cipher.deep_copy()
     for w1 in range(ki):
@@ -583,7 +606,10 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
         for w2 in range(ti):
             temp=ct
             value=np.array(select_one_vec[w1][w2],dtype=np.double)
-            value = fhe.encode(value,  "yky_temp",0,1<<logn,False, cryptoContext)
+            name = f"select_one_vec_{w1}_{w2}_{cryptoContext.cnt}"
+            cryptoContext.cnt+=1
+            print(name)
+            value = fhe.encode(value,  name,0,1<<logn,False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             w3 = int(((ki * w2 + w1) % (2 * ko)) / 2)
             w4 = (ki * w2 + w1) % 2
@@ -593,6 +619,7 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
                 sum=temp.deep_copy()
             else:
                 sum=fhe.homo_add(sum,temp,cryptoContext)
+    sum = fhe.homo_rescale(sum, sum.noise_deg - 1, cryptoContext)
     ct=sum.deep_copy()
     sum=ct.deep_copy()
     for u6 in range(1,po):
@@ -629,7 +656,7 @@ def fully_connected_seal_print(openfhe_context,cryptoContext,input,matrix,bias,q
 
 
 def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
-    temp_time1=time.time()
+    start=time.time()
     sum=0
     B=40.0
     alpha=13
@@ -667,22 +694,19 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     boot_level = 14
     total_level = remaining_level + boot_level
     logBsSlots_list = [14,13,12]
-    # logBsSlots_list = None
     levelBudget_list = [[3, 3], [3, 3],[3,3]]
-    #levelBudget_list = None
     rescaleTech = "FLEXIBLEAUTO"
-    save_dir = "/data/yky/data"
-    mode = "release"
-    dnum=3
     print("start")
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
-                             levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir="/data/yky/",
-                             config=config))#Todo:参数对齐？ #faster gen
-    temp_time2=time.time()
-    print("load运行时间为",temp_time2-temp_time1)
-    print("hello")
+                             levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir=DATA_DIR,
+                             config=config))
+    end=time.time()
+    print("load context time", end - start)
+
+    cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
+
     end_num=0
     if layer_num==20:end_num=2
     elif layer_num==32:end_num=4
@@ -690,7 +714,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     elif layer_num==56:end_num=8
     elif layer_num==110:end_num=17
     for image_id in range(start_image_id,end_image_id+1):
-        temp_time3=time.time()
+        start=time.time()
+        #if layer_num==20:output = open(f"./result/resnet20_cifar10_image{image_id}.txt", "w")
+        #Todo: 这里只给出了resnet20，源码中没有resnet32......
         dir=f"resnet{layer_num}_new"
         cipher_pool = [Cipher for _ in range(14)]
         co=0
@@ -812,31 +838,26 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                         templist.append(0.00000)
                 x = torch.tensor(templist, dtype=torch.float64, device="cuda")
                 cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
-        print("大功告成")
+        print("Done!!")
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
-        temptest12322 = openfhe_context.decrypt(cnn.cipher)
-        temptest12322 = temptest12322.cpu().numpy().reshape(-1)
-        # print(temptest12322[:10])
-        label=0
-        max_score=-100.0
-        for i in range(10):
-            if max_score<temptest12322[i]:
-                label=i
-                max_score=temptest12322[i]
-        print("最大值为:",max_score)
-        print("推测label为:",label)
-        temp_time4=time.time()
-        print("完成一次的时间为：",temp_time3-temp_time4)
-        if image_label==label:
+        infer_result = openfhe_context.decrypt(cnn.cipher)
+        infer_result = infer_result.cpu().numpy().reshape(-1)
+        print(infer_result[:10])
+        max_element_idx = np.argmax(infer_result[:10])
+        print("ground_truth: ", image_label, "prediction: ",max_element_idx)
+        end=time.time()
+        print("total execution time: ", start - end)
+        if image_label==max_element_idx:
             sum+=1
-        print("实际的label为：",image_label)
-    print("成功次数为：",sum)
+    print(f"correct/total: {sum}/{end_image_id-start_image_id}, acc: {sum/(end_image_id+1-start_image_id)}")
 
 if __name__ == "__main__":
-    start_time = time.time()
-    ResNet_cifar10_seal_sparse(20,11,20)
-    end_time = time.time()
+    start_time = time.perf_counter()
+    ResNet_cifar10_seal_sparse(20, 11, 11)
+    end_time = time.perf_counter()
     elapsed_time = end_time - start_time
-    print(f"运行时间: {elapsed_time:.4f} 秒")
+    print(f"total execution time: {elapsed_time:.4f} 秒")
 
+
+#Todo:  scale问题：scale_value取值问题 51 or 46: Relu
