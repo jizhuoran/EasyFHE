@@ -727,7 +727,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     levelBudget_list = [[3, 3], [3, 3],[3,3]]
     rescaleTech = "FLEXIBLEAUTO"
     print("start")
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=False)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
+                                     SAVE_MIDDLE=False
+                                     )
     cryptoContext, openfhe_context = (
         fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
                              levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir=DATA_DIR,
@@ -798,18 +800,17 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        #cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext)
-
-        temptest123=openfhe_context.decrypt(cnn.cipher)
-        temptest123=temptest123.cpu().numpy().reshape(-1)
-        templist=[]
-        for i in range(len(temptest123)):
-            if temptest123[i]>0.0001:
-                templist.append(temptest123[i])
-            else:
-                templist.append(0.00000)
-        x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-        cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+        cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) #looks good
+        # temptest123=openfhe_context.decrypt(cnn.cipher)
+        # temptest123=temptest123.cpu().numpy().reshape(-1)
+        # templist=[]
+        # for i in range(len(temptest123)):
+        #     if temptest123[i]>0.0001:
+        #         templist.append(temptest123[i])
+        #     else:
+        #         templist.append(0.00000)
+        # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
+        # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
 
         for j in range (3):
             # print(j)
@@ -837,17 +838,17 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[2], cryptoContext)
 
-                #cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: everything is fine if we skip this relu
-                temptest123 = openfhe_context.decrypt(cnn.cipher)
-                temptest123 = temptest123.cpu().numpy().reshape(-1)
-                templist = []
-                for i in range(len(temptest123)):
-                    if temptest123[i] > 0.0001:
-                        templist.append(temptest123[i])
-                    else:
-                        templist.append(0.00000)
-                x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-                cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: everything is fine if we skip this relu
+                # temptest123 = openfhe_context.decrypt(cnn.cipher)
+                # temptest123 = temptest123.cpu().numpy().reshape(-1)
+                # templist = []
+                # for i in range(len(temptest123)):
+                #     if temptest123[i] > 0.0001:
+                #         templist.append(temptest123[i])
+                #     else:
+                #         templist.append(0.00000)
+                # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
+                # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
                 stage=2*((end_num+1)*j+k)+2
                 st=1
                 cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
@@ -865,17 +866,17 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[2], cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                # cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext)
-                temptest123 = openfhe_context.decrypt(cnn.cipher)
-                temptest123 = temptest123.cpu().numpy().reshape(-1)
-                templist = []
-                for i in range(len(temptest123)):
-                    if temptest123[i] > 0.0001:
-                        templist.append(temptest123[i])
-                    else:
-                        templist.append(0.00000)
-                x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-                cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext)
+                # temptest123 = openfhe_context.decrypt(cnn.cipher)
+                # temptest123 = temptest123.cpu().numpy().reshape(-1)
+                # templist = []
+                # for i in range(len(temptest123)):
+                #     if temptest123[i] > 0.0001:
+                #         templist.append(temptest123[i])
+                #     else:
+                #         templist.append(0.00000)
+                # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
+                # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
         infer_result = openfhe_context.decrypt(cnn.cipher)
@@ -892,7 +893,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 if __name__ == "__main__":
     print("current time: ", datetime.datetime.now())
     start_time = time.perf_counter()
-    ResNet_cifar10_seal_sparse(20, 11, 11)
+    ResNet_cifar10_seal_sparse(20, 0, 200)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"total execution time: {elapsed_time:.4f} 秒")
