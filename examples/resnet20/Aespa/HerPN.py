@@ -9,6 +9,79 @@ from torch.autograd import Function
 def get_resnet20_HerPN(num_classes):
     return ResNet20_HerPN(block=BasicBlock_HerPN,num_classes=num_classes)
 
+class ResNet18_HerPN(nn.Module):
+
+    def __init__(self, block, num_classes=10):
+        super(ResNet18_HerPN, self).__init__()
+        self.inplanes = 64
+        self.conv1 = conv3x3(3, 64)
+        self.HerPN1 = HerPN2d(64)
+        self.layer1 = self._make_layer(block, 64, 2)
+        self.layer2 = self._make_layer(block, 128, 2, stride=2)
+        self.layer3 = self._make_layer(block, 256, 2, stride=2)
+        self.layer4 = self._make_layer(block, 512, 2, stride=2)
+
+        self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
+
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+
+
+    def _make_layer(self, block, planes, blocks, stride=1):
+        downsample = None
+        if stride != 1 or self.inplanes != planes * block.expansion:
+            downsample = nn.Sequential(
+                conv1x1(self.inplanes, planes * block.expansion, stride),
+                nn.BatchNorm2d(planes * block.expansion),
+            )
+
+        layers = []
+        layers.append(block(self.inplanes, planes, stride, downsample))
+        self.inplanes = planes * block.expansion
+        for _ in range(1, blocks):
+            layers.append(block(self.inplanes, planes))
+
+        return nn.Sequential(*layers)
+
+    def forward(self, x,fea_out = False):
+        if fea_out:
+            fea = []
+            x = self.conv1(x)
+            x = self.HerPN1(x)
+            fea.append(x)
+
+            x = self.layer1(x)
+            fea.append(x)
+
+            x = self.layer2(x)
+            fea.append(x)
+
+            x = self.layer3(x)
+            fea.append(x)
+
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            return x,fea
+        else:
+
+            x = self.conv1(x)
+            x = self.HerPN1(x)
+            x = self.layer1(x)
+            x = self.layer2(x)
+            x = self.layer3(x)
+            x = self.layer4(x)
+            x = self.avgpool(x)
+            x = x.view(x.size(0), -1)
+            x = self.fc(x)
+            return x
+
+def get_resnet18_HerPN(num_classes):
+    return ResNet18_HerPN(block=BasicBlock_HerPN,num_classes=num_classes)
+
+
 class BasicBlock_HerPN(nn.Module):
     expansion: int = 1
 
@@ -295,6 +368,13 @@ def change_all_HerPN_by_PAF_MutalChannel(model):
 def get_Aespa_MutalChannel_PAF_resnet20():
     model_path = './ResNet20_Aespa.pth'
     model = get_resnet20_HerPN(num_classes=10)
+    model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
+    model = change_all_HerPN_by_PAF_MutalChannel(model)
+    return model
+
+def get_Aespa_MutalChannel_PAF_resnet18():
+    model_path = './ResNet18_Aespa.pth'
+    model = get_resnet18_HerPN(num_classes=10)
     model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
     model = change_all_HerPN_by_PAF_MutalChannel(model)
     return model
