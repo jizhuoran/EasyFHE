@@ -8,9 +8,22 @@ import torch.fhe as fhe
 import torch
 import os
 from examples.utils import approx
-import time
+import datetime, time
 
 DATA_DIR = os.environ["DATA_DIR"]
+
+
+import pickle
+def load_weight(encode_weight_path, cryptoContext):
+    with open(encode_weight_path, 'rb') as f:
+        pre_encoded = pickle.load(f)
+    for key, _ in pre_encoded.items():
+        if cryptoContext.pre_encode_type == "middle":
+            pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")
+        elif cryptoContext.pre_encode_type == "end":
+            pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
+    cryptoContext.pre_encoded = pre_encoded
+
 
 def homo_relu(ciphertext, scale, degree, cryptoContext):
     def scaled_relu_function(x):
@@ -346,8 +359,13 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
                 value = np.array(compact_weight_vec[i1][i2][i9], dtype=np.double)
                 name = f"compact_weight_{i1}_{i2}_{i9}_{cryptoContext.cnt}"
                 cryptoContext.cnt +=1
-                print(name)
-                value = fhe.encode(value, name, 0, 1 << logn, False, cryptoContext)
+                if cryptoContext.load_middle == True:
+                    full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1, 1 << logn)
+                    value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1 << logn,
+                               False, cryptoContext)
+                else:
+                    print(name)
+                    value = fhe.encode(value, name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1 << logn, False, cryptoContext)
                 temp=fhe.homo_mul_pt(ctxt_rot[i1][i2],value,cryptoContext)
                 if(i1==0 and i2==0):
                     sum=temp.deep_copy()
@@ -386,8 +404,12 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             value=np.array(select_one_vec[j4],dtype=np.double)
             name = f"select_one_{j4}_{cryptoContext.cnt}"
             cryptoContext.cnt += 1
-            print(name)
-            value = fhe.encode(value, name,0,1<<logn, False, cryptoContext)
+            if cryptoContext.load_middle ==True:
+                full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
+            else:
+                print(name)
+                value = fhe.encode(value, name,cryptoContext.L-temp.cur_limbs,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(i8==0 and i9==0):
                 total_sum=temp.deep_copy()
@@ -505,8 +527,12 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
             value=np.array(select_one,dtype=np.double)
             name = f"select_one_{(ki*u+s)*ki}_{cryptoContext.cnt}"
             cryptoContext.cnt+=1
-            print(name)
-            value = fhe.encode(value, name,0,1<<logn, False, cryptoContext)
+            if cryptoContext.load_middle ==True:
+                full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
+            else:
+                print(name)
+                value = fhe.encode(value, name,cryptoContext.L-temp.cur_limbs,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(u==0 and s==0):
                 sum=temp
@@ -608,8 +634,12 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
             value=np.array(select_one_vec[w1][w2],dtype=np.double)
             name = f"select_one_vec_{w1}_{w2}_{cryptoContext.cnt}"
             cryptoContext.cnt+=1
-            print(name)
-            value = fhe.encode(value,  name,0,1<<logn,False, cryptoContext)
+            if cryptoContext.load_middle ==True:
+                full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
+            else:
+                print(name)
+                value = fhe.encode(value,  name,0,1<<logn,False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             w3 = int(((ki * w2 + w1) % (2 * ko)) / 2)
             w4 = (ki * w2 + w1) % 2
@@ -697,15 +727,22 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     levelBudget_list = [[3, 3], [3, 3],[3,3]]
     rescaleTech = "FLEXIBLEAUTO"
     print("start")
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
                              levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir=DATA_DIR,
                              config=config))
     end=time.time()
     print("load context time", end - start)
+    print("current time: ", datetime.datetime.now())
 
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
+    # cryptoContext.load_middle = False # todo: should be moved to config
+    cryptoContext.load_middle = True # todo: should be moved to config
+    cryptoContext.pre_encode_type = "middle"
+    pkl_path = "/data/yhh/data/encode_20250506_001403.pkl" # todo: move to hugging face
+    load_weight(pkl_path, cryptoContext)
+
 
     end_num=0
     if layer_num==20:end_num=2
@@ -714,6 +751,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     elif layer_num==56:end_num=8
     elif layer_num==110:end_num=17
     for image_id in range(start_image_id,end_image_id+1):
+        cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for ptx
         start=time.time()
         #if layer_num==20:output = open(f"./result/resnet20_cifar10_image{image_id}.txt", "w")
         #Todo: 这里只给出了resnet20，源码中没有resnet32......
@@ -838,7 +876,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                         templist.append(0.00000)
                 x = torch.tensor(templist, dtype=torch.float64, device="cuda")
                 cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
-        print("Done!!")
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
         infer_result = openfhe_context.decrypt(cnn.cipher)
@@ -847,12 +884,13 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         max_element_idx = np.argmax(infer_result[:10])
         print("ground_truth: ", image_label, "prediction: ",max_element_idx)
         end=time.time()
-        print("total execution time: ", start - end)
+        print("total execution time: ", end - start)
         if image_label==max_element_idx:
             sum+=1
-    print(f"correct/total: {sum}/{end_image_id-start_image_id}, acc: {sum/(end_image_id+1-start_image_id)}")
+    print(f"correct/total: {sum}/{end_image_id+1-start_image_id}, acc: {sum/(end_image_id+1-start_image_id)*100}%")
 
 if __name__ == "__main__":
+    print("current time: ", datetime.datetime.now())
     start_time = time.perf_counter()
     ResNet_cifar10_seal_sparse(20, 11, 11)
     end_time = time.perf_counter()
