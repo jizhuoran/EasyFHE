@@ -349,9 +349,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             ctxt_rot[i1][i2] = ctxt_in.deep_copy()
 
             ctxt_rot[i1][i2]=fhe.homo_rotate(ctxt_rot[i1][i2],ki*ki*wi*(i1-int((fh-1)/2))+ki*(i2-int((fw-1)/2)),cryptoContext)
-    zero=[0.0 for _ in range(1<<logn)]
-    x=torch.tensor(zero,dtype=torch.float64,device="cuda")
-    ct_zero=openfhe_context.encrypt(x,1,0,1<<logn)
+    ct_zero=cryptoContext.zero_32K.deep_copy()
     for i9 in range(q):
         for i1 in range(fh):
             for i2 in range(fw):
@@ -462,8 +460,18 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
             idx = int(ki*ki*u3 + ki*(v1%ki) + v2%ki)
             g[v4] = (running_mean[idx] * weight[idx] / math.sqrt(running_var[idx] + epsilon) - bias[idx]) / B
     temp=input.cipher
-    cipher_g=openfhe_context.encrypt(g,1,0,1<<logn)
-    temp=fhe.homo_sub(temp,cipher_g,cryptoContext)
+    value = np.array(g, dtype=np.double)
+    value = -value # fixme: original: `temp=fhe.homo_sub(temp,cipher_g,cryptoContext)`, there is no homo_sub_pt currently, therefore do the negation before encode
+    name = f"g_mask_{cryptoContext.cnt}"
+    cryptoContext.cnt += 1
+    if cryptoContext.load_middle == True:
+        full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - temp.cur_limbs, 1, 1 << logn)
+        value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - temp.cur_limbs, 1 << logn,
+                           False, cryptoContext)
+    else:
+        print(name)
+        value = fhe.encode(value, name, cryptoContext.L - temp.cur_limbs, 1 << logn, False, cryptoContext)
+    temp = fhe.homo_add_pt(temp, value, cryptoContext)
     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
     return output
 
@@ -573,9 +581,18 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
     for s in range(q+r-1):
         temp=ct
         temp = fhe.homo_rotate(temp, r-1-s, cryptoContext)
-        x = torch.tensor(W[s], dtype=torch.float64, device="cuda")
-        value = openfhe_context.encrypt(x, 1,0,1<<logn)
-        temp = fhe.homo_mul(temp, value, cryptoContext)
+        value = np.array(W[s], dtype=np.double)
+        name = f"W_{s}_{cryptoContext.cnt}"
+        cryptoContext.cnt += 1
+        if cryptoContext.load_middle == True:
+            full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - temp.cur_limbs, 1, 1 << logn)
+            value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - temp.cur_limbs, 1 << logn,
+                               False, cryptoContext)
+        else:
+            print(name)
+            value = fhe.encode(value, name, cryptoContext.L - temp.cur_limbs, 1 << logn, False, cryptoContext)
+        temp = fhe.homo_mul_pt(temp, value, cryptoContext)
+
         if s==0:
             sum=temp
         else:
@@ -699,9 +716,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     logN = 16
     loge = 10
     logn = 15
-    logn_1 = 14
-    logn_2 = 13
-    logn_3 = 12
+    logn_1 = 14 # todo: check if could be leveraged
+    logn_2 = 13 # todo: check if could be leveraged
+    logn_3 = 12 # todo: check if could be leveraged
     logp = 55
     logq = 60
     rotation_kinds=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
@@ -742,8 +759,13 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     # cryptoContext.load_middle = False # todo: should be moved to config
     cryptoContext.load_middle = True # todo: should be moved to config
     cryptoContext.pre_encode_type = "middle"
-    pkl_path = "/data/yhh/data/encode_20250506_001403.pkl" # todo: move to hugging face
+    pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face
     load_weight(pkl_path, cryptoContext)
+
+    zero = [0.0 for _ in range(1 << logn)]
+    x = torch.tensor(zero, dtype=torch.float64, device="cuda")
+    ct_zero = openfhe_context.encrypt(x, 1, 0, 1 << logn)
+    cryptoContext.zero_32K = ct_zero
 
 
     end_num=0
@@ -753,11 +775,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     elif layer_num==56:end_num=8
     elif layer_num==110:end_num=17
     for image_id in range(start_image_id,end_image_id+1):
-        cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for ptx
+        cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for encode_middle_vals
         start=time.time()
-        #if layer_num==20:output = open(f"./result/resnet20_cifar10_image{image_id}.txt", "w")
-        #Todo: 这里只给出了resnet20，源码中没有resnet32......
-        dir=f"resnet{layer_num}_new"
         cipher_pool = [Cipher for _ in range(14)]
         co=0
         st=0
@@ -787,8 +806,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         for i in range(n):
             image[i]/=B
         with open("./testFile/test_label.txt", "r") as in_label:
-            for _ in range(image_id):
-                image_label = int(in_label.readline().strip())
             image_label = int(in_label.readline().strip())
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
