@@ -716,6 +716,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     logN = 16
     loge = 10
     logn = 15
+    n = 1 << logn
     logn_1 = 14 # todo: check if could be leveraged
     logn_2 = 13 # todo: check if could be leveraged
     logn_3 = 12 # todo: check if could be leveraged
@@ -774,45 +775,55 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     elif layer_num==44:end_num=6
     elif layer_num==56:end_num=8
     elif layer_num==110:end_num=17
+
+    # deep learning parameters and import
+    co = 0
+    st = 0
+    fh = 3
+    fw = 3
+    init_p = 8
+    stage = 0
+    epsilon = 0.00001
+    linear_weight = []
+    linear_bias = []
+    conv_weight = []
+    bn_bias = []
+    bn_running_mean = []
+    bn_running_var = []
+    bn_weight = []
+    linear_weight, linear_bias, conv_weight, bn_bias, bn_running_mean, bn_running_var, bn_weight = import_parameters_cifar10(
+        layer_num, end_num, linear_weight, linear_bias, conv_weight, bn_bias, bn_running_mean, bn_running_var,
+        bn_weight)
+
+    # get image label
+    with open("./testFile/test_label.txt", "r") as in_label:
+        image_label = int(in_label.readline().strip())
+
+    # ciphertext pool generation
+    cipher_pool = [Cipher for _ in range(14)]
+
     for image_id in range(start_image_id,end_image_id+1):
         cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for encode_middle_vals
-        start=time.time()
-        cipher_pool = [Cipher for _ in range(14)]
-        co=0
-        st=0
-        fh=3
-        fw=3
-        init_p=8
-        n=1<<logn
-        stage=0
-        epsilon=0.00001
         image = [0.0 for _ in range(n)]
-        linear_weight = []
-        linear_bias = []
-        conv_weight = []
-        bn_bias = []
-        bn_running_mean = []
-        bn_running_var = []
-        bn_weight = []
-        linear_weight,linear_bias,conv_weight,bn_bias,bn_running_mean,bn_running_var,bn_weight=import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_weight,bn_bias,bn_running_mean,bn_running_var,bn_weight)
-        with open("./testFile/test_values.txt", "r") as in_file:
-            for i in range(32 * 32 * 3 * image_id):
-                val = float(next(in_file))
-            for i in range(32 * 32 * 3):
-                val = float(next(in_file))
+        with open("./testFile/test_values.txt", 'r') as f:
+            for _ in range(32 * 32 * 3 * image_id):# skip firt #image_id image
+                next(f)
+            for i in range(32 * 32 * 3): # read target image
+                val = float(next(f))
                 image[i] = val
         for i in range(int(n/init_p),n):
             image[i]=image[i%(int(n/init_p))]
         for i in range(n):
             image[i]/=B
-        with open("./testFile/test_label.txt", "r") as in_label:
-            image_label = int(in_label.readline().strip())
+
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
         scale_temp=pow(2.0,logq)
         x = torch.tensor(vec, dtype=torch.float64,device="cuda")
         cipher_temp= openfhe_context.encrypt(x,1,0,1<<logn )#Todo:scale？
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
+
+        start=time.time()
         cnn=multiplexed_parallel_convolution_print(openfhe_context,cryptoContext,cnn,16,1,fh,fw,conv_weight[stage],bn_running_var[stage],bn_weight[stage],epsilon,cipher_pool,end=False)
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
@@ -896,12 +907,14 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
+
+        end=time.time()
+
         infer_result = openfhe_context.decrypt(cnn.cipher)
         infer_result = infer_result.cpu().numpy().reshape(-1)
         print(infer_result[:10])
         max_element_idx = np.argmax(infer_result[:10])
         print("ground_truth: ", image_label, "prediction: ",max_element_idx)
-        end=time.time()
         print("total execution time: ", end - start)
         if image_label==max_element_idx:
             sum+=1
