@@ -86,7 +86,7 @@ class HE_res20_context:
 
 def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
-    res = convbn_initial(input, scale, he_res20_ctx, cryptoContext, 32, 1)
+    res = convbn_initial(input,16, scale, he_res20_ctx, cryptoContext, 32, 1)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
@@ -216,7 +216,6 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     return res3
 
-
 def layer3(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[3][0]
     scaleDx = normalized_deltas[3][1]
@@ -282,7 +281,6 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
     return res3
 
-
 def final_layer(input, he_res20_ctx, cryptoContext):
 
     he_res20_ctx.cur_num_slots = 4096
@@ -333,7 +331,6 @@ def read_image(index):
         return imageVector, label, index
     except FileNotFoundError:
         print(f"Failed to open the file: {filePath}")
-
 
 def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
 
@@ -474,7 +471,6 @@ def load_encode_pkl(file_name, he_res20_context_):
     os.remove(zip_path)
     print(">> Extraction complete.")
 
-
 def resnet20( ):
     # generate context
     # max_relu_degree = 59
@@ -523,8 +519,6 @@ def resnet20( ):
 
     print("start executeResNet20")
     executeResNet20(he_res20_context_, cryptoContext, openfhe_context)
-
-
 
 def homo_Aespa(x,filename,cryptoContext):
     a2_filename = filename + '-a2'

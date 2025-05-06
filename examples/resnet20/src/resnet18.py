@@ -78,9 +78,7 @@ def layer1(input, he_res18_ctx, cryptoContext):
     res1 = convbn(input, 1, 1, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
-
     # layer[0],block[0],conv2 and shorcut
-    scale = 1
     # res1 = a1*x,shortcut = input = y
     res1 = convbn(res1, 1, 2, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
@@ -91,14 +89,12 @@ def layer1(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{2}bn{2}", cryptoContext)
 
-    scale = 1
     # layer[0],block[1],conv1
     res2 = convbn(res1, 2, 1, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
 
     # layer[0],block[1],conv2 and shorcut
-    scale = 1
     res2 = convbn(res2, 2, 2, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -128,7 +124,6 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res1dx1 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2"
     )
-    # Todo:check downsample, if downsampel is 32*32 -> 16*16, then can reuse
     fullpackSx = downsample1024to256(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample1024to256(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -148,8 +143,6 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{1}bn{1}", cryptoContext)
 
-
-    scale = 1
     res2 = convbn(res2, 4, 2, scale, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -165,7 +158,6 @@ def layer3(input, he_res18_ctx, cryptoContext):
     scaleDx = 1
 
     boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 13, cryptoContext)
-    #  Todo:check all channel_offset
     res1sx0 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0, "1")
     res1sx1 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 128, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -198,7 +190,6 @@ def layer3(input, he_res18_ctx, cryptoContext):
     res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{6}-conv{1}bn{1}", cryptoContext)
 
-    scale = 1
     res2 = convbn(res2, 6, 2, scale, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -263,13 +254,13 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     # 512*4*4
     he_res20_ctx.cur_num_slots = 8192
     res = rotsum(input, 16, cryptoContext)
-    # Todo:check this avgpool
+
     res = fhe.homo_mul_pt(
         res,
         mask_mod(16, res.cur_limbs, 1.0 / 16.0, he_res20_ctx, cryptoContext),
         cryptoContext,
     )
-    # Todo:check repeat slots
+    # Todo:check repeat slots, final_layer
     res = repeat(res, 16, cryptoContext)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     weight = read_fc_weight(
