@@ -25,6 +25,7 @@ def load_weight(encode_weight_path, cryptoContext):
     cryptoContext.pre_encoded = pre_encoded
 
 
+@fhe.utils.profile_python_function
 def homo_relu(ciphertext, scale, degree, cryptoContext):
     def scaled_relu_function(x):
         return 0 if x < 0 else (1 / scale) * x
@@ -256,6 +257,8 @@ class TensorCipher:
 
 def is_power_of_two(n: int) -> bool:
     return n > 0 and (n & (n - 1)) == 0
+
+@fhe.utils.profile_python_function
 def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:TensorCipher, co, st, fh, fw, data, running_var, constant_weight, epsilon, cipher_pool, end):
     conv_data=[]
     ki=input.k
@@ -427,6 +430,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
     output=TensorCipher(ko, ho, wo, co, to, po,logn,var)
     return output
 
+@fhe.utils.profile_python_function
 def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:TensorCipher, bias, running_mean, running_var, weight, epsilon, B, end):
     ki=input.k
     hi=input.h
@@ -503,7 +507,7 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
 #     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
 #     return output
 
-
+@fhe.utils.profile_python_function
 def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B):
     ki=input.k
     hi=input.h
@@ -553,6 +557,7 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
     output=TensorCipher(ko,ho,wo,co,to,1,logn,sum)
     return output
 
+@fhe.utils.profile_python_function
 def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q,r):
     ki=input.k
     hi=input.h
@@ -607,6 +612,7 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
     output=TensorCipher(ko, ho, wo, co, to, po,logn,sum)
     return output
 
+@fhe.utils.profile_python_function
 def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
     ki=input.k
     hi=input.h
