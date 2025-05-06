@@ -831,11 +831,11 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                                                              bn_weight[stage], epsilon, cipher_pool,end=False)
                 cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
                 if j==0:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
                 elif j==1:
-                    cnn.cipher= fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[1], cryptoContext)
                 elif j==2:
-                    cnn.cipher= fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[2], cryptoContext)
 
                 #cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: everything is fine if we skip this relu
                 temptest123 = openfhe_context.decrypt(cnn.cipher)
@@ -859,11 +859,11 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                     temp=multiplexed_parallel_downsampling_seal_print(openfhe_context,cryptoContext,temp)
                 cnn.cipher=fhe.homo_add(temp.cipher,cnn.cipher,cryptoContext)
                 if j==0:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[0],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
                 elif j==1:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[1],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[1], cryptoContext)
                 elif j==2:
-                    cnn.cipher=fhe.homo_bootstrap(cnn.cipher,L0=cryptoContext.L, logBsSlots=logBsSlots_list[2],cryptoContext=cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[2], cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
                 # cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext)
                 temptest123 = openfhe_context.decrypt(cnn.cipher)
