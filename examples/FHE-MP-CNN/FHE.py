@@ -352,6 +352,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
         for i2 in range(fw):
             ctxt_rot[i1][i2] = ctxt_in.deep_copy()
             ctxt_rot[i1][i2]=fhe.homo_rotate(ctxt_rot[i1][i2],ki*ki*wi*(i1-int((fh-1)/2))+ki*(i2-int((fw-1)/2)),cryptoContext)
+
     ct_zero=cryptoContext.zero_32K.deep_copy()
     for i9 in range(q):
         for i1 in range(fh):
@@ -798,7 +799,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     fh = 3
     fw = 3
     init_p = 8
-    stage = 0
     epsilon = 0.00001
     linear_weight = []
     linear_bias = []
@@ -811,9 +811,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         layer_num, end_num, linear_weight, linear_bias, conv_weight, bn_bias, bn_running_mean, bn_running_var,
         bn_weight)
 
-    # get image label
-    with open("./testFile/test_label.txt", "r") as in_label:
-        image_label = int(in_label.readline().strip())
 
     # ciphertext pool generation
     cipher_pool = [Cipher for _ in range(14)]
@@ -821,6 +818,13 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     for image_id in range(start_image_id,end_image_id+1):
         cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for encode_middle_vals
         image = [0.0 for _ in range(n)]
+
+        # get image label
+        with open("./testFile/test_label.txt", "r") as in_label:
+            for _ in range(image_id):# skip firt #image_id image
+                next(in_label)
+            image_label = int(in_label.readline().strip())
+        #get image data
         with open("./testFile/test_values.txt", 'r') as f:
             for _ in range(32 * 32 * 3 * image_id):# skip firt #image_id image
                 next(f)
@@ -840,6 +844,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
         start=time.time()
+
+        stage = 0
         cnn=multiplexed_parallel_convolution_print(openfhe_context,cryptoContext,cnn,16,1,fh,fw,conv_weight[stage],bn_running_var[stage],bn_weight[stage],epsilon,cipher_pool,end=False)
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
@@ -934,7 +940,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         print("total execution time for single image: ", end - start)
         if image_label==max_element_idx:
             sum+=1
-    print(f"correct/total: {sum}/{end_image_id+1-start_image_id}, acc: {sum/(end_image_id+1-start_image_id)*100}%")
+
+        print(f"correct/total: {sum}/{image_id+1-start_image_id}, acc: {sum/(image_id+1-start_image_id)*100}%")
 
 if __name__ == "__main__":
     print("current time: ", datetime.datetime.now())
