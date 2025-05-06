@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Authors>Microsoft Research</Authors>
+    <Company>Microsoft Corporation</Company>
+    <Description>.NET wrapper library for Microsoft SEAL</Description>
+    <Copyright>Microsoft Corporation 2020</Copyright>
+    <SignAssembly Condition="'$(OS)' == 'Windows_NT' And '$(SEALNetSigningCertificate)' != ''">true</SignAssembly>
+    <AssemblyOriginatorKeyFile Condition="'$(OS)' == 'Windows_NT' And '$(SEALNetSigningCertificate)' != ''">SEALNetCert.snk</AssemblyOriginatorKeyFile>
+    <DelaySign Condition="'$(OS)' == 'Windows_NT' And '$(SEALNetSigningCertificate)' != ''">true</DelaySign>
+  </PropertyGroup>
+  <PropertyGroup>
+    <DocumentationFile>/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin\dotnet\$(Configuration)/SEALNet.xml</DocumentationFile>
+    <PlatformTarget>x64</PlatformTarget>
+    <OutputPath>/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin\dotnet\$(Configuration)</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(BuildIOS)' != ''">
+    <DefineConstants>$(DefineConstants);SEAL_IOS</DefineConstants>
+    <DocumentationFile>/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin\dotnet\ios\$(Configuration)\SEALNet.xml</DocumentationFile>
+    <OutputPath>/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin\dotnet\ios\$(Configuration)</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'">
+    <DebugType>pdbonly</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'">
+    <DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+</Project>
