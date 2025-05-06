@@ -294,39 +294,41 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
     compact_weight_vec = [[[[0.0 for _ in range(n)] for _ in range(q)] for _ in range(fw)] for _ in range(fh)]
     select_one = [[[[0.0 for _ in range(to)] for _ in range(ko * wo)] for _ in range(ko * ho)] for _ in range(co)]
     select_one_vec = [[0.0 for _ in range(1 << logn)] for _ in range(co)]
-    for i1 in range(fh):
-        for i2 in range(fw):
-            for j3 in range(ci):
-                for j4 in range(co):
-                    weight[i1][i2][j3][j4]=data[fh*fw*ci*j4 + fh*fw*j3 + fw*i1 + i2]
-    for i1 in range(fh):
-        for i2 in range(fw):
-            for i9 in range(q):
-                for j8 in range(n):
-                    j5 = int(((j8 % int(n / pi)) % (ki * ki * hi * wi)) / (ki * wi))
-                    j6 = int((j8 % int(n / pi)) % (ki * wi))
-                    i7 =int( (j8 % int(n / pi)) / (ki * ki * hi * wi))
-                    i8 = int(j8 / int(n / pi))
-                    if(j8%int(n/pi)>=ki*ki*hi*wi*ti or i8+pi*i9>=co or ki*ki*i7+ki*int(j5%ki)+j6%ki>=ci or int(j6/ki)-int((fw-1)/2)+i2 < 0 or int(j6/ki)-int((fw-1)/2)+i2 > wi-1 or int(j5/ki)-int((fh-1)/2)+i1 < 0 or int(j5/ki)-int((fh-1)/2)+i1 > hi-1):
-                        compact_weight_vec[i1][i2][i9][j8] = 0.0
-                    else:
-                        compact_weight_vec[i1][i2][i9][j8] = weight[i1][i2][ki * ki * i7 + ki * (j5 % ki) + j6 % ki][i8 + pi * i9]
 
-    for j4 in range(co):
-        for v1 in range(ko*ho):
-            for v2 in range(ko*wo):
-                for u3 in range(to):
-                    if ko*ko*u3 + ko*(v1%ko) + v2%ko == j4:
-                        select_one[j4][v1][v2][u3] = constant_weight[j4] / math.sqrt(running_var[j4] + epsilon)
+    if cryptoContext.config.SAVE_MIDDLE == True: # only for gen ptx
+        for i1 in range(fh):
+            for i2 in range(fw):
+                for j3 in range(ci):
+                    for j4 in range(co):
+                        weight[i1][i2][j3][j4]=data[fh*fw*ci*j4 + fh*fw*j3 + fw*i1 + i2]
+        for i1 in range(fh):
+            for i2 in range(fw):
+                for i9 in range(q):
+                    for j8 in range(n):
+                        j5 = int(((j8 % int(n / pi)) % (ki * ki * hi * wi)) / (ki * wi))
+                        j6 = int((j8 % int(n / pi)) % (ki * wi))
+                        i7 =int( (j8 % int(n / pi)) / (ki * ki * hi * wi))
+                        i8 = int(j8 / int(n / pi))
+                        if(j8%int(n/pi)>=ki*ki*hi*wi*ti or i8+pi*i9>=co or ki*ki*i7+ki*int(j5%ki)+j6%ki>=ci or int(j6/ki)-int((fw-1)/2)+i2 < 0 or int(j6/ki)-int((fw-1)/2)+i2 > wi-1 or int(j5/ki)-int((fh-1)/2)+i1 < 0 or int(j5/ki)-int((fh-1)/2)+i1 > hi-1):
+                            compact_weight_vec[i1][i2][i9][j8] = 0.0
+                        else:
+                            compact_weight_vec[i1][i2][i9][j8] = weight[i1][i2][ki * ki * i7 + ki * (j5 % ki) + j6 % ki][i8 + pi * i9]
 
-                    else: select_one[j4][v1][v2][u3]=0.0
+        for j4 in range(co):
+            for v1 in range(ko*ho):
+                for v2 in range(ko*wo):
+                    for u3 in range(to):
+                        if ko*ko*u3 + ko*(v1%ko) + v2%ko == j4:
+                            select_one[j4][v1][v2][u3] = constant_weight[j4] / math.sqrt(running_var[j4] + epsilon)
+                        else: select_one[j4][v1][v2][u3]=0.0
 
-    for j4 in range(co):
-        for v1 in range(ko * ho):
-            for v2 in range(ko * wo):
-                for u3 in range(to):
-                    if ko * ko * u3 + ko * (v1 % ko) + v2 % ko == j4:
-                        select_one_vec[j4][ko*ko*ho*wo*u3+ko*wo*v1+v2] = select_one[j4][v1][v2][u3]
+        for j4 in range(co):
+            for v1 in range(ko * ho):
+                for v2 in range(ko * wo):
+                    for u3 in range(to):
+                        if ko * ko * u3 + ko * (v1 % ko) + v2 % ko == j4:
+                            select_one_vec[j4][ko*ko*ho*wo*u3+ko*wo*v1+v2] = select_one[j4][v1][v2][u3]
+
     ctxt_in=cipher_pool[0]
     ct_zero=cipher_pool[1]
     temp=cipher_pool[2]
@@ -343,27 +345,26 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             elif((i1==int((fh-1)/2) and i2>int((fw-1)/2)) or i1>int((fh-1)/2)):ctxt_rot[i1][i2] =cipher_pool[6+fw*i1+i2-1]
             else:  ctxt_rot[i1][i2] = cipher_pool[6+fw*i1+i2]
 
-
     for i1 in range(fh):
         for i2 in range(fw):
             ctxt_rot[i1][i2] = ctxt_in.deep_copy()
-
             ctxt_rot[i1][i2]=fhe.homo_rotate(ctxt_rot[i1][i2],ki*ki*wi*(i1-int((fh-1)/2))+ki*(i2-int((fw-1)/2)),cryptoContext)
     ct_zero=cryptoContext.zero_32K.deep_copy()
     for i9 in range(q):
         for i1 in range(fh):
             for i2 in range(fw):
-
-                value = np.array(compact_weight_vec[i1][i2][i9], dtype=np.double)
+                # deal with encode
                 name = f"compact_weight_{i1}_{i2}_{i9}_{cryptoContext.cnt}"
                 cryptoContext.cnt +=1
-                if cryptoContext.load_middle == True:
+                if cryptoContext.config.SAVE_MIDDLE == False:
                     full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1, 1 << logn)
                     value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1 << logn,
                                False, cryptoContext)
                 else:
+                    value = np.array(compact_weight_vec[i1][i2][i9], dtype=np.double)
                     print(name)
                     value = fhe.encode(value, name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1 << logn, False, cryptoContext)
+
                 temp=fhe.homo_mul_pt(ctxt_rot[i1][i2],value,cryptoContext)
                 if(i1==0 and i2==0):
                     sum=temp.deep_copy()
@@ -399,14 +400,14 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             if(j4>=co):raise ValueError(f"the value of j4 is out of range!")
             temp=var
             temp = fhe.homo_rotate(temp,  int(n/pi)*(j4%pi) - j4%ko - int(j4/(ko*ko))*ko*ko*ho*wo - (int((j4%(ko*ko))/ko))*ko*wo, cryptoContext)
-            value=np.array(select_one_vec[j4],dtype=np.double)
             name = f"select_one_{j4}_{cryptoContext.cnt}"
             cryptoContext.cnt += 1
-            if cryptoContext.load_middle ==True:
+            if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
+                value = np.array(select_one_vec[j4], dtype=np.double)
                 value = fhe.encode(value, name,cryptoContext.L-temp.cur_limbs,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(i8==0 and i9==0):
@@ -440,37 +441,41 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
     co=ci
     to=ti
     po=pi
-    if len(bias)!=ci or len(running_mean)!=ci or len(running_var)!=ci or len(weight)!=ci:
-        raise ValueError(f"the size of bias, running_mean, running_var, or weight are not correct")
-    for num in running_var:
-        if(num<pow(10,-16) and num>-pow(10,-16)):raise ValueError(f"the size of running_var is too small. nearly zero.")
-    if(hi*wi*ci>(1<<logn)):
-        raise ValueError(f"hi*wi*ci should not be larger than n")
-    g=[0.0 for _ in range(1<<logn)]
-    n=1<<logn
-    if n%pi!=0:
-        raise ValueError(f"n is not divisible by pi")
-    for v4 in range (n):
-        v1 = int(((v4 % int(n / pi)) % (ki * ki * hi * wi)) / (ki * wi))
-        v2 = int(v4 % int(n / pi)) % (ki * wi)
-        u3 = int((v4 % int(n / pi)) / (ki * ki * hi * wi))
-        if (ki*ki*u3+ki*(v1%ki)+v2%ki>=ci or v4%int(n/pi)>=ki*ki*hi*wi*ti):
-            g[v4] = 0.0
-        else:
-            idx = int(ki*ki*u3 + ki*(v1%ki) + v2%ki)
-            g[v4] = (running_mean[idx] * weight[idx] / math.sqrt(running_var[idx] + epsilon) - bias[idx]) / B
-    temp=input.cipher
-    value = np.array(g, dtype=np.double)
-    value = -value # fixme: original: `temp=fhe.homo_sub(temp,cipher_g,cryptoContext)`, there is no homo_sub_pt currently, therefore do the negation before encode
+
+    # deal with encode
     name = f"g_mask_{cryptoContext.cnt}"
     cryptoContext.cnt += 1
-    if cryptoContext.load_middle == True:
-        full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - temp.cur_limbs, 1, 1 << logn)
-        value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - temp.cur_limbs, 1 << logn,
+    if cryptoContext.config.SAVE_MIDDLE == False:
+        full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - input.cipher.cur_limbs, 1, 1 << logn)
+        value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - input.cipher.cur_limbs, 1 << logn,
                            False, cryptoContext)
     else:
         print(name)
-        value = fhe.encode(value, name, cryptoContext.L - temp.cur_limbs, 1 << logn, False, cryptoContext)
+        if len(bias) != ci or len(running_mean) != ci or len(running_var) != ci or len(weight) != ci:
+            raise ValueError(f"the size of bias, running_mean, running_var, or weight are not correct")
+        for num in running_var:
+            if (num < pow(10, -16) and num > -pow(10, -16)): raise ValueError(
+                f"the size of running_var is too small. nearly zero.")
+        if (hi * wi * ci > (1 << logn)):
+            raise ValueError(f"hi*wi*ci should not be larger than n")
+        g = [0.0 for _ in range(1 << logn)]
+        n = 1 << logn
+        if n % pi != 0:
+            raise ValueError(f"n is not divisible by pi")
+        for v4 in range(n):
+            v1 = int(((v4 % int(n / pi)) % (ki * ki * hi * wi)) / (ki * wi))
+            v2 = int(v4 % int(n / pi)) % (ki * wi)
+            u3 = int((v4 % int(n / pi)) / (ki * ki * hi * wi))
+            if (ki * ki * u3 + ki * (v1 % ki) + v2 % ki >= ci or v4 % int(n / pi) >= ki * ki * hi * wi * ti):
+                g[v4] = 0.0
+            else:
+                idx = int(ki * ki * u3 + ki * (v1 % ki) + v2 % ki)
+                g[v4] = (running_mean[idx] * weight[idx] / math.sqrt(running_var[idx] + epsilon) - bias[idx]) / B
+        value = np.array(g, dtype=np.double)
+        value = -value  # fixme: original: `temp=fhe.homo_sub(temp,cipher_g,cryptoContext)`, there is no homo_sub_pt currently, therefore do the negation before encode
+        value = fhe.encode(value, name, cryptoContext.L - input.cipher.cur_limbs, 1 << logn, False, cryptoContext)
+
+    temp=input.cipher
     temp = fhe.homo_add_pt(temp, value, cryptoContext)
     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
     return output
@@ -521,25 +526,23 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
         temp=ct
         temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*ki*wi,cryptoContext)
         ct=fhe.homo_add(ct,temp,cryptoContext)
-    select_one= [0.0 for _ in range(1<<logn)]
-    zero= [0.0 for _ in range(1<<logn)]
 
     for s in range(ki):
         for u in range(ti):
             p=ki*u+s
             temp=ct
             temp=fhe.homo_rotate(temp,-p*ki + ki*ki*hi*wi*u + ki*wi*s,cryptoContext)
-            select_one=[0.0 for _ in range(1<<logn)]
-            for i in range(ki):
-                select_one[(ki*u+s)*ki+i]=B/(hi*wi)
-            value=np.array(select_one,dtype=np.double)
             name = f"select_one_{(ki*u+s)*ki}_{cryptoContext.cnt}"
             cryptoContext.cnt+=1
-            if cryptoContext.load_middle ==True:
+            if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
+                select_one = [0.0 for _ in range(1 << logn)]
+                for i in range(ki):
+                    select_one[(ki * u + s) * ki + i] = B / (hi * wi)
+                value = np.array(select_one, dtype=np.double)
                 value = fhe.encode(value, name,cryptoContext.L-temp.cur_limbs,1<<logn, False, cryptoContext)
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             if(u==0 and s==0):
@@ -564,32 +567,35 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
     co=ci
     to=ti
     po=pi
-    if (len(matrix)!=q*r):raise ValueError(f"the size of matrix is not q*r")
-    if (len(bias)!=q):raise ValueError(f"the size of bias is not q")
-    W=[[0.0 for _ in range(1<<logn)] for _ in range (q+r-1)]
-    b = [0.0 for _ in range(1 << logn)]
-    for z in range(q):
-        b[z]=bias[z]
-    for i in range(q):
-        for j in range(r):
-            W[i-j+r-1][i]=matrix[i*r+j]
-            if(i-j+r-1<0 or i-j+r-1>=q+r-1):
-                raise ValueError(f"i-j+r-1 is out of range")
-            if(i*r+j<0 or i*r+j>=len(matrix)):
-                raise ValueError(f"i*r+j is out of range")
+    if cryptoContext.config.SAVE_MIDDLE == True:
+        if (len(matrix)!=q*r):raise ValueError(f"the size of matrix is not q*r")
+        if (len(bias)!=q):raise ValueError(f"the size of bias is not q")
+        W=[[0.0 for _ in range(1<<logn)] for _ in range (q+r-1)]
+        b = [0.0 for _ in range(1 << logn)]
+        for z in range(q):
+            b[z]=bias[z]
+        for i in range(q):
+            for j in range(r):
+                W[i-j+r-1][i]=matrix[i*r+j]
+                if(i-j+r-1<0 or i-j+r-1>=q+r-1):
+                    raise ValueError(f"i-j+r-1 is out of range")
+                if(i*r+j<0 or i*r+j>=len(matrix)):
+                    raise ValueError(f"i*r+j is out of range")
     ct=input.cipher
     for s in range(q+r-1):
         temp=ct
         temp = fhe.homo_rotate(temp, r-1-s, cryptoContext)
-        value = np.array(W[s], dtype=np.double)
+
+        # deal with encode
         name = f"W_{s}_{cryptoContext.cnt}"
         cryptoContext.cnt += 1
-        if cryptoContext.load_middle == True:
+        if cryptoContext.config.SAVE_MIDDLE == False:
             full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - temp.cur_limbs, 1, 1 << logn)
             value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - temp.cur_limbs, 1 << logn,
                                False, cryptoContext)
         else:
             print(name)
+            value = np.array(W[s], dtype=np.double)
             value = fhe.encode(value, name, cryptoContext.L - temp.cur_limbs, 1 << logn, False, cryptoContext)
         temp = fhe.homo_mul_pt(temp, value, cryptoContext)
 
@@ -635,28 +641,33 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
 
     select_one_vec = [[[0.0] * (1 << logn) for _ in range(ti)] for _ in range(ki)]
     ct=input.cipher.deep_copy()
-    for w1 in range(ki):
-        for w2 in range(ti):
-            for v4 in range(1<<logn):
-                j5 = int((v4 % (ki * ki * hi * wi)) / (ki * wi))
-                j6 = v4 % (ki * wi)
-                i7 = int(v4 / (ki * ki * hi * wi))
-                if v4<ki*ki*hi*wi*ti and int(j5/ki)%2 == 0 and int(j6/ki)%2 == 0 and int(j5%ki) == w1 and i7 == w2:
-                    select_one_vec[w1][w2][v4] = 1.0
-                else :
-                    select_one_vec[w1][w2][v4] = 0.0
+
+    if cryptoContext.config.SAVE_MIDDLE == True:
+        for w1 in range(ki):
+            for w2 in range(ti):
+                for v4 in range(1<<logn):
+                    j5 = int((v4 % (ki * ki * hi * wi)) / (ki * wi))
+                    j6 = v4 % (ki * wi)
+                    i7 = int(v4 / (ki * ki * hi * wi))
+                    if v4<ki*ki*hi*wi*ti and int(j5/ki)%2 == 0 and int(j6/ki)%2 == 0 and int(j5%ki) == w1 and i7 == w2:
+                        select_one_vec[w1][w2][v4] = 1.0
+                    else :
+                        select_one_vec[w1][w2][v4] = 0.0
+
     for w1 in range(ki):
         for w2 in range(ti):
             temp=ct
-            value=np.array(select_one_vec[w1][w2],dtype=np.double)
+
             name = f"select_one_vec_{w1}_{w2}_{cryptoContext.cnt}"
             cryptoContext.cnt+=1
-            if cryptoContext.load_middle ==True:
+            if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
+                value = np.array(select_one_vec[w1][w2], dtype=np.double)
                 value = fhe.encode(value,  name,0,1<<logn,False, cryptoContext)
+
             temp = fhe.homo_mul_pt(temp, value, cryptoContext)
             w3 = int(((ki * w2 + w1) % (2 * ko)) / 2)
             w4 = (ki * w2 + w1) % 2
@@ -757,11 +768,10 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     print("current time: ", datetime.datetime.now())
 
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
-    # cryptoContext.load_middle = False # todo: should be moved to config
-    cryptoContext.load_middle = True # todo: should be moved to config
-    cryptoContext.pre_encode_type = "middle"
-    pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face
-    load_weight(pkl_path, cryptoContext)
+    if cryptoContext.config.SAVE_MIDDLE ==False:
+        cryptoContext.pre_encode_type = "middle"
+        pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face
+        load_weight(pkl_path, cryptoContext)
 
     zero = [0.0 for _ in range(1 << logn)]
     x = torch.tensor(zero, dtype=torch.float64, device="cuda")
@@ -915,7 +925,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         print(infer_result[:10])
         max_element_idx = np.argmax(infer_result[:10])
         print("ground_truth: ", image_label, "prediction: ",max_element_idx)
-        print("total execution time: ", end - start)
+        print("total execution time for single image: ", end - start)
         if image_label==max_element_idx:
             sum+=1
     print(f"correct/total: {sum}/{end_image_id+1-start_image_id}, acc: {sum/(end_image_id+1-start_image_id)*100}%")
