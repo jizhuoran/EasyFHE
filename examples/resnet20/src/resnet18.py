@@ -1,7 +1,5 @@
 import os, sys, datetime, time
 
-from android.test_app.make_assets import resnet18_traced
-from benchmarks.functional_autograd_benchmark.vision_models import get_resnet18
 
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
@@ -35,7 +33,7 @@ class HE_res18_context:
                              1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
         self.maxLevelsRemaining = 11
         self.logBsSlots_list = [12, 13, 14]
-        self.logN = 16
+        self.logN = 17
         self.dnum = 3
         self.dcrtBits = 56
         self.firstMod = 60
@@ -61,8 +59,7 @@ class HE_res18_context:
 
 
 def initial_layer(input, he_res18_ctx, cryptoContext):
-    # conv3*3 + Aespa [3,32,32]->[64,32,32]
-    # scale = normalized_deltas[0][0]
+    # conv3*3 [64,32,32]
     scale = 1
     res = convbn_initial(input, 64, scale, he_res18_ctx, cryptoContext, 32, 1)
     # he_res18_ctx.cur_num_channels = 64
@@ -79,7 +76,6 @@ def layer1(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
     # layer[0],block[0],conv2 and shorcut
-    # res1 = a1*x,shortcut = input = y
     res1 = convbn(res1, 1, 2, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -94,7 +90,7 @@ def layer1(input, he_res18_ctx, cryptoContext):
     res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
 
-    # layer[0],block[1],conv2 and shorcut
+    # layer[0],block[1],conv2
     res2 = convbn(res2, 2, 2, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -220,8 +216,8 @@ def layer4(input, he_res18_ctx, cryptoContext):
         boot_in, 7, 1, scaleDx, he_res18_ctx, cryptoContext, he_res18_ctx.cur_num_slots, 256, -64, 256, "2"
     )
 
-    fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
+    fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
@@ -261,13 +257,13 @@ def final_layer(input, he_res20_ctx, cryptoContext):
         cryptoContext,
     )
     # Todo:check repeat slots, final_layer
-    res = repeat(res, 16, cryptoContext)
+    res = repeat(res, 8, cryptoContext)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     weight = read_fc_weight(
         cryptoContext, cryptoContext.L - res.cur_limbs, 1, he_res20_ctx.cur_num_slots
     )
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = rotsum_padded(res, 64, cryptoContext)
+    res = rotsum_padded(res, 16, cryptoContext)
 
     return res
 
@@ -327,7 +323,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
     correct = 0
     total = he_res18_ctx.total
     for i in range(total):
-        # in 64*32*32 = 6+5+5 = 16  16*32*32 =14
+        # in 64*32*32 = 2^16
         he_res18_ctx.cur_num_slots = 1 << 16
         image_vector, label, index = read_image(i)
         image_vector = torch.tensor(np.array(image_vector), device="cuda")
@@ -462,8 +458,8 @@ def resnet18():
     secretKeyDist = get_resnet18_context_.secretKeyDist
     rescaleTech = get_resnet18_context_.rescaleTech
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
-                                     SAVE_END=get_resnet18_context_.SAVE_END,
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, CHECK_CIPHER=False, SAVE_MIDDLE=True,
+                                     SAVE_END=False,
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
@@ -473,10 +469,10 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        # Todo:change pkl
-        file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
-        load_encode_pkl(file_name, get_resnet18_context_)
-        pkl_path = os.path.join(get_resnet18_context_.weight_dir, file_name + ".pkl")
+        # file_name = "encode_20250421_125259"
+        # load_encode_pkl(file_name, get_resnet18_context_)
+        # pkl_path = os.path.join(get_resnet18_context_.weight_dir, file_name + ".pkl")
+        pkl_path="/home/fyh/PNP/GPU-FHE/examples/resnet20/src/encode_20250506_211416.pkl"
 
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
@@ -489,7 +485,7 @@ def resnet18():
 
 
 def homo_Aespa_perfect_square(x,filename,cryptoContext):
-    # x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
     n1_filename = filename + '-n1'
     n2_filename = filename + '-n2'
     slots = x.slots
