@@ -28,15 +28,15 @@ class Context:
         self.Nh = get_item("Nh", gpufhe_content_map)
         self.PInvModq = get_item("PInvModq", gpufhe_content_map)
         self.PModq = get_item("PModq", gpufhe_content_map)
-        self.PartQlHatInvModq = get_item("PartQlHatInvModq", gpufhe_content_map)
-        self.PartQlHatModp = get_item("PartQlHatModp", gpufhe_content_map)
-        self.QlQlInvModqlDivqlModq = get_item("QlQlInvModqlDivqlModq", gpufhe_content_map)
+        # self.PartQlHatInvModq = get_item("PartQlHatInvModq", gpufhe_content_map)
+        # self.PartQlHatModp = get_item("PartQlHatModp", gpufhe_content_map)
+        # self.QlQlInvModqlDivqlModq = get_item("QlQlInvModqlDivqlModq", gpufhe_content_map)
         self.approxSF = get_item("approxSF", gpufhe_content_map)
         self.automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
         self.barret_k = get_item("barret_k", gpufhe_content_map)
         self.barret_ratio = get_item("barret_ratio", gpufhe_content_map)
-        self.beta = get_item("beta", gpufhe_content_map)
-        self.chain_length = get_item("chain_length", gpufhe_content_map)
+        # self.beta = get_item("beta", gpufhe_content_map)
+        # self.chain_length = get_item("chain_length", gpufhe_content_map)
         self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
         self.h = get_item("h", gpufhe_content_map)
         self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
@@ -143,8 +143,8 @@ class Context:
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
         # self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
-        self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
-        self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
+        # self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
+        # self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
 
         self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
 
@@ -226,8 +226,8 @@ class Context:
         self.mod_raise_out = self.mod_raise_out.cuda()
         self.PModq = self.PModq.cuda()
         # self.mult_key_map = [v.cuda() for v in self.mult_key_map]
-        self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
-        self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
+        # self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
+        # self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
         self.max_int_diffs = self.max_int_diffs.cuda()
         for key, value in self.QplusP_map.items():
             self.QplusP_map[key] = value.cuda()
