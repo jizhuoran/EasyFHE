@@ -19,6 +19,7 @@ def get_item(item_name, content_map):
 
 class Context:
     def __init__(self, gpufhe_content_map, config):
+        #common params
         self.L = get_item("L", gpufhe_content_map)
         self.dnum = get_item("dnum", gpufhe_content_map)
         self.alpha = get_item("alpha", gpufhe_content_map)
@@ -26,90 +27,108 @@ class Context:
         self.M = get_item("M", gpufhe_content_map)
         self.N = get_item("N", gpufhe_content_map)
         self.Nh = get_item("Nh", gpufhe_content_map)
-        self.PInvModq = get_item("PInvModq", gpufhe_content_map)
-        self.PModq = get_item("PModq", gpufhe_content_map)
-        # self.PartQlHatInvModq = get_item("PartQlHatInvModq", gpufhe_content_map)
-        # self.PartQlHatModp = get_item("PartQlHatModp", gpufhe_content_map)
-        # self.QlQlInvModqlDivqlModq = get_item("QlQlInvModqlDivqlModq", gpufhe_content_map)
         self.approxSF = get_item("approxSF", gpufhe_content_map)
-        self.automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
-        self.barret_k = get_item("barret_k", gpufhe_content_map)
-        self.barret_ratio = get_item("barret_ratio", gpufhe_content_map)
-        # self.beta = get_item("beta", gpufhe_content_map)
-        # self.chain_length = get_item("chain_length", gpufhe_content_map)
-        self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
         self.h = get_item("h", gpufhe_content_map)
-        self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
-        self.hat_inverse_vec_modup = get_item("hat_inverse_vec_modup", gpufhe_content_map)
-        self.hat_inverse_vec_shoup_moddown = get_item("hat_inverse_vec_shoup_moddown", gpufhe_content_map)
-        self.hat_inverse_vec_shoup_modup = get_item("hat_inverse_vec_shoup_modup", gpufhe_content_map)
-        self.inner_out = get_item("inner_out", gpufhe_content_map)
-        self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
-        self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
-        self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
         self.levelBudget = get_item("levelBudget", gpufhe_content_map)
         self.logN = get_item("logN", gpufhe_content_map)
         self.logNh = get_item("logNh", gpufhe_content_map)
         self.logBsSlots_list = get_item("logBsSlots_list", gpufhe_content_map)
         self.auxModSize = get_item("specialMod", gpufhe_content_map)
+        self.rescaleTech = get_item("rescaleTech", gpufhe_content_map)
         self.dcrtBits = get_item("dcrtBits", gpufhe_content_map)
         self.max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
-        self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
-        self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
-        self.moduliP_scalar = get_item("moduliP_scalar", gpufhe_content_map)
-        self.moduliQ_scalar = get_item("moduliQ_scalar", gpufhe_content_map)
-        self.moduliQ = get_item("moduliQ", gpufhe_content_map)
-        self.modup_out = get_item("modup_out", gpufhe_content_map)
-        # self.mult_swk = get_item("mult_swk", gpufhe_content_map)
-        self.num_moduli_after_moddown = get_item("num_moduli_after_moddown", gpufhe_content_map)
-        self.num_moduli_after_modup = get_item("num_moduli_after_modup", gpufhe_content_map)
-        self.num_special_moduli = get_item("num_special_moduli", gpufhe_content_map)
         self.p = get_item("p", gpufhe_content_map)
+        self.secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
+        self.sigma = get_item("sigma", gpufhe_content_map)
+
+        #for common op
+        self.primes = get_item("primes", gpufhe_content_map)
+        self.barret_k = get_item("barret_k", gpufhe_content_map)
+        self.barret_ratio = get_item("barret_ratio", gpufhe_content_map)
+        self.dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
         self.pHatInvModp = get_item("pHatInvModp", gpufhe_content_map)
         self.pHatModp = get_item("pHatModp", gpufhe_content_map)
         self.pHatModq = get_item("pHatModq", gpufhe_content_map)
         self.p_mu = get_item("p_mu", gpufhe_content_map)
-        self.power_of_roots = get_item("power_of_roots", gpufhe_content_map)
-        self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
-        self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
-        self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
-        # self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
-        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
-        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
-        self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
-        self.primes = get_item("primes", gpufhe_content_map)
+        self.q_mu = get_item("q_mu", gpufhe_content_map)
+        self.moduliP_scalar = get_item("moduliP_scalar", gpufhe_content_map)
+        self.moduliQ_scalar = get_item("moduliQ_scalar", gpufhe_content_map)
+        self.moduliQ = get_item("moduliQ", gpufhe_content_map)
+        self.scalingFactorsReal = get_item("scalingFactorsReal", gpufhe_content_map)
+        self.scalingFactorsRealBig = get_item("scalingFactorsRealBig", gpufhe_content_map)
+
+        #for cv_mul
+        self.PModq = get_item("PModq", gpufhe_content_map)
+        self.PInvModq = get_item("PInvModq", gpufhe_content_map)
+        self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
+        self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
+
+        #output space
+        self.automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
+        self.inner_out = get_item("inner_out", gpufhe_content_map)
+        self.moddown_out_ax = get_item("moddown_out_ax", gpufhe_content_map)
+        self.moddown_out_bx = get_item("moddown_out_bx", gpufhe_content_map)
+        self.modup_out = get_item("modup_out", gpufhe_content_map)
+        self.rescale_out = get_item("rescale_out", gpufhe_content_map)
+        self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
+
+        #for moddown
+        self.hat_inverse_vec_moddown = get_item("hat_inverse_vec_moddown", gpufhe_content_map)
+        self.hat_inverse_vec_shoup_moddown = get_item("hat_inverse_vec_shoup_moddown", gpufhe_content_map)
         self.prod_inv_moddown = get_item("prod_inv_moddown", gpufhe_content_map)
         self.prod_inv_shoup_moddown = get_item("prod_inv_shoup_moddown", gpufhe_content_map)
         self.prod_q_i_mod_q_j_moddown = get_item("prod_q_i_mod_q_j_moddown", gpufhe_content_map)
+
+        #for modup
+        self.hat_inverse_vec_modup = get_item("hat_inverse_vec_modup", gpufhe_content_map)
+        self.hat_inverse_vec_shoup_modup = get_item("hat_inverse_vec_shoup_modup", gpufhe_content_map)
         self.prod_q_i_mod_q_j_modup = get_item("prod_q_i_mod_q_j_modup", gpufhe_content_map)
+
+        #for innerproduct
+        self.inner_workspace = get_item("inner_workspace", gpufhe_content_map)
+        self.mult_swk_ax = get_item("mult_swk_ax", gpufhe_content_map)
+        self.mult_swk_bx = get_item("mult_swk_bx", gpufhe_content_map)
+
+        #for ntt&intt
+        self.inverse_power_of_roots_div_two = get_item("inverse_power_of_roots_div_two", gpufhe_content_map)
+        self.inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
+        self.power_of_roots = get_item("power_of_roots", gpufhe_content_map)
+        self.power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
+
+        #for rotation
+        self.slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
+        self.total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
+        self.slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
+
+        #for cv_drop
         self.qVec = get_item("qVec", gpufhe_content_map)
         self.q_inv_mod_q = get_item("q_inv_mod_q", gpufhe_content_map)
         self.q_inv_mod_q_shoup = get_item("q_inv_mod_q_shoup", gpufhe_content_map)
-        self.q_mu = get_item("q_mu", gpufhe_content_map)
         self.qlql_inv_mod_ql_div_ql_mod_q = get_item("qlql_inv_mod_ql_div_ql_mod_q", gpufhe_content_map)
         self.qlql_inv_mod_ql_div_ql_mod_q_shoup = get_item("qlql_inv_mod_ql_div_ql_mod_q_shoup", gpufhe_content_map)
-        self.rescaleTech = get_item("rescaleTech", gpufhe_content_map)
-        self.rescale_out = get_item("rescale_out", gpufhe_content_map)
-        self.scalingFactorsReal = get_item("scalingFactorsReal", gpufhe_content_map)
-        self.scalingFactorsRealBig = get_item("scalingFactorsRealBig", gpufhe_content_map)
-        self.secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
-        self.sigma = get_item("sigma", gpufhe_content_map)
-        self.mod_raise_out = get_item("mod_raise_out", gpufhe_content_map)
-        self.mult_swk_ax = get_item("mult_swk_ax", gpufhe_content_map)
-        self.mult_swk_bx = get_item("mult_swk_bx", gpufhe_content_map)
-        self.QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
-        self.QplusP_map = get_item("QplusP_map", gpufhe_content_map)
+
+        #for encode
+        self.QmaxdiffplusPmaxdiff_map = get_item("QmaxdiffplusPmaxdiff_map", gpufhe_content_map)
+        self.encode_values = get_item("encode_values", gpufhe_content_map)
         self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
         self.QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
-        self.QmaxdiffplusPmaxdiff_map = get_item("QmaxdiffplusPmaxdiff_map", gpufhe_content_map)
+
         # self.BsContext_map = {}
         # if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
         #     for logBsSlots in self.logBsSlots_list:
         #         _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
         #         self.BsContext_map[str(logBsSlots)] = _BsContext
-        self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
-        self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
-        self.encode_values = get_item("encode_values", gpufhe_content_map)
+        # self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
+        # self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
+        # self.mult_swk = get_item("mult_swk", gpufhe_content_map)
+        # self.num_moduli_after_moddown = get_item("num_moduli_after_moddown", gpufhe_content_map)
+        # self.num_moduli_after_modup = get_item("num_moduli_after_modup", gpufhe_content_map)
+        # self.num_special_moduli = get_item("num_special_moduli", gpufhe_content_map)
+        # self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
+        # self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
+        # self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
+
+        #convert all params to tensor
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
         self.primes = torch.tensor(self.primes, dtype = torch.uint64)
@@ -145,7 +164,6 @@ class Context:
         # self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
         # self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
         # self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
-
         self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
 
         for key, value in self.QplusP_map.items():
@@ -181,6 +199,7 @@ class Context:
             elif isinstance(value, PreEncodeValues):
                 self.encode_values[key].encoded_values = torch.tensor(value.encoded_values)
 
+        #some setting
         self.config = config
         self.inBS = False
         self.in_check_period = False
