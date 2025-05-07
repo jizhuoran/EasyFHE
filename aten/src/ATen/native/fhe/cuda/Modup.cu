@@ -19,11 +19,11 @@ namespace fhe {
 __global__ void modup_step_two_kernel(
     uint64_t* to,
     const uint64_t* ptr,
-    const int begin_idx,
-    const int N,
-    const int alpha,
-    const int curr_limbs,
-    const int L,
+    const int64_t begin_idx,
+    const int64_t N,
+    const int64_t alpha,
+    const int64_t curr_limbs,
+    const int64_t L,
     const uint64_t start_length,
     const uint64_t* primes,
     const uint64_t* barrett_ratios,
@@ -43,8 +43,8 @@ __global__ void modup_step_two_kernel(
     inplace_add_128_128(out, accum);
   }
 
-  int gap = L - curr_limbs;
-  int prime_idx = out_idx +
+  auto gap = L - curr_limbs;
+  auto prime_idx = out_idx +
       (((out_idx >= 0 && out_idx < begin_idx) ||
         (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
            ? 0
@@ -74,10 +74,10 @@ static void modup_matmul(
     const Tensor& barret_k) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  const int begin_idx = (int)beta_idx * (int)alpha;
-  int start_length =
+  const auto begin_idx = beta_idx * alpha;
+  auto start_length =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
-  const int end_length = curr_limbs + sizeP - start_length;
+  const auto end_length = curr_limbs + sizeP - start_length;
 
   auto block_dim = dim3(256);
   auto grid_dim = dim3(N / 256 / 1, end_length);
@@ -111,9 +111,9 @@ static void modup_matmul(
 static void modup_impl(
     uint64_t* to_ptr,
     uint64_t* from_ptr,
-    int idx,
-    int curr_limbs,
-    int L,
+    int64_t idx,
+    int64_t curr_limbs,
+    int64_t L,
     const int64_t N,
     const int64_t alpha,
     const Tensor& hat_inverse_vecs,
@@ -128,7 +128,7 @@ static void modup_impl(
     const Tensor& power_of_roots) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  int num_moduli_after_modup = curr_limbs + sizeP;
+  int64_t num_moduli_after_modup = curr_limbs + sizeP;
   size_t begin_idx = idx * alpha;
   size_t in_C_L_len =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
@@ -220,7 +220,7 @@ static void modup_cuda_template(
     const Tensor& power_of_roots) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  int num_moduli_after_modup = curr_limbs + sizeP;
+  int64_t num_moduli_after_modup = curr_limbs + sizeP;
   for (int i = 0; i < beta; ++i) {
     modup_impl(
         out_ptr + (num_moduli_after_modup * N) * i,

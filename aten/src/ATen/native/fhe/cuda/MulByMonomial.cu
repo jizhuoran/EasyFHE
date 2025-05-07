@@ -27,7 +27,7 @@ __global__ void mulByMonomialKernel_step1(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    const int N) {
+    const int64_t N) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   out[blockIdx.y * N + tid_x] = qVec[blockIdx.y] - in[blockIdx.y * N + tid_x];
 }
@@ -36,8 +36,8 @@ __global__ void mulByMonomialKernel_step2(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    const int N,
-    const int shift) {
+    const int64_t N,
+    const int64_t shift) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   if (tid_x < shift) {
     out[blockIdx.y * N + tid_x] =
@@ -51,8 +51,8 @@ __global__ void mulByMonomialKernel_step1_step2(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    const int N,
-    const int shift) {
+    const int64_t N,
+    const int64_t shift) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   if (tid_x < shift) {
     out[blockIdx.y * N + tid_x] = in[blockIdx.y * N + tid_x + (N - shift)];

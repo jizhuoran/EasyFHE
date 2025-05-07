@@ -20,8 +20,8 @@ __global__ void const_mult_batch_kernel(
     const uint64_t* op1,
     const uint64_t* op2,
     const uint64_t* op2_psinv,
-    const size_t N,
-    const int batch,
+    const int64_t N,
+    const int64_t batch,
     const uint64_t* primes) {
   const int op2_idx = blockIdx.y;
   const int prime_idx = blockIdx.y;
@@ -41,9 +41,9 @@ __global__ void const_mult_batch_kernel(
 __global__ void switch_modulus_kernel(
     uint64_t* to,
     const uint64_t* ptr,
-    const size_t old_prime_idx,
-    const size_t batch,
-    const size_t N,
+    const int64_t old_prime_idx,
+    const int64_t batch,
+    const int64_t N,
     const uint64_t* primes,
     const uint64_t* barret_ratios,
     const uint64_t* barret_ks) {
@@ -118,7 +118,7 @@ void switch_modulus(
       in_ptr,
       old_prime_index,
       batch,
-      (int)N,
+      N,
       primes_ptr,
       barret_ratio_ptr,
       barret_k_ptr);

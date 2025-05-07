@@ -27,9 +27,9 @@ __global__ void new_fit_to_native_vector_kernel(
   uint64_t* max_int_diffs_ptr,
   uint64_t* barret_ratio_ptr,
   uint64_t* barret_k_ptr,
-  int N,
-  int slots,
-  int gap) {
+  int64_t N,
+  int64_t slots,
+  int64_t gap) {
 
   int i = blockIdx.x * blockDim.x + threadIdx.x;
   if(i < slots) {
@@ -96,7 +96,7 @@ static void encode_template(
       AT_WRAP([&]() {
         auto input_ptr =
             reinterpret_cast<scalar_t*>(input.data_ptr<scalar_t>());
-        int gap = N / (slots * 2);
+        auto gap = N / (slots * 2);
         auto stream = at::cuda::getCurrentCUDAStream();
         dim3 block(BLOCK_SIZE);
         dim3 grid((slots + block.x - 1) / block.x, cur_limbs + (is_ext ? sizeP : 0));

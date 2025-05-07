@@ -24,8 +24,8 @@ namespace fhe {
 __global__ void automorphism_transform_kernel(
     uint64_t* out,
     const uint64_t* in,
-    const int l,
-    const int N,
+    const int64_t l,
+    const int64_t N,
     const int* precomp_vec) {
   auto tid = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto precomp_index = precomp_vec[tid];

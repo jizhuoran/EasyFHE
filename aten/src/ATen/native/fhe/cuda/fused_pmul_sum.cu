@@ -61,9 +61,9 @@ __global__ void fusedPairwiseMACKernel9(
     uint64_t* __restrict__ out_ax,
     const uint64_t* __restrict__ mod,
     const uint64_t* __restrict__ barret_mu,
-    const int num_ciphers,
-    const int l,
-    const int N) {
+    const int64_t num_ciphers,
+    const int64_t l,
+    const int64_t N) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto tid_y = blockIdx.y;
 
@@ -135,9 +135,9 @@ __global__ void fusedBroadcastMACKernel16(
     uint64_t* __restrict__ out_ax,
     const uint64_t* __restrict__ mod,
     const uint64_t* __restrict__ barret_mu,
-    const int num_ciphers,
-    const int l,
-    const int N) {
+    const int64_t num_ciphers,
+    const int64_t l,
+    const int64_t N) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto tid_y = blockIdx.y;
 

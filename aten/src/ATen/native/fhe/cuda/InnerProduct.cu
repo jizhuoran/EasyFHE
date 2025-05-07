@@ -19,12 +19,12 @@ __global__ void sum_reduce_fused(
     const uint64_t* in_ptr,
     const uint64_t* eval_ax,
     const uint64_t* eval_bx,
-    const int N,
-    const int length,
-    const int mult_length,
-    const int batch,
-    int curr_limbs,
-    int gap,
+    const size_t N,
+    const size_t length,
+    const size_t mult_length,
+    const size_t batch,
+    size_t curr_limbs,
+    size_t gap,
     const uint64_t* primes,
     const uint64_t* barret_ks,
     const uint64_t* barret_ratios) {
@@ -78,7 +78,7 @@ static void innerproduct_template(
   int64_t sizeP = sizeQP - L;
   const int length = (curr_limbs + sizeP);
   const int mult_length = (L + sizeP);
-  int gap = L - curr_limbs;
+  auto gap = L - curr_limbs;
 
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
