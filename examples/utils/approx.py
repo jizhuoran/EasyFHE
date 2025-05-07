@@ -486,9 +486,15 @@ def eval_chebyshev_coefficients(func, a, b, degree):
     return coefficients
 
 
+coeff_dict = {}
 def eval_chebyshev_function(function, ciphertext, lowerBound, upperBound, poly_degree, cryptoContext):
-    coefficients = eval_chebyshev_coefficients(
-        function, lowerBound, upperBound, poly_degree)
+    key = (function.__name__, poly_degree, lowerBound, upperBound)
+    if key not in coeff_dict:
+        coeff_dict[key] = eval_chebyshev_coefficients(
+            function, lowerBound, upperBound, poly_degree
+        )
+    coefficients = coeff_dict[key]
+
     result = eval_chebyshev_series_ps(
         ciphertext, coefficients, lowerBound, upperBound, cryptoContext
     )
