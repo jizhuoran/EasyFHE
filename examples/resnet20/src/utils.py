@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = False
+DIRECT_LOAD = True
 
 
 if DIRECT_LOAD:
@@ -67,12 +67,47 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
-        full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
-        if cryptoContext.pre_encode_type == "middle":
-            name = "{}_{}".format("fc", slots)
-        else:
-            name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
+        # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
+        values = []
+        filename = '../weights_Aespa/fc.bin'
+        if not os.path.isfile(filename):
+            print(f"Failed to open file: {filename}")
+            return values
+
+        try:
+            # 打开文件并逐行读取
+            with open(filename, 'r') as file:
+                for row in file:
+                    # 按行解析
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        weight = values
+
+        weight_corrected = []
+        #  i is channels number
+        for i in range(512):
+            # First j is output channels,in cifar10 j is 10,in cifar100 j is 100
+            for j in range(10):
+                weight_corrected.append(weight[(10 * i) + j])
+            # This j is wide * high - out_channel ,so resnet18 is 4*4-10
+            for j in range(16 - 10):
+                weight_corrected.append(0)
+        weight_corrected = np.array(weight_corrected, dtype=np.double)
+        name = "{}_{}".format("fc", slots)
+        print(name)
+        encoded = fhe.encode(weight_corrected, name, level, slots, False, cryptoContext)
+        # key = "fc_{}_{}_{}".format(level, scale_deg, slots)
+        # encoded_weight[key] = encoded
+        # ptx = cryptoContext.pre_encoded[key]
+        # check_encoded_equal(encoded, ptx, key)
+        return encoded
 
     def mask_mod(n, cur_limbs, custom_val, he_res20_ctx, cryptoContext):
         full_name = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
@@ -155,12 +190,35 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 32768*2, False, cryptoContext)
 
     def mask_channel3(n, cur_limbs, cryptoContext):
-        full_name = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 16384*2)
-        if cryptoContext.pre_encode_type == "middle":
-            name = "mask_channel3_{}_{}".format(n, 16384*2)
-        else:
-            name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
+        # Todo:change this
+        # full_name = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 16384*2)
+        # if cryptoContext.pre_encode_type == "middle":
+        #     name = "mask_channel3_{}_{}".format(n, 16384*2)
+        # else:
+        #     name = full_name
+        # return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
+        # print("mask_channel3", "n", n, "cur_limbs", cur_limbs)
+        mask = []
+        level = cryptoContext.L - cur_limbs
+        for i in range(n):
+            for j in range(64):
+                mask.append(0)
+
+        for i in range(16):
+            mask.append(1)
+
+        for i in range(64 - 16):
+            mask.append(0)
+        for i in range(511 - n):
+            for j in range(64):
+                mask.append(0)
+        mask = np.array(mask, dtype=np.double)
+        name = "mask_channel3_{}_{}".format(n, 16384 * 2)
+        print(name)
+        encoded = fhe.encode(mask, name, level, 16384 * 2, False, cryptoContext)
+        # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
+        # encoded_weight[key] = encoded
+        return encoded
 
 else:
 
@@ -228,10 +286,13 @@ else:
         weight = values
 
         weight_corrected=[]
-        for i in range(64):
+        #  i is channels number
+        for i in range(512):
+            # First j is output channels,in cifar10 j is 10,in cifar100 j is 100
             for j in range(10):
                 weight_corrected.append(weight[(10 * i) + j])
-            for j in range(64 - 10):
+            # This j is wide * high - out_channel ,so resnet18 is 4*4-10
+            for j in range(16 - 10):
                 weight_corrected.append(0)
         weight_corrected = np.array(weight_corrected, dtype=np.double)
         name = "{}_{}".format("fc", slots)
@@ -472,7 +533,7 @@ else:
             for j in range(64):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_channel2_{}_{}".format(n, 16384*2)
+        name = "mask_channel3_{}_{}".format(n, 16384*2)
         print(name)
         encoded = fhe.encode(mask, name, level, 16384*2, False, cryptoContext)
         # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)

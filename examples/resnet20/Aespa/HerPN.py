@@ -60,7 +60,8 @@ class ResNet18_HerPN(nn.Module):
 
             x = self.layer3(x)
             fea.append(x)
-
+            x = self.layer4(x)
+            fea.append(x)
             x = self.avgpool(x)
             x = x.view(x.size(0), -1)
             x = self.fc(x)
@@ -335,7 +336,10 @@ def change_HerPN2d_into_PAF_MutalChannel(model:HerPN2d):
     a2 = 0.5 * sqrt(2) * w2
     a1 = w1
     a0 = beta - 0.5 * sqrt(2) * w2 - u2 * w2 - w1 * u1
-
+    mask = a2 < 0
+    modified_count = mask.sum().item()
+    a2[mask] = 1e-04
+    print(modified_count)
     new_model = MultiChannelPAF(a2,a1,a0)
     return new_model
 

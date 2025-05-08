@@ -4,7 +4,9 @@
 import torch
 import numpy as np
 import  os
-from HerPN import get_Aespa_MutalChannel_PAF_resnet18,get_Aespa_MutalChannel_PAF_resnet20
+from HerPN import get_Aespa_MutalChannel_PAF_resnet18, get_Aespa_MutalChannel_PAF_resnet20, \
+    change_HerPN2d_into_PAF_MutalChannel
+
 
 def build_mask(starting_padding, ending_padding, window_length, max_length):
     mask = []
@@ -8125,9 +8127,9 @@ def generate_resnet18_Aespa_bin_files_complete_square():
 
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
     np.savetxt('weights_Aespa/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected16256, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 16), delimiter=',')
 
     A = model.layer4[0].downsample[1].weight / torch.sqrt(
         model.layer4[0].downsample[1].running_var + model.layer4[0].downsample[1].eps)
@@ -8261,9 +8263,9 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
         np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
     temp_PAF = model.layer4[1].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -8345,9 +8347,9 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
         np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
     temp_PAF = model.layer4[1].HerPN2
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -8430,9 +8432,9 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
 
-    np.savetxt('weights_Aespa/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
     np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().cpu().numpy())
     np.savetxt('weights_Aespa/fc.bin', model.fc.weight.reshape(-1).detach().cpu().numpy())

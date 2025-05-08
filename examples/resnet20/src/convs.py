@@ -222,7 +222,7 @@ def downsample64to16(c1, c2, he_res20_ctx, cryptoContext):
 
     assert fullpack.noise_deg == 1
     for i in range(4):
-        masked=fhe.homo_mul_pt(fullpack, mask_first_n_mod2(4, 64, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
+        masked=fhe.homo_mul_pt(fullpack, mask_first_n_mod3(4, 64, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
         downsampledrows=fhe.homo_add(downsampledrows, masked, cryptoContext)
         if i<3:
             fullpack = fhe.homo_rotate(fullpack, 16-4, cryptoContext)
@@ -234,7 +234,7 @@ def downsample64to16(c1, c2, he_res20_ctx, cryptoContext):
 
     for i in range(512):
         masked=fhe.homo_mul_pt(downsampledrows,
-                               mask_channel2(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
+                               mask_channel3(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels,masked,cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels,-(64-16),cryptoContext)
 
