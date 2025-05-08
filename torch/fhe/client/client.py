@@ -79,7 +79,8 @@ class OpenFHEContext:
             return gpufhe_cipher
 
     def decrypt(self, x):
-        assert len(x.cv) == 2
+        assert len(x.cv) == 2, \
+    f"Assertion failed: len(x.cv) = {len(x.cv)}. Expected length of x.cv to be 2."
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         cipher.SetNoiseScaleDeg(x.noise_deg)

@@ -125,7 +125,9 @@ def save_middle_encode(func):
     def wrapper(*args, **kwargs):
         if func.__name__ == "encode":
             input, name, _, slots, _, _ = args
-            assert isinstance(input, list) or isinstance(input, np.ndarray)
+            assert isinstance(input, list) or isinstance(input, np.ndarray), \
+                f"Assertion failed: input is of type {type(input)}. " \
+                "input should be either a list or a numpy.ndarray."
             encoded_val = pre_encode(input, slots)
             middle_encoded_vals[name] = encoded_val
         return func(*args, **kwargs)

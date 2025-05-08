@@ -86,7 +86,7 @@ def cv_check(x, modulus, cur_limbs):
         x = x.cpu().numpy()
     if isinstance(modulus, torch.Tensor):
         modulus = modulus.cpu().numpy()
-    assert len(x.shape) == 2
+    assert len(x.shape) == 2,f"Assertion failed: x.shape = {x.shape}. Expected a 2D array."
     for l in range(x.shape[0]):
         for i in range(x.shape[1]):
             if x[l][i] < 0 or x[l][i] >= modulus[l]:
@@ -161,15 +161,15 @@ def cv_modup(
         x,
         curr_limbs=curr_limbs,
         L=context.L,
+        beta=beta,
+        degree=context.N,
+        alpha=context.alpha,
         hat_inverse_vec=context.hat_inverse_vec_modup,
         hat_inverse_vec_shoup=context.hat_inverse_vec_shoup_modup,
         prod_q_i_mod_q_j=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
         primes=context.primes,
         barret_ratio=context.barret_ratio,
         barret_k=context.barret_k,
-        beta=beta,
-        degree=context.N,
-        alpha=context.alpha,
         power_of_roots_shoup=context.power_of_roots_shoup,
         power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
@@ -455,12 +455,12 @@ def cv_mul_by_monomial(
     # "monomial only supports inplace operation"
     torch.mul_by_monomial_(
         input,
-        primes=context.primes,
         l=l,
         N=context.N,
         M=context.M,
         monomialDeg=monomialDeg,
         L=context.L,
+        primes=context.primes,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
         power_of_roots_shoup=context.power_of_roots_shoup,

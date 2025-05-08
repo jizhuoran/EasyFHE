@@ -213,22 +213,22 @@ static void modup_impl_(
 
 static void modup(
     uint64_t* in_ptr,
+    uint64_t* out_ptr,
     int64_t curr_limbs,
     int64_t level,
+    int64_t beta,
+    int64_t param_degree_,
+    int64_t param_alpha_,
     const Tensor& hat_inverse_vec__,
     const Tensor& hat_inverse_vec_shoup__,
     const Tensor& prod_q_i_mod_q_j__,
     const Tensor& param_primes__,
     const Tensor& param_barret_ratio__,
     const Tensor& param_barret_k__,
-    int64_t beta,
-    int64_t param_degree_,
-    int64_t param_alpha_,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    uint64_t* out_ptr) {
+    const Tensor& param_power_of_roots) {
   int num_moduli_after_modup = curr_limbs + param_alpha_;
   for (int i = 0; i < beta; ++i) {
     modup_impl_(
@@ -256,15 +256,15 @@ Tensor modup_cpu(
     const Tensor& in,
     int64_t curr_limbs,
     int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
     const Tensor& hat_inverse_vecs,
     const Tensor& hat_inverse_vec_shoups,
     const Tensor& prod_q_i_mod_q_js,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
-    int64_t beta,
-    int64_t N,
-    int64_t alpha,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
@@ -276,22 +276,22 @@ Tensor modup_cpu(
   auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
   modup(
       in_ptr,
+      out_ptr,
       curr_limbs,
       L,
+      beta,
+      N,
+      alpha,
       hat_inverse_vecs,
       hat_inverse_vec_shoups,
       prod_q_i_mod_q_js,
       primes,
       barret_ratio,
       barret_k,
-      beta,
-      N,
-      alpha,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       power_of_roots_shoup,
-      power_of_roots,
-      out_ptr);
+      power_of_roots);
   return out;
 }
 } // namespace at::native

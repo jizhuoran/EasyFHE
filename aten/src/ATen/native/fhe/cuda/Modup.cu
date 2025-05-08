@@ -19,16 +19,16 @@ namespace fhe {
 __global__ void modup_step_two_kernel(
     uint64_t* to,
     const uint64_t* ptr,
-    const int begin_idx,
-    const int N,
-    const int alpha,
-    const int curr_limbs,
-    const int L,
+    const int64_t begin_idx,
+    const int64_t N,
+    const int64_t alpha,
+    const int64_t curr_limbs,
+    const int64_t L,
+    const uint64_t start_length,
     const uint64_t* primes,
     const uint64_t* barrett_ratios,
     const uint64_t* barrett_ks,
-    const uint64_t* hat_mod_end,
-    const uint64_t start_length) {
+    const uint64_t* hat_mod_end) {
   const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
   const int hat_mod_end_idx = blockIdx.y;
 
@@ -43,8 +43,8 @@ __global__ void modup_step_two_kernel(
     inplace_add_128_128(out, accum);
   }
 
-  int gap = L - curr_limbs;
-  int prime_idx = out_idx +
+  auto gap = L - curr_limbs;
+  auto prime_idx = out_idx +
       (((out_idx >= 0 && out_idx < begin_idx) ||
         (out_idx >= (begin_idx + start_length) && out_idx < curr_limbs))
            ? 0
@@ -64,20 +64,20 @@ static void modup_matmul(
     uint64_t* to_ptr,
     uint64_t* from_ptr,
     int64_t beta_idx,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
     const int64_t alpha,
     const int64_t N,
-    const Tensor& prod_q_i_mod_q_js,
     int64_t curr_limbs,
-    int64_t L) {
+    int64_t L,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  const int begin_idx = (int)beta_idx * (int)alpha;
-  int start_length =
+  const auto begin_idx = beta_idx * alpha;
+  auto start_length =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
-  const int end_length = curr_limbs + sizeP - start_length;
+  const auto end_length = curr_limbs + sizeP - start_length;
 
   auto block_dim = dim3(256);
   auto grid_dim = dim3(N / 256 / 1, end_length);
@@ -100,24 +100,24 @@ static void modup_matmul(
       alpha,
       curr_limbs,
       L,
+      start_length,
       primes_ptr,
       barret_ratio_ptr,
       barret_k_ptr,
-      prod_q_i_mod_q_j_ptr,
-      start_length);
+      prod_q_i_mod_q_j_ptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
 static void modup_impl(
     uint64_t* to_ptr,
     uint64_t* from_ptr,
-    int idx,
-    int curr_limbs,
-    int L,
-    const Tensor& hat_inverse_vecs,
-    const Tensor& hat_inverse_vec_shoups,
+    int64_t idx,
+    int64_t curr_limbs,
+    int64_t L,
     const int64_t N,
     const int64_t alpha,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
@@ -128,7 +128,7 @@ static void modup_impl(
     const Tensor& power_of_roots) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  int num_moduli_after_modup = curr_limbs + sizeP;
+  int64_t num_moduli_after_modup = curr_limbs + sizeP;
   size_t begin_idx = idx * alpha;
   size_t in_C_L_len =
       ((begin_idx + alpha) > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
@@ -153,8 +153,8 @@ static void modup_impl(
       curr_limbs,
       L,
       N,
-      inverse_power_of_roots_div_two,
       primes,
+      inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
@@ -162,32 +162,32 @@ static void modup_impl(
       to_ptr + begin_idx * N,
       hat_inverse_vec.data_ptr<uint64_t>(),
       hat_inverse_vec_psinv.data_ptr<uint64_t>(),
-      primes.data_ptr<uint64_t>() + begin_idx,
       in_C_L_len,
-      N);
+      N,
+      primes.data_ptr<uint64_t>() + begin_idx);
 
   modup_matmul(
       to_ptr,
       to_ptr + N * begin_idx,
       idx,
-      primes,
-      barret_ratio,
-      barret_k,
       alpha,
       N,
-      prod_q_i_mod_q_js,
       curr_limbs,
-      L);
+      L,
+      prod_q_i_mod_q_js,
+      primes,
+      barret_ratio,
+      barret_k);
 
   NTT_except_some_range_impl(
       to_ptr,
-      0,
       num_moduli_after_modup,
       N,
-      begin_idx,
-      in_C_L_len,
       curr_limbs,
       L,
+      0,
+      begin_idx,
+      in_C_L_len,
       power_of_roots_shoup,
       primes,
       power_of_roots);
@@ -205,22 +205,22 @@ static void modup_cuda_template(
     uint64_t* in_ptr,
     int64_t curr_limbs,
     int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
     const Tensor& hat_inverse_vecs,
     const Tensor& hat_inverse_vec_shoups,
     const Tensor& prod_q_i_mod_q_js,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
-    int64_t beta,
-    int64_t N,
-    int64_t alpha,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots) {
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  int num_moduli_after_modup = curr_limbs + sizeP;
+  int64_t num_moduli_after_modup = curr_limbs + sizeP;
   for (int i = 0; i < beta; ++i) {
     modup_impl(
         out_ptr + (num_moduli_after_modup * N) * i,
@@ -228,10 +228,10 @@ static void modup_cuda_template(
         i,
         curr_limbs,
         L,
-        hat_inverse_vecs,
-        hat_inverse_vec_shoups,
         N,
         alpha,
+        hat_inverse_vecs,
+        hat_inverse_vec_shoups,
         primes,
         barret_ratio,
         barret_k,
@@ -247,15 +247,15 @@ Tensor modup_cuda(
     const Tensor& in,
     int64_t curr_limbs,
     int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
     const Tensor& hat_inverse_vecs,
     const Tensor& hat_inverse_vec_shoups,
     const Tensor& prod_q_i_mod_q_js,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
-    int64_t beta,
-    int64_t N,
-    int64_t alpha,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
@@ -270,15 +270,15 @@ Tensor modup_cuda(
       in_ptr,
       curr_limbs,
       L,
+      beta,
+      N,
+      alpha,
       hat_inverse_vecs,
       hat_inverse_vec_shoups,
       prod_q_i_mod_q_js,
       primes,
       barret_ratio,
       barret_k,
-      beta,
-      N,
-      alpha,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       power_of_roots_shoup,

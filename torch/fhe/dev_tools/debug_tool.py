@@ -38,8 +38,13 @@ def check_meta_equal(func):
         cryptoContext = args[-1]
         if func.__name__ in ["homo_add", "homo_sub", "homo_mul", "homo_add_pt", "homo_mul_pt"]:
             in0, in1 = args[0], args[1]
-            assert in0.is_ext == in1.is_ext
-            assert in0.slots == in1.slots
+            assert in0.is_ext == in1.is_ext, \
+                f"Assertion failed: in0.is_ext = {in0.is_ext}, in1.is_ext = {in1.is_ext}. " \
+                "in0.is_ext should be equal to in1.is_ext."
+
+            assert in0.slots == in1.slots, \
+                f"Assertion failed: in0.slots = {in0.slots}, in1.slots = {in1.slots}. " \
+                "in0.slots should be equal to in1.slots."
 
             if cryptoContext.rescaleTech == "FIXEDMANUAL":
                 if not in0.cur_limbs == in1.cur_limbs:
@@ -50,9 +55,16 @@ def check_meta_equal(func):
                 if in0.noise_deg > 2:
                     print("noise_deg should not > 2", in0.noise_deg)
 
-                assert in0.noise_deg <= 2
-                assert in0.noise_deg == in1.noise_deg
-                assert in0.cur_limbs == in1.cur_limbs
+                assert in0.noise_deg <= 2, \
+                    f"Assertion failed: in0.noise_deg = {in0.noise_deg}. in0.noise_deg should be less than or equal to 2."
+
+                assert in0.noise_deg == in1.noise_deg, \
+                    f"Assertion failed: in0.noise_deg = {in0.noise_deg}, in1.noise_deg = {in1.noise_deg}. " \
+                    "in0.noise_deg should be equal to in1.noise_deg."
+
+                assert in0.cur_limbs == in1.cur_limbs, \
+                    f"Assertion failed: in0.cur_limbs = {in0.cur_limbs}, in1.cur_limbs = {in1.cur_limbs}. " \
+                    "in0.cur_limbs should be equal to in1.cur_limbs."
 
                 # assert in0.cur_limbs == in1.cur_limbs
                 # assert in0.scaling_factor == in1.scaling_factor

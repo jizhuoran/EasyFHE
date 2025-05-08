@@ -16,8 +16,8 @@ namespace fhe {
 void automorphism_transform_kernel(
     uint64_t* out,
     const uint64_t* in,
-    const int l,
-    const int N,
+    const int64_t l,
+    const int64_t N,
     const int* precomp_vec) {
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);

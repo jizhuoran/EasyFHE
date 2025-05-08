@@ -1025,15 +1025,15 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
 namespace at::native {
 
 void iNTT_impl(
-    uint64_t* in_ptr,
     uint64_t* out_ptr,
+    uint64_t* in_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t curr_limbs,
     int64_t level,
     int64_t param_degree,
-    const Tensor& inverse_power_of_roots_div_two,
     const Tensor& param_primes,
+    const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   AT_DISPATCH_V2(
       kUInt64,
@@ -1098,12 +1098,12 @@ void iNTT_impl(
 }
 
 void NTT_impl(
-    const uint64_t* in_ptr,
     uint64_t* out_ptr,
+    const uint64_t* in_ptr,
     int64_t batch,
     int64_t param_degree,
-    const uint64_t* param_power_of_roots_shoup_ptr,
     const uint64_t* param_primes_ptr,
+    const uint64_t* param_power_of_roots_shoup_ptr,
     const uint64_t* param_power_of_roots_ptr) {
   dim3 gridDim(2048);
   dim3 blockDim(256);
@@ -1149,13 +1149,13 @@ void NTT_impl(
 
 void NTT_except_some_range_impl(
     uint64_t* op_ptr,
-    int64_t start_prime_idx,
     int64_t batch,
     int64_t N,
-    int64_t excluded_range_start,
-    int64_t excluded_range_size,
     int64_t curr_limbs,
     int64_t L,
+    int64_t start_prime_idx,
+    int64_t excluded_range_start,
+    int64_t excluded_range_size,
     const Tensor& power_of_roots_shoup,
     const Tensor& primes,
     const Tensor& power_of_roots) {
