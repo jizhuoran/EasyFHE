@@ -39,7 +39,7 @@ def log2_int(x):
 def rotsum(input,slots,padding,cryptoContext):
     result=input.deep_copy()
     for i in range(log2_int(slots)):
-        result=fhe.homo_add(result,fhe.homo_rotate(result,padding*pow(2,i),cryptoContext),cryptoContext)
+        result=fhe.homo_add(result,fhe.homo_rotate(result,int(padding*pow(2,i)),cryptoContext),cryptoContext)
     return result
 
 def matmulRE1(rows,weight,bias,cryptoContext):
@@ -55,7 +55,7 @@ def matmulRE1(rows,weight,bias,cryptoContext):
 def matmulRE2(rows,weight,row_size,padding,cryptoContext):
     columns=[]
     for i in range(len(rows)):
-        m=fhe.homo_mul_pt(rows[i],weight,cryptoContext)
+        m=fhe.homo_mul(rows[i],weight,cryptoContext)
         m=rotsum(m,row_size,padding,cryptoContext)
         columns.append(m)
     return columns
@@ -110,11 +110,11 @@ def repeat(input,slots,cryptoContext,padding=1):
     return res
 
 
-def unwrapScoresExpanded(c,inputs_num,cryptoContext):
+def unwrap_scores_expanded(c,inputs_num,cryptoContext):
     result=[]
     for i in range(inputs_num):
         i_th_1=mask_mod_n(c,128,0,inputs_num*128,cryptoContext)
-        i_th_2=mask_mod_n(c,128,164,inputs_num*128,cryptoContext)
+        i_th_2=mask_mod_n(c,128, 64,inputs_num*128,cryptoContext)
         i_th_1=repeat(i_th_1,64,cryptoContext)
         i_th_2 = repeat(i_th_2, 64, cryptoContext)
         if i <inputs_num-1:
@@ -131,7 +131,7 @@ def mask_mod_n2(ciphertext, n, cryptoContext):
         else:
             mask.append(0.0)
     mask = torch.tensor(mask, dtype=torch.float64).cuda()
-    pt = fhe.encode(mask,1, cryptoContext.L - ciphertext.cur_limbs - 2, num_slots, False, cryptoContext)
+    pt = fhe.encode(mask,1, cryptoContext.L - ciphertext.cur_limbs, num_slots, False, cryptoContext)
     return fhe.homo_mul_pt(ciphertext, pt, cryptoContext)
 
 
@@ -163,7 +163,7 @@ def matmulRElarge(inputs,weights,bias,mask_val,cryptoContext):
     for i in range(len(inputs)):
         for j in range(len(weights)-1,-1,-1):
             out=fhe.homo_mul_pt(inputs[i],weights[j],cryptoContext)
-            out=fhe.homo_rotate(out,128,cryptoContext)
+            out=rotsum(out,128,128, cryptoContext)
             out=mask_first_n(out,128,mask_val,cryptoContext)
             if j ==len(weights)-1:
                 i_th_result=out
@@ -222,7 +222,7 @@ def unwrap_512_in_4_128(c,index,cryptoContext):
     score2 = repeat(score2, 128, cryptoContext, -128)
     score3 =mask_block(c,shift+256,shift+384,1,cryptoContext)
     score3=repeat(score3,128,cryptoContext,-128)
-    score4 =mask_block(c,shift+386,shift+512,1,cryptoContext)
+    score4 =mask_block(c,shift+384,shift+512,1,cryptoContext)
     score4=repeat(score4,128,cryptoContext,-128)
     result.append(score1)
     result.append(score2)
@@ -240,20 +240,18 @@ def unwrapRepeatedLarge(containers,input_number,cryptoContext):
             quantity=input_number-(i*32)
         quantities.append(quantity)
     for i in range(len(containers)):
-        row = []
         for j in range(quantities[i]):
-            unwrapped_container = unwrap_512_in_4_128(containers[i], j, cryptoContext)  # unwrapped_container is list
-            row.extend(unwrapped_container)  # add list element
-        unwrapped_output.append(row)
+            unwrapped_container = unwrap_512_in_4_128(containers[i], j, cryptoContext)  # returns list
+            unwrapped_output.append(unwrapped_container)  # keep list-of-list
     return unwrapped_output
 
 def matmulCRlarge(rows,weights,bias,cryptoContext):
     output=[]
     for i in range(len(rows)):
-        p1=fhe.homo_add_pt(rows[i][0],weights[0],cryptoContext)
-        p2=fhe.homo_add_pt(rows[i][1],weights[1],cryptoContext)
-        p3=fhe.homo_add_pt(rows[i][2],weights[2],cryptoContext)
-        p4=fhe.homo_add_pt(rows[i][3],weights[3],cryptoContext)
+        p1=fhe.homo_mul_pt(rows[i][0],weights[0],cryptoContext)
+        p2=fhe.homo_mul_pt(rows[i][1],weights[1],cryptoContext)
+        p3=fhe.homo_mul_pt(rows[i][2],weights[2],cryptoContext)
+        p4=fhe.homo_mul_pt(rows[i][3],weights[3],cryptoContext)
         res=examples.resnet20.convs.eval_add_many([p1,p2,p3,p4],cryptoContext)
         res=rotsum(res,128,1,cryptoContext)
         if bias is not None:
@@ -282,8 +280,7 @@ def encoder1(cryptoContext,openfhe_context):
     scores_sum=rotsum(scores,128,128,cryptoContext)
     scores_denominator= eval_inverse_naive(scores_sum,2,5000,cryptoContext)
     scores=fhe.homo_mul(scores,scores_denominator,cryptoContext)
-    scores = fhe.homo_bootstrap(scores, cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    unwrapped_scores=unwrapScoresExpanded(scores,len(inputs),cryptoContext)
+    unwrapped_scores=unwrap_scores_expanded(scores, len(inputs), cryptoContext)
     value_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_value_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
     value_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_value_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1,1.0,global_num_slots)
     V=matmulRE1(inputs,value_w,value_b,cryptoContext) #fixme: 250410, yhh debug uptil here #为什么上面的value_w的level，把cryptoContext.L-inputs[0].cur_limbs换成 cryptoContext.L-score.cur_limbs-2 可以复现，进去之后第二个会g
@@ -301,7 +298,7 @@ def encoder1(cryptoContext,openfhe_context):
     wrappedOutput=fhe.homo_mul_pt(wrappedOutput,vy,cryptoContext)
     bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
-    # wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], cryptoContext)
     output_copy=wrappedOutput.deep_copy()
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
     GELU_max_abs_value = 1 / 13.5
@@ -328,8 +325,8 @@ def encoder1(cryptoContext,openfhe_context):
     precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_output_mean.txt", cryptoContext.L-wrappedOutput.cur_limbs-1, 1, -1.0, global_num_slots)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,precomputed_mean,cryptoContext)
     vy=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_vy.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
-    wrappedOutput=fhe.homo_add_pt(wrappedOutput,vy,cryptoContext)
-    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_output_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,len(inputs))
+    wrappedOutput=fhe.homo_mul_pt(wrappedOutput,vy,cryptoContext)
+    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_output_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
     #Todo:    controller.save(output, "../checkpoint/encoder1output.bin");保存序列化文件， 不保存也行
@@ -367,7 +364,7 @@ def encoder2(inputs,cryptoContext):
     scores_denominator=fhe.homo_bootstrap(scores_denominator,cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
     scores = fhe.homo_mul(scores, scores_denominator, cryptoContext)
-    unwrapped_scores = unwrapScoresExpanded(scores, len(inputs), cryptoContext)
+    unwrapped_scores = unwrap_scores_expanded(scores, len(inputs), cryptoContext)
 
 
 
