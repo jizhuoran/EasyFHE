@@ -376,14 +376,14 @@ def encoder2(inputs,cryptoContext):
     output = matmulRE2(unwrapped_scores, V_wrapped, 128, 128, cryptoContext)
 
     copyFirst=output[0].deep_copy()
-    output = [copyFirst]
+    output = [copyFirst]  # Only keep CLS token, consistent with C++ encoder2
 
     dense_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_weight.txt", cryptoContext.L - output[0].cur_limbs,1,global_num_slots)
-    dense_b = read_plain_expanded_input(cryptoContext,"../weights-sst2/layer1_selfoutput_bias.txt",
-                                        cryptoContext.L - output[0].cur_limbs,1,global_num_slots)
+    dense_b = read_plain_expanded_input(cryptoContext, "../weights-sst2/layer1_selfoutput_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots)
     output = matmulCR2(output, dense_w, dense_b, cryptoContext)
     for i in range(len(output)):
-        output[i] = fhe.homo_add(output[i], inputs[i], cryptoContext)
+        output[i] = fhe.homo_add(output[i], inputs[i], cryptoContext)  # Residual add only uses inputs[0] (CLS)
+
     wrappedOutput = wrapUpExpanded(output, cryptoContext)
     precomputed_mean = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_selfoutput_mean.txt",
                                                  cryptoContext.L - wrappedOutput.cur_limbs, 1, -1.0, global_num_slots)
@@ -394,7 +394,7 @@ def encoder2(inputs,cryptoContext):
     vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
     bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/layer1_selfoutput_normbias.txt",
-                                     cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,len(inputs))
+                                     cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
 
     output_copy = wrappedOutput.deep_copy()
@@ -404,8 +404,7 @@ def encoder2(inputs,cryptoContext):
         read_plain_input(cryptoContext, f"../weights-sst2/layer1_intermediate_weight{i + 1}.txt", cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, GELU_max_abs_value)
         for i in range(4)
     ]
-    intermediate_bias = read_plain_input(cryptoContext,"../weights-sst2/layer1_intermediate_bias.txt",
-                                         cryptoContext.L - output[0].cur_limbs, 1,global_num_slots, GELU_max_abs_value)
+    intermediate_bias = read_plain_input(cryptoContext, "../weights-sst2/layer1_intermediate_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots, GELU_max_abs_value)
     output = matmulRElarge(output, dense_weights, intermediate_bias, 1, cryptoContext)
     output = generate_containers(output, None, cryptoContext)
     for i in range(len(output)):
@@ -428,7 +427,7 @@ def encoder2(inputs,cryptoContext):
     vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_output_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
     bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/layer1_output_normbias.txt",
-                                     cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,len(inputs))
+                                     cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
     output = unwrapExpanded(wrappedOutput, len(inputs), cryptoContext)
     # Todo:    controller.save(output, "../checkpoint/encoder1output.bin");保存序列化文件， 不保存也行
