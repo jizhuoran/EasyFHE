@@ -6776,6 +6776,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     model = get_Aespa_MutalChannel_PAF_resnet18()
     model.eval()
     print(model)
+    print(model.fc.bias.reshape(-1).detach().cpu().numpy())
+
 
     img_width = 32
     padding = 1

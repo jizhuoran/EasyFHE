@@ -190,35 +190,12 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 32768*2, False, cryptoContext)
 
     def mask_channel3(n, cur_limbs, cryptoContext):
-        # Todo:change this
-        # full_name = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 16384*2)
-        # if cryptoContext.pre_encode_type == "middle":
-        #     name = "mask_channel3_{}_{}".format(n, 16384*2)
-        # else:
-        #     name = full_name
-        # return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
-        # print("mask_channel3", "n", n, "cur_limbs", cur_limbs)
-        mask = []
-        level = cryptoContext.L - cur_limbs
-        for i in range(n):
-            for j in range(64):
-                mask.append(0)
-
-        for i in range(16):
-            mask.append(1)
-
-        for i in range(64 - 16):
-            mask.append(0)
-        for i in range(511 - n):
-            for j in range(64):
-                mask.append(0)
-        mask = np.array(mask, dtype=np.double)
-        name = "mask_channel3_{}_{}".format(n, 16384 * 2)
-        print(name)
-        encoded = fhe.encode(mask, name, level, 16384 * 2, False, cryptoContext)
-        # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
-        # encoded_weight[key] = encoded
-        return encoded
+        full_name = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 16384*2)
+        if cryptoContext.pre_encode_type == "middle":
+            name = "mask_channel3_{}_{}".format(n, 16384*2)
+        else:
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
 
 else:
 
@@ -536,7 +513,7 @@ else:
         name = "mask_channel3_{}_{}".format(n, 16384*2)
         print(name)
         encoded = fhe.encode(mask, name, level, 16384*2, False, cryptoContext)
-        # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
+        # key = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 8192*2)
         # encoded_weight[key] = encoded
         return encoded
 

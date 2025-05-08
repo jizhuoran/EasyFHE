@@ -117,14 +117,18 @@ class BasicBlock_HerPN(nn.Module):
         if self.downsample is not None:
             identity = self.downsample(x)
         out = self.conv1(x)
+        print('max conv1',torch.max(out))
         # print('conv1',torch.max(out))
         out = self.HerPN1(out)
+        print('max HerPN1',torch.max(out))
         # print('herPN',torch.max(out))
         out = self.conv2(out)
+        print('max conv2',torch.max(out))
         # print('conv2', torch.max(out))
         out += identity
         # print('sum', torch.max(out))
         out = self.HerPN2(out)
+        print('max HerPN2',torch.max(out))
 
         return out
 
@@ -339,7 +343,7 @@ def change_HerPN2d_into_PAF_MutalChannel(model:HerPN2d):
     mask = a2 < 0
     modified_count = mask.sum().item()
     a2[mask] = 1e-04
-    print(modified_count)
+    # print(modified_count)
     new_model = MultiChannelPAF(a2,a1,a0)
     return new_model
 
