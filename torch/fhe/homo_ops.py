@@ -11,7 +11,9 @@ BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
 # drop last elem is a inplace operation now
 def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
-    assert num_levels <= ct.cur_limbs and num_levels >= 0
+    assert num_levels <= ct.cur_limbs and num_levels >= 0, \
+        f"Assertion failed: num_levels = {num_levels}, ct.cur_limbs = {ct.cur_limbs}. " \
+        "num_levels should be between 0 and ct.cur_limbs (inclusive)."
     if not inplace:
         ct = ct.deep_copy()
     ct.cur_limbs -= num_levels
@@ -33,7 +35,8 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 
 
 def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.cur_limbs >= target_limbs
+    assert cipher.cur_limbs >= target_limbs, \
+        f"Assertion failed: cipher.cur_limbs = {cipher.cur_limbs}, target_limbs = {target_limbs}. "
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
             return _eval_mult_core(cipher, 1.0, cryptoContext)
@@ -114,7 +117,8 @@ def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_f
 
 
 def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.cur_limbs >= target_limbs
+    assert cipher.cur_limbs >= target_limbs, f"Assertion failed: cipher.cur_limbs = {cipher.cur_limbs}, target_limbs = {target_limbs}. " \
+    "cipher.cur_limbs should be greater than or equal to target_limbs."
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
             return _eval_mult_core(cipher, 1.0, cryptoContext)
@@ -164,7 +168,9 @@ def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_fa
     return cipher
 
 def _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.noise_deg == 1 and target_noise_deg == 1
+    assert cipher.noise_deg == 1 and target_noise_deg == 1, \
+        f"Assertion failed: cipher.noise_deg = {cipher.noise_deg}, target_noise_deg = {target_noise_deg}. " \
+        "Both cipher.noise_deg and target_noise_deg should be equal to 1."
     return _drop_last_elements(cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=False)
 
 def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
@@ -190,7 +196,9 @@ def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        assert in0.noise_deg == in1.noise_deg
+        assert in0.noise_deg == in1.noise_deg, \
+            f"Assertion failed: in0.noise_deg = {in0.noise_deg}, in1.noise_deg = {in1.noise_deg}. " \
+            "Both in0.noise_deg and in1.noise_deg should be equal."
         return _adjust_levels(in0, in1, cryptoContext)
     else:
         return _adjust_levels_and_depth(in0, in1, cryptoContext)
@@ -486,7 +494,10 @@ def _cipher_neg(in0, cryptoContext):
     return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
 def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
+    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg), \
+        f"Assertion failed: (cipher.cur_limbs - cipher.noise_deg) = {cipher.cur_limbs - cipher.noise_deg}, " \
+        f"(target_limbs - target_noise_deg) = {target_limbs - target_noise_deg}. " \
+        "cipher.cur_limbs - cipher.noise_deg should be greater than or equal to target_limbs - target_noise_deg."
     if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
         return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
     elif cryptoContext.rescaleTech == "FIXEDAUTO":
@@ -725,7 +736,8 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # else:
     #     raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
 
-    assert len(cipher.cv) == 2
+    assert len(cipher.cv) == 2, \
+    f"Assertion failed: len(cipher.cv) = {len(cipher.cv)}. Expected length of cipher.cv to be 2."
 
     if cipher.slots != plaintext.slots:
         warnings.warn(
@@ -911,7 +923,10 @@ def encode(
         scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
     assert middle_value.max_encoded_value < 1e-20 or math.log2(
-        int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+        int(middle_value.max_encoded_value * scaling_factor)) < 61, \
+            f"Assertion failed: middle_value.max_encoded_value = {middle_value.max_encoded_value}, " \
+            f"scaling_factor = {scaling_factor}. " \
+            "Either max_encoded_value should be less than 1e-20, or the log2 of the scaled value should be less than 61."
 
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
@@ -946,7 +961,10 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
 
     ctx_axs, ctx_bxs, ptx_bxs = [], [], []
 
-    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K
+    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K, f"Assertion failed: ctxs[0].is_ext = {ctxs[0].is_ext}, " \
+    f"ctxs[0].cv[0].shape[0] = {ctxs[0].cv[0].shape[0]}, " \
+    f"ctxs[0].cur_limbs = {ctxs[0].cur_limbs}, cryptoContext.K = {cryptoContext.K}. " \
+    "Either ctxs[0].is_ext should be False, or ctxs[0].cv[0].shape[0] should equal ctxs[0].cur_limbs + cryptoContext.K."
 
     for idx in range(len(ctxs)):
         if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:

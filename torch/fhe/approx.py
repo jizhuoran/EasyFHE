@@ -37,7 +37,7 @@ def degree(lst):
 # the same format.
 
 def long_division_chebyshev(f, g):
-    assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0))
+    assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0)), f"Assertion failed: f[-1] = {f[-1]} is close to 0 or g[-1] = {g[-1]} is close to 0"
     n, k = len(f) - 1, len(g) - 1
 
     if n < k:

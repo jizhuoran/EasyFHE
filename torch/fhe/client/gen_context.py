@@ -137,7 +137,9 @@ def gen_contexts(
         BOOT_KEY = cc.GetEvalBootstrapContext() # get matirx saved in boot_key
         for idx, logBsSlots in enumerate(logBsSlots_list):
             slot, C2S_dim, C2S_limbs, C2S_FC, C2S, S2C_dim, S2C_limbs, S2C_FC, S2C = BOOT_KEY[idx]
-            assert slot == 1 << logBsSlots
+            assert slot == 1 << logBsSlots, \
+                f"Assertion failed: slot = {slot}, expected 1 << logBsSlots = {1 << logBsSlots}. " \
+                "slot should be equal to 1 shifted left by logBsSlots."
             boot_key = {
                 "C2S": C2S,
                 "S2C": S2C,

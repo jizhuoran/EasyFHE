@@ -10,7 +10,7 @@ def cv_check(x, modulus, cur_limbs):
         x = x.cpu().numpy()
     if isinstance(modulus, torch.Tensor):
         modulus = modulus.cpu().numpy()
-    assert len(x.shape) == 2
+    assert len(x.shape) == 2,f"Assertion failed: x.shape = {x.shape}. Expected a 2D array."
     for l in range(x.shape[0]):
         for i in range(x.shape[1]):
             if x[l][i] < 0 or x[l][i] >= modulus[l]:

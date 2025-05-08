@@ -755,7 +755,9 @@ class __FOR_SAVE_ONLY_Context:
                     boot_cnst_map[str(logBsSlots)]
                 )
         else:
-            assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]
+            assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]], \
+                f"Assertion failed: logBsSlots_list[0] = {logBsSlots_list[0]}, levelBudget_list = {levelBudget_list}. " \
+                "logBsSlots_list[0] should be 0, and levelBudget_list should be [[0, 0]]."
 
         NO_BS = False
         if logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]:
