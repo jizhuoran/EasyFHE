@@ -90,12 +90,12 @@ static void mul_by_monomial_impl(
 
 static void mul_by_monomial_template(
     Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -129,12 +129,12 @@ static void mul_by_monomial_template(
 
 Tensor mul_by_monomial_cpu(
     const Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -142,12 +142,12 @@ Tensor mul_by_monomial_cpu(
   Tensor out = res.clone();
   mul_by_monomial_template(
       out,
-      param_primes,
       l,
       N,
       M,
       monomialDeg,
       level,
+      param_primes,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -157,24 +157,25 @@ Tensor mul_by_monomial_cpu(
 
 Tensor& mul_by_monomial_cpu_(
     Tensor& res,
-    const Tensor& param_primes,
+
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
   mul_by_monomial_template(
       res,
-      param_primes,
       l,
       N,
       M,
       monomialDeg,
       level,
+      param_primes,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
@@ -184,12 +185,12 @@ Tensor& mul_by_monomial_cpu_(
 
 Tensor& mul_by_monomial_cpu_out(
     const Tensor& res,
-    const Tensor& param_primes,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg,
     int64_t level,
+    const Tensor& param_primes,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
@@ -197,12 +198,12 @@ Tensor& mul_by_monomial_cpu_out(
     Tensor& out) {
   mul_by_monomial_template(
       out,
-      param_primes,
       l,
       N,
       M,
       monomialDeg,
       level,
+      param_primes,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,

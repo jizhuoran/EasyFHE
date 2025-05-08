@@ -15,6 +15,7 @@ class __FOR_SAVE_ONLY_Context:
         specialMod,
         dnum,
         levelBudget_list,
+        maxLevelsRemaining,
         moduliQ_scalar=None,
         moduliP_scalar=None,
         rootsQ=None,
@@ -26,6 +27,7 @@ class __FOR_SAVE_ONLY_Context:
         secretKeyDist=None,
         rescaleTech=None,
         dim1=None,
+        config=None,
         h=64,
         sigma=32,
     ):
@@ -65,6 +67,8 @@ class __FOR_SAVE_ONLY_Context:
         self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
         bnd = 1
         cnt = 1
+        self.encode_values = {}
+
         if moduliQ_scalar is None and rootsQ is None:
             while True:
                 prime = (1 << firstMod) + bnd * self.M + 1
@@ -326,18 +330,18 @@ class __FOR_SAVE_ONLY_Context:
 
                 self.QlQlInvModqlDivqlModq[k][i] = np.uint64(result)
 
-        self.mult_swk = [None, None]
-        if MULT_SWK is None:
-            warnings.warn(
-                "\n------------------------\n"
-                "MULT_SWK needs to be set"
-                "\n------------------------\n",
-                UserWarning,
-            )
-            # todo: set data in numpy array
-        else:
-            self.mult_swk[0] = MULT_SWK[0]
-            self.mult_swk[1] = MULT_SWK[1]
+        # self.mult_swk = [None, None]
+        # if MULT_SWK is None:
+        #     warnings.warn(
+        #         "\n------------------------\n"
+        #         "MULT_SWK needs to be set"
+        #         "\n------------------------\n",
+        #         UserWarning,
+        #     )
+        #     # todo: set data in numpy array
+        # else:
+        #     self.mult_swk[0] = MULT_SWK[0]
+        #     self.mult_swk[1] = MULT_SWK[1]
 
 
         self.moduliQ_scalar = np.array(self.moduliQ_scalar, dtype=np.uint64)
@@ -485,8 +489,7 @@ class __FOR_SAVE_ONLY_Context:
             self.q_inv_mod_q = None
             self.q_inv_mod_q_shoup = None
 
-            self.swk_bx = np.array(self.mult_swk[0].reshape(-1), dtype=np.uint64)
-            self.swk_ax = np.array(self.mult_swk[1].reshape(-1), dtype=np.uint64)
+
 
             # for output & workspace
             self.beta = (int)((self.L+self.alpha-1) / self.alpha)
@@ -522,11 +525,6 @@ class __FOR_SAVE_ONLY_Context:
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
             )
-            self.encode_temp = np.array(
-                [0] * (2 * self.Nh),
-                dtype=np.int64,
-                )
-            self.encode_inverse = np.array( [0]*2*self.N, dtype=np.double)
 
             power_of_roots = qRootPows + pRootPows
             inverse_power_of_roots = qRootPowsInv + pRootPowsInv
@@ -699,11 +697,11 @@ class __FOR_SAVE_ONLY_Context:
             self.primes = np.array(self.primes, dtype=np.uint64)
 
 
-        swk_bx = MULT_SWK[0].reshape(self.dnum, L + K, self.N)
-        swk_ax = MULT_SWK[1].reshape(self.dnum, L + K, self.N)
-        key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
-        key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
-        self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
+        self.mult_swk_bx = np.array(MULT_SWK[0].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
+        self.mult_swk_ax = np.array(MULT_SWK[1].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
+        # key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
+        # key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
+        # self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
         #half_key
         for key, ROT_SWK in rot_swk_map.items():
@@ -757,7 +755,48 @@ class __FOR_SAVE_ONLY_Context:
                     boot_cnst_map[str(logBsSlots)]
                 )
         else:
-            assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]
+            assert logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]], \
+                f"Assertion failed: logBsSlots_list[0] = {logBsSlots_list[0]}, levelBudget_list = {levelBudget_list}. " \
+                "logBsSlots_list[0] should be 0, and levelBudget_list should be [[0, 0]]."
+
+        NO_BS = False
+        if logBsSlots_list[0] == 0 and levelBudget_list == [[0, 0]]:
+            NO_BS = True
+
+        # BsContextMembers_dict = {}
+        if NO_BS == False:
+            for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
+                print("BsContext_map: ", logBsSlots)
+                if config.ENCODE_BS_FFT:
+                    self.BsContext_map[str(logBsSlots)].eval_bootstrap_setup_OPENFHE(
+                        self, level_budget, dim1, (1 << logBsSlots), 0
+                    )
+                else:
+                    assert config.COMPARE_WITH_OPENFHE == False, "Cannot compare with openfhe if not using fully pre-encoded BS FFT"
+                    self.BsContext_map[str(logBsSlots)].eval_bootstrap_setup(
+                        self, level_budget, dim1, (1 << logBsSlots), 0, maxLevelsRemaining
+                    )
+                for i in range(len(self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT)):
+                    for j in range(len(self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT[i])):
+                        self.encode_values["{}_{}_{}_{}".format("C2S", logBsSlots, i, j)] = self.BsContext_map[str(logBsSlots)].m_U0hatTPreFFT[i][j]
+
+                for i in range(len(self.BsContext_map[str(logBsSlots)].m_U0PreFFT)):
+                    for j in range(len(self.BsContext_map[str(logBsSlots)].m_U0PreFFT[i])):
+                        self.encode_values["{}_{}_{}_{}".format("S2C", logBsSlots, i, j)] = self.BsContext_map[str(logBsSlots)].m_U0PreFFT[i][j]
+
+        self.BsContext_map = None
+
+            # for logBsSlots in logBsSlots_list:
+            #     BsContextMembers = {}
+            #     for item in dir(self.BsContext_map[str(logBsSlots)]):
+            #         if (
+            #             not callable(getattr(self.BsContext_map[str(logBsSlots)], item))
+            #         ) and not item.startswith("__"):
+            #             BsContextMembers[item] = getattr(
+            #                 self.BsContext_map[str(logBsSlots)], item
+            #             )
+            #     BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
+
 
 
     def compute_auto_map(self, k, N):
