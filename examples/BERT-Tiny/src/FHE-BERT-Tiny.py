@@ -458,10 +458,11 @@ def eval_tanh_function(c,min,max,mult,degree,cryptoContext):
     def tanh_function(x):
         return math.tanh(x * (1 / mult))
     return eval_chebyshev_function(tanh_function,c,min,max,degree,cryptoContext)
+
 def pooler(input,cryptoContext,openfhe_context):
     tanhScale=1/30.0
     weight = read_plain_input(cryptoContext,"../weights-sst2/pooler_dense_weight.txt", cryptoContext.L - input.cur_limbs,1,global_num_slots,tanhScale)
-    bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/pooler_dense_bias.txt", cryptoContext.L - input.cur_limbs,1, global_num_slots, tanhScale)
+    bias = read_plain_repeated_input(cryptoContext,"../weights-sst2/pooler_dense_bias.txt", cryptoContext.L - input.cur_limbs,1, tanhScale, global_num_slots)
     output = fhe.homo_mul_pt(input, weight, cryptoContext)
     output = rotsum(output, 128, 128, cryptoContext)
     output = fhe.homo_add_pt(output, bias, cryptoContext)
@@ -575,6 +576,10 @@ def classifier_tensor(input):
     #1.读取文件
     weight = read_plain_input_tensor("../weights-sst2/classifier_weight.txt")
     bias = read_plain_expanded_input_tensor("../weights-sst2/classifier_bias.txt")
+
+    if isinstance(input, np.ndarray):
+        input = torch.tensor(input, dtype=torch.float64).cuda()
+
     output = torch.mul(input, weight)
     output = rotsum_tensor(output, 128, 1)
     output =torch.add(output,bias)
