@@ -720,6 +720,7 @@ def fully_connected_seal_print(openfhe_context,cryptoContext,input,matrix,bias,q
     return output
 
 
+# @fhe.utils.profile_pytorch_function
 def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     start=time.time()
     sum=0
@@ -779,7 +780,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
     if cryptoContext.config.SAVE_MIDDLE ==False:
         cryptoContext.pre_encode_type = "middle"
-        pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face
+        # pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
+        pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
         load_weight(pkl_path, cryptoContext)
 
     zero = [0.0 for _ in range(1 << logn)]
@@ -842,7 +844,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         vec[:len(image)] = image[:len(image)]
         scale_temp=pow(2.0,logq)
         x = torch.tensor(vec, dtype=torch.float64,device="cuda")
-        cipher_temp= openfhe_context.encrypt(x,1,0,1<<logn )#Todo:scale？
+        cipher_temp= openfhe_context.encrypt(x,1,cryptoContext.L - 14, 1<<logn )#Todo:scale？
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
         start=time.time()
@@ -852,7 +854,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) #looks good
+        cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
         # temptest123=openfhe_context.decrypt(cnn.cipher)
         # temptest123=temptest123.cpu().numpy().reshape(-1)
         # templist=[]
@@ -890,7 +892,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
-                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: everything is fine if we skip this relu
+                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
                 # temptest123 = openfhe_context.decrypt(cnn.cipher)
                 # temptest123 = temptest123.cpu().numpy().reshape(-1)
                 # templist = []
@@ -918,7 +920,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext)
+                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
                 # temptest123 = openfhe_context.decrypt(cnn.cipher)
                 # temptest123 = temptest123.cpu().numpy().reshape(-1)
                 # templist = []
@@ -948,7 +950,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 if __name__ == "__main__":
     print("current time: ", datetime.datetime.now())
     start_time = time.perf_counter()
-    ResNet_cifar10_seal_sparse(20, 0, 200)
+    # ResNet_cifar10_seal_sparse(20, 0, 200)
+    ResNet_cifar10_seal_sparse(56, 0, 0)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"total execution time: {elapsed_time:.4f} 秒")
