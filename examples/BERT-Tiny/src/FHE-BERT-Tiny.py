@@ -437,18 +437,19 @@ def encoder2(inputs,cryptoContext):
 def classifier(input,cryptoContext,openfhe_context):
     weight=read_plain_input(cryptoContext,"../weights-sst2/classifier_weight.txt",cryptoContext.L - input.cur_limbs,1,global_num_slots)
     bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/classifier_bias.txt",cryptoContext.L - input.cur_limbs,1,global_num_slots)
-    output=fhe.homo_add_pt(input, weight, cryptoContext)
+    output=fhe.homo_mul_pt(input, weight, cryptoContext)
+
     output=rotsum(output,128,1,cryptoContext)
     output=fhe.homo_add_pt(output, bias, cryptoContext)
+
     mask=[]
     for i in range(global_num_slots):
         mask.append(0)
     mask[0]=1
     mask[128]=1
     x = torch.tensor(mask, device="cuda")
-    temp=openfhe_context.encrypt(x, 0, cryptoContext.L - output.cur_limbs, global_num_slots, False)
+    temp=openfhe_context.encrypt(x, 1, cryptoContext.L - output.cur_limbs, global_num_slots)
     output=fhe.homo_mul(output,temp,cryptoContext)
-
     output=fhe.homo_add(output,fhe.homo_rotate(fhe.homo_rotate(output,-1,cryptoContext),128,cryptoContext),cryptoContext)
     return output
 
@@ -529,22 +530,15 @@ def BERT_Tiny():
 
     pooled = pooler(encoder2output, cryptoContext, openfhe_context)
 
-    #todo: use homo_classifier in the future
-
     try:
-        plain_pooled = openfhe_context.decrypt(pooled)
-        plain_pooled = plain_pooled.cpu().numpy().reshape(-1)
+        result = classifier(pooled, cryptoContext,openfhe_context)
+        result = openfhe_context.decrypt(result)
     except RuntimeError as e:
         print(f"Decryption failed: {e}")
-        plain_pooled = None
-
-    # implement the plain classifier and post process here
-    # plain_pooled generated above is available
-    # 实现 pooler->解密->classified->判断
-    classifier_result = classifier_tensor(plain_pooled)
+        result = None
     # 判断逻辑
     print("Outcome: ", end='')
-    if classifier_result[0].item() > classifier_result[1].item():
+    if result[0].item() > result[1].item():
         print(f"\033[92mnegative\033[0m sentiment!")  # 使用ANSI颜色代码
     else:
         print(f"\033[92mpositive\033[0m sentiment!")
@@ -576,20 +570,19 @@ def classifier_tensor(input):
     #1.读取文件
     weight = read_plain_input_tensor("../weights-sst2/classifier_weight.txt")
     bias = read_plain_expanded_input_tensor("../weights-sst2/classifier_bias.txt")
-
     if isinstance(input, np.ndarray):
         input = torch.tensor(input, dtype=torch.float64).cuda()
-
     output = torch.mul(input, weight)
     output = rotsum_tensor(output, 128, 1)
     output =torch.add(output,bias)
-    mask = torch.zeros(global_num_slots, dtype=torch.double)
+    mask = torch.zeros(global_num_slots, dtype=torch.double).to(device=output.device)
     # 设置索引0和128的位置为1
     mask[0] = 1.0
     mask[128] = 1.0
     output = torch.mul(output, mask)
     output = torch.add(output, rotate_tensor(rotate_tensor(output, -1), 128))
     return output
+
 
 def rotsum_tensor(input,slots, padding):
     result=input
@@ -628,8 +621,14 @@ def read_plain_input_tensor(filename,scale=1):
 def read_plain_expanded_input_tensor(filename):
     input_values = read_values_from_file(filename)
     # 扩展阶段
-    repeated = [val for val in input_values for _ in range(128)]
-    x = torch.tensor(repeated, dtype=torch.float64, device="cuda")
+    repeat = []
+    for value in input_values:
+        for i in range(128):
+            repeat.append(value)
+    for i in range(128-len(input_values)):
+        for j in range(128):
+            repeat.append(0)
+    x = torch.tensor(repeat, dtype=torch.float64, device="cuda")
     return  x
 
 

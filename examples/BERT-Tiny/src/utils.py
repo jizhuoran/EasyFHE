@@ -1,10 +1,10 @@
 import torch
 import pickle
 import torch.fhe as fhe
+import examples.utils.approx as approx
 import atexit, os,csv
-
+import warnings
 DATA_DIR = os.environ["DATA_DIR"]
-global_circuit_depth=0
 encoded_weight = {}
 NEW_VERSION = False
 
@@ -46,7 +46,7 @@ if NEW_VERSION:
             for i in range(size):
                 repeated[i]=repeated[i]*scale
         x = torch.tensor(repeated, device="cuda")
-        return openfhe_context.encrypt(x, 0, 1, slots, "release")
+        return openfhe_context.encrypt(x, 1, 0, slots)
 
 
     def read_values_from_file(filename, scale=1):
@@ -165,7 +165,7 @@ if NEW_VERSION:
             encoded=cryptoContext.pre_encoded[
                 "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
             ]
-            temp=fhe.homo_add_pt(c, encoded, cryptoContext)
+            temp=fhe.homo_mul_pt(c, encoded, cryptoContext)
             return temp
 
         else:
@@ -180,14 +180,14 @@ if NEW_VERSION:
             encoded=cryptoContext.pre_encoded[
                 "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
             ]
-            temp=fhe.homo_add_pt(c, encoded, cryptoContext)
+            temp=fhe.homo_mul_pt(c, encoded, cryptoContext)
             return temp
         else:
             ptx = cryptoContext.pre_encoded[
                 "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
             ].shallow_copy()
             ptx.cv = [torch.tensor(ptx.cv[0], dtype=torch.uint64, device="cuda")]
-            return fhe.homo_add_pt(c, ptx, cryptoContext)
+            return fhe.homo_mul_pt(c, ptx, cryptoContext)
 
 
 else:
@@ -265,26 +265,45 @@ else:
 
         input_values = read_values_from_file(filename)
         repeated = []
-
-        for j in range(128):
-            if num_inputs is None:
-                for i in range(128):
-                    repeated.append(input_values[j])
-            else:
-                for i in range(num_inputs):
-                    repeated.append(input_values[j])
-                for i in range(128 - num_inputs):
-                    repeated.append(0)
+        # 分支判断
+        if len(input_values) < 128:
+            warnings.warn(
+                f"The num of value in filename : {filename} is :{len(input_values)} is less than 128",
+                Warning,
+            )
+            for j in range(128):
+                if j < len(input_values):
+                    if num_inputs is None:
+                        for i in range(128):
+                            repeated.append(input_values[j])
+                    else:
+                        for i in range(num_inputs):
+                            repeated.append(input_values[j])
+                        for i in range(128 - num_inputs):
+                            repeated.append(0)
+                else:
+                    for i in range(128):
+                        repeated.append(0)
+        else:
+            assert len(input_values) == 128,f"The num of value in filename : {filename} is :{len(input_values)} is more than 128"
+            for j in range(128):
+                if num_inputs is None:
+                    for i in range(128):
+                        repeated.append(input_values[j])
+                else:
+                    for i in range(num_inputs):
+                        repeated.append(input_values[j])
+                    for i in range(128 - num_inputs):
+                        repeated.append(0)
 
         if scale != 1:
             repeated = [x * scale for x in repeated]
-
         x = torch.tensor(repeated, dtype=torch.float64).cuda()
-        encoded=fhe.encode(x, scale_deg, level, slots, False, cryptoContext)
+        encoded = fhe.encode(x, scale_deg, level, slots, False, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         encoded_weight[key] = encoded
-        return  encoded
+        return encoded
 
 
     def mask_block(c, fro, to, mask_value, cryptoContext):
@@ -348,39 +367,41 @@ else:
 
         return sum
     def eval_exp(c, inputs_number, cryptoContext):
-        # Todo:    Ctxt res = context->EvalPoly(c, {1, 1, 1/(2.0), 1/(6.0), 1/(24.0), 1/(120.0), 1/(720.0)});
-        res = c
+        res = approx.eval_poly_ps(c, [1, 1, 1/(2.0), 1/(6.0), 1/(24.0), 1/(120.0), 1/(720.0)], cryptoContext)
 
-        if cryptoContext.L - res.cur_limbs + 4 > global_circuit_depth:
-            res = fhe.homo_bootstrap(res, L0=cryptoContext.L, logBsSlots=14,
-                                     cryptoContext=cryptoContext)
+        if cryptoContext.L - res.cur_limbs + 4 > cryptoContext.L:
+            res = fhe.homo_bootstrap(res, cryptoContext.L, 14, #todo: should use logBsSlots list
+                                     cryptoContext)
         res = eval_mult_many([res, res, res, res, res, res, res, res], cryptoContext)
         mask = []
-        for i in range(c.slots):
+        num_slots = (1<<14) # fixme: should not hardcode here, introduce global management?
+        for i in range(num_slots):
             if i % 64 < inputs_number and i < (128 * inputs_number):
                 mask.append(0)
             else:
-                mask.append(1)
+                mask.append(-1)
 
         x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
+        encoded = fhe.encode(x, 1, cryptoContext.L-res.cur_limbs, num_slots, False, cryptoContext)
         temp = fhe.homo_add_pt(res, encoded, cryptoContext)
+
         encoded.cv[0].cpu().numpy()
-        key = "eval_exp_{}_{}_{}".format(0, inputs_number, c.slots)
+        key = "eval_exp_{}_{}_{}".format(0, inputs_number, num_slots)
         encoded_weight[key] = encoded
         return temp
 
 
     def mask_mod_n(c, n, padding, max_slots, cryptoContext):
         mask = []
-        for i in range(c.slots):
+        # print("c.slots", c.slots)
+        for i in range((1<<14)):
             if i % n == padding:
                 mask.append(1)
             else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
         encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
-        temp = fhe.homo_add_pt(c, encoded, cryptoContext)
+        temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
         encoded_weight[key] = encoded
@@ -396,7 +417,7 @@ else:
                 mask.append(0)
         x = torch.tensor(mask, dtype=torch.float64).cuda()
         encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
-        temp = fhe.homo_add_pt(c, encoded, cryptoContext)
+        temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
         encoded_weight[key] = encoded
