@@ -21,74 +21,103 @@
 #define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
 
 namespace fhe {
-// __global__ void mulByMonomialKernel_step1(
-//     uint64_t* res,
-//     uint64_t* qVec,
-//     uint64_t* tmp,
-//     long l,
-//     long N) {
-//   STRIDED_LOOP_START(l * N, idx)
-//   if (idx < l * N) {
-//     long i = idx / N;
-//     long n = idx % N;
-//       tmp[idx] = qVec[i] - res[idx];
-//   }
-//   STRIDED_LOOP_END;
-// }
+inline void mulByMonomial_step1(
+    uint64_t* out,
+    const uint64_t* in,
+    const uint64_t* qVec,
+    int64_t l,
+    int64_t N) {
+  // Equivalent to the first kernel over a 2D grid (y = blockIdx.y, x = tid_x)
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      out_row[x] = q - in_row[x];
+    }
+  }
+}
 
-// __global__ void mulByMonomialKernel_step2(
-//     uint64_t* res,
-//     uint64_t* qVec,
-//     uint64_t* tmp,
-//     long l,
-//     long N,
-//     long shift) {
-//   STRIDED_LOOP_START(l * N, idx)
-//   if (idx < l * N) {
-//     long i = idx / N;
-//     long n = idx % N;
-//     shift %= N;
-//     if (n < shift) {
-//       res[idx] = qVec[i] - tmp[idx +(N - shift)];
-//     } else {
-//       res[idx] = tmp[idx - shift];
-//     }
-//   }
-//   STRIDED_LOOP_END;
-// }
+inline void mulByMonomial_step2(
+    uint64_t* out,
+    const uint64_t* in,
+    const uint64_t* qVec,
+    int64_t l,
+    int64_t N,
+    int64_t shift) {
+  // Equivalent to the second kernel
+  shift = shift % N;
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      if (x < shift) {
+        out_row[x] = q - in_row[x + (N - shift)];
+      } else {
+        out_row[x] = in_row[x - shift];
+      }
+    }
+  }
+}
+
+inline void mulByMonomial_step1_step2(
+    uint64_t* out,
+    const uint64_t* in,
+    const uint64_t* qVec,
+    int64_t l,
+    int64_t N,
+    int64_t shift) {
+  // Equivalent to the combined kernel
+  shift = shift % N;
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      if (x < shift) {
+        out_row[x] = in_row[x + (N - shift)];
+      } else {
+        out_row[x] = q - in_row[x - shift];
+      }
+    }
+  }
+}
 } // namespace fhe
 
 namespace at::native {
 
-static void mul_by_monomial_impl(
-    uint64_t* res_ptr,
-    const Tensor& primes,
-    Tensor& tmp,
+static void mul_by_monomial_impl_cpu(
+    uint64_t* out_ptr,
+    const uint64_t* in_ptr,
+    const uint64_t* primes_ptr,
     int64_t l,
     int64_t N,
     int64_t M,
     int64_t monomialDeg) {
   int64_t shift = monomialDeg % M;
-  AT_DISPATCH_V2(
-      tmp.scalar_type(),
-      "mul_by_monomial_impl",
-      AT_WRAP([&]() {
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
-        const int block_dim = 256;
-        const int grid_dim = N * l / block_dim;
-        // if (shift > N || shift == N) {
-        //   fhe::mulByMonomialKernel_step1<<<grid_dim, block_dim, 0, stream>>>(
-        //     res_ptr, primes_ptr, tmp_ptr, l, N);
-        // }
-        // fhe::mulByMonomialKernel_step2<<<grid_dim, block_dim, 0, stream>>>(
-        //    res_ptr, primes_ptr, tmp_ptr, l, N, shift);
-      }),
-      kUInt64);
+
+  if (shift < N) {
+    fhe::mulByMonomial_step2(
+        out_ptr,
+        in_ptr,
+        primes_ptr,
+        /*l=*/l,
+        /*N=*/N,
+        /*shift=*/shift);
+  } else {
+    shift = shift % N;
+    fhe::mulByMonomial_step1_step2(
+        out_ptr,
+        in_ptr,
+        primes_ptr,
+        /*l=*/l,
+        /*N=*/N,
+        /*shift=*/shift);
+  }
 }
 
-static void mul_by_monomial_template(
+static void mul_by_monomial_template_cpu(
     Tensor& res,
     int64_t l,
     int64_t N,
@@ -100,7 +129,8 @@ static void mul_by_monomial_template(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  // 1) inverse NTT (in-place on res)
+  uint64_t* res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       res_ptr,
       res_ptr,
@@ -113,9 +143,18 @@ static void mul_by_monomial_template(
       param_primes,
       inverse_scaled_power_of_roots_div_two);
 
-  Tensor temp = res.clone();
-  mul_by_monomial_impl(res_ptr, param_primes, temp, l, N, M, monomialDeg);
+  Tensor tmp = at::empty_like(res);
+  uint64_t* tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
+  const uint64_t* primes_ptr =
+      reinterpret_cast<const uint64_t*>(param_primes.data_ptr<uint64_t>());
 
+  // perform the CPU impl
+  mul_by_monomial_impl_cpu(tmp_ptr, res_ptr, primes_ptr, l, N, M, monomialDeg);
+
+  // copy back into res
+  std::memcpy(res_ptr, tmp_ptr, size_t(l) * size_t(N) * sizeof(uint64_t));
+
+  // 3) forward NTT (in-place on res)
   NTT_impl(
       res_ptr,
       res_ptr,
@@ -140,7 +179,7 @@ Tensor mul_by_monomial_cpu(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
   Tensor out = res.clone();
-  mul_by_monomial_template(
+  mul_by_monomial_template_cpu(
       out,
       l,
       N,
@@ -168,7 +207,7 @@ Tensor& mul_by_monomial_cpu_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  mul_by_monomial_template(
+  mul_by_monomial_template_cpu(
       res,
       l,
       N,
@@ -196,7 +235,7 @@ Tensor& mul_by_monomial_cpu_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
-  mul_by_monomial_template(
+  mul_by_monomial_template_cpu(
       out,
       l,
       N,
