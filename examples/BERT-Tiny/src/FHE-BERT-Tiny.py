@@ -682,6 +682,9 @@ def read_plain_expanded_input_tensor(filename):
 if __name__ == "__main__":
     data_dirs = [entry.name for entry in os.scandir('./tmp_embeddings') if entry.is_dir()]
     data_dirs.sort(key=int)
-    for data_dir in data_dirs:
-        input_folder = origin_input_folder+data_dir+'/'
-        BERT_Tiny()
+    # for data_dir in data_dirs:
+    #     input_folder = origin_input_folder+data_dir+'/'
+    #     BERT_Tiny()
+
+    input_folder = "/home/yhh/Experiments/local/GPU-FHE/examples/BERT-Tiny/src/tmp_embeddings/0/" # "this is a bad movie"
+    BERT_Tiny()
