@@ -355,8 +355,10 @@ def encoder2(inputs,cryptoContext):
 
     scores=fhe.homo_mul_scalar_double(scores,1/500.0,cryptoContext)
     scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], cryptoContext)
-    scores=fhe.homo_mul_scalar_double(scores,500.0,cryptoContext)
-    # scores=fhe.homo_mul_scalar_int(scores,500,cryptoContext) #todo: check in cpp if it is correct to use mul scalar int
+    # use `homo_mul_scalar_int` instead of `homo_mul_scalar_double` to avoid overflow when computing `_get_element_for_eval_mult`
+    # todo: yhh: see if this scaling up and down is necessary?
+    # scores=fhe.homo_mul_scalar_double(scores,500.0,cryptoContext)
+    scores=fhe.homo_mul_scalar_int(scores,500,cryptoContext)
 
 
     scores_sum = rotsum(scores, 128, 128, cryptoContext)
