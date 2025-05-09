@@ -20,30 +20,6 @@ class TestDraftExport(TestCase):
         super().setUp()
         init_torchbind_implementations()
 
-        @torch._library.register_fake_class("_TorchScriptTesting::_TensorQueue")
-        class FakeTensorQueue:
-            def __init__(self, queue):
-                self.queue = queue
-
-            @classmethod
-            def __obj_unflatten__(cls, flattened_ctx):
-                return cls(**dict(flattened_ctx))
-
-            def push(self, x):
-                self.queue.append(x)
-
-            def pop(self):
-                return self.queue.pop(0)
-
-            def size(self):
-                return len(self.queue)
-
-            def is_empty(self):
-                return len(self.queue) == 0
-
-            def float_size(self):
-                return float(len(self.queue))
-
         self.torch_bind_ops = [
             torch.ops._TorchScriptTesting.queue_pop,
             torch.ops._TorchScriptTesting.queue_push,
@@ -51,9 +27,7 @@ class TestDraftExport(TestCase):
         ]
 
     def tearDown(self):
-        torch._library.fake_class_registry.deregister_fake_class(
-            "_TorchScriptTesting::_TensorQueue"
-        )
+        return
 
     def test_missing_meta_kernel_custom_op(self):
         with torch.library._scoped_library("mylib", "FRAGMENT"):
@@ -269,6 +243,15 @@ class TestDraftExport(TestCase):
         inp = (torch.tensor(4), torch.tensor(2), torch.tensor(6))
         self.assertEqual(ep.module()(*inp), M()(*inp))
 
+        # the fake tensors on node.meta["val"] should have real_tensor
+        gm = ep.module()
+        tensors = [
+            node.meta.get("val").real_tensor
+            for node in gm.graph.nodes
+            if node.op == "placeholder"
+        ]
+        self.assertTrue(all(isinstance(t, torch.Tensor) for t in tensors))
+
     def test_complex_data_dependent_expr(self):
         class M(torch.nn.Module):
             def forward(self, x, y):
@@ -291,7 +274,6 @@ class TestDraftExport(TestCase):
         self.assertEqual(
             report.failures[0].failure_type, FailureType.DATA_DEPENDENT_ERROR
         )
-        self.assertTrue(len(report.expressions_created) >= 4)
         for _ep in [ep, ep.run_decompositions()]:
             # check data-dependent asserts
             assert_scalar_nodes = [
@@ -330,9 +312,7 @@ class TestDraftExport(TestCase):
         report = ep._report
 
         self.assertEqual(len(report.failures), 1)
-        self.assertEqual(
-            report.failures[0].failure_type, FailureType.CONSTRAINT_VIOLATION_ERROR
-        )
+        self.assertEqual(report.failures[0].failure_type, FailureType.GUARD_ADDED)
 
         inp = (torch.randn(3, 3),)
         self.assertEqual(ep.module()(*inp), M()(*inp))

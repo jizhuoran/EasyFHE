@@ -15,27 +15,24 @@ dcrtBits = 52
 firstMod = 56
 levelBudget_list = [[3, 3], [4, 4]]
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-mode = "release"  # "debug" or "release"
-autoLoadAndSetConfig = True # note: currently only support True
 
 DATA_DIR = os.environ["DATA_DIR"]
 
+config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=False)
 cryptoContext, openfhe_context = (
     fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                          levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=DATA_DIR,
-                         autoLoadAndSetConfig=True, mode=mode))
-
+                         config=config))
 
 values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
 encode_slots = (1 << 11)
 x = np.array([values[i % len(values)] for i in range(encode_slots)])
 x = torch.tensor(x, device="cuda")
-cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots, mode)
+cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
 values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
 x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
-x1 = torch.tensor(x1, device="cuda")
-ptx = fhe.encode(x1, 1, 0, encode_slots, use_gpu_fft=True, cryptoContext=cryptoContext)
+ptx = fhe.encode(x1, "x1", 0, encode_slots, False, cryptoContext)
 
 # do some application computation
 cipher = fhe.homo_rotate(cipher, -1, cryptoContext)
@@ -43,7 +40,7 @@ cipher = fhe.homo_rotate(cipher, 2, cryptoContext)
 print("homo_rotate done!")
 
 # bootstrapping
-result = fhe.homo_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], cryptoContext=cryptoContext)
+result = fhe.homo_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 print("gpu bootstrapp done!")
 
 clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -60,7 +57,7 @@ for i in range(result.cur_limbs - 4):
     result = fhe.homo_rescale(result,1, cryptoContext)  # for FIXEDMANUAL mode only
 
 # do another bootstrapping
-result1 = fhe.homo_bootstrap(result, L0=cryptoContext.L, logBsSlots=logBsSlots_list[1], cryptoContext=cryptoContext)
+result1 = fhe.homo_bootstrap(result, cryptoContext.L, logBsSlots_list[1], cryptoContext)
 print("gpu bootstrapp done!")
 
 clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine

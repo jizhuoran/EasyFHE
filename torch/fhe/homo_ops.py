@@ -1,10 +1,10 @@
 import math
 import torch
 import warnings
-from .ciphertext import Cipher, Plaintext
+from .ciphertext import *
 from . import functional as F
 from . import hybrid_keyswitch
-from .decorator_factory import decorator_factory
+from .dev_tools.decorator_factory import decorator_factory
 
 
 BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
@@ -16,6 +16,10 @@ def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
         ct = ct.deep_copy()
     ct.cur_limbs -= num_levels
     return ct
+
+@decorator_factory
+def drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
+    return _drop_last_elements(ct, num_levels, cryptoContext, inplace)
 
 # note: AdjustLevelsInPlace in rns-leveledshe.cpp
 # mainly for "FIXEDMANUAL" case
@@ -179,7 +183,7 @@ def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
         target_noise_deg = max(ct1.noise_deg, ct2.noise_deg)
         target_scaling_factor = None
         # print("case3", target_limbs, target_noise_deg, target_scaling_factor)
-    return adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), adjust_to(
+    return _adjust_to(ct1, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext), _adjust_to(
         ct2, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext
     )
 
@@ -481,8 +485,7 @@ def _cipher_neg(in0, cryptoContext):
     cv = [F.cv_neg(cv0, cryptoContext.moduliQ, in0.cur_limbs) for cv0 in in0.cv]
     return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
-@decorator_factory
-def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
     assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
     if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
         return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
@@ -492,6 +495,12 @@ def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cry
         return _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
     else:
         raise ValueError 
+
+
+@decorator_factory
+def adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
+    return _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
+
 
 def _cipher_automorphism(in0, index, cryptoContext):
     norm_index = cryptoContext.norm_rot_index(index)
@@ -530,6 +539,7 @@ def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in 
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
     assert levels == 1 or levels == 0 and "Only support these two cases"
+    assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
     if levels == 0:
         return ct.deep_copy()
 
@@ -555,7 +565,7 @@ def _homo_rescale_internal(ct, levels, cryptoContext):
     )
 
 @decorator_factory
-def homo_rescale_internal(ct, levels, cryptoContext):
+def force_rescale(ct, levels, cryptoContext):
     return _homo_rescale_internal(ct, levels, cryptoContext)
 
 @decorator_factory
@@ -627,13 +637,15 @@ def homo_mul_scalar_double(in0, cnst, cryptoContext):
 
 @decorator_factory
 def homo_rotate(in0, index, cryptoContext):
+    if index ==0:
+        return in0.deep_copy()
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.get_rotation_key(norm_index)
     res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
-    res = cipher_automorphism(res, index, cryptoContext)
+    res = _cipher_automorphism(res, index, cryptoContext)
 
     return res
 
@@ -680,7 +692,7 @@ def eval_fast_rotate(digits, cipher, index, need_KS_add, need_moddown, cryptoCon
                 inplace=True,
             )
 
-    result = cipher_automorphism(result, index, cryptoContext)
+    result = _cipher_automorphism(result, index, cryptoContext)
 
     return result
 
@@ -867,182 +879,135 @@ def dump_encode_middle(
     inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
     return inverse_array, log_approx
 
+from .dev_tools.encode_tool import pre_encode
 
 @decorator_factory
 def encode(
     x,
-    scale_deg,
+    name,
     level,
     slots,
-    use_gpu_fft,
-    cryptoContext,
-    use_middle=False,
-    inverse_internal=None,
-    log_approx=None,
+    is_ext,
+    cryptoContext
 ):
+    if isinstance(x, list) or isinstance(x, np.ndarray):
+        if isinstance(x, np.ndarray):
+            x = x.tolist()
+        middle_value = pre_encode(x, slots)
+        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+    elif isinstance(x, PreEncodeValues):
+        assert slots == x.slots
+        middle_value = x
+    elif isinstance(x, Plaintext):
+        return x
+    else:
+        raise ValueError("Invalid input type")
 
-    def _ptx_encode_cuda(
-        x,
-        slots,
-        type_flag,
-        scaling_factor,
-        cur_limbs,
-        noise_scale_deg,
-        use_gpu_fft,
-        cryptocontext,
-    ):
-        inverse = x
-        pt_encode = []
+    cur_limbs = cryptoContext.L - level
 
-        if slots < len(inverse):
-            raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
-
-        if not use_gpu_fft:
-            # Clears all imaginary values as CKKS for complex numbers
-            inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
-
-            # Resize the inverse to fit the slot size.
-            # note that default: slots value should be greater than size of input data list x
-            inverse_complex = np.pad(
-                inverse_complex,
-                pad_width=(0, slots - len(inverse)),
-                mode="constant",
-                constant_values=complex(0.0, 0.0),
-            )
-            arr = cryptocontext.encode_params_ksiPows.cpu().numpy()
-            complex_arr = arr[0::2] + arr[1::2] * 1j
-            inverse_complex = _fft_special_inv(
-                inverse_complex,
-                cryptocontext.M,
-                cryptocontext.encode_params_rotGroup.cpu().numpy(),
-                complex_arr,
-            )
-            inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).tolist()
-            inverse_internal = torch.tensor(inverse_array, dtype=torch.double, device="cuda")
-            inverse = torch.tensor(inverse, device="cuda")
-        else:
-            inverse_internal = cryptocontext.encode_inverse
-
-        pt_encode = torch.encode(
-            inverse=inverse,
-            inverse_internal=inverse_internal,
-            temp=cryptocontext.encode_temp,
-            primes=cryptocontext.primes,
-            precompute_rotgroups=cryptocontext.encode_params_rotGroup,
-            precompute_ksipows=cryptocontext.encode_params_ksiPows,
-            M=cryptocontext.M,
-            N=cryptocontext.N,
-            cur_limbs=cur_limbs,
-            slots=slots,
-            noise_scale_deg=noise_scale_deg,
-            scaling_factor=scaling_factor,
-            power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-            power_of_roots=cryptocontext.power_of_roots,
-            use_fft=use_gpu_fft,
-        )
-
-        return pt_encode
-
-    def _ptx_encode_middle_cuda(
-        inverse_internal,
-        slots,
-        type_flag,
-        scaling_factor,
-        log_approx,
-        cur_limbs,
-        noise_scale_deg,
-        cryptocontext,
-    ):
-        pt_encode = torch.encode_middle(
-            inverse_internal=inverse_internal,
-            primes=cryptocontext.primes,
-            N=cryptocontext.N,
-            cur_limbs=cur_limbs,
-            slots=slots,
-            noise_scale_deg=noise_scale_deg,
-            scaling_factor=scaling_factor,
-            log_approx=log_approx,
-            power_of_roots_shoup=cryptocontext.power_of_roots_shoup,
-            power_of_roots=cryptocontext.power_of_roots,
-        )
-        return pt_encode
-
-    cur_limb = cryptoContext.L - level
     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT":
-        scFact = cryptoContext.GetScalingFactorRealBig(cur_limb)
-        # In FLEXIBLEAUTOEXT mode at level 0, we don't use the noiseScaleDeg
-        # in our encoding function, so we set it to 1 to make sure it
-        # has no effect on the encoding.
-        assert scale_deg == 1
+        scaling_factor = cryptoContext.GetScalingFactorRealBig(cur_limbs)
     else:
-        scFact = cryptoContext.GetScalingFactorReal(cur_limb)
+        scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
-    if not use_middle:
-        encoded_vector_dcrt_elements_cuda = _ptx_encode_cuda(
-            x,
-            slots,
-            "IsDCRTPoly",
-            scFact,
-            cur_limb,
-            scale_deg,
-            use_gpu_fft,
-            cryptoContext,
-        )
-        mv = [encoded_vector_dcrt_elements_cuda]
-        gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
-        if cryptoContext.config.PTX_TWIN:
-            gpufhe_cipher.ptx_twin = np.array(x.tolist() + [0] * (slots - len(x)))
-        return gpufhe_cipher
-    else:
-        if inverse_internal != None and log_approx != None:
-            encoded_vector_dcrt_elements_cuda = _ptx_encode_middle_cuda(
-                inverse_internal,
-                slots,
-                "IsDCRTPoly",
-                scFact,
-                log_approx,
-                cur_limb,
-                scale_deg,
-                cryptoContext,
-            )
-            mv = [encoded_vector_dcrt_elements_cuda]
-            gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
-            if cryptoContext.config.PTX_TWIN:
-                gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
-            return gpufhe_cipher
+    assert middle_value.max_encoded_value < 1e-20 or math.log2(
+        int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+
+    pt_encode = torch.encode(
+        input=middle_value.encoded_values,
+        N=cryptoContext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        scaling_factor=scaling_factor,
+        is_ext=is_ext,
+        sizeP=cryptoContext.primes.shape[0] - cryptoContext.L,
+        primes=cryptoContext.QplusP_map[cur_limbs],
+        max_int_diffs=cryptoContext.QmaxdiffplusPmaxdiff_map[cur_limbs],
+        barret_ratio=cryptoContext.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        barret_k=cryptoContext.QbarretKplusPbarretK_map[cur_limbs],
+        power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
+        power_of_roots=cryptoContext.power_of_roots
+    )
+    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext)
+    if cryptoContext.config.PTX_TWIN:
+        if isinstance(x, list):
+            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
         else:
-            inverse_internal = torch.encode_fft(
-                inverse=x,
-                precompute_rotgroups=cryptoContext.encode_params_rotGroup,
-                precompute_ksipows=cryptoContext.encode_params_ksiPows,
-                M=cryptoContext.M,
-                slots=slots,
-            )
-            log_approx = torch.encode_log_approx(
-                inverse_internal=inverse_internal,
-                slots=slots,
-                cur_limbs=cur_limb,
-                scaling_factor=scFact,
-            )
-            log_approx = int(log_approx.cpu()[0])
+            gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
+    return gpufhe_cipher
 
-            encoded_vector_dcrt_elements_cuda = _ptx_encode_middle_cuda(
-                inverse_internal,
-                slots,
-                "IsDCRTPoly",
-                scFact,
-                log_approx,
-                cur_limb,
-                scale_deg,
-                cryptoContext,
-            )
-            mv = [encoded_vector_dcrt_elements_cuda]
-            gpufhe_cipher = Plaintext(mv, mv[0].shape[0], scFact, scale_deg, slots, False)
-            if cryptoContext.config.PTX_TWIN:
-                gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
-            return (
-                inverse_internal,
-                log_approx,
-                gpufhe_cipher
-            )
+################## FUSED OPS ##################
+def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if len(ctxs) != 9 or len(ptxs) != 9:
+        raise ValueError("The length of ctxs and ptxs must be 9, but got {} and {}".format(len(ctxs), len(ptxs)))
 
+    ctx_axs, ctx_bxs, ptx_bxs = [], [], []
+
+    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K
+
+    for idx in range(len(ctxs)):
+        if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ctxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ctxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ctxs[{idx}].slots != ptxs[0].slots")
+        if ctxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ctxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ctxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ctxs[{idx}].is_ext != ctxs[0].is_ext")
+
+        if ptxs[idx].cur_limbs != ctxs[0].cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctxs[0].cur_limbs")
+        if ptxs[idx].slots != ctxs[0].slots:
+            raise ValueError(f"ptxs[{idx}].slots != ctxs[0].slots")
+        if ptxs[idx].noise_deg != ctxs[0].noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctxs[0].noise_deg")
+        if ptxs[idx].is_ext != ctxs[0].is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext={ptxs[idx].is_ext} != ctxs[0].is_ext={ctxs[0].is_ext}")
+
+        ctx_bxs.append(ctxs[idx].cv[0])
+        ctx_axs.append(ctxs[idx].cv[1])
+        ptx_bxs.append(ptxs[idx].cv[0])
+
+    res = F.cipher_fused_pairwise_mac(
+        ctx_bxs,
+        ctx_axs,
+        ptx_bxs,
+        cryptoContext.QplusP_map[ctxs[0].cur_limbs],
+        cryptoContext.QmuplusPmu_map[ctxs[0].cur_limbs],
+        len(ctx_bxs),
+        ctxs[0].cur_limbs + (cryptoContext.K if ctxs[0].is_ext else 0),
+        cryptoContext.N,
+    )
+    return ctxs[0].cipher_like(
+        [res[0], res[1]],
+        scaling_factor=ctxs[0].scaling_factor * ptxs[0].scaling_factor,
+        noise_deg=ctxs[0].noise_deg + ptxs[0].noise_deg,
+    )
+
+def fused_broadcast_mac(ctx, ptxs, cryptoContext):
+    """
+    Fused operation for pmul and sum
+    """
+    if not (len(ptxs) == 16 or  len(ptxs) == 32 or len(ptxs) == 64):
+        raise ValueError("The length of ptxs must be 16, 32 or 64, but got {}".format(len(ptxs)))
+
+    ptx_bxs = []
+
+    for idx in range(len(ptxs)):
+        if ptxs[idx].cur_limbs != ctx.cur_limbs:
+            raise ValueError(f"ptxs[{idx}].cur_limbs != ctx.cur_limbs")
+        if ptxs[idx].slots != ctx.slots:
+            raise ValueError(f"ptxs[{idx}].slots != ptxs[0].slots")
+        if ptxs[idx].noise_deg != ctx.noise_deg:
+            raise ValueError(f"ptxs[{idx}].noise_deg != ctx.noise_deg")
+        if ptxs[idx].scaling_factor != ctx.scaling_factor:
+            raise ValueError(f"ptxs[{idx}].scaling_factor != ctx.scaling_factor")
+        if ptxs[idx].is_ext != ctx.is_ext:
+            raise ValueError(f"ptxs[{idx}].is_ext != ctx.is_ext")
+        ptx_bxs.append(ptxs[idx].cv[0])
+
+    res = F.cipher_fused_broadcast_mac(ctx.cv[0], ctx.cv[1], ptx_bxs, cryptoContext.moduliQ, cryptoContext.q_mu, len(ptx_bxs), ctx.cur_limbs, cryptoContext.N)
+    return ctx.cipher_like([res[0], res[1]], scaling_factor=ctx.scaling_factor * ptxs[0].scaling_factor, noise_deg=ctx.noise_deg + ptxs[0].noise_deg)
