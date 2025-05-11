@@ -6,14 +6,10 @@ import torch.fhe as fhe
 
 def geneT0T1(cipher, cryptoContext):
     """
-    构造 T0 = encrypt(1.0), T1 = cipher
+    construct T0 = encrypt(1.0), T1 = cipher
     """
     # scale = cipher.scaling_factor
-    Nh = cryptoContext.N // 2  # poly_modulus_degree() / 2
-    ones_vec = np.ones(Nh, dtype=np.float64)
-
-    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, 1, 0, Nh)
-    T0 = ctxt_1
+    T0 = cryptoContext.ones_Nh.deep_copy()
     T1 = cipher.deep_copy()
 
     return T0, T1
@@ -47,9 +43,7 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
     T = [None for _ in range(100)]
     pt = [None for _ in range(100)]
 
-    # Generate encrypted zero ciphertext
-    zeros_vec = np.zeros(Nh, dtype=np.float64)
-    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, 1, 0, Nh)
+    ctxt_zero = cryptoContext.zeros_Nh
 
     # Initial term index for coefficient mapping
     if eval_type == EvalType.ODDBABY:
@@ -298,9 +292,11 @@ def minimax_relu(comp_no, deg_list, alpha, tree_list, scaled_val, cipher_in, cry
         cipher_x = eval_polynomial_integrate(cipher_x, deg_list[i], decomp_coeff[i], tree_list[i], cryptoContext)
 
     # Compute (1 + f(x)) / 2
-    slots = cipher_x.slots
-    half_vec = np.full(slots, 0.5, dtype=np.float64)
-    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, cryptoContext.L - cipher_x.cur_limbs, slots)
+    # fixme: should check whether or not slots here can be hardcoded to Nh
+    # slots = cipher_x.slots
+    # half_vec = np.full(slots, 0.5, dtype=np.float64)
+    # cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, cryptoContext.L - cipher_x.cur_limbs, slots)
+    cipher_half = cryptoContext.cipher_half
 
     temp = fhe.homo_add(cipher_x, cipher_half, cryptoContext)
     result = fhe.homo_mul(temp, cipher_in, cryptoContext)

@@ -29,6 +29,8 @@ def test_minimax_relu():
     levelBudget_list = []
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+
+
     print("==> Generating evaluation tree...")
     trees = []
     for i in range(comp_no):
@@ -57,6 +59,21 @@ def test_minimax_relu():
     input_vec = np.array([-1.0 + 2.0 * i / (slots - 1) for i in range(slots)], dtype=np.float64)
 
     print("==> Encrypting input...")
+    # Generate encrypted zero ciphertext
+    Nh = cryptoContext.N//2
+    zeros_vec = np.zeros(Nh, dtype=np.float64)
+    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, 1, 0, Nh)
+    cryptoContext.zeros_Nh = ctxt_zero
+
+    ones_vec = np.ones(Nh, dtype=np.float64)
+    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, 1, 0, Nh)
+    cryptoContext.ones_Nh = ctxt_1
+
+    half_vec = np.full(Nh, 0.5, dtype=np.float64)
+    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, 0, Nh)     # fixme: should check if slots here cant be hardcoded to Nh
+    cryptoContext.cipher_half = cipher_half
+
+
     cipher_x = openfhe_context.encrypt(input_vec, 1, 0, slots)
 
     print("==> Starting Minimax ReLU evaluation...")
