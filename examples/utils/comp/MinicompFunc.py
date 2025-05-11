@@ -2,7 +2,7 @@
 from decimal import Decimal, getcontext
 from math import ceil, floor, log10
 from typing import Callable, List
-from Point import Point
+from .Point import Point
 
 getcontext().prec = 100  # 可调整精度
 

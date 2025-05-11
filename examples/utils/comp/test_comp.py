@@ -1,7 +1,8 @@
 import time
-from comp import *
 import torch
 import torch.fhe as fhe
+from examples.utils.comp.comp import *
+
 
 import os
 DATA_DIR = os.environ["DATA_DIR"]
@@ -82,6 +83,7 @@ def test_minimax_relu():
     print("execution time:", t1 - t0)
 
     print("==> Decrypting partial result...")
+    print("result.cur_limbs", result.cur_limbs)
     decrypted = openfhe_context.decrypt(result).cpu().numpy()
     print(f"Partial decrypted output (first 5 values): {decrypted[:5]}")
 

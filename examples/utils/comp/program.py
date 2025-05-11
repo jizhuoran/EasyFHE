@@ -1,8 +1,7 @@
 from math import log
 from decimal import Decimal, getcontext
-from typing import List
-from PolyUpdate import Tree, EvalType
-from MinicompFunc import pow2, ceil_to_int
+from .PolyUpdate import Tree, EvalType
+from .MinicompFunc import pow2, ceil_to_int
 
 getcontext().prec = 100
 
