@@ -1,6 +1,5 @@
 import time
-from sealFunc import *
-from program import *
+from comp import *
 import torch
 import torch.fhe as fhe
 

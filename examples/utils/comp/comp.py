@@ -1,5 +1,6 @@
 import numpy as np
 import math
+from program import * # therefore we dont need to import it when using the miniMax_relu
 from PolyUpdate import *
 from MinicompFunc import *
 import torch.fhe as fhe
