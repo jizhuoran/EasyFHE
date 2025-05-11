@@ -8,6 +8,7 @@ import torch.fhe as fhe
 import torch
 import os
 from examples.utils import approx
+from examples.utils.comp.comp import *
 import datetime, time
 
 DATA_DIR = os.environ["DATA_DIR"]
@@ -25,13 +26,23 @@ def load_weight(encode_weight_path, cryptoContext):
     cryptoContext.pre_encoded = pre_encoded
 
 
-@fhe.utils.profile_python_function
-def homo_relu(ciphertext, scale, degree, cryptoContext):
-    def scaled_relu_function(x):
-        return 0 if x < 0 else (1 / scale) * x
+# @fhe.utils.profile_python_function
+# def homo_relu(ciphertext, scale, degree, cryptoContext):
+#     def scaled_relu_function(x):
+#         return 0 if x < 0 else (1 / scale) * x
+#
+#     result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
+#     return result
 
-    result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
-    return result
+@fhe.utils.profile_python_function
+def homo_relu(cipher_x, cryptoContext):
+    alpha = 13
+    comp_no = 3
+    degs = [15, 15, 27]
+    scaled_val = 1.7
+    trees = cryptoContext.trees
+    cipher_x = minimax_relu(comp_no, degs, alpha, trees, scaled_val, cipher_x, cryptoContext)
+    return cipher_x
 
 def log2_long(n):
     if n > 65536 or n <= 0:
@@ -254,6 +265,9 @@ class TensorCipher:
         self.p = p  # 2^log2(nt / k^2 hwt)
         self.logn = logn
         self.cipher = cipher
+
+    def copy(self):
+        return TensorCipher(self.k, self.h, self.w, self.c, self.t, self.p, self.logn, self.cipher.deep_copy())
 
 def is_power_of_two(n: int) -> bool:
     return n > 0 and (n & (n - 1)) == 0
@@ -725,9 +739,14 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     start=time.time()
     sum=0
     B=40.0
-    alpha=13
-    comp_no=3
-    scaled_val=1.7
+
+    # approx ReLU setting
+    alpha = 13
+    comp_no = 3
+    degs = [15, 15, 27]
+    scaled_val = 1.7
+    eval_type = EvalType.ODDBABY
+
     boundary_K = 25
     boot_deg = 59
     scale_factor = 2
@@ -780,8 +799,12 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
     if cryptoContext.config.SAVE_MIDDLE ==False:
         cryptoContext.pre_encode_type = "middle"
-        # pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
-        pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
+        if layer_num == 20:
+            pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
+        elif layer_num == 56:
+            pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
+        else:
+            raise ValueError("pkl ungenerated")
         load_weight(pkl_path, cryptoContext)
 
     zero = [0.0 for _ in range(1 << logn)]
@@ -789,6 +812,32 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     ct_zero = openfhe_context.encrypt(x, 1, 0, 1 << logn)
     cryptoContext.zero_32K = ct_zero
 
+    Nh = cryptoContext.N // 2
+    zeros_vec = np.zeros(Nh, dtype=np.float64)
+    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, 1, 0, Nh)
+    cryptoContext.zeros_Nh = ctxt_zero
+
+    ones_vec = np.ones(Nh, dtype=np.float64)
+    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, 1, 0, Nh)
+    cryptoContext.ones_Nh = ctxt_1
+
+    half_vec = np.full(Nh, 0.5, dtype=np.float64)
+    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, 0,
+                                                        Nh)  # fixme: should check if slots here cant be hardcoded to Nh
+    cryptoContext.cipher_half = cipher_half
+
+    print("==> Generating evaluation tree...")
+    trees = []
+    for i in range(comp_no):
+        tr = Tree()
+        if eval_type == EvalType.ODDBABY:
+            upgrade_oddbaby(degs[i], tr)
+        else:
+            raise ValueError("Unsupported evaltype")
+        tr.print()
+        trees.append(tr)
+
+    cryptoContext.trees = trees
 
     end_num=0
     if layer_num==20:end_num=2
@@ -842,9 +891,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
-        scale_temp=pow(2.0,logq)
+        # scale_temp=pow(2.0,logq)
         x = torch.tensor(vec, dtype=torch.float64,device="cuda")
-        cipher_temp= openfhe_context.encrypt(x,1,cryptoContext.L - 14, 1<<logn )#Todo:scale？
+        cipher_temp= openfhe_context.encrypt(x,1, 0, 1<<logn ) # note: one more boot after first relu if use -18
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
         start=time.time()
@@ -853,8 +902,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=multiplexed_parallel_convolution_print(openfhe_context,cryptoContext,cnn,16,1,fh,fw,conv_weight[stage],bn_running_var[stage],bn_weight[stage],epsilon,cipher_pool,end=False)
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
+        cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
         #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
+        # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
         # temptest123=openfhe_context.decrypt(cnn.cipher)
         # temptest123=temptest123.cpu().numpy().reshape(-1)
         # templist=[]
@@ -892,7 +942,8 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
-                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
+                cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
+                # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
                 # temptest123 = openfhe_context.decrypt(cnn.cipher)
                 # temptest123 = temptest123.cpu().numpy().reshape(-1)
                 # templist = []
@@ -919,8 +970,10 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
                 elif j==2:
                     cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+
+                cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                cnn.cipher = homo_relu(cnn.cipher, 1, 119, cryptoContext) # fixme: trivial openfhe chebyshev relu may lead to 5% precision loss
+                # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
                 # temptest123 = openfhe_context.decrypt(cnn.cipher)
                 # temptest123 = temptest123.cpu().numpy().reshape(-1)
                 # templist = []
@@ -950,11 +1003,9 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 if __name__ == "__main__":
     print("current time: ", datetime.datetime.now())
     start_time = time.perf_counter()
-    # ResNet_cifar10_seal_sparse(20, 0, 200)
-    ResNet_cifar10_seal_sparse(56, 0, 0)
+    ResNet_cifar10_seal_sparse(20, 0, 0)
+    # ResNet_cifar10_seal_sparse(56, 0, 0)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"total execution time: {elapsed_time:.4f} 秒")
 
-
-#Todo:  scale问题：scale_value取值问题 51 or 46: Relu
