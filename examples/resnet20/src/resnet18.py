@@ -16,15 +16,14 @@ from termcolor import colored
 
 DATA_DIR = os.environ["DATA_DIR"]
 
-def decrypt_and_encrypt(input, level, slots, cryptoContext):
+def decrypt_and_encrypt(input, cryptoContext):
     slots = input.slots
     temp = cryptoContext.openfhe_context.decrypt(input).cpu().numpy().reshape(-1)
     assert len(temp) == slots
     print('len:',len(temp))
     print('max',max(temp))
     print('min',min(temp))
-    res = cryptoContext.openfhe_context.encrypt(temp,1,0,slots)
-    return res
+
 
 
 class HE_res18_context:
@@ -118,22 +117,13 @@ def layer2(input, he_res18_ctx, cryptoContext):
     # after down sample [128,16,16]
     scaleSx = 1
     scaleDx = 1
-    # print('================================')
-    # zeros = cryptoContext.openfhe_context.encrypt(np.zeros(2 ** 16), 2, 0, 2 ** 16)
-    # zeros = fhe.homo_bootstrap(zeros, cryptoContext.L, 16, cryptoContext)
-    # decrypt_and_encrypt(zeros, cryptoContext.L, 16, cryptoContext)
-    #
-    # print('================================')
-    # decrypt_and_encrypt(input, cryptoContext.L, 16, cryptoContext)
-    # print('================================')
+
     boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
-    # decrypt_and_encrypt(boot_in, cryptoContext.L, 16, cryptoContext)
 
     res1sx0 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
-
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #RESCALE ADD BY ZRJI
     res1dx0 = convbn_dx(
@@ -143,8 +133,15 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res1dx1 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2"
     )
-    fullpackSx = downsample1024to256(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample1024to256(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    print("res1sx0")
+    decrypt_and_encrypt(res1sx0,cryptoContext)
+    print("res1sx1")
+    decrypt_and_encrypt(res1sx1, cryptoContext)
+    fullpackSx = downsample1024to256_v2(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
+
+    print("fullpackSx")
+    decrypt_and_encrypt(fullpackSx, cryptoContext)
+    fullpackDx = downsample1024to256_v2(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
@@ -295,7 +292,6 @@ def final_layer(input, he_res20_ctx, cryptoContext):
         cryptoContext,
     )
     # Todo:check repeat slots, final_layer
-
     res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min?
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     weight = read_fc_weight(
@@ -347,6 +343,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
     he_res18_ctx.relu_degree = 59
     cryptoContext.openfhe_context = openfhe_context
 
+    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2 ** 16), 2, 0, 2 ** 16)
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), 2, 0, 2**15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 2, 0, 2**14)
 
@@ -354,7 +351,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
     model = get_resnet18_HerPN(num_classes=10)
     device = torch.device("cuda:0")
     model.to(device)
-    model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet18_Aespa.pth'
+    model_path = '../Aespa/ResNet18_Aespa.pth'
     stict = torch.load(model_path, map_location='cuda:0')
     model.load_state_dict(stict, strict=False)
     model.eval()
@@ -521,7 +518,7 @@ def resnet18():
         # file_name = "encode_20250421_125259"
         # load_encode_pkl(file_name, get_resnet18_context_)
         # pkl_path = os.path.join(get_resnet18_context_.weight_dir, file_name + ".pkl")
-        pkl_path="/home/fyh/PNP/GPU-FHE/examples/resnet20/src/encode_20250508_191407.pkl"
+        pkl_path="/home/yhfan/PNP/GPU-FHE/examples/resnet20/src/encode_20250513_030534.pkl"
 
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
@@ -543,9 +540,6 @@ def resnet18():
     #     temp = read_values_from_file(cryptoContext, cleaned_name, cryptoContext.L - 1, 1, 1<<16)
 
     print("start executeResNet18")
-    zeros = cryptoContext.openfhe_context.encrypt(np.zeros(2 ** 16), 2, 0, 2 ** 16)
-    zeros = fhe.homo_bootstrap(zeros, cryptoContext.L, 16, cryptoContext)
-    decrypt_and_encrypt(zeros, cryptoContext.L, 16, cryptoContext)
     executeResNet18(get_resnet18_context_, cryptoContext, openfhe_context)
 
 
