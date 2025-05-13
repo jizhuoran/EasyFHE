@@ -6776,8 +6776,6 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     model = get_Aespa_MutalChannel_PAF_resnet18()
     model.eval()
     print(model)
-    print(model.fc.bias.reshape(-1).detach().cpu().numpy())
-
 
     img_width = 32
     padding = 1
@@ -8438,7 +8436,6 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     np.savetxt('weights_Aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
     np.savetxt('weights_Aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
-    np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().cpu().numpy())
     np.savetxt('weights_Aespa/fc.bin', model.fc.weight.reshape(-1).detach().cpu().numpy())
     np.savetxt('weights_Aespa/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
 
@@ -8447,5 +8444,104 @@ if __name__ == '__main__':
     path = './weights_Aespa'
     if not os.path.exists(path):
         os.mkdir(path)
-    generate_resnet18_Aespa_bin_files_complete_square()
+    # generate_resnet18_Aespa_bin_files_complete_square()
+    img_width = 4
+    padding = 1
+
+    model = get_Aespa_MutalChannel_PAF_resnet18()
+    model.eval()
+    print(model)
+    bin_mask1 = np.tile(np.array(build_mask(img_width + 1, 0, img_width - 1, img_width ** 2)), 512)
+    bin_mask2 = np.tile(np.array(build_mask(img_width, 0, img_width ** 2, img_width ** 2)), 512)
+    bin_mask3 = np.tile(np.array(build_mask(img_width, 0, img_width - 1, img_width ** 2)), 512)
+    bin_mask4 = np.tile(np.array(build_mask(1, 0, img_width - 1, img_width ** 2)), 512)
+    bin_mask5 = np.tile(np.array(build_mask(0, 0, img_width ** 2, img_width ** 2)), 512)
+    bin_mask6 = np.tile(np.array(build_mask(0, 1, img_width - 1, img_width ** 2)), 512)
+    bin_mask7 = np.tile(np.array(build_mask(1, img_width - 1, img_width - 1, img_width ** 2)), 512)
+    bin_mask8 = np.tile(np.array(build_mask(0, img_width, img_width ** 2, img_width ** 2)), 512)
+    bin_mask9 = np.tile(np.array(build_mask(0, img_width + 1, img_width - 1, img_width ** 2)), 512)
+    temp_PAF = model.layer4[0].HerPN2
+    A2 = temp_PAF.a2.detach() ** 0.5
+    n1 = temp_PAF.a1.detach() * 0.5 * (A2 ** -1)
+    n2 = temp_PAF.a0.detach() - (temp_PAF.a1.detach() ** 2) * 0.25 * (temp_PAF.a2.detach() ** -1)
+    print("A2: {}\n\nn1: {}\n\nn2: {}".format(A2, n1, n2))
+
+    ks = []
+
+    for i in range(512):
+        k1 = np.array([])
+        k2 = np.array([])
+        k3 = np.array([])
+        k4 = np.array([])
+        k5 = np.array([])
+        k6 = np.array([])
+        k7 = np.array([])
+        k8 = np.array([])
+        k9 = np.array([])
+
+        for j in range(512):
+            # Qua moltiplico np.repeat blabla per A[j]
+            k1 = np.append(k1,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[0].detach().cpu(), 16))
+            k2 = np.append(k2,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[1].detach().cpu(), 16))
+            k3 = np.append(k3,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[2].detach().cpu(), 16))
+            k4 = np.append(k4,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[3].detach().cpu(), 16))
+            k5 = np.append(k5,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[4].detach().cpu(), 16))
+            k6 = np.append(k6,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[5].detach().cpu(), 16))
+            k7 = np.append(k7,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[6].detach().cpu(), 16))
+            k8 = np.append(k8,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[7].detach().cpu(), 16))
+            k9 = np.append(k9,
+                           np.repeat(model.layer4[0].conv2.weight[j][(j + i) % 512].reshape(9)[8].detach().cpu(), 16))
+
+        k1 = np.multiply(k1, bin_mask1)
+        k2 = np.multiply(k2, bin_mask2)
+        k3 = np.multiply(k3, bin_mask3)
+        k4 = np.multiply(k4, bin_mask4)
+        k5 = np.multiply(k5, bin_mask5)
+        k6 = np.multiply(k6, bin_mask6)
+        k7 = np.multiply(k7, bin_mask7)
+        k8 = np.multiply(k8, bin_mask8)
+        k9 = np.multiply(k9, bin_mask9)
+
+        k1 = np.multiply(k1, np.repeat(A2.detach().cpu(), 16))
+        k2 = np.multiply(k2, np.repeat(A2.detach().cpu(), 16))
+        k3 = np.multiply(k3, np.repeat(A2.detach().cpu(), 16))
+        k4 = np.multiply(k4, np.repeat(A2.detach().cpu(), 16))
+        k5 = np.multiply(k5, np.repeat(A2.detach().cpu(), 16))
+        k6 = np.multiply(k6, np.repeat(A2.detach().cpu(), 16))
+        k7 = np.multiply(k7, np.repeat(A2.detach().cpu(), 16))
+        k8 = np.multiply(k8, np.repeat(A2.detach().cpu(), 16))
+        k9 = np.multiply(k9, np.repeat(A2.detach().cpu(), 16))
+
+        mul1 = np.roll(k1, 16 * i)
+        mul2 = np.roll(k2, 16 * i)
+        mul3 = np.roll(k3, 16 * i)
+        mul4 = np.roll(k4, 16 * i)
+        mul5 = np.roll(k5, 16 * i)
+        mul6 = np.roll(k6, 16 * i)
+        mul7 = np.roll(k7, 16 * i)
+        mul8 = np.roll(k8, 16 * i)
+        mul9 = np.roll(k9, 16 * i)
+
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+
+    np.savetxt('weights_Aespa/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt('weights_Aespa/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
+
     print('success')

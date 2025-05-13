@@ -7,7 +7,7 @@ import torch.fhe.utils as utils
 import torch.fhe.bs_context
 import numpy as np
 from termcolor import colored
-
+import torch.fhe as fhe
 DATA_DIR = os.environ["DATA_DIR"]
 
 def print_failed(message):
@@ -15,9 +15,9 @@ def print_failed(message):
 
 def app_without_bs_example_debug(
         maxLevelsRemaining=5,
-        appRotIndex_list = [-1, 2, -4, 5],
+        appRotIndex_list = [98304,32768],
         logBsSlots_list=None,
-        logN=14,
+        logN=17,
         dnum=3,
         dcrtBits=52,
         firstMod=56,
@@ -32,29 +32,71 @@ def app_without_bs_example_debug(
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
                                config=config))
 
-    encode_slots = (1 << 11)
+    encode_slots = (1 << 16)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    x = np.array([1 for i in range(encode_slots)])
     x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    print(x)
+    print('len_x',len(x))
+    cipher_x, cipher_openfhe_x = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
+    y = np.array([2 for i in range(encode_slots)])
+    y = torch.tensor(y, device="cuda")
+    print(y)
+    print('len_y',len(y))
+    cipher_y, cipher_openfhe_y = openfhe_context.encrypt(y, 1, openfhe_context.depth - 1, encode_slots)
+    #
+    print('cipher_x.slot',cipher_x.slots)
+    print('cipher_y.slot',cipher_y.slots)
+    temp = cryptoContext.openfhe_context.decrypt(cipher_x).cpu().numpy().reshape(-1)
+    print(temp[(1 << 15) - 1])
+    # print(temp[1 << 15 - 1])
+
+    tempx = fhe.homo_mul_pt(cipher_x, mask_first_n_v2(1 << 15, cipher_x.cur_limbs, 1 << 16, cryptoContext),
+                        cryptoContext)
+    temp = cryptoContext.openfhe_context.decrypt(tempx).cpu().numpy().reshape(-1)
+    print(temp[(1 << 15) - 1])
+    print(temp[(1 << 15) + 1 ])
+    # print(temp[1 << 13  ])
+    # print(temp[(1 << 13) + 1])
+    # print(temp[1 << 15 - 1])
+    tempy = fhe.homo_mul_pt(cipher_y, mask_scecond_n_v2(1 << 15, cipher_x.cur_limbs, 1 << 16, cryptoContext),
+                        cryptoContext)
+
+    downsampledchannels = fhe.homo_add(tempx, tempy,cryptoContext)
     # do the application computation
-    cryptoContext.load_rotation_keys("app")
-    cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
-    cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
-    cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
-    cipher = homo_ops.homo_rotate(cipher, 5, cryptoContext)
-    print("homo_rotate done!")
-    # compute golden answer
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, -1)
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
-    cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
-    is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
-    if is_euqal:
-        print("homo_rotate: Test passed!")
-    else:
-        print_failed("homo_rotate: Test failed!")
+    temp = cryptoContext.openfhe_context.decrypt(downsampledchannels).cpu().numpy().reshape(-1)
+    print(temp[(1 << 15) - 1])
+    print(temp[(1 << 15) + 1])
+    # cryptoContext.load_rotation_keys("app")
+
+    # cipher = homo_ops.homo_rotate(cipher, 98304, cryptoContext)
+    # cipher1 = homo_ops.homo_rotate(cipher, 32768, cryptoContext)
+    # # cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
+    # # cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
+    # # cipher = homo_ops.homo_rotate(cipher, 5, cryptoContext)
+    # print("homo_rotate done!")
+    # # compute golden answer
+    # cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe, 98304)
+    # cipher_openfhe1 = openfhe_context.cc.EvalRotate(cipher_openfhe, 32768)
+    # # cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,2)
+    # # cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,-4)
+    # # cipher_openfhe = openfhe_context.cc.EvalRotate(cipher_openfhe,5)
+    #
+    # clear_result = openfhe_context.decrypt(cipher)  # decrypt by cc with different slots value should be fine
+    # clear_result = clear_result.cpu().numpy().reshape(-1)
+    # print("HE decryption result: ", clear_result[:10])
+    #
+    # is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher, cipher_openfhe)
+    # if is_euqal:
+    #     print("homo_rotate: Test passed!")
+    # else:
+    #     print_failed("homo_rotate: Test failed!")
+    # is_euqal = utils.compare_gpufhe_ct_with_openfhe(cipher1, cipher_openfhe1)
+    # if is_euqal:
+    #     print("homo_rotate: Test passed!")
+    # else:
+    #     print_failed("homo_rotate: Test failed!")
 
 def app_example_debug(
         maxLevelsRemaining=3,
@@ -112,6 +154,9 @@ def app_example_debug(
         print("BootstrapTest_logBsSlots11: Test passed!")
     else:
         print_failed("BootstrapTest_logBsSlots11: Test failed!")
+        clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
+        clear_result = clear_result.cpu().numpy().reshape(-1)
+        print("HE decryption result: ", clear_result[:10])
 
     # do some multiplication to consume some limbs
     result.slots =  (1 << 12) # This assignment is for testing purposes only
@@ -141,6 +186,9 @@ def app_example_debug(
         print("BootstrapTest_logBsSlots12: Test passed!")
     else:
         print_failed("BootstrapTest_logBsSlots12: Test failed!")
+        clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
+        clear_result = clear_result.cpu().numpy().reshape(-1)
+        print("HE decryption result: ", clear_result[:10])
 
 
 def app_example_release(
@@ -586,27 +634,67 @@ def gen_CoeffSlots_matrix_test_case(
 ## run tests #
 ##############
 
-if __name__ == "__main__":
+def mask_scecond_n_v2(n, cur_limbs, cur_num_slots, cryptoContext):
+    # print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+    mask=[]
+    level=cryptoContext.L-cur_limbs
+    for i in range(cur_num_slots):
+        if i >=n :
+            mask.append(1)
+        else:
+            mask.append(0)
+    mask = np.array(mask, dtype=np.double)
+    name = "mask_scecond_n_{}_{}".format(n, cur_num_slots)
+    print(name)
+    encoded = fhe.encode(mask, name, level, cur_num_slots, False, cryptoContext)
+    # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+    # encoded_weight[key] = encoded
+    # ptx = cryptoContext.pre_encoded[key]
+    # check_encoded_equal(encoded, ptx, key)
+    return encoded
 
-    gen_CoeffSlots_matrix_test_case()
+def mask_first_n_v2(n, cur_limbs, cur_num_slots, cryptoContext):
+    # print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
+    mask=[]
+    level=cryptoContext.L-cur_limbs
+    for i in range(cur_num_slots):
+        if i < n:
+            mask.append(1)
+        else:
+            mask.append(0)
+    mask = np.array(mask, dtype=np.double)
+    name = "mask_first_n_{}_{}".format(n, cur_num_slots)
+    print(name)
+    encoded = fhe.encode(mask, name, level, cur_num_slots, False, cryptoContext)
+    # encoded = cryptoContext.openfhe_context.encode(mask, 1, level, cur_num_slots)
+    # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
+    # encoded_weight[key] = encoded
+    # ptx = cryptoContext.pre_encoded[key]
+    # check_encoded_equal(encoded, ptx, key)
+    return encoded
+
+if __name__ == "__main__":
+    # print("可用GPU数量:", torch.cuda.device_count())
+
+    # gen_CoeffSlots_matrix_test_case()
 
 
     for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
         print("***********{}***********".format(rescaleTech))
         print("==========={}============".format('app_without_bs_example_debug'))
         app_without_bs_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_debug'))
-        app_example_debug(rescaleTech = rescaleTech)
-        print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-        print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-        app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-        print("==========={}============".format('encode_test_case'))
-        encode_test_case(rescaleTech = rescaleTech)
-        print("==========={}============".format('ct_pt_test_case'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-        print("==========={}============".format('test_plaintext_twin'))
-        ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-        print("==========={}============".format('double_bs_debug'))
-        double_bs_debug(rescaleTech = rescaleTech)
-        print("************************************".format(rescaleTech))
+        # print("==========={}============".format('app_example_debug'))
+        # app_example_debug(rescaleTech = rescaleTech)
+        # print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+        # app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+        # print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+        # app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+        # print("==========={}============".format('encode_test_case'))
+        # encode_test_case(rescaleTech = rescaleTech)
+        # print("==========={}============".format('ct_pt_test_case'))
+        # ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+        # print("==========={}============".format('test_plaintext_twin'))
+        # ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+        # print("==========={}============".format('double_bs_debug'))
+        # double_bs_debug(rescaleTech = rescaleTech)
+        # print("************************************".format(rescaleTech))

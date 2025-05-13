@@ -129,24 +129,17 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res1dx0 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, he_res18_ctx.cur_num_slots, 64, -1024, 0, "1"
     )
-
     res1dx1 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2"
     )
-    print("res1sx0")
-    decrypt_and_encrypt(res1sx0,cryptoContext)
-    print("res1sx1")
-    decrypt_and_encrypt(res1sx1, cryptoContext)
     fullpackSx = downsample1024to256_v2(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-
-    print("fullpackSx")
-    decrypt_and_encrypt(fullpackSx, cryptoContext)
     fullpackDx = downsample1024to256_v2(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    he_res18_ctx.cur_num_slots = 32768
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
 
-    he_res18_ctx.cur_num_slots = 32768
+
 
     fullpackSx = convbn(fullpackSx, 3, 2, scaleDx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
@@ -191,10 +184,10 @@ def layer3(input, he_res18_ctx, cryptoContext):
     fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
-
+    he_res18_ctx.cur_num_slots = 16384
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
-    he_res18_ctx.cur_num_slots = 16384
+
     fullpackSx = convbn(fullpackSx, 5, 2, scaleDx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots , 256, -64, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -239,7 +232,7 @@ def layer4(input, he_res18_ctx, cryptoContext):
     fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
-
+    he_res18_ctx.cur_num_slots = 8192
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
     print('layer7-HerPN1')
@@ -247,9 +240,10 @@ def layer4(input, he_res18_ctx, cryptoContext):
     print('max', max(temp))
     print('min', min(temp))
     # 512*4*4
-    he_res18_ctx.cur_num_slots = 8192
 
+    cryptoContext.in_check_period = True
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
+    cryptoContext.in_check_period = False
     temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
     print('layer7-conv2')
     print('len:', len(temp))
