@@ -46,6 +46,7 @@ def convbn_initial(input,num_channel,scale, he_res20_ctx, cryptoContext, img_wid
 
 @fhe.utils.profile_python_function
 def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, padding, slots, num_channel, rot_offset, channel_offset, biasoff=""):
+    slots=65536
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
 
@@ -161,10 +162,9 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
     #     cryptoContext)
     # Part2 :rotate + add + mask
     fullpack = fhe.homo_rescale(c1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    print(fullpack.slots)
     fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
                                             fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
-                               gen_mask_v2(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
+                               gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
                                cryptoContext)
     # 相邻两个相加
     fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
@@ -172,10 +172,10 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
                                             fhe.homo_rotate(
                                                 fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
                                             cryptoContext),
-                               gen_mask_v2(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+                               gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
     fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext),
-                               gen_mask_v2(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+                               gen_mask(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
     fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
 
@@ -187,7 +187,7 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
     for i in range(16):
         #  每个i取得1024中第i个16的数，每64取16，最终得到256的通道
         masked = fhe.homo_mul_pt(fullpack,
-                                 mask_first_n_mod_v2(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
+                                 mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
         downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
         if i < 15:
             fullpack = fhe.homo_rotate(fullpack, 64 - 16, cryptoContext)
@@ -202,7 +202,7 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
                                                  cryptoContext)  # drop_last_elements ADD BY ZRJI
     for i in range(64):
         # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel_v2(i, downsampledrows.cur_limbs, cryptoContext),
+        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext),
                                  cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
@@ -212,7 +212,7 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
     fullpack = fhe.homo_rescale(c2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
                                             fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
-                               gen_mask_v2(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
+                               gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),
                                cryptoContext)
     # 相邻两个相加
     fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
@@ -220,10 +220,10 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
                                             fhe.homo_rotate(
                                                 fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
                                             cryptoContext),
-                               gen_mask_v2(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+                               gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
     fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext),
-                               gen_mask_v2(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
+                               gen_mask(8, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
     fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
 
@@ -235,7 +235,7 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
     for i in range(16):
         #  每个i取得1024中第i个16的数，每64取16，最终得到256的通道
         masked = fhe.homo_mul_pt(fullpack,
-                                 mask_first_n_mod_v2(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
+                                 mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
         downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
         if i < 15:
             fullpack = fhe.homo_rotate(fullpack, 64 - 16, cryptoContext)
@@ -250,22 +250,20 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
                                                  cryptoContext)  # drop_last_elements ADD BY ZRJI
     for i in range(64):
         # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel_v2(i, downsampledrows.cur_limbs, cryptoContext),
+        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext),
                                  cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
     downsampledchannels_c2 = fhe.homo_rotate(downsampledchannels, 48*1024, cryptoContext)
-    # cat 128*16*16 = 64*16*16 *2 = 16384 * 2
-    # downsampledchannels_c1.slots = 16384 * 2
-    # downsampledchannels_c2.slots = 16384 * 2
+
 
     downsampledchannels = cryptoContext.zero_64K
 
     downsampledchannels = fhe.homo_add(downsampledchannels,
-        fhe.homo_mul_pt(downsampledchannels_c1, mask_first_n_v2(16384, c1.cur_limbs, he_res20_ctx.cur_num_slots, cryptoContext), cryptoContext),cryptoContext)
+        fhe.homo_mul_pt(downsampledchannels_c1, mask_first_n(16384, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),cryptoContext)
 
     downsampledchannels = fhe.homo_add(downsampledchannels,
-        fhe.homo_mul_pt(fhe.homo_rotate(downsampledchannels_c2, 16384, cryptoContext),mask_scecond_n_v2(16384, c1.cur_limbs, he_res20_ctx.cur_num_slots,cryptoContext), cryptoContext),cryptoContext)
+        fhe.homo_mul_pt(fhe.homo_rotate(downsampledchannels_c2, 16384, cryptoContext),mask_scecond_n(16384, c1.cur_limbs, he_res20_ctx,cryptoContext), cryptoContext),cryptoContext)
     downsampledchannels = fhe.homo_add(downsampledchannels,fhe.homo_rotate(downsampledchannels, 16384*2, cryptoContext),cryptoContext)
 
     # Part 3
@@ -281,113 +279,7 @@ def downsample1024to256_v2(c1, c2, he_res20_ctx, cryptoContext):
 
     return downsampledchannels
 
-def mask_first_n_mod_v2(n,padding,pos,cur_limbs, cryptoContext):
-    # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
-    mask=[]
-    level = cryptoContext.L - cur_limbs
-    for i in range(64):
-        for j in range(pos*n):
-            mask.append(0)
-        for j in range(n):
-            mask.append(1)
-        for j in range(padding-n-(pos*n)):
-            mask.append(0)
-    mask = np.array(mask, dtype=np.double)
-    name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536)
-    print(name)
-    encoded = fhe.encode(mask, name, level, 65536, False, cryptoContext)
-    # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-    # encoded_weight[key] = encoded
-    # ptx = cryptoContext.pre_encoded[key]
-    # check_encoded_equal(encoded, ptx, key)
-    return encoded
 
-def mask_channel_v2(n,cur_limbs,cryptoContext):
-        # print("mask_channel", "n", n, "cur_limbs", cur_limbs)
-        mask=[]
-        level = cryptoContext.L - cur_limbs
-        for i in range(n):
-            for j in range(1024):
-                mask.append(0)
-
-        for i in range(256):
-            mask.append(1)
-
-        for i in range(1024-256):
-            mask.append(0)
-        for i in range(63-n):
-            for j in range(1024):
-                mask.append(0)
-        mask = np.array(mask, dtype=np.double)
-        name = "mask_channel_{}_{}".format(n, 65536)
-        print(name)
-        encoded = fhe.encode(mask, name, level, 65536,False, cryptoContext)
-        # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
-        return encoded
-
-def gen_mask_v2(n,cur_limbs, he_res20_ctx, cryptoContext):
-    # print("gen_mask", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    level = cryptoContext.L - cur_limbs
-    mask=[]
-    copy_interval=n
-    for i in range(he_res20_ctx.cur_num_slots):
-        if copy_interval>0:
-            mask.append(1)
-        else:
-            mask.append(0)
-        copy_interval-=1
-        if copy_interval<= -n:
-            copy_interval=n
-    mask = np.array(mask, dtype=np.double)
-    name = "gen_mask_{}_{}".format(n, he_res20_ctx.cur_num_slots)
-    print(name)
-    encoded = fhe.encode(mask, name, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-    # key = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-    # encoded_weight[key] = encoded
-    # ptx = cryptoContext.pre_encoded[key]
-    # check_encoded_equal(encoded, ptx, key)
-    return encoded
-
-def mask_scecond_n_v2(n, cur_limbs, cur_num_slots, cryptoContext):
-    # print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    mask=[]
-    level=cryptoContext.L-cur_limbs
-    for i in range(cur_num_slots):
-        if i >=n :
-            mask.append(1)
-        else:
-            mask.append(0)
-    mask = np.array(mask, dtype=np.double)
-    name = "mask_scecond_n_{}_{}".format(n, cur_num_slots)
-    print(name)
-    encoded = fhe.encode(mask, name, level, cur_num_slots, False, cryptoContext)
-    # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-    # encoded_weight[key] = encoded
-    # ptx = cryptoContext.pre_encoded[key]
-    # check_encoded_equal(encoded, ptx, key)
-    return encoded
-
-def mask_first_n_v2(n, cur_limbs, cur_num_slots, cryptoContext):
-    # print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-    mask=[]
-    level=cryptoContext.L-cur_limbs
-    for i in range(cur_num_slots):
-        if i < n:
-            mask.append(1)
-        else:
-            mask.append(0)
-    mask = np.array(mask, dtype=np.double)
-    name = "mask_first_n_{}_{}".format(n, cur_num_slots)
-    print(name)
-    encoded = fhe.encode(mask, name, level, cur_num_slots, False, cryptoContext)
-    # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-    # encoded_weight[key] = encoded
-    # ptx = cryptoContext.pre_encoded[key]
-    # check_encoded_equal(encoded, ptx, key)
-    return encoded
 
 @fhe.utils.profile_python_function
 def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):

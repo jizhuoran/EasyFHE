@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = True
+DIRECT_LOAD = False
 
 
 if DIRECT_LOAD:
@@ -73,7 +73,6 @@ if DIRECT_LOAD:
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
-
         try:
             # 打开文件并逐行读取
             with open(filename, 'r') as file:
@@ -152,10 +151,10 @@ if DIRECT_LOAD:
     def mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext):
         full_name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536*2)
+            name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536)
         else:
             name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536*2, False, cryptoContext)
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536, False, cryptoContext)
 
     def mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext):
         full_name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
@@ -174,12 +173,12 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
 
     def mask_channel(n, cur_limbs, cryptoContext):
-        full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 65536*2)
+        full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 65536)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_channel_{}_{}".format(n, 65536*2)
+            name = "mask_channel_{}_{}".format(n, 65536)
         else:
             name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536*2, False, cryptoContext)
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536, False, cryptoContext)
 
     def mask_channel2(n, cur_limbs, cryptoContext):
         full_name = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 32768*2)
@@ -384,7 +383,7 @@ else:
         # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
-        for i in range(128):
+        for i in range(64):
             for j in range(pos*n):
                 mask.append(0)
             for j in range(n):
@@ -392,14 +391,16 @@ else:
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536*2)
+        name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536)
         print(name)
-        encoded = fhe.encode(mask, name, level, 65536*2, False, cryptoContext)
+        encoded = fhe.encode(mask, name, level, 65536, False, cryptoContext)
         # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
         # check_encoded_equal(encoded, ptx, key)
         return encoded
+
+
 
     def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext):
         # print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
@@ -456,13 +457,13 @@ else:
 
         for i in range(1024-256):
             mask.append(0)
-        for i in range(127-n):
+        for i in range(63-n):
             for j in range(1024):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_channel_{}_{}".format(n, 65536*2)
+        name = "mask_channel_{}_{}".format(n, 65536)
         print(name)
-        encoded = fhe.encode(mask, name, level, 65536*2,False, cryptoContext)
+        encoded = fhe.encode(mask, name, level, 65536,False, cryptoContext)
         # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
