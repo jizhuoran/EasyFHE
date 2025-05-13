@@ -9,6 +9,7 @@ import torch
 import os
 from examples.utils import approx
 from examples.utils.comp.comp import *
+from examples.utils.utils import *
 import datetime, time
 
 DATA_DIR = os.environ["DATA_DIR"]
@@ -797,15 +798,33 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     print("current time: ", datetime.datetime.now())
 
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
-    if cryptoContext.config.SAVE_MIDDLE ==False:
-        cryptoContext.pre_encode_type = "middle"
+    # if cryptoContext.config.SAVE_MIDDLE ==False:
+    #     cryptoContext.pre_encode_type = "middle"
+    #     if layer_num == 20:
+    #         pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
+    #     elif layer_num == 56:
+    #         pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
+    #     else:
+    #         raise ValueError("pkl ungenerated")
+    #     load_weight(pkl_path, cryptoContext)
+
+    pkl_path = None
+    if config.SAVE_MIDDLE==False:
         if layer_num == 20:
-            pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
+            file_name = "encode_20250506_152909"
         elif layer_num == 56:
-            pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
+            file_name = "encode_20250506_224353"
         else:
             raise ValueError("pkl ungenerated")
-        load_weight(pkl_path, cryptoContext)
+
+        cryptoContext.pre_encode_type = "middle"
+        load_encode_pkl(file_name, DATA_DIR)
+        pkl_path = os.path.join(DATA_DIR, file_name + ".pkl")
+
+        # pkl_path = "" # encode end pkl, should be generated from encode middle pkl
+        # cryptoContext.pre_encode_type = "end"
+
+    load_weight(pkl_path, cryptoContext)
 
     zero = [0.0 for _ in range(1 << logn)]
     x = torch.tensor(zero, dtype=torch.float64, device="cuda")
