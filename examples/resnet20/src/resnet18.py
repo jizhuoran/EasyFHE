@@ -244,14 +244,29 @@ def layer4(input, he_res18_ctx, cryptoContext):
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
+    temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
+    print('layer7-HerPN1')
+    print('len:', len(temp))
+    print('max', max(temp))
+    print('min', min(temp))
     # 512*4*4
     he_res18_ctx.cur_num_slots = 8192
 
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
+    temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
+    print('layer7-conv2')
+    print('len:', len(temp))
+    print('max', max(temp))
+    print('min', min(temp))
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
     res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
+    temp = cryptoContext.openfhe_context.decrypt(res1).cpu().numpy().reshape(-1)
+    print('layer7-HerPn2')
+    print('len:', len(temp))
+    print('max', max(temp))
+    print('min', min(temp))
 
     scale = 1
     res2 = convbn(res1, 8, 1, scale, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
@@ -494,7 +509,7 @@ def resnet18():
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
                                      SAVE_END=False,
-                                     PTX_TWIN=False)
+                                     PTX_TWIN=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,

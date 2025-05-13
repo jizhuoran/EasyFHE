@@ -146,8 +146,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
     c1.slots=65536
     c2.slots=65536
     he_res20_ctx.cur_num_slots = 32768 * 2
-    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1,
-                                          mask_first_n(32768, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1,mask_first_n(32768, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
                           fhe.homo_mul_pt(c2, mask_scecond_n(32768, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
     fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -199,28 +198,16 @@ def downsample64to16(c1, c2, he_res20_ctx, cryptoContext):
     c1.slots=32768
     c2.slots=32768
     he_res20_ctx.cur_num_slots = 16384 * 2
-    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1,
-                                          mask_first_n(16384, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+    fullpack=fhe.homo_add(fhe.homo_mul_pt(c1,mask_first_n(16384, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
                           fhe.homo_mul_pt(c2, mask_scecond_n(16384, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext), cryptoContext)
 
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
     fullpack=fhe.homo_mul_pt(
         fhe.homo_add(fullpack,fhe.homo_rotate(fullpack,1,cryptoContext),cryptoContext),
         gen_mask(2, fullpack.cur_limbs, he_res20_ctx, cryptoContext),cryptoContext)
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(
-        fhe.homo_add(fullpack,
-                          fhe.homo_rotate(
-                              fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext),
-        gen_mask(4, fullpack.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext)
-    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    fullpack=fhe.homo_add(fullpack,
-                               fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
+    fullpack = fhe.homo_add(fullpack,fhe.homo_rotate(fhe.homo_rotate(fullpack,1,cryptoContext), 1, cryptoContext), cryptoContext)
 
     downsampledrows = cryptoContext.zero_16K
-    downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
 
-    assert fullpack.noise_deg == 1
     for i in range(4):
         masked=fhe.homo_mul_pt(fullpack, mask_first_n_mod3(4, 64, i, fullpack.cur_limbs, cryptoContext), cryptoContext)
         downsampledrows=fhe.homo_add(downsampledrows, masked, cryptoContext)

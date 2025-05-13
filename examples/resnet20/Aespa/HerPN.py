@@ -118,17 +118,21 @@ class BasicBlock_HerPN(nn.Module):
             identity = self.downsample(x)
         out = self.conv1(x)
         print('max conv1',torch.max(out))
+        print('min conv1', torch.min(out))
         # print('conv1',torch.max(out))
         out = self.HerPN1(out)
-        print('max HerPN1',torch.max(out))
+        print('max HerPN1 ',torch.max(out))
+        print('min HerPN1', torch.min(out))
         # print('herPN',torch.max(out))
         out = self.conv2(out)
         print('max conv2',torch.max(out))
+        print('min conv2', torch.min(out))
         # print('conv2', torch.max(out))
         out += identity
         # print('sum', torch.max(out))
         out = self.HerPN2(out)
         print('max HerPN2',torch.max(out))
+        print('min HerPN2', torch.min(out))
 
         return out
 

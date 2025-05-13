@@ -2,7 +2,6 @@
 本文件用于查看模型中间输入
 """
 import numpy as np
-
 import torch
 from examples.resnet20.Aespa.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
 from examples.resnet20.src.resnet18 import read_image
@@ -12,7 +11,7 @@ def main():
     model = get_resnet18_HerPN(num_classes=10)
     device = torch.device("cuda:0")
     model.to(device)
-    model_path = '/home/fyh/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet18_Aespa.pth'
+    model_path = '/home/yhfan/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet18_Aespa.pth'
     stict = torch.load(model_path, map_location='cuda:0')
     model.load_state_dict(stict, strict=False)
     model.eval()
