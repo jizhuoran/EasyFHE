@@ -3,7 +3,6 @@ import sys,os
 import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-from torch.fhe.ciphertext import Cipher # todo: to be removed
 import torch.fhe as fhe
 import torch
 import os
@@ -257,7 +256,7 @@ def import_parameters_cifar10(layer_num,end_num,linear_weight,linear_bias,conv_w
 
 
 class TensorCipher:
-    def __init__(self, k, h, w, c, t,p,logn, cipher:Cipher):
+    def __init__(self, k, h, w, c, t,p,logn, cipher):
         self.k = k  # gap
         self.h = h  # height
         self.w = w  # width
@@ -355,7 +354,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
     var=cipher_pool[5]
     ctxt_in=input.cipher.deep_copy()
     # print(type(ctxt_in))
-    ctxt_rot = [[Cipher for _ in range(fw)] for _ in range(fh)]
+    ctxt_rot = [[None for _ in range(fw)] for _ in range(fh)]
     if (fh%2==0 or fw%2==0):raise ValueError(f"fh and fw should be odd")
     for i1 in range (fh):
         for i2 in range (fw):
@@ -519,7 +518,7 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
 #     temp = input.cipher
 #     scale=1.7
 #     deg=15
-#     temp=homo_relu(temp,B,deg,cryptoContext)#Todo:这里的deg为什么是一个数组
+#     temp=homo_relu(temp,B,deg,cryptoContext)
 #     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
 #     return output
 
@@ -798,15 +797,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     print("current time: ", datetime.datetime.now())
 
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
-    # if cryptoContext.config.SAVE_MIDDLE ==False:
-    #     cryptoContext.pre_encode_type = "middle"
-    #     if layer_num == 20:
-    #         pkl_path = "/data/yhh/data/encode_20250506_152909.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=20
-    #     elif layer_num == 56:
-    #         pkl_path = "/data/yhh/data/encode_20250506_224353.pkl" # todo: move to hugging face # fhe-mp-cnn layer_num=56
-    #     else:
-    #         raise ValueError("pkl ungenerated")
-    #     load_weight(pkl_path, cryptoContext)
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
@@ -885,7 +875,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 
 
     # ciphertext pool generation
-    cipher_pool = [Cipher for _ in range(14)]
+    cipher_pool = [None for _ in range(14)]
 
     for image_id in range(start_image_id,end_image_id+1):
         cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for encode_middle_vals
