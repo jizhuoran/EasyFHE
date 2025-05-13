@@ -43,13 +43,13 @@ class HE_res18_context:
                              1, 2, 4, 8, 12,16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048,12288, 24576, 49152, 98304]
         self.maxLevelsRemaining = 11
         # self.logBsSlots_list = [12, 13, 14]
-        self.logBsSlots_list = [16]
+        self.logBsSlots_list = [13,14,15,16]
         self.logN = 17
         self.dnum = 3
         self.dcrtBits = 55
         self.firstMod = 60
         # self.levelBudget_list = [[4, 4], [4, 4], [4, 4]]
-        self.levelBudget_list = [[4, 4],]
+        self.levelBudget_list = [[4, 4],[4, 4],[4, 4],[4, 4],]
         self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
         self.rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
         self.cur_num_channels = None
@@ -84,6 +84,7 @@ def layer1(input, he_res18_ctx, cryptoContext):
     scale = 1
     # layer[0],block[0],conv1
     # input = [64,32,32]
+    he_res18_ctx.cur_num_slots = 1 << 16
     res1 = convbn(input, 1, 1, scale, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
@@ -134,16 +135,17 @@ def layer2(input, he_res18_ctx, cryptoContext):
     )
     fullpackSx = downsample1024to256_v2(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample1024to256_v2(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
-    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
+
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, cryptoContext)
+
     he_res18_ctx.cur_num_slots = 32768
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
 
-
-
     fullpackSx = convbn(fullpackSx, 3, 2, scaleDx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
 
     # layer[2]block[1]
@@ -166,7 +168,7 @@ def layer3(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15, cryptoContext)
     res1sx0 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0, "1")
     res1sx1 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 128, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -183,6 +185,10 @@ def layer3(input, he_res18_ctx, cryptoContext):
 
     fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 14, cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 14, cryptoContext)
+
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
     he_res18_ctx.cur_num_slots = 16384
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
@@ -192,7 +198,7 @@ def layer3(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{5}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 6, 1, scale, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0)
@@ -214,7 +220,7 @@ def layer4(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 14, cryptoContext)
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 256, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -231,19 +237,15 @@ def layer4(input, he_res18_ctx, cryptoContext):
 
     fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 13, cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 13, cryptoContext)
+
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
     he_res18_ctx.cur_num_slots = 8192
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
-    temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
-    print('layer7-HerPN1')
-    print('len:', len(temp))
-    print('max', max(temp))
-    print('min', min(temp))
-    # 512*4*4
-
-    cryptoContext.in_check_period = True
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
-    cryptoContext.in_check_period = False
+
     temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
     print('layer7-conv2')
     print('len:', len(temp))
@@ -252,12 +254,7 @@ def layer4(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
-    temp = cryptoContext.openfhe_context.decrypt(res1).cpu().numpy().reshape(-1)
-    print('layer7-HerPn2')
-    print('len:', len(temp))
-    print('max', max(temp))
-    print('min', min(temp))
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 13, cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 8, 1, scale, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
@@ -337,7 +334,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
     he_res18_ctx.relu_degree = 59
     cryptoContext.openfhe_context = openfhe_context
 
-    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2 ** 16), 2, 0, 2 ** 16)
+    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2**16), 2, 0, 2**16)
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), 2, 0, 2**15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 2, 0, 2**14)
 
@@ -498,9 +495,9 @@ def resnet18():
     secretKeyDist = get_resnet18_context_.secretKeyDist
     rescaleTech = get_resnet18_context_.rescaleTech
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=True,
                                      SAVE_END=False,
-                                     PTX_TWIN=True)
+                                     PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
@@ -519,20 +516,6 @@ def resnet18():
             pkl_path = get_resnet18_context_.full_encode_pkl_path
 
     load_weight(pkl_path, cryptoContext)
-
-    # # 设置目标路径（默认当前目录）
-    # path = '../weights_Aespa'
-    # # 获取并排序文件名列表
-    # sorted_files = sorted(os.listdir(path))
-    # print("处理后的文件名（已去除.bin后缀）：")
-    # for filename in sorted_files:
-    #     # 分离文件名和扩展名
-    #     name, ext = os.path.splitext(filename)
-    #     # 判断是否为.bin后缀
-    #     cleaned_name = name if ext == '.bin' else filename
-    #     print(cleaned_name)
-    #     temp = read_values_from_file(cryptoContext, cleaned_name, cryptoContext.L - 1, 1, 1<<16)
-
     print("start executeResNet18")
     executeResNet18(get_resnet18_context_, cryptoContext, openfhe_context)
 
