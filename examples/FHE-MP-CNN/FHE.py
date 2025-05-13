@@ -394,11 +394,11 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
         c=int(log2_long(ti))
         for x in range(d):
             temp=var
-            temp=fhe.homo_rotate(temp,math.pow(2,x),cryptoContext)
+            temp=fhe.homo_rotate(temp,(1<<x),cryptoContext)
             var=fhe.homo_add(var,temp,cryptoContext)
         for x in range(d):
             temp=var
-            temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*wi,cryptoContext)
+            temp=fhe.homo_rotate(temp,(1<<x)*ki*wi,cryptoContext)
             var=fhe.homo_add(var,temp,cryptoContext)
         if(c==-1):
             sum=ct_zero.deep_copy()
@@ -410,7 +410,7 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
         else:
             for x in range(c):
                 temp=var
-                temp = fhe.homo_rotate(temp, math.pow(2, x) *ki* ki * hi * wi, cryptoContext)
+                temp = fhe.homo_rotate(temp, (1<<x) *ki* ki * hi * wi, cryptoContext)
                 var = fhe.homo_add(var, temp, cryptoContext)
         i8 = 0
         while i8 < pi and (pi * i9 + i8) < co:
@@ -539,11 +539,11 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
     ct=input.cipher
     for x in range (log2_long(wi)):
         temp=ct
-        temp=fhe.homo_rotate(temp,math.pow(2,x)*ki,cryptoContext)
+        temp=fhe.homo_rotate(temp,(1<<x)*ki,cryptoContext)
         ct=fhe.homo_add(ct,temp,cryptoContext)
     for x in range (log2_long(hi)):
         temp=ct
-        temp=fhe.homo_rotate(temp,math.pow(2,x)*ki*ki*wi,cryptoContext)
+        temp=fhe.homo_rotate(temp,(1<<x)*ki*ki*wi,cryptoContext)
         ct=fhe.homo_add(ct,temp,cryptoContext)
 
     for s in range(ki):
@@ -643,12 +643,12 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
     to=0
     po=0
     n=1<<logn
-    ko=2*ki
+    ko=int(2*ki)
     ho=int(hi/2)
     wo=int(wi/2)
     to=int(ti/2)
-    co=2*ci
-    po = 2 ** math.floor(math.log(n / (ko * ko * ho * wo * to), 2))
+    co=int(2*ci)
+    po = int(2 ** math.floor(math.log(n / (ko * ko * ho * wo * to), 2)))
 
     # error check: check if po | n
     if ti % 8 != 0:
@@ -693,7 +693,7 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
             w3 = int(((ki * w2 + w1) % (2 * ko)) / 2)
             w4 = (ki * w2 + w1) % 2
             w5 = int((ki * w2 + w1) / (2 * ko))
-            temp=fhe.homo_rotate(temp,ki*ki*hi*wi*w2 + ki*wi*w1 - ko*ko*ho*wo*w5 - ko*wo*w3 - ki*w4 - ko*ko*ho*wo*int(ti/8),cryptoContext)
+            temp=fhe.homo_rotate(temp,ki*ki*hi*wi*w2 + ki*wi*w1 - ko*ko*ho*wo*w5 - ko*wo*w3 - ki*w4 - ko*ko*ho*wo*(ti>>3),cryptoContext)
             if w1==0 and w2==0:
                 sum=temp.deep_copy()
             else:
