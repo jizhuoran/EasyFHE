@@ -189,6 +189,15 @@ class Context:
 
     
     def cuda(self):
+        def recursive_to_cuda(obj):
+            if isinstance(obj, dict):  # 处理字典类型
+                return {k: recursive_to_cuda(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):  # 处理列表/元组
+                return type(obj)(recursive_to_cuda(x) for x in obj)
+            elif hasattr(obj, "cuda"):  # 处理张量
+                return obj.cuda()
+            else:  # 其他类型直接返回
+                return obj
         new_instance = self.__class__.__new__(self.__class__)
         attrs_to_cuda = ["q_mu", "moduliQ", "primes", "power_of_roots", "power_of_roots_shoup",
                         "inverse_power_of_roots_div_two", "inverse_scaled_power_of_roots_div_two",
@@ -202,58 +211,31 @@ class Context:
                         "mod_raise_out", "PModq", "max_int_diffs","QplusP_map", "QmuplusPmu_map","QbarretKplusPbarretK_map",
                         "QbarretRatioplusPbarretRatio_map", "QmaxdiffplusPmaxdiff_map",
                         "left_rot_key_map", "precompute_auto_map"]
-        for attr in dir(self):
-            if attr.startswith("__") :
-                continue
-            if(attr not in attrs_to_cuda):
-                value = getattr(self, attr)
-                new_value = value
-                setattr(new_instance, attr, new_value)
-        new_instance.device = "cuda"
-        new_instance.q_mu = self.q_mu.cuda()
-        new_instance.moduliQ = self.moduliQ.cuda()
-        new_instance.primes = self.primes.cuda()
-        new_instance.power_of_roots = self.power_of_roots.cuda()
-        new_instance.power_of_roots_shoup = self.power_of_roots_shoup.cuda()
-        new_instance.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cuda()
-        new_instance.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cuda()
-        new_instance.barret_k = self.barret_k.cuda()
-        new_instance.barret_ratio = self.barret_ratio.cuda()
-        new_instance.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cuda()
-        new_instance.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cuda()
-        new_instance.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cuda()
-        new_instance.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cuda()
-        new_instance.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cuda()
-        new_instance.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cuda()
-        new_instance.prod_inv_moddown = self.prod_inv_moddown.cuda()
-        new_instance.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cuda()
-        new_instance.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cuda()
-        new_instance.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cuda()
-        new_instance.q_inv_mod_q = self.q_inv_mod_q.cuda()
-        new_instance.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cuda()
-        new_instance.mult_swk_bx = self.mult_swk_bx.cuda()
-        new_instance.mult_swk_ax = self.mult_swk_ax.cuda()
-        new_instance.inner_workspace = self.inner_workspace.cuda()
-        new_instance.inner_out = self.inner_out.cuda()
-        new_instance.moddown_out_ax = self.moddown_out_ax.cuda()
-        new_instance.moddown_out_bx = self.moddown_out_bx.cuda()
-        new_instance.modup_out = self.modup_out.cuda()
-        new_instance.rescale_out = self.rescale_out.cuda()
-        new_instance.automorphism_transform_out = self.automorphism_transform_out.cuda()
-        new_instance.mod_raise_out = self.mod_raise_out.cuda()
-        new_instance.PModq = self.PModq.cuda()
-        new_instance.max_int_diffs = self.max_int_diffs.cuda()
-        new_instance.QplusP_map = {k: v.cuda() for k, v in self.QplusP_map.items()}
-        new_instance.QmuplusPmu_map = {k: v.cuda() for k, v in self.QmuplusPmu_map.items()}
-        new_instance.QbarretKplusPbarretK_map = {k: v.cuda() for k, v in self.QbarretKplusPbarretK_map.items()}
-        new_instance.QbarretRatioplusPbarretRatio_map = {k: v.cuda() for k, v in self.QbarretRatioplusPbarretRatio_map.items()}
-        new_instance.QmaxdiffplusPmaxdiff_map = {k: v.cuda() for k, v in self.QmaxdiffplusPmaxdiff_map.items()}
-        new_instance.left_rot_key_map = {k: [v_.cuda() for v_ in v] for k, v in self.left_rot_key_map.items()}
-        new_instance.precompute_auto_map = {k: v.cuda() for k, v in self.precompute_auto_map.items()}
+        for attr in self.__dict__:
+            value = getattr(self, attr)
+            
+            if attr in attrs_to_cuda:
+                new_value = recursive_to_cuda(value)
+            else:
+                new_value = value  # 直接复制非迁移属性
+            
+            setattr(new_instance, attr, new_value)
 
+        new_instance.device = "cuda"
         return new_instance
     # move to cpu
     def cpu(self):
+        def recursive_to_cpu(obj):
+            if isinstance(obj, dict):  # 处理字典
+                return {k: recursive_to_cpu(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):  # 处理列表/元组
+                return type(obj)(recursive_to_cpu(x) for x in obj)
+            elif hasattr(obj, "cpu"):  # 处理张量
+                return obj.cpu()
+            elif hasattr(obj, "copy"):  # 处理自定义对象
+                return obj.copy().cpu()  # 假设自定义对象有 copy() 和 cpu() 方法
+            else:
+                return obj
         new_instance = self.__class__.__new__(self.__class__)
         attrs_to_cpu = ["q_mu", "moduliQ", "primes", "power_of_roots", "power_of_roots_shoup",
                         "inverse_power_of_roots_div_two", "inverse_scaled_power_of_roots_div_two",
@@ -267,73 +249,33 @@ class Context:
                         "mod_raise_out", "PModq", "max_int_diffs","QplusP_map", "QmuplusPmu_map","QbarretKplusPbarretK_map",
                         "QbarretRatioplusPbarretRatio_map", "QmaxdiffplusPmaxdiff_map",
                         "left_rot_key_map", "precompute_auto_map", "encode_values"]
-        for attr in dir(self):
-            if attr.startswith("__") :
-                continue
-            if(attr not in attrs_to_cpu):
-                value = getattr(self, attr)
-                new_value = value
-                setattr(new_instance, attr, new_value)
-        new_instance.device = "cpu"
-        new_instance.q_mu = self.q_mu.cpu()
-        new_instance.moduliQ = self.moduliQ.cpu()
-        new_instance.primes = self.primes.cpu()
-        new_instance.power_of_roots = self.power_of_roots.cpu()
-        new_instance.power_of_roots_shoup = self.power_of_roots_shoup.cpu()
-        new_instance.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu()
-        new_instance.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cpu()
-        new_instance.barret_k = self.barret_k.cpu()
-        new_instance.barret_ratio = self.barret_ratio.cpu()
-        new_instance.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu()
-        new_instance.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu()
-        new_instance.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu()
-        new_instance.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cpu()
-        new_instance.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu()
-        new_instance.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu()
-        new_instance.prod_inv_moddown = self.prod_inv_moddown.cpu()
-        new_instance.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cpu()
-        new_instance.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cpu()
-        new_instance.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu()
-        new_instance.q_inv_mod_q = self.q_inv_mod_q.cpu()
-        new_instance.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cpu()
-        new_instance.mult_swk_bx = self.mult_swk_bx.cpu()
-        new_instance.mult_swk_ax = self.mult_swk_ax.cpu()
-        new_instance.inner_workspace = self.inner_workspace.cpu()
-        new_instance.inner_out = self.inner_out.cpu()
-        new_instance.moddown_out_ax = self.moddown_out_ax.cpu()
-        new_instance.moddown_out_bx = self.moddown_out_bx.cpu()
-        new_instance.modup_out = self.modup_out.cpu()
-        new_instance.rescale_out = self.rescale_out.cpu()
-        new_instance.automorphism_transform_out = self.automorphism_transform_out.cpu()
-        new_instance.mod_raise_out = self.mod_raise_out.cpu()
-        new_instance.PModq = self.PModq.cpu()
-        new_instance.max_int_diffs = self.max_int_diffs.cpu()
-        new_instance.QplusP_map = {k: v.cpu() for k, v in self.QplusP_map.items()}
-        new_instance.QmuplusPmu_map = {k: v.cpu() for k, v in self.QmuplusPmu_map.items()}
-        new_instance.QbarretKplusPbarretK_map = {k: v.cpu() for k, v in self.QbarretKplusPbarretK_map.items()}
-        new_instance.QbarretRatioplusPbarretRatio_map = {k: v.cpu() for k, v in self.QbarretRatioplusPbarretRatio_map.items()}
-        new_instance.QmaxdiffplusPmaxdiff_map = {k: v.cpu() for k, v in self.QmaxdiffplusPmaxdiff_map.items()}
-        new_instance.left_rot_key_map = {k: [v_.cpu() for v_ in v] for k, v in self.left_rot_key_map.items()}
-        new_instance.precompute_auto_map = {k: v.cpu() for k, v in self.precompute_auto_map.items()}
+        
 
         new_instance.encode_values = {}
         for key, value in self.encode_values.items():
             if isinstance(value, Plaintext):
-                new_instance.encode_values[key] = copy.deepcopy(value)
-                new_instance.encode_values[key].cv = [value.cv[0].cpu()]
+                copied = copy.deepcopy(value)
+                copied.cv = [recursive_to_cpu(v) for v in value.cv]
+                new_instance.encode_values[key] = copied
             elif isinstance(value, PreEncodeValues):
-                new_instance.encode_values[key] = copy.deepcopy(value)
-                new_instance.encode_values[key].encoded_values = value.encoded_values.cpu()
+                copied = copy.deepcopy(value)
+                copied.encoded_values = recursive_to_cpu(value.encoded_values)
+                new_instance.encode_values[key] = copied
             else:
-                raise TypeError("Unsupported type for encode_values value: {}".format(type(value)))
+                raise TypeError(f"Unsupported type in encode_values: {type(value)}")
+        for attr in self.__dict__:
+            value = getattr(self, attr)
+            if (attr=="encode_values"):
+                continue
+            if attr in attrs_to_cpu:
+                new_value = recursive_to_cpu(value)
+            else:
+                new_value = value  # 直接复制非迁移属性
+            
+            setattr(new_instance, attr, new_value)
 
-        if self.config.AUTO_LOAD_KEYS:
-            for key, value in new_instance.left_rot_key_map.items():
-                new_instance.left_rot_key_map[key] = [v.cpu() for v in value]
-            for key, value in new_instance.precompute_auto_map.items():
-                new_instance.precompute_auto_map[key] = value.cpu()
+        new_instance.device = "cpu"
         return new_instance
-
     def norm_rot_index(self, i):
         if i < 0:
             i = self.N // 2 + i
