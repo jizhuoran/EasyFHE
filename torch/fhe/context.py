@@ -2,7 +2,7 @@ from enum import Enum
 import torch
 from .ciphertext import Plaintext, Cipher, PreEncodeValues
 from .config import *
-
+import copy
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
 
@@ -113,21 +113,6 @@ class Context:
         self.QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
         self.QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
 
-        # self.BsContext_map = {}
-        # if self.logBsSlots_list[0]!=0: # if logBsSlots_list[0] is 0, then there are no BS ops in this application
-        #     for logBsSlots in self.logBsSlots_list:
-        #         _BsContext = BsContext(BsContext_content_map[str(logBsSlots)])
-        #         self.BsContext_map[str(logBsSlots)] = _BsContext
-        # self.encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
-        # self.encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
-        # self.mult_swk = get_item("mult_swk", gpufhe_content_map)
-        # self.num_moduli_after_moddown = get_item("num_moduli_after_moddown", gpufhe_content_map)
-        # self.num_moduli_after_modup = get_item("num_moduli_after_modup", gpufhe_content_map)
-        # self.num_special_moduli = get_item("num_special_moduli", gpufhe_content_map)
-        # self.mult_key_map = get_item("mult_key_map", gpufhe_content_map)
-        # self.power_of_roots_shoup_vec = get_item("power_of_roots_shoup_vec", gpufhe_content_map)
-        # self.power_of_roots_vec = get_item("power_of_roots_vec", gpufhe_content_map)
-
         #convert all params to tensor
         self.q_mu = torch.tensor(self.q_mu, dtype = torch.uint64)
         self.moduliQ = torch.tensor(self.moduliQ, dtype = torch.uint64)
@@ -161,9 +146,6 @@ class Context:
         self.automorphism_transform_out = torch.tensor(self.automorphism_transform_out, dtype = torch.uint64)
         self.mod_raise_out = torch.tensor(self.mod_raise_out, dtype = torch.uint64)
         self.PModq = torch.tensor(self.PModq, dtype = torch.uint64)
-        # self.mult_key_map = [torch.tensor(v, dtype = torch.uint64) for v in self.mult_key_map]
-        # self.encode_params_ksiPows = torch.tensor(self.encode_params_ksiPows, dtype = torch.double)
-        # self.encode_params_rotGroup = torch.tensor(self.encode_params_rotGroup, dtype = torch.int64)
         self.max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in self.primes.tolist()], dtype = torch.uint64)
 
         for key, value in self.QplusP_map.items():
@@ -199,142 +181,158 @@ class Context:
             elif isinstance(value, PreEncodeValues):
                 self.encode_values[key].encoded_values = torch.tensor(value.encoded_values)
 
-        #some setting
         self.config = config
         self.inBS = False
         self.in_check_period = False
-        self.device = "cpu"
-        self.cpu()
-        # self.BsContext = None
+        self.gpufhe_content_map = gpufhe_content_map
+        self.device = None
 
-    def to_cuda(self):
-        self.device = "cuda"
-        self.q_mu = self.q_mu.cuda()
-        self.moduliQ = self.moduliQ.cuda()
-        self.primes = self.primes.cuda()
-        self.power_of_roots = self.power_of_roots.cuda()
-        self.power_of_roots_shoup = self.power_of_roots_shoup.cuda()
-        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cuda()
-        self.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cuda()
-        self.barret_k = self.barret_k.cuda()
-        self.barret_ratio = self.barret_ratio.cuda()
-        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cuda()
-        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cuda()
-        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cuda()
-        self.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cuda()
-        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cuda()
-        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cuda()
-        self.prod_inv_moddown = self.prod_inv_moddown.cuda()
-        self.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cuda()
-        self.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cuda()
-        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cuda()
-        self.q_inv_mod_q = self.q_inv_mod_q.cuda()
-        self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cuda()
-        self.mult_swk_bx = self.mult_swk_bx.cuda()
-        self.mult_swk_ax = self.mult_swk_ax.cuda()
-        self.inner_workspace = self.inner_workspace.cuda()
-        self.inner_out = self.inner_out.cuda()
-        self.moddown_out_ax = self.moddown_out_ax.cuda()
-        self.moddown_out_bx = self.moddown_out_bx.cuda()
-        self.modup_out = self.modup_out.cuda()
-        self.rescale_out = self.rescale_out.cuda()
-        self.automorphism_transform_out = self.automorphism_transform_out.cuda()
-        self.mod_raise_out = self.mod_raise_out.cuda()
-        self.PModq = self.PModq.cuda()
-        # self.mult_key_map = [v.cuda() for v in self.mult_key_map]
-        # self.encode_params_ksiPows = self.encode_params_ksiPows.cuda()
-        # self.encode_params_rotGroup = self.encode_params_rotGroup.cuda()
-        self.max_int_diffs = self.max_int_diffs.cuda()
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = value.cuda()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = value.cuda()
-        for key, value in self.QbarretKplusPbarretK_map.items():
-            self.QbarretKplusPbarretK_map[key] = value.cuda()
-        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
-            self.QbarretRatioplusPbarretRatio_map[key] = value.cuda()
-        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
-            self.QmaxdiffplusPmaxdiff_map[key] = value.cuda()
-        for key, _ in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [
-                v.cuda() for v in self.left_rot_key_map[key]
-            ]
-        for key, _ in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = self.precompute_auto_map[key].cuda()
+    
+    def cuda(self):
+        new_instance = self.__class__.__new__(self.__class__)
+        attrs_to_cuda = ["q_mu", "moduliQ", "primes", "power_of_roots", "power_of_roots_shoup",
+                        "inverse_power_of_roots_div_two", "inverse_scaled_power_of_roots_div_two",
+                        "barret_k", "barret_ratio", "hat_inverse_vec_modup", "hat_inverse_vec_shoup_modup",
+                        "prod_q_i_mod_q_j_modup", "hat_inverse_vec_moddown", "hat_inverse_vec_shoup_moddown",
+                        "prod_q_i_mod_q_j_moddown", "prod_inv_moddown", "prod_inv_shoup_moddown",
+                        "qlql_inv_mod_ql_div_ql_mod_q", "qlql_inv_mod_ql_div_ql_mod_q_shoup",
+                        "q_inv_mod_q", "q_inv_mod_q_shoup", "mult_swk_bx", "mult_swk_ax",
+                        "inner_workspace", "inner_out", "moddown_out_ax", "moddown_out_bx",
+                        "modup_out", "rescale_out", "automorphism_transform_out", 
+                        "mod_raise_out", "PModq", "max_int_diffs","QplusP_map", "QmuplusPmu_map","QbarretKplusPbarretK_map",
+                        "QbarretRatioplusPbarretRatio_map", "QmaxdiffplusPmaxdiff_map",
+                        "left_rot_key_map", "precompute_auto_map"]
+        for attr in dir(self):
+            if attr.startswith("__") :
+                continue
+            if(attr not in attrs_to_cuda):
+                value = getattr(self, attr)
+                new_value = value
+                setattr(new_instance, attr, new_value)
+        new_instance.device = "cuda"
+        new_instance.q_mu = self.q_mu.cuda()
+        new_instance.moduliQ = self.moduliQ.cuda()
+        new_instance.primes = self.primes.cuda()
+        new_instance.power_of_roots = self.power_of_roots.cuda()
+        new_instance.power_of_roots_shoup = self.power_of_roots_shoup.cuda()
+        new_instance.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cuda()
+        new_instance.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cuda()
+        new_instance.barret_k = self.barret_k.cuda()
+        new_instance.barret_ratio = self.barret_ratio.cuda()
+        new_instance.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cuda()
+        new_instance.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cuda()
+        new_instance.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cuda()
+        new_instance.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cuda()
+        new_instance.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cuda()
+        new_instance.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cuda()
+        new_instance.prod_inv_moddown = self.prod_inv_moddown.cuda()
+        new_instance.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cuda()
+        new_instance.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cuda()
+        new_instance.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cuda()
+        new_instance.q_inv_mod_q = self.q_inv_mod_q.cuda()
+        new_instance.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cuda()
+        new_instance.mult_swk_bx = self.mult_swk_bx.cuda()
+        new_instance.mult_swk_ax = self.mult_swk_ax.cuda()
+        new_instance.inner_workspace = self.inner_workspace.cuda()
+        new_instance.inner_out = self.inner_out.cuda()
+        new_instance.moddown_out_ax = self.moddown_out_ax.cuda()
+        new_instance.moddown_out_bx = self.moddown_out_bx.cuda()
+        new_instance.modup_out = self.modup_out.cuda()
+        new_instance.rescale_out = self.rescale_out.cuda()
+        new_instance.automorphism_transform_out = self.automorphism_transform_out.cuda()
+        new_instance.mod_raise_out = self.mod_raise_out.cuda()
+        new_instance.PModq = self.PModq.cuda()
+        new_instance.max_int_diffs = self.max_int_diffs.cuda()
+        new_instance.QplusP_map = {k: v.cuda() for k, v in self.QplusP_map.items()}
+        new_instance.QmuplusPmu_map = {k: v.cuda() for k, v in self.QmuplusPmu_map.items()}
+        new_instance.QbarretKplusPbarretK_map = {k: v.cuda() for k, v in self.QbarretKplusPbarretK_map.items()}
+        new_instance.QbarretRatioplusPbarretRatio_map = {k: v.cuda() for k, v in self.QbarretRatioplusPbarretRatio_map.items()}
+        new_instance.QmaxdiffplusPmaxdiff_map = {k: v.cuda() for k, v in self.QmaxdiffplusPmaxdiff_map.items()}
+        new_instance.left_rot_key_map = {k: [v_.cuda() for v_ in v] for k, v in self.left_rot_key_map.items()}
+        new_instance.precompute_auto_map = {k: v.cuda() for k, v in self.precompute_auto_map.items()}
 
+        return new_instance
     # move to cpu
     def cpu(self):
-        self.device = "cpu"
-        self.q_mu = self.q_mu.cpu()
-        self.moduliQ = self.moduliQ.cpu()
-        self.primes = self.primes.cpu()
-        self.power_of_roots = self.power_of_roots.cpu()
-        self.power_of_roots_shoup = self.power_of_roots_shoup.cpu()
-        self.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu()
-        self.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cpu()
-        self.barret_k = self.barret_k.cpu()
-        self.barret_ratio = self.barret_ratio.cpu()
-        self.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu()
-        self.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu()
-        self.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu()
-        self.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cpu()
-        self.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu()
-        self.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu()
-        self.prod_inv_moddown = self.prod_inv_moddown.cpu()
-        self.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cpu()
-        self.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cpu()
-        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu()
-        self.q_inv_mod_q = self.q_inv_mod_q.cpu()
-        self.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cpu()
-        self.mult_swk_bx = self.mult_swk_bx.cpu()
-        self.mult_swk_ax = self.mult_swk_ax.cpu()
-        self.inner_workspace = self.inner_workspace.cpu()
-        self.inner_out = self.inner_out.cpu()
-        self.moddown_out_ax = self.moddown_out_ax.cpu()
-        self.moddown_out_bx = self.moddown_out_bx.cpu()
-        self.modup_out = self.modup_out.cpu()
-        self.rescale_out = self.rescale_out.cpu()
-        self.automorphism_transform_out = self.automorphism_transform_out.cpu()
-        self.mod_raise_out = self.mod_raise_out.cpu()
-        self.PModq = self.PModq.cpu()
-        # self.mult_key_map = [v.cpu() for v in self.mult_key_map]
-        # self.encode_params_ksiPows = self.encode_params_ksiPows.cpu()
-        # self.encode_params_rotGroup = self.encode_params_rotGroup.cpu()
-        # self.encode_temp = self.encode_temp.cpu()
-        # self.encode_inverse = self.encode_inverse.cpu()
-        self.max_int_diffs = self.max_int_diffs.cpu()
-        for key, value in self.QplusP_map.items():
-            self.QplusP_map[key] = value.cpu()
-        for key, value in self.QmuplusPmu_map.items():
-            self.QmuplusPmu_map[key] = value.cpu()
-        for key, value in self.QbarretKplusPbarretK_map.items():
-            self.QbarretKplusPbarretK_map[key] = value.cpu()
-        for key, value in self.QbarretRatioplusPbarretRatio_map.items():
-            self.QbarretRatioplusPbarretRatio_map[key] = value.cpu()
-        for key, value in self.QmaxdiffplusPmaxdiff_map.items():
-            self.QmaxdiffplusPmaxdiff_map[key] = value.cpu()
-        for key, _ in self.left_rot_key_map.items():
-            self.left_rot_key_map[key] = [
-                v.cpu() for v in self.left_rot_key_map[key]
-            ]
-        for key, _ in self.precompute_auto_map.items():
-            self.precompute_auto_map[key] = self.precompute_auto_map[key].cpu()
+        new_instance = self.__class__.__new__(self.__class__)
+        attrs_to_cpu = ["q_mu", "moduliQ", "primes", "power_of_roots", "power_of_roots_shoup",
+                        "inverse_power_of_roots_div_two", "inverse_scaled_power_of_roots_div_two",
+                        "barret_k", "barret_ratio", "hat_inverse_vec_modup", "hat_inverse_vec_shoup_modup",
+                        "prod_q_i_mod_q_j_modup", "hat_inverse_vec_moddown", "hat_inverse_vec_shoup_moddown",
+                        "prod_q_i_mod_q_j_moddown", "prod_inv_moddown", "prod_inv_shoup_moddown",
+                        "qlql_inv_mod_ql_div_ql_mod_q", "qlql_inv_mod_ql_div_ql_mod_q_shoup",
+                        "q_inv_mod_q", "q_inv_mod_q_shoup", "mult_swk_bx", "mult_swk_ax",
+                        "inner_workspace", "inner_out", "moddown_out_ax", "moddown_out_bx",
+                        "modup_out", "rescale_out", "automorphism_transform_out", 
+                        "mod_raise_out", "PModq", "max_int_diffs","QplusP_map", "QmuplusPmu_map","QbarretKplusPbarretK_map",
+                        "QbarretRatioplusPbarretRatio_map", "QmaxdiffplusPmaxdiff_map",
+                        "left_rot_key_map", "precompute_auto_map", "encode_values"]
+        for attr in dir(self):
+            if attr.startswith("__") :
+                continue
+            if(attr not in attrs_to_cpu):
+                value = getattr(self, attr)
+                new_value = value
+                setattr(new_instance, attr, new_value)
+        new_instance.device = "cpu"
+        new_instance.q_mu = self.q_mu.cpu()
+        new_instance.moduliQ = self.moduliQ.cpu()
+        new_instance.primes = self.primes.cpu()
+        new_instance.power_of_roots = self.power_of_roots.cpu()
+        new_instance.power_of_roots_shoup = self.power_of_roots_shoup.cpu()
+        new_instance.inverse_power_of_roots_div_two = self.inverse_power_of_roots_div_two.cpu()
+        new_instance.inverse_scaled_power_of_roots_div_two = self.inverse_scaled_power_of_roots_div_two.cpu()
+        new_instance.barret_k = self.barret_k.cpu()
+        new_instance.barret_ratio = self.barret_ratio.cpu()
+        new_instance.hat_inverse_vec_modup = self.hat_inverse_vec_modup.cpu()
+        new_instance.hat_inverse_vec_shoup_modup = self.hat_inverse_vec_shoup_modup.cpu()
+        new_instance.prod_q_i_mod_q_j_modup = self.prod_q_i_mod_q_j_modup.cpu()
+        new_instance.hat_inverse_vec_moddown = self.hat_inverse_vec_moddown.cpu()
+        new_instance.hat_inverse_vec_shoup_moddown = self.hat_inverse_vec_shoup_moddown.cpu()
+        new_instance.prod_q_i_mod_q_j_moddown = self.prod_q_i_mod_q_j_moddown.cpu()
+        new_instance.prod_inv_moddown = self.prod_inv_moddown.cpu()
+        new_instance.prod_inv_shoup_moddown = self.prod_inv_shoup_moddown.cpu()
+        new_instance.qlql_inv_mod_ql_div_ql_mod_q = self.qlql_inv_mod_ql_div_ql_mod_q.cpu()
+        new_instance.qlql_inv_mod_ql_div_ql_mod_q_shoup = self.qlql_inv_mod_ql_div_ql_mod_q_shoup.cpu()
+        new_instance.q_inv_mod_q = self.q_inv_mod_q.cpu()
+        new_instance.q_inv_mod_q_shoup = self.q_inv_mod_q_shoup.cpu()
+        new_instance.mult_swk_bx = self.mult_swk_bx.cpu()
+        new_instance.mult_swk_ax = self.mult_swk_ax.cpu()
+        new_instance.inner_workspace = self.inner_workspace.cpu()
+        new_instance.inner_out = self.inner_out.cpu()
+        new_instance.moddown_out_ax = self.moddown_out_ax.cpu()
+        new_instance.moddown_out_bx = self.moddown_out_bx.cpu()
+        new_instance.modup_out = self.modup_out.cpu()
+        new_instance.rescale_out = self.rescale_out.cpu()
+        new_instance.automorphism_transform_out = self.automorphism_transform_out.cpu()
+        new_instance.mod_raise_out = self.mod_raise_out.cpu()
+        new_instance.PModq = self.PModq.cpu()
+        new_instance.max_int_diffs = self.max_int_diffs.cpu()
+        new_instance.QplusP_map = {k: v.cpu() for k, v in self.QplusP_map.items()}
+        new_instance.QmuplusPmu_map = {k: v.cpu() for k, v in self.QmuplusPmu_map.items()}
+        new_instance.QbarretKplusPbarretK_map = {k: v.cpu() for k, v in self.QbarretKplusPbarretK_map.items()}
+        new_instance.QbarretRatioplusPbarretRatio_map = {k: v.cpu() for k, v in self.QbarretRatioplusPbarretRatio_map.items()}
+        new_instance.QmaxdiffplusPmaxdiff_map = {k: v.cpu() for k, v in self.QmaxdiffplusPmaxdiff_map.items()}
+        new_instance.left_rot_key_map = {k: [v_.cpu() for v_ in v] for k, v in self.left_rot_key_map.items()}
+        new_instance.precompute_auto_map = {k: v.cpu() for k, v in self.precompute_auto_map.items()}
 
+        new_instance.encode_values = {}
         for key, value in self.encode_values.items():
             if isinstance(value, Plaintext):
-                self.encode_values[key].cv = [self.encode_values[key].cv[0].cpu()]
+                new_instance.encode_values[key] = copy.deepcopy(value)
+                new_instance.encode_values[key].cv = [value.cv[0].cpu()]
             elif isinstance(value, PreEncodeValues):
-                self.encode_values[key].encoded_values = self.encode_values[key].encoded_values.cpu()
+                new_instance.encode_values[key] = copy.deepcopy(value)
+                new_instance.encode_values[key].encoded_values = value.encoded_values.cpu()
             else:
                 raise TypeError("Unsupported type for encode_values value: {}".format(type(value)))
 
         if self.config.AUTO_LOAD_KEYS:
-            for key, value in self.left_rot_key_map.items():
-                self.left_rot_key_map[key] = [
-                    v.cpu() for v in value
-                ]
-            for key, value in self.precompute_auto_map.items():
-                self.precompute_auto_map[key] = value.cpu()
+            for key, value in new_instance.left_rot_key_map.items():
+                new_instance.left_rot_key_map[key] = [v.cpu() for v in value]
+            for key, value in new_instance.precompute_auto_map.items():
+                new_instance.precompute_auto_map[key] = value.cpu()
+        return new_instance
 
     def norm_rot_index(self, i):
         if i < 0:
