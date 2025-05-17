@@ -20,13 +20,13 @@ def app_without_bs_example_debug_cpu(
         logBsSlots_list=[12],
         logN=14,
         dnum=3,
-        dcrtBits=59,
-        firstMod=60,
+        dcrtBits=52,
+        firstMod=55,
         levelBudget_list=[[4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
         save_dir =DATA_DIR
 ):
-#todo fix none   :  dcrtBits=53,firstMod=55,
+
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
@@ -43,54 +43,49 @@ def app_without_bs_example_debug_cpu(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1 << logBsSlots))
 
     # do the application computation
-    print("start")
-    # cipher_cuda = cipher.deep_copy()
-    # cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    # cryptoContext.to_cuda()
-    # cryptoContext.load_rotation_keys(logBsSlots)
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    # cryptoContext.BsContext.to_cuda()
-    # # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
-    # # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
-    # result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    print("start gpu")
+    cipher_cuda = cipher.deep_copy()
+    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    cryptoContext = cryptoContext.cuda()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
 
-
-
+    print("start cpu")
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
-    cryptoContext.cpu()
+    cryptoContext = cryptoContext.cpu()
     cryptoContext.load_rotation_keys(logBsSlots)
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    # cryptoContext.BsContext.cpu()
     # result2 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
     # result2 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
-    result2 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], level_budgets=levelBudget_list[0],cryptoContext=cryptoContext)
+    result2 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
 
-    # cipher_cuda = cipher.deep_copy()
-    # cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    # cryptoContext.to_cuda()
-    # cryptoContext.load_rotation_keys(logBsSlots)
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-    # cryptoContext.BsContext.to_cuda()
-    # # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
-    # # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
-    # result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    print("start gpu")
+    cipher_cuda = cipher.deep_copy()
+    cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
+    cryptoContext = cryptoContext.cuda()
+    cryptoContext.load_rotation_keys(logBsSlots)
+    # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
+    # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
+    result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
+    print("start cpu")
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
-    cryptoContext.cpu()
+    cryptoContext = cryptoContext.cpu()
     cryptoContext.load_rotation_keys(logBsSlots)
     # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     # cryptoContext.BsContext.cpu()
     # result4 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
     # result4 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
-    result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0],  level_budgets=levelBudget_list[0],cryptoContext=cryptoContext)
+    result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     start_time = time.time()
-    result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], level_budgets=levelBudget_list[0],cryptoContext=cryptoContext)
+    result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     elapsed_time = time.time() - start_time
-    print(f"eval_bootstrap cpu耗时: {elapsed_time:.4f} 秒")
+    print(f"eval_bootstrap cpu exec time: {elapsed_time:.4f} 秒")
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
@@ -99,16 +94,17 @@ def app_without_bs_example_debug_cpu(
     start_time = time.time()
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     elapsed_time = time.time() - start_time
-    print(f"eval_bootstrap openfhe_result耗时: {elapsed_time:.4f} 秒")
-    print("compare_gpufhe_ct_with_openfhe")
-    # is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
-    # print("is_equal", is_equal)
+    print(f"eval_bootstrap openfhe_result exec time: {elapsed_time:.4f} 秒")
+
+    print("compare with openfhe")
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
+    print("gpu is_equal", is_equal)
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
-    print("is_equal", is_equal)
-    # is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
-    # print("is_equal", is_equal)
+    print("cpu is_equal", is_equal)
+    is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
+    print("gpu is_equal", is_equal)
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result4, openfhe_result)
-    print("is_equal", is_equal)
+    print("cpu is_equal", is_equal)
 
 
 
@@ -1020,28 +1016,28 @@ if __name__ == "__main__":
 
     # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
     #     print("***********{}***********".format(rescaleTech))
-
+    #
     #     print("==========={}============".format('app_without_bs_example_debug'))
     #     app_without_bs_example_debug(rescaleTech = rescaleTech)
-
+    #
     #     print("==========={}============".format('app_example_debug'))
     #     app_example_debug(rescaleTech = rescaleTech)
-
+    #
     #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
     #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-
+    #
     #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
     #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-
+    #
     #     print("==========={}============".format('encode_test_case'))
     #     encode_test_case(rescaleTech = rescaleTech)
-
+    #
     #     print("==========={}============".format('ct_pt_test_case'))
     #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-
+    #
     #     print("==========={}============".format('test_plaintext_twin'))
     #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-
+    #
     #     print("==========={}============".format('double_bs_debug'))
     #     double_bs_debug(rescaleTech = rescaleTech)
     #     print("************************************".format(rescaleTech))

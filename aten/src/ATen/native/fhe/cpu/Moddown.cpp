@@ -34,8 +34,8 @@ void moddown_kernel(
     const uint64_t* ptr,
     const uint64_t* hat_mod_end,
     const int hat_mod_end_size,
-    const uint64_t start_length,
-    const uint64_t end_length,
+    const uint64_t start_length, //it should be the size of the Auxiliary CRT basis {P} = {p_1,...,p_k}
+    const uint64_t end_length, // it should be curr_limbs
     uint64_t* to) {
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);

@@ -72,12 +72,14 @@ static void modup_matmul_(
     const Tensor& prod_q_i_mod_q_j__,
     int64_t curr_limbs,
     int64_t level_) {
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - level_;
   const int unroll_factor = 1;
   const int begin_idx = (int)beta_idx * (int)param_alpha_;
   int start_length = ((begin_idx + param_alpha_) > curr_limbs)
       ? (curr_limbs - begin_idx)
       : param_alpha_;
-  const int end_length = curr_limbs + param_alpha_ - start_length;
+  const int end_length = curr_limbs + sizeP - start_length;
   int grid_dim{(int)param_degree_ * end_length / 256 / unroll_factor};
   int block_dim{256};
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_j__[beta_idx];
@@ -117,7 +119,7 @@ static void modup_impl_(
     uint64_t* to_ptr,
     int idx,
     int curr_limbs,
-    int level,
+    int level, // fixme: change all these var `level` into `total_limbs` or `L` for clarity?
     const Tensor& hat_inverse_vec__,
     const Tensor& hat_inverse_vec_shoup__,
     const int64_t param_degree_,
@@ -130,7 +132,9 @@ static void modup_impl_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  int num_moduli_after_modup = curr_limbs + param_alpha_;
+  int64_t sizeQP = param_primes__.numel();
+  int64_t sizeP = sizeQP - level;
+  int num_moduli_after_modup = curr_limbs + sizeP;
   size_t begin_idx = idx * param_alpha_;
   size_t in_C_L_len = ((begin_idx + param_alpha_) > curr_limbs)
       ? (curr_limbs - begin_idx)
@@ -215,7 +219,7 @@ static void modup(
     uint64_t* in_ptr,
     uint64_t* out_ptr,
     int64_t curr_limbs,
-    int64_t level,
+    int64_t level, // fixme: change all these var `level` into `total_limbs` or `L` for clarity?
     int64_t beta,
     int64_t param_degree_,
     int64_t param_alpha_,
@@ -229,7 +233,9 @@ static void modup(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  int num_moduli_after_modup = curr_limbs + param_alpha_;
+  int64_t sizeQP = param_primes__.numel();
+  int64_t sizeP = sizeQP - level;
+  int num_moduli_after_modup = curr_limbs + sizeP;
   for (int i = 0; i < beta; ++i) {
     modup_impl_(
         in_ptr + (param_alpha_ * param_degree_ * i),
