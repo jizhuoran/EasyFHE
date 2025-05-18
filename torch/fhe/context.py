@@ -175,7 +175,7 @@ class Context:
         QmaxdiffplusPmaxdiff_map,
         encode_values,
         QbarretKplusPbarretK_map,
-        QbarretRatioplusPbarretRatio_map,
+        QbarretRatioplusPbarretRatio_map
     ):
 
         #  self, gpufhe_content_map, config):

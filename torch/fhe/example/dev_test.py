@@ -39,9 +39,8 @@ def app_without_bs_example_debug_cpu(
 
     logBsSlots = logBsSlots_list[0]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(1 << logBsSlots)])
-    x = torch.tensor(x, device="cpu")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, (1 << logBsSlots))
+    x = [values[i % len(values)] for i in range(1 << logBsSlots)]
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, "cpu", 1, openfhe_context.depth - 1, (1 << logBsSlots))
 
     # do the application computation
     print("start gpu")
@@ -129,8 +128,8 @@ def app_without_bs_example_debug(
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
@@ -171,8 +170,8 @@ def app_example_debug(
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
@@ -259,13 +258,13 @@ def app_example_release(
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     # x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
-    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher = openfhe_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
     # x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
-    x1 = torch.tensor([values1[i % len(values1)] for i in range(encode_slots)], device=device)
-    cipher1 = openfhe_context.encrypt(x1, 1, 0, encode_slots)
+    x1 = [values1[i % len(values1)] for i in range(encode_slots)]
+    cipher1 = openfhe_context.encrypt(x1, device, 1, 0, encode_slots)
 
     # do the application computation
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
@@ -330,10 +329,10 @@ def encode_test_case(
     ############
     ## test 1 ##
     ############
-    x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
+    x = [0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0]
     encode_slots = (1<<10)
     plaintext = homo_ops.encode(x, "test1", 0, encode_slots, False, cryptoContext)
-    plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
+    plaintext_golden = openfhe_context.encode(x, device, 1, 0, encode_slots)
 
     all_correct = True
     attributes = [
@@ -414,7 +413,7 @@ def encode_test_case(
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device=device, dtype=torch.double)
     plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, False, cryptoContext)
 
-    plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
+    plaintext_golden = openfhe_context.encode(x, device, 1, 0, encode_slots)
 
     all_correct = True
     attributes = [
@@ -465,10 +464,9 @@ def ct_pt_test_case(
 
     encode_slots=(1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device=device)
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    encoded = openfhe_context.encode(values, 1, 0, encode_slots)
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, device, 1, 0, encode_slots)
+    encoded = openfhe_context.encode(values, device, 1, 0, encode_slots)
     encoded.cv[0] = encoded.cv[0].to(device)
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -550,10 +548,9 @@ def double_bs_debug(
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device=device)
+    x = [values[i % len(values)] for i in range(encode_slots)]
     openfhe_boot_context.config = openfhe_context.config
-    cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     precision = 17
 
@@ -622,9 +619,8 @@ def gen_CoeffSlots_matrix_test_case(
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device=device)
-    cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher = openfhe_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     # bootstrapping
     result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -770,13 +766,12 @@ def slim_bs_test_case(
     encode_slots = (1 << 13)
     Nh = (1<<logN-1)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(Nh)])
-    x = torch.tensor(x, device=device)
+    x = [values[i % len(values)] for i in range(Nh)]
 
     # add a mult
     # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
     cipher_level = cryptoContext.L - (maxLevelsRemaining + 1 + 4)  # fixme: poor work around here, since `eval_slots_to_coeffs_precompute` cant be accessed outside now
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, cipher_level, Nh)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, device, 1, cipher_level, Nh)
     cipher.slots = encode_slots
 
     result2 = eval_slim_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -796,7 +791,7 @@ def slim_bs_test_case(
 
 
     # transfer x to numpy on cpu
-    y = x.cpu().numpy()
+    y = np.array(x)
     diff = np.abs(y[:len(clear_result2)] - clear_result2)
     max_diff = np.max(diff)
     mean_diff = np.mean(diff)
