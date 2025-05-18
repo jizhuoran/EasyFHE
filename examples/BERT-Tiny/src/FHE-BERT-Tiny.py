@@ -1,18 +1,13 @@
 import itertools
 import subprocess
 from pathlib import Path
-import csv
 import torch.fhe as fhe
-import numpy as np
-import torch
 import os,time
-import shutil
 from utils import *
-import examples.resnet20.src.convs
 from examples.utils.approx import eval_chebyshev_function
 from triton.profiler.flags import command_line
 import math
-# 备注：
+
 DATA_DIR = os.environ["DATA_DIR"]
 global_num_slots = 1<<14
 # origin_input_folder = "../src/tmp_embeddings/"
@@ -254,6 +249,8 @@ def encoder1(cryptoContext,openfhe_context):
 
     inputs_count = sum(1 for _ in p1.iterdir())
 
+    print(f"{inputs_count} inputs were found")
+
     inputs=[]
     for i in range(inputs_count):
         inputs.append(read_expanded_input(openfhe_context,f"{input_folder}input_{i}.txt",global_num_slots))
@@ -286,6 +283,9 @@ def encoder1(cryptoContext,openfhe_context):
 
     output=matmulRE2(unwrapped_scores,V_wrapped,128,128,cryptoContext)
 
+
+    ############## The evaluation of Self-Attention Done #################
+
     dense_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_weight.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
     dense_b=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_bias.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
 
@@ -306,9 +306,12 @@ def encoder1(cryptoContext,openfhe_context):
 
     wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
-    output_copy=wrappedOutput.deep_copy()
+    output_copy=wrappedOutput.deep_copy() # Required at the last layernorm
 
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
+
+    ##################### The evaluation of Self-Output Done #####################
+
 
     GELU_max_abs_value = 1 / 13.5
 
@@ -331,13 +334,25 @@ def encoder1(cryptoContext,openfhe_context):
 
     unwrappedLargeOutput=unwrapRepeatedLarge(output,len(inputs),cryptoContext)
 
-    output_w_1=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_weight1.txt",cryptoContext.L-unwrappedLargeOutput[0][0].cur_limbs,1,global_num_slots)
-    output_w_2=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_weight2.txt",cryptoContext.L-unwrappedLargeOutput[0][0].cur_limbs,1,global_num_slots)
-    output_w_3=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_weight3.txt",cryptoContext.L-unwrappedLargeOutput[0][0].cur_limbs,1,global_num_slots)
-    output_w_4=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_weight4.txt",cryptoContext.L-unwrappedLargeOutput[0][0].cur_limbs,1,global_num_slots)
-    output_bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_output_bias.txt",cryptoContext.L-unwrappedLargeOutput[0][0].cur_limbs+1,1,global_num_slots)
+    ##################### The evaluation of Intermediate Done #####################
 
-    output=matmulCRlarge(unwrappedLargeOutput,[output_w_1, output_w_2, output_w_3, output_w_4],output_bias,cryptoContext)
+    weight_files = [f"../weights-sst2/layer0_output_weight{i}.txt" for i in range(1, 5)]
+    cur_limbs = cryptoContext.L - unwrappedLargeOutput[0][0].cur_limbs
+
+    output_weights = [
+        read_plain_input(cryptoContext, path, cur_limbs, 1, global_num_slots)
+        for path in weight_files
+    ]
+
+    output_bias = read_plain_expanded_input(
+        cryptoContext,
+        "../weights-sst2/layer0_output_bias.txt",
+        cur_limbs + 1,
+        1,
+        global_num_slots
+    )
+
+    output = matmulCRlarge(unwrappedLargeOutput, output_weights, output_bias, cryptoContext)
 
     wrappedOutput=wrapUpExpanded(output,cryptoContext)
     wrappedOutput=fhe.homo_add(wrappedOutput,output_copy,cryptoContext)
@@ -351,7 +366,9 @@ def encoder1(cryptoContext,openfhe_context):
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
 
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
-    #Todo:    controller.save(output, "../checkpoint/encoder1output.bin");保存序列化文件， 不保存也行
+
+    #################### The evaluation of Output Done ####################
+
     return output
 
 
@@ -380,7 +397,7 @@ def encoder2(inputs,cryptoContext):
 
     scores = eval_exp(scores, len(inputs), cryptoContext)
 
-    scores=fhe.homo_mul_scalar_double(scores,1/500.0,cryptoContext)
+    scores=fhe.homo_mul_scalar_double(scores,1/500.0,cryptoContext) # Here values are scaled down in order to achieve better accuracy with bootstrapping
     scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], cryptoContext)
     # use `homo_mul_scalar_int` instead of `homo_mul_scalar_double` to avoid overflow when computing `_get_element_for_eval_mult`
     # todo: yhh: see if this scaling up and down is necessary?
@@ -407,11 +424,13 @@ def encoder2(inputs,cryptoContext):
 
     output = matmulRE2(unwrapped_scores, V_wrapped, 128, 128, cryptoContext)
 
+    #################### The evaluation of Self-Attention Done ####################
+
     copyFirst=output[0].deep_copy()
     output = [copyFirst]  # Only keep CLS token, consistent with C++ encoder2
 
     dense_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_weight.txt", cryptoContext.L - output[0].cur_limbs,1,global_num_slots)
-    dense_b = read_plain_expanded_input(cryptoContext, "../weights-sst2/layer1_selfoutput_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots)
+    dense_b = read_plain_expanded_input(cryptoContext, "../weights-sst2/layer1_selfoutput_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots) # Bias do only 12 reps.
 
     output = matmulCR2(output, dense_w, dense_b, cryptoContext)
     for i in range(len(output)):
@@ -430,9 +449,11 @@ def encoder2(inputs,cryptoContext):
                                      cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
 
-    output_copy = wrappedOutput.deep_copy()
+    output_copy = wrappedOutput.deep_copy() # Required at the last layernorm
 
     output = unwrapExpanded(wrappedOutput, len(inputs), cryptoContext)
+
+    ###################### The evaluation of Self-Output Done ######################
 
     GELU_max_abs_value = 1 / 17.0
     dense_weights = [
@@ -447,6 +468,8 @@ def encoder2(inputs,cryptoContext):
         output[i] = fhe.homo_bootstrap(output[i], cryptoContext.L, logBsSlots_list[0],
                                        cryptoContext)
     unwrappedLargeOutput = unwrapRepeatedLarge(output, len(output), cryptoContext)
+
+    ######################## The evaluation of Intermediate Done ########################
 
     output_weights = [
         read_plain_input(cryptoContext, f"../weights-sst2/layer1_output_weight{i + 1}.txt", cryptoContext.L - output[0].cur_limbs, 1, global_num_slots)
@@ -465,7 +488,8 @@ def encoder2(inputs,cryptoContext):
                                      cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
     output = unwrapExpanded(wrappedOutput, len(inputs), cryptoContext)
-    # Todo:    controller.save(output, "../checkpoint/encoder1output.bin");保存序列化文件， 不保存也行
+
+    ############################ The evaluation of Output Done ############################
     return output[0]
 
 
@@ -725,5 +749,5 @@ if __name__ == "__main__":
     #     input_folder = origin_input_folder+data_dir+'/'
     #     BERT_Tiny()
 
-    input_folder = "/home/yky/FHE-MP-CNN/PNP/GPU-FHE/examples/BERT-Tiny/src/tmp_embeddings/0/" # "this is a bad movie"
+    input_folder = "./tmp_embeddings/0/" # "this is a bad movie" # todo: gen embeddings, tackle the server side part
     BERT_Tiny()
