@@ -281,6 +281,7 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 
 # note: EvalBootstrap in ckksrns-fhe.cpp
+# @utils.profile_pytorch_function
 def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
@@ -472,6 +473,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
             ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
         else:
             ctxtDec = eval_slots_to_coeffs(ctxtEnc, slots, level_budgets[1], cryptoContext)
+
 
         ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
         ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)

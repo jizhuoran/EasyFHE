@@ -1,0 +1,60 @@
+#include <ATen/Dispatch_v2.h>
+#include <ATen/TensorOperators.h>
+#include <ATen/core/Tensor.h>
+#include <ATen/core/TensorBody.h>
+#include <ATen/core/interned_strings.h>
+#include <ATen/ops/copy.h>
+#include <ATen/ops/empty.h>
+#include <ATen/ops/stack.h>
+#include <ATen/ops/zeros.h>
+#include <omp.h>
+
+#include "ATen/native/fhe/cpu/Utils.h"
+#pragma clang diagnostic ignored "-Wmissing-prototypes"
+
+namespace fhe {
+void automorphism_transform_kernel(
+    uint64_t* out,
+    const uint64_t* in,
+    const int64_t l,
+    const int64_t N,
+    const int* precomp_vec) {
+  const int max_threads = omp_get_max_threads();
+  omp_set_num_threads(max_threads);
+
+#pragma omp parallel for schedule(static) num_threads(max_threads)
+  for (int j = 0; j < l; j++) {
+    for (int i = 0; i < N; i++) {
+      out[j * N + i] = in[j * N + precomp_vec[i]];
+    }
+  }
+}
+
+} // namespace fhe
+
+namespace at::native {
+static void automorphism_transform_template(
+    Tensor& out,
+    const Tensor& in,
+    int64_t l,
+    int64_t N,
+    const Tensor& precomp_vec) {
+  auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
+  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+  auto precomp_vec_ptr =
+      reinterpret_cast<int32_t*>(precomp_vec.data_ptr<int32_t>());
+
+  fhe::automorphism_transform_kernel(out_ptr, in_ptr, l, N, precomp_vec_ptr);
+}
+
+Tensor automorphism_transform_cpu(
+    const Tensor& a,
+    int64_t l,
+    int64_t N,
+    const Tensor& precomp_vec) {
+  Tensor out = at::empty_like(a);
+  automorphism_transform_template(out, a, l, N, precomp_vec);
+  return out;
+}
+
+} // namespace at::native

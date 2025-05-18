@@ -4,7 +4,6 @@ import numpy as np
 
 Tensor = torch.Tensor
 
-
 def cv_check(x, modulus, cur_limbs):
     if isinstance(x, torch.Tensor):
         x = x.cpu().numpy()
@@ -23,7 +22,7 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
         scalar_list = [int(int(scalar) % int(modulus[l])) for l in range(cur_limbs)]
     else:
         scalar_list = [int(int(scalar[l]) % int(modulus[l])) for l in range(cur_limbs)]
-    return torch.from_numpy(np.array(scalar_list, dtype=np.uint64)).cuda()
+    return torch.from_numpy(np.array(scalar_list, dtype=np.uint64))
 
 
 def cv_neg(x, modulus, cur_limbs, inplace=False):
