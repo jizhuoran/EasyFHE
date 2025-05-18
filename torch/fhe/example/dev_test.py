@@ -34,7 +34,7 @@ def app_without_bs_example_debug_cpu(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, "cuda", save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     logBsSlots = logBsSlots_list[0]
@@ -97,18 +97,18 @@ def app_without_bs_example_debug_cpu(
     elapsed_time = time.time() - start_time
     print(f"eval_bootstrap openfhe_result exec time: {elapsed_time:.4f} 秒")
 
+    def check_and_print(name, result, openfhe_result):
+        is_equal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_result)
+        print(f"{name} is_equal: {is_equal}")
+        if is_equal:
+            print("Test passed!")
+        else:
+            print_failed(f"{name}: Test failed!")
     print("compare with openfhe")
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result1, openfhe_result)
-    print("gpu is_equal", is_equal)
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_result)
-    print("cpu is_equal", is_equal)
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result3, openfhe_result)
-    print("gpu is_equal", is_equal)
-    is_equal = utils.compare_gpufhe_ct_with_openfhe(result4, openfhe_result)
-    print("cpu is_equal", is_equal)
-
-
-
+    check_and_print("gpu (result1)", result1, openfhe_result)
+    check_and_print("cpu (result2)", result2, openfhe_result)
+    check_and_print("gpu (result3)", result3, openfhe_result)
+    check_and_print("cpu (result4)", result4, openfhe_result)
 
 
 def app_without_bs_example_debug(
@@ -250,6 +250,7 @@ def app_example_release(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR,
         AUTO_LOAD_KEYS=True
 ):
@@ -257,20 +258,20 @@ def app_example_release(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=AUTO_LOAD_KEYS)
     cryptoContext, openfhe_context = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     print("Current allocated memory (GB):", torch.cuda.memory_allocated() / 1024 / 1024 / 1024)
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    # x = np.array([values[i % len(values)] for i in range(encode_slots)])
+    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
     cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     values1 = [0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888, 0.888888]
-    x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
-    x1 = torch.tensor(x1, device="cuda")
+    # x1 = np.array([values1[i % len(values1)] for i in range(encode_slots)])
+    x1 = torch.tensor([values1[i % len(values1)] for i in range(encode_slots)], device=device)
     cipher1 = openfhe_context.encrypt(x1, 1, 0, encode_slots)
 
     # do the application computation
@@ -325,12 +326,13 @@ def encode_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR
 ):
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=True)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
     ############
     ## test 1 ##
@@ -372,7 +374,7 @@ def encode_test_case(
     # encode_slots = (1 << 11)
     # values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     # x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    # x = torch.tensor(x, device="cuda")
+    # x = torch.tensor(x, device=device)
     # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
     # encoded = homo_ops.encode(x, 0, encode_slots, False, cryptoContext)
 
@@ -393,7 +395,7 @@ def encode_test_case(
     # encode_slots = (1 << 11)
     # values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     # x = np.array(values)
-    # x = torch.tensor(x, device="cuda")
+    # x = torch.tensor(x, device=device)
     # cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
     # encoded = homo_ops.encode(x, 0, encode_slots, False, cryptoContext)
 
@@ -416,7 +418,7 @@ def encode_test_case(
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
     pre_encode_value = homo_ops.pre_encode(x, encode_slots)
-    pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
+    pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device=device, dtype=torch.double)
     plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, False, cryptoContext)
 
     plaintext_golden = openfhe_context.encode(x, 1, 0, encode_slots)
@@ -457,6 +459,7 @@ def ct_pt_test_case(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR,
         plaintext_twin = False
 ):
@@ -464,16 +467,16 @@ def ct_pt_test_case(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True, PTX_TWIN = plaintext_twin)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     encode_slots=(1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor(x, device=device)
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
     encoded = openfhe_context.encode(values, 1, 0, encode_slots)
-
+    encoded.cv[0] = encoded.cv[0].to(device)
     result = homo_ops.homo_add_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
@@ -541,21 +544,21 @@ def double_bs_debug(
         firstMod=56,
         levelBudget_list=[[3, 3]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR,
-        mode = "debug" # "debug" or "release"
 ):
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots_list[0])]
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor(x, device=device)
     openfhe_boot_context.config = openfhe_context.config
     cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
@@ -591,12 +594,13 @@ def gen_CoeffSlots_matrix_test_case(
         firstMod=60,
         levelBudget_list=[[3,3]], # fixme: should check if levelBudget_list is too large as in eval_bootstrap_setup
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR
 ):
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, SAVE_MIDDLE=False, ENCODE_BS_FFT=False)
     cryptoContext, openfhe_context= (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
     # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
     # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
@@ -627,7 +631,7 @@ def gen_CoeffSlots_matrix_test_case(
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor(x, device=device)
     cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # bootstrapping
@@ -690,18 +694,19 @@ def slim_bs_test_case(
         firstMod=60,
         levelBudget_list=[[4,4]], # fixme: should check if levelBudget_list is too large as in eval_bootstrap_setup
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR
 ):
     # config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC = True, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
     # cryptoContext, openfhe_context, _ = (
     #     utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-    #                            levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+    #                            levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
     #                            config=config))
     #
     # encode_slots = (1 << 13)
     # values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     # x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    # x = torch.tensor(x, device="cuda")
+    # x = torch.tensor(x, device=device)
     #
     # # add a mult
     # # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
@@ -772,14 +777,14 @@ def slim_bs_test_case(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC = True, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     encode_slots = (1 << 13)
     Nh = (1<<logN-1)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(Nh)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor(x, device=device)
 
     # add a mult
     # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
@@ -838,7 +843,7 @@ def slim_bs_test_case(
 #     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC = True, COMPARE_WITH_OPENFHE=True, SAVE_MIDDLE=False)
 #     cryptoContext, openfhe_context, _ = (
 #         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-#                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+#                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
 #                                config=config))
 #
 #     # encryption
@@ -848,13 +853,13 @@ def slim_bs_test_case(
 #     x[0] = 0.4
 #     x[4096] = -0.2 # considering the bit reverse
 #     print("x", x[:2], x[4096:4096+2])
-#     x = torch.tensor(x, device="cuda")
+#     x = torch.tensor(x, device=device)
 #
 #     y = np.array([0.0] * Nh)
 #     y[0] = 2
 #     y[4096] = -1 # considering the bit reverse
 #     print("y: ", y[:2], y[4096:4096+2])
-#     y = torch.tensor(y, device="cuda")
+#     y = torch.tensor(y, device=device)
 #
 #     # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
 #     cipher_limbs = cryptoContext.L - 2 - levelBudget_list[0][1] - 1 # one for the following mult computation
@@ -1007,34 +1012,39 @@ def slim_bs_test_case(
 ##############
 
 if __name__ == "__main__":
-    # app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
 
-    # gen_CoeffSlots_matrix_test_case()
-    # slim_bs_test_case()
+    app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
+
+    gen_CoeffSlots_matrix_test_case()
+    slim_bs_test_case()
     # # hybrid_bs_test_case() # todo: to be supported
 
     for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
         for device in ["cuda", "cpu"]:
             print("==========={}, {}, {}============".format(rescaleTech, device, "app_without_bs_example_debug"))
             app_without_bs_example_debug(rescaleTech = rescaleTech, device=device)
+
             print("==========={}, {}, {}============".format(rescaleTech, device, "app_example_debug"))
             app_example_debug(rescaleTech = rescaleTech, device=device)
-        #
-        #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-        #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-        #
-        #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-        #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-        #
-        #     print("==========={}============".format('encode_test_case'))
-        #     encode_test_case(rescaleTech = rescaleTech)
-        #
-        #     print("==========={}============".format('ct_pt_test_case'))
-        #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-        #
-        #     print("==========={}============".format('test_plaintext_twin'))
-        #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-        #
-        #     print("==========={}============".format('double_bs_debug'))
-        #     double_bs_debug(rescaleTech = rescaleTech)
-        #     print("************************************".format(rescaleTech))
+
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'app_example_release NOT AUTO_LOAD_KEYS'))
+            app_example_release(rescaleTech = rescaleTech, device=device, AUTO_LOAD_KEYS=False)
+
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'app_example_release AUTO_LOAD_KEYS'))
+            app_example_release(rescaleTech = rescaleTech, device=device, AUTO_LOAD_KEYS=True)
+
+            if device == "cuda":
+                print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
+                encode_test_case(rescaleTech = rescaleTech, device=device)
+            else:
+                print("to be implemented")
+
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'ct_pt_test_case'))
+            ct_pt_test_case(rescaleTech = rescaleTech, device=device, plaintext_twin = False)
+
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'test_plaintext_twin'))
+            ct_pt_test_case(rescaleTech = rescaleTech, device=device, plaintext_twin = True)
+
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'double_bs_debug'))
+            double_bs_debug(rescaleTech = rescaleTech, device=device)
+            print("************************************".format(rescaleTech))
