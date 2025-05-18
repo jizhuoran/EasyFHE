@@ -220,6 +220,7 @@ Tensor moddown_cpu(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   auto res = at::empty({curr_limbs * N}, in.options());
+//   auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   auto workspace = in.clone();
   moddown_cpu_template(
       workspace,

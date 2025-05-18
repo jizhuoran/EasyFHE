@@ -483,10 +483,7 @@ class Context:
         if self.device == "cuda" and not self.left_rot_key_map[rot_index][0].is_cuda:
             return [self.left_rot_key_map[rot_index][0].cuda(), self.left_rot_key_map[rot_index][1].cuda()]
         else:
-            return [
-                torch.tensor(v, dtype=torch.uint64, device=self.device)
-                for v in self.total_left_rot_key_map[rot_index]
-            ]
+            return self.left_rot_key_map[rot_index]
 
     def get_precompute_auto(self, key):
         if self.device == "cuda" and not self.precompute_auto_map[key].is_cuda:
@@ -494,14 +491,3 @@ class Context:
         else:
             return self.precompute_auto_map[key]
 
-    def load_rotation_keys(self, key_name):
-        for key in self.slots_left_rot_key_map[str(key_name)]:
-            if key not in self.left_rot_key_map:
-                self.left_rot_key_map[key] = [
-                    torch.tensor(v, dtype=torch.uint64, device=self.device) # fixme:??
-                    for v in self.total_left_rot_key_map[key]
-                ]
-        for key, value in self.slots_precompute_auto_map[str(key_name)].items():
-            self.precompute_auto_map[key] = torch.tensor(
-                value, dtype=torch.int32, device=self.device
-            )
