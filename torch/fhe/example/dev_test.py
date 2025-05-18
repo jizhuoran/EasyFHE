@@ -1017,7 +1017,8 @@ if __name__ == "__main__":
                 print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
                 encode_test_case(rescaleTech = rescaleTech, device=device)
             else:
-                print("to be implemented")
+                print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
+                print("TO BE IMPLEMENTED")
 
             print("==========={}, {}, {}============".format(rescaleTech, device, 'ct_pt_test_case'))
             ct_pt_test_case(rescaleTech = rescaleTech, device=device, plaintext_twin = False)
