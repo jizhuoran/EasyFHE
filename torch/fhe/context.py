@@ -332,14 +332,21 @@ class Context:
         for key_name in self.slots_left_rot_key_map:
             for key in self.slots_left_rot_key_map[str(key_name)]:
                 self.left_rot_key_map[key] = [
-                    torch.tensor(v, dtype=torch.uint64, device=self.device)
+                    torch.tensor(v, dtype=torch.uint64)
                     for v in self.total_left_rot_key_map[key]
                 ]
         for key_name in self.slots_precompute_auto_map:
             for key, value in self.slots_precompute_auto_map[str(key_name)].items():
                 self.precompute_auto_map[key] = torch.tensor(
-                    value, dtype=torch.int32, device=self.device
+                    value, dtype=torch.int32
                 )
+        if config.AUTO_LOAD_KEYS and device == "cuda":
+            for key, value in self.left_rot_key_map.items():
+                self.left_rot_key_map[key] = [
+                    value[0].cuda(), value[1].cuda()
+                ]
+            for key, value in self.precompute_auto_map.items():
+                self.precompute_auto_map[key] = value.cuda()
 
         for key, value in self.encode_values.items():
             if isinstance(value, Plaintext):
