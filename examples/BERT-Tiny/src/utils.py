@@ -7,12 +7,14 @@ import warnings
 DATA_DIR = os.environ["DATA_DIR"]
 encoded_weight = {}
 NEW_VERSION = False
-
+import numpy as np
 if NEW_VERSION:
 
 
 
+
     def load_weight(encode_weight_path, cryptoContext):
+
         with open(encode_weight_path, 'rb') as f:
             pre_encoded = pickle.load(f)
         if cryptoContext.PRELOAD_ALL:
@@ -77,7 +79,7 @@ if NEW_VERSION:
 
 
     def read_plain_repeated_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
-
+        # Assumption: inputs have 128 values
         val_name = filename
         if cryptoContext.PRELOAD_ALL:
             return cryptoContext.pre_encoded[
@@ -221,8 +223,9 @@ else:
         if scale != 1:
             for i in range(size):
                 input[i] = input[i] * scale
-        x = torch.tensor(input, dtype=torch.float64).cuda()
-        encoded=fhe.encode(x, scale_deg, level, slots, False, cryptoContext)
+
+        x=np.array(input, dtype=np.double)
+        encoded=fhe.encode(x, "yky", level, slots, False, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         encoded_weight[key] = encoded
@@ -246,8 +249,8 @@ else:
         if scale != 1:
             for i in range(size):
                 repeated[i] = repeated[i] * scale
-        x = torch.tensor(repeated, dtype=torch.float64).cuda()
-        encoded=fhe.encode(x, scale_deg, level, slots, False, cryptoContext)
+        x=np.array(repeated, dtype=np.double)
+        encoded=fhe.encode(x, "yky", level, slots, False, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         encoded_weight[key] = encoded
@@ -298,8 +301,8 @@ else:
 
         if scale != 1:
             repeated = [x * scale for x in repeated]
-        x = torch.tensor(repeated, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, scale_deg, level, slots, False, cryptoContext)
+        x = np.array(repeated, dtype=np.double)
+        encoded = fhe.encode(x, "yky", level, slots, False, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         encoded_weight[key] = encoded
@@ -314,8 +317,8 @@ else:
                 mask.append(mask_value)
             else:
                 mask.append(0)
-        x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded=fhe.encode(x, 1, level, c.slots, False, cryptoContext)
+        x = np.array(mask, dtype=np.double)
+        encoded=fhe.encode(x, "yky", level, c.slots, False, cryptoContext)
         temp=fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_block_{}_{}_{}_{}".format( level, fro,to, c.slots)
@@ -333,8 +336,8 @@ else:
                 mask.append(mask_value)
             else:
                 mask.append(0)
-        x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
+        x = np.array(mask, dtype=np.double)
+        encoded = fhe.encode(x, "yky", 0, c.slots, False, cryptoContext)
         temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_heads_{}_{}_{}".format(0, mask_value, c.slots)
@@ -381,8 +384,8 @@ else:
             else:
                 mask.append(-1)
 
-        x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, cryptoContext.L-res.cur_limbs, num_slots, False, cryptoContext)
+        x = np.array(mask, dtype=np.double)
+        encoded = fhe.encode(x, "yky", cryptoContext.L-res.cur_limbs, num_slots, False, cryptoContext)
         temp = fhe.homo_add_pt(res, encoded, cryptoContext)
 
         encoded.cv[0].cpu().numpy()
@@ -399,8 +402,8 @@ else:
                 mask.append(1)
             else:
                 mask.append(0)
-        x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
+        x = np.array(mask, dtype=np.double)
+        encoded = fhe.encode(x, "yky", 0, c.slots, False, cryptoContext)
         temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_mod_n_{}_{}_{}".format(0, padding, c.slots)
@@ -415,8 +418,8 @@ else:
                 mask.append(mask_value)
             else:
                 mask.append(0)
-        x = torch.tensor(mask, dtype=torch.float64).cuda()
-        encoded = fhe.encode(x, 1, 0, c.slots, False, cryptoContext)
+        x = np.array(mask, dtype=np.double)
+        encoded = fhe.encode(x, "yky", 0, c.slots, False, cryptoContext)
         temp = fhe.homo_mul_pt(c, encoded, cryptoContext)
         encoded.cv[0].cpu().numpy()
         key = "mask_first_n_{}_{}_{}".format(0, mask_value, c.slots)
@@ -430,3 +433,14 @@ def save_encoded_weight():
             encoded_weight[key].cv = [value.cv[0].cpu().numpy()]
         with open(DATA_DIR + "/weight.pkl", "wb") as f:
             pickle.dump(encoded_weight, f)
+
+def eval_add_many(ciphertexts, cryptoContext):
+    # plain implementation of EvalAddMany
+    inSize = len(ciphertexts)
+    if inSize < 1:
+        raise ValueError("Input ciphertext vector size should be 1 or more")
+    sum = ciphertexts[0].deep_copy()
+    for i in range(1,inSize):
+        sum = fhe.homo_add(sum, ciphertexts[i], cryptoContext)
+
+    return sum
