@@ -2,7 +2,7 @@ import itertools
 import subprocess
 from pathlib import Path
 import torch.fhe as fhe
-import os,time
+import os,time, datetime
 from utils import *
 from examples.utils.approx import eval_chebyshev_function
 from triton.profiler.flags import command_line
@@ -13,15 +13,7 @@ global_num_slots = 1<<14
 # origin_input_folder = "../src/tmp_embeddings/"
 # input_folder="src/tmp_embeddings/"
 logBsSlots_list = [14] # todo: do not use global variable
-def read_fc_weight(filename):
-    weight=read_values_from_file("../weights/fc.bin")
-    weight_corrected=[]
-    for i in range(64):
-        for j in range(10):
-            weight_corrected.append(weight[(10*i)+j])
-            for j in range(54):
-                weight_corrected.append(0)
-    return weight_corrected
+
 
 def log2_int(x):
     import math
@@ -100,8 +92,8 @@ def repeat(input,slots,cryptoContext,padding=1):
 def unwrap_scores_expanded(c,inputs_num,cryptoContext):
     result=[]
     for i in range(inputs_num):
-        i_th_1=mask_mod_n(c,128,0,inputs_num*128,cryptoContext)
-        i_th_2=mask_mod_n(c,128, 64,inputs_num*128,cryptoContext)
+        i_th_1= mask_mod_n(c, 128, 0, cryptoContext)
+        i_th_2= mask_mod_n(c, 128, 64, cryptoContext)
         i_th_1=repeat(i_th_1,64,cryptoContext)
         i_th_2 = repeat(i_th_2, 64, cryptoContext)
         if i <inputs_num-1:
@@ -109,25 +101,13 @@ def unwrap_scores_expanded(c,inputs_num,cryptoContext):
         result.append(fhe.homo_add(i_th_1,i_th_2,cryptoContext))
     return result
 
-def mask_mod_n2(ciphertext, n, cryptoContext):
-    num_slots = ciphertext.slots # todo: check if they are equal
-    mask = []
-    for i in range(num_slots):
-        if i%n==0:
-            mask.append(1.0)
-        else:
-            mask.append(0.0)
-    mask = np.array(mask, dtype=np.double)
-    pt = fhe.encode(mask,1, cryptoContext.L - ciphertext.cur_limbs, num_slots, False, cryptoContext)
-    return fhe.homo_mul_pt(ciphertext, pt, cryptoContext)
-
 
 def wrapUpExpanded(vectors,cryptoContext):
-    masked=mask_mod_n2(vectors[-1],128,cryptoContext)
+    masked= mask_mod_n(vectors[-1], 128, 0, cryptoContext)
     if len(vectors) > 1:
         masked = fhe.homo_rotate(masked, -1, cryptoContext)
     for i in range(len(vectors)-2,-1,-1):
-        masked=fhe.homo_add(masked,mask_mod_n2(vectors[i],128,cryptoContext),cryptoContext)
+        masked=fhe.homo_add(masked, mask_mod_n(vectors[i], 128, 0, cryptoContext), cryptoContext)
         if i>0:
             masked=fhe.homo_rotate(masked,-1,cryptoContext)
     return masked
@@ -135,7 +115,7 @@ def wrapUpExpanded(vectors,cryptoContext):
 def unwrapExpanded(c,inputs_num,cryptoContext):
     result=[]
     for i in range(inputs_num):
-        out=mask_mod_n(c,128,0,inputs_num*128,cryptoContext)
+        out= mask_mod_n(c, 128, 0, cryptoContext)
         out=repeat(out,128,cryptoContext)
         if i<inputs_num-1:
             c=fhe.homo_rotate(c,1,cryptoContext)
@@ -253,12 +233,12 @@ def encoder1(cryptoContext,openfhe_context):
 
     inputs=[]
     for i in range(inputs_count):
-        inputs.append(read_expanded_input(openfhe_context,f"{input_folder}input_{i}.txt",global_num_slots))
+        inputs.append(read_expanded_input(openfhe_context, f"{input_folder}input_{i}.txt",0,1,global_num_slots))
 
-    query_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_query_weight.txt",0,1,global_num_slots)
-    query_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_query_bias.txt",0,1,1.0,global_num_slots)
-    key_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_key_weight.txt",0,1,global_num_slots)
-    key_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_key_bias.txt",0, 1, 1.0,global_num_slots)
+    query_w=read_plain_input(cryptoContext,"layer0_attself_query_weight",0,1,global_num_slots)
+    query_b= read_plain_repeated_input(cryptoContext, "layer0_attself_query_bias", 0, 1, global_num_slots, 1.0)
+    key_w=read_plain_input(cryptoContext,"layer0_attself_key_weight",0,1,global_num_slots)
+    key_b= read_plain_repeated_input(cryptoContext, "layer0_attself_key_bias", 0, 1, global_num_slots, 1.0)
 
     Q=matmulRE1(inputs,query_w,query_b,cryptoContext)
     K=matmulRE1(inputs,key_w,key_b,cryptoContext)
@@ -275,8 +255,9 @@ def encoder1(cryptoContext,openfhe_context):
 
     unwrapped_scores=unwrap_scores_expanded(scores, len(inputs), cryptoContext)
 
-    value_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_attself_value_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
-    value_b=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_attself_value_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1,1.0,global_num_slots)
+    value_w=read_plain_input(cryptoContext,"layer0_attself_value_weight",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
+    value_b= read_plain_repeated_input(cryptoContext, "layer0_attself_value_bias",
+                                       cryptoContext.L - inputs[0].cur_limbs, 1, global_num_slots, 1.0)
 
     V=matmulRE1(inputs,value_w,value_b,cryptoContext) #fixme: 250410, yhh debug uptil here #为什么上面的value_w的level，把cryptoContext.L-inputs[0].cur_limbs换成 cryptoContext.L-score.cur_limbs-2 可以复现，进去之后第二个会g
     V_wrapped=wrapUpRepeated(V,cryptoContext)
@@ -286,8 +267,8 @@ def encoder1(cryptoContext,openfhe_context):
 
     ############## The evaluation of Self-Attention Done #################
 
-    dense_w=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_weight.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
-    dense_b=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_bias.txt",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
+    dense_w=read_plain_input(cryptoContext,"layer0_selfoutput_weight",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
+    dense_b=read_plain_expanded_input(cryptoContext,"layer0_selfoutput_bias",cryptoContext.L-output[0].cur_limbs-2,1,global_num_slots)
 
     output=matmulCR2(output,dense_w,dense_b,cryptoContext)
 
@@ -296,12 +277,13 @@ def encoder1(cryptoContext,openfhe_context):
 
     wrappedOutput=wrapUpExpanded(output,cryptoContext)
 
-    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_selfoutput_mean.txt",cryptoContext.L-wrappedOutput.cur_limbs,1, -1.0, global_num_slots)
+    precomputed_mean= read_plain_repeated_input(cryptoContext, "layer0_selfoutput_mean",
+                                                cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, -1.0)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,precomputed_mean,cryptoContext)
 
-    vy=read_plain_input(cryptoContext,"../weights-sst2/layer0_selfoutput_vy.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
+    vy=read_plain_input(cryptoContext,"layer0_selfoutput_vy",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput=fhe.homo_mul_pt(wrappedOutput,vy,cryptoContext)
-    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_selfoutput_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
+    bias=read_plain_expanded_input(cryptoContext,"layer0_selfoutput_normbias",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
 
     wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], cryptoContext)
@@ -315,14 +297,14 @@ def encoder1(cryptoContext,openfhe_context):
 
     GELU_max_abs_value = 1 / 13.5
 
-    intermediate_w_1=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight1.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
-    intermediate_w_2=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight2.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
-    intermediate_w_3=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight3.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
-    intermediate_w_4=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_weight4.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_1=read_plain_input(cryptoContext,"layer0_intermediate_weight1",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_2=read_plain_input(cryptoContext,"layer0_intermediate_weight2",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_3=read_plain_input(cryptoContext,"layer0_intermediate_weight3",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
+    intermediate_w_4=read_plain_input(cryptoContext,"layer0_intermediate_weight4",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,GELU_max_abs_value)
 
     dense_weights=[intermediate_w_1, intermediate_w_2, intermediate_w_3, intermediate_w_4]
 
-    intermediate_bias=read_plain_input(cryptoContext,"../weights-sst2/layer0_intermediate_bias.txt",cryptoContext.L-output[0].cur_limbs-1,1,global_num_slots,GELU_max_abs_value)
+    intermediate_bias=read_plain_input(cryptoContext,"layer0_intermediate_bias",cryptoContext.L-output[0].cur_limbs-1,1,global_num_slots,GELU_max_abs_value)
 
     output=matmulRElarge(output,dense_weights,intermediate_bias, 1, cryptoContext)
 
@@ -336,7 +318,7 @@ def encoder1(cryptoContext,openfhe_context):
 
     ##################### The evaluation of Intermediate Done #####################
 
-    weight_files = [f"../weights-sst2/layer0_output_weight{i}.txt" for i in range(1, 5)]
+    weight_files = [f"layer0_output_weight{i}" for i in range(1, 5)]
     cur_limbs = cryptoContext.L - unwrappedLargeOutput[0][0].cur_limbs
 
     output_weights = [
@@ -346,7 +328,7 @@ def encoder1(cryptoContext,openfhe_context):
 
     output_bias = read_plain_expanded_input(
         cryptoContext,
-        "../weights-sst2/layer0_output_bias.txt",
+        "layer0_output_bias",
         cur_limbs + 1,
         1,
         global_num_slots
@@ -357,12 +339,14 @@ def encoder1(cryptoContext,openfhe_context):
     wrappedOutput=wrapUpExpanded(output,cryptoContext)
     wrappedOutput=fhe.homo_add(wrappedOutput,output_copy,cryptoContext)
 
-    precomputed_mean=read_plain_repeated_input(cryptoContext,"../weights-sst2/layer0_output_mean.txt", cryptoContext.L-wrappedOutput.cur_limbs-1, 1, -1.0, global_num_slots)
+    precomputed_mean= read_plain_repeated_input(cryptoContext, "layer0_output_mean",
+                                                cryptoContext.L - wrappedOutput.cur_limbs - 1, 1, global_num_slots,
+                                                -1.0)
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,precomputed_mean,cryptoContext)
 
-    vy=read_plain_input(cryptoContext,"../weights-sst2/layer0_output_vy.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
+    vy=read_plain_input(cryptoContext,"layer0_output_vy",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput=fhe.homo_mul_pt(wrappedOutput,vy,cryptoContext)
-    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/layer0_output_normbias.txt",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
+    bias=read_plain_expanded_input(cryptoContext,"layer0_output_normbias",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
 
     output=unwrapExpanded(wrappedOutput,len(inputs),cryptoContext)
@@ -381,10 +365,12 @@ def eval_inverse_naive2(c,min,max,mult,cryptoContext):
 
 
 def encoder2(inputs,cryptoContext):
-    query_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_query_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
-    query_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_query_bias.txt",cryptoContext.L-inputs[0].cur_limbs,1, 1.0,global_num_slots)
-    key_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_key_weight.txt",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
-    key_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_key_bias.txt",cryptoContext.L-inputs[0].cur_limbs, 1, 1.0,global_num_slots)
+    query_w = read_plain_input(cryptoContext,"layer1_attself_query_weight",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
+    query_b = read_plain_repeated_input(cryptoContext, "layer1_attself_query_bias",
+                                        cryptoContext.L - inputs[0].cur_limbs, 1, global_num_slots, 1.0)
+    key_w = read_plain_input(cryptoContext,"layer1_attself_key_weight",cryptoContext.L-inputs[0].cur_limbs,1,global_num_slots)
+    key_b = read_plain_repeated_input(cryptoContext, "layer1_attself_key_bias", cryptoContext.L - inputs[0].cur_limbs,
+                                      1, global_num_slots, 1.0)
 
     Q = matmulRE1(inputs, query_w, query_b, cryptoContext)
     K = matmulRE1(inputs, key_w, key_b, cryptoContext)
@@ -415,9 +401,9 @@ def encoder2(inputs,cryptoContext):
 
     unwrapped_scores = unwrap_scores_expanded(scores, len(inputs), cryptoContext)
 
-    value_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_attself_value_weight.txt", cryptoContext.L -inputs[0].cur_limbs,1,global_num_slots)
-    value_b = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_attself_value_bias.txt",
-                                        cryptoContext.L - inputs[0].cur_limbs, 1, 1.0,global_num_slots )
+    value_w = read_plain_input(cryptoContext,"layer1_attself_value_weight", cryptoContext.L -inputs[0].cur_limbs,1,global_num_slots)
+    value_b = read_plain_repeated_input(cryptoContext, "layer1_attself_value_bias",
+                                        cryptoContext.L - inputs[0].cur_limbs, 1, global_num_slots, 1.0)
 
     V = matmulRE1(inputs, value_w, value_b, cryptoContext)
     V_wrapped = wrapUpRepeated(V, cryptoContext)
@@ -429,23 +415,23 @@ def encoder2(inputs,cryptoContext):
     copyFirst=output[0].deep_copy()
     output = [copyFirst]  # Only keep CLS token, consistent with C++ encoder2
 
-    dense_w = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_weight.txt", cryptoContext.L - output[0].cur_limbs,1,global_num_slots)
-    dense_b = read_plain_expanded_input(cryptoContext, "../weights-sst2/layer1_selfoutput_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots) # Bias do only 12 reps.
+    dense_w = read_plain_input(cryptoContext,"layer1_selfoutput_weight", cryptoContext.L - output[0].cur_limbs,1,global_num_slots)
+    dense_b = read_plain_expanded_input(cryptoContext, "layer1_selfoutput_bias", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots) # Bias do only 12 reps.
 
     output = matmulCR2(output, dense_w, dense_b, cryptoContext)
     for i in range(len(output)):
         output[i] = fhe.homo_add(output[i], inputs[i], cryptoContext)  # Residual add only uses inputs[0] (CLS)
 
     wrappedOutput = wrapUpExpanded(output, cryptoContext)
-    precomputed_mean = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_selfoutput_mean.txt",
-                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1, -1.0, global_num_slots)
+    precomputed_mean = read_plain_repeated_input(cryptoContext, "layer1_selfoutput_mean",
+                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, -1.0)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, precomputed_mean, cryptoContext)
 
     wrappedOutput = fhe.homo_bootstrap(wrappedOutput, cryptoContext.L, logBsSlots_list[0], cryptoContext)
 
-    vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_selfoutput_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs,1,global_num_slots)
+    vy = read_plain_input(cryptoContext,"layer1_selfoutput_vy", cryptoContext.L - wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
-    bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/layer1_selfoutput_normbias.txt",
+    bias = read_plain_expanded_input(cryptoContext,"layer1_selfoutput_normbias",
                                      cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
 
@@ -457,10 +443,10 @@ def encoder2(inputs,cryptoContext):
 
     GELU_max_abs_value = 1 / 17.0
     dense_weights = [
-        read_plain_input(cryptoContext, f"../weights-sst2/layer1_intermediate_weight{i + 1}.txt", cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, GELU_max_abs_value)
+        read_plain_input(cryptoContext, f"layer1_intermediate_weight{i + 1}", cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, GELU_max_abs_value)
         for i in range(4)
     ]
-    intermediate_bias = read_plain_input(cryptoContext, "../weights-sst2/layer1_intermediate_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots, GELU_max_abs_value)
+    intermediate_bias = read_plain_input(cryptoContext, "layer1_intermediate_bias", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots, GELU_max_abs_value)
     output = matmulRElarge(output, dense_weights, intermediate_bias, 1, cryptoContext)
     output = generate_containers(output, None, cryptoContext)
     for i in range(len(output)):
@@ -472,19 +458,19 @@ def encoder2(inputs,cryptoContext):
     ######################## The evaluation of Intermediate Done ########################
 
     output_weights = [
-        read_plain_input(cryptoContext, f"../weights-sst2/layer1_output_weight{i + 1}.txt", cryptoContext.L - output[0].cur_limbs, 1, global_num_slots)
+        read_plain_input(cryptoContext, f"layer1_output_weight{i + 1}", cryptoContext.L - output[0].cur_limbs, 1, global_num_slots)
         for i in range(4)
     ]
-    output_bias = read_plain_expanded_input(cryptoContext, "../weights-sst2/layer1_output_bias.txt", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots)
+    output_bias = read_plain_expanded_input(cryptoContext, "layer1_output_bias", cryptoContext.L - output[0].cur_limbs + 1, 1, global_num_slots)
     output = matmulCRlarge(unwrappedLargeOutput, output_weights, output_bias, cryptoContext)
     wrappedOutput = wrapUpExpanded(output, cryptoContext)
     wrappedOutput = fhe.homo_add(wrappedOutput, output_copy, cryptoContext)
-    precomputed_mean = read_plain_repeated_input(cryptoContext,"../weights-sst2/layer1_output_mean.txt",
-                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1,-1.0,global_num_slots)
+    precomputed_mean = read_plain_repeated_input(cryptoContext, "layer1_output_mean",
+                                                 cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, -1.0)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, precomputed_mean, cryptoContext)
-    vy = read_plain_input(cryptoContext,"../weights-sst2/layer1_output_vy.txt", cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots)
+    vy = read_plain_input(cryptoContext,"layer1_output_vy", cryptoContext.L - wrappedOutput.cur_limbs, 1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
-    bias = read_plain_expanded_input(cryptoContext,"../weights-sst2/layer1_output_normbias.txt",
+    bias = read_plain_expanded_input(cryptoContext,"layer1_output_normbias",
                                      cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots,1.0, len(inputs))
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, bias, cryptoContext)
     output = unwrapExpanded(wrappedOutput, len(inputs), cryptoContext)
@@ -493,9 +479,9 @@ def encoder2(inputs,cryptoContext):
     return output[0]
 
 
-def classifier(input,cryptoContext,openfhe_context):
-    weight=read_plain_input(cryptoContext,"../weights-sst2/classifier_weight.txt",cryptoContext.L - input.cur_limbs,1,global_num_slots)
-    bias=read_plain_expanded_input(cryptoContext,"../weights-sst2/classifier_bias.txt",cryptoContext.L - input.cur_limbs,1,global_num_slots)
+def classifier(input, openfhe_context, cryptoContext):
+    weight=read_plain_input(cryptoContext,"classifier_weight",cryptoContext.L - input.cur_limbs,1,global_num_slots)
+    bias=read_plain_expanded_input(cryptoContext,"classifier_bias",cryptoContext.L - input.cur_limbs,1,global_num_slots)
     output=fhe.homo_mul_pt(input, weight, cryptoContext)
 
     output=rotsum(output,128,1,cryptoContext)
@@ -521,8 +507,9 @@ def eval_tanh_function(c,min,max,mult,degree,cryptoContext):
 
 def pooler(input,cryptoContext,openfhe_context):
     tanhScale=1/30.0
-    weight = read_plain_input(cryptoContext,"../weights-sst2/pooler_dense_weight.txt", cryptoContext.L - input.cur_limbs,1,global_num_slots,tanhScale)
-    bias = read_plain_repeated_input(cryptoContext,"../weights-sst2/pooler_dense_bias.txt", cryptoContext.L - input.cur_limbs,1, tanhScale, global_num_slots)
+    weight = read_plain_input(cryptoContext,"pooler_dense_weight", cryptoContext.L - input.cur_limbs,1,global_num_slots,tanhScale)
+    bias = read_plain_repeated_input(cryptoContext, "pooler_dense_bias", cryptoContext.L - input.cur_limbs, 1,
+                                     global_num_slots, tanhScale)
     output = fhe.homo_mul_pt(input, weight, cryptoContext)
     output = rotsum(output, 128, 128, cryptoContext)
     output = fhe.homo_add_pt(output, bias, cryptoContext)
@@ -533,6 +520,10 @@ def pooler(input,cryptoContext,openfhe_context):
 
 
 def BERT_Tiny():
+
+    if not os.path.exists(input_folder):
+        raise ValueError(f"Directory {input_folder} does not exist!")
+
     #todo: add setup_environment function
     #  根据BERT-TINT C++版本的代码改写为Python版本
     #
@@ -555,48 +546,43 @@ def BERT_Tiny():
     secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
+                                     SAVE_MIDDLE=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
                              config=config))
-
-    cryptoContext.PRELOAD_ALL = True  # poor workaround, should be fixed in the future, need to be set to False/True now
-
     print("Context Done")
 
-    # todo: copy res-20 work around implementation
-    # encode_weight_path = (
-    #     DATA_DIR
-    #     + "/weight.pkl"
-    # )
-    #
-    # load_weight(encode_weight_path, cryptoContext)
+
+    cryptoContext.cnt = 0
+
+    cryptoContext.pre_encode_type = "middle"
+    encode_weight_path = "/data/yhh/data/encode_20250519_202246.pkl"
+    load_weight(encode_weight_path, cryptoContext)
 
     print("\nSERVER-SIDE\nThe evaluation of the circuit started.")
 
+    print("current time", datetime.datetime.now())
     start = time.time()
 
-    if not os.path.exists(input_folder):
-        raise ValueError(f"Directory {input_folder} does not exist!")
-
-
     encoder1output = encoder1(cryptoContext, openfhe_context)
-    # encoder1output = controller.load_vector("../checkpoint/encoder1output.bin"); #todo: we dont save checkpoint now, therefore omit deserialization
     encoder2output = encoder2(encoder1output,cryptoContext)
-
     pooled = pooler(encoder2output, cryptoContext, openfhe_context)
+    result = classifier(pooled, openfhe_context, cryptoContext)
+
+    end = time.time()
+    print(f"Time taken: {end - start} seconds")
 
     try:
-        result = classifier(pooled, cryptoContext,openfhe_context)
         result = openfhe_context.decrypt(result)
     except RuntimeError as e:
         print(f"Decryption failed: {e}")
         result = None
-    # 判断逻辑
+
     print("Outcome: ", end='')
     if result[0].item() > result[1].item():
-        print(f"\033[92mnegative\033[0m sentiment!")  # 使用ANSI颜色代码
+        print(f"\033[92mnegative\033[0m sentiment!")  # use ANSI color
     else:
         print(f"\033[92mpositive\033[0m sentiment!")
 
@@ -604,11 +590,11 @@ def BERT_Tiny():
 
 def classifier_tensor(input):
     """
-    本函数实现明文状态下的分类器，输入输出均为double数组
+    plain classifier, input and output are both double list
     :return:
     C++源代码如下：
-    vector<double> weight = controller.read_plain_input_vector("../weights-sst2/classifier_weight.txt");
-    vector<double> bias = controller.read_plain_expanded_input_vector("../weights-sst2/classifier_bias.txt");
+    vector<double> weight = controller.read_plain_input_vector("classifier_weight");
+    vector<double> bias = controller.read_plain_expanded_input_vector("classifier_bias");
     vector<double> output = controller.mult(input, weight);
     output = controller.rotsum(output, 128, 1);
     output = controller.add(output, bias);
@@ -625,8 +611,8 @@ def classifier_tensor(input):
     return output;
     """
     #1.读取文件
-    weight = read_plain_input_tensor("../weights-sst2/classifier_weight.txt")
-    bias = read_plain_expanded_input_tensor("../weights-sst2/classifier_bias.txt")
+    weight = read_plain_input_tensor("classifier_weight")
+    bias = read_plain_expanded_input_tensor("classifier_bias")
 
     if isinstance(input, np.ndarray):
         input = torch.tensor(input, dtype=torch.float64).cuda()
