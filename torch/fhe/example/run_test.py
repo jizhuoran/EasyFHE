@@ -55,9 +55,9 @@ if compare == True:
         0.888888,
     ]
     # x = np.array([values[i % len(values)] for i in range((1 << logBsSlots))])
-    x = torch.tensor([values[i % len(values)] for i in range((1 << logBsSlots))], device=device)
+    x = [values[i % len(values)] for i in range((1 << logBsSlots))]
     cipher, cipher_openfhe = openfhe_context.encrypt(
-        x, 1, openfhe_context.depth - 1, (1 << logBsSlots)
+        x, device, 1, openfhe_context.depth - 1, (1 << logBsSlots)
     )  # specify the slots value explicitly
 
 
