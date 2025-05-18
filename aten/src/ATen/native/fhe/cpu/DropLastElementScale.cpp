@@ -9,6 +9,7 @@
 #include <omp.h>
 #include <iostream>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
+#include "ATen/native/fhe/cpu/arithmetic.h"
 #include "ATen/native/fhe/cpu/NttImpl.h"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -66,7 +67,6 @@ static void drop_last_element_scale_template(
       param_primes);
   NTT_impl(
       to_ptr,
-      to_ptr,
       0,
       end_length,
       param_degree,
@@ -87,15 +87,24 @@ static void drop_last_element_scale_template(
       from_ptr,
       param_primes);
 
-  vec_add_mod_batch(
-      to_ptr,
-      from_ptr,
-      param_primes,
-      param_barret_ratio,
-      param_barret_k,
-      end_length,
-      param_degree,
-      to_ptr);
+    vadd_mod(
+        param_degree,
+        end_length,
+        to_ptr,
+        to_ptr,
+        from_ptr,
+        param_primes.data_ptr<uint64_t>());
+
+
+//   vec_add_mod_batch(
+//       to_ptr,
+//       from_ptr,
+//       param_primes,
+//       param_barret_ratio,
+//       param_barret_k,
+//       end_length,
+//       param_degree,
+//       to_ptr);
 }
 
 Tensor drop_last_element_scale_cpu(
@@ -160,26 +169,6 @@ Tensor& drop_last_element_scale_cpu_(
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
   to.resize_({(curr_limbs - 1) * param_degree});
-
-  // drop_last_element_scale_template(
-  //     from,
-  //     curr_limbs,
-  //     l,
-  //     level,
-  //     param_degree,
-  //     param_primes,
-  //     param_barret_ratio,
-  //     param_barret_k,
-  //     param_power_of_roots_shoup,
-  //     param_power_of_roots,
-  //     inverse_power_of_roots_div_two,
-  //     inverse_scaled_power_of_roots_div_two,
-  //     qlql_inv_mod_ql_div_ql_mod_q,
-  //     qlql_inv_mod_ql_div_ql_mod_q_shoup,
-  //     q_inv_mod_q,
-  //     q_inv_mod_q_shoup,
-  //     to);
-
   return to;
 }
 
@@ -203,26 +192,6 @@ Tensor& drop_last_element_scale_cpu_out(
     const Tensor& q_inv_mod_q_shoup,
     Tensor& res) {
   res.resize_({(curr_limbs - 1) * param_degree});
-
-  // drop_last_element_scale_template(
-  //     from,
-  //     curr_limbs,
-  //     l,
-  //     level,
-  //     param_degree,
-  //     param_primes,
-  //     param_barret_ratio,
-  //     param_barret_k,
-  //     param_power_of_roots_shoup,
-  //     param_power_of_roots,
-  //     inverse_power_of_roots_div_two,
-  //     inverse_scaled_power_of_roots_div_two,
-  //     qlql_inv_mod_ql_div_ql_mod_q,
-  //     qlql_inv_mod_ql_div_ql_mod_q_shoup,
-  //     q_inv_mod_q,
-  //     q_inv_mod_q_shoup,
-  //     res);
-
   return res;
 }
 } // namespace at::native

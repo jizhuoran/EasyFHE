@@ -64,15 +64,15 @@ class OpenFHEContext:
         return gpufhe_cipher
 
     def encrypt(self, x, scale_deg, level, slots):
-        if isinstance(x, (np.ndarray, torch.Tensor)):
-            x= x.tolist()
-        ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
+        assert isinstance(x, (np.ndarray, torch.Tensor))
+        x_list = x.tolist()
+        ptx = self.cc.MakeCKKSPackedPlaintext(x_list, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
-        cv = [torch.tensor(elem, device="cpu", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
+        cv = [torch.tensor(elem, device=x.device, dtype=torch.uint64) for elem in data]
         gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
         if self.config.PTX_TWIN:
-            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+            gpufhe_cipher.ptx_twin = np.array(x_list + [0] * (slots - len(x_list)))
         if self.config.COMPARE_WITH_OPENFHE:
             return gpufhe_cipher, cipher
         else:

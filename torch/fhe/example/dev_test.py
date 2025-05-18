@@ -24,6 +24,7 @@ def app_without_bs_example_debug_cpu(
         firstMod=55,
         levelBudget_list=[[4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir =DATA_DIR
 ):
 
@@ -33,7 +34,7 @@ def app_without_bs_example_debug_cpu(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, "cuda", save_dir=save_dir,
                                config=config))
 
     logBsSlots = logBsSlots_list[0]
@@ -46,7 +47,7 @@ def app_without_bs_example_debug_cpu(
     print("start gpu")
     cipher_cuda = cipher.deep_copy()
     cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
-    cryptoContext = cryptoContext.cuda()
+    # cryptoContext = cryptoContext.cuda()
     cryptoContext.load_rotation_keys(logBsSlots)
     # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
     # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
@@ -120,23 +121,22 @@ def app_without_bs_example_debug(
         firstMod=56,
         levelBudget_list=None,
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR
 ):
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, _ = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    # cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, -4, cryptoContext)
@@ -163,19 +163,19 @@ def app_example_debug(
         firstMod=56,
         levelBudget_list=[[3, 3], [4, 4]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir=DATA_DIR
 ):
 
     config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
-    x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
+    x = torch.tensor([values[i % len(values)] for i in range(encode_slots)], device=device)
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
@@ -1007,37 +1007,34 @@ def slim_bs_test_case(
 ##############
 
 if __name__ == "__main__":
-    app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
-    # app_without_bs_example_debug(rescaleTech = "FIXEDMANUAL")
+    # app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
 
     # gen_CoeffSlots_matrix_test_case()
     # slim_bs_test_case()
     # # hybrid_bs_test_case() # todo: to be supported
 
-    # for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
-    #     print("***********{}***********".format(rescaleTech))
-    #
-    #     print("==========={}============".format('app_without_bs_example_debug'))
-    #     app_without_bs_example_debug(rescaleTech = rescaleTech)
-    #
-    #     print("==========={}============".format('app_example_debug'))
-    #     app_example_debug(rescaleTech = rescaleTech)
-    #
-    #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
-    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
-    #
-    #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
-    #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
-    #
-    #     print("==========={}============".format('encode_test_case'))
-    #     encode_test_case(rescaleTech = rescaleTech)
-    #
-    #     print("==========={}============".format('ct_pt_test_case'))
-    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
-    #
-    #     print("==========={}============".format('test_plaintext_twin'))
-    #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
-    #
-    #     print("==========={}============".format('double_bs_debug'))
-    #     double_bs_debug(rescaleTech = rescaleTech)
-    #     print("************************************".format(rescaleTech))
+    for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:
+        for device in ["cuda", "cpu"]:
+            print("==========={}, {}, {}============".format(rescaleTech, device, "app_without_bs_example_debug"))
+            app_without_bs_example_debug(rescaleTech = rescaleTech, device=device)
+            print("==========={}, {}, {}============".format(rescaleTech, device, "app_example_debug"))
+            app_example_debug(rescaleTech = rescaleTech, device=device)
+        #
+        #     print("==========={}============".format('app_example_release NOT AUTO_LOAD_KEYS'))
+        #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=False)
+        #
+        #     print("==========={}============".format('app_example_release AUTO_LOAD_KEYS'))
+        #     app_example_release(rescaleTech = rescaleTech, AUTO_LOAD_KEYS=True)
+        #
+        #     print("==========={}============".format('encode_test_case'))
+        #     encode_test_case(rescaleTech = rescaleTech)
+        #
+        #     print("==========={}============".format('ct_pt_test_case'))
+        #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = False)
+        #
+        #     print("==========={}============".format('test_plaintext_twin'))
+        #     ct_pt_test_case(rescaleTech = rescaleTech, plaintext_twin = True)
+        #
+        #     print("==========={}============".format('double_bs_debug'))
+        #     double_bs_debug(rescaleTech = rescaleTech)
+        #     print("************************************".format(rescaleTech))

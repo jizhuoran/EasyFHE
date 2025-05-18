@@ -83,10 +83,7 @@ static void modup_matmul_(
   int grid_dim{(int)param_degree_ * end_length / 256 / unroll_factor};
   int block_dim{256};
   const auto& prod_q_i_mod_q_j = prod_q_i_mod_q_j__[beta_idx];
-  AT_DISPATCH_V2(
-      kUInt64,
-      "modup_matmul_",
-      AT_WRAP([&]() {
+
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
         auto barret_ratio_ptr =
@@ -110,8 +107,7 @@ static void modup_matmul_(
             start_length,
             end_length,
             to_ptr);
-      }),
-      kUInt64);
+
 }
 
 static void modup_impl_(

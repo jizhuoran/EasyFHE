@@ -107,6 +107,7 @@ def try_load_context(
     levelBudget_list,
     secretKeyDist,
     rescaleTech,
+    device,
     save_dir,
     config
 ):
@@ -180,13 +181,7 @@ def try_load_context(
     with open(load_path, "rb") as file:
         gpufheMembers, openfheMembers= pickle.load(file)
 
-    cryptoContext = Context(gpufheMembers, config)
-    # if cryptoContext.config.AUTO_LOAD_KEYS:
-    #     if rotIndex_list is not None and rotIndex_list != []:
-    #         cryptoContext.load_rotation_keys("app")
-    #     if NO_BS == False:
-    #         for logBsSlots in logBsSlots_list:
-    #             cryptoContext.load_rotation_keys(logBsSlots)
+    cryptoContext = parse_content_map(gpufheMembers, device, config)
 
     openfhe_context = client.OpenFHEContext(openfheMembers)
     openfhe_context.config = cryptoContext.config

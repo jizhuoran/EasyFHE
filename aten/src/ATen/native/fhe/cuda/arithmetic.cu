@@ -3,12 +3,12 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/native/cuda/thread_constants.h>
+#include <ATen/native/fhe/cuda/arithmetic.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <ATen/native/fhe/cuda/arithmetic.h>
-#include "ATen/native/fhe/cuda/Utils.cuh"
 #include <cassert>
+#include "ATen/native/fhe/cuda/Utils.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -71,23 +71,17 @@ namespace at::native {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu
 
-#define GENERATE_FUNCTION(NAME, HAS_BARRET)                                    \
-  void NAME##_mod(                                                      \
-    const size_t N,                                                \
-    int64_t l, \
-    uint64_t* c,                                                   \
-    const uint64_t* a,                                             \
-    const uint64_t* b,                                             \
-    const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                                                     \
-    fhe::NAME##_kernel<<<                                                      \
-        dim3(num_blocks(N), l),                                        \
-        dim3(BLOCK_SIZE, 1)>>>(                                                \
-        N,                                                                     \
-        c,                                        \
-        a,                                                \
-        b,                                                \
-        mod BARRET_ARGS_##HAS_BARRET);                    \
-    C10_CUDA_KERNEL_LAUNCH_CHECK();                                            \
+#define GENERATE_FUNCTION(NAME, HAS_BARRET)                              \
+  void NAME##_mod(                                                       \
+      const size_t N,                                                    \
+      int64_t l,                                                         \
+      uint64_t* c,                                                       \
+      const uint64_t* a,                                                 \
+      const uint64_t* b,                                                 \
+      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                  \
+    fhe::NAME##_kernel<<<dim3(num_blocks(N), l), dim3(BLOCK_SIZE, 1)>>>( \
+        N, c, a, b, mod BARRET_ARGS_##HAS_BARRET);                       \
+    C10_CUDA_KERNEL_LAUNCH_CHECK();                                      \
   }
 
 GENERATE_FUNCTION(vadd, 0)
@@ -124,9 +118,9 @@ GENERATE_FUNCTION(vneg, 0)
     TORCH_INTERNAL_ASSERT(                                                     \
         (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
         (N == 1 << 17) || (N == 1 << 18));                                     \
-    NAME##_mod(                                                \
+    NAME##_mod(                                                                \
         N,                                                                     \
-        cur_limbs, \
+        cur_limbs,                                                             \
         c.mutable_data_ptr<uint64_t>(),                                        \
         a.data_ptr<uint64_t>(),                                                \
         b.data_ptr<uint64_t>(),                                                \
@@ -155,7 +149,7 @@ GENERATE_TEMPLATE(vneg, 0)
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu
 
-#define GENERATE_INTERFACE(NAME, HAS_BARRET)                               \
+#define GENERATE_INTERFACE(NAME, HAS_BARRET)                              \
   Tensor NAME##_mod_cuda(                                                 \
       const Tensor& a,                                                    \
       const Tensor& b,                                                    \
