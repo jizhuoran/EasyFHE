@@ -92,8 +92,8 @@ static void moddown_impl(
 
 static void moddown_cpu_template(
     // aten::moddown
+    Tensor& res,
     const Tensor& from,
-    Tensor& workspace,
     int64_t curr_limbs,
     int64_t level,
     int64_t alpha,
@@ -111,7 +111,7 @@ static void moddown_cpu_template(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
-    Tensor& res) {
+    Tensor& workspace) {
   const int start_length = alpha;
   const int end_length = curr_limbs;
 
@@ -124,7 +124,7 @@ static void moddown_cpu_template(
 
   iNTT_impl(
       workspace_ptr,
-      workspace_ptr,
+      from_ptr,
       end_length,
       start_length,
       curr_limbs,
@@ -220,11 +220,10 @@ Tensor moddown_cpu(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   auto res = at::empty({curr_limbs * N}, in.options());
-//   auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
-  auto workspace = in.clone();
+  auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   moddown_cpu_template(
-      workspace,
-      workspace,
+    res,
+      in,
       curr_limbs,
       L,
       sizeP,
@@ -242,7 +241,7 @@ Tensor moddown_cpu(
       power_of_roots,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
-      res);
+      workspace);
   return res;
 }
 } // namespace at::native

@@ -7,8 +7,8 @@
 namespace at::native {
 
 void iNTT_impl(
-    uint64_t* in_ptr,
     uint64_t* out_ptr,
+    uint64_t* in_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t curr_limbs,
@@ -36,17 +36,40 @@ void iNTT_impl(
     uint64_t base_prime_idx = prime_idx * param_degree;
     uint64_t base = primeidx * param_degree;
 
-    for (uint32_t m = n >> 1, t = 1, logt = 1; m > 1;
+    // ---------- Pass 0 : m = n/2, t = 1, logt = 1 ----------
+    {
+      const uint32_t m0 = n >> 1; // n/2
+      const uint32_t t0 = 1;
+      const uint32_t logt0 = 1;
+
+      for (uint32_t i = 0; i < m0; ++i) {
+        auto omega =
+            inverse_power_of_roots_div_two_ptr[i + m0 + base_prime_idx];
+        auto preconOmega =
+            inverse_scaled_power_of_roots_div_two_ptr[i + m0 + base_prime_idx];
+
+        uint32_t j = (i << logt0) + base; // j1
+        auto loVal = in_ptr[j];
+        auto hiVal = in_ptr[j + t0];
+        fhe::butt_intt_local(loVal, hiVal, omega, preconOmega, modulus);
+        out_ptr[j] = loVal;
+        out_ptr[j + t0] = hiVal;
+      }
+    }
+
+    // ---------- Pass ≥ 1 : m, t, logt ----------
+    for (uint32_t m = n >> 2, t = 2, logt = 2; m > 1;
          m >>= 1, t <<= 1, ++logt) {
       for (uint32_t i = 0; i < m; ++i) {
         auto omega = inverse_power_of_roots_div_two_ptr[i + m + base_prime_idx];
         auto preconOmega =
             inverse_scaled_power_of_roots_div_two_ptr[i + m + base_prime_idx];
-        for (uint32_t j1 = i << logt, j2 = j1 + t; j1 < j2; ++j1) {
-          auto loVal = out_ptr[j1 + 0 + base];
+
+        for (uint32_t j1 = (i << logt), j2 = j1 + t; j1 < j2; ++j1) {
+          auto loVal = out_ptr[j1 + base];
           auto hiVal = out_ptr[j1 + t + base];
           fhe::butt_intt_local(loVal, hiVal, omega, preconOmega, modulus);
-          out_ptr[j1 + 0 + base] = loVal;
+          out_ptr[j1 + base] = loVal;
           out_ptr[j1 + t + base] = hiVal;
         }
       }

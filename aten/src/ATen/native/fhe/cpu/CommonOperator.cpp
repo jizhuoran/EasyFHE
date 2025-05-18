@@ -146,30 +146,23 @@ void const_mult_batch_(
     int64_t param_degree,
     uint64_t* res_ptr,
     const Tensor& primes) {
-  AT_DISPATCH_V2(
-      op2.scalar_type(),
-      "const_mult_batch_",
-      AT_WRAP([&]() {
-        auto op2_ptr = reinterpret_cast<uint64_t*>(op2.data_ptr<uint64_t>());
-        auto op2_psinv_ptr =
-            reinterpret_cast<uint64_t*>(op2_psinv.data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        const int block_dim = 256;
-        const int grid_dim = param_degree * batch / block_dim;
-        const_mult_batch(
-            (int)param_degree,
-            primes_ptr,
-            op1_ptr,
-            op2_ptr,
-            op2_psinv_ptr,
-            (int)start_prime_idx,
-            (int)batch,
-            (int)start_op1_idx,
-            (int)start_op2_idx,
-            res_ptr);
-      }),
-      kUInt64);
+  auto op2_ptr = reinterpret_cast<uint64_t*>(op2.data_ptr<uint64_t>());
+  auto op2_psinv_ptr =
+      reinterpret_cast<uint64_t*>(op2_psinv.data_ptr<uint64_t>());
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  const int block_dim = 256;
+  const int grid_dim = param_degree * batch / block_dim;
+  const_mult_batch(
+      (int)param_degree,
+      primes_ptr,
+      op1_ptr,
+      op2_ptr,
+      op2_psinv_ptr,
+      (int)start_prime_idx,
+      (int)batch,
+      (int)start_op1_idx,
+      (int)start_op2_idx,
+      res_ptr);
 }
 
 void vec_mod_batch(
