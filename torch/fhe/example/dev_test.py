@@ -48,7 +48,6 @@ def app_without_bs_example_debug_cpu(
     cipher_cuda = cipher.deep_copy()
     cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
     # cryptoContext = cryptoContext.cuda()
-    cryptoContext.load_rotation_keys(logBsSlots)
     # result1 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
     # result1 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
     result1 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -58,7 +57,6 @@ def app_without_bs_example_debug_cpu(
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
     cryptoContext = cryptoContext.cpu()
-    cryptoContext.load_rotation_keys(logBsSlots)
     # result2 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
     # result2 = homo_ops.homo_rotate(cipher_cpu, -1, cryptoContext)
     result2 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -68,7 +66,6 @@ def app_without_bs_example_debug_cpu(
     cipher_cuda = cipher.deep_copy()
     cipher_cuda.cv = [cv.cuda() for cv in cipher_cuda.cv]
     cryptoContext = cryptoContext.cuda()
-    cryptoContext.load_rotation_keys(logBsSlots)
     # result3 = homo_ops.homo_mul(cipher_cuda, cipher_cuda, cryptoContext)
     # result3 = homo_ops.homo_rotate(cipher_cuda, -1, cryptoContext)
     result3 = eval_bootstrap(cipher_cuda, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -77,7 +74,6 @@ def app_without_bs_example_debug_cpu(
     cipher_cpu = cipher.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
     cryptoContext = cryptoContext.cpu()
-    cryptoContext.load_rotation_keys(logBsSlots)
     # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
     # cryptoContext.BsContext.cpu()
     # result4 = homo_ops.homo_mul(cipher_cpu, cipher_cpu, cryptoContext)
@@ -179,7 +175,6 @@ def app_example_debug(
     cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # do the application computation
-    # cryptoContext.load_rotation_keys("app")
     cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
     cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
@@ -194,7 +189,6 @@ def app_example_debug(
         print_failed("homo_rotate: Test failed!")
 
     # bootstrapping
-    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
@@ -218,7 +212,6 @@ def app_example_debug(
         result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[1]))
     result1 = eval_bootstrap(result, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext)
     result1 = homo_ops.homo_rescale(result1, 1, cryptoContext)
     print("gpu bootstrapp done!")
@@ -565,7 +558,6 @@ def double_bs_debug(
     precision = 17
 
     # bootstrapping
-    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = homo_double_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], level_budgets=levelBudget_list[0],
                                     precision=precision, cryptoContext=cryptoContext)
     print("gpu bootstrapp done!")
@@ -635,7 +627,6 @@ def gen_CoeffSlots_matrix_test_case(
     cipher = openfhe_context.encrypt(x, 1, openfhe_context.depth - 1, encode_slots)
 
     # bootstrapping
-    # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     result = homo_ops.homo_rescale(result, 1, cryptoContext)
     print("gpu bootstrapp done!")
@@ -648,7 +639,6 @@ def gen_CoeffSlots_matrix_test_case(
     # print("\n")
     # m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
     # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = c2s_matrix
-    # # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     # result = homo_ops.homo_rescale(result, 1, cryptoContext)
     # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT = m_U0hatTPreFFT_backup #recover the context
@@ -668,7 +658,6 @@ def gen_CoeffSlots_matrix_test_case(
     # print("\n")
     # m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
     # # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = s2c_matrix
-    # # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     # result = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     # result = homo_ops.homo_rescale(result, 1, cryptoContext)
     # cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT = m_U0PreFFT_backup  # recover the context
@@ -718,7 +707,6 @@ def slim_bs_test_case(
     #
     # import time
     # # bootstrapping golden
-    # # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     # result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     # start_time = time.time()
     # result1 = eval_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
@@ -763,7 +751,6 @@ def slim_bs_test_case(
     # lEnc = cryptoContext.L - levelBudget_list[0][0] - 1
     #
     # # bootstrapping
-    # # # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
     #
     # # note: c2s_matrix should be same as m_U0hatTPreFFT
     # # note: s2c_matrix should be same as m_U0PreFFT
@@ -879,7 +866,6 @@ def slim_bs_test_case(
 #     ##########################
 #     # regular bootsrapping ###
 #     ##########################
-#     # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0]))
 #     m_U0hatTPreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0hatTPreFFT
 #     m_U0PreFFT_backup = cryptoContext.BsContext_map[str(logBsSlots_list[0])].m_U0PreFFT
 #
@@ -919,7 +905,6 @@ def slim_bs_test_case(
 #     lDec = 3 # note: there should be at least two limbs before go into bootstrap, should be more if we need to do computations under coeff domain
 #     lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
 #
-#     # cryptoContext.load_bootstrapping_context(str(logBsSlots_list[0])) # bootstrapping setup
 #
 #     # hijack the matrix
 #     # note: c2s_matrix should be same as m_U0hatTPreFFT
