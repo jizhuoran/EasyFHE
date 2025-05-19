@@ -499,3 +499,302 @@ def eval_chebyshev_function(function, ciphertext, lowerBound, upperBound, poly_d
         ciphertext, coefficients, lowerBound, upperBound, cryptoContext
     )
     return result
+
+def long_division_poly(f, g):
+    assert not math.isclose(f[-1], 0.0)
+    assert not math.isclose(g[-1], 0.0)
+
+    n = degree(f)
+    k = degree(g)
+    if n != len(f) - 1 or k != len(g) - 1:
+        raise ValueError("Leading coefficient is zero")
+
+    if n < k:
+        return np.array([1.0]), np.array(f)
+
+    q = np.zeros(n - k + 1)
+    r = np.copy(f)
+
+    while n >= k:
+        coeff = r[-1] / g[-1] if not math.isclose(g[-1], 1.0) else r[-1]
+        q[n - k] = coeff
+
+        d = np.zeros(n - k)
+        d = np.concatenate([d, g])
+        d *= coeff
+
+        r = r - d
+        if len(r) > 1:
+            n = degree(r)
+            r = r[:n + 1]
+
+    return q, r
+
+
+
+def eval_poly(x, coefficients, cryptoContext):
+    n = degree(coefficients)
+
+    assert n >= 5, "EvalPolyLinear(x, coefficients); for n<5 is to be implemented"
+    # todo: EvalPolyLinear(x, coefficients); to be implemented
+
+    return eval_poly_ps(x, coefficients, cryptoContext)
+
+def eval_poly_ps(x, coefficients, cryptoContext):
+    n = degree(coefficients)
+    f2 = np.copy(coefficients)
+
+    # Make sure the coefficients do not have the dominant terms zero
+    if coefficients[-1] == 0:
+        f2.resize(n + 1, refcheck=False)
+
+    k, m = ComputeDegreesPS(n)
+
+    # set the indices for the powers of x that need to be computed to 1
+    indices = [0] * k
+    for i in range(k, 0, -1):
+        if not (i & (i - 1)): # if i is a power of 2
+            indices[i - 1] = 1
+        else: # non-power of 2
+            indices[i - 1] = 1
+            powerOf2 = 1 << int(np.floor(np.log2(i)))
+            rem = i % powerOf2
+            if indices[rem - 1] == 0:
+                indices[rem - 1] = 1
+            # while rem is not a power of 2
+            # set indices required to compute rem to 1
+            while rem & (rem - 1):
+                powerOf2 = 1 << int(np.floor(np.log2(rem)))
+                rem = rem % powerOf2
+                if indices[rem - 1] == 0:
+                    indices[rem - 1] = 1
+
+    # computes all powers up to k for x
+    powers = [x.deep_copy()]
+    for i in range(2, k + 1):
+        if not (i & (i - 1)): # if i is a power of two
+            t = fhe.homo_square(powers[i // 2 - 1], cryptoContext)
+            t = fhe.homo_rescale(t, 1, cryptoContext)
+            powers.append(t)
+        elif indices[i - 1] == 1: # non-power of 2
+            powerOf2 = 1 << int(np.floor(np.log2(i)))
+            rem = i % powerOf2
+            t1 = powers[powerOf2 - 1]
+            t2 = powers[rem - 1]
+            t2 = fhe.adjust_to(t2, t1.cur_limbs, t1.noise_deg, t1.scaling_factor, cryptoContext)
+            t = fhe.homo_mul(t1, t2, cryptoContext)
+            t = fhe.homo_rescale(t, 1, cryptoContext)
+            powers.append(t)
+        else:
+            pass
+            # powers.append(None)
+
+    # brings all powers of x to the same level
+    for i in range(1, k):
+        if indices[i - 1] == 1:
+            powers[i - 1] = fhe.adjust_to(powers[i - 1], powers[k - 1].cur_limbs, powers[k - 1].noise_deg, powers[k - 1].scaling_factor, cryptoContext)
+
+    # computes powers of form k*2^i for x
+    powers2 = [powers[k - 1].deep_copy()]
+    for i in range(1, m):
+        t = fhe.homo_square(powers2[i - 1], cryptoContext)
+        t = fhe.homo_rescale(t, 1, cryptoContext)
+        powers2.append(t)
+
+    # computes the product of the powers in power2, that yield x^{k(2*m - 1)}
+    power2km1 = powers2[0].deep_copy()
+    for i in range(1, m):
+        tmp = fhe.homo_mul(power2km1, powers2[i], cryptoContext)
+        tmp = fhe.homo_rescale(tmp, 1, cryptoContext)
+        power2km1 = tmp
+
+    # Compute k*2^{m-1}-k because we use it a lot
+    k2m2k = int(k * (1 << (m - 1)) - k)
+    # Add x^{k(2^m - 1)} to the polynomial that has to be evaluated
+    f2.resize(2 * k2m2k + k + 1, refcheck=False)
+    f2[-1] = 1
+
+    # Divide f2 by x^{k*2^{m-1}}
+    xkm = np.zeros(k2m2k + k + 1)
+    xkm[-1] = 1
+    divqr_q, divqr_r = long_division_poly(f2, xkm)
+
+    r2 = np.copy(divqr_r)
+    if k2m2k - degree(divqr_r) <= 0:
+        r2[k2m2k] -= 1
+        r2.resize(degree(r2) + 1, refcheck=False)
+    else:
+        r2.resize(k2m2k + 1, refcheck=False)
+        r2[-1] = -1
+
+    divcs_q, divcs_r = long_division_poly(r2, divqr_q)
+
+    s2 = np.copy(divcs_r)
+    s2.resize(k2m2k + 1, refcheck=False)
+    s2[-1] = 1
+
+    dc = degree(divcs_q)
+    flag_c = False
+    if dc >= 1:
+        if dc == 1:
+            if divcs_q[1] != 1:
+                cu = fhe.homo_mul_scalar_double(powers[0], divcs_q[1], cryptoContext)
+                cu = fhe.homo_rescale(cu, 1, cryptoContext)
+            else:
+                cu = powers[0].deep_copy()
+        else:
+            ctxs = [powers[i] for i in range(dc)]
+            weights = divcs_q[1:dc + 1]
+            cu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+        # adds the free term (at x^0)
+        cu = fhe.homo_add_scalar_double(cu, divcs_q[0], cryptoContext)
+        flag_c = True
+
+
+
+    if degree(divqr_q) > k:
+        qu = inner_eval_poly_ps(x, divqr_q, k, m - 1, powers, powers2)
+    else:
+        qcopy = np.copy(divqr_q)
+        qcopy.resize(k, refcheck=False)
+        dq = degree(qcopy)
+        if dq > 0:
+            ctxs = [powers[i] for i in range(dq)]
+            weights = divqr_q[1:dq + 1]
+            qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            # the highest order term will always be 1 because q is monic
+            qu = fhe.homo_add(qu, powers[k - 1], cryptoContext)
+        else:
+            qu = powers[k - 1].deep_copy()
+        # adds the free term (at x^0)
+        qu = fhe.homo_add_scalar_double(qu, divqr_q[0], cryptoContext)
+
+    if np.allclose(s2, divqr_q):
+        su = qu.deep_copy()
+    elif degree(s2) > k:
+        su = inner_eval_poly_ps(x, s2, k, m - 1, powers, powers2)
+    else:
+        # ds = k from construction
+        # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
+        scopy = np.copy(s2)
+        scopy.resize(k, refcheck=False)
+        ds = degree(scopy)
+        if ds > 0:
+            ctxs = [powers[i] for i in range(ds)]
+            weights = s2[1:ds + 1]
+            su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            # the highest order term will always be 1 because q is monic
+            su = fhe.homo_add(su, powers[k - 1], cryptoContext)
+        else:
+            su = powers[k - 1].deep_copy()
+
+        # adds the free term (at x^0)
+        su = fhe.homo_add_scalar_double(su, s2[0], cryptoContext)
+
+    if flag_c:
+        result = fhe.homo_add(powers2[m - 1], cu, cryptoContext)
+    else:
+        result = fhe.homo_add_scalar_double(powers2[m - 1], divcs_q[0], cryptoContext)
+
+    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_rescale(result, 1, cryptoContext)
+    result = fhe.homo_add(result, su, cryptoContext)
+    result = fhe.homo_sub(result, power2km1, cryptoContext)
+
+    return result
+
+
+def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
+    k2m2k = int(k * (1 << (m - 1)) - k)
+
+    xkm = np.zeros(k2m2k + k + 1)
+    xkm[-1] = 1
+    divqr_q, divqr_r = long_division_poly(coefficients, xkm)
+
+    # Subtract x^{k(2^{m-1} - 1)} from r
+    r2 = np.copy(divqr_r)
+    if k2m2k - degree(divqr_r) <= 0:
+        r2[k2m2k] -= 1
+        r2.resize(degree(r2) + 1, refcheck=False)
+    else:
+        r2.resize(k2m2k + 1, refcheck=False)
+        r2[-1] = -1
+
+    divcs_q, divcs_r = long_division_poly(r2, divqr_q)
+
+    s2 = np.copy(divcs_r)
+    s2.resize(k2m2k + 1, refcheck=False)
+    s2[-1] = 1
+
+    dc = degree(divcs_q)
+    flag_c = False
+    if dc >= 1:
+        if dc == 1:
+            if divcs_q[1] != 1:
+                cu = fhe.homo_mul_scalar_double(powers[0], divcs_q[1], cryptoContext)
+                cu = fhe.homo_rescale(cu, 1, cryptoContext)
+            else:
+                cu = powers[0].deep_copy()
+        else:
+            ctxs = [powers[i] for i in range(dc)]
+            weights = divcs_q[1:dc + 1]
+            cu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+
+        # adds the free term (at x^0)
+        cu = fhe.homo_add_scalar_double(cu, divcs_q[0], cryptoContext)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            cu = fhe.adjust_to(cu, powers2[m - 1].cur_limbs, powers2[m - 1].noise_deg, powers2[m - 1].scaling_factor, cryptoContext)
+        flag_c = True
+
+    # Evaluate q and s2 at u. If their degrees are larger than k, then recursively apply the Paterson-Stockmeyer algorithm.
+    if degree(divqr_q) > k:
+        qu = inner_eval_poly_ps(x, divqr_q, k, m - 1, powers, powers2, cryptoContext)
+    else:
+        # dq = k from construction
+        # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
+        qcopy = np.copy(divqr_q)
+        qcopy.resize(k, refcheck=False)
+        dq = degree(qcopy)
+        if dq > 0:
+            ctxs = [powers[i] for i in range(dq)]
+            weights = divqr_q[1:dq + 1]
+            qu = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            # the highest order term will always be 1 because q is monic
+            qu = fhe.homo_add(qu, powers[k - 1], cryptoContext)
+        else:
+            qu = powers[k - 1]
+
+        # adds the free term (at x^0)
+        qu = fhe.homo_add_scalar_double(qu, divqr_q[0], cryptoContext)
+
+    if np.allclose(s2, divqr_q):
+        su = qu.deep_copy()
+    elif degree(s2) > k:
+        su = inner_eval_poly_ps(x, s2, k, m - 1, powers, powers2, cryptoContext)
+    else:
+        # ds = k from construction
+        # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
+        scopy = np.copy(s2)
+        scopy.resize(k, refcheck=False)
+        ds = degree(scopy)
+        if ds > 0:
+            ctxs = [powers[i] for i in range(ds)]
+            weights = s2[1:ds + 1]
+            su = eval_linear_wsum_mutable(ctxs, weights, cryptoContext)
+            su = fhe.homo_add(su, powers[k - 1], cryptoContext)
+        else:
+            su = powers[k - 1]
+        su = fhe.homo_add_scalar_double(su, s2[0], cryptoContext)
+        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+            su = fhe.adjust_to(su, su.cur_limbs - 1, 1, None, cryptoContext)
+
+    if flag_c:
+        result = fhe.homo_add(powers2[m - 1], cu, cryptoContext)
+    else:
+        result = fhe.homo_add_scalar_double(powers2[m - 1], divcs_q[0], cryptoContext)
+
+    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_rescale(result, 1, cryptoContext)
+    result = fhe.homo_add(result, su, cryptoContext)
+
+    return result
