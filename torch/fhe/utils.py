@@ -226,6 +226,4 @@ def compare_cpufhe_with_gpufhe(cpufhe_ct, gpufhe_ct):
     # gpu_res = np.array([gpufhe_ct.cv[0].cpu().numpy()]).reshape(-1)
     cpu_res = np.array([cpufhe_ct.cv[0].cpu().numpy(), cpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
     gpu_res = np.array([gpufhe_ct.cv[0].cpu().numpy(), gpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
-    print(cpu_res)
-    print(gpu_res)
     return np.array_equal(cpu_res, gpu_res)

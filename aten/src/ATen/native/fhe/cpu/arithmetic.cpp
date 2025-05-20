@@ -6,6 +6,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 #include <omp.h>
+#include<iostream>
 #include <cassert>
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -27,23 +28,22 @@ namespace fhe {
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu[l * 2], barret_mu[l * 2 + 1]
 
-#define GENERATE_KERNEL(NAME, OP, B_ACCESS, HAS_BARRET)                         \
-  void NAME(                                                                    \
-      const size_t L,                                                           \
-      const size_t N,                                                           \
-      uint64_t* c,                                                              \
-      const uint64_t* a,                                                        \
-      const uint64_t* b,                                                        \
-      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                         \
-    const int max_threads = omp_get_max_threads();                              \
-    omp_set_num_threads(max_threads);                                           \
-    _Pragma("omp parallel for schedule(static) num_threads(max_threads)") for ( \
-        size_t l = 0; l < L; l++) {                                             \
-      for (size_t i = 0; i < N; i++) {                                          \
-        c[l * N + i] =                                                          \
-            OP(a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET);        \
-      }                                                                         \
-    }                                                                           \
+  #define GENERATE_KERNEL(NAME, OP, B_ACCESS, HAS_BARRET)                             \
+  void NAME(                                                                        \
+      const size_t L,                                                               \
+      const size_t N,                                                               \
+      uint64_t* c,                                                                  \
+      const uint64_t* a,                                                            \
+      const uint64_t* b,                                                            \
+      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {                             \
+    const int max_threads = omp_get_max_threads();                                  \
+    _Pragma("omp parallel for collapse(2) schedule(static) num_threads(max_threads)") \
+    for (size_t l = 0; l < L; l++) {                                                 \
+      for (size_t i = 0; i < N; i++) {                                               \
+        c[l * N + i] = OP(                                                           \
+            a[l * N + i], B_ACCESS, mod[l] BARRET_ARGS_##HAS_BARRET);                \
+      }                                                                             \
+    }                                                                               \
   }
 
 GENERATE_KERNEL(vadd_kernel, add_mod, b[l * N + i], 0)
@@ -158,5 +158,4 @@ GENERATE_FUNCTION(neg, 0)
 #undef BARRET_ARGS_0
 #undef BARRET_ARGS_1
 #undef GENERATE_FUNCTION
-
 } // namespace at::native
