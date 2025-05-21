@@ -16019,6 +16019,7 @@
 - func: encode(Tensor input, int N, int cur_limbs, int slots, float scaling_factor, bool is_ext, int sizeP, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
+    CPU: encode_cpu
     CUDA: encode_cuda
 
 - func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
