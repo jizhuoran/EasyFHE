@@ -81,7 +81,7 @@ def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_f
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
             if cipher.cur_limbs == target_limbs + 1:
-                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 # otherwise, mul the higher with scale factor, rescale, drop, rescale.
                 # the last rescale is to make sure both has degree 1
@@ -147,7 +147,7 @@ def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_fa
             cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             if cipher.cur_limbs == target_limbs + 1:
-                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
                 cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
