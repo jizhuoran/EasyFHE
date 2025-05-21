@@ -157,7 +157,6 @@ static void mul_by_monomial_template_cpu(
   // 3) forward NTT (in-place on res)
   NTT_impl(
       res_ptr,
-      res_ptr,
       0,
       l,
       N,
@@ -178,20 +177,8 @@ Tensor mul_by_monomial_cpu(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  Tensor out = res.clone();
-  mul_by_monomial_template_cpu(
-      out,
-      l,
-      N,
-      M,
-      monomialDeg,
-      level,
-      param_primes,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
-  return out;
+  TORCH_INTERNAL_ASSERT(false, "mul_by_monomial_cuda only supports inplace operation");
+  return res;
 }
 
 Tensor& mul_by_monomial_cpu_(
@@ -235,18 +222,8 @@ Tensor& mul_by_monomial_cpu_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
-  mul_by_monomial_template_cpu(
-      out,
-      l,
-      N,
-      M,
-      monomialDeg,
-      level,
-      param_primes,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
+      TORCH_INTERNAL_ASSERT(false, "Not implemented");
+
   return out;
 }
 

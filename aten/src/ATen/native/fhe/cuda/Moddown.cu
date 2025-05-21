@@ -8,6 +8,8 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <ATen/TensorIndexing.h>
+#include <ATen/ops/cat.h>
 
 #include <ATen/native/fhe/cuda/arithmetic.h>
 #include "ATen/native/fhe/cuda/CommonOperation.h"
@@ -120,6 +122,10 @@ static void moddown_cuda_template(
       reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
 
+  auto intt_primes = at::cat({primes.index({at::indexing::Slice(at::indexing::None, curr_limbs)}), primes.index({at::indexing::Slice(L, at::indexing::None)})}, 0);
+  auto intt_inverse_power_of_roots_div_two = at::cat({inverse_power_of_roots_div_two.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), inverse_power_of_roots_div_two.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
+  auto intt_inverse_scaled_power_of_roots_div_two = at::cat({inverse_scaled_power_of_roots_div_two.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), inverse_scaled_power_of_roots_div_two.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
+
   iNTT_impl(
       workspace_ptr,
       from_ptr,
@@ -128,9 +134,9 @@ static void moddown_cuda_template(
       curr_limbs,
       L,
       N,
-      primes,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two);
+      intt_primes,
+      intt_inverse_power_of_roots_div_two,
+      intt_inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
       workspace_ptr + curr_limbs * N,

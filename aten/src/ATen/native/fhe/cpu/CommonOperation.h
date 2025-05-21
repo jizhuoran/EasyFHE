@@ -1,11 +1,12 @@
 #pragma once
 #include <ATen/core/Tensor.h>
+#include <ATen/native/fhe/cpu/arithmetic.h>
 #include <cstdint>
 
 namespace at::native {
 void iNTT_impl(
-    uint64_t* op_ptr,
     uint64_t* out_ptr,
+    uint64_t* in_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t curr_limbs,
@@ -17,7 +18,6 @@ void iNTT_impl(
 
 void NTT_impl(
     uint64_t* op_ptr,
-    uint64_t* out_ptr,
     int64_t start_prime_idx,
     int64_t batch,
     int64_t param_degree,
@@ -55,16 +55,6 @@ void vec_mod_batch(
     int64_t degree,
     uint64_t* res_ptr);
 
-void vec_add_mod_batch(
-    uint64_t* op1_ptr,
-    uint64_t* op2_ptr,
-    const Tensor& primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    int64_t batch,
-    int64_t degree,
-    uint64_t* res_ptr);
-
 void const_mult_batch_(
     uint64_t* op1_ptr,
     const Tensor& op2,
@@ -75,13 +65,6 @@ void const_mult_batch_(
     int64_t start_op2_idx,
     int64_t param_degree,
     uint64_t* res_ptr,
-    const Tensor& primes);
-
-void SubInplace(
-    uint64_t* op1,
-    const uint64_t* op2,
-    const int64_t batch,
-    const int64_t param_degree,
     const Tensor& primes);
 
 } // namespace at::native

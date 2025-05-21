@@ -27,10 +27,10 @@ static void innerproduct_template(
     const Tensor& barret_k,
     const Tensor& workspace,
     Tensor& res) {
-  const int total_length = modup_out.size(-1) / param_degree;
-  const int beta = total_length / (curr_limbs + alpha);
-  const int length = (curr_limbs + alpha);
-  const int mult_length = (level + alpha);
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - level;
+  const int length = (curr_limbs + sizeP);
   int gap = level - curr_limbs;
   __uint128_t* accum_bx_ptr =
       reinterpret_cast<__uint128_t*>(workspace.data_ptr<uint64_t>());
@@ -47,13 +47,13 @@ static void innerproduct_template(
   auto barret_k_ptr =
       reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
   const int max_threads = omp_get_max_threads();
-  omp_set_num_threads(max_threads);
+//  omp_set_num_threads(max_threads);
   for (uint32_t j = 0; j < beta; ++j) {
     const uint64_t* d2_ptr = modup_out_ptr + j * param_degree * length;
-    const uint64_t* d_ax_ptr = ax_ptr + j * param_degree * mult_length;
-    const uint64_t* d_bx_ptr = bx_ptr + j * param_degree * mult_length;
+    const uint64_t* d_ax_ptr = ax_ptr + j * param_degree * sizeQP;
+    const uint64_t* d_bx_ptr = bx_ptr + j * param_degree * sizeQP;
 
-#pragma omp parallel for schedule(static) num_threads(max_threads)
+//#pragma omp parallel for schedule(static) num_threads(max_threads)
     for (uint64_t idx = 0; idx < length; ++idx) {
         const int prime_idx = (idx < curr_limbs) ? 0 : gap;
         for (uint64_t k = 0; k < param_degree; ++k) {
@@ -101,7 +101,9 @@ Tensor innerproduct_cpu(
     const Tensor& barret_k,
     const Tensor& workspace) {
   Tensor out = at::empty_like(res);
-  out.resize_({2, (curr_limbs + alpha) * N});
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  out.resize_({2, (curr_limbs + sizeP) * N});
   innerproduct_template(
       in,
       bx,
@@ -110,65 +112,6 @@ Tensor innerproduct_cpu(
       alpha,
       L,
       N,
-      primes,
-      barret_ratio,
-      barret_k,
-      workspace,
-      out);
-  return out;
-}
-
-Tensor& innerproduct_cpu_(
-    Tensor& res,
-    const Tensor& modup_out,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  innerproduct_template(
-      modup_out,
-      bx,
-      ax,
-      curr_limbs,
-      alpha,
-      level,
-      param_degree,
-      primes,
-      barret_ratio,
-      barret_k,
-      workspace,
-      res);
-  return res;
-}
-
-Tensor& innerproduct_cpu_out(
-    const Tensor& res,
-    const Tensor& modup_out,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t level,
-    int64_t param_degree,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace,
-    Tensor& out) {
-  innerproduct_template(
-      modup_out,
-      bx,
-      ax,
-      curr_limbs,
-      alpha,
-      level,
-      param_degree,
       primes,
       barret_ratio,
       barret_k,

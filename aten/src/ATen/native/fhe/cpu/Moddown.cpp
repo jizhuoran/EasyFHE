@@ -12,19 +12,7 @@
 #include "ATen/native/fhe/cpu/NttImpl.h"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 namespace fhe {
-void negateInplace_(
-    size_t degree,
-    size_t log_degree,
-    size_t batch,
-    const uint64_t* primes,
-    uint64_t* op) {
-  for (int i = 0; i < batch * degree; i++) {
-    const int prime_idx = i >> log_degree;
-    const uint64_t prime = primes[prime_idx];
-    if (op[i] != 0)
-      op[i] = prime - op[i];
-  }
-}
+
 void moddown_kernel(
     int degree_,
     uint64_t* d_primes,
@@ -34,8 +22,9 @@ void moddown_kernel(
     const uint64_t* ptr,
     const uint64_t* hat_mod_end,
     const int hat_mod_end_size,
-    const uint64_t start_length,
-    const uint64_t end_length,
+    const uint64_t start_length, // it should be the size of the Auxiliary CRT
+                                 // basis {P} = {p_1,...,p_k}
+    const uint64_t end_length, // it should be curr_limbs
     uint64_t* to) {
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);
@@ -57,25 +46,6 @@ void moddown_kernel(
 } // namespace fhe
 namespace at::native {
 
-static void NegateInplace(
-    uint64_t* op1,
-    const int batch,
-    const Tensor& primes,
-    const int64_t param_degree,
-    const int64_t param_log_degree) {
-  AT_DISPATCH_V2(
-      kUInt64,
-      "NegateInplace",
-      AT_WRAP([&]() {
-        const int block_dim = 256;
-        const int grid_dim = param_degree * batch / block_dim;
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        fhe::negateInplace_(
-            param_degree, param_log_degree, batch, primes_ptr, op1);
-      }),
-      kUInt64);
-}
 static void moddown_impl(
     uint64_t* from_ptr,
     const int64_t param_degree,
@@ -122,8 +92,8 @@ static void moddown_impl(
 
 static void moddown_cpu_template(
     // aten::moddown
+    Tensor& res,
     const Tensor& from,
-    Tensor& workspace,
     int64_t curr_limbs,
     int64_t level,
     int64_t alpha,
@@ -141,7 +111,7 @@ static void moddown_cpu_template(
     const Tensor& param_power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
-    Tensor& res) {
+    Tensor& workspace) {
   const int start_length = alpha;
   const int end_length = curr_limbs;
 
@@ -154,7 +124,7 @@ static void moddown_cpu_template(
 
   iNTT_impl(
       workspace_ptr,
-      workspace_ptr,
+      from_ptr,
       end_length,
       start_length,
       curr_limbs,
@@ -191,7 +161,6 @@ static void moddown_cpu_template(
 
   NTT_impl(
       to_ptr,
-      to_ptr,
       0,
       end_length,
       param_degree,
@@ -202,10 +171,21 @@ static void moddown_cpu_template(
   const auto& prod_inv = prod_inv_moddown[0];
   const auto& prod_inv_psinv = prod_inv_shoup_moddown[0];
 
-  SubInplace(to_ptr, from_ptr, end_length, param_degree, param_primes);
+  vsub_mod(
+      param_degree,
+      end_length,
+      to_ptr,
+      to_ptr,
+      from_ptr,
+      param_primes.data_ptr<uint64_t>());
 
-  NegateInplace(
-      to_ptr, end_length, param_primes, param_degree, param_log_degree);
+  vneg_mod(
+      param_degree,
+      end_length,
+      to_ptr,
+      to_ptr,
+      nullptr,
+      param_primes.data_ptr<uint64_t>());
 
   const_mult_batch_(
       to_ptr,
@@ -240,10 +220,10 @@ Tensor moddown_cpu(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
   auto res = at::empty({curr_limbs * N}, in.options());
-  auto workspace = in.clone();
+  auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   moddown_cpu_template(
-      workspace,
-      workspace,
+    res,
+      in,
       curr_limbs,
       L,
       sizeP,
@@ -261,7 +241,7 @@ Tensor moddown_cpu(
       power_of_roots,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
-      res);
+      workspace);
   return res;
 }
 } // namespace at::native

@@ -47,28 +47,6 @@ void subInplace_(
   }
 }
 
-void vec_add_mod_batch_(
-    int degree_,
-    uint64_t* d_primes,
-    uint64_t* d_barret_ratio,
-    uint64_t* d_barret_k,
-    const uint64_t* op1,
-    const uint64_t* op2,
-    const uint64_t batch,
-    uint64_t* to) {
-  const int max_threads = omp_get_max_threads();
-  omp_set_num_threads(max_threads);
-#pragma omp parallel for schedule(static) num_threads(max_threads)
-  for (int i = 0; i < batch * degree_; i++) {
-    const int out_prime_idx = i / degree_;
-    const auto prime = d_primes[out_prime_idx];
-    const auto barret_ratio = d_barret_ratio[out_prime_idx];
-    const auto barret_k = d_barret_k[out_prime_idx];
-    to[i] =
-        barret_reduction_64_64(op1[i] + op2[i], prime, barret_ratio, barret_k);
-  }
-}
-
 void vec_mod_batch_(
     int degree_,
     uint64_t* d_primes,
@@ -168,83 +146,23 @@ void const_mult_batch_(
     int64_t param_degree,
     uint64_t* res_ptr,
     const Tensor& primes) {
-  AT_DISPATCH_V2(
-      op2.scalar_type(),
-      "const_mult_batch_",
-      AT_WRAP([&]() {
-        auto op2_ptr = reinterpret_cast<uint64_t*>(op2.data_ptr<uint64_t>());
-        auto op2_psinv_ptr =
-            reinterpret_cast<uint64_t*>(op2_psinv.data_ptr<uint64_t>());
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        const int block_dim = 256;
-        const int grid_dim = param_degree * batch / block_dim;
-        const_mult_batch(
-            (int)param_degree,
-            primes_ptr,
-            op1_ptr,
-            op2_ptr,
-            op2_psinv_ptr,
-            (int)start_prime_idx,
-            (int)batch,
-            (int)start_op1_idx,
-            (int)start_op2_idx,
-            res_ptr);
-      }),
-      kUInt64);
-}
-
-void SubInplace(
-    uint64_t* op1,
-    const uint64_t* op2,
-    const int64_t batch,
-    const int64_t param_degree,
-    const Tensor& primes) {
-  AT_DISPATCH_V2(
-      kUInt64,
-      "SubInplace",
-      AT_WRAP([&]() {
-        const int block_dim = 256;
-        const int grid_dim = param_degree * batch / block_dim;
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        fhe::subInplace_(param_degree, batch, primes_ptr, op1, op2);
-      }),
-      kUInt64);
-}
-
-void vec_add_mod_batch(
-    uint64_t* op1_ptr,
-    uint64_t* op2_ptr,
-    const Tensor& primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    int64_t batch,
-    int64_t degree,
-    uint64_t* res_ptr) {
-  AT_DISPATCH_V2(
-      primes.scalar_type(),
-      "vec_add_mod_batch_",
-      AT_WRAP([&]() {
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto barret_ratio_ptr = reinterpret_cast<uint64_t*>(
-            param_barret_ratio.data_ptr<uint64_t>());
-        auto barret_k_ptr =
-            reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
-        const int block_dim = 256;
-        const int grid_dim = degree * batch / block_dim;
-        fhe::vec_add_mod_batch_(
-            (int)degree,
-            primes_ptr,
-            barret_ratio_ptr,
-            barret_k_ptr,
-            op1_ptr,
-            op2_ptr,
-            (int)batch,
-            res_ptr);
-      }),
-      kUInt64);
+  auto op2_ptr = reinterpret_cast<uint64_t*>(op2.data_ptr<uint64_t>());
+  auto op2_psinv_ptr =
+      reinterpret_cast<uint64_t*>(op2_psinv.data_ptr<uint64_t>());
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  const int block_dim = 256;
+  const int grid_dim = param_degree * batch / block_dim;
+  const_mult_batch(
+      (int)param_degree,
+      primes_ptr,
+      op1_ptr,
+      op2_ptr,
+      op2_psinv_ptr,
+      (int)start_prime_idx,
+      (int)batch,
+      (int)start_op1_idx,
+      (int)start_op2_idx,
+      res_ptr);
 }
 
 void vec_mod_batch(
@@ -257,7 +175,7 @@ void vec_mod_batch(
     uint64_t* res_ptr) {
   AT_DISPATCH_V2(
       primes.scalar_type(),
-      "vec_add_mod_batch_",
+      "vec_mod_batch_",
       AT_WRAP([&]() {
         auto primes_ptr =
             reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());

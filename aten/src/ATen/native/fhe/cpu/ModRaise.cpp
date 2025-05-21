@@ -44,7 +44,6 @@ static void switch_modulus_template(
 
   NTT_impl(
       res_ptr,
-      res_ptr,
       0,
       L0,
       N,
@@ -69,63 +68,6 @@ Tensor mod_raise_cpu(
     const Tensor& barret_k) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
-  switch_modulus_template(
-      out,
-      in,
-      N,
-      L0,
-      logN,
-      level,
-      moduliQ,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
-  return out;
-}
-
-Tensor& switch_modulus_cpu_(
-    Tensor& res,
-    const Tensor& in,
-    const Tensor& moduliQ,
-    int64_t N,
-    int64_t L0,
-    int64_t logN,
-    int64_t level,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots) {
-  res.resize_({L0 * N});
-  switch_modulus_template(
-      res,
-      in,
-      N,
-      L0,
-      logN,
-      level,
-      moduliQ,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two,
-      param_power_of_roots_shoup,
-      param_power_of_roots);
-  return res;
-}
-
-Tensor& switch_modulus_cpu_out(
-    const Tensor& res,
-    const Tensor& in,
-    const Tensor& moduliQ,
-    int64_t N,
-    int64_t L0,
-    int64_t logN,
-    int64_t level,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    Tensor& out) {
-  out.resize_({L0 * N});
   switch_modulus_template(
       out,
       in,

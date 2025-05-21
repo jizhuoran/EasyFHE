@@ -69,12 +69,45 @@ namespace at::native {
 /* kernel launchers */
 
 #define BARRET_PARAMS_0
+#define BARRET_PARAMS_1 , const uint64_t* barret_mu
+
+#define BARRET_ARGS_0
+#define BARRET_ARGS_1 , barret_mu
+
+#define GENERATE_FUNCTION(NAME, HAS_BARRET)                          \
+  void NAME##_mod(                                                   \
+      const size_t N,                                                \
+      int64_t l,                                                     \
+      uint64_t* c,                                                   \
+      const uint64_t* a,                                             \
+      const uint64_t* b,                                             \
+      const uint64_t* mod BARRET_PARAMS_##HAS_BARRET) {              \
+    fhe::NAME##_kernel(l, N, c, a, b, mod BARRET_ARGS_##HAS_BARRET); \
+  }
+
+GENERATE_FUNCTION(vadd, 0)
+GENERATE_FUNCTION(vsub, 0)
+GENERATE_FUNCTION(vmul, 1)
+GENERATE_FUNCTION(vadd_scalar, 0)
+GENERATE_FUNCTION(vsub_scalar, 0)
+GENERATE_FUNCTION(vmul_scalar, 1)
+GENERATE_FUNCTION(vneg, 0)
+
+#undef BARRET_PARAMS_0
+#undef BARRET_PARAMS_1
+#undef BARRET_ARGS_0
+#undef BARRET_ARGS_1
+#undef GENERATE_FUNCTION
+
+/* templates */
+
+#define BARRET_PARAMS_0
 #define BARRET_PARAMS_1 , const Tensor& barret_mu
 
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu.data_ptr<uint64_t>()
 
-#define GENERATE_KERNEL(NAME, HAS_BARRET)                   \
+#define GENERATE_TEMPLATE(NAME, HAS_BARRET)                 \
   static void NAME##_template(                              \
       Tensor& c,                                            \
       const Tensor& a,                                      \
@@ -83,30 +116,30 @@ namespace at::native {
       int64_t cur_limbs) {                                  \
     TORCH_INTERNAL_ASSERT(a.dim() == 2);                    \
     auto N = static_cast<int>(a.sizes()[1]);                \
-    fhe::NAME##_kernel(                                     \
-        cur_limbs,                                          \
+    NAME##_mod(                                             \
         N,                                                  \
+        cur_limbs,                                          \
         c.mutable_data_ptr<uint64_t>(),                     \
         a.data_ptr<uint64_t>(),                             \
         b.data_ptr<uint64_t>(),                             \
         mod.data_ptr<uint64_t>() BARRET_ARGS_##HAS_BARRET); \
   }
 
-GENERATE_KERNEL(vadd, 0)
-GENERATE_KERNEL(vsub, 0)
-GENERATE_KERNEL(vmul, 1)
-GENERATE_KERNEL(vadd_scalar, 0)
-GENERATE_KERNEL(vsub_scalar, 0)
-GENERATE_KERNEL(vmul_scalar, 1)
-GENERATE_KERNEL(vneg, 0)
+GENERATE_TEMPLATE(vadd, 0)
+GENERATE_TEMPLATE(vsub, 0)
+GENERATE_TEMPLATE(vmul, 1)
+GENERATE_TEMPLATE(vadd_scalar, 0)
+GENERATE_TEMPLATE(vsub_scalar, 0)
+GENERATE_TEMPLATE(vmul_scalar, 1)
+GENERATE_TEMPLATE(vneg, 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1
 #undef BARRET_ARGS_0
 #undef BARRET_ARGS_1
-#undef GENERATE_KERNEL
+#undef GENERATE_TEMPLATE
 
-/* functions */
+/* interface */
 
 #define BARRET_PARAMS_0
 #define BARRET_PARAMS_1 , const Tensor& barret_mu
@@ -114,7 +147,7 @@ GENERATE_KERNEL(vneg, 0)
 #define BARRET_ARGS_0
 #define BARRET_ARGS_1 , barret_mu
 
-#define GENERATE_FUNCTION(NAME, HAS_BARRET)                               \
+#define GENERATE_INTERFACE(NAME, HAS_BARRET)                              \
   Tensor NAME##_mod_cpu(                                                  \
       const Tensor& a,                                                    \
       const Tensor& b,                                                    \
@@ -145,17 +178,18 @@ GENERATE_KERNEL(vneg, 0)
     return c;                                                             \
   }
 
-GENERATE_FUNCTION(add, 0)
-GENERATE_FUNCTION(sub, 0)
-GENERATE_FUNCTION(mul, 1)
-GENERATE_FUNCTION(add_scalar, 0)
-GENERATE_FUNCTION(sub_scalar, 0)
-GENERATE_FUNCTION(mul_scalar, 1)
-GENERATE_FUNCTION(neg, 0)
+GENERATE_INTERFACE(add, 0)
+GENERATE_INTERFACE(sub, 0)
+GENERATE_INTERFACE(mul, 1)
+GENERATE_INTERFACE(add_scalar, 0)
+GENERATE_INTERFACE(sub_scalar, 0)
+GENERATE_INTERFACE(mul_scalar, 1)
+GENERATE_INTERFACE(neg, 0)
 
 #undef BARRET_PARAMS_0
 #undef BARRET_PARAMS_1
 #undef BARRET_ARGS_0
 #undef BARRET_ARGS_1
-#undef GENERATE_FUNCTION
+#undef GENERATE_INTERFACE
+
 } // namespace at::native

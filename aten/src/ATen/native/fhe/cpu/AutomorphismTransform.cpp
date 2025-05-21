@@ -57,23 +57,4 @@ Tensor automorphism_transform_cpu(
   return out;
 }
 
-Tensor& automorphism_transform_cpu_(
-    Tensor& a,
-    int64_t l,
-    int64_t N,
-    const Tensor& precomp_vec) {
-  automorphism_transform_template(a, a, l, N, precomp_vec);
-  return a;
-}
-
-Tensor& automorphism_transform_cpu_out(
-    const Tensor& a,
-    int64_t l,
-    int64_t N,
-    const Tensor& precomp_vec,
-    Tensor& out) {
-  automorphism_transform_template(out, a, l, N, precomp_vec);
-  return out;
-}
-
 } // namespace at::native
