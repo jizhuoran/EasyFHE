@@ -786,6 +786,12 @@ class __FOR_SAVE_ONLY_Context:
 
         self.BsContext_map = None
 
+        for i in range(9, int(logN)):
+            for j in range(8, i):
+                mask = [1] * (1 << j) + [0] * ((1 << i) - (1 << j))
+                mask = pre_encode(mask, 1 << i)
+                self.encode_values["slot_conversion_mask_{}to{}".format(1<<i, 1<<j)] = mask
+
             # for logBsSlots in logBsSlots_list:
             #     BsContextMembers = {}
             #     for item in dir(self.BsContext_map[str(logBsSlots)]):

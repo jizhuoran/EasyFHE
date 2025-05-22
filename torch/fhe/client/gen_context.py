@@ -102,6 +102,9 @@ def gen_contexts(
     rot_swk_map = {}
     autoIdx2rotIdx_map = {}
     MULT_SWK = np.array(cc.GetEvalMultKey(), dtype=np.uint64)
+    
+    slot_conversion_rot_index = [1 << i for i in range(8, logN)]
+    rotIndex_list = slot_conversion_rot_index if rotIndex_list is None else (rotIndex_list + slot_conversion_rot_index)
     if rotIndex_list is not None and rotIndex_list != []: # deal with "app" rot Index
         cc.EvalRotateKeyGen(keys.secretKey, rotIndex_list)
         APP_ROT_SWK = cc.GetEvalRotateKey()

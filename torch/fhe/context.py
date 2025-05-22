@@ -579,4 +579,3 @@ class Context:
             return self.precompute_auto_map[key].cuda()
         else:
             return self.precompute_auto_map[key]
-

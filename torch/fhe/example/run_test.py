@@ -19,7 +19,7 @@ levelBudget_list = [[4, 4]]
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = DATA_DIR
 secretKeyDist = "UNIFORM_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-device = "cpu"  # "cuda" # "cpu"
+device = "cuda"  # "cuda" # "cpu"
 compare = True
 
 if compare == True:
@@ -60,6 +60,9 @@ if compare == True:
         x, device, 1, openfhe_context.depth - 1, (1 << logBsSlots)
     )  # specify the slots value explicitly
 
+    cipher1 = torch.fhe.homo_ops.slot_resize(cipher, 1 << 8, cryptoContext)
+    clear_result = openfhe_context.decrypt(cipher1)  # decrypt by cc with different slots value should be fine
+    print(clear_result.tolist())
 
     start_time = time.time()
     result = BS.eval_bootstrap(

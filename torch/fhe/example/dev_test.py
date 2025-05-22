@@ -237,6 +237,49 @@ def app_without_bs_example_debug(
     else:
         print_failed("homo_rotate: Test failed!")
 
+def slot_conversion(
+        maxLevelsRemaining=8,
+        appRotIndex_list = [-1, 2, -4, 5],
+        logBsSlots_list=None,
+        logN=14,
+        dnum=3,
+        dcrtBits=54,
+        firstMod=57,
+        levelBudget_list=None,
+        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
+        save_dir=DATA_DIR
+):
+
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True)
+    cryptoContext, openfhe_context, _ = (
+        utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
+                               config=config))
+
+    encode_slots = (1 << 10)
+    values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
+    x = [values[i % len(values)] for i in range(encode_slots)]
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
+
+    cipher1 = torch.fhe.homo_ops.slot_resize(cipher, 1 << 12, cryptoContext)
+    clear_result = openfhe_context.decrypt(cipher1)
+    is_equal = np.allclose(clear_result.cpu().numpy()[-1 << 10:], np.array(x), atol=1e-02)
+    if is_equal:
+        print("Increase slot: Test passed!")
+    else:
+        print_failed("Increase slot: Test failed!")
+
+
+    cipher2 = torch.fhe.homo_ops.slot_resize(cipher, 1 << 8, cryptoContext)
+    clear_result = openfhe_context.decrypt(cipher2)
+    is_equal = np.allclose(clear_result.cpu().numpy(), np.array(x[-1 << 8:]), atol=1e-02)
+    if is_equal:
+        print("Decrease slot: Test passed!")
+    else:
+        print_failed("Decrease slot: Test failed!")
+
+        
 def app_example_debug(
         maxLevelsRemaining=3,
         appRotIndex_list = [-1, 2],
@@ -1086,8 +1129,9 @@ if __name__ == "__main__":
 
     app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
 
-    gen_CoeffSlots_matrix_test_case()
-    slim_bs_test_case()
+    # gen_CoeffSlots_matrix_test_case()
+    # slim_bs_test_case()
+    slot_conversion()
     # # hybrid_bs_test_case() # todo: to be supported
 
     for rescaleTech in ["FLEXIBLEAUTO", "FIXEDAUTO", "FIXEDMANUAL"]:

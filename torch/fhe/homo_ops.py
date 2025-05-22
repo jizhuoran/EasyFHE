@@ -955,6 +955,29 @@ def encode(
             gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
     return gpufhe_cipher
 
+
+def slot_resize(x, slots, cryptoContext):
+    assert x.is_ext == False, "slot_resize only support non-ext"
+
+    if x.slots <= slots:
+        res = x.deep_copy()
+    else:
+        mask_name = "slot_conversion_mask_{}to{}".format(x.slots, slots)
+        mask = encode(
+            cryptoContext.encode_values[mask_name],
+            mask_name,
+            cryptoContext.L - x.cur_limbs,
+            x.slots,
+            x.is_ext,
+            cryptoContext,
+        )
+        res = homo_mul_pt(x, mask, cryptoContext)
+        for i in range(int(math.log2(slots)), int(math.log2(x.slots))):
+            res = homo_add(res, homo_rotate(res, 1 << i, cryptoContext), cryptoContext)
+    res.slots = slots
+    return res
+
+
 ################## FUSED OPS ##################
 def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
     """
