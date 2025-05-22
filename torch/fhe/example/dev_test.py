@@ -14,7 +14,7 @@ def print_failed(message):
     print(colored(message, "red"))
 
 
-def homoaddtime(
+def test_homoaddtime(
         maxLevelsRemaining=3,
         appRotIndex_list=[-1],
         logBsSlots_list=[12],
@@ -24,6 +24,7 @@ def homoaddtime(
         firstMod=60,
         levelBudget_list=[[4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cpu",
         save_dir =DATA_DIR
 ):
     if not os.path.exists(DATA_DIR):
@@ -31,13 +32,12 @@ def homoaddtime(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
     logBsSlots = logBsSlots_list[0]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     xcpu = np.array([values[i % len(values)] for i in range(1 << logBsSlots)])
-    xcpu = torch.tensor(xcpu, device="cpu")
-    cipherxcpu, cipher_openfhe = openfhe_context.encrypt(xcpu, 1, openfhe_context.depth - 15, (1 << logBsSlots))
+    cipherxcpu, cipher_openfhe = openfhe_context.encrypt(xcpu, "cpu", 1, openfhe_context.depth - 15, (1 << logBsSlots))
     cipher_cpu = cipherxcpu.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
     a=cryptoContext.cpu()
@@ -45,7 +45,7 @@ def homoaddtime(
     for i in range(10000):
         homo_ops.homo_add(cipher_cpu, cipher_cpu, a)
     elapsed_time = time.time() - start_time
-    print(f"add cpu耗时: {elapsed_time:.8f} 秒")
+    print(f"add cpu exec time: {elapsed_time:.8f} seconds")
 
 
 def switch_context_example(
@@ -58,6 +58,7 @@ def switch_context_example(
         firstMod=60,
         levelBudget_list=[[4, 4]],
         rescaleTech="FLEXIBLEAUTO",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device="cuda",
         save_dir =DATA_DIR
 ):
     if not os.path.exists(DATA_DIR):
@@ -65,26 +66,24 @@ def switch_context_example(
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, AUTO_SYNC=False, COMPARE_WITH_OPENFHE=True)
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
     logBsSlots = logBsSlots_list[0]
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     
     xcpu = np.array([values[i % len(values)] for i in range(1 << logBsSlots)])
     xgpu = np.array([values[i % len(values)] for i in range(1 << logBsSlots)])
-    xcpu = torch.tensor(xcpu, device="cpu")
-    xgpu = torch.tensor(xgpu, device="cuda")
-    cipherxcpu, cipher_openfhe = openfhe_context.encrypt(xcpu, 1, openfhe_context.depth - 1, (1 << logBsSlots))
-    cipherxgpu, cipher_openfhexgpu = openfhe_context.encrypt(xgpu, 1, openfhe_context.depth - 1, (1 << logBsSlots))
+    cipherxcpu, cipher_openfhe = openfhe_context.encrypt(xcpu, "cpu", 1, openfhe_context.depth - 1, (1 << logBsSlots))
+    cipherxgpu, cipher_openfhexgpu = openfhe_context.encrypt(xgpu, "cuda", 1, openfhe_context.depth - 1, (1 << logBsSlots))
     cipher_cpu = cipherxcpu.deep_copy()
     cipher_cpu.cv = [cv.cpu() for cv in cipher_cpu.cv]
     a=cryptoContext.cpu()
-    result2 = eval_bootstrap(cipher_cpu, a.L, logBsSlots_list[0], level_budgets=levelBudget_list[0],cryptoContext=a)
+    result2 = eval_bootstrap(cipher_cpu, a.L, logBsSlots_list[0], levelBudget_list[0], a)
 
     cipher_gpu = cipherxgpu.deep_copy()
     cipher_gpu.cv = [cv.cuda() for cv in cipher_gpu.cv]
     b=cryptoContext.cuda()
-    result4 = eval_bootstrap(cipher_gpu, b.L, logBsSlots_list[0], level_budgets=levelBudget_list[0],cryptoContext=b)
+    result4 = eval_bootstrap(cipher_gpu, b.L, logBsSlots_list[0], levelBudget_list[0], b)
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
@@ -95,10 +94,16 @@ def switch_context_example(
 
     print("compare_cpufhe_ct_with_openfhe")
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result2, openfhe_resultcpu)
-    print("is_equal", is_equal)
+    if is_equal:
+        print("compare_cpufhe_ct_with_openfhe Test passed!")
+    else:
+        print_failed("compare_cpufhe_ct_with_openfhe Test failed!")
     print("compare_gpufhe_ct_with_openfhe")
     is_equal = utils.compare_gpufhe_ct_with_openfhe(result4, openfhe_resultgpu)
-    print("is_equal", is_equal)
+    if is_equal:
+        print("compare_cpufhe_ct_with_openfhe Test passed!")
+    else:
+        print_failed("compare_cpufhe_ct_with_openfhe Test failed!")
 
 def app_without_bs_example_debug_cpu(
         maxLevelsRemaining=3,
@@ -291,8 +296,8 @@ def app_example_debug(
     result.slots =  (1 << 12) # This assignment is for testing purposes only
     drop_limbs = result.cur_limbs - 3
     for i in range(drop_limbs):
-        result = homo_ops.homo_mul(result, result, a)
-        result = homo_ops.homo_rescale(result, 1, a)
+        result = homo_ops.homo_mul(result, result, cryptoContext)
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
     result1 = eval_bootstrap(result, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext)
@@ -351,12 +356,12 @@ def app_example_release(
     cipher1 = openfhe_context.encrypt(x1, device, 1, 0, encode_slots)
 
     # do the application computation
-    cipher = homo_ops.homo_rotate(cipher, -1, a)
-    cipher = homo_ops.homo_rotate(cipher, 2, a)
+    cipher = homo_ops.homo_rotate(cipher, -1, cryptoContext)
+    cipher = homo_ops.homo_rotate(cipher, 2, cryptoContext)
     print("homo_rotate done!")
 
     # bootstrapping
-    result = homo_bootstrap(cipher, a.L, logBsSlots_list[0], levelBudget_list[0], a)
+    result = homo_bootstrap(cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
@@ -370,11 +375,11 @@ def app_example_release(
     for i in range(result.cur_limbs - 4):
         approx_plain_val = approx_plain_val * values1[0]
         # print(approx_plain_val)
-        result = homo_ops.homo_mul(result, cipher1, a)
-        result = homo_ops.homo_rescale(result, 1, a)
+        result = homo_ops.homo_mul(result, cipher1, cryptoContext)
+        result = homo_ops.homo_rescale(result, 1, cryptoContext)
 
     # bootstrapping
-    result1 = homo_bootstrap(result, a.L, logBsSlots_list[1], levelBudget_list[1], a)
+    result1 = homo_bootstrap(result, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext)
     print("gpu bootstrapp done!")
 
     clear_result = openfhe_context.decrypt(result1)  # decrypt by cc with different slots value should be fine
@@ -566,7 +571,7 @@ def ct_pt_test_case(
         print("data", ground_truth)
 
 
-    result = homo_ops.homo_mul_pt(cipher, encoded, a)
+    result = homo_ops.homo_mul_pt(cipher, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(values) * np.array(values)
@@ -580,9 +585,9 @@ def ct_pt_test_case(
         print("data", ground_truth)
 
     # encoded = homo_ops._drop_last_elements(encoded, 1, cryptoContext, False)
-    result = homo_ops.homo_rescale(result, 1, a)
-    encoded = homo_ops.adjust_to(encoded, result.cur_limbs, result.noise_deg, result.scaling_factor, a)
-    result = homo_ops.homo_add_pt(result, encoded, a)
+    result = homo_ops.homo_rescale(result, 1, cryptoContext)
+    encoded = homo_ops.adjust_to(encoded, result.cur_limbs, result.noise_deg, result.scaling_factor, cryptoContext)
+    result = homo_ops.homo_add_pt(result, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(ground_truth) + np.array(values)
@@ -595,7 +600,7 @@ def ct_pt_test_case(
         print("result", clear_result[:len(values)])
         print("data", ground_truth)
 
-    result = homo_ops.homo_mul_pt(result, encoded, a)
+    result = homo_ops.homo_mul_pt(result, encoded, cryptoContext)
     clear_result = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
     clear_result = clear_result.cpu().numpy().reshape(-1)[:len(values)]
     ground_truth = np.array(ground_truth) * np.array(values)
@@ -637,7 +642,7 @@ def double_bs_debug(
     cipher, cipher_openfhe = openfhe_boot_context.encrypt(x, device, 1, openfhe_context.depth - 1, encode_slots)
 
     precision = 17
-    a=cryptoContext.cuda()
+
     # bootstrapping
     result = homo_double_bootstrap(cipher, L0=cryptoContext.L, logBsSlots=logBsSlots_list[0], level_budgets=levelBudget_list[0],
                                     precision=precision, cryptoContext=cryptoContext)
@@ -675,7 +680,30 @@ def gen_CoeffSlots_matrix_test_case(
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
+    # precom->m_U0hatTPreFFT = EvalCoeffsToSlotsPrecompute(cc, ksiPows, rotGroup, false, scaleEnc, lEnc);
+    # precom->m_U0PreFFT = EvalSlotsToCoeffsPrecompute(cc, ksiPows, rotGroup, false, scaleDec, lDec);
 
+    # precom = cryptoContext.BsContext_map[str(logBsSlots_list[0])]
+    #
+    # K_SPARSE = 28
+    # K_UNIFORM = 512
+    #
+    # import math
+    # q = cryptoContext.moduliQ[0]
+    # q_double = float(q)
+    # factor = 1 << int(round(math.log2(q_double)))
+    # pre = q_double / factor
+    # k = K_SPARSE if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 1.0
+    # scaleEnc = pre / k
+    # scaleDec = 1 / pre
+    #
+    # lEnc = cryptoContext.L - precom.paramsEnc.level_budget - 1
+    # lDec = maxLevelsRemaining + 1
+    #
+    # # note: c2s_matrix should be same as m_U0hatTPreFFT
+    # # note: s2c_matrix should be same as m_U0PreFFT
+    # c2s_matrix = homo_ops.eval_coeffs_to_slots_precompute(logBsSlots_list[0],scaleEnc, lEnc, cryptoContext)
+    # s2c_matrix = homo_ops.eval_slots_to_coeffs_precompute(logBsSlots_list[0],scaleDec, lDec, cryptoContext)
 
 
     encode_slots = (1 << 11)
@@ -689,7 +717,7 @@ def gen_CoeffSlots_matrix_test_case(
     print("gpu bootstrapp done!")
     # compute golden answer
     clear_result1 = openfhe_context.decrypt(result)  # decrypt by cc with different slots value should be fine
-    clear_result1 = clear_result1.cuda().numpy().reshape(-1)
+    clear_result1 = clear_result1.cpu().numpy().reshape(-1)
     print("HE decryption result: ", clear_result1[:10])
 
     # control group
@@ -847,7 +875,7 @@ def slim_bs_test_case(
     print("gpu bootstrapp done!")
     # compute golden answer
     clear_result2 = openfhe_context.decrypt(result2)  # decrypt by cc with different slots value should be fine
-    clear_result2 = clear_result2.cuda().numpy().reshape(-1)
+    clear_result2 = clear_result2.cpu().numpy().reshape(-1)
     print("HE decryption result: ", clear_result2[:10])
 
 
@@ -859,6 +887,11 @@ def slim_bs_test_case(
     print(f"slim bs Max diff: {max_diff:.5e}")
     print(f"slim bs Mean diff: {mean_diff:.5e}", "\n\n")
 
+    # diff = np.abs(clear_result1[:len(clear_result2)] - clear_result2)
+    # max_diff = np.max(diff)
+    # mean_diff = np.mean(diff)
+    # print(f"slim bs and regular bs Max diff: {max_diff:.5e}")
+    # print(f"slim bs and regular bs Mean diff: {mean_diff:.5e}")
 
 
 # # todo: to be supported, need to comment S2C in eval_slim_bs currently
@@ -1048,6 +1081,8 @@ def slim_bs_test_case(
 ##############
 
 if __name__ == "__main__":
+    switch_context_example()
+    test_homoaddtime()
 
     app_without_bs_example_debug_cpu(rescaleTech = "FIXEDMANUAL")
 
