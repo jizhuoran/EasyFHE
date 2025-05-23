@@ -172,14 +172,14 @@ def app_without_bs_example_debug_cpu(
     start_time = time.time()
     result4 = eval_bootstrap(cipher_cpu, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     elapsed_time = time.time() - start_time
-    print(f"eval_bootstrap cpu exec time: {elapsed_time:.4f} 秒")
+    print(f"eval_bootstrap cpu exec time: {elapsed_time:.4f} seconds")
 
     cipher_openfhe.SetSlots((1 << logBsSlots))
     openfhe_boot_context = openfhe_boot_contexts[str(logBsSlots)]
     start_time = time.time()
     openfhe_result = openfhe_boot_context.cc.EvalBootstrap(cipher_openfhe)
     elapsed_time = time.time() - start_time
-    print(f"eval_bootstrap openfhe_result exec time: {elapsed_time:.4f} 秒")
+    print(f"eval_bootstrap openfhe_result exec time: {elapsed_time:.4f} seconds")
 
     def check_and_print(name, result, openfhe_result):
         is_equal = utils.compare_gpufhe_ct_with_openfhe(result, openfhe_result)
