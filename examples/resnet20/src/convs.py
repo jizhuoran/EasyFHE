@@ -46,11 +46,29 @@ def convbn_initial(input,num_channel,scale, he_res20_ctx, cryptoContext, img_wid
 
 @fhe.utils.profile_python_function
 def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, padding, slots, num_channel, rot_offset, channel_offset, biasoff=""):
-    slots=65536
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
 
     c_rotations = rot_input(input, img_width, padding, cryptoContext)
+    # if layer == 7 and n == 2:
+    #     # zeros_8k = cryptoContext.openfhe_context.encrypt(np.zeros(2 ** 13), 2, 0, 2 ** 13)
+    #     ones_64k = cryptoContext.openfhe_context.encrypt(np.ones(2 ** 16), 2, 0, 2 ** 16)
+    #     for j in range(num_channel):
+    #         for k in range(9):
+    #             encoded = read_values_from_file(cryptoContext,
+    #                                             f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",
+    #                                             cryptoContext.L - input.cur_limbs, 1, 8*1024, scale)
+    #             result = fhe.homo_mul_pt(ones_64k,encoded,cryptoContext)
+    #             value = read_value(filename=f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",target_len=8*1024)
+    #             temp = cryptoContext.openfhe_context.decrypt(result).cpu().numpy().reshape(-1)
+    #             print(f"file--------------layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}")
+    #             print('len encode:', len(temp))
+    #             print('max encode', max(temp))
+    #             print('min encode', min(temp))
+    #             print('len value:', len(value))
+    #             print('max value', max(value))
+    #             print('min value', min(value))
+    #
 
     for j in range(num_channel):
         k_rows=[]
@@ -65,6 +83,83 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, paddi
     # bias = read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias{biasoff}",cryptoContext.L-input.cur_limbs,1,slots,scale)
     # finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
     return finalsum
+
+@fhe.utils.profile_python_function
+def convbn4(input,layer,n,scale, he_res20_ctx, cryptoContext):
+    if input.noise_deg > 1:
+        input = fhe.force_rescale(input, 1, cryptoContext)
+    img_width=4
+    padding=1
+    digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
+    c_rotations=[]
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),-img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
+    c_rotations.append(
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width, cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
+    c_rotations.append(input)#这里旋转什么的都只需要对cv1吗？
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
+    c_rotations.append(fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext),img_width,cryptoContext))
+    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
+    c_rotations.append(
+        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width, cryptoContext))
+
+
+    for j in range(512):
+        k_rows=[]
+        for k in range(9):
+            encoded=read_values_from_file(cryptoContext, f"layer{layer}-conv{n}bn{n}-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,8192,scale)
+            k_rows.append(fhe.homo_mul_pt(c_rotations[k],encoded,cryptoContext))
+        sum=eval_add_many(k_rows,cryptoContext)
+        if j==0:
+            finalsum=sum.deep_copy()
+            finalsum=fhe.homo_rotate(finalsum,-16,cryptoContext)
+        else:
+            finalsum=fhe.homo_add(finalsum,sum,cryptoContext)
+            finalsum=fhe.homo_rotate(finalsum,-16,cryptoContext)
+
+    return finalsum
+
+
+def eval_add_many(ciphertexts, cryptoContext):
+    # plain implementation of EvalAddMany
+    inSize = len(ciphertexts)
+    if inSize < 1:
+        raise ValueError("Input ciphertext vector size should be 1 or more")
+    sum = ciphertexts[0].deep_copy()
+    for i in range(1,inSize):
+        sum = fhe.homo_add(sum, ciphertexts[i], cryptoContext)
+
+    return sum
+
+def read_value(filename,target_len, scale=1.0):
+    values = []
+    val_name = filename
+    filename = '../weights_Aespa/' + filename + '.bin'
+    if not os.path.isfile(filename):
+        print(f"Failed to open file: {filename}")
+        return values
+
+    try:
+        # 打开文件并逐行读取
+        with open(filename, 'r') as file:
+            for row in file:
+                # 按行解析
+                for value in row.strip().split(','):
+                    try:
+                        num = float(value)
+                        values.append(num * scale)
+                    except ValueError:
+                        print(f"unconvert:: {value}")
+    except IOError as e:
+        print(f"error: {e}")
+
+    values = np.array(values, dtype=np.double)
+    n = len(values)
+    if target_len % n != 0:
+        raise ValueError(f"target_len ({target_len}) must be a multiple of the original array's length ({n})")
+    k = target_len // n
+    return np.repeat(values, k)
 
 @fhe.utils.profile_python_function
 def convbn_dx(input, layer, n, scale, he_res20_ctx, cryptoContext, slots, num_channel, rot_offset, channel_offset, biasoff=""):
@@ -373,3 +468,25 @@ def downsample64to16(c1, c2, he_res20_ctx, cryptoContext):
     downsampledchannels.slots=8192
 
     return downsampledchannels
+
+
+def change_cipher_length(cipher,target_length,cryptoContext):
+    slots = cipher.slots
+    if target_length<slots:
+        # 缩小目标长度
+        temp = cryptoContext.openfhe_context.decrypt(cipher).cpu().numpy().reshape(-1)
+        temp = temp[:target_length]
+        res = cryptoContext.openfhe_context.encrypt(temp, 1, 0, target_length)
+        return res
+    elif target_length %slots != 0 :
+        raise ValueError('target_length should be slots * k')
+    else:
+        k = target_length // slots
+        print("运行到change_cipher_length，k=",k)
+        temp = cryptoContext.openfhe_context.decrypt(cipher).cpu().numpy().reshape(-1)
+        assert len(temp) == slots
+        res = temp
+        for i in range(k-1):
+            res = np.hstack((res,temp))
+        res = cryptoContext.openfhe_context.encrypt(temp, 1, 0, target_length)
+        return res
