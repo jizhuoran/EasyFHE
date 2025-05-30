@@ -67,9 +67,8 @@ def gen_contexts(
         max_level_budget = max(
             levelBudget_list, key=lambda level_budget: level_budget[0] + level_budget[1]
         )
-        approxModDepth = 9 # 9 is the default value of approxModDepth in openfhe
         depth = maxLevelsRemaining + openfhe.FHECKKSRNS.GetBootstrapDepth(
-            approxModDepth, max_level_budget, openfhe_secretKeyDist
+            max_level_budget, openfhe_secretKeyDist
         )
 
     parameters = openfhe.CCParamsCKKSRNS()
