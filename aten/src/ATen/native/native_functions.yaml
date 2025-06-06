@@ -16022,6 +16022,13 @@
     CPU: encode_cpu
     CUDA: encode_cuda
 
+
+- func: pre_encode(Tensor input, int slots, int M, Tensor rotGroup, Tensor ksiPows, Tensor bitrev) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: pre_encode_cpu
+
+
 - func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:

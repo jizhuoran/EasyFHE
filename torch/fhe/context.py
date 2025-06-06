@@ -2,7 +2,7 @@ from enum import Enum
 import torch
 from .ciphertext import Plaintext, Cipher, PreEncodeValues
 from .config import *
-import copy
+import numpy as np
 def custom_warning_format(message, category, filename, lineno, file=None, line=None):
     return f"{message}\n"
 
@@ -92,6 +92,10 @@ def parse_content_map(gpufhe_content_map, device, config):
     QbarretKplusPbarretK_map = get_item("QbarretKplusPbarretK_map", gpufhe_content_map)
     QbarretRatioplusPbarretRatio_map = get_item("QbarretRatioplusPbarretRatio_map", gpufhe_content_map)
 
+    encode_params_ksiPows = get_item("encode_params_ksiPows", gpufhe_content_map)
+    encode_params_rotGroup = get_item("encode_params_rotGroup", gpufhe_content_map)
+    encode_bitrev_indices = get_item("encode_bitrev_indices", gpufhe_content_map)
+
     q_mu = torch.tensor(q_mu, dtype = torch.uint64)
     moduliQ = torch.tensor(moduliQ, dtype = torch.uint64)
     primes = torch.tensor(primes, dtype = torch.uint64)
@@ -125,6 +129,12 @@ def parse_content_map(gpufhe_content_map, device, config):
     mod_raise_out = torch.tensor(mod_raise_out, dtype = torch.uint64)
     PModq = torch.tensor(PModq, dtype = torch.uint64)
     max_int_diffs = torch.tensor([(9223372036854775295 - prime) % prime for prime in primes.tolist()], dtype = torch.uint64)
+
+    encode_params_rotGroup = torch.tensor(encode_params_rotGroup, dtype=torch.uint32)
+    encode_params_ksiPows = torch.tensor(encode_params_ksiPows, dtype=torch.complex128)
+    for key, value in encode_bitrev_indices.items():
+        encode_bitrev_indices[key] = torch.tensor(value, dtype=torch.uint32)
+
 
     for key, value in QplusP_map.items():
         QplusP_map[key] = torch.tensor(value, dtype = torch.uint64)
@@ -233,6 +243,9 @@ def parse_content_map(gpufhe_content_map, device, config):
         qlql_inv_mod_ql_div_ql_mod_q,
         qlql_inv_mod_ql_div_ql_mod_q_shoup,
         QmaxdiffplusPmaxdiff_map,
+        encode_params_ksiPows,
+        encode_params_rotGroup,
+        encode_bitrev_indices,
         encode_values,
         QbarretKplusPbarretK_map,
         QbarretRatioplusPbarretRatio_map,
@@ -315,6 +328,9 @@ class Context:
         qlql_inv_mod_ql_div_ql_mod_q,
         qlql_inv_mod_ql_div_ql_mod_q_shoup,
         QmaxdiffplusPmaxdiff_map,
+        encode_params_ksiPows,
+        encode_params_rotGroup,
+        encode_bitrev_indices,
         encode_values,
         QbarretKplusPbarretK_map,
         QbarretRatioplusPbarretRatio_map
@@ -419,6 +435,9 @@ class Context:
         self.QbarretKplusPbarretK_map = {key: value.clone().to(device) for key, value in QbarretKplusPbarretK_map.items()}
         self.QbarretRatioplusPbarretRatio_map = {key: value.clone().to(device) for key, value in QbarretRatioplusPbarretRatio_map.items()}
         self.max_int_diffs = max_int_diffs.clone().to(device)
+        self.encode_params_ksiPows = encode_params_ksiPows
+        self.encode_params_rotGroup = encode_params_rotGroup
+        self.encode_bitrev_indices = encode_bitrev_indices
         self.encode_values = {}
         for key, value in encode_values.items():
             if isinstance(value, Plaintext):
@@ -513,6 +532,9 @@ class Context:
             self.qlql_inv_mod_ql_div_ql_mod_q,
             self.qlql_inv_mod_ql_div_ql_mod_q_shoup,
             self.QmaxdiffplusPmaxdiff_map,
+            self.encode_params_ksiPows,
+            self.encode_params_rotGroup,
+            self.encode_bitrev_indices,
             self.encode_values,
             self.QbarretKplusPbarretK_map,
             self.QbarretRatioplusPbarretRatio_map

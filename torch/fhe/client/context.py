@@ -446,9 +446,17 @@ class __FOR_SAVE_ONLY_Context:
             angle = 2.0 * M_PI * j / self.M
             self.encode_params_ksiPows.append(cmath.exp(1j * angle))
         self.encode_params_ksiPows.append(self.encode_params_ksiPows[0])
+        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128)
+        self.encode_params_rotGroup = np.array(self.encode_params_rotGroup, dtype=np.uint32)
 
-        self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
-        self.encode_params_rotGroup = np.array(self.encode_params_rotGroup)
+        def _bitrev_indices(k: int) -> np.ndarray:
+            n = 1 << k
+            rev = np.arange(n, dtype=np.uint32)
+            bits = np.arange(k, dtype=np.uint32)
+            rev = ((rev[:, None] >> bits) & 1).dot(1 << (k-1-bits))
+            return rev
+
+        self.encode_bitrev_indices = {log_slot: _bitrev_indices(log_slot) for log_slot in range(2, self.logN)}
 
 
         # for cuda context

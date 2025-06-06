@@ -85,7 +85,7 @@ def profiling_single_op(
         0.888888,
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    pre_encode_value = homo_ops.pre_encode(x, encode_slots)
+    pre_encode_value = homo_ops.pre_encode(x, encode_slots, cryptoContext)
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
     x = torch.tensor(x, device="cuda")
     cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)

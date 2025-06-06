@@ -475,6 +475,9 @@ def encode_test_case(
         ('len', len(plaintext.cv), len(plaintext_golden.cv)),
     ]
 
+    # print("plaintext", plaintext.cv.shape)
+    # print("plaintext_golden", plaintext_golden.cv.shape)
+
     # Compare attributes
     for attr_name, attr_value, golden_value in attributes:
         if attr_value != golden_value:
@@ -541,7 +544,7 @@ def encode_test_case(
     cryptoContext.config.SAVE_MIDDLE = False
     x = np.array([0.25, 0.5, 0.75, 1.0, 2.0, 3.0, 4.0, 5.0])
     encode_slots = (1<<10)
-    pre_encode_value = homo_ops.pre_encode(x, encode_slots)
+    pre_encode_value = homo_ops.pre_encode(x, encode_slots, cryptoContext)
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device=device, dtype=torch.double)
     plaintext = homo_ops.encode(pre_encode_value, "test4", 0, encode_slots, False, cryptoContext)
 
@@ -1148,12 +1151,8 @@ if __name__ == "__main__":
             print("==========={}, {}, {}============".format(rescaleTech, device, 'app_example_release AUTO_LOAD_KEYS'))
             app_example_release(rescaleTech = rescaleTech, device=device, AUTO_LOAD_KEYS=True)
 
-            if device == "cuda":
-                print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
-                encode_test_case(rescaleTech = rescaleTech, device=device)
-            else:
-                print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
-                print("TO BE IMPLEMENTED")
+            print("==========={}, {}, {}============".format(rescaleTech, device, 'encode_test_case'))
+            encode_test_case(rescaleTech=rescaleTech, device=device)
 
             print("==========={}, {}, {}============".format(rescaleTech, device, 'ct_pt_test_case'))
             ct_pt_test_case(rescaleTech = rescaleTech, device=device, plaintext_twin = False)

@@ -909,14 +909,14 @@ def encode(
     if isinstance(x, list) or isinstance(x, np.ndarray):
         if isinstance(x, np.ndarray):
             x = x.tolist()
-        middle_value = pre_encode(x, slots)
-        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
+        middle_value = pre_encode(x, slots, cryptoContext)
     elif isinstance(x, PreEncodeValues):
         assert slots == x.slots
         middle_value = x
     elif isinstance(x, Plaintext):
         return x
     else:
+        print(f"Invalid input type: {type(x)}")
         raise ValueError("Invalid input type")
 
     cur_limbs = cryptoContext.L - level
@@ -932,6 +932,9 @@ def encode(
             f"scaling_factor = {scaling_factor}. " \
             "Either max_encoded_value should be less than 1e-20, or the log2 of the scaled value should be less than 61."
 
+    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
+    # print("slots: ", slots, "shape", middle_value.encoded_values.shape)
+    middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots) #TODO workaround, to remove this in the future
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
         N=cryptoContext.N,
@@ -947,7 +950,7 @@ def encode(
         power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
         power_of_roots=cryptoContext.power_of_roots
     )
-    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext)
+    gpufhe_cipher = Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)
     if cryptoContext.config.PTX_TWIN:
         if isinstance(x, list):
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
