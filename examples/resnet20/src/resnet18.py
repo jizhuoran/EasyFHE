@@ -1,7 +1,5 @@
 import os, sys, datetime, time
-
 from examples.resnet20.Aespa.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
-
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
@@ -13,7 +11,7 @@ from examples.resnet20.src.convs import *
 from huggingface_hub import hf_hub_download
 import zipfile
 from termcolor import colored
-
+import torch.fhe.utils as utils
 DATA_DIR = os.environ["DATA_DIR"]
 
 def decrypt_and_encrypt(input, cryptoContext):
@@ -27,11 +25,9 @@ def decrypt_and_encrypt(input, cryptoContext):
     return res
 
 
-
 class HE_res18_context:
     def __init__(self, weight_dir,
-                 # total=1000, SAVE_END=False, pre_encode_end=True,
-                 total=1, SAVE_END=True, pre_encode_end=False,
+                 total=10, SAVE_END=True, pre_encode_end=False,
                  full_encode_pkl_path=""):
         self.cur_num_slots = None
         self.relu_degree = None
@@ -55,6 +51,7 @@ class HE_res18_context:
         self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
         self.rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
         self.cur_num_channels = None
+        self.device ="cuda"
 
         print("rotate_index_list: ", self.rotate_index_list)
         print("maxLevelsRemaining: ", self.maxLevelsRemaining)
@@ -66,8 +63,6 @@ class HE_res18_context:
         print("levelBudget_list: ", self.levelBudget_list)
         print("secretKeyDist: ", self.secretKeyDist)
         print("rescaleTech: ", self.rescaleTech)
-
-
         print("full_encode_pkl_path: ", self.full_encode_pkl_path)
         print("\n\n")
 
@@ -80,7 +75,6 @@ def initial_layer(input, he_res18_ctx, cryptoContext):
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
-
 
 def layer1(input, he_res18_ctx, cryptoContext):
     scale = 1
@@ -119,8 +113,7 @@ def layer2(input, he_res18_ctx, cryptoContext):
     # after down sample [128,16,16]
     scaleSx = 1
     scaleDx = 1
-
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
 
     res1sx0 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2")
@@ -136,24 +129,19 @@ def layer2(input, he_res18_ctx, cryptoContext):
     )
     fullpackSx = downsample1024to256_v2(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample1024to256_v2(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16, [4, 4], cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16, [4, 4], cryptoContext)
 
     he_res18_ctx.cur_num_slots = 32768
-    # fullpackSx = decrypt_and_encrypt(fullpackSx,cryptoContext)
-    # fullpackDx = decrypt_and_encrypt(fullpackDx, cryptoContext)
-
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
-
     fullpackSx = convbn(fullpackSx, 3, 2, scaleDx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
-
     # layer[2]block[1]
     scale = 1
     res2 = convbn(res1, 4, 1, scale, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{1}bn{1}", cryptoContext)
-
     res2 = convbn(res2, 4, 2, scale, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     if cryptoContext.rescaleTech=="FIXEDMANUAL":
         res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
@@ -168,7 +156,7 @@ def layer3(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
     res1sx0 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0, "1")
     res1sx1 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 128, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -185,6 +173,8 @@ def layer3(input, he_res18_ctx, cryptoContext):
 
     fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16, [4, 4], cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16, [4, 4], cryptoContext)
 
 
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -196,7 +186,7 @@ def layer3(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{5}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16,[4,4], cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 6, 1, scale, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0)
@@ -218,7 +208,7 @@ def layer4(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16, cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 256, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -236,23 +226,18 @@ def layer4(input, he_res18_ctx, cryptoContext):
     fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
 
-    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16, cryptoContext)
-    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16, cryptoContext)
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16,[4,4], cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16,[4,4], cryptoContext)
 
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
     he_res18_ctx.cur_num_slots = 8192
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
 
-    # temp = cryptoContext.openfhe_context.decrypt(fullpackSx).cpu().numpy().reshape(-1)
-    # print('layer7-conv2')
-    # print('len:', len(temp))
-    # print('max', max(temp))
-    # print('min', min(temp))
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16,[4,4], cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 8, 1, scale, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
@@ -273,26 +258,22 @@ def layer4(input, he_res18_ctx, cryptoContext):
 def final_layer(input, he_res20_ctx, cryptoContext):
     # 512*4*4
     he_res20_ctx.cur_num_slots = 8192
+    # 16合1旋转&相加
     res = rotsum(input, 16, cryptoContext)
-
+    # 仅对16倍数对应的位置有mask对应的值1/16
     res = fhe.homo_mul_pt(
         res,
         mask_mod(16, res.cur_limbs, 1.0 / 16.0, he_res20_ctx, cryptoContext),
         cryptoContext,
     )
-    # Todo:check repeat slots, final_layer
-    res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min?
+    res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min? For cifar100, we need repeat 128
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    weight = read_fc_weight(
-        cryptoContext, cryptoContext.L - res.cur_limbs, 1, he_res20_ctx.cur_num_slots
-    )
-    # bias = read_values_from_file(cryptoContext, f"bias",cryptoContext.L-res.cur_limbs,1,he_res20_ctx.cur_num_slots)
+    weight = read_fc_weight(cryptoContext, cryptoContext.L - res.cur_limbs, 1, he_res20_ctx.cur_num_slots)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = rotsum_padded(res, 16, cryptoContext)
-
-    # Todo:check bias
+    res = rotsum_padded(res, 16,512, cryptoContext)
+    bias = read_fc_bias(cryptoContext, cryptoContext.L - res.cur_limbs, 1, he_res20_ctx.cur_num_slots)
+    res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
-
 
 def read_image(index):
     filePath = "../cifar10/test_batch.bin"
@@ -326,48 +307,47 @@ def read_image(index):
         print(f"Failed to open the file: {filePath}")
 
 def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
-
     he_res18_ctx.cur_num_slots = 1 << 16 #64*32*32
     he_res18_ctx.cur_num_channels = 3
     he_res18_ctx.relu_degree = 59
     cryptoContext.openfhe_context = openfhe_context
+    device = he_res18_ctx.device
 
-    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2**16), 2, 0, 2**16)
-    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), 2, 0, 2**15)
-    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 2, 0, 2**14)
+    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2**16),device, 2, 0, 2**16)
+    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15),device, 2, 0, 2**15)
+    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14),device, 2, 0, 2**14)
 
     # 准备明文模型，测速时可以删除
-    model = get_resnet18_HerPN(num_classes=10)
-    device = torch.device("cuda:0")
-    model.to(device)
-    model_path = '../Aespa/ResNet18_Aespa.pth'
-    stict = torch.load(model_path, map_location='cuda:0')
-    model.load_state_dict(stict, strict=False)
-    model.eval()
-    model = change_all_HerPN_by_PAF_MutalChannel(model)
+    # model = get_resnet18_HerPN(num_classes=10)
+    # device = torch.device("cuda:0")
+    # model.to(device)
+    # model_path = '../Aespa/ResNet18_Aespa.pth'
+    # stict = torch.load(model_path, map_location='cuda:0')
+    # model.load_state_dict(stict, strict=False)
+    # model.eval()
+    # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
     correct = 0
     total = he_res18_ctx.total
-    for i in range(total):
+    for i in range(3,total,1):
         # in 64*32*32 = 2^16
         he_res18_ctx.cur_num_slots = 1 << 16
-        image_vector, label, index = read_image(3)
-        image_vector = torch.tensor(np.array(image_vector), device="cuda")
+        image_vector, label, index = read_image(i)
+        # image_vector = torch.tensor(np.array(image_vector), device="cuda")
         # 明文模型输出
-        input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
-        input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
-        x , fea = model(input,fea_out=True)
-
+        # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
+        # input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
+        # x , fea = model(input,fea_out=True)
         in_ct = openfhe_context.encrypt(
             image_vector,
+            device,
             1,
             12,
             he_res18_ctx.cur_num_slots,
         )
         print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
-
         cryptoContext.openfhe_context = openfhe_context
         # 密文推理
         firstLayer = initial_layer(in_ct, he_res18_ctx, cryptoContext)
@@ -380,43 +360,44 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
         print("time: ", time.time() - start_time)
 
         # 对比明密文loss
-        conv_init = fea[0].flatten().reshape(-1)
-        init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
-        init_out = torch.from_numpy(init_out).to(device)
-        loss = torch.sum((conv_init - init_out) ** 2)
-        print("loss: ", loss)
+        # conv_init = fea[0].flatten().reshape(-1)
+        # init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
+        # init_out = torch.from_numpy(init_out).to(device)
+        # loss = torch.sum((conv_init - init_out) ** 2)
+        # print("loss: ", loss)
 
-        temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
-        print('name:resLayer1', temp)
-        fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
-        print('fea1', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer1', loss)
+        # temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
+        # print('name:resLayer1', temp)
+        # fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
+        # print('fea1', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer1', loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
+        # print('name:resLayer2', temp)
+        # fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
+        # print('fea2', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer2',loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
+        # print('name:resLayer3', temp)
+        # fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
+        # print('fea3', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer3',loss)
 
-        temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
-        print('name:resLayer2', temp)
-        fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
-        print('fea2', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer2',loss)
+        # temp = openfhe_context.decrypt(resLayer4).cpu().numpy().reshape(-1)
+        # print('name:resLayer4', temp)
+        # fea_out = torch.tensor(fea[4].flatten().reshape(-1), device="cuda:0")
+        # print('fea4', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer4', loss)
 
-        temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
-        print('name:resLayer3', temp)
-        fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
-        print('fea3', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer3',loss)
-
-        temp = openfhe_context.decrypt(resLayer4).cpu().numpy().reshape(-1)
-        print('name:resLayer4', temp)
-        fea_out = torch.tensor(fea[4].flatten().reshape(-1), device="cuda:0")
-        print('fea4', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer4', loss)
         try:
             clear_result = openfhe_context.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
@@ -479,9 +460,7 @@ def load_encode_pkl(file_name, he_res20_context_):
 def resnet18():
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
-
     get_resnet18_context_ = HE_res18_context("../weights_Aespa")
-
     rotate_index_list = get_resnet18_context_.rotate_index_list
     maxLevelsRemaining = get_resnet18_context_.maxLevelsRemaining
     logBsSlots_list = get_resnet18_context_.logBsSlots_list
@@ -497,29 +476,25 @@ def resnet18():
                                      SAVE_END=False,
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
-        fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+        utils.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
+                             levelBudget_list, secretKeyDist, rescaleTech, get_resnet18_context_.device, save_dir=DATA_DIR,
                              config=config))
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        # file_name = "encode_20250421_125259"
-        # load_encode_pkl(file_name, get_resnet18_context_)
-        # pkl_path = os.path.join(get_resnet18_context_.weight_dir, file_name + ".pkl")
-        pkl_path="/home/yhfan/PNP/GPU-FHE/examples/resnet20/src/encode_20250513_030534.pkl"
-
+        # Todo: in this pkl--encode_20250606_112746.pkl ,the value of fc.bin is error and don't has bias.bin, so change src/utils.py read_fc_weight to run, Need to geng a new pkl
+        pkl_path="/home/yhfan/PNP/GPU-FHE/examples/resnet20/src/encode_20250606_112746.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = get_resnet18_context_.full_encode_pkl_path
-
     load_weight(pkl_path, cryptoContext)
     print("start executeResNet18")
     executeResNet18(get_resnet18_context_, cryptoContext, openfhe_context)
 
-
 def homo_Aespa_perfect_square(x,filename,cryptoContext):
     x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    x = fhe.homo_bootstrap(x, cryptoContext.L, 16, [4, 4], cryptoContext)
     n1_filename = filename + '-n1'
     n2_filename = filename + '-n2'
     slots = x.slots
@@ -532,37 +507,6 @@ def homo_Aespa_perfect_square(x,filename,cryptoContext):
     n2 = read_values_from_file(cryptoContext, n2_filename, cryptoContext.L - perfect_squre.cur_limbs, 1, slots, scale)
     res = fhe.homo_add_pt(perfect_squre, n2, cryptoContext)
     return res
-
-
-
-def read_aespa_value(filename,target_len, scale=1.0):
-    values = []
-    val_name = filename
-    filename = '../weights_Aespa/' + filename + '.bin'
-    if not os.path.isfile(filename):
-        print(f"Failed to open file: {filename}")
-        return values
-
-    try:
-        # 打开文件并逐行读取
-        with open(filename, 'r') as file:
-            for row in file:
-                # 按行解析
-                for value in row.strip().split(','):
-                    try:
-                        num = float(value)
-                        values.append(num * scale)
-                    except ValueError:
-                        print(f"unconvert:: {value}")
-    except IOError as e:
-        print(f"error: {e}")
-
-    values = np.array(values, dtype=np.double)
-    n = len(values)
-    if target_len % n != 0:
-        raise ValueError(f"target_len ({target_len}) must be a multiple of the original array's length ({n})")
-    k = target_len // n
-    return np.repeat(values, k)
 
 if __name__ == "__main__":
     resnet18()
