@@ -51,25 +51,21 @@ class OpenFHEContext:
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
 
-    def encode(self, x, scale_deg, level, slots):
-        if isinstance(x, (np.ndarray, torch.Tensor)):
-            x = x.tolist()
+    def encode(self, x, device, scale_deg, level, slots):
         ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         ptx.Encode()
         data = ptx.GetVectorOfData()
-        mv = [torch.tensor(data, device="cuda", dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+        mv = [torch.tensor(data, device=device, dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
         gpufhe_cipher = Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
         if self.config.PTX_TWIN:
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
         return gpufhe_cipher
 
-    def encrypt(self, x, scale_deg, level, slots):
-        if isinstance(x, (np.ndarray, torch.Tensor)):
-            x= x.tolist()
+    def encrypt(self, x, device, scale_deg, level, slots):
         ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         data = cipher.GetVectorOfData()
-        cv = [torch.tensor(elem, device="cuda", dtype=torch.uint64) for elem in data] #fixme: shall we set device = "cuda" directly?
+        cv = [torch.tensor(elem, device=device, dtype=torch.uint64) for elem in data]
         gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
         if self.config.PTX_TWIN:
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
@@ -79,7 +75,8 @@ class OpenFHEContext:
             return gpufhe_cipher
 
     def decrypt(self, x):
-        assert len(x.cv) == 2
+        assert len(x.cv) == 2, \
+    f"Assertion failed: len(x.cv) = {len(x.cv)}. Expected length of x.cv to be 2."
         ptx = self.cc.MakeCKKSPackedPlaintext([0.0])
         cipher = self.cc.Encrypt(self.publicKey, ptx)
         cipher.SetNoiseScaleDeg(x.noise_deg)
@@ -292,4 +289,3 @@ class OpenFHEContext:
             print("Only DCRTPoly is supported for CKKS.")
 
         return encoded_vector_dcrt_elements
-    

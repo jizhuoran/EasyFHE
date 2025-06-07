@@ -11,7 +11,9 @@ BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
 
 # drop last elem is a inplace operation now
 def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
-    assert num_levels <= ct.cur_limbs and num_levels >= 0
+    assert num_levels <= ct.cur_limbs and num_levels >= 0, \
+        f"Assertion failed: num_levels = {num_levels}, ct.cur_limbs = {ct.cur_limbs}. " \
+        "num_levels should be between 0 and ct.cur_limbs (inclusive)."
     if not inplace:
         ct = ct.deep_copy()
     ct.cur_limbs -= num_levels
@@ -33,7 +35,8 @@ def _adjust_levels(ct1, ct2, cryptoContext):
 
 
 def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.cur_limbs >= target_limbs
+    assert cipher.cur_limbs >= target_limbs, \
+        f"Assertion failed: cipher.cur_limbs = {cipher.cur_limbs}, target_limbs = {target_limbs}. "
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
             return _eval_mult_core(cipher, 1.0, cryptoContext)
@@ -78,7 +81,7 @@ def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_f
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             # if ct1 has degree 2, and it is just 1 more limb, do a rescale (seems this is the case the smae as fix?)
             if cipher.cur_limbs == target_limbs + 1:
-                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 # otherwise, mul the higher with scale factor, rescale, drop, rescale.
                 # the last rescale is to make sure both has degree 1
@@ -114,7 +117,8 @@ def _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_f
 
 
 def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.cur_limbs >= target_limbs
+    assert cipher.cur_limbs >= target_limbs, f"Assertion failed: cipher.cur_limbs = {cipher.cur_limbs}, target_limbs = {target_limbs}. " \
+    "cipher.cur_limbs should be greater than or equal to target_limbs."
     if cipher.cur_limbs == target_limbs:
         if cipher.noise_deg < target_noise_deg:
             return _eval_mult_core(cipher, 1.0, cryptoContext)
@@ -143,7 +147,7 @@ def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_fa
             cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
         elif cipher.noise_deg == 2 and target_noise_deg == 1:
             if cipher.cur_limbs == target_limbs + 1:
-                _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+                cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             else:
                 cipher = _eval_mult_core(cipher, 1.0, cryptoContext)
                 cipher = _homo_rescale_internal(cipher, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
@@ -164,7 +168,9 @@ def _fixauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_fa
     return cipher
 
 def _fixmanual_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert cipher.noise_deg == 1 and target_noise_deg == 1
+    assert cipher.noise_deg == 1 and target_noise_deg == 1, \
+        f"Assertion failed: cipher.noise_deg = {cipher.noise_deg}, target_noise_deg = {target_noise_deg}. " \
+        "Both cipher.noise_deg and target_noise_deg should be equal to 1."
     return _drop_last_elements(cipher, cipher.cur_limbs - target_limbs, cryptoContext, inplace=False)
 
 def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
@@ -190,7 +196,9 @@ def _adjust_levels_and_depth(ct1, ct2, cryptoContext):
 # AdjustForAddOrSubInPlace in rns-leveledshe.cpp
 def _adjust_for_add_or_sub(in0, in1, cryptoContext):
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        assert in0.noise_deg == in1.noise_deg
+        assert in0.noise_deg == in1.noise_deg, \
+            f"Assertion failed: in0.noise_deg = {in0.noise_deg}, in1.noise_deg = {in1.noise_deg}. " \
+            "Both in0.noise_deg and in1.noise_deg should be equal."
         return _adjust_levels(in0, in1, cryptoContext)
     else:
         return _adjust_levels_and_depth(in0, in1, cryptoContext)
@@ -432,6 +440,7 @@ def _cipher_square(in0, cryptoContext):
 
 def _cipher_add_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -441,6 +450,7 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -452,6 +462,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 # todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -468,6 +479,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
+    scalar_mod = scalar_mod.to(in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(
             cv0,
@@ -486,7 +498,10 @@ def _cipher_neg(in0, cryptoContext):
     return in0.cipher_like(cv, scaling_factor=in0.scaling_factor, noise_deg=in0.noise_deg)
 
 def _adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext):
-    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg)
+    assert (cipher.cur_limbs - cipher.noise_deg) >= (target_limbs - target_noise_deg), \
+        f"Assertion failed: (cipher.cur_limbs - cipher.noise_deg) = {cipher.cur_limbs - cipher.noise_deg}, " \
+        f"(target_limbs - target_noise_deg) = {target_limbs - target_noise_deg}. " \
+        "cipher.cur_limbs - cipher.noise_deg should be greater than or equal to target_limbs - target_noise_deg."
     if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
         return _flexauto_adjust_to(cipher, target_limbs, target_noise_deg, target_scaling_factor, cryptoContext)
     elif cryptoContext.rescaleTech == "FIXEDAUTO":
@@ -577,8 +592,8 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
+            cryptoContext.mult_swk_bx,
+            cryptoContext.mult_swk_ax,
             cryptoContext,
         )
     )
@@ -595,8 +610,8 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
-            cryptoContext.swk_bx,
-            cryptoContext.swk_ax,
+            cryptoContext.mult_swk_bx,
+            cryptoContext.mult_swk_ax,
             cryptoContext,
         )
     )
@@ -725,7 +740,8 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     # else:
     #     raise TypeError("Invalid parameters: one must be ciphertext and the other must be plaintext.")
 
-    assert len(cipher.cv) == 2
+    assert len(cipher.cv) == 2, \
+    f"Assertion failed: len(cipher.cv) = {len(cipher.cv)}. Expected length of cipher.cv to be 2."
 
     if cipher.slots != plaintext.slots:
         warnings.warn(
@@ -893,14 +909,14 @@ def encode(
     if isinstance(x, list) or isinstance(x, np.ndarray):
         if isinstance(x, np.ndarray):
             x = x.tolist()
-        middle_value = pre_encode(x, slots)
-        middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device="cuda")
+        middle_value = pre_encode(x, slots, cryptoContext)
     elif isinstance(x, PreEncodeValues):
         assert slots == x.slots
         middle_value = x
     elif isinstance(x, Plaintext):
         return x
     else:
+        print(f"Invalid input type: {type(x)}")
         raise ValueError("Invalid input type")
 
     cur_limbs = cryptoContext.L - level
@@ -911,8 +927,14 @@ def encode(
         scaling_factor = cryptoContext.GetScalingFactorReal(cur_limbs)
 
     assert middle_value.max_encoded_value < 1e-20 or math.log2(
-        int(middle_value.max_encoded_value * scaling_factor)) < 61  # MAX_BITS_IN_WORD
+        int(middle_value.max_encoded_value * scaling_factor)) < 61, \
+            f"Assertion failed: middle_value.max_encoded_value = {middle_value.max_encoded_value}, " \
+            f"scaling_factor = {scaling_factor}. " \
+            "Either max_encoded_value should be less than 1e-20, or the log2 of the scaled value should be less than 61."
 
+    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
+    # print("slots: ", slots, "shape", middle_value.encoded_values.shape)
+    middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots) #TODO workaround, to remove this in the future
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
         N=cryptoContext.N,
@@ -928,13 +950,36 @@ def encode(
         power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
         power_of_roots=cryptoContext.power_of_roots
     )
-    gpufhe_cipher = Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext)
+    gpufhe_cipher = Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)
     if cryptoContext.config.PTX_TWIN:
         if isinstance(x, list):
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
         else:
             gpufhe_cipher.ptx_twin = np.array(x.values.tolist() + [0] * (slots - len(x.values.tolist())))
     return gpufhe_cipher
+
+
+def slot_resize(x, slots, cryptoContext):
+    assert x.is_ext == False, "slot_resize only support non-ext"
+
+    if x.slots <= slots:
+        res = x.deep_copy()
+    else:
+        mask_name = "slot_conversion_mask_{}to{}".format(x.slots, slots)
+        mask = encode(
+            cryptoContext.encode_values[mask_name],
+            mask_name,
+            cryptoContext.L - x.cur_limbs,
+            x.slots,
+            x.is_ext,
+            cryptoContext,
+        )
+        res = homo_mul_pt(x, mask, cryptoContext)
+        for i in range(int(math.log2(slots)), int(math.log2(x.slots))):
+            res = homo_add(res, homo_rotate(res, 1 << i, cryptoContext), cryptoContext)
+    res.slots = slots
+    return res
+
 
 ################## FUSED OPS ##################
 def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
@@ -946,7 +991,10 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
 
     ctx_axs, ctx_bxs, ptx_bxs = [], [], []
 
-    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K
+    assert ctxs[0].is_ext == False or ctxs[0].cv[0].shape[0] == ctxs[0].cur_limbs + cryptoContext.K, f"Assertion failed: ctxs[0].is_ext = {ctxs[0].is_ext}, " \
+    f"ctxs[0].cv[0].shape[0] = {ctxs[0].cv[0].shape[0]}, " \
+    f"ctxs[0].cur_limbs = {ctxs[0].cur_limbs}, cryptoContext.K = {cryptoContext.K}. " \
+    "Either ctxs[0].is_ext should be False, or ctxs[0].cv[0].shape[0] should equal ctxs[0].cur_limbs + cryptoContext.K."
 
     for idx in range(len(ctxs)):
         if ctxs[idx].cur_limbs != ctxs[0].cur_limbs:

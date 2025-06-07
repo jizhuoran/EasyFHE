@@ -3,14 +3,12 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/core/TensorBody.h>
 #include <ATen/core/interned_strings.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/native/cuda/thread_constants.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cpu/CommonOperation.h"
+#include "ATen/native/fhe/cpu/Utils.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -23,74 +21,103 @@
 #define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
 
 namespace fhe {
-__global__ void mulByMonomialKernel_step1(
+inline void mulByMonomial_step1(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    const int64_t N) {
-  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  out[blockIdx.y * N + tid_x] = qVec[blockIdx.y] - in[blockIdx.y * N + tid_x];
-}
-
-__global__ void mulByMonomialKernel_step2(
-    uint64_t* out,
-    const uint64_t* in,
-    const uint64_t* qVec,
-    const int64_t N,
-    const int64_t shift) {
-  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  if (tid_x < shift) {
-    out[blockIdx.y * N + tid_x] =
-        qVec[blockIdx.y] - in[blockIdx.y * N + tid_x + (N - shift)];
-  } else {
-    out[blockIdx.y * N + tid_x] = in[blockIdx.y * N + tid_x - shift];
+    int64_t l,
+    int64_t N) {
+  // Equivalent to the first kernel over a 2D grid (y = blockIdx.y, x = tid_x)
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      out_row[x] = q - in_row[x];
+    }
   }
 }
 
-__global__ void mulByMonomialKernel_step1_step2(
+inline void mulByMonomial_step2(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
-    const int64_t N,
-    const int64_t shift) {
-  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  if (tid_x < shift) {
-    out[blockIdx.y * N + tid_x] = in[blockIdx.y * N + tid_x + (N - shift)];
-  } else {
-    out[blockIdx.y * N + tid_x] =
-        (qVec[blockIdx.y] - in[blockIdx.y * N + tid_x - shift]);
+    int64_t l,
+    int64_t N,
+    int64_t shift) {
+  // Equivalent to the second kernel
+  shift = shift % N;
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      if (x < shift) {
+        out_row[x] = q - in_row[x + (N - shift)];
+      } else {
+        out_row[x] = in_row[x - shift];
+      }
+    }
   }
 }
 
+inline void mulByMonomial_step1_step2(
+    uint64_t* out,
+    const uint64_t* in,
+    const uint64_t* qVec,
+    int64_t l,
+    int64_t N,
+    int64_t shift) {
+  // Equivalent to the combined kernel
+  shift = shift % N;
+  for (int64_t row = 0; row < l; ++row) {
+    const uint64_t q = qVec[row];
+    const uint64_t* in_row = in + row * N;
+    uint64_t* out_row = out + row * N;
+    for (int64_t x = 0; x < N; ++x) {
+      if (x < shift) {
+        out_row[x] = in_row[x + (N - shift)];
+      } else {
+        out_row[x] = q - in_row[x - shift];
+      }
+    }
+  }
+}
 } // namespace fhe
 
 namespace at::native {
 
-static void mul_by_monomial_impl(
+static void mul_by_monomial_impl_cpu(
     uint64_t* out_ptr,
     const uint64_t* in_ptr,
     const uint64_t* primes_ptr,
-    const int64_t l,
-    const int64_t N,
-    const int64_t M,
-    const int64_t monomialDeg) {
+    int64_t l,
+    int64_t N,
+    int64_t M,
+    int64_t monomialDeg) {
+  int64_t shift = monomialDeg % M;
 
-  dim3 block(BLOCK_SIZE);
-  dim3 grid(N / BLOCK_SIZE, l);
-  auto stream = at::cuda::getCurrentCUDAStream();
-  auto shift = monomialDeg % M;
   if (shift < N) {
-    fhe::mulByMonomialKernel_step2<<<grid, block, 0, stream>>>(
-      out_ptr, in_ptr, primes_ptr, N, shift);
+    fhe::mulByMonomial_step2(
+        out_ptr,
+        in_ptr,
+        primes_ptr,
+        /*l=*/l,
+        /*N=*/N,
+        /*shift=*/shift);
   } else {
     shift = shift % N;
-    fhe::mulByMonomialKernel_step1_step2<<<grid, block, 0, stream>>>(
-        out_ptr, in_ptr, primes_ptr, N, shift);
+    fhe::mulByMonomial_step1_step2(
+        out_ptr,
+        in_ptr,
+        primes_ptr,
+        /*l=*/l,
+        /*N=*/N,
+        /*shift=*/shift);
   }
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-static void mul_by_monomial_inplace_template(
+static void mul_by_monomial_template_cpu(
     Tensor& res,
     int64_t l,
     int64_t N,
@@ -102,8 +129,8 @@ static void mul_by_monomial_inplace_template(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-
-  auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  // 1) inverse NTT (in-place on res)
+  uint64_t* res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
       res_ptr,
       res_ptr,
@@ -112,27 +139,33 @@ static void mul_by_monomial_inplace_template(
       l,
       level,
       N,
-      param_primes,
       inverse_power_of_roots_div_two,
+      param_primes,
       inverse_scaled_power_of_roots_div_two);
 
-  Tensor temp = at::empty_like(res);
-  auto temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
-  auto param_primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-  mul_by_monomial_impl(temp_ptr, res_ptr, param_primes_ptr, l, N, M, monomialDeg);
-  cudaMemcpy(res_ptr, temp_ptr, l * N * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
+  Tensor tmp = at::empty_like(res);
+  uint64_t* tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
+  const uint64_t* primes_ptr =
+      reinterpret_cast<const uint64_t*>(param_primes.data_ptr<uint64_t>());
 
+  // perform the CPU impl
+  mul_by_monomial_impl_cpu(tmp_ptr, res_ptr, primes_ptr, l, N, M, monomialDeg);
+
+  // copy back into res
+  std::memcpy(res_ptr, tmp_ptr, size_t(l) * size_t(N) * sizeof(uint64_t));
+
+  // 3) forward NTT (in-place on res)
   NTT_impl(
       res_ptr,
-      res_ptr,
+      0,
       l,
       N,
-      param_primes.data_ptr<uint64_t>(),
-      param_power_of_roots_shoup.data_ptr<uint64_t>(),
-      param_power_of_roots.data_ptr<uint64_t>());
+      param_power_of_roots_shoup,
+      param_primes,
+      param_power_of_roots);
 }
 
-Tensor mul_by_monomial_cuda(
+Tensor mul_by_monomial_cpu(
     const Tensor& res,
     int64_t l,
     int64_t N,
@@ -144,13 +177,13 @@ Tensor mul_by_monomial_cuda(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  
   TORCH_INTERNAL_ASSERT(false, "mul_by_monomial_cuda only supports inplace operation");
   return res;
 }
 
-Tensor& mul_by_monomial_cuda_(
+Tensor& mul_by_monomial_cpu_(
     Tensor& res,
+
     int64_t l,
     int64_t N,
     int64_t M,
@@ -161,7 +194,7 @@ Tensor& mul_by_monomial_cuda_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  mul_by_monomial_inplace_template(
+  mul_by_monomial_template_cpu(
       res,
       l,
       N,
@@ -176,7 +209,7 @@ Tensor& mul_by_monomial_cuda_(
   return res;
 }
 
-Tensor& mul_by_monomial_cuda_out(
+Tensor& mul_by_monomial_cpu_out(
     const Tensor& res,
     int64_t l,
     int64_t N,
@@ -189,7 +222,8 @@ Tensor& mul_by_monomial_cuda_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
-  TORCH_INTERNAL_ASSERT(false, "Not implemented");
+      TORCH_INTERNAL_ASSERT(false, "Not implemented");
+
   return out;
 }
 

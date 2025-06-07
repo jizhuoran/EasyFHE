@@ -68,3 +68,11 @@ class PreEncodeValues:
         self.slots = slots
         self.encoded_values = encoded_values
         self.max_encoded_value = max_encoded_value
+    
+    def deep_copy(self):
+        return PreEncodeValues(
+            self.values.copy(),
+            self.slots,
+            self.encoded_values.clone(),
+            self.max_encoded_value,
+        )

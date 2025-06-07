@@ -3,19 +3,17 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/core/TensorBody.h>
 #include <ATen/core/interned_strings.h>
-#include <ATen/cuda/CUDAContext.h>
-#include <ATen/native/cuda/thread_constants.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cuda/CommonOperation.h"
+#include "ATen/native/fhe/cpu/CommonOperation.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace at::native {
 
-static void mod_raise_template(
+static void switch_modulus_template(
     Tensor& res,
     const Tensor& in,
     int64_t N,
@@ -26,36 +24,35 @@ static void mod_raise_template(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k) {
-  auto op_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+    const Tensor& param_power_of_roots) {
+  auto op = in.clone();
+  auto op_ptr = reinterpret_cast<uint64_t*>(op.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
-      res_ptr,
+      op_ptr,
       op_ptr,
       0,
       1,
       1,
       level,
       N,
-      moduliQ,
       inverse_power_of_roots_div_two,
+      moduliQ,
       inverse_scaled_power_of_roots_div_two);
 
-  switch_modulus(res_ptr, res_ptr, 0, L0, N, moduliQ, barret_ratio, barret_k);
+  switch_modulus(op_ptr, res_ptr, moduliQ, 0, L0, N);
 
   NTT_impl(
       res_ptr,
-      res_ptr,
+      0,
       L0,
       N,
-      moduliQ.data_ptr<uint64_t>(),
-      param_power_of_roots_shoup.data_ptr<uint64_t>(),
-      param_power_of_roots.data_ptr<uint64_t>());
+      param_power_of_roots_shoup,
+      moduliQ,
+      param_power_of_roots);
 }
 
-Tensor mod_raise_cuda(
+Tensor mod_raise_cpu(
     const Tensor& res,
     const Tensor& in,
     int64_t N,
@@ -71,7 +68,7 @@ Tensor mod_raise_cuda(
     const Tensor& barret_k) {
   Tensor out = at::empty_like(res).resize_({L0 * N});
   //   out.resize_({2, (curr_limbs + alpha) * param_degree});
-  mod_raise_template(
+  switch_modulus_template(
       out,
       in,
       N,
@@ -82,9 +79,7 @@ Tensor mod_raise_cuda(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
-      param_power_of_roots,
-      barret_ratio,
-      barret_k);
+      param_power_of_roots);
   return out;
 }
 

@@ -4,7 +4,6 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from functools import partial
 from collections import defaultdict
 import numpy as np
-from torch.fhe.bs_context import *
 from torch.fhe import homo_ops, hybrid_keyswitch, homo_bootstrap
 from torch.fhe import utils
 
@@ -74,7 +73,6 @@ def profiling_single_op(
 
     cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_encode_slot)]
     cryptoContext.BsContext.to_cuda()
-    cryptoContext.load_rotation_keys(log_encode_slot)
 
     values = [
         0.111111,
@@ -87,7 +85,7 @@ def profiling_single_op(
         0.888888,
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    pre_encode_value = homo_ops.pre_encode(x, encode_slots)
+    pre_encode_value = homo_ops.pre_encode(x, encode_slots, cryptoContext)
     pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
     x = torch.tensor(x, device="cuda")
     cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
