@@ -13,7 +13,7 @@ global_num_slots = 1<<14
 # origin_input_folder = "../src/tmp_embeddings/"
 # input_folder="src/tmp_embeddings/"
 logBsSlots_list = [14] # todo: do not use global variable
-
+levelBudget_list = [[4,4]] # todo: do not use global variable
 
 def log2_int(x):
     import math
@@ -233,7 +233,7 @@ def encoder1(cryptoContext,openfhe_context):
 
     inputs=[]
     for i in range(inputs_count):
-        inputs.append(read_expanded_input(openfhe_context, f"{input_folder}input_{i}.txt",0,1,global_num_slots))
+        inputs.append(read_expanded_input(cryptoContext, openfhe_context, f"{input_folder}input_{i}.txt",0,1,global_num_slots))
 
     query_w=read_plain_input(cryptoContext,"layer0_attself_query_weight",0,1,global_num_slots)
     query_b= read_plain_repeated_input(cryptoContext, "layer0_attself_query_bias", 0, 1, global_num_slots, 1.0)
@@ -286,7 +286,7 @@ def encoder1(cryptoContext,openfhe_context):
     bias=read_plain_expanded_input(cryptoContext,"layer0_selfoutput_normbias",cryptoContext.L-wrappedOutput.cur_limbs,1,global_num_slots,1.0, len(inputs))
     wrappedOutput=fhe.homo_add_pt(wrappedOutput,bias,cryptoContext)
 
-    wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    wrappedOutput=fhe.homo_bootstrap(wrappedOutput,cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     output_copy=wrappedOutput.deep_copy() # Required at the last layernorm
 
@@ -312,7 +312,7 @@ def encoder1(cryptoContext,openfhe_context):
 
     for i in range(len(output)):
         output[i]=eval_gelu_function(output[i],-1,1,GELU_max_abs_value,119,cryptoContext)
-        output[i]=fhe.homo_bootstrap(output[i],cryptoContext.L, logBsSlots_list[0], cryptoContext)
+        output[i]=fhe.homo_bootstrap(output[i],cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     unwrappedLargeOutput=unwrapRepeatedLarge(output,len(inputs),cryptoContext)
 
@@ -379,12 +379,12 @@ def encoder2(inputs,cryptoContext):
 
     scores = matmulScores(Q, K_wrapped, cryptoContext)
 
-    scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     scores = eval_exp(scores, len(inputs), cryptoContext)
 
     scores=fhe.homo_mul_scalar_double(scores,1/500.0,cryptoContext) # Here values are scaled down in order to achieve better accuracy with bootstrapping
-    scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     # use `homo_mul_scalar_int` instead of `homo_mul_scalar_double` to avoid overflow when computing `_get_element_for_eval_mult`
     # todo: yhh: see if this scaling up and down is necessary?
     # scores=fhe.homo_mul_scalar_double(scores,500.0,cryptoContext)
@@ -395,7 +395,7 @@ def encoder2(inputs,cryptoContext):
 
     scores_denominator = eval_inverse_naive2(scores_sum, 3,145000, 1,cryptoContext)
 
-    scores_denominator=fhe.homo_bootstrap(scores_denominator,cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    scores_denominator=fhe.homo_bootstrap(scores_denominator,cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     scores = fhe.homo_mul(scores, scores_denominator, cryptoContext)
 
@@ -427,7 +427,7 @@ def encoder2(inputs,cryptoContext):
                                                  cryptoContext.L - wrappedOutput.cur_limbs, 1, global_num_slots, -1.0)
     wrappedOutput = fhe.homo_add_pt(wrappedOutput, precomputed_mean, cryptoContext)
 
-    wrappedOutput = fhe.homo_bootstrap(wrappedOutput, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+    wrappedOutput = fhe.homo_bootstrap(wrappedOutput, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     vy = read_plain_input(cryptoContext,"layer1_selfoutput_vy", cryptoContext.L - wrappedOutput.cur_limbs,1,global_num_slots)
     wrappedOutput = fhe.homo_mul_pt(wrappedOutput, vy, cryptoContext)
@@ -451,7 +451,7 @@ def encoder2(inputs,cryptoContext):
     output = generate_containers(output, None, cryptoContext)
     for i in range(len(output)):
         output[i] = eval_gelu_function(output[i], -1, 1, GELU_max_abs_value, 59, cryptoContext)
-        output[i] = fhe.homo_bootstrap(output[i], cryptoContext.L, logBsSlots_list[0],
+        output[i] = fhe.homo_bootstrap(output[i], cryptoContext.L, logBsSlots_list[0], levelBudget_list[0],
                                        cryptoContext)
     unwrappedLargeOutput = unwrapRepeatedLarge(output, len(output), cryptoContext)
 
@@ -492,8 +492,7 @@ def classifier(input, openfhe_context, cryptoContext):
         mask.append(0)
     mask[0]=1
     mask[128]=1
-    x = torch.tensor(mask, device="cuda")
-    temp=openfhe_context.encrypt(x, 1, cryptoContext.L - output.cur_limbs, global_num_slots)
+    temp=openfhe_context.encrypt(mask, cryptoContext.device, 1, cryptoContext.L - output.cur_limbs, global_num_slots)
     output=fhe.homo_mul(output,temp,cryptoContext)
     output=fhe.homo_add(output,fhe.homo_rotate(fhe.homo_rotate(output,-1,cryptoContext),128,cryptoContext),cryptoContext)
     return output
@@ -513,7 +512,7 @@ def pooler(input,cryptoContext,openfhe_context):
     output = fhe.homo_mul_pt(input, weight, cryptoContext)
     output = rotsum(output, 128, 128, cryptoContext)
     output = fhe.homo_add_pt(output, bias, cryptoContext)
-    output = fhe.homo_bootstrap(output, cryptoContext.L, logBsSlots_list[0],
+    output = fhe.homo_bootstrap(output, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0],
                                    cryptoContext)
     output=eval_tanh_function(output,-1,1,tanhScale,300,cryptoContext)
     return output
@@ -542,15 +541,15 @@ def BERT_Tiny():
     dnum = 4
     dcrtBits = 57 #note there is a bootstrap scale up and down by 500
     firstMod = 60
-    levelBudget_list = [[4,4]]
+    # levelBudget_list = [[4,4]]
     secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-
+    device = "cuda"
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
                                      SAVE_MIDDLE=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
     print("Context Done")
 
@@ -558,7 +557,7 @@ def BERT_Tiny():
     cryptoContext.cnt = 0
 
     cryptoContext.pre_encode_type = "middle"
-    encode_weight_path = "/data/yhh/data/encode_20250519_202246.pkl"
+    encode_weight_path = "/data/yhh/data/encode_20250607_213413.pkl" # on h100-zrji
     load_weight(encode_weight_path, cryptoContext)
 
     print("\nSERVER-SIDE\nThe evaluation of the circuit started.")

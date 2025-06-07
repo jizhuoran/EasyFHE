@@ -29,7 +29,7 @@ def test_minimax_relu():
     levelBudget_list = []
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-
+    device = "cuda"
 
     print("==> Generating evaluation tree...")
     trees = []
@@ -48,7 +48,7 @@ def test_minimax_relu():
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
     slots = cryptoContext.N//2
@@ -62,19 +62,19 @@ def test_minimax_relu():
     # Generate encrypted zero ciphertext
     Nh = cryptoContext.N//2
     zeros_vec = np.zeros(Nh, dtype=np.float64)
-    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, 1, 0, Nh)
+    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, cryptoContext.device, 1, 0, Nh)
     cryptoContext.zeros_Nh = ctxt_zero
 
     ones_vec = np.ones(Nh, dtype=np.float64)
-    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, 1, 0, Nh)
+    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, cryptoContext.device, 1, 0, Nh)
     cryptoContext.ones_Nh = ctxt_1
 
     half_vec = np.full(Nh, 0.5, dtype=np.float64)
-    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, 0, Nh)     # fixme: should check if slots here cant be hardcoded to Nh
+    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, cryptoContext.device, 1, 0, Nh)     # fixme: should check if slots here cant be hardcoded to Nh
     cryptoContext.cipher_half = cipher_half
 
 
-    cipher_x = openfhe_context.encrypt(input_vec, 1, 0, slots)
+    cipher_x = openfhe_context.encrypt(input_vec, cryptoContext.device, 1, 0, slots)
 
     print("==> Starting Minimax ReLU evaluation...")
     t0 = time.time()

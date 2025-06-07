@@ -24,25 +24,25 @@ def evalpolyps_debug(
         firstMod=56,
         levelBudget_list=[[4,4]],
         rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        device = "cuda",
         save_dir=DATA_DIR
 ):
 
     config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
 
     encode_slots = (1 << 11)
     values = [0.111111, 0.222222, 0.333333, 0.444444, 0.555555, 0.666666, 0.777777, 0.888888]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
-    x = torch.tensor(x, device="cuda")
-    cipher, cipher_openfhe = openfhe_context.encrypt(x, 1, 0, encode_slots)
+    cipher, cipher_openfhe = openfhe_context.encrypt(x, cryptoContext.device, 1, 0, encode_slots)
 
     import examples.utils.approx as approx
     res = approx.eval_poly_ps(cipher, [1, 1, 1 / (2.0), 1 / (6.0), 1 / (24.0), 1 / (120.0), 1 / (720.0)], cryptoContext)
     res_openfhe = openfhe_context.cc.EvalPoly(cipher_openfhe, [1, 1, 1 / (2.0), 1 / (6.0), 1 / (24.0), 1 / (120.0), 1 / (720.0)])
-    is_euqal = utils.compare_bs_ct_with_openfhe(res, res_openfhe)
+    is_euqal = utils.compare_gpufhe_ct_with_openfhe(res, res_openfhe)
 
     if is_euqal:
         print("eval_poly_ps: Test passed!")

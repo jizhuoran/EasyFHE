@@ -44,7 +44,7 @@ def Sort(input_length=8):
     levelBudget_list = [[2,2]]
     secretKeyDist = "SPARSE_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # todo: note that original is FLEXIBLEAUTOEXT
-
+    device = "cuda"
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
@@ -52,14 +52,14 @@ def Sort(input_length=8):
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                       levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
+                       levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR, config=config))
 
     total_steps = int((1+math.log2(input_length))*math.log2(input_length)/2)
     print("Total steps: {}".format(total_steps))
 
     # input preparation
     input_msg = np.random.uniform(3, 4, input_length)  # Generate a random number within the range
-    input_ct = openfhe_context.encrypt(input_msg, 1, 0, input_length)
+    input_ct = openfhe_context.encrypt(input_msg, device, 1, 0, input_length)
     # print("Generated input vector: ", input_msg)
     print("Initial number of mult depth remaining: ", input_ct.cur_limbs-1)
 
@@ -74,7 +74,7 @@ def Sort(input_length=8):
             cur_lRemain = input_ct.cur_limbs - (input_ct.noise_deg - 1)
             if cur_lRemain <= 10: # equivalent to multDepth - trueLevel(input_ct)
                 print("lRemain before bootstrapping: ", cur_lRemain)
-                input_ct = fhe.homo_bootstrap(input_ct, cryptoContext.L, logBsSlots_list[0], cryptoContext) #todo: update framework bootstrapping with numiterations
+                input_ct = fhe.homo_bootstrap(input_ct, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext) #todo: originally used double-bootstrapping, but single-bootstrapping seems fine here
                 print("lRemain after bootstrapping: ", cur_lRemain)
 
             print("step: {}".format(step))

@@ -784,13 +784,16 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     # logBsSlots_list = [14,13,12] # note: need to change the input index in `homo_bootstrap` simultaneously
     # levelBudget_list = [[3, 3], [3, 3],[3,3]]
     rescaleTech = "FLEXIBLEAUTO"
+
+    device = "cuda" # "cuda" # "cpu"
+
     print("start")
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
                                      SAVE_MIDDLE=False
                                      )
     cryptoContext, openfhe_context = (
         fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
-                             levelBudget_list, "SPARSE_TERNARY", rescaleTech, save_dir=DATA_DIR,
+                             levelBudget_list, "SPARSE_TERNARY", rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
     end=time.time()
     print("load context time", end - start)
@@ -817,21 +820,20 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     load_weight(pkl_path, cryptoContext)
 
     zero = [0.0 for _ in range(1 << logn)]
-    x = torch.tensor(zero, dtype=torch.float64, device="cuda")
-    ct_zero = openfhe_context.encrypt(x, 1, 0, 1 << logn)
+    ct_zero = openfhe_context.encrypt(zero, cryptoContext.device, 1, 0, 1 << logn)
     cryptoContext.zero_32K = ct_zero
 
     Nh = cryptoContext.N // 2
     zeros_vec = np.zeros(Nh, dtype=np.float64)
-    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, 1, 0, Nh)
+    ctxt_zero = cryptoContext.openfhe_context.encrypt(zeros_vec, cryptoContext.device, 1, 0, Nh)
     cryptoContext.zeros_Nh = ctxt_zero
 
     ones_vec = np.ones(Nh, dtype=np.float64)
-    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, 1, 0, Nh)
+    ctxt_1 = cryptoContext.openfhe_context.encrypt(ones_vec, cryptoContext.device, 1, 0, Nh)
     cryptoContext.ones_Nh = ctxt_1
 
     half_vec = np.full(Nh, 0.5, dtype=np.float64)
-    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, 0,
+    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, cryptoContext.device, 1, 0,
                                                         Nh)  # fixme: should check if slots here cant be hardcoded to Nh
     cryptoContext.cipher_half = cipher_half
 
@@ -901,8 +903,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
         # scale_temp=pow(2.0,logq)
-        x = torch.tensor(vec, dtype=torch.float64,device="cuda")
-        cipher_temp= openfhe_context.encrypt(x,1, 0, 1<<logn ) # note: one more boot after first relu if use -18
+        cipher_temp= openfhe_context.encrypt(vec, cryptoContext.device, 1, 0, 1<<logn ) # note: one more boot after first relu if use -18
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
         start=time.time()
@@ -922,8 +923,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         #         templist.append(temptest123[i])
         #     else:
         #         templist.append(0.00000)
-        # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-        # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+        # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
 
         for j in range (3):
             # print(j)
@@ -945,11 +945,11 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                                                              bn_weight[stage], epsilon, cipher_pool,end=False)
                 cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
                 if j==0:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
                 elif j==1:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
                 elif j==2:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
                 cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
                 # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
@@ -961,8 +961,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 #         templist.append(temptest123[i])
                 #     else:
                 #         templist.append(0.00000)
-                # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-                # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+                # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
                 stage=2*((end_num+1)*j+k)+2
                 st=1
                 cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
@@ -974,11 +973,11 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                     temp=multiplexed_parallel_downsampling_seal_print(openfhe_context,cryptoContext,temp)
                 cnn.cipher=fhe.homo_add(temp.cipher,cnn.cipher,cryptoContext)
                 if j==0:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
                 elif j==1:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
                 elif j==2:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
                 cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
                 #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
@@ -991,8 +990,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 #         templist.append(temptest123[i])
                 #     else:
                 #         templist.append(0.00000)
-                # x = torch.tensor(templist, dtype=torch.float64, device="cuda")
-                # cnn.cipher = openfhe_context.encrypt(x, 1,0,1<<logn)
+                # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
 

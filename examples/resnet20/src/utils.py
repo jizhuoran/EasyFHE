@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = True
+DIRECT_LOAD = False
 
 
 if DIRECT_LOAD:
@@ -157,7 +157,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = '../weights/' + filename + '.bin'
+        filename = cryptoContext.weight_path + filename + '.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values

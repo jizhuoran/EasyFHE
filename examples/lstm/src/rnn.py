@@ -24,7 +24,7 @@ def rnn_layer(input, hidden, cryptoContext, openfhe_context):
     num_batch = int(num_slots / 128) # We batch several inputs together
     # Rotation are done based on batch size
 
-    hidden_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
+    hidden_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), cryptoContext.device, 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
         # Perform Mult and Rotate, and accumulate
@@ -68,7 +68,7 @@ def fc_layer(input, fc_bias, cryptoContext, openfhe_context):
     num_slots = encode_slots
     num_batch = int(num_slots / 128) # We batch several inputs together
     # Rotation are done based on batch size
-    output_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), 1, 0, encode_slots)
+    output_accum_ct = openfhe_context.encrypt(np.zeros(num_slots), cryptoContext.device, 1, 0, encode_slots)
     # Matrix-Vector Multiplication
     for i in range(128):
         # Perform Mult and Rotate, and accumulate
@@ -106,6 +106,7 @@ def fhe_rnn(b_id):
     levelBudget_list = [[4, 4]]
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     secretKeyDist = "SPARSE_TERNARY"
+    device = "cuda"
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
@@ -113,7 +114,7 @@ def fhe_rnn(b_id):
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
     # File paths
@@ -169,7 +170,7 @@ def fhe_rnn(b_id):
 
 
 
-    batched_hidden_ct = openfhe_context.encrypt(np.zeros(batch_size * STEP_NUM), 1, 0, encode_slots)
+    batched_hidden_ct = openfhe_context.encrypt(np.zeros(batch_size * STEP_NUM), cryptoContext.device, 1, 0, encode_slots)
     print(f"Before rnn, batched_hidden_ct's remaining levels: {batched_hidden_ct.cur_limbs- (batched_hidden_ct.noise_deg - 1)}")
 
 
@@ -187,11 +188,11 @@ def fhe_rnn(b_id):
                 batched_embedding[k * batch_size + j] = embedding_in[sample_index, i, k]
         # Embeddings are packed as (em_0_0, em_1_0, ... , em_{last_on_in_batch}_0, em_0_1, em_1_1, ... , em_0_127, ... , em_{last_on_in_batch}_127)
         # Rotations are done in granularity as batch_size
-        batched_embedding_ct = openfhe_context.encrypt(batched_embedding, 1, 0, encode_slots)
+        batched_embedding_ct = openfhe_context.encrypt(batched_embedding, cryptoContext.device, 1, 0, encode_slots)
 
         if (maxLevelsRemaining - (cryptoContext.L - (batched_hidden_ct.cur_limbs - 1))<= 4):
             print("Evaluating Bootstrapping!")
-            batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, cryptoContext.L, logBsSlots_list[0], cryptoContext)
+            batched_hidden_ct = fhe.homo_bootstrap(batched_hidden_ct, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
         
         batched_hidden_ct = rnn_layer(batched_embedding_ct, batched_hidden_ct, cryptoContext, openfhe_context)
 

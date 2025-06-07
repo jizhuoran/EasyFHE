@@ -11,7 +11,7 @@ import warnings
 
 DATA_DIR = os.environ["DATA_DIR"]
 
-DIRECT_LOAD = True
+DIRECT_LOAD = False
 
 if DIRECT_LOAD:
     def load_weight(encode_weight_path, cryptoContext):
@@ -38,7 +38,7 @@ if DIRECT_LOAD:
                         print(f"Can not convert: {value}")
         return values
 
-    def read_expanded_input(openfhe_context,filename,level, scale_deg, slots,scale=1):
+    def read_expanded_input(cryptoContext, openfhe_context,filename,level, scale_deg, slots, scale=1):
         input=read_values_from_file(filename)
         repeated=[]
         for j in range(128):
@@ -48,8 +48,7 @@ if DIRECT_LOAD:
         if scale!=1:
             for i in range(size):
                 repeated[i]=repeated[i]*scale
-        x = torch.tensor(repeated, device="cuda")
-        return openfhe_context.encrypt(x, scale_deg, level, slots)
+        return openfhe_context.encrypt(repeated, cryptoContext.device, scale_deg, level, slots)
 
 
     def read_plain_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
@@ -173,7 +172,7 @@ else:
         return values
 
 
-    def read_expanded_input(openfhe_context,filename, level, scale_deg, slots,scale=1):
+    def read_expanded_input(cryptoContext, openfhe_context,filename, level, scale_deg, slots,scale=1):
         input=read_values_from_file(filename)
         assert len(input)==128, f"len of input {len(input)} is not equal to 128"
         repeated=[]
@@ -184,8 +183,7 @@ else:
         if scale!=1:
             for i in range(size):
                 repeated[i]=repeated[i]*scale
-        x = torch.tensor(repeated, device="cuda")
-        return openfhe_context.encrypt(x, scale_deg, level, slots)
+        return openfhe_context.encrypt(repeated, cryptoContext.device, scale_deg, level, slots)
 
 
 

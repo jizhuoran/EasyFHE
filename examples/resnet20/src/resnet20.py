@@ -13,7 +13,8 @@ from huggingface_hub import hf_hub_download
 import zipfile
 
 DATA_DIR = os.environ["DATA_DIR"]
-
+logBsSlots_list = [14, 13, 12]
+levelBudget_list = [[4, 4], [4, 4], [4, 4]]
 
 class HE_res20_context:
     def __init__(self, data_dir):
@@ -63,7 +64,7 @@ def layer1(input, he_res20_ctx, cryptoContext):
     res1 = convbn(input, 1, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     bias = read_values_from_file(cryptoContext,  f"layer{1}-conv{1}bn{1}-bias",cryptoContext.L-res1.cur_limbs,1,16384,scale)
     res1 = fhe.homo_add_pt(res1,bias,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][1]
@@ -73,14 +74,14 @@ def layer1(input, he_res20_ctx, cryptoContext):
     res1 = fhe.homo_add(
         res1, fhe.homo_mul_scalar_double(input, scale, cryptoContext), cryptoContext
     )
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 14, cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1 = homo_relu(res1, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][2]
     res2 = convbn(res1, 2, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     bias = read_values_from_file(cryptoContext, f"layer{2}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,16384,scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, 14, cryptoContext)
+    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][3]
@@ -90,14 +91,14 @@ def layer1(input, he_res20_ctx, cryptoContext):
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
-    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, 14, cryptoContext)
+    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][4]
     res3 = convbn(res2, 3, 1, scale, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0)
     bias = read_values_from_file(cryptoContext, f"layer{3}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,16384,scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, 14, cryptoContext)
+    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][5]
@@ -107,7 +108,7 @@ def layer1(input, he_res20_ctx, cryptoContext):
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
-    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, 14, cryptoContext)
+    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
     return res3
@@ -117,7 +118,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     scaleSx = normalized_deltas[2][0]
     scaleDx = normalized_deltas[2][1]
     boot_in = fhe.homo_bootstrap(
-        input, cryptoContext.L, 14, cryptoContext
+        input, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext
     )
 
     res1sx0 = convbn(boot_in, 4, 1, scaleSx, he_res20_ctx, cryptoContext, 32, 1, 16384, 16, -1024, 0, "1")
@@ -141,7 +142,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     he_res20_ctx.cur_num_slots = 8192
 
     fullpackSx = fhe.homo_bootstrap(
-        fullpackSx, cryptoContext.L, 13, cryptoContext
+        fullpackSx, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
     fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
@@ -149,7 +150,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     fullpackSx = fhe.homo_add_pt(fullpackSx, bias, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
-        res1, cryptoContext.L, 13, cryptoContext
+        res1, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -158,7 +159,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     bias = read_values_from_file(cryptoContext, f"layer{5}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,8192,scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 13, cryptoContext
+        res2, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -170,7 +171,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
     res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 13, cryptoContext
+        res2, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -179,7 +180,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
     bias = read_values_from_file(cryptoContext, f"layer{6}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,8192,scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 13, cryptoContext
+        res3, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -191,7 +192,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
     res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 13, cryptoContext
+        res3, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -203,7 +204,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scaleDx = normalized_deltas[3][1]
 
     boot_in = fhe.homo_bootstrap(
-        input, cryptoContext.L, 13, cryptoContext
+        input, cryptoContext.L, logBsSlots_list[1], levelBudget_list[1], cryptoContext
     )
 
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
@@ -227,7 +228,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     he_res20_ctx.cur_num_slots = 4096
 
     fullpackSx = fhe.homo_bootstrap(
-        fullpackSx, cryptoContext.L, 12, cryptoContext
+        fullpackSx, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     fullpackSx = homo_relu(fullpackSx, scaleSx, he_res20_ctx.relu_degree, cryptoContext)
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
@@ -235,7 +236,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     fullpackSx = fhe.homo_add_pt(fullpackSx, bias, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_bootstrap(
-        res1, cryptoContext.L, 12, cryptoContext
+        res1, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     res1 = homo_relu(res1, scaleDx, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -244,7 +245,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     bias = read_values_from_file(cryptoContext, f"layer{8}-conv{1}bn{1}-bias",cryptoContext.L-res2.cur_limbs,1,4096,scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
     res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 12, cryptoContext
+        res2, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -256,7 +257,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
     res2 = fhe.homo_bootstrap(
-        res2, cryptoContext.L, 12, cryptoContext
+        res2, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     res2 = homo_relu(res2, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -265,7 +266,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     bias = read_values_from_file(cryptoContext, f"layer{9}-conv{1}bn{1}-bias",cryptoContext.L-res3.cur_limbs,1,4096,scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
     res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 12, cryptoContext
+        res3, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
 
@@ -277,11 +278,11 @@ def layer3(input, he_res20_ctx, cryptoContext):
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
     res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 12, cryptoContext
+        res3, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     res3 = homo_relu(res3, scale, he_res20_ctx.relu_degree, cryptoContext)
     res3 = fhe.homo_bootstrap(
-        res3, cryptoContext.L, 12, cryptoContext
+        res3, cryptoContext.L, logBsSlots_list[2], levelBudget_list[2], cryptoContext
     )
     return res3
 
@@ -344,17 +345,17 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     he_res20_ctx.relu_degree = 59
     cryptoContext.openfhe_context = openfhe_context
 
-    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), 1, 0, 2**15)
-    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), 1, 0, 2**14)
+    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), cryptoContext.device, 1, 0, 2**15)
+    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), cryptoContext.device,  1, 0, 2**14)
 
     print("=====================================================")
-    for i in range(10):
+    for i in range(1):
         he_res20_ctx.cur_num_slots = 1 << 14
 
         image_vector, label, _ = read_image(i)
-        image_vector = torch.tensor(np.array(image_vector), device="cuda")
         in_ct = openfhe_context.encrypt(
             image_vector,
+            cryptoContext.device,
             1,
             cryptoContext.L - 11,
             he_res20_ctx.cur_num_slots,
@@ -429,26 +430,27 @@ def resnet20( ):
                          1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
 
     maxLevelsRemaining = 14
-    logBsSlots_list = [12, 13, 14]
+    # logBsSlots_list = [14, 13, 12]
     logN = 16
     dnum = 3
     dcrtBits = 59
     firstMod = 60
-    levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+    # levelBudget_list = [[4, 4], [4, 4], [4, 4]]
     secretKeyDist = "SPARSE_TERNARY" # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
     rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO" #todo: FIXEDMANUAL is not supported yet!
-
+    device = "cuda"
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
     he_res20_context_ = HE_res20_context("../weights")
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, SAVE_MIDDLE=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR,
+                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
+    cryptoContext.weight_path = '../weights/' # fixme: workaround only
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
