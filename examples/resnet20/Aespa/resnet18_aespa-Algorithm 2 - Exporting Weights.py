@@ -8419,7 +8419,7 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     np.savetxt('weights_Aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
     np.savetxt('weights_Aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
-    np.savetxt('weights/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
     np.savetxt('weights_Aespa/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
 
 def move_files_by_keyword(source_dir, target_dir, keyword, recursive=False):
@@ -8480,6 +8480,9 @@ if __name__ == "__main__":
     path = './weights_Aespa'
     if not os.path.exists(path):
         os.mkdir(path)
-    model = get_Aespa_MutalChannel_PAF_resnet18()
-    model.eval()
-    np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    generate_resnet18_Aespa_bin_files_complete_square()
+
+    # generate specific bin
+    # model = get_Aespa_MutalChannel_PAF_resnet18()
+    # model.eval()
+    # np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
