@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- Copyright (c) Microsoft Corporation. All rights reserved.
+     Licensed under the MIT license. -->
+
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>Microsoft.Research.SEALNet</id>
+    <version>3.6.6</version>
+    <title>Microsoft SEAL</title>
+    <authors>Microsoft</authors>
+    <owners>Microsoft</owners>
+    <projectUrl>http://sealcrypto.org</projectUrl>
+    <license type="file">LICENSE</license>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Microsoft SEAL is an easy-to-use and powerful open source homomorphic encryption library, developed by researchers in the Cryptography and Privacy Research Group at Microsoft Research. Microsoft SEAL is licensed under the MIT license.</description>
+    <releaseNotes>https://GitHub.com/Microsoft/SEAL</releaseNotes>
+    <copyright>© Microsoft Corporation. All rights reserved.</copyright>
+    <tags>c# crypto cryptography homomorphic encryption</tags>
+    <dependencies>
+      <group targetFramework=".NETStandard2.0" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="SEALNet.targets" target="build/Microsoft.Research.SEALNet.targets" />
+    <file src="" target="runtimes/win10-x64" />
+    <file src="/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/lib/libsealc.so" target="runtimes/linux-x64" />
+    <file src="" target="runtimes/macos-x64" />
+    <file src="/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin/dotnet/$configuration$/netstandard2.0/SEALNet.dll" target="lib/netstandard2.0/" />
+    <file src="/home/yhh/PNP/FHE-MP-CNN/cnn_ckks/cpu-ckks/single-key/seal-modified-3.6.6/build/bin/dotnet/$configuration$/SEALNet.xml" target="lib/netstandard2.0/" />
+    <file src="../../LICENSE" target="LICENSE" />
+    <file src="../../NOTICE" target="/ThirdPartyNotices" />
+  </files>
+</package>

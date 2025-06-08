@@ -2,7 +2,6 @@ import os, sys, time
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 import torch
 import torch.fhe as fhe
-from torch.fhe.client import openfhe as openfhe
 import numpy as np
 import random, math
 
@@ -80,7 +79,7 @@ class SecureML:
         self.params = params
         self.enc_data_cache = {} 
         # Generate a special vector and use it to create the dummy plaintext
-        pvals = np.zeros(self.params.slots, dtype=complex) 
+        pvals = np.zeros(self.params.slots, dtype=np.float64)
         for i in range(0, self.params.slots, self.params.batch):
             pvals[i] = 1.0
         # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
@@ -168,15 +167,14 @@ class SecureML:
                     
             enc_data = []
             for j in range(self.params.cnum):
-                pz_data = np.zeros(self.params.slots, dtype=np.complex128)
+                pz_data = np.zeros(self.params.slots, dtype=np.float64)
                 
                 for k in range(self.params.block_size):
                     for l in range(self.params.batch):
                         if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(z_data[0]):
                             pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][self.params.batch * j + l]
-                
-                pz_data_tensor = torch.tensor(pz_data, dtype=torch.float64).cuda()             
-                enc_z = openfhe_context.encrypt(pz_data_tensor, 1, 0, self.params.encode_slots)
+
+                enc_z = openfhe_context.encrypt(pz_data, cryptoContext.device, 1, 0, self.params.encode_slots)
                 enc_data.append(enc_z)
                     
             self.enc_data_cache[block_id] = enc_data
@@ -210,17 +208,17 @@ class SecureML:
         print("Update finished!")
 
     @fhe.utils.profile_python_function
-    def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots, print_all=False):
+    def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list, levelBudget_list, print_all=False):
         enc_v_data = [None] * self.params.cnum
 
-        zero_vec = np.zeros(self.params.slots, dtype=complex)
+        zero_vec = np.zeros(self.params.slots, dtype=np.float64)
         input_vec = zero_vec
 
         # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, False, cryptoContext) #todo: ?? (deprecated api
 
         for i in range(self.params.cnum):
-            enc_w_data[i] = openfhe_context.encrypt(input_vec, 1, 0, self.params.encode_slots)
-            enc_v_data[i] = openfhe_context.encrypt(input_vec, 1, 0, self.params.encode_slots)
+            enc_w_data[i] = openfhe_context.encrypt(input_vec,  cryptoContext.device, 1, 0, self.params.encode_slots)
+            enc_v_data[i] = openfhe_context.encrypt(input_vec,  cryptoContext.device, 1, 0, self.params.encode_slots)
 
         # init params
         v_data = np.zeros(self.params.factor_num)
@@ -265,8 +263,8 @@ class SecureML:
 
                 # bootstrap encWData and encVData
                 for i in range(self.params.cnum):
-                    enc_w_data[i] = fhe.homo_bootstrap(enc_w_data[i], cryptoContext.L, logBsSlots[0], cryptoContext)
-                    enc_v_data[i] = fhe.homo_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots[0], cryptoContext)
+                    enc_w_data[i] = fhe.homo_bootstrap(enc_w_data[i], cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+                    enc_v_data[i] = fhe.homo_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
                 elapsed_time = self.params.end_time()
                 self.params.print_time("bootstrapping", elapsed_time)
@@ -464,7 +462,7 @@ class SecureML:
         return auc, accuracy
 
 
-def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=False):
+def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBudget_list, file, file_test, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=False):
     z_data, factor_num, sample_num = SecureML.z_data_from_file(file, is_first)
     z_data = SecureML.shuffle_z_data(z_data, factor_num, sample_num)
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
@@ -501,7 +499,8 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file, fi
 
     start_time = time.time()
     if is_encrypted:
-        secure_ml.training(cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list,print_all=print_all)
+        secure_ml.training(cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array,
+                           openfhe_context, logBsSlots_list, levelBudget_list, print_all=print_all)
     else:
         secure_ml.plain_training(cryptoContext, w_data, z_data, factor_num, sample_num)
     elapsed_time = time.time() - start_time
@@ -537,7 +536,7 @@ def main():
     levelBudget_list = [[4, 4]]
     secretKeyDist = "SPARSE_TERNARY"
     rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
-
+    device = "cuda" # "cpu" # "cuda"
     encode_slots = (1 << (logN - 1))
     appRotIndex_list = []
     i = 1
@@ -553,9 +552,9 @@ def main():
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, save_dir=DATA_DIR, config=config))
+                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR, config=config))
 
-    test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=PRINT_ALL)
+    test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBudget_list, file1, file2, is_first, num_iter, learning_rate, num_thread, is_encrypted, print_all=PRINT_ALL)
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
 from datetime import datetime
-import time, os, pickle
+import time, os, pickle, math
 import numpy as np
 import functools
 import atexit
@@ -67,8 +67,8 @@ def profile_pytorch_function(func):
             activities=[
                 torch.profiler.ProfilerActivity.CPU,
                 torch.profiler.ProfilerActivity.CUDA,
-            ],
-            on_trace_ready=torch.profiler.tensorboard_trace_handler("/home/zrji/log"),
+            ] if torch.cuda.is_available() else [torch.profiler.ProfilerActivity.CPU],
+            on_trace_ready=torch.profiler.tensorboard_trace_handler("~"),
             record_shapes=True,
             profile_memory=True,
             with_stack=True,
@@ -77,7 +77,8 @@ def profile_pytorch_function(func):
             profiler.step()
 
         profiler_results = profiler.key_averages()
-        print(profiler_results.table(sort_by="self_cuda_time_total"))
+        if torch.cuda.is_available():
+            print(profiler_results.table(sort_by="self_cuda_time_total"))
         print(profiler_results.table(sort_by="self_cpu_time_total"))
 
         return result
@@ -106,6 +107,7 @@ def try_load_context(
     levelBudget_list,
     secretKeyDist,
     rescaleTech,
+    device,
     save_dir,
     config
 ):
@@ -177,7 +179,13 @@ def try_load_context(
         )
 
     with open(load_path, "rb") as file:
-        gpufheMembers, openfheMembers, BsContextMembers = pickle.load(file)
+        gpufheMembers, openfheMembers= pickle.load(file)
+
+    cryptoContext = parse_content_map(gpufheMembers, device, config)
+
+    openfhe_context = client.OpenFHEContext(openfheMembers)
+    openfhe_context.config = cryptoContext.config
+    cryptoContext.openfhe_context = openfhe_context
 
     if config.COMPARE_WITH_OPENFHE:
         if not os.path.exists(debug_load_path):
@@ -185,19 +193,6 @@ def try_load_context(
         with open(debug_load_path, "rb") as file:
             debug_keys = pickle.load(file)
 
-    cryptoContext = Context(BsContextMembers, gpufheMembers, config)
-    if cryptoContext.config.AUTO_LOAD_KEYS:
-        if rotIndex_list is not None and rotIndex_list != []:
-            cryptoContext.load_rotation_keys("app")
-        if NO_BS == False:
-            for logBsSlots in logBsSlots_list:
-                cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
-                cryptoContext.BsContext.to_cuda()
-                cryptoContext.load_rotation_keys(logBsSlots)
-
-    openfhe_context = client.OpenFHEContext(openfheMembers)
-    openfhe_context.config = cryptoContext.config
-    cryptoContext.openfhe_context = openfhe_context
     if config.COMPARE_WITH_OPENFHE:
         openfhe_boot_contexts = {}
         if NO_BS == False:
@@ -221,3 +216,9 @@ def compare_gpufhe_ct_with_openfhe(bs_cipher, openfhe_cipher):
     openfhe_bootstrapping_res = np.array(openfhe_cipher.GetVectorOfData()).reshape(-1)
     return np.array_equal(gpu_bootstrapping_res, openfhe_bootstrapping_res)
 
+def compare_cpufhe_with_gpufhe(cpufhe_ct, gpufhe_ct):
+    # cpu_res = np.array([cpufhe_ct.cv[0].cpu().numpy()]).reshape(-1)
+    # gpu_res = np.array([gpufhe_ct.cv[0].cpu().numpy()]).reshape(-1)
+    cpu_res = np.array([cpufhe_ct.cv[0].cpu().numpy(), cpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
+    gpu_res = np.array([gpufhe_ct.cv[0].cpu().numpy(), gpufhe_ct.cv[1].cpu().numpy()]).reshape(-1)
+    return np.array_equal(cpu_res, gpu_res)

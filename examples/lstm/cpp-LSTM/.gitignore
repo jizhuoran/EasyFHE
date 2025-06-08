@@ -1,0 +1,28 @@
+# object files
+*.d
+*.o
+*.pyc
+*.a
+
+# emacs temp files
+*~
+
+# vi temp files
+*.swp
+
+# patch rejections
+*.rej
+
+# training data
+# train/*
+bert*
+
+# some important files to keep track of
+!train/train_pytorch.py
+!train/trained_fc_bias.pt
+!train/trained_fc_weight.pt
+!train/trained_rnn_hh.pt
+!train/trained_rnn_ih.pt
+
+# build dir
+build

@@ -2,33 +2,52 @@ name: Upload torch dynamo performance stats
 
 on:
   workflow_run:
-    workflows: [inductor-A100-perf-nightly, inductor-perf-nightly-A10g, inductor-perf-nightly-aarch64, inductor-perf-nightly-x86, perf-nightly-macos, inductor-perf-nightly-rocm, inductor-perf-nightly-h100]
+    workflows:
+      - inductor-A100-perf-nightly
+      - inductor-perf-nightly-A10g
+      - inductor-perf-nightly-aarch64
+      - inductor-perf-nightly-x86
+      - perf-nightly-macos
+      - inductor-perf-nightly-rocm
+      - inductor-perf-nightly-h100
     types:
       - completed
+
+permissions:
+  actions: read
+  contents: read
 
 jobs:
   get-conclusion:
     runs-on: ubuntu-latest
     outputs:
-      conclusion: ${{ fromJson(steps.get-conclusion.outputs.data).conclusion }}
+      conclusion: ${{ steps.conclusion.outputs.result }}
     steps:
       - name: Get workflow run conclusion
-        # TODO (huydhn): Pin this once https://github.com/octokit/request-action/issues/315 is resolved
-        uses: octokit/request-action@main
-        id: get-conclusion
+        id: conclusion
+        uses: actions/github-script@v7
         with:
-          route: GET /repos/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}/attempts/${{ github.event.workflow_run.run_attempt }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const run_id = context.payload.workflow_run.id;
+            const run_attempt = context.payload.workflow_run.run_attempt;
+            const { data } = await github.rest.actions.getWorkflowRunAttempt({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: run_id,
+              attempt_number: run_attempt
+            });
+            return data.conclusion;
 
   upload-perf-stats:
     needs: get-conclusion
-    if: github.event.workflow_run.conclusion == 'success' || needs.get-conclusion.outputs.conclusion == 'success' ||
-        github.event.workflow_run.conclusion == 'failure' || needs.get-conclusion.outputs.conclusion == 'failure'
+    if: |
+      needs.get-conclusion.outputs.conclusion == 'success' ||
+      needs.get-conclusion.outputs.conclusion == 'failure'
     runs-on: ubuntu-22.04
     environment: upload-stats
     permissions:
       id-token: write
+      contents: read
     name: Upload dynamo performance stats for ${{ github.event.workflow_run.id }}, attempt ${{ github.event.workflow_run.run_attempt }}
     steps:
       - name: Checkout PyTorch
@@ -37,7 +56,7 @@ jobs:
           submodules: false
           fetch-depth: 1
 
-      - name: Configure aws credentials
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         continue-on-error: true
         with:
@@ -49,8 +68,7 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      - run: |
-          pip3 install requests==2.32.2 boto3==1.35.42
+      - run: pip3 install requests==2.32.2 boto3==1.35.42
 
       - name: Upload torch dynamo performance stats to S3
         id: upload-s3
@@ -61,16 +79,23 @@ jobs:
           WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           REPO_FULLNAME: ${{ github.event.workflow_run.repository.full_name }}
         run: |
-          # Upload perf test reports from GHA to S3, which can now be downloaded
-          # on HUD
-          python3 -m tools.stats.upload_artifacts --workflow-run-id "${WORKFLOW_RUN_ID}" --workflow-run-attempt "${WORKFLOW_RUN_ATTEMPT}" --repo "${REPO_FULLNAME}"
+          python3 -m tools.stats.upload_artifacts \
+            --workflow-run-id "${WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${WORKFLOW_RUN_ATTEMPT}" \
+            --repo "${REPO_FULLNAME}"
 
-      - name: Upload torch dynamo performance stats to s3
-        if: steps.upload-s3.outcome && steps.upload-s3.outcome == 'success'
+      - name: Upload torch dynamo performance stats to DynamoDB
+        if: steps.upload-s3.outcome == 'success'
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           REPO_FULLNAME: ${{ github.event.workflow_run.repository.full_name }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
         run: |
-          python3 -m tools.stats.upload_dynamo_perf_stats --workflow-run-id "${WORKFLOW_RUN_ID}" --workflow-run-attempt "${WORKFLOW_RUN_ATTEMPT}" --repo "${REPO_FULLNAME}" --head-branch "${HEAD_BRANCH}" --dynamodb-table torchci-dynamo-perf-stats --match-filename "^inductor_"
+          python3 -m tools.stats.upload_dynamo_perf_stats \
+            --workflow-run-id "${WORKFLOW_RUN_ID}" \
+            --workflow-run-attempt "${WORKFLOW_RUN_ATTEMPT}" \
+            --repo "${REPO_FULLNAME}" \
+            --head-branch "${HEAD_BRANCH}" \
+            --dynamodb-table torchci-dynamo-perf-stats \
+            --match-filename "^inductor_"
