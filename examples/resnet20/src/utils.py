@@ -191,7 +191,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = '../weights/fc.bin'
+        filename = cryptoContext.weight_path + 'fc.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
