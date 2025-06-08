@@ -6,8 +6,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 import torch
 import numpy as np
 import torch.fhe as fhe
-from examples.utils import approx
-from examples.resnet20.src.convs import *
+from examples.resnet20.src.resnet18_convs import *
 from huggingface_hub import hf_hub_download
 import zipfile
 from termcolor import colored
@@ -483,7 +482,7 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        # Todo: in this pkl--encode_20250606_112746.pkl ,the value of fc.bin is error and don't has bias.bin, so change src/utils.py read_fc_weight to run, Need to geng a new pkl
+        # Todo: in this pkl--encode_20250606_112746.pkl ,the value of fc.bin is error and don't has bias.bin, so change src/resnet18_utils.py read_fc_weight to run, Need to geng a new pkl
         pkl_path="/home/yhfan/PNP/GPU-FHE/examples/resnet20/src/encode_20250606_112746.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
