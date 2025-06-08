@@ -26,7 +26,7 @@ def decrypt_and_encrypt(input, cryptoContext):
 
 class HE_res18_context:
     def __init__(self, weight_dir,
-                 total=20, SAVE_END=True, pre_encode_end=False,
+                 total=20, SAVE_END=False, pre_encode_end=False,
                  full_encode_pkl_path=""):
         self.cur_num_slots = None
         self.relu_degree = None
@@ -417,9 +417,9 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
         print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
         if label == max_element_idx:
             correct += 1
+        message = f"\ncorrect/total: {correct}/{(i + 1)}"
+        print(colored(message, "red"))
         if (i+1) % 100 == 0:
-            message=f"\ncorrect/total: {correct}/{(i+1)}"
-            print(colored(message, "red"))
             print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
@@ -482,7 +482,7 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        pkl_path="/data/yhh/data/encode_20250608_144403.pkl"
+        pkl_path="/data/yhh/data/encode_20250608_223322.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = get_resnet18_context_.full_encode_pkl_path
