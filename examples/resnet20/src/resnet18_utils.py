@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = False
+DIRECT_LOAD = True
 
 
 if DIRECT_LOAD:
@@ -258,11 +258,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-<<<<<<<< HEAD:examples/resnet20/src/resnet18_utils.py
         filename = '../weights_Aespa/' + filename + '.bin'
-========
-        filename = cryptoContext.weight_path + filename + '.bin'
->>>>>>>> yhh-examples:examples/resnet20/src/resnet20_utils.py
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
@@ -296,11 +292,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-<<<<<<<< HEAD:examples/resnet20/src/resnet18_utils.py
         filename = '../weights_Aespa/fc.bin'
-========
-        filename = cryptoContext.weight_path + 'fc.bin'
->>>>>>>> yhh-examples:examples/resnet20/src/resnet20_utils.py
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values

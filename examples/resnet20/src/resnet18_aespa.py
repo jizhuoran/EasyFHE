@@ -1,5 +1,5 @@
 import os, sys, datetime, time
-from examples.resnet20.Aespa.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
+from examples.resnet20.gen_aespa_weights.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
@@ -26,7 +26,7 @@ def decrypt_and_encrypt(input, cryptoContext):
 
 class HE_res18_context:
     def __init__(self, weight_dir,
-                 total=10, SAVE_END=True, pre_encode_end=False,
+                 total=20, SAVE_END=True, pre_encode_end=False,
                  full_encode_pkl_path=""):
         self.cur_num_slots = None
         self.relu_degree = None
@@ -42,7 +42,7 @@ class HE_res18_context:
         # self.logBsSlots_list = [12, 13, 14]
         self.logBsSlots_list = [16]
         self.logN = 17
-        self.dnum = 3
+        self.dnum = 1
         self.dcrtBits = 55
         self.firstMod = 60
         # self.levelBudget_list = [[4, 4], [4, 4], [4, 4]]
@@ -329,7 +329,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
     print("=====================================================")
     correct = 0
     total = he_res18_ctx.total
-    for i in range(3,total,1):
+    for i in range(total):
         # in 64*32*32 = 2^16
         he_res18_ctx.cur_num_slots = 1 << 16
         image_vector, label, index = read_image(i)
@@ -482,8 +482,7 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        # Todo: in this pkl--encode_20250606_112746.pkl ,the value of fc.bin is error and don't has bias.bin, so change src/resnet18_utils.py read_fc_weight to run, Need to geng a new pkl
-        pkl_path="/home/yhfan/PNP/GPU-FHE/examples/resnet20/src/encode_20250606_112746.pkl"
+        pkl_path="/data/yhh/data/encode_20250608_144403.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = get_resnet18_context_.full_encode_pkl_path
