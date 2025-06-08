@@ -8,7 +8,7 @@ import torch
 import numpy as np
 import torch.fhe as fhe
 from examples.utils import approx
-from examples.resnet20.src.convs import *
+from examples.resnet20.src.resnet20_convs import *
 from huggingface_hub import hf_hub_download
 import zipfile
 from termcolor import colored
