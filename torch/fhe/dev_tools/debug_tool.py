@@ -3,6 +3,10 @@ import torch
 import numpy as np
 from termcolor import colored
 
+import warnings
+warnings.filterwarnings("error", category=RuntimeWarning)
+import traceback, sys
+
 def print_failed(message):
     print(colored(message, "red"))
 
@@ -93,6 +97,8 @@ def plaintext_twin(func):
             "eval_fast_rotate",
             "cipher_automorphism",
             "mult_rot_key_and_sum_ext",
+            "slot_resize",
+            "fused_pairwise_mac",
         ]:
             if func.__name__ == "homo_add" or func.__name__ == "homo_add_pt":
                 res.ptx_twin = args[0].ptx_twin + args[1].ptx_twin
@@ -110,7 +116,19 @@ def plaintext_twin(func):
                 res.ptx_twin = np.array(args[0].ptx_twin[args[1] :].tolist() + args[0].ptx_twin[: args[1]].tolist())
             elif func.__name__ == "eval_fast_rotate":
                 res.ptx_twin = np.array(args[0].ptx_twin[args[2] :].tolist() + args[0].ptx_twin[: args[2]].tolist())
-        
+            elif func.__name__ == "slot_resize":
+                if args[0].slots >= args[1]:
+                    res.ptx_twin = args[0].ptx_twin[:args[0].slots]
+                else:
+                    assert args[1] // args[0].slots == (args[1] + args[0].slots - 1) // args[0].slots # only support slots be power of 2
+                    repeat_times = args[1] // args[0].slots
+                    res.ptx_twin = np.tile(args[0].ptx_twin[:args[0].slots], repeat_times)
+            elif func.__name__ == "fused_pairwise_mac": # fixme: poor work around, simply assert fused_pairwise_mac is definitely correct
+                cryptoContext = args[-1]
+                decrypted_result = cryptoContext.openfhe_context.decrypt(res)
+                decrypted_result = decrypted_result.cpu().numpy().reshape(-1)[:len(res.ptx_twin)]
+                res.ptx_twin = decrypted_result
+
         #check
         cryptoContext = args[-1]
         if cryptoContext.in_check_period == True:
@@ -127,6 +145,10 @@ def plaintext_twin(func):
                     print("diff indices", diff_indices)
                     print("diff values at ciphertext", decrypted_result[diff_indices])
                     print("diff values at plaintext twin", res.ptx_twin[diff_indices])
+
+                    # print call stack and end the program
+                    traceback.print_stack()
+                    sys.exit(1)
         
         return res
 

@@ -68,7 +68,12 @@ class OpenFHEContext:
         cv = [torch.tensor(elem, device=device, dtype=torch.uint64) for elem in data]
         gpufhe_cipher = Cipher.Cipher(cv, cv[0].shape[0], cipher.GetScalingFactor(), cipher.GetNoiseScaleDeg(), cipher.GetSlots(), is_ext=False)
         if self.config.PTX_TWIN:
-            gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
+            if isinstance(x, np.ndarray):
+                padded = np.concatenate([x, np.zeros(slots - len(x))])
+            else:
+                padded = np.array(list(x) + [0] * (slots - len(x)))
+
+            gpufhe_cipher.ptx_twin = padded
         if self.config.COMPARE_WITH_OPENFHE:
             return gpufhe_cipher, cipher
         else:
