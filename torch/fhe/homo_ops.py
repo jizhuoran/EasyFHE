@@ -959,6 +959,7 @@ def encode(
     return gpufhe_cipher
 
 
+@decorator_factory
 def slot_resize(x, slots, cryptoContext):
     assert x.is_ext == False, "slot_resize only support non-ext"
 
@@ -982,6 +983,7 @@ def slot_resize(x, slots, cryptoContext):
 
 
 ################## FUSED OPS ##################
+@decorator_factory
 def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
     """
     Fused operation for pmul and sum
