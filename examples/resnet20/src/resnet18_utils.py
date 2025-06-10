@@ -116,29 +116,29 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, False, cryptoContext)
 
-    def mask_first_n_mod(n, padding, pos, cur_limbs, cryptoContext):
-        full_name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+    def mask_first_n_mod(n, padding, pos, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_first_n_mod_{}_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536)
+            name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         else:
             name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536, False, cryptoContext)
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, False, cryptoContext)
 
-    def mask_first_n_mod2(n, padding, pos, cur_limbs, cryptoContext):
-        full_name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+    def mask_first_n_mod2(n, padding, pos, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_first_n_mod2_{}_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, 32768*2)
+            name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         else:
             name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 32768*2, False, cryptoContext)
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, False, cryptoContext)
 
-    def mask_first_n_mod3(n, padding, pos, cur_limbs, cryptoContext):
-        full_name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
+    def mask_first_n_mod3(n, padding, pos, cur_limbs, he_res20_ctx, cryptoContext):
+        full_name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, 16384*2)
+            name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         else:
             name = full_name
-        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, he_res20_ctx.cur_num_slots, False, cryptoContext)
 
     def mask_channel(n, cur_limbs, cryptoContext):
         full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 65536)
@@ -389,7 +389,7 @@ else:
         # check_encoded_equal(encoded, ptx, key)
         return encoded
 
-    def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext):
+    def mask_first_n_mod(n,padding,pos,cur_limbs, he_res20_ctx, cryptoContext):
         # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
@@ -401,9 +401,9 @@ else:
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, 65536)
+        name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         print(name)
-        encoded = fhe.encode(mask, name, level, 65536, False, cryptoContext)
+        encoded = fhe.encode(mask, name, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
         # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
@@ -412,7 +412,7 @@ else:
 
 
 
-    def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext):
+    def mask_first_n_mod2(n,padding,pos,cur_limbs, he_res20_ctx, cryptoContext):
         # print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
@@ -424,16 +424,16 @@ else:
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, 32768*2)
+        name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         print(name)
-        encoded = fhe.encode(mask, name, level, 32768*2, False, cryptoContext)
+        encoded = fhe.encode(mask, name, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
         # key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]
         # check_encoded_equal(encoded, ptx, key)
         return encoded
 
-    def mask_first_n_mod3(n,padding,pos,cur_limbs, cryptoContext):
+    def mask_first_n_mod3(n,padding,pos,cur_limbs, he_res20_ctx, cryptoContext):
         # print("mask_first_n_mod3", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
@@ -445,9 +445,9 @@ else:
             for j in range(padding-n-(pos*n)):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, 16384*2)
+        name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, he_res20_ctx.cur_num_slots)
         print(name)
-        encoded = fhe.encode(mask, name, level, 16384*2, False, cryptoContext)
+        encoded = fhe.encode(mask, name, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
         # key = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]

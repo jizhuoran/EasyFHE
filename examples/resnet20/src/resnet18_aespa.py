@@ -38,9 +38,9 @@ class HE_res18_context:
 
         self.rotate_index_list = [-32768,-16384,-8192, -4096, -1024, -768, -256, -192, -64,-48, -32, -16, -15, -8, -1,
                              1, 2, 4, 8, 12,16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048,12288, 24576, 49152, 98304]
-        self.maxLevelsRemaining = 11
+        self.maxLevelsRemaining = 15
         # self.logBsSlots_list = [12, 13, 14]
-        self.logBsSlots_list = [16]
+        self.logBsSlots_list = [15]
         self.logN = 17
         self.dnum = 1
         self.dcrtBits = 55
@@ -112,7 +112,9 @@ def layer2(input, he_res18_ctx, cryptoContext):
     # after down sample [128,16,16]
     scaleSx = 1
     scaleDx = 1
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
+    # boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext) #need to boot-16 here
+
+    boot_in = input
 
     res1sx0 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 0, "1")
     res1sx1 = convbn(boot_in, 3, 1, scaleSx, he_res18_ctx, cryptoContext, 32, 1, he_res18_ctx.cur_num_slots, 64, -1024, 64, "2")
@@ -128,10 +130,12 @@ def layer2(input, he_res18_ctx, cryptoContext):
     )
     fullpackSx = downsample1024to256_v2(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample1024to256_v2(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
-    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16, [4, 4], cryptoContext)
-    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16, [4, 4], cryptoContext)
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
     he_res18_ctx.cur_num_slots = 32768
+    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 32768, cryptoContext)
+    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 32768, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = convbn(fullpackSx, 3, 2, scaleDx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
@@ -155,7 +159,8 @@ def layer3(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
+    # boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15,[4,4], cryptoContext)
+    boot_in = input
     res1sx0 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 0, "1")
     res1sx1 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, he_res18_ctx.cur_num_slots, 128, -256, 128, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -172,12 +177,14 @@ def layer3(input, he_res18_ctx, cryptoContext):
 
     fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
-    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16, [4, 4], cryptoContext)
-    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16, [4, 4], cryptoContext)
+    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
+    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
 
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
     he_res18_ctx.cur_num_slots = 16384
+    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 16384, cryptoContext)
+    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 16384, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
 
@@ -185,7 +192,7 @@ def layer3(input, he_res18_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{5}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16,[4,4], cryptoContext)
+    # res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15,[4,4], cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 6, 1, scale, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0)
@@ -207,7 +214,7 @@ def layer4(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15,[4,4], cryptoContext)
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res18_ctx, cryptoContext, 8, 1, he_res18_ctx.cur_num_slots, 256, -64, 256, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -225,18 +232,20 @@ def layer4(input, he_res18_ctx, cryptoContext):
     fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
 
-    fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 16,[4,4], cryptoContext)
-    fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 16,[4,4], cryptoContext)
+    # fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15,[4,4], cryptoContext)
+    # fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15,[4,4], cryptoContext)
 
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
     he_res18_ctx.cur_num_slots = 8192
+    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 8192, cryptoContext)
+    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 8192, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
 
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 16,[4,4], cryptoContext)
+    # res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15,[4,4], cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 8, 1, scale, he_res18_ctx, cryptoContext, 4, 1, he_res18_ctx.cur_num_slots, 512, -16, 0)
@@ -401,8 +410,7 @@ def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
             clear_result = openfhe_context.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
             clear_result = clear_result[:10]
-            # print(clear_result)
-            # print('x:',x)
+            print(clear_result)
             max_element_idx = np.argmax(clear_result)
         except RuntimeError as e:
             print(f"Decryption failed: {e}")
@@ -491,8 +499,7 @@ def resnet18():
     executeResNet18(get_resnet18_context_, cryptoContext, openfhe_context)
 
 def homo_Aespa_perfect_square(x,filename,cryptoContext):
-    x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    x = fhe.homo_bootstrap(x, cryptoContext.L, 16, [4, 4], cryptoContext)
+    x = fhe.homo_rescale(x, x.noise_deg-1, cryptoContext) #RESCALE ADD BY ZRJI
     n1_filename = filename + '-n1'
     n2_filename = filename + '-n2'
     slots = x.slots
