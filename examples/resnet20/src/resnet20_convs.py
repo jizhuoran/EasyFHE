@@ -167,7 +167,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
     fullpack=fhe.homo_add(fullpack,
                                fhe.homo_rotate(fullpack,4,cryptoContext),cryptoContext)
 
-    downsampledrows = cryptoContext.zero_16K
+    downsampledrows = cryptoContext.zero_16K.deep_copy()
     downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
 
     assert fullpack.noise_deg == 1
@@ -178,7 +178,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
             fullpack = fhe.homo_rotate(fullpack, 24, cryptoContext)
 
     downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    downsampledchannels = cryptoContext.zero_16K
+    downsampledchannels = cryptoContext.zero_16K.deep_copy()
     downsampledchannels = fhe.drop_last_elements(downsampledchannels, downsampledchannels.cur_limbs - downsampledrows.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     assert downsampledrows.noise_deg == 1
 
