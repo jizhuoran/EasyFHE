@@ -129,7 +129,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
                                                  cryptoContext)  # drop_last_elements ADD BY ZRJI
     for i in range(64):
         # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext),
+        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, 64, 1024, 2, downsampledrows.cur_limbs, cryptoContext),
                                  cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
@@ -177,7 +177,7 @@ def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
                                                  cryptoContext)  # drop_last_elements ADD BY ZRJI
     for i in range(64):
         # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, downsampledrows.cur_limbs, cryptoContext),
+        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, 64, 1024, 2, downsampledrows.cur_limbs, cryptoContext),
                                  cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
@@ -245,7 +245,7 @@ def downsample256to64(c1, c2, he_res20_ctx, cryptoContext):
 
     for i in range(256):
         masked=fhe.homo_mul_pt(downsampledrows,
-                               mask_channel2(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
+                               mask_channel(i, 128, 256, 1, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels,masked,cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels,-(256-64),cryptoContext)
 
@@ -283,7 +283,7 @@ def downsample64to16(c1, c2, he_res20_ctx, cryptoContext):
     assert downsampledrows.noise_deg == 1
 
     for i in range(512):
-        masked=fhe.homo_mul_pt(downsampledrows,mask_channel3(i, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
+        masked=fhe.homo_mul_pt(downsampledrows,mask_channel(i, 256, 64, 1, downsampledrows.cur_limbs, cryptoContext), cryptoContext)
         downsampledchannels = fhe.homo_add(downsampledchannels,masked,cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels,-(64-16),cryptoContext)
 
