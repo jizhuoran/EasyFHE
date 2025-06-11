@@ -126,8 +126,8 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res1dx1 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, None, 64, -1024, 64, "2"
     )
-    fullpackSx = downsample1024to256(res1sx0, res1sx1, 2, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample1024to256(res1dx0, res1dx1, 2, he_res18_ctx, cryptoContext)
+    fullpackSx = downsample1024to256(res1sx0, res1sx1, 64, 2, he_res18_ctx, cryptoContext)
+    fullpackDx = downsample1024to256(res1dx0, res1dx1, 64, 2, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
     fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
@@ -172,8 +172,8 @@ def layer3(input, he_res18_ctx, cryptoContext):
         boot_in, 5, 1, scaleDx, he_res18_ctx, cryptoContext, None, 128, -256, 128, "2"
     )
 
-    fullpackSx = downsample256to64(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample256to64(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = downsample256to64(res1sx0, res1sx1, 128, he_res18_ctx, cryptoContext)
+    fullpackDx = downsample256to64(res1dx0, res1dx1, 128, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
     fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
@@ -225,8 +225,8 @@ def layer4(input, he_res18_ctx, cryptoContext):
         boot_in, 7, 1, scaleDx, he_res18_ctx, cryptoContext, None, 256, -64, 256, "2"
     )
 
-    fullpackSx = downsample64to16(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample64to16(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = downsample64to16(res1sx0, res1sx1, 256, he_res18_ctx, cryptoContext)
+    fullpackDx = downsample64to16(res1dx0, res1dx1, 256, he_res18_ctx, cryptoContext)
 
     # fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15,[4,4], cryptoContext)
     # fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15,[4,4], cryptoContext)
@@ -484,7 +484,7 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        pkl_path="/data/yhh/data/encode_20250608_223322.pkl"
+        pkl_path="/data/yhh/data/encode_20250611_223924.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = get_resnet18_context_.full_encode_pkl_path
