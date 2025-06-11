@@ -148,9 +148,9 @@ if DIRECT_LOAD:
 
     def mask_channel(n, num_channel, spatial_size, num_cipher, cur_limbs, cryptoContext):
         channel_per_cipher = num_channel // num_cipher
-        full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 2 * channel_per_cipher*spatial_size)
+        full_name = "mask_channel_{}_{}_{}_{}".format(n, channel_per_cipher, spatial_size, cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
-            name = "mask_channel_{}_{}".format(n, 2 * channel_per_cipher*spatial_size)
+            name = "mask_channel_{}_{}_{}".format(n, channel_per_cipher, spatial_size)
         else:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 2 * channel_per_cipher*spatial_size, False, cryptoContext)
@@ -490,7 +490,7 @@ else:
             for j in range(spatial_size):
                 mask.append(0)
         mask = np.array(mask, dtype=np.double)
-        name = "mask_channel_{}_{}".format(n, 2 * channel_per_cipher * spatial_size)
+        name = "mask_channel_{}_{}_{}".format(n, channel_per_cipher, spatial_size)
         print(name)
         encoded = fhe.encode(mask, name, level, 2 * channel_per_cipher * spatial_size, False, cryptoContext)
         # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
