@@ -3,7 +3,7 @@
 """
 import numpy as np
 import torch
-from examples.resnet20.Aespa.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
+from examples.resnet20.gen_aespa_weights.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
 from examples.resnet20.src.resnet18_aespa import read_image
 
 def main():
