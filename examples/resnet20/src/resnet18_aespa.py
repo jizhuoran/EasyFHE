@@ -126,8 +126,8 @@ def layer2(input, he_res18_ctx, cryptoContext):
     res1dx1 = convbn_dx(
         boot_in, 3, 1, scaleDx, he_res18_ctx, cryptoContext, None, 64, -1024, 64, "2"
     )
-    fullpackSx = downsample1024to256(res1sx0, res1sx1, he_res18_ctx, cryptoContext)
-    fullpackDx = downsample1024to256(res1dx0, res1dx1, he_res18_ctx, cryptoContext)
+    fullpackSx = downsample1024to256(res1sx0, res1sx1, 2, he_res18_ctx, cryptoContext)
+    fullpackDx = downsample1024to256(res1dx0, res1dx1, 2, he_res18_ctx, cryptoContext)
     fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
     fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 

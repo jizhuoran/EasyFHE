@@ -79,131 +79,93 @@ def convbn_dx(input, layer, n, scale, he_res20_ctx, cryptoContext, slots, num_ch
 
 
 @fhe.utils.profile_python_function
-def downsample1024to256(c1, c2, he_res20_ctx, cryptoContext):
-    # Part1: c1=c2=65536, gene [c1,c2]
-    # c1.slots = 131072
-    # c2.slots = 131072
-    # fullpack = fhe.homo_add(
-    #     fhe.homo_mul_pt(c1, mask_first_n(65536, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
-    #     fhe.homo_mul_pt(c2, mask_scecond_n(65536, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
-    #     cryptoContext)
-    # Part2 :rotate + add + mask
-    fullpack = fhe.homo_rescale(c1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
-                                            fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
-                               gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext),
-                               cryptoContext)
-    # 相邻两个相加
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
-                                            fhe.homo_rotate(
-                                                fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
-                                            cryptoContext),
-                               gen_mask(4, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext),
-                               gen_mask(8, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
+def downsample1024to256(c1, c2, num_cipher, he_res20_ctx, cryptoContext):
 
-    assert fullpack.noise_deg == 1
-    downsampledrows = cryptoContext.zero_64K
-    downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs,
-                                             cryptoContext)  # drop_last_elements ADD BY ZRJI
+    assert num_cipher ==2 or num_cipher==1
 
-    for i in range(16):
-        #  每个i取得1024中第i个16的数，每64取16，最终得到256的通道
-        masked = fhe.homo_mul_pt(fullpack,
-                                 mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-        downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
-        if i < 15:
-            fullpack = fhe.homo_rotate(fullpack, 64 - 16, cryptoContext)
+    cipher_list =[]
+    downsampledchannels_list =[]
+    if num_cipher==1:
+        old_slots = c1.slots
+        c1 = torch.fhe.homo_ops.slot_resize(c1, c1.slots*2, cryptoContext)
+        c2 = torch.fhe.homo_ops.slot_resize(c2, c2.slots*2, cryptoContext)
+        fullpack = fhe.homo_add(
+            fhe.homo_mul_pt(c1, mask_first_n(old_slots, c1.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+            fhe.homo_mul_pt(c2, mask_scecond_n(old_slots, c2.cur_limbs, he_res20_ctx, cryptoContext), cryptoContext),
+            cryptoContext)
+        cipher_list.append(fullpack)
+    else:
+        cipher_list.append(c1)
+        cipher_list.append(c2)
 
-    downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
+    for cipher in cipher_list:
+        fullpack = fhe.homo_rescale(cipher, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
+                                                fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
+                                   gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext),
+                                   cryptoContext)
+        # 相邻两个相加
+        fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
+                                                fhe.homo_rotate(
+                                                    fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
+                                                cryptoContext),
+                                   gen_mask(4, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
+        fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext),
+                                   gen_mask(8, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
+        fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
 
-    assert downsampledrows.noise_deg == 1
-
-    downsampledchannels = cryptoContext.zero_64K
-    downsampledchannels = fhe.drop_last_elements(downsampledchannels,
-                                                 downsampledchannels.cur_limbs - downsampledrows.cur_limbs,
+        assert fullpack.noise_deg == 1
+        downsampledrows = cryptoContext.zero_64K
+        downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs,
                                                  cryptoContext)  # drop_last_elements ADD BY ZRJI
-    for i in range(64):
-        # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, 64, 1024, 2, downsampledrows.cur_limbs, cryptoContext),
-                                 cryptoContext)
-        downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
-        downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
-    downsampledchannels_c1 = fhe.homo_rotate(downsampledchannels, 48*1024, cryptoContext)
+
+        for i in range(16):
+            #  每个i取得1024中第i个16的数，每64取16，最终得到256的通道
+            masked = fhe.homo_mul_pt(fullpack,
+                                     mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, fullpack.slots, cryptoContext),
+                                     cryptoContext)
+            downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
+            if i < 15:
+                fullpack = fhe.homo_rotate(fullpack, 64 - 16, cryptoContext)
+
+        downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
+
+        assert downsampledrows.noise_deg == 1
+
+        downsampledchannels = cryptoContext.zero_64K
+        downsampledchannels = fhe.drop_last_elements(downsampledchannels,
+                                                     downsampledchannels.cur_limbs - downsampledrows.cur_limbs,
+                                                     cryptoContext)  # drop_last_elements ADD BY ZRJI
+        for i in range(64):
+            # 将128通道的更紧凑
+            masked = fhe.homo_mul_pt(downsampledrows,
+                                     mask_channel(i, 64, 1024, num_cipher, downsampledrows.cur_limbs, cryptoContext),
+                                     cryptoContext)
+            downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
+            downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
+        downsampledchannels = fhe.homo_rotate(downsampledchannels, 48 * 1024, cryptoContext)
+        downsampledchannels_list.append(downsampledchannels)
+    ######################################
 
 
-    fullpack = fhe.homo_rescale(c2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
-                                            fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
-                               gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext),
-                               cryptoContext)
-    # 相邻两个相加
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
-                                            fhe.homo_rotate(
-                                                fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
-                                            cryptoContext),
-                               gen_mask(4, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-    fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext),
-                               gen_mask(8, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
+    if num_cipher==1:
+        downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels_list[0], downsampledchannels_list[0]//4, cryptoContext)
+        return downsampledchannels
+    else:
+        downsampledchannels = cryptoContext.zero_64K
+        downsampledchannels = fhe.homo_add(downsampledchannels,
+            fhe.homo_mul_pt(downsampledchannels_list[0], mask_first_n(16384, downsampledchannels_list[0].cur_limbs, downsampledchannels_list[0].slots, cryptoContext), cryptoContext),cryptoContext)
 
-    assert fullpack.noise_deg == 1
-    downsampledrows = cryptoContext.zero_64K
-    downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs,
-                                             cryptoContext)  # drop_last_elements ADD BY ZRJI
-
-    for i in range(16):
-        #  每个i取得1024中第i个16的数，每64取16，最终得到256的通道
-        masked = fhe.homo_mul_pt(fullpack,
-                                 mask_first_n_mod(16, 1024, i, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
-        downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
-        if i < 15:
-            fullpack = fhe.homo_rotate(fullpack, 64 - 16, cryptoContext)
-
-    downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)
-
-    assert downsampledrows.noise_deg == 1
-
-    downsampledchannels = cryptoContext.zero_64K
-    downsampledchannels = fhe.drop_last_elements(downsampledchannels,
-                                                 downsampledchannels.cur_limbs - downsampledrows.cur_limbs,
-                                                 cryptoContext)  # drop_last_elements ADD BY ZRJI
-    for i in range(64):
-        # 将128通道的更紧凑
-        masked = fhe.homo_mul_pt(downsampledrows, mask_channel(i, 64, 1024, 2, downsampledrows.cur_limbs, cryptoContext),
-                                 cryptoContext)
-        downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
-        downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
-    downsampledchannels_c2 = fhe.homo_rotate(downsampledchannels, 48*1024, cryptoContext)
+        downsampledchannels = fhe.homo_add(downsampledchannels,
+            fhe.homo_mul_pt(fhe.homo_rotate(downsampledchannels_list[1], 16384, cryptoContext),mask_scecond_n(16384, downsampledchannels_list[1].cur_limbs, downsampledchannels_list[1].slots,cryptoContext), cryptoContext),cryptoContext)
+        downsampledchannels = fhe.homo_add(downsampledchannels,fhe.homo_rotate(downsampledchannels, 16384*2, cryptoContext),cryptoContext)
+        downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, 32768, cryptoContext)
 
 
-    downsampledchannels = cryptoContext.zero_64K
-
-    downsampledchannels = fhe.homo_add(downsampledchannels,
-        fhe.homo_mul_pt(downsampledchannels_c1, mask_first_n(16384, c1.cur_limbs, downsampledchannels_c1.slots, cryptoContext), cryptoContext),cryptoContext)
-
-    downsampledchannels = fhe.homo_add(downsampledchannels,
-        fhe.homo_mul_pt(fhe.homo_rotate(downsampledchannels_c2, 16384, cryptoContext),mask_scecond_n(16384, c1.cur_limbs, c1.slots,cryptoContext), cryptoContext),cryptoContext)
-    downsampledchannels = fhe.homo_add(downsampledchannels,fhe.homo_rotate(downsampledchannels, 16384*2, cryptoContext),cryptoContext)
-
-    # Part 3
-    # downsampledchannels = fhe.homo_rotate(downsampledchannels, 32768, cryptoContext)
-    # downsampledchannels = fhe.homo_add(downsampledchannels, fhe.homo_rotate(downsampledchannels, -32768, cryptoContext),
-    #                                    cryptoContext)
-    # downsampledchannels = fhe.homo_add(downsampledchannels,
-    #                                    fhe.homo_rotate(
-    #                                        fhe.homo_rotate(downsampledchannels, -32768, cryptoContext), -32768,
-    #                                        cryptoContext),
-    #                                    cryptoContext)
-    downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, 32768, cryptoContext)
-    return downsampledchannels
+        return downsampledchannels
 
 
 
