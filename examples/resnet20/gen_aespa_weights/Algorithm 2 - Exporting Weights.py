@@ -1757,6 +1757,7 @@ def generate_resnet20_Aespa_bin_files_complete_square():
     ## Fully Connected Layer
 
     np.savetxt('weights_aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    np.savetxt('weights_aespa/bias.bin', model.fc.bias.reshape(-1).detach().numpy())
 
 def generate_resnet18_Aespa_bin_files_complete_square():
     model = get_Aespa_MutalChannel_PAF_resnet18()

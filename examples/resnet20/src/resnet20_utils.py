@@ -74,6 +74,14 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
+    def read_fc_bias(cryptoContext, level, scale_deg, slots):
+        full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
+        if cryptoContext.pre_encode_type == "middle":
+            name = "{}_{}".format("bias", slots)
+        else:
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
+
     def mask_mod(n, cur_limbs, custom_val, he_res20_ctx, cryptoContext):
         full_name = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
         if cryptoContext.pre_encode_type == "middle":
@@ -222,6 +230,48 @@ else:
         name = "{}_{}".format("fc", slots)
         print(name)
         encoded = fhe.encode(weight_corrected, name, level, slots, False, cryptoContext)
+        # key = "fc_{}_{}_{}".format(level, scale_deg, slots)
+        # encoded_weight[key] = encoded
+        # ptx = cryptoContext.pre_encoded[key]
+        # check_encoded_equal(encoded, ptx, key)
+        return encoded
+
+
+    def read_fc_bias(cryptoContext, level, scale_deg, slots):
+        values = []
+        filename = cryptoContext.weight_path + 'bias.bin'
+        if not os.path.isfile(filename):
+            print(f"Failed to open file: {filename}")
+            return values
+        try:
+            # 打开文件并逐行读取
+            with open(filename, 'r') as file:
+                for row in file:
+                    # 按行解析
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        bias = values
+
+        bias_corrected = []
+        #  i is channels number
+        for i in range(64):
+            # First j is output channels,in cifar10 j is 10,in cifar100 j is 100
+            for j in range(10):
+                bias_corrected.append(bias[j])
+            # This j is wide * high - out_channel ,so resnet18 is 4*4-10
+            for j in range(16 - 10):
+                bias_corrected.append(0)
+        bias_corrected = np.array(bias_corrected, dtype=np.double)
+        name = "{}_{}".format("bias", slots)
+        print(name)
+        encoded = fhe.encode(bias_corrected, name, level, slots, False, cryptoContext)
         # key = "fc_{}_{}_{}".format(level, scale_deg, slots)
         # encoded_weight[key] = encoded
         # ptx = cryptoContext.pre_encoded[key]

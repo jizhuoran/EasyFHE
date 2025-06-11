@@ -32,12 +32,12 @@ class HE_res20_context:
         self.rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
                              1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
         self.maxLevelsRemaining = 11
-        self.logBsSlots_list = [12, 13, 14]
+        self.logBsSlots_list = [14]
         self.logN = 16
         self.dnum = 3
         self.dcrtBits = 56
         self.firstMod = 60
-        self.levelBudget_list = [[4, 4], [4, 4], [4, 4]]
+        self.levelBudget_list = [[4, 4]]
         self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
         self.rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
         self.device = "cuda"
@@ -176,7 +176,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[1], he_res20_ctx.levelBudget_list[1], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext) #13
     res1 = homo_Aespa_perfect_square(res1, f"layer{4}-conv{2}bn{2}", cryptoContext)
 
     # layer[2]block[1]
@@ -221,7 +221,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scaleSx = 1 #normalized_deltas[3][0]
     scaleDx = 1 #normalized_deltas[3][1]
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[1], he_res20_ctx.levelBudget_list[1], cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext) #13
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, 8192, 32, -256, 32, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -248,7 +248,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[2], he_res20_ctx.levelBudget_list[2], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext) #12
 
     scale = 1 #normalized_deltas[3][2]
     res2 = convbn(res1, 8, 1, scale, he_res20_ctx, cryptoContext, 8, 1, 4096, 64, -64, 0)
@@ -300,6 +300,8 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
     res = rotsum_padded(res, 64, 64, cryptoContext)
 
+    bias = read_fc_bias(cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
 
 
@@ -500,7 +502,7 @@ def resnet20( ):
     rescaleTech = he_res20_context_.rescaleTech
     device = he_res20_context_.device
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=True,
                                      SAVE_END=he_res20_context_.SAVE_END,
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
@@ -512,11 +514,13 @@ def resnet20( ):
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
-        cryptoContext.pre_encode_type = "middle"
-        file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
-        load_encode_pkl(file_name, he_res20_context_)
-        pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        # cryptoContext.pre_encode_type = "middle"
+        # file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
+        # load_encode_pkl(file_name, he_res20_context_)
+        # pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
 
+        cryptoContext.pre_encode_type = "middle"
+        pkl_path = ""
         if he_res20_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = he_res20_context_.full_encode_pkl_path
