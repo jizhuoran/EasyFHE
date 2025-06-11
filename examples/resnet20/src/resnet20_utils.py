@@ -684,9 +684,9 @@ def rotsum(input,slots,cryptoContext):
     return result
 
 
-def rotsum_padded(input,slots,cryptoContext):
+def rotsum_padded(input,slots,num_channel,cryptoContext):
     result=input.deep_copy()
-    for i in range(log2_int(slots)):
+    for i in range(log2_int(num_channel)):
         result=fhe.homo_add(result,fhe.homo_rotate(result,slots*pow(2,i),cryptoContext),cryptoContext)
     return result
 

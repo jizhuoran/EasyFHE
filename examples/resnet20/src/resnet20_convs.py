@@ -18,13 +18,13 @@ def rot_input(input, img_width, padding, cryptoContext):
     return c_rotations
 
 @fhe.utils.profile_python_function
-def convbn_initial(input, scale, he_res20_ctx, cryptoContext, img_width, padding):
+def convbn_initial(input,num_channel,scale, he_res20_ctx, cryptoContext, img_width, padding):
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
     
     c_rotations = rot_input(input, img_width, padding, cryptoContext)
 
-    for j in range(16):
+    for j in range(num_channel):
         k_rows=[]
         for k in range(9):
             encoded=read_values_from_file(cryptoContext, f"conv1bn1-ch{j}-k{k+1}",cryptoContext.L-input.cur_limbs,1,16384,scale)
@@ -50,7 +50,6 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, paddi
         input = fhe.force_rescale(input, 1, cryptoContext)
 
     c_rotations = rot_input(input, img_width, padding, cryptoContext)
-
     for j in range(num_channel):
         k_rows=[]
         for k in range(9):
@@ -60,9 +59,6 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, paddi
 
         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
-
-    # bias = read_values_from_file(cryptoContext,  f"layer{layer}-conv{n}bn{n}-bias{biasoff}",cryptoContext.L-input.cur_limbs,1,slots,scale)
-    # finalsum=fhe.homo_add_pt(finalsum,bias,cryptoContext)
     return finalsum
 
 @fhe.utils.profile_python_function

@@ -51,7 +51,7 @@ def homo_relu(ciphertext, scale, degree, cryptoContext):
 
 def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
-    res = convbn_initial(input, scale, he_res20_ctx, cryptoContext, 32, 1)
+    res = convbn_initial(input, 16, scale, he_res20_ctx, cryptoContext, 32, 1)
     bias=read_values_from_file(cryptoContext, "conv1bn1-bias", cryptoContext.L-res.cur_limbs, 1, 16384, scale)
     res=fhe.homo_add_pt(res,bias,cryptoContext)
     res = homo_relu(res, scale, he_res20_ctx.relu_degree, cryptoContext)
@@ -302,7 +302,7 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     res = repeat(res, 16, cryptoContext)
 
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = rotsum_padded(res, 64, cryptoContext)
+    res = rotsum_padded(res, 64, 64, cryptoContext)
 
     return res
 

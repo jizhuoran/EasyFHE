@@ -86,7 +86,7 @@ class HE_res20_context:
 
 def initial_layer(input, he_res20_ctx, cryptoContext):
     scale = normalized_deltas[0][0]
-    res = convbn_initial(input, scale, he_res20_ctx, cryptoContext, 32, 1)
+    res = convbn_initial(input, 16, scale, he_res20_ctx, cryptoContext, 32, 1)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
@@ -298,7 +298,7 @@ def final_layer(input, he_res20_ctx, cryptoContext):
         cryptoContext, cryptoContext.L - res.cur_limbs, 1, he_res20_ctx.cur_num_slots
     )
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = rotsum_padded(res, 64, cryptoContext)
+    res = rotsum_padded(res, 64, 64, cryptoContext)
 
     return res
 
