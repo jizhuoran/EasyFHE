@@ -67,13 +67,19 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
-        full_name = "{}_{}".format("fc", slots)
-        name = full_name
+        full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
+        if cryptoContext.pre_encode_type == "middle":
+            name = "{}_{}".format("fc", slots)
+        else:
+            name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
     def read_fc_bias(cryptoContext, level, scale_deg, slots):
-        full_name = "{}_{}".format("bias", slots)
-        name = full_name
+        full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
+        if cryptoContext.pre_encode_type == "middle":
+            name = "{}_{}".format("bias", slots)
+        else:
+            name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
     def mask_mod(n, cur_limbs, custom_val, he_res20_ctx, cryptoContext):
@@ -174,7 +180,7 @@ else:
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
-        filename = '../weights_Aespa/' + filename + '.bin'
+        filename = cryptoContext.weight_path + filename + '.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
@@ -208,7 +214,7 @@ else:
     def read_fc_weight(cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
-        filename = '../weights_Aespa/fc.bin'
+        filename = cryptoContext.weight_path + 'fc.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
@@ -251,7 +257,7 @@ else:
 
     def read_fc_bias(cryptoContext, level, scale_deg, slots):
         values = []
-        filename = '../weights_Aespa/bias.bin'
+        filename = cryptoContext.weight_path + 'bias.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values

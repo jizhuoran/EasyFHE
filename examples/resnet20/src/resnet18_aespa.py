@@ -487,6 +487,8 @@ def resnet18():
                              levelBudget_list, secretKeyDist, rescaleTech, get_resnet18_context_.device, save_dir=DATA_DIR,
                              config=config))
 
+    cryptoContext.weight_path = '../weights_Aespa/' # fixme: workaround only
+
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
