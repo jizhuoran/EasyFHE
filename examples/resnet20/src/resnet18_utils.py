@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = False
+DIRECT_LOAD = True
 
 
 if DIRECT_LOAD:
@@ -66,7 +66,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
-    def read_fc_weight(num_channel, cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel,spatial_size, cryptoContext, level, scale_deg, slots):
         full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("fc", slots)
@@ -74,7 +74,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
-    def read_fc_bias(num_channel, cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
         full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("bias", slots)
@@ -220,7 +220,7 @@ else:
 
         return encoded
 
-    def read_fc_weight(num_channel, cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel,spatial_size, cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
         filename = cryptoContext.weight_path + 'fc.bin'
@@ -251,7 +251,7 @@ else:
             for j in range(10):
                 weight_corrected.append(weight[(10 * i) + j])
             # This j is wide * high - out_channel ,so resnet18 is 4*4-10
-            for j in range(16 - 10):
+            for j in range(spatial_size - 10):
                 weight_corrected.append(0)
         weight_corrected = np.array(weight_corrected, dtype=np.double)
         name = "{}_{}".format("fc", slots)
@@ -264,7 +264,7 @@ else:
         return encoded
 
 
-    def read_fc_bias(num_channel, cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
         values = []
         filename = cryptoContext.weight_path + 'bias.bin'
         if not os.path.isfile(filename):
@@ -293,7 +293,7 @@ else:
             for j in range(10):
                 bias_corrected.append(bias[j])
             # This j is wide * high - out_channel ,so resnet18 is 4*4-10
-            for j in range(16 - 10):
+            for j in range(spatial_size - 10):
                 bias_corrected.append(0)
         bias_corrected = np.array(bias_corrected, dtype=np.double)
         name = "{}_{}".format("bias", slots)

@@ -170,7 +170,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     fullpackSx = convbn(fullpackSx, 4, 2, scaleDx, he_res20_ctx, cryptoContext, 16, 1, None, 32, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[1], he_res20_ctx.levelBudget_list[1], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{4}-conv{2}bn{2}", cryptoContext)
 
     # layer[2]block[1]
@@ -215,7 +215,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     scaleSx = 1 #normalized_deltas[3][0]
     scaleDx = 1 #normalized_deltas[3][1]
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[1], he_res20_ctx.levelBudget_list[1], cryptoContext) #13
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext) #13
     res1sx0 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, None, 32, -256, 0, "1")
     res1sx1 = convbn(boot_in, 7, 1, scaleSx, he_res20_ctx, cryptoContext, 16, 1, None, 32, -256, 32, "2")
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -241,7 +241,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[2], he_res20_ctx.levelBudget_list[2], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext)
 
     scale = 1 #normalized_deltas[3][2]
     res2 = convbn(res1, 8, 1, scale, he_res20_ctx, cryptoContext, 8, 1, None, 64, -64, 0)
@@ -277,7 +277,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
 
 
 def final_layer(input, he_res20_ctx, cryptoContext):
-
+    # 64*8*8
     res = rotsum(input, 64, cryptoContext)
     res = fhe.homo_mul_pt(
         res,
@@ -287,12 +287,12 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     res = repeat(res, 16, cryptoContext)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     weight = read_fc_weight(
-        64, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots
+        64,64, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots
     )
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
     res = rotsum_padded(res, 64, 64, cryptoContext)
 
-    bias = read_fc_bias(64, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    bias = read_fc_bias(64, 16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
 
@@ -336,25 +336,25 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), cryptoContext.device, 2, 0, 2**15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), cryptoContext.device, 2, 0, 2**14)
 
-    # 准备明文模型，测速时可以删除
-    model = get_resnet20_HerPN(num_classes=10)
-    device = torch.device("cuda:0")
-    model.to(device)
-    model_path = '/home/yhh/PNP/GPU-FHE/examples/resnet20/gen_aespa_weights/ResNet20_Aespa.pth'
-    stict = torch.load(model_path, map_location='cuda:0')
-    model.load_state_dict(stict, strict=False)
-    model.eval()
-    model = change_all_HerPN_by_PAF_MutalChannel(model)
+    # # 准备明文模型，测速时可以删除
+    # model = get_resnet20_HerPN(num_classes=10)
+    # device = torch.device("cuda:0")
+    # model.to(device)
+    # model_path = '/home/yhh/PNP/GPU-FHE/examples/resnet20/gen_aespa_weights/ResNet20_Aespa.pth'
+    # stict = torch.load(model_path, map_location='cuda:0')
+    # model.load_state_dict(stict, strict=False)
+    # model.eval()
+    # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
     correct = 0
     total = he_res20_ctx.total
-    for i in range(1):
-        image_vector, label, index = read_image(3)
-        # 明文模型输出
-        input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
-        input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
-        x , fea = model(input,fea_out=True)
+    for i in range(10):
+        image_vector, label, index = read_image(i)
+        # # 明文模型输出
+        # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
+        # input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
+        # x , fea = model(input,fea_out=True)
 
         in_ct = openfhe_context.encrypt(
             image_vector,
@@ -377,40 +377,40 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         print("time: ", time.time() - start_time)
 
         # 对比明密文loss
-        conv_init = fea[0].flatten().reshape(-1)
-        init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
-        init_out = torch.from_numpy(init_out).to(device)
-        loss = torch.sum((conv_init - init_out) ** 2)
-        print("loss: ", loss)
+        # conv_init = fea[0].flatten().reshape(-1)
+        # init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
+        # init_out = torch.from_numpy(init_out).to(device)
+        # loss = torch.sum((conv_init - init_out) ** 2)
+        # print("loss: ", loss)
 
-        temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
-        print('name:resLayer1', temp)
-        fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
-        print('fea1', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer1', loss)
+        # temp = openfhe_context.decrypt(resLayer1).cpu().numpy().reshape(-1)
+        # print('name:resLayer1', temp)
+        # fea_out = torch.tensor(fea[1].flatten().reshape(-1), device="cuda:0")
+        # print('fea1', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer1', loss)
 
-        temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
-        print('name:resLayer2', temp)
-        fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
-        print('fea2', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer2',loss)
-
-        temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
-        print('name:resLayer3', temp)
-        fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
-        print('fea3', fea_out)
-        temp = torch.tensor(temp, device="cuda:0")
-        loss = torch.sum((fea_out - temp) ** 2)
-        print('resLayer3',loss)
+        # temp = openfhe_context.decrypt(resLayer2).cpu().numpy().reshape(-1)
+        # print('name:resLayer2', temp)
+        # fea_out = torch.tensor(fea[2].flatten().reshape(-1), device="cuda:0")
+        # print('fea2', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer2',loss)
+        #
+        # temp = openfhe_context.decrypt(resLayer3).cpu().numpy().reshape(-1)
+        # print('name:resLayer3', temp)
+        # fea_out = torch.tensor(fea[3].flatten().reshape(-1), device="cuda:0")
+        # print('fea3', fea_out)
+        # temp = torch.tensor(temp, device="cuda:0")
+        # loss = torch.sum((fea_out - temp) ** 2)
+        # print('resLayer3',loss)
         try:
             clear_result = openfhe_context.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
             clear_result = clear_result[:10]
-            print(clear_result)
+            print('clear_result',clear_result)
             # print('x:',x)
             max_element_idx = np.argmax(clear_result)
         except RuntimeError as e:
@@ -477,7 +477,7 @@ def resnet20( ):
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
-    he_res20_context_ = HE_res20_context("../weights_Aespa")
+    he_res20_context_ = HE_res20_context("../weights_aespa")
 
     rotate_index_list = he_res20_context_.rotate_index_list
     maxLevelsRemaining = he_res20_context_.maxLevelsRemaining
@@ -491,7 +491,7 @@ def resnet20( ):
     rescaleTech = he_res20_context_.rescaleTech
     device = he_res20_context_.device
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=True,
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
                                      SAVE_END=he_res20_context_.SAVE_END,
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
@@ -508,7 +508,7 @@ def resnet20( ):
         # load_encode_pkl(file_name, he_res20_context_)
         # pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
         cryptoContext.pre_encode_type = "middle"
-        pkl_path = ""
+        pkl_path = "/data/yhh/data/encode_20250612_171807.pkl"
 
         if he_res20_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"

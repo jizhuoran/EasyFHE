@@ -271,10 +271,10 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     )
     res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min? For cifar100, we need repeat 128
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    weight = read_fc_weight(512, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    weight = read_fc_weight(512,16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
     res = rotsum_padded(res, 16,512, cryptoContext)
-    bias = read_fc_bias(512, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    bias = read_fc_bias(512, 16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
 
