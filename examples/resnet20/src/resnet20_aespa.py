@@ -5,7 +5,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 import torch.fhe as fhe
-from examples.resnet20.src.resnet18_convs import *
+from examples.resnet20.src.convs import *
 from huggingface_hub import hf_hub_download
 import zipfile
 from termcolor import colored

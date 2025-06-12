@@ -1,5 +1,5 @@
 import torch.fhe as fhe
-from resnet18_utils import *
+from utils import *
 
 def rot_input(input, img_width, padding, cryptoContext):
     digits=fhe.modup_to_ext(input.cipher_like([input.cv[1]]),cryptoContext)
