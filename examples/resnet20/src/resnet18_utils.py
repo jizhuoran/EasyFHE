@@ -44,7 +44,7 @@ def log2_int(x):
     return int(math.log2(x))
 
 
-DIRECT_LOAD = True
+DIRECT_LOAD = False
 
 
 if DIRECT_LOAD:
@@ -66,7 +66,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
-    def read_fc_weight(cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel, cryptoContext, level, scale_deg, slots):
         full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("fc", slots)
@@ -74,7 +74,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
-    def read_fc_bias(cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, cryptoContext, level, scale_deg, slots):
         full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("bias", slots)
@@ -122,7 +122,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, slots, False, cryptoContext)
 
-    def mask_first_n_mod(n, padding, pos, cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod(n, padding, pos, length, cur_limbs, slots, cryptoContext):
         full_name = "mask_first_n_mod_{}_{}_{}_{}_{}".format(n, padding, pos, slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, slots)
@@ -130,7 +130,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, slots, False, cryptoContext)
 
-    def mask_first_n_mod2(n, padding, pos, cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod2(n, padding, pos, length, cur_limbs, slots, cryptoContext):
         full_name = "mask_first_n_mod2_{}_{}_{}_{}_{}".format(n, padding, pos, slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, slots)
@@ -138,7 +138,7 @@ if DIRECT_LOAD:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, slots, False, cryptoContext)
 
-    def mask_first_n_mod3(n, padding, pos, cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod3(n, padding, pos, length, cur_limbs, slots, cryptoContext):
         full_name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, slots,cur_limbs)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, slots)
@@ -220,7 +220,7 @@ else:
 
         return encoded
 
-    def read_fc_weight(cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel, cryptoContext, level, scale_deg, slots):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
         filename = cryptoContext.weight_path + 'fc.bin'
@@ -246,7 +246,7 @@ else:
 
         weight_corrected=[]
         #  i is channels number
-        for i in range(512):
+        for i in range(num_channel):
             # First j is output channels,in cifar10 j is 10,in cifar100 j is 100
             for j in range(10):
                 weight_corrected.append(weight[(10 * i) + j])
@@ -264,7 +264,7 @@ else:
         return encoded
 
 
-    def read_fc_bias(cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, cryptoContext, level, scale_deg, slots):
         values = []
         filename = cryptoContext.weight_path + 'bias.bin'
         if not os.path.isfile(filename):
@@ -288,7 +288,7 @@ else:
 
         bias_corrected = []
         #  i is channels number
-        for i in range(512):
+        for i in range(num_channel):
             # First j is output channels,in cifar10 j is 10,in cifar100 j is 100
             for j in range(10):
                 bias_corrected.append(bias[j])
@@ -404,11 +404,11 @@ else:
         # check_encoded_equal(encoded, ptx, key)
         return encoded
 
-    def mask_first_n_mod(n,padding,pos,cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod(n,padding,pos,length,cur_limbs, slots, cryptoContext):
         # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
-        for i in range(64):
+        for i in range(length):
             for j in range(pos*n):
                 mask.append(0)
             for j in range(n):
@@ -427,11 +427,11 @@ else:
 
 
 
-    def mask_first_n_mod2(n,padding,pos,cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod2(n,padding,pos,length, cur_limbs, slots, cryptoContext):
         # print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
-        for i in range(256):
+        for i in range(length):
             for j in range(pos*n):
                 mask.append(0)
             for j in range(n):
@@ -448,11 +448,11 @@ else:
         # check_encoded_equal(encoded, ptx, key)
         return encoded
 
-    def mask_first_n_mod3(n,padding,pos,cur_limbs, slots, cryptoContext):
+    def mask_first_n_mod3(n,padding,pos,length, cur_limbs, slots, cryptoContext):
         # print("mask_first_n_mod3", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
         mask=[]
         level = cryptoContext.L - cur_limbs
-        for i in range(512):
+        for i in range(length):
             for j in range(pos*n):
                 mask.append(0)
             for j in range(n):

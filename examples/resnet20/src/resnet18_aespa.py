@@ -26,7 +26,7 @@ def decrypt_and_encrypt(input, cryptoContext):
 
 class HE_res18_context:
     def __init__(self, weight_dir,
-                 total=20, SAVE_END=False, pre_encode_end=False,
+                 total=1, SAVE_END=False, pre_encode_end=False,
                  full_encode_pkl_path=""):
         self.relu_degree = None
         self.weight_dir = weight_dir
@@ -271,10 +271,10 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     )
     res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min? For cifar100, we need repeat 128
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    weight = read_fc_weight(cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    weight = read_fc_weight(512, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
     res = rotsum_padded(res, 16,512, cryptoContext)
-    bias = read_fc_bias(cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    bias = read_fc_bias(512, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
 
@@ -484,7 +484,7 @@ def resnet18():
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         cryptoContext.pre_encode_type = "middle"
-        pkl_path="/data/yhh/data/encode_20250611_223924.pkl"
+        pkl_path="/data/yhh/data/encode_20250611_234607.pkl"
         if get_resnet18_context_.pre_encode_end:
             cryptoContext.pre_encode_type = "end"
             pkl_path = get_resnet18_context_.full_encode_pkl_path
