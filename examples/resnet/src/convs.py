@@ -227,7 +227,7 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, he_res20_ctx, cryptoCon
     ######################################
 
 
-    if num_cipher==1: #resnet20
+    if num_cipher==1: #resnet
         downsampledchannels = downsampledchannels_list[0]
         downsampledchannels = fhe.homo_add(downsampledchannels,
                                            fhe.homo_rotate(downsampledchannels, - downsampledchannels_list[0].slots//4, cryptoContext), cryptoContext)

@@ -11,7 +11,7 @@ def main():
     model = get_resnet18_HerPN(num_classes=10)
     device = torch.device("cuda:0")
     model.to(device)
-    model_path = '/home/yhfan/PNP/GPU-FHE/examples/resnet20/Aespa/ResNet18_Aespa.pth'
+    model_path = '/home/yhfan/PNP/GPU-FHE/examples/resnet/Aespa/ResNet18_Aespa.pth'
     stict = torch.load(model_path, map_location='cuda:0')
     model.load_state_dict(stict, strict=False)
     model.eval()

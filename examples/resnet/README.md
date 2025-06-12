@@ -10,8 +10,8 @@ set `NEW_VERSION = False` for the first time, and then set true
 
 Run:
 ```bash
-cd examples/resnet20/src
-python3 ./resnet20.py
+cd examples/resnet/src
+python3 ./resnet.py
 ```
 
 ---
