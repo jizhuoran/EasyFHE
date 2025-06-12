@@ -26,7 +26,6 @@ class HE_res18_context:
     def __init__(self, weight_dir,
                  total=1, SAVE_END=False, pre_encode_end=False,
                  full_encode_pkl_path=""):
-        self.relu_degree = None
         self.weight_dir = weight_dir
         self.total = total
         self.SAVE_END = SAVE_END
@@ -66,7 +65,6 @@ def initial_layer(input, he_res18_ctx, cryptoContext):
     # conv3*3 [64,32,32]
     scale = 1
     res = convbn_initial(input, 64, scale, he_res18_ctx, cryptoContext, 32, 1)
-    # he_res18_ctx.cur_num_channels = 64
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
@@ -108,7 +106,6 @@ def layer2(input, he_res18_ctx, cryptoContext):
     # after down sample [128,16,16]
     scaleSx = 1
     scaleDx = 1
-    # boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 16,[4,4], cryptoContext) #need to boot-16 here
 
     boot_in = input
 
@@ -129,8 +126,6 @@ def layer2(input, he_res18_ctx, cryptoContext):
     fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
     fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
-    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 32768, cryptoContext)
-    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 32768, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = convbn(fullpackSx, 3, 2, scaleDx, he_res18_ctx, cryptoContext, 16, 1, None, 128, -256, 0)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
@@ -154,7 +149,6 @@ def layer3(input, he_res18_ctx, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    # boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15,[4,4], cryptoContext)
     boot_in = input
     res1sx0 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, None, 128, -256, 0, "1")
     res1sx1 = convbn(boot_in, 5, 1, scaleSx, he_res18_ctx, cryptoContext, 16, 1, None, 128, -256, 128, "2")
@@ -177,8 +171,6 @@ def layer3(input, he_res18_ctx, cryptoContext):
 
 
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 16384, cryptoContext)
-    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 16384, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
 
@@ -226,19 +218,13 @@ def layer4(input, he_res18_ctx, cryptoContext):
     fullpackSx = downsample64to16(res1sx0, res1sx1, 256, he_res18_ctx, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, 256, he_res18_ctx, cryptoContext)
 
-    # fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15,[4,4], cryptoContext)
-    # fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15,[4,4], cryptoContext)
-
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    fullpackSx = torch.fhe.homo_ops.slot_resize(fullpackSx, 8192, cryptoContext)
-    fullpackDx = torch.fhe.homo_ops.slot_resize(fullpackDx, 8192, cryptoContext)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     fullpackSx = convbn(fullpackSx, 7, 2, scaleDx, he_res18_ctx, cryptoContext, 4, 1, None, 512, -16, 0)
 
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    # res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15,[4,4], cryptoContext)
 
     scale = 1
     res2 = convbn(res1, 8, 1, scale, he_res18_ctx, cryptoContext, 4, 1, None, 512, -16, 0)
@@ -308,7 +294,6 @@ def read_image(index):
         print(f"Failed to open the file: {filePath}")
 
 def executeResNet18(he_res18_ctx, cryptoContext, openfhe_context):
-    he_res18_ctx.relu_degree = 59
     cryptoContext.openfhe_context = openfhe_context
     device = he_res18_ctx.device
 
