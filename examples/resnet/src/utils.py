@@ -61,7 +61,7 @@ if DIRECT_LOAD:
         cryptoContext.pre_encoded = pre_encoded
 
 
-    def read_values_from_file(cryptoContext, val_name, level, scale_deg, slots, scale=1.0):
+    def read_values_from_file(val_name, level, scale_deg, slots, cryptoContext, scale=1.0):
         full_name = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format(val_name, slots)
@@ -70,7 +70,7 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
 
-    def read_fc_weight(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
         full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("fc", slots)
@@ -79,7 +79,7 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
 
-    def read_fc_bias(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
         full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("bias", slots)
@@ -88,7 +88,7 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
 
-    def mask_mod(n, cur_limbs, custom_val, slots, cryptoContext):
+    def mask_mod(n, custom_val, cur_limbs, slots, cryptoContext):
         full_name = "mask_mod_{}_{}_{}".format(n, cur_limbs, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "mask_mod_{}_{}_{}".format(n, custom_val, slots)
@@ -183,7 +183,7 @@ else:
         pass
 
 
-    def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
+    def read_values_from_file(filename, level, scale_deg, slots, cryptoContext, scale=1.0):
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
         val_name = filename
@@ -211,7 +211,7 @@ else:
         return encoded
 
 
-    def read_fc_weight(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
+    def read_fc_weight(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
         values = []
         filename = cryptoContext.weight_path + 'fc.bin'
@@ -249,7 +249,7 @@ else:
         return encoded
 
 
-    def read_fc_bias(num_channel, spatial_size, cryptoContext, level, scale_deg, slots):
+    def read_fc_bias(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
         values = []
         filename = cryptoContext.weight_path + 'bias.bin'
         if not os.path.isfile(filename):
@@ -285,7 +285,7 @@ else:
         return encoded
 
 
-    def mask_mod(n, cur_limbs, custom_val, slots, cryptoContext):
+    def mask_mod(n, custom_val, cur_limbs, slots, cryptoContext):
         # print("mask_mod", "n", n, "cur_limbs", cur_limbs, "custom_val", custom_val, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
         level = cryptoContext.L - cur_limbs
         vec = []
