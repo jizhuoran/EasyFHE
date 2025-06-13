@@ -183,11 +183,10 @@ else:
         pass
 
 
-    def read_values_from_file(filename, level, slots, cryptoContext, scale=1.0):
+    def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
         # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
         values = []
-        val_name = filename
-        filename = cryptoContext.weight_path + filename + '.bin'
+        filename = cryptoContext.weight_path + val_name + '.bin'
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
