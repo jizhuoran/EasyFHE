@@ -6,6 +6,25 @@ import numpy as np
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
 
+def get_relu_depth(degree):
+    ranges = [
+        (1, 5, 3),
+        (6, 13, 4),
+        (14, 27, 5),
+        (28, 59, 6),
+        (60, 119, 7),
+        (120, 247, 8),
+        (248, 495, 9),
+        (496, 1007, 10),
+        (1008, 2031, 11)
+    ]
+
+    for lower, upper, depth in ranges:
+        if lower <= degree <= upper:
+            return depth
+
+    raise ValueError("Set a valid degree for ReLU")
+
 
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
     if cryptoContext.rescaleTech != "FIXEDMANUAL":

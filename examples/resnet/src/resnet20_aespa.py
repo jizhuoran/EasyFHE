@@ -1,86 +1,62 @@
 import os, sys, datetime, time
-from examples.resnet.gen_aespa_weights.HerPN import get_resnet20_HerPN, change_all_HerPN_by_PAF_MutalChannel
-
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
+from termcolor import colored
 import torch.fhe as fhe
 from examples.resnet.src.convs import *
-from huggingface_hub import hf_hub_download
-import zipfile
-from termcolor import colored
+from examples.utils.utils import *
+
+#for debug
+from examples.resnet.gen_aespa_weights.HerPN import get_resnet20_HerPN, change_all_HerPN_by_PAF_MutalChannel
 
 DATA_DIR = os.environ["DATA_DIR"]
 
+# # config1
+# total=1000
+# SAVE_END=False
+# SAVE_MIDDLE=False
 
-class HE_res20_context:
-    def __init__(self, weight_dir,
-                 # total=1000, SAVE_END=False, pre_encode_end=True,
-                 total=1, SAVE_END=False, pre_encode_end=False,
-                 full_encode_pkl_path=""):
-        self.relu_degree = None
-        self.weight_dir = weight_dir
-        self.total = total
-        self.SAVE_END = SAVE_END
-        self.full_encode_pkl_path = full_encode_pkl_path
-        self.pre_encode_end = pre_encode_end
+# # config2
+total = 10
+SAVE_END = False
+SAVE_MIDDLE = False
 
-        self.rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
-                             1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
-        self.maxLevelsRemaining = 11
-        self.logBsSlots_list = [14]
-        self.logN = 16
-        self.dnum = 3
-        self.dcrtBits = 56
-        self.firstMod = 60
-        self.levelBudget_list = [[4, 4]]
-        self.secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-        self.rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-        self.device = "cuda"
-        print("rotate_index_list: ", self.rotate_index_list)
-        print("maxLevelsRemaining: ", self.maxLevelsRemaining)
-        print("logBsSlots_list: ", self.logBsSlots_list)
-        print("logN: ", self.logN)
-        print("dnum: ", self.dnum)
-        print("dcrtBits: ", self.dcrtBits)
-        print("firstMod: ", self.firstMod)
-        print("levelBudget_list: ", self.levelBudget_list)
-        print("secretKeyDist: ", self.secretKeyDist)
-        print("rescaleTech: ", self.rescaleTech)
+# # config3
+# total=1
+# SAVE_END=False
+# SAVE_MIDDLE=True
 
+#######################
+#######################
+weight_dir = "../weights_aespa/"
 
-        print("full_encode_pkl_path: ", self.full_encode_pkl_path)
-        print("\n\n")
-
-
-# def get_relu_depth(degree):
-#     ranges = [
-#         (1, 5, 3),
-#         (6, 13, 4),
-#         (14, 27, 5),
-#         (28, 59, 6),
-#         (60, 119, 7),
-#         (120, 247, 8),
-#         (248, 495, 9),
-#         (496, 1007, 10),
-#         (1008, 2031, 11)
-#     ]
-
-#     for lower, upper, depth in ranges:
-#         if lower <= degree <= upper:
-#             return depth
-
-#     raise ValueError("Set a valid degree for ReLU")
-
-# def homo_relu(ciphertext, scale, degree, cryptoContext):
-#     def scaled_relu_function(x):
-#         return 0 if x < 0 else (1 / scale) * x
-
-#     result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
-#     return result
+rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
+                          1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576]
+maxLevelsRemaining = 11
+logBsSlots_list = [14]
+logN = 16
+dnum = 3
+dcrtBits = 56
+firstMod = 60
+levelBudget_list = [[4, 4]]
+secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
+rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+device = "cuda"
+print("rotate_index_list: ", rotate_index_list)
+print("maxLevelsRemaining: ", maxLevelsRemaining)
+print("logBsSlots_list: ", logBsSlots_list)
+print("logN: ", logN)
+print("dnum: ", dnum)
+print("dcrtBits: ", dcrtBits)
+print("firstMod: ", firstMod)
+print("levelBudget_list: ", levelBudget_list)
+print("secretKeyDist: ", secretKeyDist)
+print("rescaleTech: ", rescaleTech)
+print("\n\n")
 
 
-def initial_layer(input, he_res20_ctx, cryptoContext):
+def initial_layer(input, cryptoContext):
     scale = 1 #normalized_deltas[0][0]
     res = conv_initial(input, 32, 1, 16, scale, cryptoContext)
     res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -88,7 +64,7 @@ def initial_layer(input, he_res20_ctx, cryptoContext):
     return res
 
 
-def layer1(input, he_res20_ctx, cryptoContext):
+def layer1(input, cryptoContext):
     scale = 1 #normalized_deltas[1][0]
     # layer[0],block[0],conv1
     res1 = conv(input, 32, 1, 16, -1024, 1, 1, 0, scale, cryptoContext)
@@ -143,10 +119,10 @@ def layer1(input, he_res20_ctx, cryptoContext):
 
     return res3
 
-def layer2(input, he_res20_ctx, cryptoContext):
+def layer2(input, cryptoContext):
     scaleSx = 1 #normalized_deltas[2][0]
     scaleDx = 1 #normalized_deltas[2][1]
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1sx0 = conv(boot_in, 32, 1, 16, -1024, 4, 1, 0, scaleSx, cryptoContext)
     res1sx1 = conv(boot_in, 32, 1, 16, -1024, 4, 1, 16, scaleSx, cryptoContext)
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -166,7 +142,7 @@ def layer2(input, he_res20_ctx, cryptoContext):
 
     fullpackSx = conv(fullpackSx, 16, 1, 32, -256, 4, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{4}-conv{2}bn{2}", cryptoContext)
 
     # layer[2]block[1]
@@ -207,11 +183,11 @@ def layer2(input, he_res20_ctx, cryptoContext):
     return res3
 
 
-def layer3(input, he_res20_ctx, cryptoContext):
+def layer3(input, cryptoContext):
     scaleSx = 1 #normalized_deltas[3][0]
     scaleDx = 1 #normalized_deltas[3][1]
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext) #13
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext) #13
     res1sx0 = conv(boot_in, 16, 1, 32, -256, 7, 1, 0, scaleSx, cryptoContext)
     res1sx1 = conv(boot_in, 16, 1, 32, -256, 7, 1, 32, scaleSx, cryptoContext)
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
@@ -233,7 +209,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, he_res20_ctx.logBsSlots_list[0], he_res20_ctx.levelBudget_list[0], cryptoContext)
+    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     scale = 1 #normalized_deltas[3][2]
     res2 = conv(res1, 8, 1, 64, -64, 8, 1, 0, scale, cryptoContext)
@@ -268,7 +244,7 @@ def layer3(input, he_res20_ctx, cryptoContext):
     return res3
 
 
-def final_layer(input, he_res20_ctx, cryptoContext):
+def final_layer(input, cryptoContext):
     # 64*8*8
     res = rotsum(input, 64, cryptoContext)
     res = fhe.homo_mul_pt(
@@ -289,42 +265,9 @@ def final_layer(input, he_res20_ctx, cryptoContext):
     return res
 
 
-def read_image(index):
-    filePath = "../cifar10/test_batch.bin"
-    IMAGE_SIZE = 3072
-    LABEL_SIZE = 1
-    RECORD_SIZE = LABEL_SIZE + IMAGE_SIZE
-    try:
-        with open(filePath, "rb") as file:
-            file.seek(index * RECORD_SIZE)
-            label = file.read(LABEL_SIZE)
-            if not label:
-                raise ValueError("Failed to read label.")
-            label = int.from_bytes(label, byteorder="big")
-            # print(f"Label: {label}")
-            image_data = file.read(IMAGE_SIZE)
-            if not image_data or len(image_data) != 3072:
-                raise ValueError("Failed to read image data.")
-        imageVector = []
-        for channel in range(3):
-            for i in range(1024):
-                pixel = float(image_data[channel * 1024 + i]) / 255.0
-                if channel == 0:
-                    pixel = (pixel - 0.4914) / 0.2023
-                elif channel == 1:
-                    pixel = (pixel - 0.4822) / 0.1994
-                elif channel == 2:
-                    pixel = (pixel - 0.4465) / 0.2010
-                imageVector.append(pixel)
-        return imageVector, label, index
-    except FileNotFoundError:
-        print(f"Failed to open the file: {filePath}")
+def executeResNet20(cryptoContext):
 
-
-def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
-    he_res20_ctx.relu_degree = 59
-    cryptoContext.openfhe_context = openfhe_context
-
+    openfhe_context=cryptoContext.openfhe_context
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15), cryptoContext.device, 2, 0, 2**15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14), cryptoContext.device, 2, 0, 2**14)
 
@@ -340,8 +283,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
 
     print("=====================================================")
     correct = 0
-    total = he_res20_ctx.total
-    for i in range(10):
+    for i in range(total):
         image_vector, label, index = read_image(i)
         # # 明文模型输出
         # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
@@ -360,11 +302,11 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
 
         cryptoContext.openfhe_context = openfhe_context
         # 密文推理
-        firstLayer = initial_layer(in_ct, he_res20_ctx, cryptoContext)
-        resLayer1 = layer1(firstLayer, he_res20_ctx, cryptoContext)
-        resLayer2 = layer2(resLayer1, he_res20_ctx, cryptoContext)
-        resLayer3 = layer3(resLayer2, he_res20_ctx, cryptoContext)
-        finalRes = final_layer(resLayer3, he_res20_ctx, cryptoContext)
+        firstLayer = initial_layer(in_ct, cryptoContext)
+        resLayer1 = layer1(firstLayer, cryptoContext)
+        resLayer2 = layer2(resLayer1, cryptoContext)
+        resLayer3 = layer3(resLayer2, cryptoContext)
+        finalRes = final_layer(resLayer3, cryptoContext)
         print("after processing image ", i, "time: ", datetime.datetime.now())
         print("time: ", time.time() - start_time)
 
@@ -418,7 +360,7 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
         print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
         if label == max_element_idx:
             correct += 1
-        message = f"\ncorrect/total: {correct}/{(i + 1)}"
+        message = f"correct/total: {correct}/{(i + 1)}"
         print(colored(message, "red"))
         if (i+1) % 100 == 0:
             print("\n\n")
@@ -426,90 +368,40 @@ def executeResNet20(he_res20_ctx, cryptoContext, openfhe_context):
     print(f"\n\ncorrect/total: {correct}/{total}")
 
 
-def load_encode_pkl(file_name, he_res20_context_):
-    repo_id = "catslab/res20-ver_LowMem_encode_middle"
-    hf_token = "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"
-    pkl_path = os.path.join(he_res20_context_.weight_dir, file_name+".pkl")
-    zip_path = os.path.join(he_res20_context_.weight_dir, file_name+".zip")
-
-    if os.path.exists(pkl_path):
-        print(">> Found cached pkl, skipping download.")
-        return
-
-    if os.path.exists(zip_path):
-        print(">> Found cached encode zip.")
-    else:
-        print(f">> {file_name}.pkl not found, downloading zip from Hugging Face private repo...")
-
-        zip_path = hf_hub_download(
-            repo_id=repo_id,
-            filename=file_name + ".zip",
-            repo_type="model",
-            token=hf_token,
-            local_dir=he_res20_context_.weight_dir,
-            # local_dir_use_symlinks=False
-        )
-        print(">> Download complete.")
-
-    print(">> Extracting zip...")
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(he_res20_context_.weight_dir)
-    os.remove(zip_path)
-    print(">> Extraction complete.")
-
-
 def resnet20( ):
-    # generate context
-    # max_relu_degree = 59
-    # maxLevelsRemaining = get_relu_depth(max_relu_degree) + 3
-    # if max_relu_degree < 59:
-    #     diff = get_relu_depth(59)-get_relu_depth(max_relu_degree)
-    #     maxLevelsRemaining +=diff
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
 
-    he_res20_context_ = HE_res20_context("../weights_aespa")
-
-    rotate_index_list = he_res20_context_.rotate_index_list
-    maxLevelsRemaining = he_res20_context_.maxLevelsRemaining
-    logBsSlots_list = he_res20_context_.logBsSlots_list
-    logN = he_res20_context_.logN
-    dnum = he_res20_context_.dnum
-    dcrtBits = he_res20_context_.dcrtBits
-    firstMod = he_res20_context_.firstMod
-    levelBudget_list = he_res20_context_.levelBudget_list
-    secretKeyDist = he_res20_context_.secretKeyDist
-    rescaleTech = he_res20_context_.rescaleTech
-    device = he_res20_context_.device
-
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False, SAVE_MIDDLE=False,
-                                     SAVE_END=he_res20_context_.SAVE_END,
+    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True, CHECK_CIPHER=False,
+                                     SAVE_MIDDLE=SAVE_MIDDLE,
+                                     SAVE_END=SAVE_END,
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
-    cryptoContext.weight_path = '../weights_aespa/' # fixme: workaround only
+    cryptoContext.weight_path = weight_dir # fixme: work around only
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         # cryptoContext.pre_encode_type = "middle"
-        # file_name = "encode_20250421_125259" #  Aespa pkl(italian_res20, cifar10, square impl.)
-        # load_encode_pkl(file_name, he_res20_context_)
-        # pkl_path = os.path.join(he_res20_context_.weight_dir, file_name + ".pkl")
+        # file_name = ""
+        # load_encode_pkl(file_name, weight_dir)
+        # pkl_path = os.path.join(weight_dir, file_name + ".pkl")
+
         cryptoContext.pre_encode_type = "middle"
         pkl_path = "/data/yhh/data/encode_20250612_171807.pkl"
 
-        if he_res20_context_.pre_encode_end:
-            cryptoContext.pre_encode_type = "end"
-            pkl_path = he_res20_context_.full_encode_pkl_path
+        # cryptoContext.pre_encode_type = "end"
+        # pkl_path = ""
 
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
-    executeResNet20(he_res20_context_, cryptoContext, openfhe_context)
+    cryptoContext.openfhe_context = openfhe_context
+    executeResNet20(cryptoContext)
 
 
 def homo_Aespa_perfect_square(x,filename,cryptoContext):
