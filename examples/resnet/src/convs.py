@@ -18,7 +18,7 @@ def rot_input(input, img_width, padding, cryptoContext):
     return c_rotations
 
 @fhe.utils.profile_python_function
-def convbn_initial(input,num_channel,scale, he_res20_ctx, cryptoContext, img_width, padding):
+def conv_initial(input, img_width, padding, num_channel,scale, cryptoContext):
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
     
@@ -41,7 +41,7 @@ def convbn_initial(input,num_channel,scale, he_res20_ctx, cryptoContext, img_wid
     return finalsum
 
 @fhe.utils.profile_python_function
-def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, padding, slots, num_channel, rot_offset, channel_offset, biasoff=""):
+def conv(input, img_width, padding, num_channel, rot_offset, layer, n, channel_offset, scale, cryptoContext):
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
 
@@ -59,7 +59,7 @@ def convbn(input, layer, n, scale, he_res20_ctx, cryptoContext, img_width, paddi
 
 
 @fhe.utils.profile_python_function
-def convbn_dx(input, layer, n, scale, he_res20_ctx, cryptoContext, slots, num_channel, rot_offset, channel_offset, biasoff=""):
+def convbn_dx(input, num_channel, rot_offset, layer, n, channel_offset, biasoff, scale, cryptoContext):
     if input.noise_deg > 1:
         input = fhe.force_rescale(input, 1, cryptoContext)
 
@@ -155,7 +155,7 @@ def choose_zero(slots, cryptoContext):
 #     return downsampledchannels
 
 @fhe.utils.profile_python_function
-def downsample1024to256(c1, c2, num_channel, num_cipher, he_res20_ctx, cryptoContext):
+def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
 
     assert num_cipher ==2 or num_cipher==1
 
@@ -254,7 +254,7 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, he_res20_ctx, cryptoCon
 
 
 @fhe.utils.profile_python_function
-def downsample256to64(c1, c2, num_channel, he_res20_ctx, cryptoContext):
+def downsample256to64(c1, c2, num_channel, cryptoContext):
     old_slots = c1.slots
     c1 = torch.fhe.homo_ops.slot_resize(c1, c1.slots*2, cryptoContext)
     c2 = torch.fhe.homo_ops.slot_resize(c2, c2.slots*2, cryptoContext)
@@ -306,7 +306,7 @@ def downsample256to64(c1, c2, num_channel, he_res20_ctx, cryptoContext):
     return downsampledchannels
 
 @fhe.utils.profile_python_function
-def downsample64to16(c1, c2, num_channel, he_res20_ctx, cryptoContext):
+def downsample64to16(c1, c2, num_channel, cryptoContext):
     old_slots = c1.slots
     c1 = torch.fhe.homo_ops.slot_resize(c1, c1.slots*2, cryptoContext)
     c2 = torch.fhe.homo_ops.slot_resize(c2, c2.slots*2, cryptoContext)
