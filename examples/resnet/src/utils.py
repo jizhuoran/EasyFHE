@@ -1,13 +1,14 @@
 import torch
 import pickle
 import torch.fhe as fhe
-import atexit, os
+import os
 import numpy as np
 
 DATA_DIR = os.environ["DATA_DIR"]
 
 encoded_weight = {}
 
+# for original res20 only
 # Normalized deltas (trained by CIFAR-10 test data)
 normalized_deltas = [
     [0.30245313974658655, 0, 0, 0, 0, 0],
@@ -154,37 +155,12 @@ if DIRECT_LOAD:
         else:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 2 * channel_per_cipher*spatial_size, False, cryptoContext)
-
-    # def mask_channel(n, cur_limbs, cryptoContext):
-    #     full_name = "mask_channel_{}_{}_{}".format(n, cur_limbs, 65536)
-    #     if cryptoContext.pre_encode_type == "middle":
-    #         name = "mask_channel_{}_{}".format(n, 65536)
-    #     else:
-    #         name = full_name
-    #     return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 65536, False, cryptoContext)
-    #
-    # def mask_channel2(n, cur_limbs, cryptoContext):
-    #     full_name = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 32768*2)
-    #     if cryptoContext.pre_encode_type == "middle":
-    #         name = "mask_channel2_{}_{}".format(n, 32768*2)
-    #     else:
-    #         name = full_name
-    #     return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 32768*2, False, cryptoContext)
-    #
-    # def mask_channel3(n, cur_limbs, cryptoContext):
-    #     full_name = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 16384*2)
-    #     if cryptoContext.pre_encode_type == "middle":
-    #         name = "mask_channel3_{}_{}".format(n, 16384*2)
-    #     else:
-    #         name = full_name
-    #     return fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - cur_limbs, 16384*2, False, cryptoContext)
-
 else:
 
     def load_weight(encode_weight_path, cryptoContext):
         pass
 
-    # raise ValueError("deprecated branch")
+
     def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
         values = []
@@ -195,10 +171,8 @@ else:
             return values
 
         try:
-            # 打开文件并逐行读取
             with open(filename, 'r') as file:
                 for row in file:
-                    # 按行解析
                     for value in row.strip().split(','):
                         try:
                             num = float(value)
@@ -212,12 +186,6 @@ else:
         name = "{}_{}".format(val_name, slots)
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
-        # encoded.cv[0].cpu().numpy()
-        # key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
-
         return encoded
 
     def read_fc_weight(num_channel,spatial_size, cryptoContext, level, scale_deg, slots):
@@ -229,10 +197,8 @@ else:
             return values
 
         try:
-            # 打开文件并逐行读取
             with open(filename, 'r') as file:
                 for row in file:
-                    # 按行解析
                     for value in row.strip().split(','):
                         try:
                             num = float(value)
@@ -257,10 +223,6 @@ else:
         name = "{}_{}".format("fc", slots)
         print(name)
         encoded = fhe.encode(weight_corrected, name, level, slots, False, cryptoContext)
-        # key = "fc_{}_{}_{}".format(level, scale_deg, slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
 
@@ -271,10 +233,8 @@ else:
             print(f"Failed to open file: {filename}")
             return values
         try:
-            # 打开文件并逐行读取
             with open(filename, 'r') as file:
                 for row in file:
-                    # 按行解析
                     for value in row.strip().split(','):
                         try:
                             num = float(value)
@@ -299,10 +259,6 @@ else:
         name = "{}_{}".format("bias", slots)
         print(name)
         encoded = fhe.encode(bias_corrected, name, level, slots, False, cryptoContext)
-        # key = "fc_{}_{}_{}".format(level, scale_deg, slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_mod(n,cur_limbs,custom_val, slots, cryptoContext):
@@ -318,10 +274,6 @@ else:
         name = "mask_mod_{}_{}_{}".format(n, custom_val, slots)
         print(name)
         encoded = fhe.encode(vec, name, level, slots, False, cryptoContext)
-        # key = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_scecond_n(n, cur_limbs, slots, cryptoContext):
@@ -337,10 +289,6 @@ else:
         name = "mask_scecond_n_{}_{}".format(n, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_first_n(n, cur_limbs, slots, cryptoContext):
@@ -356,10 +304,6 @@ else:
         name = "mask_first_n_{}_{}".format(n, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_from_to(from_, to, cur_limbs, slots, cryptoContext):
@@ -375,10 +319,6 @@ else:
         name = "mask_from_to_{}_{}_{}".format(from_, to, slots)
         print(name)
         encoded = fhe.encode(vec, name, level, slots, False, cryptoContext)
-        # key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def gen_mask(n,cur_limbs, slots, cryptoContext):
@@ -398,10 +338,6 @@ else:
         name = "gen_mask_{}_{}".format(n, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_first_n_mod(n,padding,pos,length,cur_limbs, slots, cryptoContext):
@@ -419,10 +355,6 @@ else:
         name = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
 
@@ -442,10 +374,6 @@ else:
         name = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
     def mask_first_n_mod3(n,padding,pos,length, cur_limbs, slots, cryptoContext):
@@ -463,10 +391,6 @@ else:
         name = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, slots)
         print(name)
         encoded = fhe.encode(mask, name, level, slots, False, cryptoContext)
-        # key = "mask_first_n_mod3_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
 
@@ -493,343 +417,8 @@ else:
         name = "mask_channel_{}_{}_{}".format(n, channel_per_cipher, spatial_size)
         print(name)
         encoded = fhe.encode(mask, name, level, 2 * channel_per_cipher * spatial_size, False, cryptoContext)
-        # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
-        # encoded_weight[key] = encoded
-        # ptx = cryptoContext.pre_encoded[key]
-        # check_encoded_equal(encoded, ptx, key)
         return encoded
 
-
-    # def mask_channel(n,cur_limbs,cryptoContext):
-    #     # print("mask_channel", "n", n, "cur_limbs", cur_limbs)
-    #     mask=[]
-    #     level = cryptoContext.L - cur_limbs
-    #     for i in range(n):
-    #         for j in range(1024):
-    #             mask.append(0)
-    #
-    #     for i in range(256):
-    #         mask.append(1)
-    #
-    #     for i in range(1024-256):
-    #         mask.append(0)
-    #     for i in range(63-n):
-    #         for j in range(1024):
-    #             mask.append(0)
-    #     mask = np.array(mask, dtype=np.double)
-    #     name = "mask_channel_{}_{}".format(n, 65536)
-    #     print(name)
-    #     encoded = fhe.encode(mask, name, level, 65536,False, cryptoContext)
-    #     # key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
-    #     # encoded_weight[key] = encoded
-    #     # ptx = cryptoContext.pre_encoded[key]
-    #     # check_encoded_equal(encoded, ptx, key)
-    #     return encoded
-    #
-    # def mask_channel2(n,cur_limbs,cryptoContext):
-    #     # print("mask_channel2", "n", n, "cur_limbs", cur_limbs)
-    #     mask=[]
-    #     level = cryptoContext.L - cur_limbs
-    #     for i in range(n):
-    #         for j in range(256):
-    #             mask.append(0)
-    #
-    #     for i in range(64):
-    #         mask.append(1)
-    #
-    #     for i in range(256-64):
-    #         mask.append(0)
-    #     for i in range(255-n):
-    #         for j in range(256):
-    #             mask.append(0)
-    #     mask = np.array(mask, dtype=np.double)
-    #     name = "mask_channel2_{}_{}".format(n, 32768*2)
-    #     print(name)
-    #     encoded = fhe.encode(mask, name, level, 32768*2, False, cryptoContext)
-    #     # key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
-    #     # encoded_weight[key] = encoded
-    #     return encoded
-    #
-    # def mask_channel3(n,cur_limbs,cryptoContext):
-    #     # print("mask_channel3", "n", n, "cur_limbs", cur_limbs)
-    #     mask=[]
-    #     level = cryptoContext.L - cur_limbs
-    #     for i in range(n):
-    #         for j in range(64):
-    #             mask.append(0)
-    #
-    #     for i in range(16):
-    #         mask.append(1)
-    #
-    #     for i in range(64-16):
-    #         mask.append(0)
-    #     for i in range(511-n):
-    #         for j in range(64):
-    #             mask.append(0)
-    #     mask = np.array(mask, dtype=np.double)
-    #     name = "mask_channel3_{}_{}".format(n, 16384*2)
-    #     print(name)
-    #     encoded = fhe.encode(mask, name, level, 16384*2, False, cryptoContext)
-    #     # key = "mask_channel3_{}_{}_{}".format(n, cur_limbs, 8192*2)
-    #     # encoded_weight[key] = encoded
-    #     return encoded
-
-# else:
-#     def load_weight(encode_weight_path, cryptoContext):
-#         pass
-#
-#     # raise ValueError("deprecated branch")
-#     def read_values_from_file(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
-#         # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
-#         values = []
-#         val_name = filename
-#         filename = DATA_DIR + '/weights/' + filename + '.bin'
-#         if not os.path.isfile(filename):
-#             print(f"Failed to open file: {filename}")
-#             return values
-#
-#         try:
-#             # 打开文件并逐行读取
-#             with open(filename, 'r') as file:
-#                 for row in file:
-#                     # 按行解析
-#                     for value in row.strip().split(','):
-#                         try:
-#                             num = float(value)
-#                             values.append(num * scale)
-#                         except ValueError:
-#                             print(f"unconvert:: {value}")
-#         except IOError as e:
-#             print(f"error: {e}")
-#
-#         values = torch.tensor(values, dtype=torch.float64).cuda()
-#         key = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
-#         encoded = fhe.encode(values, key, level, slots, False, cryptoContext)
-#         encoded.cv[0].cpu().numpy()
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#
-#         return encoded
-#
-#     def read_fc_weight(cryptoContext, level, scale_deg, slots):
-#         # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
-#         values = []
-#         filename = DATA_DIR + '/weights/fc.bin'
-#         if not os.path.isfile(filename):
-#             print(f"Failed to open file: {filename}")
-#             return values
-#
-#         try:
-#             # 打开文件并逐行读取
-#             with open(filename, 'r') as file:
-#                 for row in file:
-#                     # 按行解析
-#                     for value in row.strip().split(','):
-#                         try:
-#                             num = float(value)
-#                             values.append(num)
-#                         except ValueError:
-#                             print(f"unconvert:: {value}")
-#         except IOError as e:
-#             print(f"error: {e}")
-#
-#         weight = values
-#
-#         weight_corrected=[]
-#         for i in range(64):
-#             for j in range(10):
-#                 weight_corrected.append(weight[(10 * i) + j])
-#             for j in range(64 - 10):
-#                 weight_corrected.append(0)
-#         weight_corrected = torch.tensor(weight_corrected, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(weight_corrected, scale_deg, level, slots, False, cryptoContext)
-#         key = "fc_{}_{}_{}".format(level, scale_deg, slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_mod(n,cur_limbs,custom_val, he_res20_ctx, cryptoContext):
-#         # print("mask_mod", "n", n, "cur_limbs", cur_limbs, "custom_val", custom_val, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-#         level = cryptoContext.L-cur_limbs
-#         vec=[]
-#         for i in range(he_res20_ctx.cur_num_slots):
-#             if i%n==0:
-#                 vec.append(custom_val)
-#             else:
-#                 vec.append(0)
-#         vec = torch.tensor(vec, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(vec,1, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-#         key = "mask_mod_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_scecond_n(n, cur_limbs, he_res20_ctx, cryptoContext):
-#         # print("mask_scecond_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-#         mask=[]
-#         level=cryptoContext.L-cur_limbs
-#         for i in range(he_res20_ctx.cur_num_slots):
-#             if i >=n :
-#                 mask.append(1)
-#             else:
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask,1, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-#         key = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_first_n(n, cur_limbs, he_res20_ctx, cryptoContext):
-#         # print("mask_first_n", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-#         mask=[]
-#         level=cryptoContext.L-cur_limbs
-#         for i in range(he_res20_ctx.cur_num_slots):
-#             if i < n:
-#                 mask.append(1)
-#             else:
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask, 1, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-#         key = "mask_first_n_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_from_to(from_, to, cur_limbs, he_res20_ctx, cryptoContext):
-#         # print("mask_from_to", "from_", from_, "to", to, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-#         vec=[]
-#         level=cryptoContext.L-cur_limbs
-#         for i in range(he_res20_ctx.cur_num_slots):
-#             if i>=from_ and i<to:
-#                 vec.append(1)
-#             else:
-#                 vec.append(0)
-#         vec = torch.tensor(vec, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(vec,1, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-#         key = "mask_from_to_{}_{}_{}_{}".format(from_, to, cur_limbs, he_res20_ctx.cur_num_slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def gen_mask(n,cur_limbs, he_res20_ctx, cryptoContext):
-#         # print("gen_mask", "n", n, "cur_limbs", cur_limbs, "he_res20_ctx.cur_num_slots", he_res20_ctx.cur_num_slots)
-#         level = cryptoContext.L - cur_limbs
-#         mask=[]
-#         copy_interval=n
-#         for i in range(he_res20_ctx.cur_num_slots):
-#             if copy_interval>0:
-#                 mask.append(1)
-#             else:
-#                 mask.append(0)
-#             copy_interval-=1
-#             if copy_interval<= -n:
-#                 copy_interval=n
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask,1, level, he_res20_ctx.cur_num_slots, False, cryptoContext)
-#         key = "gen_mask_{}_{}_{}".format(n, cur_limbs, he_res20_ctx.cur_num_slots)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_first_n_mod(n,padding,pos,cur_limbs, cryptoContext):
-#         # print("mask_first_n_mod", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
-#         mask=[]
-#         level = cryptoContext.L - cur_limbs
-#         for i in range(32):
-#             for j in range(pos*n):
-#                 mask.append(0)
-#             for j in range(n):
-#                 mask.append(1)
-#             for j in range(padding-n-(pos*n)):
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask, 1, level, 16384*2, False, cryptoContext)
-#         key = "mask_first_n_mod_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_first_n_mod2(n,padding,pos,cur_limbs, cryptoContext):
-#         # print("mask_first_n_mod2", "n", n, "padding", padding, "pos", pos, "cur_limbs", cur_limbs)
-#         mask=[]
-#         level = cryptoContext.L - cur_limbs
-#         for i in range(64):
-#             for j in range(pos*n):
-#                 mask.append(0)
-#             for j in range(n):
-#                 mask.append(1)
-#             for j in range(padding-n-(pos*n)):
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask, 1, level, 8192*2, False, cryptoContext)
-#         key = "mask_first_n_mod2_{}_{}_{}_{}".format(n, padding, pos, cur_limbs)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_channel(n,cur_limbs,cryptoContext):
-#         # print("mask_channel", "n", n, "cur_limbs", cur_limbs)
-#         mask=[]
-#         level = cryptoContext.L - cur_limbs
-#         for i in range(n):
-#             for j in range(1024):
-#                 mask.append(0)
-#
-#         for i in range(256):
-#             mask.append(1)
-#
-#         for i in range(1024-256):
-#             mask.append(0)
-#         for i in range(31-n):
-#             for j in range(1024):
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask, 1, level, 16384*2, False, cryptoContext)
-#         key = "mask_channel_{}_{}_{}".format(n, cur_limbs, 16384*2)
-#         encoded_weight[key] = encoded
-#         # ptx = cryptoContext.pre_encoded[key]
-#         # check_encoded_equal(encoded, ptx, key)
-#         return encoded
-#
-#     def mask_channel2(n,cur_limbs,cryptoContext):
-#         # print("mask_channel2", "n", n, "cur_limbs", cur_limbs)
-#         mask=[]
-#         level = cryptoContext.L - cur_limbs
-#         for i in range(n):
-#             for j in range(256):
-#                 mask.append(0)
-#
-#         for i in range(64):
-#             mask.append(1)
-#
-#         for i in range(256-64):
-#             mask.append(0)
-#         for i in range(63-n):
-#             for j in range(256):
-#                 mask.append(0)
-#         mask = torch.tensor(mask, dtype=torch.float64).cuda()
-#         encoded = fhe.encode(mask, 1, level, 8192*2, False, cryptoContext)
-#         key = "mask_channel2_{}_{}_{}".format(n, cur_limbs, 8192*2)
-#         encoded_weight[key] = encoded
-#         return encoded
-#
-# @atexit.register
-# def save_encoded_weight():
-#     if DIRECT_LOAD == False:
-#         for key, value in encoded_weight.items():
-#             encoded_weight[key].cv = [value.cv[0].cpu().numpy()]
-#         with open(DATA_DIR + "/weight.pkl", "wb") as f:
-#             pickle.dump(encoded_weight, f)
 
 def rotsum(input,slots,cryptoContext):
     result=input.deep_copy()
