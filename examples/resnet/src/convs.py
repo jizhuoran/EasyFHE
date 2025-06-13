@@ -265,7 +265,7 @@ def downsample64to16(c1, c2, num_channel, cryptoContext):
 
     downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext) #RESCALE ADD BY ZRJI
     downsampledchannels = choose_zero(fullpack.slots, cryptoContext)
-    # downsampledchannels = fhe.drop_last_elements(downsampledchannels, downsampledchannels.cur_limbs - downsampledrows.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
+    downsampledchannels = fhe.drop_last_elements(downsampledchannels, downsampledchannels.cur_limbs - downsampledrows.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
     assert downsampledrows.noise_deg == 1
 
     for i in range(num_channel*2):
