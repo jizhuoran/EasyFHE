@@ -50,7 +50,7 @@ dcrtBits = 59
 firstMod = 60
 levelBudget_list = [[4, 4]]  # [[4, 4], [4, 4], [4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FLEXIBLEAUTO" # only support FLEXIBLEAUTO for now # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
 
 relu_degree = 59

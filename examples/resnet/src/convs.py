@@ -189,6 +189,7 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
                                                - downsampledchannels_list[0].slots // 4,
                                                cryptoContext),
                                            cryptoContext)
+        downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
         downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, downsampledchannels.slots // 4,
                                                              cryptoContext)
         return downsampledchannels
@@ -209,6 +210,7 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
         downsampledchannels = fhe.homo_add(downsampledchannels,
                                            fhe.homo_rotate(downsampledchannels, 16384 * 2, cryptoContext),
                                            cryptoContext)
+        downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
         downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, 32768, cryptoContext)
 
         return downsampledchannels
@@ -275,7 +277,8 @@ def downsample256to64(c1, c2, num_channel, cryptoContext):
                                                            cryptoContext), -(downsampledchannels.slots // 4),
                                            cryptoContext),
                                        cryptoContext)
-    downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, (downsampledchannels.slots // 4),
+    downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
+    downsampledchannels = fhe.homo_ops.slot_resize(downsampledchannels, (downsampledchannels.slots // 4),
                                                          cryptoContext)
 
     return downsampledchannels
@@ -330,6 +333,7 @@ def downsample64to16(c1, c2, num_channel, cryptoContext):
                                                            cryptoContext), -(downsampledchannels.slots // 4),
                                            cryptoContext),
                                        cryptoContext)
+    downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
     downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, (downsampledchannels.slots // 4),
                                                          cryptoContext)
     return downsampledchannels

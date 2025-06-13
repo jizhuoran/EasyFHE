@@ -51,7 +51,7 @@ dcrtBits = 55
 firstMod = 60
 levelBudget_list = [[4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
 
 print("rotate_index_list: ", rotate_index_list)
@@ -263,6 +263,7 @@ def final_layer(input, cryptoContext):
     res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     weight = read_fc_weight(512, 16, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
+    res = fhe.force_rescale(res, 1, cryptoContext)
     res = rotsum_padded(res, 16, 512, cryptoContext)
     bias = read_fc_bias(512, 16, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
     res = fhe.homo_add_pt(res, bias, cryptoContext)

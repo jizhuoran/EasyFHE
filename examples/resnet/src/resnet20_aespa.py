@@ -51,7 +51,7 @@ dcrtBits = 56
 firstMod = 60
 levelBudget_list = [[4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
-rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
+rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
 print("rotate_index_list: ", rotate_index_list)
 print("maxLevelsRemaining: ", maxLevelsRemaining)
@@ -146,8 +146,8 @@ def layer2(input, cryptoContext):
 
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # RESCALE ADD BY ZRJI
-    res1dx0 = convbn_dx(boot_in, 16, -1024, 4, 1, 0, "1", scaleDx, cryptoContext)
 
+    res1dx0 = convbn_dx(boot_in, 16, -1024, 4, 1, 0, "1", scaleDx, cryptoContext)
     res1dx1 = convbn_dx(boot_in, 16, -1024, 4, 1, 16, "2", scaleDx, cryptoContext)
 
     fullpackSx = downsample1024to256(res1sx0, res1sx1, 16, 1, cryptoContext)
@@ -275,6 +275,7 @@ def final_layer(input, cryptoContext):
     res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     weight = read_fc_weight(64, 64, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
+    res = fhe.force_rescale(res, 1, cryptoContext)
     res = rotsum_padded(res, 64, 64, cryptoContext)
 
     bias = read_fc_bias(64, 16, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
@@ -407,7 +408,8 @@ def resnet20():
 
 
 def homo_Aespa_perfect_square(x, filename, cryptoContext):
-    # x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    if x.noise_deg >1:
+        x = fhe.homo_rescale(x, 1, cryptoContext) #RESCALE ADD BY ZRJI
     n1_filename = filename + '-n1'
     n2_filename = filename + '-n2'
     slots = x.slots
