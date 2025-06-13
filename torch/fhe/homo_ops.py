@@ -1,6 +1,6 @@
 import math
 import torch
-import warnings
+import warnings,traceback,sys
 from .ciphertext import *
 from . import functional as F
 from . import hybrid_keyswitch
@@ -547,13 +547,20 @@ def homo_sub(in0, in1, cryptoContext):
 @decorator_factory
 def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in user api for other rescaleTech?
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        return _homo_rescale_internal(ct, levels, cryptoContext)
+        if ct.noise_deg - levels == 1:
+            return _homo_rescale_internal(ct, levels, cryptoContext)
+        else:
+            warnings.warn(f"Rescaling should not put here. Current ct.noise_deg: {ct.noise_deg}.", Warning)
+            # print call stack and end the program
+            traceback.print_stack()
+            # sys.exit(1)
+            return ct.deep_copy()
     else:
         return ct.deep_copy()
 
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
-    assert levels == 1 or levels == 0 and "Only support these two cases"
+    assert levels in (0, 1), f"input level = {levels}, only support 0 or 1"
     assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
     if levels == 0:
         return ct.deep_copy()
