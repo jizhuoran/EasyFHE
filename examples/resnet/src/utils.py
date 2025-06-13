@@ -61,8 +61,8 @@ if DIRECT_LOAD:
         cryptoContext.pre_encoded = pre_encoded
 
 
-    def read_values_from_file(val_name, level, scale_deg, slots, cryptoContext, scale=1.0):
-        full_name = "{}_{}_{}_{}".format(val_name, level, scale_deg, slots)
+    def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
+        full_name = "{}_{}_{}".format(val_name, level, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format(val_name, slots)
         else:
@@ -70,8 +70,8 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
 
-    def read_fc_weight(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
-        full_name = "fc_{}_{}_{}".format(level, scale_deg, slots)
+    def read_fc_weight(num_channel, spatial_size, level, slots, cryptoContext):
+        full_name = "fc_{}_{}".format(level, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("fc", slots)
         else:
@@ -79,8 +79,8 @@ if DIRECT_LOAD:
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
 
 
-    def read_fc_bias(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
-        full_name = "{}_{}_{}_{}".format("bias", level, scale_deg, slots)
+    def read_fc_bias(num_channel, spatial_size, level, slots, cryptoContext):
+        full_name = "{}_{}_{}".format("bias", level, slots)
         if cryptoContext.pre_encode_type == "middle":
             name = "{}_{}".format("bias", slots)
         else:
@@ -183,8 +183,8 @@ else:
         pass
 
 
-    def read_values_from_file(filename, level, scale_deg, slots, cryptoContext, scale=1.0):
-        # print("read_values_from_file", filename, "level", level, "scale_deg", scale_deg, "slots", slots, "scale", scale)
+    def read_values_from_file(filename, level, slots, cryptoContext, scale=1.0):
+        # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
         values = []
         val_name = filename
         filename = cryptoContext.weight_path + filename + '.bin'
@@ -211,8 +211,8 @@ else:
         return encoded
 
 
-    def read_fc_weight(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
-        # print("read_values_from_file", "fc", "level", level, "scale_deg", scale_deg, "slots", slots, "scale", 1)
+    def read_fc_weight(num_channel, spatial_size, level, slots, cryptoContext):
+        # print("read_values_from_file", "fc", "level", level, "slots", slots, "scale", 1)
         values = []
         filename = cryptoContext.weight_path + 'fc.bin'
         if not os.path.isfile(filename):
@@ -249,7 +249,7 @@ else:
         return encoded
 
 
-    def read_fc_bias(num_channel, spatial_size, level, scale_deg, slots, cryptoContext):
+    def read_fc_bias(num_channel, spatial_size, level, slots, cryptoContext):
         values = []
         filename = cryptoContext.weight_path + 'bias.bin'
         if not os.path.isfile(filename):

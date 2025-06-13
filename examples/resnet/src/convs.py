@@ -35,8 +35,8 @@ def conv_initial(input, img_width, padding, num_channel, scale, cryptoContext):
     for j in range(num_channel):
         k_rows = []
         for k in range(9):
-            encoded = read_values_from_file(f"conv1bn1-ch{j}-k{k + 1}", cryptoContext.L - input.cur_limbs, 1,
-                                            input.slots, cryptoContext, scale)
+            encoded = read_values_from_file(f"conv1bn1-ch{j}-k{k + 1}", cryptoContext.L - input.cur_limbs, input.slots,
+                                            cryptoContext, scale)
             k_rows.append(encoded)
         partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
         partial_sum = fhe.homo_rescale(partial_sum, 1, cryptoContext)  # RESCALE ADD BY ZRJI
@@ -62,7 +62,7 @@ def conv(input, img_width, padding, num_channel, rot_offset, layer, n, channel_o
         k_rows = []
         for k in range(9):
             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",
-                                            cryptoContext.L - input.cur_limbs, 1, input.slots, cryptoContext, scale)
+                                            cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
             k_rows.append(encoded)
         partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
 
@@ -78,7 +78,7 @@ def convbn_dx(input, num_channel, rot_offset, layer, n, channel_offset, biasoff,
 
     for j in range(num_channel):
         encoded = read_values_from_file(f"layer{layer}dx-conv{n}bn{n}-ch{j + channel_offset}-k1",
-                                        cryptoContext.L - input.cur_limbs, 1, input.slots, cryptoContext, scale)
+                                        cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
         partial_sum = fhe.homo_mul_pt(input, encoded, cryptoContext)
 
         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
@@ -86,7 +86,7 @@ def convbn_dx(input, num_channel, rot_offset, layer, n, channel_offset, biasoff,
 
     finalsum = fhe.homo_rescale(finalsum, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     bias1 = read_values_from_file(f"layer{layer}dx-conv{n}bn{n}-bias" + biasoff, cryptoContext.L - finalsum.cur_limbs,
-                                  1, finalsum.slots, cryptoContext, scale)
+                                  finalsum.slots, cryptoContext, scale)
     finalsum = fhe.homo_add_pt(finalsum, bias1, cryptoContext)
 
     return finalsum
