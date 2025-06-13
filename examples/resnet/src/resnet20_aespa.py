@@ -20,16 +20,22 @@ DATA_DIR = os.environ["DATA_DIR"]
 # total=1000
 # SAVE_END=False
 # SAVE_MIDDLE=False
+# pre_encode_type = "middle"
+# pkl_path = "/data/yhh/data/encode_20250612_171807.pkl"
 
 # # config2
 total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
+pre_encode_type = "middle"
+pkl_path = "/data/yhh/data/encode_20250613_155340.pkl"
 
 # # config3
 # total=1
 # SAVE_END=False
 # SAVE_MIDDLE=True
+# pre_encode_type = None
+# pkl_path = None
 
 #######################
 #######################
@@ -394,20 +400,7 @@ def resnet20():
                              config=config))
 
     cryptoContext.weight_path = weight_dir  # fixme: work around only
-
-    pkl_path = None
-    if config.SAVE_MIDDLE == False:
-        # cryptoContext.pre_encode_type = "middle"
-        # file_name = ""
-        # load_encode_pkl(file_name, weight_dir)
-        # pkl_path = os.path.join(weight_dir, file_name + ".pkl")
-
-        cryptoContext.pre_encode_type = "middle"
-        pkl_path = "/data/yhh/data/encode_20250612_171807.pkl"
-
-        # cryptoContext.pre_encode_type = "end"
-        # pkl_path = ""
-
+    cryptoContext.pre_encode_type = pre_encode_type
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
