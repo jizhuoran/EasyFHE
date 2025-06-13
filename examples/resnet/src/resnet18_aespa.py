@@ -1,4 +1,8 @@
-import os, sys, datetime, time
+import datetime
+import os
+import sys
+import time
+
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
@@ -7,7 +11,7 @@ import torch.fhe as fhe
 from examples.resnet.src.convs import *
 from examples.utils.utils import *
 
-#for debug
+# for debug
 from examples.resnet.gen_aespa_weights.HerPN import get_resnet18_HerPN, change_all_HerPN_by_PAF_MutalChannel
 
 DATA_DIR = os.environ["DATA_DIR"]
@@ -31,8 +35,8 @@ SAVE_MIDDLE = False
 #######################
 weight_dir = "../weights_Aespa/"
 
-rotate_index_list = [-32768,-16384,-8192, -4096, -1024, -768, -256, -192, -64,-48, -32, -16, -15, -8, -1,
-                             1, 2, 4, 8, 12,16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048,12288, 24576, 49152, 98304]
+rotate_index_list = [-32768, -16384, -8192, -4096, -1024, -768, -256, -192, -64, -48, -32, -16, -15, -8, -1,
+                     1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576, 49152, 98304]
 maxLevelsRemaining = 15
 logBsSlots_list = [15]
 logN = 17
@@ -42,7 +46,7 @@ firstMod = 60
 levelBudget_list = [[4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-device ="cuda"
+device = "cuda"
 
 print("rotate_index_list: ", rotate_index_list)
 print("maxLevelsRemaining: ", maxLevelsRemaining)
@@ -61,42 +65,48 @@ def initial_layer(input, cryptoContext):
     # conv3*3 [64,32,32]
     scale = 1
     res = conv_initial(input, 32, 1, 64, scale, cryptoContext)
-    res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
+
 
 def layer1(input, cryptoContext):
     scale = 1
     # layer[0],block[0],conv1
     # input = [64,32,32]
     res1 = conv(input, 32, 1, 64, -1024, 1, 1, 0, scale, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
     # layer[0],block[0],conv2 and shorcut
     res1 = conv(res1, 32, 1, 64, -1024, 1, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(cryptoContext,  f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input.cur_limbs, 1, input.slots, scale)
-    A2y = fhe.homo_mul_pt(input,A2,cryptoContext)
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs,
+                                       cryptoContext)  # drop_last_elements ADD BY ZRJI
+    A2 = read_values_from_file(cryptoContext, f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input.cur_limbs, 1,
+                               input.slots, scale)
+    A2y = fhe.homo_mul_pt(input, A2, cryptoContext)
     res1 = fhe.homo_add(res1, A2y, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{2}bn{2}", cryptoContext)
 
     # layer[0],block[1],conv1
     res2 = conv(res1, 32, 1, 64, -1024, 2, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
 
     # layer[0],block[1],conv2
     res2 = conv(res2, 32, 1, 64, -1024, 2, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(cryptoContext,  f"layer{2}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1, res1.slots,scale)
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
+                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+    A2 = read_values_from_file(cryptoContext, f"layer{2}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, 1,
+                               res1.slots, scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
-    res2 = fhe.homo_add(res2, A2y,cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_add(res2, A2y, cryptoContext)
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
     return res2
+
 
 def layer2(input, cryptoContext):
     # after down sample [128,16,16]
@@ -107,10 +117,10 @@ def layer2(input, cryptoContext):
 
     res1sx0 = conv(boot_in, 32, 1, 64, -1024, 3, 1, 0, scaleSx, cryptoContext)
     res1sx1 = conv(boot_in, 32, 1, 64, -1024, 3, 1, 64, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #RESCALE ADD BY ZRJI
+    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # RESCALE ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 64, -1024, 3, 1, 0, "1", scaleDx, cryptoContext)
     res1dx1 = convbn_dx(boot_in, 64, -1024, 3, 1, 64, "2", scaleDx, cryptoContext)
     fullpackSx = downsample1024to256(res1sx0, res1sx1, 64, 2, cryptoContext)
@@ -120,22 +130,25 @@ def layer2(input, cryptoContext):
 
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
-    res1 = fhe.homo_add(fullpackSx, fullpackDx,cryptoContext)
+    res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
     # layer[2]block[1]
     scale = 1
     res2 = conv(res1, 16, 1, 128, -256, 4, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{1}bn{1}", cryptoContext)
     res2 = conv(res2, 16, 1, 128, -256, 4, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(cryptoContext,  f"layer{4}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,res1.slots,scale)
-    A2y = fhe.homo_mul_pt(res1,A2,cryptoContext)
-    res2 = fhe.homo_add(res2,A2y,cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
+                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+    A2 = read_values_from_file(cryptoContext, f"layer{4}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, 1,
+                               res1.slots, scale)
+    A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
+    res2 = fhe.homo_add(res2, A2y, cryptoContext)
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{2}bn{2}", cryptoContext)
     return res2
+
 
 def layer3(input, cryptoContext):
     scaleSx = 1
@@ -144,10 +157,10 @@ def layer3(input, cryptoContext):
     boot_in = input
     res1sx0 = conv(boot_in, 16, 1, 128, -256, 5, 1, 0, scaleSx, cryptoContext)
     res1sx1 = conv(boot_in, 16, 1, 128, -256, 5, 1, 128, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #drop_last_elements ADD BY ZRJI
+    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 128, -256, 5, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 128, -256, 5, 1, 128, "2", scaleDx, cryptoContext)
@@ -157,43 +170,44 @@ def layer3(input, cryptoContext):
     fullpackSx = fhe.homo_bootstrap(fullpackSx, cryptoContext.L, 15, [4, 4], cryptoContext)
     fullpackDx = fhe.homo_bootstrap(fullpackDx, cryptoContext.L, 15, [4, 4], cryptoContext)
 
-
-    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
-
 
     fullpackSx = conv(fullpackSx, 8, 1, 256, -64, 5, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{5}-conv{2}bn{2}", cryptoContext)
 
     scale = 1
     res2 = conv(res1, 8, 1, 256, -64, 6, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{6}-conv{1}bn{1}", cryptoContext)
 
     res2 = conv(res2, 8, 1, 256, -64, 6, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(cryptoContext, f"layer{6}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,res1.slots,scale)
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
+                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+    A2 = read_values_from_file(cryptoContext, f"layer{6}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, 1,
+                               res1.slots, scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
-    res2 = fhe.homo_add(res2, A2y,cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_add(res2, A2y, cryptoContext)
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{6}-conv{2}bn{2}", cryptoContext)
 
     return res2
+
 
 def layer4(input, cryptoContext):
     scaleSx = 1
     scaleDx = 1
 
-    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15,[4,4], cryptoContext)
+    boot_in = fhe.homo_bootstrap(input, cryptoContext.L, 15, [4, 4], cryptoContext)
     res1sx0 = conv(boot_in, 8, 1, 256, -64, 7, 1, 0, scaleSx, cryptoContext)
     res1sx1 = conv(boot_in, 8, 1, 256, -64, 7, 1, 256, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext) #drop_last_elements ADD BY ZRJI
+    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 256, -64, 7, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 256, -64, 7, 1, 256, "2", scaleDx, cryptoContext)
@@ -201,29 +215,32 @@ def layer4(input, cryptoContext):
     fullpackSx = downsample64to16(res1sx0, res1sx1, 256, cryptoContext)
     fullpackDx = downsample64to16(res1dx0, res1dx1, 256, cryptoContext)
 
-    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 4, 1, 512, -16, 7, 2, 0, scaleDx, cryptoContext)
 
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
 
     scale = 1
     res2 = conv(res1, 4, 1, 512, -16, 8, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{1}bn{1}", cryptoContext)
 
     scale = 1
     res2 = conv(res2, 4, 1, 512, -16, 8, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech=="FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs, cryptoContext) #drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-A2",cryptoContext.L-res1.cur_limbs,1,res1.slots,scale)
+    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
+                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+    A2 = read_values_from_file(cryptoContext, f"layer{8}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, 1,
+                               res1.slots, scale)
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
-    res2 = fhe.homo_add(res2, A2y,cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    res2 = fhe.homo_add(res2, A2y, cryptoContext)
+    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
     return res2
+
 
 def final_layer(input, cryptoContext):
     # 512*4*4
@@ -236,11 +253,11 @@ def final_layer(input, cryptoContext):
         mask_mod(16, res.cur_limbs, 1.0 / 16.0, res.slots, cryptoContext),
         cryptoContext,
     )
-    res = repeat(res, 16, cryptoContext)# repeat num = 16，because 16>10 and min? For cifar100, we need repeat 128
-    res = fhe.homo_rescale(res, 1, cryptoContext) #RESCALE ADD BY ZRJI
-    weight = read_fc_weight(512,16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
+    res = repeat(res, 16, cryptoContext)  # repeat num = 16，because 16>10 and min? For cifar100, we need repeat 128
+    res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    weight = read_fc_weight(512, 16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = rotsum_padded(res, 16,512, cryptoContext)
+    res = rotsum_padded(res, 16, 512, cryptoContext)
     bias = read_fc_bias(512, 16, cryptoContext, cryptoContext.L - res.cur_limbs, 1, res.slots)
     res = fhe.homo_add_pt(res, bias, cryptoContext)
     return res
@@ -249,9 +266,9 @@ def final_layer(input, cryptoContext):
 def executeResNet18(cryptoContext):
     openfhe_context = cryptoContext.openfhe_context
 
-    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2**16),device, 2, 0, 2**16)
-    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2**15),device, 2, 0, 2**15)
-    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2**14),device, 2, 0, 2**14)
+    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2 ** 16), device, 2, 0, 2 ** 16)
+    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2 ** 15), device, 2, 0, 2 ** 15)
+    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2 ** 14), device, 2, 0, 2 ** 14)
 
     # 准备明文模型，测速时可以删除
     # model = get_resnet18_HerPN(num_classes=10)
@@ -278,7 +295,7 @@ def executeResNet18(cryptoContext):
             device,
             1,
             12,
-            64*32*32,
+            64 * 32 * 32,
         )
         print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
@@ -353,7 +370,7 @@ def executeResNet18(cryptoContext):
             correct += 1
         message = f"correct/total: {correct}/{(i + 1)}"
         print(colored(message, "red"))
-        if (i+1) % 100 == 0:
+        if (i + 1) % 100 == 0:
             print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
@@ -372,12 +389,12 @@ def resnet18():
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
-    cryptoContext.weight_path = weight_dir # fixme: workaround only
+    cryptoContext.weight_path = weight_dir  # fixme: workaround only
 
     pkl_path = None
-    if config.SAVE_MIDDLE==False:
+    if config.SAVE_MIDDLE == False:
         cryptoContext.pre_encode_type = "middle"
-        pkl_path="/data/yhh/data/encode_20250611_234607.pkl"
+        pkl_path = "/data/yhh/data/encode_20250611_234607.pkl"
 
         # cryptoContext.pre_encode_type = "end"
         # pkl_path = ""
@@ -386,8 +403,9 @@ def resnet18():
     cryptoContext.openfhe_context = openfhe_context
     executeResNet18(cryptoContext)
 
-def homo_Aespa_perfect_square(x,filename,cryptoContext):
-    x = fhe.homo_rescale(x, x.noise_deg-1, cryptoContext) #RESCALE ADD BY ZRJI
+
+def homo_Aespa_perfect_square(x, filename, cryptoContext):
+    x = fhe.homo_rescale(x, x.noise_deg - 1, cryptoContext)  # RESCALE ADD BY ZRJI
     n1_filename = filename + '-n1'
     n2_filename = filename + '-n2'
     slots = x.slots
@@ -396,10 +414,11 @@ def homo_Aespa_perfect_square(x,filename,cryptoContext):
     # input x = origin sqrt(a2) * x
     temp1 = fhe.homo_add_pt(x, n1, cryptoContext)
     perfect_squre = fhe.homo_square(temp1, cryptoContext)
-    perfect_squre = fhe.homo_rescale(perfect_squre, 1, cryptoContext) #RESCALE ADD BY ZRJI
+    perfect_squre = fhe.homo_rescale(perfect_squre, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     n2 = read_values_from_file(cryptoContext, n2_filename, cryptoContext.L - perfect_squre.cur_limbs, 1, slots, scale)
     res = fhe.homo_add_pt(perfect_squre, n2, cryptoContext)
     return res
+
 
 if __name__ == "__main__":
     resnet18()
