@@ -62,7 +62,7 @@ def altalena3(v):
     return new_v
 
 
-def generate_resnet20_bin_files():
+def generate_resnet20_bin_files(path):
     model = torch.hub.load("chenyaofo/pytorch-cifar-models", "cifar10_resnet20", pretrained=True)
     model.eval()
     img_width = 32
@@ -147,17 +147,17 @@ def generate_resnet20_bin_files():
         mul9 = np.roll(k9, 1024 * i)
         """
 
-        np.savetxt('weights/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
-        np.savetxt('weights/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
 
-    np.savetxt('weights/conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
     ## Layer1[0]: Conv1+Bn1
     A = model.layer1[0].bn1.weight / torch.sqrt(model.layer1[0].bn1.running_var + model.layer1[0].bn1.eps)
@@ -218,17 +218,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer1-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
     ## Layer1[0]: Conv2+Bn2
     A = model.layer1[0].bn2.weight / torch.sqrt(model.layer1[0].bn2.running_var + model.layer1[0].bn2.eps)
@@ -288,17 +288,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer1-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
     ## Layer1[1]: Conv1+Bn1
     A = model.layer1[1].bn1.weight / torch.sqrt(model.layer1[1].bn1.running_var + model.layer1[1].bn1.eps)
@@ -357,17 +357,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer2-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv2+Bn2
 
     A = model.layer1[1].bn2.weight / torch.sqrt(model.layer1[1].bn2.running_var + model.layer1[1].bn2.eps)
@@ -427,17 +427,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer2-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
     ## Layer1[2]: Conv1+Bn1
     A = model.layer1[2].bn1.weight / torch.sqrt(model.layer1[2].bn1.running_var + model.layer1[2].bn1.eps)
@@ -497,17 +497,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer3-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer3-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
     ## Layer1[2]: Conv2+Bn2
     A = model.layer1[2].bn2.weight / torch.sqrt(model.layer1[2].bn2.running_var + model.layer1[2].bn2.eps)
@@ -567,17 +567,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer3-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-bias.bin'.format(i), np.repeat(b.detach(), 1024), delimiter=',')
 
 
     ## Layer2[0]: Conv1+Bn1 SX DownsamplingFast
@@ -641,33 +641,33 @@ def generate_resnet20_bin_files():
     #     k8 = np.add(k8, np.roll(k8, -16384 + 1))[:16384]
     #     k9 = np.add(k9, np.roll(k9, -16384 + 1))[:16384]
     #
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
     #
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
     #
     # bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(), 1024)),
     #                         np.roll(altalena(np.repeat(b.detach().numpy(), 1024)), -16384 + 1))[:16384]
     # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.roll(np.repeat(b.detach().numpy()[16:32], 1024), -1))
     #
-    # np.savetxt('weights/layer4-conv1bn1-bias1.bin', bias_corrected016, delimiter=',')
-    # np.savetxt('weights/layer4-conv1bn1-bias2.bin', bias_corrected1632, delimiter=',')
+    # np.savetxt(path + '/layer4-conv1bn1-bias1.bin', bias_corrected016, delimiter=',')
+    # np.savetxt(path + '/layer4-conv1bn1-bias2.bin', bias_corrected1632, delimiter=',')
 
     # N.b il 1632 deve essere ruotato a DX di uno
 
@@ -733,32 +733,32 @@ def generate_resnet20_bin_files():
         k8 = np.add(k8, np.roll(k8, -16384 + 1))[:16384]
         k9 = np.add(k9, np.roll(k9, -16384 + 1))[:16384]
 
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
 
     bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(), 1024)),
                             np.roll(altalena(np.repeat(b.detach().numpy(), 1024)), -16384 + 1))[:16384]
     bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
-    np.savetxt('weights/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 DX
 
@@ -784,8 +784,8 @@ def generate_resnet20_bin_files():
 
         print(k1[0])
 
-        np.savetxt('weights/layer4dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights/layer4dx-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)),
+        np.savetxt(path + '/layer4dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4dx-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
@@ -794,8 +794,8 @@ def generate_resnet20_bin_files():
     # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
-    np.savetxt('weights/layer4dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights/layer4dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer4dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer4dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     ## Layer2[0]: Conv2+Bn2
 
@@ -871,17 +871,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer4-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
 
     ## Layer2[1]: Conv1+Bn1
 
@@ -944,17 +944,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer5-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer5-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
 
     ## Layer2[1]: Conv2+Bn2
 
@@ -1017,17 +1017,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer5-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
 
     ## Layer2[2]: Conv1+Bn1
 
@@ -1090,17 +1090,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer6-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
 
     ## Layer2[2]: Conv2+Bn2
 
@@ -1163,17 +1163,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer6-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-bias.bin', np.repeat(b.detach(), 256), delimiter=',')
 
     ## Layer3[0]: Conv1+Bn1 SX
 
@@ -1256,32 +1256,32 @@ def generate_resnet20_bin_files():
         k8 = np.add(k8, np.roll(k8, -8192 + 1))[:8192]
         k9 = np.add(k9, np.roll(k9, -8192 + 1))[:8192]
 
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k2.bin'.format(i + 32), altalena2(np.roll(k2, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k3.bin'.format(i + 32), altalena2(np.roll(k3, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k4.bin'.format(i + 32), altalena2(np.roll(k4, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k5.bin'.format(i + 32), altalena2(np.roll(k5, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k6.bin'.format(i + 32), altalena2(np.roll(k6, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k7.bin'.format(i + 32), altalena2(np.roll(k7, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k8.bin'.format(i + 32), altalena2(np.roll(k8, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7-conv1bn1-ch{}-k9.bin'.format(i + 32), altalena2(np.roll(k9, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i + 32), altalena2(np.roll(k2, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i + 32), altalena2(np.roll(k3, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i + 32), altalena2(np.roll(k4, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i + 32), altalena2(np.roll(k5, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i + 32), altalena2(np.roll(k6, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i + 32), altalena2(np.roll(k7, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i + 32), altalena2(np.roll(k8, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i + 32), altalena2(np.roll(k9, 256 * i - 1)), delimiter=',')
 
     bias_corrected = np.add(altalena2(np.repeat(b.detach().numpy(), 256)),
                             np.roll(altalena2(np.repeat(b.detach().numpy(), 256)), -8192 + 1))[:8192]
     bias_corrected016 = altalena2(np.repeat(b.detach().numpy()[:32], 256))
     bias_corrected1632 = altalena2(np.roll(np.repeat(b.detach().numpy()[32:64], 256), -1))
 
-    np.savetxt('weights/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     ## Layer3[0]: Conv1+Bn1 DX
 
@@ -1306,8 +1306,8 @@ def generate_resnet20_bin_files():
 
         print(k1[0])
 
-        np.savetxt('weights/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)),
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena2(np.repeat(b.detach().numpy()[:32], 256))
@@ -1316,8 +1316,8 @@ def generate_resnet20_bin_files():
     # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
-    np.savetxt('weights/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     img_width = 8
     padding = 1
@@ -1393,17 +1393,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer7-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
 
     ## Layer3[1]: Conv1+Bn1
 
@@ -1466,17 +1466,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer8-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
 
     ## Layer3[1]: Conv2+Bn2
 
@@ -1539,17 +1539,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer8-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
 
     ## Layer3[2]: Conv1+Bn1
 
@@ -1612,17 +1612,17 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer9-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer9-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv1bn1-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
 
     ## Layer3[2]: Conv2+Bn2
 
@@ -1685,26 +1685,26 @@ def generate_resnet20_bin_files():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights/layer9-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights/layer9-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv2bn2-bias.bin', np.repeat(b.detach(), 64), delimiter=',')
 
     ## Fully Connected Layer
 
-    np.savetxt('weights/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
-    np.savetxt('weights/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
+    np.savetxt(path + '/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    np.savetxt(path + '/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
 
 
 
-def generate_resnet20_Aespa_bin_files_complete_square():
+def generate_resnet20_Aespa_bin_files_complete_square(path):
     model = get_Aespa_MutalChannel_PAF_resnet20()
     model.eval()
     img_width = 32
@@ -1791,19 +1791,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
         """
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
-        np.savetxt('weights_aespa/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
 
-    np.savetxt('weights_aespa/conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
     ## Layer1[0]: Conv1+Bn1
     temp_PAF = model.layer1[0].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -1864,19 +1864,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer1-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer1-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer1-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
     ## Layer1[0]: Conv2+Bn2
     temp_PAF = model.layer1[0].HerPN2
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -1936,19 +1936,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer1-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer1-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer1-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv1+Bn1
     temp_PAF = model.layer1[1].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -2007,19 +2007,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer2-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer2-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer2-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
     ## Layer1[1]: Conv2+Bn2
 
     temp_PAF = model.layer1[1].HerPN2
@@ -2080,19 +2080,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer2-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer2-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer2-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
     ## Layer1[2]: Conv1+Bn1
     temp_PAF = model.layer1[2].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -2152,19 +2152,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer3-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer3-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer3-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer1[2]: Conv2+Bn2
     temp_PAF = model.layer1[2].HerPN2
@@ -2224,19 +2224,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer3-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer3-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_aespa/layer3-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 SX DownsamplingFast
     # Dispari sempre 0, riempe i primi 32 mod 64
@@ -2299,33 +2299,33 @@ def generate_resnet20_Aespa_bin_files_complete_square():
     #     k8 = np.add(k8, np.roll(k8, -16384 + 1))[:16384]
     #     k9 = np.add(k9, np.roll(k9, -16384 + 1))[:16384]
     #
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
     #
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
-    #     np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
+    #     np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
     #
     # bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(), 1024)),
     #                         np.roll(altalena(np.repeat(b.detach().numpy(), 1024)), -16384 + 1))[:16384]
     # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.roll(np.repeat(b.detach().numpy()[16:32], 1024), -1))
     #
-    # np.savetxt('weights_aespa/layer4-conv1bn1-bias1.bin', bias_corrected016, delimiter=',')
-    # np.savetxt('weights_aespa/layer4-conv1bn1-bias2.bin', bias_corrected1632, delimiter=',')
+    # np.savetxt(path + '/layer4-conv1bn1-bias1.bin', bias_corrected016, delimiter=',')
+    # np.savetxt(path + '/layer4-conv1bn1-bias2.bin', bias_corrected1632, delimiter=',')
 
     # N.b il 1632 deve essere ruotato a DX di uno
 
@@ -2393,24 +2393,24 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         k8 = np.add(k8, np.roll(k8, -16384 + 1))[:16384]
         k9 = np.add(k9, np.roll(k9, -16384 + 1))[:16384]
 
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i + 16), altalena(np.roll(k2, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i + 16), altalena(np.roll(k3, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i + 16), altalena(np.roll(k4, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i + 16), altalena(np.roll(k5, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i + 16), altalena(np.roll(k6, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i + 16), altalena(np.roll(k7, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i + 16), altalena(np.roll(k8, 1024 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i + 16), altalena(np.roll(k9, 1024 * i - 1)), delimiter=',')
 
     bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(), 1024)),
                             np.roll(altalena(np.repeat(b.detach().numpy(), 1024)), -16384 + 1))[:16384]
@@ -2418,12 +2418,12 @@ def generate_resnet20_Aespa_bin_files_complete_square():
     bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
 
-    np.savetxt('weights_aespa/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_aespa/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
-    np.savetxt('weights_aespa/layer4-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer4-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer4-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
 
     ## Layer2[0]: Conv1+Bn1 DX
 
@@ -2452,8 +2452,8 @@ def generate_resnet20_Aespa_bin_files_complete_square():
 
         # print(k1[0])
 
-        np.savetxt('weights_aespa/layer4dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer4dx-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)),
+        np.savetxt(path + '/layer4dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer4dx-conv1bn1-ch{}-k1.bin'.format(i + 16), altalena(np.roll(k1, 1024 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
@@ -2461,8 +2461,8 @@ def generate_resnet20_Aespa_bin_files_complete_square():
     # bias_corrected1632 = altalena(np.roll(np.repeat(b.detach().numpy()[16:32], 1024), -1))
     # bias_corrected = np.add(altalena(np.repeat(b.detach().numpy(),1024)), np.roll(altalena(np.repeat(b.detach().numpy(),1024)), -16384 + 1))[:16384]
 
-    np.savetxt('weights_aespa/layer4dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_aespa/layer4dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer4dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer4dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     ## Layer2[0]: Conv2+Bn2
 
@@ -2540,19 +2540,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer4-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer4-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer4-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
     ## Layer2[1]: Conv1+Bn1
 
     temp_PAF = model.layer2[1].HerPN1
@@ -2616,19 +2616,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer5-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer5-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer5-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
     ## Layer2[1]: Conv2+Bn2
 
     temp_PAF = model.layer2[1].HerPN2
@@ -2692,19 +2692,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer5-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer5-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer5-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
     ## Layer2[2]: Conv1+Bn1
 
     temp_PAF = model.layer2[2].HerPN1
@@ -2768,19 +2768,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer6-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer6-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer6-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
     ## Layer2[2]: Conv2+Bn2
 
     temp_PAF = model.layer2[2].HerPN2
@@ -2844,19 +2844,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer6-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer6-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_aespa/layer6-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
     ## Layer3[0]: Conv1+Bn1 SX
 
     img_width = 16
@@ -2933,35 +2933,35 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         k8 = np.add(k8, np.roll(k8, -8192 + 1))[:8192]
         k9 = np.add(k9, np.roll(k9, -8192 + 1))[:8192]
 
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k2.bin'.format(i + 32), altalena2(np.roll(k2, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k3.bin'.format(i + 32), altalena2(np.roll(k3, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k4.bin'.format(i + 32), altalena2(np.roll(k4, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k5.bin'.format(i + 32), altalena2(np.roll(k5, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k6.bin'.format(i + 32), altalena2(np.roll(k6, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k7.bin'.format(i + 32), altalena2(np.roll(k7, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k8.bin'.format(i + 32), altalena2(np.roll(k8, 256 * i - 1)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv1bn1-ch{}-k9.bin'.format(i + 32), altalena2(np.roll(k9, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i + 32), altalena2(np.roll(k2, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i + 32), altalena2(np.roll(k3, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i + 32), altalena2(np.roll(k4, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i + 32), altalena2(np.roll(k5, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i + 32), altalena2(np.roll(k6, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i + 32), altalena2(np.roll(k7, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i + 32), altalena2(np.roll(k8, 256 * i - 1)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i + 32), altalena2(np.roll(k9, 256 * i - 1)), delimiter=',')
 
     bias_corrected = np.add(altalena2(np.repeat(b.detach().numpy(), 256)),
                             np.roll(altalena2(np.repeat(b.detach().numpy(), 256)), -8192 + 1))[:8192]
     bias_corrected016 = altalena2(np.repeat(b.detach().numpy()[:32], 256))
     bias_corrected1632 = altalena2(np.roll(np.repeat(b.detach().numpy()[32:64], 256), -1))
 
-    np.savetxt('weights_aespa/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 64), delimiter=',')
     ## Layer3[0]: Conv1+Bn1 DX
 
     A = model.layer3[0].downsample[1].weight / torch.sqrt(
@@ -2990,8 +2990,8 @@ def generate_resnet20_Aespa_bin_files_complete_square():
 
         # print(k1[0])
 
-        np.savetxt('weights_aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights_aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)),
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 32), altalena2(np.roll(k1, 256 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena2(np.repeat(b.detach().numpy()[:32], 256))
@@ -3000,8 +3000,8 @@ def generate_resnet20_Aespa_bin_files_complete_square():
     # bias_corrected016 = altalena(np.repeat(b.detach().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.repeat(b.detach().numpy()[16:32], 1024))
 
-    np.savetxt('weights_aespa/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_aespa/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
     img_width = 8
     padding = 1
@@ -3079,19 +3079,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
     ## Layer3[1]: Conv1+Bn1
 
     temp_PAF = model.layer3[1].HerPN1
@@ -3155,19 +3155,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
     ## Layer3[1]: Conv2+Bn2
 
     temp_PAF = model.layer3[1].HerPN2
@@ -3231,19 +3231,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
     ## Layer3[2]: Conv1+Bn1
 
     temp_PAF = model.layer3[2].HerPN1
@@ -3307,19 +3307,19 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer9-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer9-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer9-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer9-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
     ## Layer3[2]: Conv2+Bn2
 
     temp_PAF = model.layer3[2].HerPN2
@@ -3383,25 +3383,25 @@ def generate_resnet20_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_aespa/layer9-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer9-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_aespa/layer9-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer9-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_aespa/layer9-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer9-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
     ## Fully Connected Layer
 
-    np.savetxt('weights_aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
-    np.savetxt('weights_aespa/bias.bin', model.fc.bias.reshape(-1).detach().numpy())
+    np.savetxt(path + '/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    np.savetxt(path + '/bias.bin', model.fc.bias.reshape(-1).detach().numpy())
 
-def generate_resnet18_Aespa_bin_files_complete_square():
+def generate_resnet18_Aespa_bin_files_complete_square(path):
     model = get_Aespa_MutalChannel_PAF_resnet18()
     model.eval()
     print(model)
@@ -3487,18 +3487,18 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul9 = np.roll(k9, 1024 * i)
         """
 
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
-        np.savetxt('weights_Aespa/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
-    np.savetxt('weights_Aespa/conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k1.bin'.format(i), k1, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k2.bin'.format(i), k2, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k3.bin'.format(i), k3, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k4.bin'.format(i), k4, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k5.bin'.format(i), k5, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k6.bin'.format(i), k6, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k7.bin'.format(i), k7, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k8.bin'.format(i), k8, delimiter=',')
+        np.savetxt(path + '/conv1bn1-ch{}-k9.bin'.format(i), k9, delimiter=',')
+    np.savetxt(path + '/conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer1[0]: Conv1+Bn1
     temp_PAF = model.layer1[0].HerPN1
@@ -3569,19 +3569,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer1-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer1-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer1-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer1[0]: Conv2+Bn2
     temp_PAF = model.layer1[0].HerPN2
@@ -3651,19 +3651,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer1-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer1-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer1-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer1-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer1-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer1[1]: Conv1+Bn1
     temp_PAF = model.layer1[1].HerPN1
@@ -3733,18 +3733,18 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
-    np.savetxt('weights_Aespa/layer2-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer2-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer2-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer1[1]: Conv2+Bn2
 
@@ -3814,19 +3814,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 1024 * i)
         mul9 = np.roll(k9, 1024 * i)
 
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer2-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer2-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer2-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
-    np.savetxt('weights_Aespa/layer2-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-n1.bin'.format(i), np.repeat(n1.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-n2.bin'.format(i), np.repeat(n2.detach(), 1024), delimiter=',')
+    np.savetxt(path + '/layer2-conv2bn2-A2.bin'.format(i), np.repeat(A2.detach(), 1024), delimiter=',')
 
     ## Layer2[1]: Conv1+Bn1
     temp_PAF = model.layer2[0].HerPN1
@@ -3898,33 +3898,33 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         k8 = np.add(k8, np.roll(k8, -65536 + 1))[:65536]
         k9 = np.add(k9, np.roll(k9, -65536 + 1))[:65536]
 
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k2.bin'.format(i), altalena(np.roll(k2, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k3.bin'.format(i), altalena(np.roll(k3, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k4.bin'.format(i), altalena(np.roll(k4, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k5.bin'.format(i), altalena(np.roll(k5, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k6.bin'.format(i), altalena(np.roll(k6, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k7.bin'.format(i), altalena(np.roll(k7, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k8.bin'.format(i), altalena(np.roll(k8, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k9.bin'.format(i), altalena(np.roll(k9, 1024 * i)), delimiter=',')
 
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k1.bin'.format(i + 64), altalena(np.roll(k1, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k1.bin'.format(i + 64), altalena(np.roll(k1, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k2.bin'.format(i + 64), altalena(np.roll(k2, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k2.bin'.format(i + 64), altalena(np.roll(k2, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k3.bin'.format(i + 64), altalena(np.roll(k3, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k3.bin'.format(i + 64), altalena(np.roll(k3, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k4.bin'.format(i + 64), altalena(np.roll(k4, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k4.bin'.format(i + 64), altalena(np.roll(k4, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k5.bin'.format(i + 64), altalena(np.roll(k5, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k5.bin'.format(i + 64), altalena(np.roll(k5, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k6.bin'.format(i + 64), altalena(np.roll(k6, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k6.bin'.format(i + 64), altalena(np.roll(k6, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k7.bin'.format(i + 64), altalena(np.roll(k7, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k7.bin'.format(i + 64), altalena(np.roll(k7, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k8.bin'.format(i + 64), altalena(np.roll(k8, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k8.bin'.format(i + 64), altalena(np.roll(k8, 1024 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv1bn1-ch{}-k9.bin'.format(i + 64), altalena(np.roll(k9, 1024 * i - 1)),
+        np.savetxt(path + '/layer3-conv1bn1-ch{}-k9.bin'.format(i + 64), altalena(np.roll(k9, 1024 * i - 1)),
                    delimiter=',')
 
     bias_corrected = np.add(altalena(np.repeat(b.detach().cpu().numpy(), 1024)),
@@ -3932,11 +3932,11 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     bias_corrected064 = altalena(np.repeat(b.detach().cpu().numpy()[:64], 1024))
     bias_corrected64128 = altalena(np.roll(np.repeat(b.detach().cpu().numpy()[64:128], 1024), -1))
 
-    np.savetxt('weights_Aespa/layer3-conv1bn1-bias1.bin', bias_corrected064, delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv1bn1-bias2.bin', bias_corrected64128, delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-bias1.bin', bias_corrected064, delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-bias2.bin', bias_corrected64128, delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer3-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 256), delimiter=',')
 
     A = model.layer2[0].downsample[1].weight / torch.sqrt(
         model.layer2[0].downsample[1].running_var + model.layer2[0].downsample[1].eps)
@@ -3965,8 +3965,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
 
         print(k1[0])
 
-        np.savetxt('weights_Aespa/layer3dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer3dx-conv1bn1-ch{}-k1.bin'.format(i + 64), altalena(np.roll(k1, 1024 * i - 1)),
+        np.savetxt(path + '/layer3dx-conv1bn1-ch{}-k1.bin'.format(i), altalena(np.roll(k1, 1024 * i)), delimiter=',')
+        np.savetxt(path + '/layer3dx-conv1bn1-ch{}-k1.bin'.format(i + 64), altalena(np.roll(k1, 1024 * i - 1)),
                    delimiter=',')
 
     bias_corrected064 = altalena(np.repeat(b.detach().cpu().numpy()[:64], 1024))
@@ -3975,8 +3975,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     # bias_corrected064 = altalena(np.repeat(b.detach().cpu().numpy()[:64], 1024))
     # bias_corrected64128 = altalena(np.repeat(b.detach().cpu().numpy()[64:128], 1024))
 
-    np.savetxt('weights_Aespa/layer3dx-conv1bn1-bias1.bin'.format(i), bias_corrected064, delimiter=',')
-    np.savetxt('weights_Aespa/layer3dx-conv1bn1-bias2.bin'.format(i), bias_corrected64128, delimiter=',')
+    np.savetxt(path + '/layer3dx-conv1bn1-bias1.bin'.format(i), bias_corrected064, delimiter=',')
+    np.savetxt(path + '/layer3dx-conv1bn1-bias2.bin'.format(i), bias_corrected64128, delimiter=',')
 
     img_width = 16
     padding = 1
@@ -4061,18 +4061,18 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer3-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer3-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer3-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
 
     temp_PAF = model.layer2[1].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4144,18 +4144,18 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer4-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv1bn1-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
 
     ## Layer2[1]: Conv2+Bn2
     temp_PAF = model.layer2[1].HerPN2
@@ -4226,18 +4226,18 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 256 * i)
         mul9 = np.roll(k9, 256 * i)
 
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
-    np.savetxt('weights_Aespa/layer4-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer4-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-n1.bin', np.repeat(n1.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-n2.bin', np.repeat(n2.detach(), 256), delimiter=',')
+    np.savetxt(path + '/layer4-conv2bn2-A2.bin', np.repeat(A2.detach(), 256), delimiter=',')
 
     temp_PAF = model.layer3[0].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4299,32 +4299,32 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         k8 = np.add(k8, np.roll(k8, -32768 + 1))[:32768]
         k9 = np.add(k9, np.roll(k9, -32768 + 1))[:32768]
 
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k1.bin'.format(i + 128), altalena2(np.roll(k1, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k1.bin'.format(i + 128), altalena2(np.roll(k1, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k2.bin'.format(i + 128), altalena2(np.roll(k2, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k2.bin'.format(i), altalena2(np.roll(k2, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k2.bin'.format(i + 128), altalena2(np.roll(k2, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k3.bin'.format(i + 128), altalena2(np.roll(k3, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k3.bin'.format(i), altalena2(np.roll(k3, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k3.bin'.format(i + 128), altalena2(np.roll(k3, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k4.bin'.format(i + 128), altalena2(np.roll(k4, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k4.bin'.format(i), altalena2(np.roll(k4, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k4.bin'.format(i + 128), altalena2(np.roll(k4, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k5.bin'.format(i + 128), altalena2(np.roll(k5, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k5.bin'.format(i), altalena2(np.roll(k5, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k5.bin'.format(i + 128), altalena2(np.roll(k5, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k6.bin'.format(i + 128), altalena2(np.roll(k6, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k6.bin'.format(i), altalena2(np.roll(k6, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k6.bin'.format(i + 128), altalena2(np.roll(k6, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k7.bin'.format(i + 128), altalena2(np.roll(k7, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k7.bin'.format(i), altalena2(np.roll(k7, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k7.bin'.format(i + 128), altalena2(np.roll(k7, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k8.bin'.format(i + 128), altalena2(np.roll(k8, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k8.bin'.format(i), altalena2(np.roll(k8, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k8.bin'.format(i + 128), altalena2(np.roll(k8, 256 * i - 1)),
                    delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv1bn1-ch{}-k9.bin'.format(i + 128), altalena2(np.roll(k9, 256 * i - 1)),
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k9.bin'.format(i), altalena2(np.roll(k9, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5-conv1bn1-ch{}-k9.bin'.format(i + 128), altalena2(np.roll(k9, 256 * i - 1)),
                    delimiter=',')
 
     bias_corrected = np.add(altalena2(np.repeat(b.detach().cpu().numpy(), 256)),
@@ -4332,11 +4332,11 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     bias_corrected016 = altalena2(np.repeat(b.detach().cpu().numpy()[:128], 256))
     bias_corrected16128 = altalena2(np.roll(np.repeat(b.detach().cpu().numpy()[128:256], 256), -1))
 
-    np.savetxt('weights_Aespa/layer5-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv1bn1-bias2.bin'.format(i), bias_corrected16128, delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-bias2.bin'.format(i), bias_corrected16128, delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 64), delimiter=',')
     A = model.layer3[0].downsample[1].weight / torch.sqrt(
         model.layer3[0].downsample[1].running_var + model.layer3[0].downsample[1].eps)
     b = -(model.layer3[0].downsample[1].weight * model.layer3[0].downsample[1].running_mean / torch.sqrt(
@@ -4363,8 +4363,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
 
         print(k1[0])
 
-        np.savetxt('weights_Aespa/layer5dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer5dx-conv1bn1-ch{}-k1.bin'.format(i + 128), altalena2(np.roll(k1, 256 * i - 1)),
+        np.savetxt(path + '/layer5dx-conv1bn1-ch{}-k1.bin'.format(i), altalena2(np.roll(k1, 256 * i)), delimiter=',')
+        np.savetxt(path + '/layer5dx-conv1bn1-ch{}-k1.bin'.format(i + 128), altalena2(np.roll(k1, 256 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena2(np.repeat(b.detach().cpu().numpy()[:128], 256))
@@ -4373,8 +4373,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     # bias_corrected016 = altalena(np.repeat(b.detach().cpu().numpy()[:16], 1024))
     # bias_corrected16128 = altalena(np.repeat(b.detach().cpu().numpy()[16:128], 1024))
 
-    np.savetxt('weights_Aespa/layer5dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer5dx-conv1bn1-bias2.bin'.format(i), bias_corrected16128, delimiter=',')
+    np.savetxt(path + '/layer5dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer5dx-conv1bn1-bias2.bin'.format(i), bias_corrected16128, delimiter=',')
 
     img_width = 8
     padding = 1
@@ -4459,19 +4459,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer5-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer5-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer5-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer5-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
 
     temp_PAF = model.layer3[1].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4543,19 +4543,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer6-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer6-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer6-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv1bn1-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
 
     temp_PAF = model.layer3[1].HerPN2
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4627,19 +4627,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 64 * i)
         mul9 = np.roll(k9, 64 * i)
 
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer6-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer6-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer6-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
-    np.savetxt('weights_Aespa/layer6-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-n1.bin', np.repeat(n1.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-n2.bin', np.repeat(n2.detach(), 64), delimiter=',')
+    np.savetxt(path + '/layer6-conv2bn2-A2.bin', np.repeat(A2.detach(), 64), delimiter=',')
 
     temp_PAF = model.layer4[0].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4701,35 +4701,35 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         k8 = np.add(k8, np.roll(k8, -16384 + 1))[:16384]
         k9 = np.add(k9, np.roll(k9, -16384 + 1))[:16384]
 
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena3(np.roll(k1, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k1.bin'.format(i + 256), altalena3(np.roll(k1, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena3(np.roll(k2, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k2.bin'.format(i + 256), altalena3(np.roll(k2, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena3(np.roll(k3, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k3.bin'.format(i + 256), altalena3(np.roll(k3, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena3(np.roll(k4, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k4.bin'.format(i + 256), altalena3(np.roll(k4, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena3(np.roll(k5, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k5.bin'.format(i + 256), altalena3(np.roll(k5, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena3(np.roll(k6, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k6.bin'.format(i + 256), altalena3(np.roll(k6, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena3(np.roll(k7, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k7.bin'.format(i + 256), altalena3(np.roll(k7, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena3(np.roll(k8, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k8.bin'.format(i + 256), altalena3(np.roll(k8, 64 * i - 1)),delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena3(np.roll(k9, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv1bn1-ch{}-k9.bin'.format(i + 256), altalena3(np.roll(k9, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i), altalena3(np.roll(k1, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k1.bin'.format(i + 256), altalena3(np.roll(k1, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i), altalena3(np.roll(k2, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k2.bin'.format(i + 256), altalena3(np.roll(k2, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i), altalena3(np.roll(k3, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k3.bin'.format(i + 256), altalena3(np.roll(k3, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i), altalena3(np.roll(k4, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k4.bin'.format(i + 256), altalena3(np.roll(k4, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i), altalena3(np.roll(k5, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k5.bin'.format(i + 256), altalena3(np.roll(k5, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i), altalena3(np.roll(k6, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k6.bin'.format(i + 256), altalena3(np.roll(k6, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i), altalena3(np.roll(k7, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k7.bin'.format(i + 256), altalena3(np.roll(k7, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i), altalena3(np.roll(k8, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k8.bin'.format(i + 256), altalena3(np.roll(k8, 64 * i - 1)),delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i), altalena3(np.roll(k9, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7-conv1bn1-ch{}-k9.bin'.format(i + 256), altalena3(np.roll(k9, 64 * i - 1)),delimiter=',')
 
     # bias_corrected = np.add(altalena3(np.repeat(b.detach().cpu().numpy(), 64)),
     #                         np.roll(altalena3(np.repeat(b.detach().cpu().numpy(), 64)), -16384 + 1))[:16384]
     # bias_corrected016 = altalena3(np.repeat(b.detach().cpu().numpy()[:256], 64))
     # bias_corrected16256 = altalena3(np.roll(np.repeat(b.detach().cpu().numpy()[256:512], 64), -1))
     #
-    # np.savetxt('weights_Aespa/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    # np.savetxt('weights_Aespa/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected16256, delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 16), delimiter=',')
+    # np.savetxt(path + '/layer7-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    # np.savetxt(path + '/layer7-conv1bn1-bias2.bin'.format(i), bias_corrected16256, delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-n1.bin'.format(i), np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-n2.bin'.format(i), np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer7-conv1bn1-A2.bin'.format(i), np.repeat(A2.detach(), 16), delimiter=',')
 
     A = model.layer4[0].downsample[1].weight / torch.sqrt(
         model.layer4[0].downsample[1].running_var + model.layer4[0].downsample[1].eps)
@@ -4757,8 +4757,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
 
         print(k1[0])
 
-        np.savetxt('weights_Aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena3(np.roll(k1, 64 * i)), delimiter=',')
-        np.savetxt('weights_Aespa/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 256), altalena3(np.roll(k1, 64 * i - 1)),
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i), altalena3(np.roll(k1, 64 * i)), delimiter=',')
+        np.savetxt(path + '/layer7dx-conv1bn1-ch{}-k1.bin'.format(i + 256), altalena3(np.roll(k1, 64 * i - 1)),
                    delimiter=',')
 
     bias_corrected016 = altalena3(np.repeat(b.detach().cpu().numpy()[:256], 64))
@@ -4767,8 +4767,8 @@ def generate_resnet18_Aespa_bin_files_complete_square():
     # bias_corrected016 = altalena(np.repeat(b.detach().cpu().numpy()[:16], 1024))
     # bias_corrected1632 = altalena(np.repeat(b.detach().cpu().numpy()[16:32], 1024))
 
-    np.savetxt('weights_Aespa/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
-    np.savetxt('weights_Aespa/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias1.bin'.format(i), bias_corrected016, delimiter=',')
+    np.savetxt(path + '/layer7dx-conv1bn1-bias2.bin'.format(i), bias_corrected1632, delimiter=',')
 
 
     img_width = 4
@@ -4853,19 +4853,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 16 * i)
         mul9 = np.roll(k9, 16 * i)
 
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer7-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer7-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
     temp_PAF = model.layer4[1].HerPN1
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -4937,19 +4937,19 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 16 * i)
         mul9 = np.roll(k9, 16 * i)
 
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv1bn1-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
-    np.savetxt('weights_Aespa/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv1bn1-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
     temp_PAF = model.layer4[1].HerPN2
     A2 = temp_PAF.a2.detach() ** 0.5
@@ -5021,23 +5021,23 @@ def generate_resnet18_Aespa_bin_files_complete_square():
         mul8 = np.roll(k8, 16 * i)
         mul9 = np.roll(k9, 16 * i)
 
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
-        np.savetxt('weights_Aespa/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k1.bin'.format(i), mul1, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k2.bin'.format(i), mul2, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k3.bin'.format(i), mul3, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k4.bin'.format(i), mul4, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k5.bin'.format(i), mul5, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k6.bin'.format(i), mul6, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k7.bin'.format(i), mul7, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k8.bin'.format(i), mul8, delimiter=',')
+        np.savetxt(path + '/layer8-conv2bn2-ch{}-k9.bin'.format(i), mul9, delimiter=',')
 
 
-    np.savetxt('weights_Aespa/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
-    np.savetxt('weights_Aespa/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-n1.bin', np.repeat(n1.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-n2.bin', np.repeat(n2.detach(), 16), delimiter=',')
+    np.savetxt(path + '/layer8-conv2bn2-A2.bin', np.repeat(A2.detach(), 16), delimiter=',')
 
-    np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
-    np.savetxt('weights_Aespa/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
+    np.savetxt(path + '/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    np.savetxt(path + '/bias.bin', model.fc.bias.reshape(-1).detach().cpu().numpy())
 
 def move_files_by_keyword(source_dir, target_dir, keyword, recursive=False):
     """
@@ -5095,29 +5095,30 @@ if __name__ == "__main__":
     # 执行文件移动
     # move_files_by_keyword(SOURCE_DIR, TARGET_DIR, KEYWORD, RECURSIVE)
 
-    # ## gen res18 bin files
-    # path = './weights_Aespa'
-    # if not os.path.exists(path):
-    #     os.mkdir(path)
-    # generate_resnet18_Aespa_bin_files_complete_square()
 
-    # gen res20 aespa bin files
-    # # remove current ./weights_aespa folder first
-    # path = './weights_aespa'
-    # if not os.path.exists(path):
-    #     os.mkdir(path)
-    # generate_resnet20_Aespa_bin_files_complete_square()
-    # print('success')
-
-    # gen res20 bin files
-    path = './weights'
+    # # ## gen res18 bin files
+    path = '../weights_aespa_18/'
     if not os.path.exists(path):
         os.mkdir(path)
-    generate_resnet20_bin_files()
+    generate_resnet18_Aespa_bin_files_complete_square(path)
     print('success')
+
+    # # gen res20 aespa bin files
+    # path = '../weights_aespa_20/'
+    # if not os.path.exists(path):
+    #     os.mkdir(path)
+    # generate_resnet20_Aespa_bin_files_complete_square(path)
+    # print('success')
+
+    # # gen res20 bin files
+    # path = '../weights/'
+    # if not os.path.exists(path):
+    #     os.mkdir(path)
+    # generate_resnet20_bin_files(path)
+    # print('success')
 
 
     # generate specific bin for res18
     # model = get_Aespa_MutalChannel_PAF_resnet18()
     # model.eval()
-    # np.savetxt('weights_Aespa/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
+    # np.savetxt('../weights_aespa_18/fc.bin', model.fc.weight.t().reshape(-1).detach().numpy())
