@@ -42,11 +42,11 @@ class OpenFHEContext:
         self.cc = openfhe.DeserializeCryptoContextString(content_map["cc"], openfhe.BINARY)
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
-        openfhe.DeserializeEvalAutomorphismKeyString(content_map["app_rot_key"], openfhe.BINARY)
         self.depth = content_map["depth"]
 
     def setup_for_debug(self, debug_keys, slots, level_budget):
-        self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
+        if slots != None and level_budget != None:
+            self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
         openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
