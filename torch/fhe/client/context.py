@@ -330,32 +330,11 @@ class __FOR_SAVE_ONLY_Context:
 
                 self.QlQlInvModqlDivqlModq[k][i] = np.uint64(result)
 
-        # self.mult_swk = [None, None]
-        # if MULT_SWK is None:
-        #     warnings.warn(
-        #         "\n------------------------\n"
-        #         "MULT_SWK needs to be set"
-        #         "\n------------------------\n",
-        #         UserWarning,
-        #     )
-        #     # todo: set data in numpy array
-        # else:
-        #     self.mult_swk[0] = MULT_SWK[0]
-        #     self.mult_swk[1] = MULT_SWK[1]
-
 
         self.moduliQ_scalar = np.array(self.moduliQ_scalar, dtype=np.uint64)
         self.moduliP_scalar = np.array(self.moduliP_scalar, dtype=np.uint64)
-        qRoots = np.array(qRoots, dtype=np.uint64) #todo: remove unused var?
-        pRoots = np.array(pRoots, dtype=np.uint64) #todo: remove unused var?
 
         self.max_int_diffs = np.array([(9223372036854775295 - p) % p for p in np.concat((self.moduliQ_scalar, self.moduliP_scalar)).tolist()], dtype=np.uint64)
-
-        #todo: remove duplicated variables?
-        # self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
-        # self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
-        # self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
-        # self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
 
         self.PInvModq = np.array(self.PInvModq, dtype=np.uint64)
 
@@ -370,9 +349,7 @@ class __FOR_SAVE_ONLY_Context:
             self.QlQlInvModqlDivqlModq, dtype=np.uint64
         )
 
-        # todo: scalingFactorsReal and scalingFactorsRealBig should be move to cuda?
         # note that they are vector of doubles in openfhe. now is set to float
-        # todo: check if self.dmoduliQ needs to be moved to cuda
         DEFAULT_EXTRA_MOD_SIZE = 20
         extraBits = (
             DEFAULT_EXTRA_MOD_SIZE if self.rescaleTech == "FLEXIBLEAUTOEXT" else 0
@@ -526,9 +503,9 @@ class __FOR_SAVE_ONLY_Context:
                 dtype=np.uint64,
             )
             self.automorphism_transform_out = np.array(
-                [0] * (self.num_moduli_after_modup * self.N * self.beta),
+                [0] * (self.num_moduli_after_modup * self.N),
                 dtype=np.uint64,
-            ) #todo: over estiamted, at least remove self.beta if remain (L+K) for hoisted moddown in partial-sum-like computation
+            )
             self.mod_raise_out = np.array(
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
@@ -700,16 +677,12 @@ class __FOR_SAVE_ONLY_Context:
                 np.array(qInvModq_shoup_vec, dtype=np.uint64),
                 dtype=np.uint64,
             )
-            # self.PModq_cuda = np.array(self.PModq, dtype=np.uint64)
 
             self.primes = np.array(self.primes, dtype=np.uint64)
 
 
         self.mult_swk_bx = np.array(MULT_SWK[0].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
         self.mult_swk_ax = np.array(MULT_SWK[1].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
-        # key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
-        # key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
-        # self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
         #half_key
         for key, ROT_SWK in rot_swk_map.items():
@@ -799,18 +772,6 @@ class __FOR_SAVE_ONLY_Context:
                 mask = [1] * (1 << j) + [0] * ((1 << i) - (1 << j))
                 mask = pre_encode(mask, 1 << i)
                 self.encode_values["slot_conversion_mask_{}to{}".format(1<<i, 1<<j)] = mask
-
-            # for logBsSlots in logBsSlots_list:
-            #     BsContextMembers = {}
-            #     for item in dir(self.BsContext_map[str(logBsSlots)]):
-            #         if (
-            #             not callable(getattr(self.BsContext_map[str(logBsSlots)], item))
-            #         ) and not item.startswith("__"):
-            #             BsContextMembers[item] = getattr(
-            #                 self.BsContext_map[str(logBsSlots)], item
-            #             )
-            #     BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
-
 
 
     def compute_auto_map(self, k, N):
