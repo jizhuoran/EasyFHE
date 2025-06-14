@@ -556,7 +556,7 @@ def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in 
             # sys.exit(1)
             return ct.deep_copy()
     else:
-        return ct.deep_copy()
+        return ct
 
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
