@@ -367,8 +367,8 @@ class Context:
 
         # for common op
         self.primes = primes.clone().to(device)
-        self.barret_k = barret_k
-        self.barret_ratio = barret_ratio
+        self.barret_k = barret_k.clone().to(device)
+        self.barret_ratio = barret_ratio.clone().to(device)
         self.dmoduliQ = dmoduliQ
         self.pHatInvModp = pHatInvModp
         self.pHatModp = pHatModp
