@@ -43,9 +43,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     barret_k = get_item("barret_k", gpufhe_content_map)
     barret_ratio = get_item("barret_ratio", gpufhe_content_map)
     dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
-    pHatInvModp = get_item("pHatInvModp", gpufhe_content_map)
-    pHatModp = get_item("pHatModp", gpufhe_content_map)
-    pHatModq = get_item("pHatModq", gpufhe_content_map)
     p_mu = get_item("p_mu", gpufhe_content_map)
     q_mu = get_item("q_mu", gpufhe_content_map)
     moduliP_scalar = get_item("moduliP_scalar", gpufhe_content_map)
@@ -198,9 +195,6 @@ def parse_content_map(gpufhe_content_map, device, config):
         barret_k,
         barret_ratio,
         dmoduliQ,
-        pHatInvModp,
-        pHatModp,
-        pHatModq,
         p_mu,
         q_mu,
         moduliP_scalar,
@@ -283,9 +277,6 @@ class Context:
         barret_k,
         barret_ratio,
         dmoduliQ,
-        pHatInvModp,
-        pHatModp,
-        pHatModq,
         p_mu,
         q_mu,
         moduliP_scalar,
@@ -370,9 +361,6 @@ class Context:
         self.barret_k = barret_k.clone().to(device)
         self.barret_ratio = barret_ratio.clone().to(device)
         self.dmoduliQ = dmoduliQ
-        self.pHatInvModp = pHatInvModp
-        self.pHatModp = pHatModp
-        self.pHatModq = pHatModq
         self.p_mu = p_mu
         self.q_mu = q_mu.clone().to(device)
         self.moduliP_scalar = moduliP_scalar
@@ -487,9 +475,6 @@ class Context:
             self.barret_k,
             self.barret_ratio,
             self.dmoduliQ,
-            self.pHatInvModp,
-            self.pHatModp,
-            self.pHatModq,
             self.p_mu,
             self.q_mu,
             self.moduliP_scalar,

@@ -261,28 +261,28 @@ class __FOR_SAVE_ONLY_Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
 
-        self.pHatModp = [0] * K
-        self.pHatInvModp = [0] * K
+        pHatModp = [0] * K
+        pHatInvModp = [0] * K
         # 计算 pHatModp
         for k in range(K):
-            self.pHatModp[k] = int(1)
+            pHatModp[k] = int(1)
             for j in list(range(k)) + list(range(k + 1, K)):
                 temp = int(self.moduliP_scalar[j] % self.moduliP_scalar[k])
-                self.pHatModp[k] = (self.pHatModp[k] * temp) % int(self.moduliP_scalar[k])
+                pHatModp[k] = (pHatModp[k] * temp) % int(self.moduliP_scalar[k])
 
         for k in range(K):
-            self.pHatInvModp[k] = int(
-                self.invMod(int(self.pHatModp[k]), self.moduliP_scalar[k])
+            pHatInvModp[k] = int(
+                self.invMod(int(pHatModp[k]), self.moduliP_scalar[k])
             )
 
-        self.pHatModq = [[0] * L for _ in range(K)]
+        pHatModq = [[0] * L for _ in range(K)]
         for k in range(K):
             for i in range(L):
-                self.pHatModq[k][i] = int(1)
+                pHatModq[k][i] = int(1)
                 for s in list(range(k)) + list(range(k + 1, K)):
                     temp = int(self.moduliP_scalar[s]) % int(self.moduliQ_scalar[i])
-                    self.pHatModq[k][i] = self.mulMod(
-                        int(self.pHatModq[k][i]), temp, int(self.moduliQ_scalar[i])
+                    pHatModq[k][i] = self.mulMod(
+                        int(pHatModq[k][i]), temp, int(self.moduliQ_scalar[i])
                     )
 
         self.PModq = [0] * L
@@ -340,9 +340,8 @@ class __FOR_SAVE_ONLY_Context:
 
         self.PartQlHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.PartQlHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
-        self.pHatModp = np.array(self.pHatModp, dtype=np.uint64)
-        self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
-        self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
+        pHatInvModp = np.array(pHatInvModp, dtype=np.uint64)
+        pHatModq = np.array(pHatModq, dtype=np.uint64)
         self.PModq = np.array(self.PModq, dtype=np.uint64)
         qInvModq = np.array(qInvModq, dtype=np.uint64)
         self.QlQlInvModqlDivqlModq = np.array(
@@ -590,7 +589,7 @@ class __FOR_SAVE_ONLY_Context:
             start_begin = self.primes[end_length:]
             start_end = start_begin[start_length:]
 
-            hat_inv_moddown = self.pHatInvModp
+            hat_inv_moddown = pHatInvModp
             hat_inv_shoup_moddown = []
             hat_inverse_vec_moddown = []
             hat_inverse_vec_shoup_moddown = []
@@ -611,7 +610,7 @@ class __FOR_SAVE_ONLY_Context:
 
             prod_q_i_mod_q_j_moddown = []
             end_primes = self.set_difference(self.primes, start_begin)
-            prod_q_i_mod_q_j_moddown.append(self.pHatModq.swapaxes(1, 0).flatten())
+            prod_q_i_mod_q_j_moddown.append(pHatModq.swapaxes(1, 0).flatten())
             self.prod_q_i_mod_q_j_moddown = np.array(
                 np.array(prod_q_i_mod_q_j_moddown, dtype=np.uint64),
                 dtype=np.uint64,
