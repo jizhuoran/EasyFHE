@@ -157,12 +157,10 @@ class BsContext:
         self,
         N,
         logslot,
-        moduliP_scalar,
         correctionFactor,
         secretKeyDist,
         BOOT_CNST
     ):
-        K = len(moduliP_scalar)
         self.M = N * 2
         self.Nh = N >> 1
         self.logslot = logslot

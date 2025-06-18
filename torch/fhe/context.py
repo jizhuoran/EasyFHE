@@ -34,7 +34,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     rescaleTech = get_item("rescaleTech", gpufhe_content_map)
     dcrtBits = get_item("dcrtBits", gpufhe_content_map)
     max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
-    p = get_item("p", gpufhe_content_map)
     secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
     sigma = get_item("sigma", gpufhe_content_map)
     False,
@@ -42,8 +41,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     primes = get_item("primes", gpufhe_content_map)
     barret_k = get_item("barret_k", gpufhe_content_map)
     barret_ratio = get_item("barret_ratio", gpufhe_content_map)
-    dmoduliQ = get_item("dmoduliQ", gpufhe_content_map)
-    p_mu = get_item("p_mu", gpufhe_content_map)
     q_mu = get_item("q_mu", gpufhe_content_map)
     moduliP_scalar = get_item("moduliP_scalar", gpufhe_content_map)
     moduliQ_scalar = get_item("moduliQ_scalar", gpufhe_content_map)
@@ -51,7 +48,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     scalingFactorsReal = get_item("scalingFactorsReal", gpufhe_content_map)
     scalingFactorsRealBig = get_item("scalingFactorsRealBig", gpufhe_content_map)
     PModq = get_item("PModq", gpufhe_content_map)
-    PInvModq = get_item("PInvModq", gpufhe_content_map)
     QmuplusPmu_map = get_item("QmuplusPmu_map", gpufhe_content_map)
     QplusP_map = get_item("QplusP_map", gpufhe_content_map)
     automorphism_transform_out = get_item("automorphism_transform_out", gpufhe_content_map)
@@ -76,10 +72,8 @@ def parse_content_map(gpufhe_content_map, device, config):
     inverse_scaled_power_of_roots_div_two = get_item("inverse_scaled_power_of_roots_div_two", gpufhe_content_map)
     power_of_roots = get_item("power_of_roots", gpufhe_content_map)
     power_of_roots_shoup = get_item("power_of_roots_shoup", gpufhe_content_map)
-    slots_left_rot_key_map = get_item("slots_left_rot_key_map", gpufhe_content_map)
     total_left_rot_key_map = get_item("total_left_rot_key_map", gpufhe_content_map)
-    slots_precompute_auto_map = get_item("slots_precompute_auto_map", gpufhe_content_map)
-    qVec = get_item("qVec", gpufhe_content_map)
+    total_precompute_auto_map = get_item("total_precompute_auto_map", gpufhe_content_map)
     q_inv_mod_q = get_item("q_inv_mod_q", gpufhe_content_map)
     q_inv_mod_q_shoup = get_item("q_inv_mod_q_shoup", gpufhe_content_map)
     qlql_inv_mod_ql_div_ql_mod_q = get_item("qlql_inv_mod_ql_div_ql_mod_q", gpufhe_content_map)
@@ -144,20 +138,18 @@ def parse_content_map(gpufhe_content_map, device, config):
     for key, value in QmaxdiffplusPmaxdiff_map.items():
         QmaxdiffplusPmaxdiff_map[key] = torch.tensor(value, dtype = torch.uint64)
 
-    left_rot_key_map = {}
-    precompute_auto_map = {}
+    left_rot_key_map = {
+        int(rotIdx): [
+            torch.tensor(key_pair[0], dtype=torch.uint64),
+            torch.tensor(key_pair[1], dtype=torch.uint64),
+        ]
+        for rotIdx, key_pair in total_left_rot_key_map.items()
+    }
 
-    for key_name in slots_left_rot_key_map:
-        for key in slots_left_rot_key_map[str(key_name)]:
-            left_rot_key_map[key] = [
-                torch.tensor(v, dtype=torch.uint64)
-                for v in total_left_rot_key_map[key]
-            ]
-    for key_name in slots_precompute_auto_map:
-        for key, value in slots_precompute_auto_map[str(key_name)].items():
-            precompute_auto_map[key] = torch.tensor(
-                value, dtype=torch.int32
-            )
+    precompute_auto_map = {
+        int(rotIdx): torch.tensor(auto_map, dtype=torch.int32)
+        for rotIdx, auto_map in total_precompute_auto_map.items()
+    }
 
     for key, value in encode_values.items():
         if isinstance(value, Plaintext):
@@ -186,7 +178,6 @@ def parse_content_map(gpufhe_content_map, device, config):
         rescaleTech,
         dcrtBits,
         max_num_moduli,
-        p,
         secretKeyDist,
         sigma,
         False,
@@ -194,8 +185,6 @@ def parse_content_map(gpufhe_content_map, device, config):
         primes,
         barret_k,
         barret_ratio,
-        dmoduliQ,
-        p_mu,
         q_mu,
         moduliP_scalar,
         moduliQ_scalar,
@@ -204,7 +193,6 @@ def parse_content_map(gpufhe_content_map, device, config):
         scalingFactorsRealBig,
         PModq,
         max_int_diffs,
-        PInvModq,
         QmuplusPmu_map,
         QplusP_map,
         automorphism_transform_out,
@@ -231,7 +219,6 @@ def parse_content_map(gpufhe_content_map, device, config):
         power_of_roots_shoup,
         left_rot_key_map,
         precompute_auto_map,
-        qVec,
         q_inv_mod_q,
         q_inv_mod_q_shoup,
         qlql_inv_mod_ql_div_ql_mod_q,
@@ -268,7 +255,6 @@ class Context:
         rescaleTech,
         dcrtBits,
         max_num_moduli,
-        p,
         secretKeyDist,
         sigma,
         inBS,
@@ -276,8 +262,6 @@ class Context:
         primes,
         barret_k,
         barret_ratio,
-        dmoduliQ,
-        p_mu,
         q_mu,
         moduliP_scalar,
         moduliQ_scalar,
@@ -286,7 +270,6 @@ class Context:
         scalingFactorsRealBig,
         PModq,
         max_int_diffs,
-        PInvModq,
         QmuplusPmu_map,
         QplusP_map,
         automorphism_transform_out,
@@ -313,7 +296,6 @@ class Context:
         power_of_roots_shoup,
         left_rot_key_map,
         precompute_auto_map,
-        qVec,
         q_inv_mod_q,
         q_inv_mod_q_shoup,
         qlql_inv_mod_ql_div_ql_mod_q,
@@ -352,7 +334,6 @@ class Context:
         self.rescaleTech = rescaleTech
         self.dcrtBits = dcrtBits
         self.max_num_moduli = max_num_moduli
-        self.p = p
         self.secretKeyDist = secretKeyDist
         self.sigma = sigma
 
@@ -360,18 +341,15 @@ class Context:
         self.primes = primes.clone().to(device)
         self.barret_k = barret_k.clone().to(device)
         self.barret_ratio = barret_ratio.clone().to(device)
-        self.dmoduliQ = dmoduliQ
-        self.p_mu = p_mu
         self.q_mu = q_mu.clone().to(device)
-        self.moduliP_scalar = moduliP_scalar
-        self.moduliQ_scalar = moduliQ_scalar
+        self.moduliP_scalar = moduliP_scalar # for computation on cpu
+        self.moduliQ_scalar = moduliQ_scalar # for computation on cpu
         self.moduliQ = moduliQ.clone().to(device)
         self.scalingFactorsReal = scalingFactorsReal
         self.scalingFactorsRealBig = scalingFactorsRealBig
 
         # for cv_mul
         self.PModq = PModq.clone().to(device)
-        self.PInvModq = PInvModq
         self.QmuplusPmu_map = {key: value.clone().to(device) for key, value in QmuplusPmu_map.items()}
         self.QplusP_map =  {key: value.clone().to(device) for key, value in QplusP_map.items()}
 
@@ -412,7 +390,6 @@ class Context:
         self.precompute_auto_map = {key: value.clone().to("cpu") for key, value in precompute_auto_map.items()}
 
         # for cv_drop
-        self.qVec = qVec
         self.q_inv_mod_q = q_inv_mod_q.clone().to(device)
         self.q_inv_mod_q_shoup = q_inv_mod_q_shoup.clone().to(device)
         self.qlql_inv_mod_ql_div_ql_mod_q = qlql_inv_mod_ql_div_ql_mod_q.clone().to(device)
@@ -466,7 +443,6 @@ class Context:
             self.rescaleTech,
             self.dcrtBits,
             self.max_num_moduli,
-            self.p,
             self.secretKeyDist,
             self.sigma,
             self.inBS,
@@ -474,8 +450,6 @@ class Context:
             self.primes,
             self.barret_k,
             self.barret_ratio,
-            self.dmoduliQ,
-            self.p_mu,
             self.q_mu,
             self.moduliP_scalar,
             self.moduliQ_scalar,
@@ -484,7 +458,6 @@ class Context:
             self.scalingFactorsRealBig,
             self.PModq,
             self.max_int_diffs,
-            self.PInvModq,
             self.QmuplusPmu_map,
             self.QplusP_map,
             self.automorphism_transform_out,
@@ -511,7 +484,6 @@ class Context:
             self.power_of_roots_shoup,
             self.left_rot_key_map,
             self.precompute_auto_map,
-            self.qVec,
             self.q_inv_mod_q,
             self.q_inv_mod_q_shoup,
             self.qlql_inv_mod_ql_div_ql_mod_q,
@@ -572,7 +544,7 @@ class Context:
             cur_limbs = 0
         l = cur_limbs
         if self.rescaleTech == "FLEXIBLEAUTO" or self.rescaleTech == "FLEXIBLEAUTOEXT":
-            return self.dmoduliQ[l]
+            return float(self.moduliQ_scalar[l]) # Moduli as real
         return self.approxSF
 
     def get_rotation_key(self, rot_index):

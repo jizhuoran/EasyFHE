@@ -39,8 +39,6 @@ class __FOR_SAVE_ONLY_Context:
         self.rescaleTech = rescaleTech
         self.BsContext_map = {}
         self.specialMod = specialMod
-        self.qVec = None
-        # self.correctionFactor = 0 # todo: to be removed
 
         self.logN = logN
         self.dcrtBits = dcrtBits
@@ -54,17 +52,14 @@ class __FOR_SAVE_ONLY_Context:
         self.M = self.N << 1
         self.logNh = logN - 1
         self.Nh = self.N >> 1
-        self.p = 1 << dcrtBits #todo: to be removed?
 
         self.moduliQ_scalar = [0] * L
         qRoots = [0] * L
         qRootsInv = [0] * L
         qRootPows = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
-        self.mult_key_map = None
-        self.slots_left_rot_key_map = {} 
-        self.total_left_rot_key_map = {} 
-        self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
+        self.total_left_rot_key_map = {}
+        self.total_precompute_auto_map = {}
         bnd = 1
         cnt = 1
         self.encode_values = {}
@@ -199,7 +194,7 @@ class __FOR_SAVE_ONLY_Context:
             low = x & ((1 << 64) - 1)
             high = x >> 64
             p_mu.append([low, high])
-        self.p_mu = np.array(p_mu, dtype=np.uint64)
+        p_mu = np.array(p_mu, dtype=np.uint64)
 
         moduliPartQ = [0] * self.dnum
         for j in range(self.dnum):
@@ -296,10 +291,10 @@ class __FOR_SAVE_ONLY_Context:
                     int(self.PModq[i]), int(temp), int(self.moduliQ_scalar[i])
                 )
 
-        self.PInvModq = [0] * L
+        PInvModq = [0] * L
         # 计算 PInvModq
         for i in range(L):
-            self.PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
+            PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
 
         qInvModq = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
@@ -336,7 +331,7 @@ class __FOR_SAVE_ONLY_Context:
 
         self.max_int_diffs = np.array([(9223372036854775295 - p) % p for p in np.concat((self.moduliQ_scalar, self.moduliP_scalar)).tolist()], dtype=np.uint64)
 
-        self.PInvModq = np.array(self.PInvModq, dtype=np.uint64)
+        PInvModq = np.array(PInvModq, dtype=np.uint64)
 
         self.PartQlHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.PartQlHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
@@ -402,10 +397,6 @@ class __FOR_SAVE_ONLY_Context:
                     self.scalingFactorsRealBig[k] = (
                         self.scalingFactorsReal[k] * self.scalingFactorsReal[k]
                     )
-            # Moduli as real
-            self.dmoduliQ = [0.0] * self.L
-            for i in range(self.L):
-                self.dmoduliQ[i] = float(self.moduliQ_scalar[i])
         else:
             self.approxSF = 2**self.dcrtBits
         # compute encode params
@@ -616,7 +607,7 @@ class __FOR_SAVE_ONLY_Context:
                 dtype=np.uint64,
             )
 
-            prod_inv = self.PInvModq
+            prod_inv = PInvModq
             prod_shoup = []
 
             for i, end_prime in enumerate(end_primes):
@@ -685,22 +676,15 @@ class __FOR_SAVE_ONLY_Context:
 
         #half_key
         for key, ROT_SWK in rot_swk_map.items():
-            left_rot_key_map = []
-            precompute_auto_map = {}
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
-                if int(rotIdx)<0:    # the same as `norm_rot_index(self, i)` in class Context
-                    rotIdx = self.N//2 + rotIdx
-                left_rot_key_map.append(int(rotIdx))
+                if rotIdx < 0: # the same as `norm_rot_index(self, i)` in class Context
+                    rotIdx = self.N // 2 + rotIdx
                 self.total_left_rot_key_map[int(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
-                precompute_auto_map[int(rotIdx)] = self.compute_auto_map(
-                    int(autoIdx), self.N
-                )
-            self.slots_left_rot_key_map[key] = left_rot_key_map
-            self.slots_precompute_auto_map[key] = precompute_auto_map
+                self.total_precompute_auto_map[int(rotIdx)] = self.compute_auto_map(int(autoIdx), self.N)
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
@@ -712,7 +696,7 @@ class __FOR_SAVE_ONLY_Context:
                 np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
             )
             self.QmuplusPmu_map[cur_limbs] = np.array(
-                np.concatenate((self.q_mu[0:cur_limbs], self.p_mu[:K])), dtype=np.uint64
+                np.concatenate((self.q_mu[0:cur_limbs], p_mu[:K])), dtype=np.uint64
             )
             self.QbarretKplusPbarretK_map[cur_limbs] = np.array(
                 np.concatenate((self.barret_k[0:cur_limbs], self.barret_k[-K:])), dtype=np.uint64
@@ -729,7 +713,6 @@ class __FOR_SAVE_ONLY_Context:
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
                     logBsSlots,
-                    self.moduliP_scalar,
                     0,
                     self.secretKeyDist,
                     boot_cnst_map[str(logBsSlots)]
