@@ -370,7 +370,7 @@ class Context:
         self.scalingFactorsRealBig = scalingFactorsRealBig
 
         # for cv_mul
-        self.PModq = PModq
+        self.PModq = PModq.clone().to(device)
         self.PInvModq = PInvModq
         self.QmuplusPmu_map = {key: value.clone().to(device) for key, value in QmuplusPmu_map.items()}
         self.QplusP_map =  {key: value.clone().to(device) for key, value in QplusP_map.items()}
