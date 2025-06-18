@@ -9,7 +9,7 @@ def key_switch_P_ext(cipher, cryptoContext):
     cv = [
         torch.cat((
             F.cv_mul_scalar(cv, cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-            torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device=cryptoContext.device).reshape(-1, cryptoContext.N) #todo: note
+            torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device=cryptoContext.device).reshape(-1, cryptoContext.N) # fixme: optimize torch.cat?
         ), dim=0)
         for cv in cipher.cv
     ]
@@ -32,7 +32,6 @@ def _mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     return digits.cipher_like(sum_mult, is_ext=True)
 
 
-#todo: do we need to support mult key, considering that hoisting is only for rotation
 @decorator_factory
 def mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     return _mult_rot_key_and_sum_ext(digits, index, cryptoContext)

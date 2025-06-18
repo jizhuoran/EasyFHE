@@ -55,7 +55,7 @@ class OpenFHEContext:
         ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         ptx.Encode()
         data = ptx.GetVectorOfData()
-        mv = [torch.tensor(data, device=device, dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+        mv = [torch.tensor(data, device=device, dtype=torch.uint64)]
         gpufhe_cipher = Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
         if self.config.PTX_TWIN:
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))
