@@ -39,8 +39,6 @@ class __FOR_SAVE_ONLY_Context:
         self.rescaleTech = rescaleTech
         self.BsContext_map = {}
         self.specialMod = specialMod
-        self.qVec = None
-        # self.correctionFactor = 0 # todo: to be removed
 
         self.logN = logN
         self.dcrtBits = dcrtBits
@@ -54,17 +52,14 @@ class __FOR_SAVE_ONLY_Context:
         self.M = self.N << 1
         self.logNh = logN - 1
         self.Nh = self.N >> 1
-        self.p = 1 << dcrtBits #todo: to be removed?
 
         self.moduliQ_scalar = [0] * L
         qRoots = [0] * L
         qRootsInv = [0] * L
         qRootPows = [[] for _ in range(L)]
         qRootPowsInv = [[] for _ in range(L)]
-        self.mult_key_map = None
-        self.slots_left_rot_key_map = {} 
-        self.total_left_rot_key_map = {} 
-        self.slots_precompute_auto_map = {} #fixme: why adding prefix slots_ ?
+        self.total_left_rot_key_map = {}
+        self.total_precompute_auto_map = {}
         bnd = 1
         cnt = 1
         self.encode_values = {}
@@ -199,7 +194,7 @@ class __FOR_SAVE_ONLY_Context:
             low = x & ((1 << 64) - 1)
             high = x >> 64
             p_mu.append([low, high])
-        self.p_mu = np.array(p_mu, dtype=np.uint64)
+        p_mu = np.array(p_mu, dtype=np.uint64)
 
         moduliPartQ = [0] * self.dnum
         for j in range(self.dnum):
@@ -261,28 +256,28 @@ class __FOR_SAVE_ONLY_Context:
                         QHatModpj = int(partQHat) % int(mod)
                         self.PartQlHatModp[l][k][i][j] = QHatModpj
 
-        self.pHatModp = [0] * K
-        self.pHatInvModp = [0] * K
+        pHatModp = [0] * K
+        pHatInvModp = [0] * K
         # 计算 pHatModp
         for k in range(K):
-            self.pHatModp[k] = int(1)
+            pHatModp[k] = int(1)
             for j in list(range(k)) + list(range(k + 1, K)):
                 temp = int(self.moduliP_scalar[j] % self.moduliP_scalar[k])
-                self.pHatModp[k] = (self.pHatModp[k] * temp) % int(self.moduliP_scalar[k])
+                pHatModp[k] = (pHatModp[k] * temp) % int(self.moduliP_scalar[k])
 
         for k in range(K):
-            self.pHatInvModp[k] = int(
-                self.invMod(int(self.pHatModp[k]), self.moduliP_scalar[k])
+            pHatInvModp[k] = int(
+                self.invMod(int(pHatModp[k]), self.moduliP_scalar[k])
             )
 
-        self.pHatModq = [[0] * L for _ in range(K)]
+        pHatModq = [[0] * L for _ in range(K)]
         for k in range(K):
             for i in range(L):
-                self.pHatModq[k][i] = int(1)
+                pHatModq[k][i] = int(1)
                 for s in list(range(k)) + list(range(k + 1, K)):
                     temp = int(self.moduliP_scalar[s]) % int(self.moduliQ_scalar[i])
-                    self.pHatModq[k][i] = self.mulMod(
-                        int(self.pHatModq[k][i]), temp, int(self.moduliQ_scalar[i])
+                    pHatModq[k][i] = self.mulMod(
+                        int(pHatModq[k][i]), temp, int(self.moduliQ_scalar[i])
                     )
 
         self.PModq = [0] * L
@@ -296,10 +291,10 @@ class __FOR_SAVE_ONLY_Context:
                     int(self.PModq[i]), int(temp), int(self.moduliQ_scalar[i])
                 )
 
-        self.PInvModq = [0] * L
+        PInvModq = [0] * L
         # 计算 PInvModq
         for i in range(L):
-            self.PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
+            PInvModq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
 
         qInvModq = [[0 for _ in range(L)] for _ in range(L)]
         for i in range(L):
@@ -330,49 +325,25 @@ class __FOR_SAVE_ONLY_Context:
 
                 self.QlQlInvModqlDivqlModq[k][i] = np.uint64(result)
 
-        # self.mult_swk = [None, None]
-        # if MULT_SWK is None:
-        #     warnings.warn(
-        #         "\n------------------------\n"
-        #         "MULT_SWK needs to be set"
-        #         "\n------------------------\n",
-        #         UserWarning,
-        #     )
-        #     # todo: set data in numpy array
-        # else:
-        #     self.mult_swk[0] = MULT_SWK[0]
-        #     self.mult_swk[1] = MULT_SWK[1]
-
 
         self.moduliQ_scalar = np.array(self.moduliQ_scalar, dtype=np.uint64)
         self.moduliP_scalar = np.array(self.moduliP_scalar, dtype=np.uint64)
-        qRoots = np.array(qRoots, dtype=np.uint64) #todo: remove unused var?
-        pRoots = np.array(pRoots, dtype=np.uint64) #todo: remove unused var?
 
         self.max_int_diffs = np.array([(9223372036854775295 - p) % p for p in np.concat((self.moduliQ_scalar, self.moduliP_scalar)).tolist()], dtype=np.uint64)
 
-        #todo: remove duplicated variables?
-        # self.QHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
-        # self.QHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
-        # self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
-        # self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
-
-        self.PInvModq = np.array(self.PInvModq, dtype=np.uint64)
+        PInvModq = np.array(PInvModq, dtype=np.uint64)
 
         self.PartQlHatInvModq = np.array(self.PartQlHatInvModq, dtype=np.uint64)
         self.PartQlHatModp = np.array(self.PartQlHatModp, dtype=np.uint64)
-        self.pHatModp = np.array(self.pHatModp, dtype=np.uint64)
-        self.pHatInvModp = np.array(self.pHatInvModp, dtype=np.uint64)
-        self.pHatModq = np.array(self.pHatModq, dtype=np.uint64)
+        pHatInvModp = np.array(pHatInvModp, dtype=np.uint64)
+        pHatModq = np.array(pHatModq, dtype=np.uint64)
         self.PModq = np.array(self.PModq, dtype=np.uint64)
         qInvModq = np.array(qInvModq, dtype=np.uint64)
         self.QlQlInvModqlDivqlModq = np.array(
             self.QlQlInvModqlDivqlModq, dtype=np.uint64
         )
 
-        # todo: scalingFactorsReal and scalingFactorsRealBig should be move to cuda?
         # note that they are vector of doubles in openfhe. now is set to float
-        # todo: check if self.dmoduliQ needs to be moved to cuda
         DEFAULT_EXTRA_MOD_SIZE = 20
         extraBits = (
             DEFAULT_EXTRA_MOD_SIZE if self.rescaleTech == "FLEXIBLEAUTOEXT" else 0
@@ -426,10 +397,6 @@ class __FOR_SAVE_ONLY_Context:
                     self.scalingFactorsRealBig[k] = (
                         self.scalingFactorsReal[k] * self.scalingFactorsReal[k]
                     )
-            # Moduli as real
-            self.dmoduliQ = [0.0] * self.L
-            for i in range(self.L):
-                self.dmoduliQ[i] = float(self.moduliQ_scalar[i])
         else:
             self.approxSF = 2**self.dcrtBits
         # compute encode params
@@ -526,9 +493,9 @@ class __FOR_SAVE_ONLY_Context:
                 dtype=np.uint64,
             )
             self.automorphism_transform_out = np.array(
-                [0] * (self.num_moduli_after_modup * self.N * self.beta),
+                [0] * (self.num_moduli_after_modup * self.N),
                 dtype=np.uint64,
-            ) #todo: over estiamted, at least remove self.beta if remain (L+K) for hoisted moddown in partial-sum-like computation
+            )
             self.mod_raise_out = np.array(
                 [0] * (self.L * self.N),
                 dtype=np.uint64,
@@ -613,7 +580,7 @@ class __FOR_SAVE_ONLY_Context:
             start_begin = self.primes[end_length:]
             start_end = start_begin[start_length:]
 
-            hat_inv_moddown = self.pHatInvModp
+            hat_inv_moddown = pHatInvModp
             hat_inv_shoup_moddown = []
             hat_inverse_vec_moddown = []
             hat_inverse_vec_shoup_moddown = []
@@ -634,13 +601,13 @@ class __FOR_SAVE_ONLY_Context:
 
             prod_q_i_mod_q_j_moddown = []
             end_primes = self.set_difference(self.primes, start_begin)
-            prod_q_i_mod_q_j_moddown.append(self.pHatModq.swapaxes(1, 0).flatten())
+            prod_q_i_mod_q_j_moddown.append(pHatModq.swapaxes(1, 0).flatten())
             self.prod_q_i_mod_q_j_moddown = np.array(
                 np.array(prod_q_i_mod_q_j_moddown, dtype=np.uint64),
                 dtype=np.uint64,
             )
 
-            prod_inv = self.PInvModq
+            prod_inv = PInvModq
             prod_shoup = []
 
             for i, end_prime in enumerate(end_primes):
@@ -700,35 +667,24 @@ class __FOR_SAVE_ONLY_Context:
                 np.array(qInvModq_shoup_vec, dtype=np.uint64),
                 dtype=np.uint64,
             )
-            # self.PModq_cuda = np.array(self.PModq, dtype=np.uint64)
 
             self.primes = np.array(self.primes, dtype=np.uint64)
 
 
         self.mult_swk_bx = np.array(MULT_SWK[0].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
         self.mult_swk_ax = np.array(MULT_SWK[1].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
-        # key_map_ax_fixed = np.array(swk_ax, dtype=np.uint64)
-        # key_map_bx_fixed = np.array(swk_bx, dtype=np.uint64)
-        # self.mult_key_map = [key_map_bx_fixed, key_map_ax_fixed]
 
         #half_key
         for key, ROT_SWK in rot_swk_map.items():
-            left_rot_key_map = []
-            precompute_auto_map = {}
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
-                if int(rotIdx)<0:    # the same as `norm_rot_index(self, i)` in class Context
-                    rotIdx = self.N//2 + rotIdx
-                left_rot_key_map.append(int(rotIdx))
+                if rotIdx < 0: # the same as `norm_rot_index(self, i)` in class Context
+                    rotIdx = self.N // 2 + rotIdx
                 self.total_left_rot_key_map[int(rotIdx)] = [
                     np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                     np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
                 ]
-                precompute_auto_map[int(rotIdx)] = self.compute_auto_map(
-                    int(autoIdx), self.N
-                )
-            self.slots_left_rot_key_map[key] = left_rot_key_map
-            self.slots_precompute_auto_map[key] = precompute_auto_map
+                self.total_precompute_auto_map[int(rotIdx)] = self.compute_auto_map(int(autoIdx), self.N)
 
         self.QplusP_map = {}
         self.QmuplusPmu_map = {}
@@ -740,7 +696,7 @@ class __FOR_SAVE_ONLY_Context:
                 np.concatenate((self.moduliQ_scalar[0:cur_limbs], self.moduliP_scalar[0:K])), dtype=np.uint64
             )
             self.QmuplusPmu_map[cur_limbs] = np.array(
-                np.concatenate((self.q_mu[0:cur_limbs], self.p_mu[:K])), dtype=np.uint64
+                np.concatenate((self.q_mu[0:cur_limbs], p_mu[:K])), dtype=np.uint64
             )
             self.QbarretKplusPbarretK_map[cur_limbs] = np.array(
                 np.concatenate((self.barret_k[0:cur_limbs], self.barret_k[-K:])), dtype=np.uint64
@@ -757,7 +713,6 @@ class __FOR_SAVE_ONLY_Context:
                 self.BsContext_map[str(logBsSlots)] = BsContext(
                     self.N,
                     logBsSlots,
-                    self.moduliP_scalar,
                     0,
                     self.secretKeyDist,
                     boot_cnst_map[str(logBsSlots)]
@@ -799,18 +754,6 @@ class __FOR_SAVE_ONLY_Context:
                 mask = [1] * (1 << j) + [0] * ((1 << i) - (1 << j))
                 mask = pre_encode(mask, 1 << i)
                 self.encode_values["slot_conversion_mask_{}to{}".format(1<<i, 1<<j)] = mask
-
-            # for logBsSlots in logBsSlots_list:
-            #     BsContextMembers = {}
-            #     for item in dir(self.BsContext_map[str(logBsSlots)]):
-            #         if (
-            #             not callable(getattr(self.BsContext_map[str(logBsSlots)], item))
-            #         ) and not item.startswith("__"):
-            #             BsContextMembers[item] = getattr(
-            #                 self.BsContext_map[str(logBsSlots)], item
-            #             )
-            #     BsContextMembers_dict[str(logBsSlots)] = BsContextMembers
-
 
 
     def compute_auto_map(self, k, N):

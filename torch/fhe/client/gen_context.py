@@ -117,9 +117,6 @@ def gen_contexts(
     openfheMembers["publicKey"] = openfhe.Serialize(keys.publicKey, openfhe.BINARY)
     openfheMembers["secretKey"] = openfhe.Serialize(keys.secretKey, openfhe.BINARY)
     openfheMembers["depth"] = depth
-    openfheMembers["app_rot_key"] = openfhe.SerializeEvalAutomorphismKeyString(
-        openfhe.BINARY
-    )
     # with open(OPENFHE_path, "wb") as file:
     #     pickle.dump(openfheMembers, file)
     # del openfheMembers

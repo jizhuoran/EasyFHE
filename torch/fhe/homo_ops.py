@@ -1,6 +1,6 @@
 import math
 import torch
-import warnings
+import warnings,traceback,sys
 from .ciphertext import *
 from . import functional as F
 from . import hybrid_keyswitch
@@ -230,7 +230,6 @@ def _crt_mult(xs, ys, mods):
     return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
 
 
-# todo: implement void EvalSubInPlace(Ciphertext<Element>& ciphertext, double constant) in cryptocontext.h?
 def _get_element_for_eval_add_or_sub(constant, cur_limbs, noise_deg, cryptoContext):
 
     if cryptoContext.rescaleTech == "FLEXIBLEAUTOEXT" and cur_limbs == cryptoContext.L:
@@ -336,11 +335,6 @@ def _get_element_for_eval_mult(constant, cur_limbs, cryptoContext):
 def _eval_mult_core(in0, cnst, cryptoContext):
     factors = _get_element_for_eval_mult(cnst, in0.cur_limbs, cryptoContext)
     return _cipher_mul_scalar_double(in0, factors, cryptoContext)
-
-
-# todo: only support in `FIXEDMANUAL` mode, or `_adjust_levels_and_depth` function.
-# should not be used directly in other rescale modes!!! except when openfhe directly used it
-# todo: write homo_level_reduce
 
 
 def _cipher_add(in0, in1, cryptoContext):
@@ -458,8 +452,6 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
     return in0.cipher_like(cv)
 
 
-# todo: used only in `homo_mul_scalar_int`, therefore the scaling factor and noise_deg remain unchanged
-# todo: if used for `homo_mul_scalar_double`, the scaling factor and noise_deg should be changed
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
     scalar_mod = scalar_mod.to(in0.cv[0].device)
@@ -545,15 +537,22 @@ def homo_sub(in0, in1, cryptoContext):
 
 
 @decorator_factory
-def homo_rescale(ct, levels, cryptoContext):  # todo: add force_rescale flag in user api for other rescaleTech?
+def homo_rescale(ct, levels, cryptoContext):
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        return _homo_rescale_internal(ct, levels, cryptoContext)
+        if ct.noise_deg - levels == 1:
+            return _homo_rescale_internal(ct, levels, cryptoContext)
+        else:
+            warnings.warn(f"Rescaling should not put here. Current ct.noise_deg: {ct.noise_deg}.", Warning)
+            # print call stack and end the program
+            traceback.print_stack()
+            # sys.exit(1)
+            return ct.deep_copy()
     else:
-        return ct.deep_copy()
+        return ct
 
 
 def _homo_rescale_internal(ct, levels, cryptoContext):
-    assert levels == 1 or levels == 0 and "Only support these two cases"
+    assert levels in (0, 1), f"input level = {levels}, only support 0 or 1"
     assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
     if levels == 0:
         return ct.deep_copy()
@@ -633,7 +632,6 @@ def homo_add_scalar_int(in0, scalar, cryptoContext):
 
 
 # note: corresponds to MultByIntegerInPlace in openfhe, the datatype of scalar in openfhe is `uint64_t`
-# fixme: do we accept scalar<0?
 @decorator_factory
 def homo_mul_scalar_int(in0, scalar, cryptoContext):
     res = _cipher_mul_scalar_int(in0, abs(scalar), cryptoContext)

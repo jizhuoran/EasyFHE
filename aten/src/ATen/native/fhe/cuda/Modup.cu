@@ -8,8 +8,6 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <ATen/TensorIndexing.h>
-#include <ATen/ops/cat.h>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
@@ -147,10 +145,6 @@ static void modup_impl(
       cudaMemcpyDeviceToDevice,
       stream);
 
-  auto intt_primes = at::cat({primes.index({at::indexing::Slice(at::indexing::None, curr_limbs)}), primes.index({at::indexing::Slice(L, at::indexing::None)})}, 0);
-  auto intt_inverse_power_of_roots_div_two = at::cat({inverse_power_of_roots_div_two.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), inverse_power_of_roots_div_two.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
-  auto intt_inverse_scaled_power_of_roots_div_two = at::cat({inverse_scaled_power_of_roots_div_two.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), inverse_scaled_power_of_roots_div_two.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
-
   iNTT_impl(
       to_ptr,
       to_ptr,
@@ -159,9 +153,9 @@ static void modup_impl(
       curr_limbs,
       L,
       N,
-      intt_primes,
-      intt_inverse_power_of_roots_div_two,
-      intt_inverse_scaled_power_of_roots_div_two);
+      primes,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two);
 
   const_mult_batch(
       to_ptr + begin_idx * N,
@@ -185,9 +179,6 @@ static void modup_impl(
       barret_ratio,
       barret_k);
 
-  auto ntt_primes = at::cat({primes.index({at::indexing::Slice(at::indexing::None, curr_limbs)}), primes.index({at::indexing::Slice(L, at::indexing::None)})}, 0);
-  auto ntt_power_of_roots_shoup = at::cat({power_of_roots_shoup.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), power_of_roots_shoup.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
-  auto ntt_power_of_roots = at::cat({power_of_roots.index({at::indexing::Slice(at::indexing::None, curr_limbs*N)}), power_of_roots.index({at::indexing::Slice(L*N, at::indexing::None)})}, 0);
   NTT_except_some_range_impl(
       to_ptr,
       num_moduli_after_modup,
@@ -197,9 +188,9 @@ static void modup_impl(
       0,
       begin_idx,
       in_C_L_len,
-      ntt_power_of_roots_shoup,
-      ntt_primes,
-      ntt_power_of_roots);
+      power_of_roots_shoup,
+      primes,
+      power_of_roots);
 
   cudaMemcpyAsync(
       to_ptr + N * begin_idx,

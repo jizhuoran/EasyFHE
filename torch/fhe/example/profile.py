@@ -4,6 +4,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 from functools import partial
 from collections import defaultdict
 import numpy as np
+import torch
 from torch.fhe import homo_ops, hybrid_keyswitch, homo_bootstrap
 from torch.fhe import utils
 
@@ -43,12 +44,13 @@ def profiling_single_op(
     maxLevelsRemaining=20,
     appRotIndex_list=[-1, 2],
     logBsSlots_list=[12],
-    logN=15,
+    logN=16,
     dnum=3,
     dcrtBits=59,
     firstMod=60,
     levelBudget_list=[[4, 4]],
     rescaleTech="FIXEDMANUAL",  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    device="cuda",
     save_dir=DATA_DIR
 ):
 
@@ -65,14 +67,12 @@ def profiling_single_op(
         levelBudget_list,
         "UNIFORM_TERNARY",
         rescaleTech,
+        device,
         save_dir=save_dir,
         config=config,
     )
     log_encode_slot = logBsSlots_list[0]
     encode_slots = 1 << log_encode_slot
-
-    cryptoContext.BsContext = cryptoContext.BsContext_map[str(log_encode_slot)]
-    cryptoContext.BsContext.to_cuda()
 
     values = [
         0.111111,
@@ -86,11 +86,9 @@ def profiling_single_op(
     ]
     x = np.array([values[i % len(values)] for i in range(encode_slots)])
     pre_encode_value = homo_ops.pre_encode(x, encode_slots, cryptoContext)
-    pre_encode_value.encoded_values = torch.tensor(pre_encode_value.encoded_values, device="cuda", dtype=torch.double)
-    x = torch.tensor(x, device="cuda")
-    cipher = openfhe_context.encrypt(x, 1, 0, encode_slots)
-    cipher_rescale = openfhe_context.encrypt(x, 2, 0, encode_slots)
-    plaintext = openfhe_context.encode(values, 1, 0, False, encode_slots)
+    cipher = openfhe_context.encrypt(x, device, 1, 0, encode_slots)
+    cipher_rescale = openfhe_context.encrypt(x, device, 2, 0, encode_slots)
+    plaintext = openfhe_context.encode(values, device, 1, 0, encode_slots)
 
     for limb in range(1, cipher.cur_limbs + 1):
         tmp_ct = homo_ops._drop_last_elements(cipher, cipher.cur_limbs - limb, cryptoContext)
@@ -100,35 +98,35 @@ def profiling_single_op(
         tmp_pt = homo_ops._drop_last_elements(plaintext, plaintext.cur_limbs - limb, cryptoContext)
 
         # perf(partial(homo_ops.encode, x, 1, cipher.cur_limbs-limb, encode_slots, True, cryptoContext), "encode", limb, repeat_time=10)
-        perf(partial(homo_ops.encode, pre_encode_value, cipher.cur_limbs-limb, encode_slots, cryptoContext), "encode_new", limb, repeat_time=10)
-        # perf(partial(homo_ops.homo_add, tmp_ct, tmp_ct, cryptoContext), "homo_add", limb)
-        # perf(partial(homo_ops.homo_sub, tmp_ct, tmp_ct, cryptoContext), "homo_sub", limb)
-        # perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
+        # perf(partial(homo_ops.encode, pre_encode_value, cipher.cur_limbs-limb, encode_slots, cryptoContext), "encode_new", limb, repeat_time=10)
+        perf(partial(homo_ops.homo_add, tmp_ct, tmp_ct, cryptoContext), "homo_add", limb)
+        perf(partial(homo_ops.homo_sub, tmp_ct, tmp_ct, cryptoContext), "homo_sub", limb)
+        perf(partial(homo_ops.homo_mul, tmp_ct, tmp_ct, cryptoContext), "homo_mul", limb)
         # perf(partial(homo_ops.homo_square, tmp_ct, cryptoContext), "homo_square", limb)
-        # perf(partial(homo_ops.homo_rescale_internal, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
-        # perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
+        perf(partial(homo_ops._homo_rescale_internal, tmp_ct_rescale, 1, cryptoContext), "homo_rescale", limb)
+        perf(partial(homo_ops.homo_add_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_add_scalar_double", limb)
         # perf(partial(homo_ops.homo_add_scalar_int, tmp_ct, 1, cryptoContext), "homo_add_scalar_int", limb)
-        # perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
+        perf(partial(homo_ops.homo_mul_scalar_double, tmp_ct, 1.0, cryptoContext), "homo_mul_scalar_double", limb)
         # perf(partial(homo_ops.homo_mul_scalar_int, tmp_ct, 1, cryptoContext), "homo_mul_scalar_int", limb)
-        # perf(partial(homo_ops.homo_rotate, tmp_ct, 2, cryptoContext), "homo_rotate", limb)
-        # perf(partial(homo_ops.homo_mul_pt, tmp_ct, tmp_pt, cryptoContext), "homo_mul_pt", limb)
-        # perf(partial(homo_ops.homo_add_pt, tmp_ct, tmp_pt, cryptoContext), "homo_add_pt", limb)
+        perf(partial(homo_ops.homo_rotate, tmp_ct, 2, cryptoContext), "homo_rotate", limb)
+        perf(partial(homo_ops.homo_mul_pt, tmp_ct, tmp_pt, cryptoContext), "homo_mul_pt", limb)
+        perf(partial(homo_ops.homo_add_pt, tmp_ct, tmp_pt, cryptoContext), "homo_add_pt", limb)
 
-        # perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
-        # perf(partial(hybrid_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
-        # perf(partial(hybrid_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
-        # perf(partial(hybrid_keyswitch.key_switch_P_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
-        # perf(partial(hybrid_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, 2, cryptoContext), "mult_rot_key_and_sum_ext", limb)
+        perf(partial(homo_ops.eval_fast_rotate, tmp_cv_ext, tmp_cv, 2, True, False, cryptoContext), "eval_fast_rotate", limb)
+        perf(partial(hybrid_keyswitch.modup_to_ext, tmp_cv, cryptoContext), "modup_to_ext", limb)
+        perf(partial(hybrid_keyswitch.moddown_from_ext, tmp_cv_ext, cryptoContext), "moddown_from_ext", limb)
+        perf(partial(hybrid_keyswitch.key_switch_P_ext, tmp_cv, cryptoContext), "key_switch_P_ext", limb)
+        perf(partial(hybrid_keyswitch.mult_rot_key_and_sum_ext, tmp_cv_ext, 2, cryptoContext), "mult_rot_key_and_sum_ext", limb)
 
-    # cipher_last = homo_ops._drop_last_elements(cipher, cipher.cur_limbs - 2, cryptoContext)
-    # perf(
-    #     partial(
-    #         homo_bootstrap, cipher_last, cryptoContext.L, log_encode_slot, cryptoContext
-    #     ),
-    #     "homo_bootstrap",
-    #     1,
-    #     repeat_time=3,
-    # )
+    cipher_last = homo_ops._drop_last_elements(cipher, cipher.cur_limbs - 2, cryptoContext)
+    perf(
+        partial(
+            homo_bootstrap, cipher_last, cryptoContext.L, log_encode_slot, levelBudget_list[0], cryptoContext
+        ),
+        "homo_bootstrap",
+        1,
+        repeat_time=2,
+    )
 
     print_profiling_result()
 

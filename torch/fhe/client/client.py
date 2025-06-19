@@ -42,11 +42,11 @@ class OpenFHEContext:
         self.cc = openfhe.DeserializeCryptoContextString(content_map["cc"], openfhe.BINARY)
         self.publicKey = openfhe.DeserializePublicKeyString(content_map["publicKey"], openfhe.BINARY)
         self.secretKey = openfhe.DeserializePrivateKeyString(content_map["secretKey"], openfhe.BINARY)
-        openfhe.DeserializeEvalAutomorphismKeyString(content_map["app_rot_key"], openfhe.BINARY)
         self.depth = content_map["depth"]
 
     def setup_for_debug(self, debug_keys, slots, level_budget):
-        self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
+        if slots != None and level_budget != None:
+            self.cc.EvalBootstrapSetup(level_budget, [0, 0], slots)
         openfhe.DeserializeEvalMultKeyString(debug_keys["mul_key"], openfhe.BINARY)
         openfhe.DeserializeEvalAutomorphismKeyString(debug_keys["rot_key"], openfhe.BINARY)
 
@@ -55,7 +55,7 @@ class OpenFHEContext:
         ptx = self.cc.MakeCKKSPackedPlaintext(x, scale_deg, level, None, slots)
         ptx.Encode()
         data = ptx.GetVectorOfData()
-        mv = [torch.tensor(data, device=device, dtype=torch.uint64)] #fixme: shall we set device = "cuda" directly?
+        mv = [torch.tensor(data, device=device, dtype=torch.uint64)]
         gpufhe_cipher = Plaintext(mv, mv[0].shape[0], ptx.GetScalingFactor(), ptx.GetNoiseScaleDeg(), ptx.GetSlots(), False)
         if self.config.PTX_TWIN:
             gpufhe_cipher.ptx_twin = np.array(x + [0] * (slots - len(x)))

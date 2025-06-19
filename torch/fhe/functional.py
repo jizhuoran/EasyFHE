@@ -222,7 +222,7 @@ def cv_innerproduct(
         barret_k=context.barret_k,
         workspace=context.inner_workspace,
     )
-    return res.reshape(2, -1, context.N) #todo: check return type is tensor or list?
+    return res.reshape(2, -1, context.N)
 
 
 def cv_keyswitch(
