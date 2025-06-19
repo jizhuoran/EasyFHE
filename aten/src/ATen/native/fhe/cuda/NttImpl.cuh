@@ -26,6 +26,7 @@ __global__ void Intt8PointPerThreadPhase2OoP(
     const int N,
     const int start_prime_idx,
     const int ceil_curr_limbs,
+    const int gap,
     const int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
@@ -40,7 +41,8 @@ __global__ void Intt8PointPerThreadPhase2OoP(
     int t = N / 2 / m;
     // prime idx
     int np_idx = i / (N / 8);
-    int prime_idx = np_idx;
+    int prime_idx =
+        np_idx + (((np_idx + start_prime_idx) < ceil_curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -188,6 +190,7 @@ __global__ void Intt8PointPerThreadPhase1OoP(
     const int N,
     const int start_prime_idx,
     const int ceil_curr_limbs,
+    const int gap,
     int pad,
     int radix,
     const uint64_t* base_inv,
@@ -204,7 +207,8 @@ __global__ void Intt8PointPerThreadPhase1OoP(
     int t = N / 2 / m;
     // prime idx
     int np_idx = i / (N / 8) + start_prime_idx;
-    int prime_idx = np_idx ;
+    int prime_idx =
+        np_idx + ((np_idx >= 0 && np_idx < ceil_curr_limbs) ? 0 : gap);
     // index in N/2 range
     int N_idx = i % (N / 8);
     // i'th block
@@ -698,6 +702,7 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
     const int excluded_range_start,
     const int excluded_range_end,
     const int curr_limbs,
+    const int gap,
     const int pad,
     const int radix,
     const uint64_t* base_inv,
@@ -715,7 +720,7 @@ __global__ void Ntt8PointPerThreadPhase1ExcludeSomeRange(
   int np_idx = blockIdx.y + start_prime_idx;
   if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
     return;
-  int prime_idx = np_idx;
+  int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
   // index in N/2 range
   int N_idx = blockIdx.x * blockDim.x + threadIdx.x;
   // i'th block
@@ -862,6 +867,7 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
     const int excluded_range_start,
     const int excluded_range_end,
     const int curr_limbs,
+    const int gap,
     const int radix,
     const uint64_t* base_inv,
     const uint64_t* base_inv_,
@@ -878,7 +884,7 @@ __global__ void Ntt8PointPerThreadPhase2ExcludeSomeRange(
   int np_idx = num_prime - 1 - blockIdx.y + start_prime_idx;
   if (np_idx >= excluded_range_start && np_idx < excluded_range_end)
     return;
-  int prime_idx = np_idx;
+  int prime_idx = np_idx + ((np_idx >= 0 && np_idx < curr_limbs) ? 0 : gap);
   // index in N/2 range
   int N_idx = blockIdx.x * blockDim.x + threadIdx.x;
   // i'th block
@@ -1048,6 +1054,8 @@ void iNTT_impl(
         auto inverse_scaled_power_of_roots_div_two_ptr =
             reinterpret_cast<uint64_t*>(
                 inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
+        int gap = level - curr_limbs;
+
         auto stream = at::cuda::getCurrentCUDAStream();
         fhe::Intt8PointPerThreadPhase2OoP<<<
             gridDim,
@@ -1060,6 +1068,7 @@ void iNTT_impl(
             param_degree,
             start_prime_idx,
             curr_limbs,
+            gap,
             second_radix_size / per_thread_ntt_size,
             inverse_power_of_roots_div_two_ptr + param_degree * start_prime_idx,
             inverse_scaled_power_of_roots_div_two_ptr +
@@ -1077,6 +1086,7 @@ void iNTT_impl(
             param_degree,
             start_prime_idx,
             curr_limbs,
+            gap,
             pad,
             first_stage_radix_size / 8,
             inverse_power_of_roots_div_two_ptr,
@@ -1165,6 +1175,7 @@ void NTT_except_some_range_impl(
       reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
   auto param_power_of_roots_ptr =
       reinterpret_cast<uint64_t*>(power_of_roots.data_ptr<uint64_t>());
+  int gap = L - curr_limbs;
   auto stream = at::cuda::getCurrentCUDAStream();
   fhe::Ntt8PointPerThreadPhase1ExcludeSomeRange<<<
       dim3(N / 8 / ((first_stage_radix_size / 8) * pad), batch),
@@ -1179,6 +1190,7 @@ void NTT_except_some_range_impl(
       excluded_range_start,
       excluded_range_end,
       curr_limbs,
+      gap,
       pad,
       first_stage_radix_size / per_thread_ntt_size,
       param_power_of_roots_ptr,
@@ -1197,6 +1209,7 @@ void NTT_except_some_range_impl(
       excluded_range_start,
       excluded_range_end,
       curr_limbs,
+      gap,
       second_radix_size / per_thread_ntt_size,
       param_power_of_roots_ptr,
       param_power_of_roots_shoup_ptr,
