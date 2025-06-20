@@ -18,8 +18,8 @@ call_registry = {}
 def print_call_counts():
     if len(call_registry) > 0:
         print("\nFunction Call Counts:")
-        for func_name, wrapper in call_registry.items():
-            print(f"Function '{func_name}' was called {wrapper.count} times.")
+        for func_name, count in call_registry.items():
+            print(f"Function '{func_name}' was called {count} times.")
 
 
 @atexit.register
@@ -34,10 +34,11 @@ def print_execution_times():
 def call_counter(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        wrapper.count += 1  # Increment the call count
+        if func.__name__ not in call_registry:
+            call_registry[func.__name__] = 1
+        else:
+            call_registry[func.__name__] += 1
         return func(*args, **kwargs)
-    wrapper.count = 0  # Initialize the call count
-    call_registry[func.__name__] = wrapper  # Register the function
     return wrapper
 
 def profile_python_function(func):
