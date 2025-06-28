@@ -120,7 +120,10 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
         cipher_list.append(c2)
 
     for cipher in cipher_list:
-        fullpack = fhe.homo_rescale(cipher, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        if cipher.noise_deg > 1:
+            fullpack = fhe.homo_rescale(cipher, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        else:
+            fullpack = cipher
         fullpack = fhe.homo_mul_pt(fhe.homo_add(fullpack,
                                                 fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
                                    gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext),
@@ -171,6 +174,7 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
             downsampledchannels = fhe.homo_rotate(downsampledchannels, -(1024 - 256), cryptoContext)
         downsampledchannels = fhe.homo_rotate(downsampledchannels, 2 * num_channel // num_cipher * (1024 - 256),
                                               cryptoContext)
+        downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
         downsampledchannels_list.append(downsampledchannels)
 
     if num_cipher == 1:  # resnet20
@@ -186,7 +190,6 @@ def downsample1024to256(c1, c2, num_channel, num_cipher, cryptoContext):
                                                - downsampledchannels_list[0].slots // 4,
                                                cryptoContext),
                                            cryptoContext)
-        downsampledchannels = fhe.force_rescale(downsampledchannels, 1, cryptoContext)
         downsampledchannels = torch.fhe.homo_ops.slot_resize(downsampledchannels, downsampledchannels.slots // 4,
                                                              cryptoContext)
         return downsampledchannels
@@ -290,10 +293,12 @@ def downsample64to16(c1, c2, num_channel, cryptoContext):
         fhe.homo_mul_pt(c1, mask_first_n(old_slots, c1.cur_limbs, c1.slots, cryptoContext), cryptoContext),
         fhe.homo_mul_pt(c2, mask_scecond_n(old_slots, c2.cur_limbs, c2.slots, cryptoContext), cryptoContext),
         cryptoContext)
+    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)
 
     fullpack = fhe.homo_mul_pt(
         fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
         gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
+    fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)
     fullpack = fhe.homo_add(fullpack, fhe.homo_rotate(fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext),
                             cryptoContext)
     downsampledrows = choose_zero(fullpack.slots, cryptoContext)
