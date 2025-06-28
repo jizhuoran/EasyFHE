@@ -554,6 +554,7 @@ def homo_rescale(ct, levels, cryptoContext):
 def _homo_rescale_internal(ct, levels, cryptoContext):
     assert levels in (0, 1), f"input level = {levels}, only support 0 or 1"
     assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
+    assert ct.noise_deg-levels >= 1, f"ct.noise_deg = {ct.noise_deg}, rescaled levels = {levels}, there aren't enough noise_deg to be rescaled"
     if levels == 0:
         return ct.deep_copy()
 
