@@ -5,23 +5,20 @@ from utils import *
 def rot_input(input, img_width, padding, cryptoContext):
     digits = fhe.modup_to_ext(input.cipher_like([input.cv[1]]), cryptoContext)
     c_rotations = []
-    c_rotations.append(
-        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext), -img_width,
-                        cryptoContext))
-    c_rotations.append(fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext))
-    c_rotations.append(
-        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), -img_width,
-                        cryptoContext))
-    c_rotations.append(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext))
+    digits_neg_padding = fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext)
+    digits_padding = fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext)
+    digits_neg_img_width = fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext)
+    digits_img_width = fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext)
+
+    c_rotations.append(fhe.homo_rotate(digits_neg_padding, -img_width, cryptoContext))
+    c_rotations.append(digits_neg_img_width)
+    c_rotations.append(fhe.homo_rotate(digits_padding, -img_width, cryptoContext))
+    c_rotations.append(digits_neg_padding)
     c_rotations.append(input)
-    c_rotations.append(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext))
-    c_rotations.append(
-        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext), img_width,
-                        cryptoContext))
-    c_rotations.append(fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext))
-    c_rotations.append(
-        fhe.homo_rotate(fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext), img_width,
-                        cryptoContext))
+    c_rotations.append(digits_padding)
+    c_rotations.append(fhe.homo_rotate(digits_neg_padding, img_width, cryptoContext))
+    c_rotations.append(digits_img_width)
+    c_rotations.append(fhe.homo_rotate(digits_padding, img_width, cryptoContext))
     return c_rotations
 
 
