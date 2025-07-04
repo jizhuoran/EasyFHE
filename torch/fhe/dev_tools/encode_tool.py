@@ -47,7 +47,8 @@ def pre_encode(x, slots, cryptoContext):
         cryptoContext.encode_bitrev_indices[int(math.log2(slots))]
     )
 
-    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64)
+    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).astype(np.float32)
+
     inverse_array = inverse_array.reshape(1, -1)
     max_encoded_value = np.max(np.abs(inverse_array))
 

@@ -931,7 +931,7 @@ def encode(
             f"scaling_factor = {scaling_factor}. " \
             "Either max_encoded_value should be less than 1e-20, or the log2 of the scaled value should be less than 61."
 
-    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
+    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.float, device=cryptoContext.device)
     # print("slots: ", slots, "shape", middle_value.encoded_values.shape)
     middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots) #TODO workaround, to remove this in the future
     pt_encode = torch.encode(
