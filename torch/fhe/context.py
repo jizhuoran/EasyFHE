@@ -558,3 +558,20 @@ class Context:
             return self.precompute_auto_map[key].cuda()
         else:
             return self.precompute_auto_map[key]
+
+
+    def __repr__(self):
+        s = []
+        s.append(f"{'L:':20} {self.L}")
+        s.append(f"{'logBsSlots:':20} {self.logBsSlots_list}")
+        s.append(f"{'N:':20} {self.N}")
+        s.append(f"{'dnum:':20} {self.dnum}")
+        s.append(f"{'dcrtBits:':20} {self.dcrtBits}")
+        # s.append(f"{'firstMod:':20} {self.firstMod}")  # todo: to add
+        s.append(f"{'K:':20} {self.K}")
+        s.append(f"{'levelBudget_list:':20} {self.levelBudget}")
+        s.append(f"{'rescaleTech:':20} {self.rescaleTech}")
+        s.append(f"{'secretKeyDist:':20} {self.secretKeyDist}")
+        s.append(f"{'device:':20} {self.device}")
+        return "<Context>\n" + "\n".join(s)
+
