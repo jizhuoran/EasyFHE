@@ -27,9 +27,11 @@ def load_weight(encode_weight_path, cryptoContext):
 
 
 # @fhe.utils.profile_python_function
-# def homo_relu(ciphertext, scale, degree, cryptoContext):
+# def homo_relu(ciphertext, cryptoContext):
+#     scale = 1
+#     degree = 119
 #     def scaled_relu_function(x):
-#         return 0 if x < 0 else (1 / scale) * x
+#         return 0 if x < 0 else scale * x
 #
 #     result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
 #     return result
@@ -760,25 +762,16 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     logn_3 = 12 # todo: check if could be leveraged
     logp = 55
     logq = 60
-    rotation_kinds=[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
-		,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61
-		,62,63,64,66,84,124,128,132,256,512,959,960,990,991,1008,1023,1024,1036,1064,1092,1952,1982,1983,2016,2044,2047,2048,2072,2078,2100,3007,3024,3040,3052,3070,3071,3072,3080,3108,4031
-		,4032,4062,4063,4095,4096,5023,5024,5054,5055,5087,5118,5119,5120,6047,6078,6079,6111,6112,6142,6143,6144,7071,7102,7103,7135
-		,7166,7167,7168,8095,8126,8127,8159,8190,8191,8192,9149,9183,9184,9213,9215,9216,10173,10207,10208,10237,10239,10240,11197,11231
-		,11232,11261,11263,11264,12221,12255,12256,12285,12287,12288,13214,13216,13246,13278,13279,13280,13310,13311,13312,14238,14240
-		,14270,14302,14303,14304,14334,14335,15262,15264,15294,15326,15327,15328,15358,15359,15360,16286,16288,16318,16350,16351,16352
-		,16382,16383,16384,17311,17375,18335,18399,18432,19359,19423,20383,20447,20480,21405,21406,21437,21469,21470,21471,21501,21504
-		,22429,22430,22461,22493,22494,22495,22525,22528,23453,23454,23485,23517,23518,23519,23549,24477,24478,24509,24541,24542,24543
-		,24573,24576,25501,25565,25568,25600,26525,26589,26592,26624,27549,27613,27616,27648,28573,28637,28640,28672,29600,29632,29664
-		,29696,30624,30656,30688,30720,31648,31680,31712,31743,31744,31774,32636,32640,32644,32672,32702,32704,32706,32735
-		,32736,32737,32759,32760,32761,32762,32763,32764,32765,32766,32767]
+    rotation_kinds=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,66,84,124,128,132,256,512,959,960,990,991,1008,1023,1024,1036,1064,1092,1952,1982,1983,2016,2044,2047,2048,2072,2078,2100,3007,3024,3040,3052,3070,3071,3072,3080,3108,4031,4032,4062,4063,4095,4096,5023,5024,5054,5055,5087,5118,5119,5120,6047,6078,6079,6111,6112,6142,6143,6144,7071,7102,7103,7135,7166,7167,7168,8095,8126,8127,8159,8190,8191,8192,9149,9183,9184,9213,9215,9216,10173,10207,10208,10237,10239,10240,11197,11231,11232,11261,11263,11264,12221,12255,12256,12285,12287,12288,13214,13216,13246,13278,13279,13280,13310,13311,13312,14238,14240,14270,14302,14303,14304,14334,14335,15262,15264,15294,15326,15327,15328,15358,15359,15360,16286,16288,16318,16350,16351,16352,16382,16383,16384,17311,17375,18335,18399,18432,19359,19423,20383,20447,20480,21405,21406,21437,21469,21470,21471,21501,21504,22429,22430,22461,22493,22494,22495,22525,22528,23453,23454,23485,23517,23518,23519,23549,24477,24478,24509,24541,24542,24543,24573,24576,25501,25565,25568,25600,26525,26589,26592,26624,27549,27613,27616,27648,28573,28637,28640,28672,29600,29632,29664,29696,30624,30656,30688,30720,31648,31680,31712,31743,31744,31774,32636,32640,32644,32672,32702,32704,32706,32735,32736,32737,32759,32760,32761,32762,32763,32764,32765,32766,32767,131071,]
 
 
     log_special_prime = 51
     log_integer_part = logq - logp - loge + 5
-    remaining_level = 16 + 1 + 1
+    # remaining_level = 13 # maybe not enough # for cheby only relu
+    remaining_level = 17 # original 16 for original relu
     boot_level = 14
     total_level = remaining_level + boot_level
+    dnum = 3
     logBsSlots_list = [14]
     levelBudget_list = [[4, 4],]
     # logBsSlots_list = [14,13,12] # note: need to change the input index in `homo_bootstrap` simultaneously
@@ -792,12 +785,14 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                                      SAVE_MIDDLE=False
                                      )
     cryptoContext, openfhe_context = (
-        fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, 1, logp, logq,
+        fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, dnum, logp, logq,
                              levelBudget_list, "SPARSE_TERNARY", rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
     end=time.time()
     print("load context time", end - start)
     print("current time: ", datetime.datetime.now())
+
+    print("cryptoContext: ", cryptoContext)
 
     cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
 
@@ -903,7 +898,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
         # scale_temp=pow(2.0,logq)
-        cipher_temp= openfhe_context.encrypt(vec, cryptoContext.device, 1, 0, 1<<logn ) # note: one more boot after first relu if use -18
+        cipher_temp= openfhe_context.encrypt(vec, cryptoContext.device, 1, cryptoContext.L-20, 1<<logn ) # note: one more boot after first relu if use -18
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
         start=time.time()
@@ -913,17 +908,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
         cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
 
         cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
-        #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-        # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
-        # temptest123=openfhe_context.decrypt(cnn.cipher)
-        # temptest123=temptest123.cpu().numpy().reshape(-1)
-        # templist=[]
-        # for i in range(len(temptest123)):
-        #     if temptest123[i]>0.0001:
-        #         templist.append(temptest123[i])
-        #     else:
-        #         templist.append(0.00000)
-        # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
 
         for j in range (3):
             # print(j)
@@ -944,24 +928,10 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                                                              conv_weight[stage], bn_running_var[stage],
                                                              bn_weight[stage], epsilon, cipher_pool,end=False)
                 cnn=multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,cnn,bn_bias[stage],bn_running_mean[stage],bn_running_var[stage],bn_weight[stage],epsilon,B,end=False)
-                if j==0:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
-                elif j==1:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
-                elif j==2:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
+                cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
                 cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
-                # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
-                # temptest123 = openfhe_context.decrypt(cnn.cipher)
-                # temptest123 = temptest123.cpu().numpy().reshape(-1)
-                # templist = []
-                # for i in range(len(temptest123)):
-                #     if temptest123[i] > 0.0001:
-                #         templist.append(temptest123[i])
-                #     else:
-                #         templist.append(0.00000)
-                # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
                 stage=2*((end_num+1)*j+k)+2
                 st=1
                 cnn = multiplexed_parallel_convolution_print(openfhe_context, cryptoContext, cnn, co, st, fh, fw,
@@ -972,25 +942,10 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
                 if j>=1 and k==0:
                     temp=multiplexed_parallel_downsampling_seal_print(openfhe_context,cryptoContext,temp)
                 cnn.cipher=fhe.homo_add(temp.cipher,cnn.cipher,cryptoContext)
-                if j==0:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
-                elif j==1:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
-                elif j==2:
-                    cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
+                cnn.cipher = fhe.homo_bootstrap(cnn.cipher, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
                 cnn.cipher=homo_relu(cnn.cipher, cryptoContext)
-                #approx_ReLU_seal_print(openfhe_context,cryptoContext,cnn,comp_no,deg,alpha,tree,scaled_val,logp,public_key,secret_key,relin_keys,B)
-                # cnn.cipher=homo_relu(cnn.cipher,1,119,cryptoContext) # trivial openfhe chebyshev relu may lead to 5% precision loss
-                # temptest123 = openfhe_context.decrypt(cnn.cipher)
-                # temptest123 = temptest123.cpu().numpy().reshape(-1)
-                # templist = []
-                # for i in range(len(temptest123)):
-                #     if temptest123[i] > 0.0001:
-                #         templist.append(temptest123[i])
-                #     else:
-                #         templist.append(0.00000)
-                # cnn.cipher = openfhe_context.encrypt(templist, cryptoContext.device, 1,0,1<<logn)
+
         cnn=averagepooling_seal_scale_print(openfhe_context,cryptoContext,cnn,B)
         cnn=fully_connected_seal_print(openfhe_context,cryptoContext,cnn,linear_weight,linear_bias,10,64)
 
@@ -1014,5 +969,5 @@ if __name__ == "__main__":
     # ResNet_cifar10_seal_sparse(56, 0, 0)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
-    print(f"total execution time: {elapsed_time:.4f} 秒")
+    print(f"total execution time: {elapsed_time:.4f} seconds")
 
