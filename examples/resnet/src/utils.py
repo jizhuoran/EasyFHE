@@ -64,7 +64,7 @@ if DIRECT_LOAD:
     def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
         full_name = "{}_{}_{}".format(val_name, level, slots)
         if cryptoContext.pre_encode_type == "middle":
-            name = "{}_{}".format(val_name, slots)
+            name = "{}".format(val_name)
         else:
             name = full_name
         return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
@@ -204,7 +204,7 @@ else:
             print(f"error: {e}")
 
         values = np.array(values, dtype=np.double)
-        name = "{}_{}".format(val_name, slots)
+        name = "{}".format(val_name)
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
