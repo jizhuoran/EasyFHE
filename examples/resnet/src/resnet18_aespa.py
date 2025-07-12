@@ -24,11 +24,11 @@ DATA_DIR = os.environ["DATA_DIR"]
 # pkl_path = "/data/yhh/data/encode_20250611_234607.pkl"
 
 # # config2
-total = 10
+total = 1
 SAVE_END = False
 SAVE_MIDDLE = False
 pre_encode_type = "middle"
-pkl_path = "/data/yhh/data/encode_20250611_234607.pkl"
+pkl_path = "/data/yhh/data/encode_20250703_223228.pkl"
 
 # # config3
 # total=1
