@@ -746,6 +746,7 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, level_budgets,cryptoContext)
 
 
 @decorator_factory
+@utils.profile_python_function
 def homo_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext):
 
     result = eval_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext)
