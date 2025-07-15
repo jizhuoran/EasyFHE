@@ -5,8 +5,17 @@ import torch.fhe as fhe
 import numpy as np
 import random, math
 
+from pathlib import Path
+
+# helr_GPU.py 顶部附近
+ROOT_DIR  = Path(__file__).resolve().parents[2]   #  .../examples/helr
+INPUT_DATA_DIR  = ROOT_DIR / "data"                    #  .../examples/helr/data
+TRAIN_TXT = INPUT_DATA_DIR / "MNIST_train.txt"
+TEST_TXT  = INPUT_DATA_DIR / "MNIST_test.txt"
+
 DATA_DIR = os.environ["DATA_DIR"]
 encData_DIR = DATA_DIR + "/helr/encData/"
+
 
 class Params:
     def __init__(self, factor_num, sample_num, iter_num, alpha, num_thread, slots):
@@ -82,10 +91,8 @@ class SecureML:
         pvals = np.zeros(self.params.slots, dtype=np.float64)
         for i in range(0, self.params.slots, self.params.batch):
             pvals[i] = 1.0
-        # todo: cc.MakeCKKSPackedPlaintext转换明文(已解决？)
         self.dummy = fhe.encode(pvals, "dummy", 0, self.params.encode_slots, False, cryptoContext)
 
-        # todo: 为了支持fixedmanual模式，每个乘法(包括明密文和密密文)后面都要调用一个homo_rescale 
         self.z_data_test, self.factor_num_test, self.sample_num_test = \
             self.z_data_from_file(params.path_to_test_file, True)
         self.z_data_test = self.normalize_z_data(
@@ -124,13 +131,14 @@ class SecureML:
     @fhe.utils.profile_python_function
     def sigmoid(self, cryptoContext, enc_grad, enc_z_data, enc_ip, gamma):
         enc_ip_sqr = fhe.homo_square(enc_ip, cryptoContext)
+        enc_ip_sqr = fhe.homo_rescale(enc_ip_sqr, 1, cryptoContext)
         enc_ip_sqr = fhe.homo_add_scalar_double(enc_ip_sqr, self.params.degree3[1] / self.params.degree3[3], cryptoContext)
 
         for i in range(self.params.cnum):
             enc_grad[i] = fhe.homo_mul_scalar_double(enc_z_data[i], gamma * self.params.degree3[3], cryptoContext)
             enc_grad[i] = fhe.homo_rescale(enc_grad[i], 1, cryptoContext)
             enc_grad[i] = fhe.homo_mul(enc_grad[i], enc_ip, cryptoContext)
-            enc_grad[i] = fhe.homo_rescale(enc_grad[i], 1, cryptoContext) 
+            enc_grad[i] = fhe.homo_rescale(enc_grad[i], 1, cryptoContext)
             enc_grad[i] = fhe.homo_mul(enc_grad[i], enc_ip_sqr, cryptoContext)
             enc_grad[i] = fhe.homo_rescale(enc_grad[i], 1, cryptoContext) 
 
@@ -197,32 +205,18 @@ class SecureML:
             tmp2 = fhe.homo_rescale(tmp2, 1, cryptoContext) 
 
             enc_v_data[i] = fhe.homo_mul_scalar_double(enc_w_data[i], 1.0 - eta, cryptoContext)
-            enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext) 
+            enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext)
 
-            tmp2 = fhe.homo_rescale(tmp2, 1, cryptoContext)
             enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp2, cryptoContext)
-
-            enc_w_data[i] = fhe.homo_rescale(enc_w_data[i], 1, cryptoContext)
 
 
         print("Update finished!")
 
     @fhe.utils.profile_python_function
-    def training(self, cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list, levelBudget_list, print_all=False):
-        enc_v_data = [None] * self.params.cnum
-
-        zero_vec = np.zeros(self.params.slots, dtype=np.float64)
-        input_vec = zero_vec
-
-        # ptxt1 = fhe.encode(input_vec, 1, 0, encode_slots, False, cryptoContext) #todo: ?? (deprecated api
-
-        for i in range(self.params.cnum):
-            enc_w_data[i] = openfhe_context.encrypt(input_vec,  cryptoContext.device, 1, 0, self.params.encode_slots)
-            enc_v_data[i] = openfhe_context.encrypt(input_vec,  cryptoContext.device, 1, 0, self.params.encode_slots)
-
-        # init params
-        v_data = np.zeros(self.params.factor_num)
-        w_data = np.zeros(self.params.factor_num)
+    def training(self, cryptoContext, enc_w_data, enc_v_data, factor_num, sample_num, w_data, z_data, block_array, openfhe_context, logBsSlots_list, levelBudget_list, print_all=False):
+        # init plain update params
+        # v_data = np.zeros(self.params.factor_num)
+        # w_data = np.zeros(self.params.factor_num)
 
         alpha0 = 0.01
         alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
@@ -234,21 +228,18 @@ class SecureML:
             eta = (1 - alpha0) / alpha1
             block_id = block_array[iter]
             print(f"blockid: {block_id}")
-            print("** un-encrypted")
-            
+
+            # print("** un-encrypted")
             # # plain update
             # self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
             # self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
 
             # encrypted update
-            self.params.start_time()
             self.update(cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id)
-            elapsed_time = self.params.end_time()
-            self.params.print_time("Encrypted Update", elapsed_time)
 
             
             # Decide whether to print based on the value of print_all
-            if print_all or iter == self.params.iter_num - 1:
+            if print_all:
                 dw_data = self.decrypt_w_data(cryptoContext, enc_w_data, factor_num, openfhe_context)
                 self.test_auroc(self,self.z_data_test,self.factor_num_test,self.sample_num_test,dw_data,self.params.is_first)
 
@@ -495,16 +486,32 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBud
     print(f"Encryption time: {elapsed_time:.4f} seconds")
 
     enc_w_data = [None] * params.cnum
+    enc_v_data = [None] * params.cnum
+
+    zero_vec = np.zeros(params.slots, dtype=np.float64)
+    input_vec = zero_vec
+
+    for i in range(params.cnum):
+        enc_w_data[i] = openfhe_context.encrypt(input_vec, cryptoContext.device, 1, 0, params.encode_slots)
+        enc_v_data[i] = openfhe_context.encrypt(input_vec, cryptoContext.device, 1, 0, params.encode_slots)
+
     w_data = np.zeros(params.factor_num)
 
+    torch.cuda.synchronize()
+    torch.cpu.synchronize()
     start_time = time.time()
     if is_encrypted:
-        secure_ml.training(cryptoContext, enc_w_data, factor_num, sample_num, w_data, z_data, block_array,
+        secure_ml.training(cryptoContext, enc_w_data, enc_v_data, factor_num, sample_num, w_data, z_data, block_array,
                            openfhe_context, logBsSlots_list, levelBudget_list, print_all=print_all)
     else:
         secure_ml.plain_training(cryptoContext, w_data, z_data, factor_num, sample_num)
+    torch.cuda.synchronize()
+    torch.cpu.synchronize()
     elapsed_time = time.time() - start_time
     print(f"Training time: {elapsed_time:.4f} seconds")
+
+    dw_data = secure_ml.decrypt_w_data(cryptoContext, enc_w_data, factor_num, openfhe_context)
+    secure_ml.test_auroc(secure_ml, secure_ml.z_data_test, secure_ml.factor_num_test, secure_ml.sample_num_test, dw_data, secure_ml.params.is_first)
 
     save_dwData=False
     if save_dwData:
@@ -513,8 +520,8 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBud
 
 def main():
     PRINT_ALL = False 
-    file1 = "../../data/MNIST_train.txt"
-    file2 = "../../data/MNIST_test.txt"
+    file1 = TRAIN_TXT
+    file2 = TEST_TXT
     is_first = True
     is_encrypted = True
     num_iter = 30
@@ -528,14 +535,14 @@ def main():
     print(f"Testing Data = {file2}")
 
     maxLevelsRemaining = 30
-    logBsSlots_list = [8]  # todo: should be 8 for mnist data
+    logBsSlots_list = [8]  # for compact mnist data, the nearest power of 2 for 14*14 is 2^8
     logN = 16
     dnum = 3
     dcrtBits = 59
     firstMod = 60
     levelBudget_list = [[4, 4]]
     secretKeyDist = "SPARSE_TERNARY"
-    rescaleTech = "FIXEDAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     device = "cuda" # "cpu" # "cuda"
     encode_slots = (1 << (logN - 1))
     appRotIndex_list = []
