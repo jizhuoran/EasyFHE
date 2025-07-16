@@ -30,6 +30,7 @@ class Params:
         self.l_bits = 5
         self.degree3 = [0.5, -0.0843, 0.0, 0.0002]
         self.iter_per_boot = 5
+        self.firstBootPlace = 5
 
         self.kdeg = 3
 
@@ -58,11 +59,7 @@ class Params:
         self.start_time_val = None
         self.end_time_val = None
 
-        # gpu-fhe params
-        # cryptoContext = None
-        # openfhe_context = None
-        logBsSlots_list = None
-
+    def prt(self):
         print("***********************************")
         print("Secure Machine Learning Parameters")
         print("***********************************")
@@ -98,6 +95,229 @@ class SecureML:
         self.z_data_test = self.normalize_z_data(
             self.z_data_test, self.factor_num_test, self.sample_num_test
         )
+
+    def innerproduct(self, vec1, vec2, size):
+        ip = 0.0
+        for i in range(size):
+            ip += vec1[i] * vec2[i]
+        return ip
+
+    def plain_inner_product(self, ip, z_data, v_data, factor_num, block_size):
+        for i in range(block_size):
+            ip[i] = self.innerproduct(v_data, z_data[i][:factor_num], factor_num)
+
+    def plain_sigmoid(self, grad, z_data, ip, gamma, factor_num, sample_num):
+        for i in range(sample_num):
+            tmp = self.params.degree3[0] + self.params.degree3[1] * ip[i] + self.params.degree3[3] * ip[i] ** 3
+            tmp *= gamma  # 缩放
+            for j in range(len(z_data[0])):
+                grad[j] += tmp * z_data[i][j]
+
+    def plain_training(self, cryptoContext, w_data, z_data, factor_num, sample_num):
+        gamma = 0
+        eta = 0
+        alpha0 = 0.01
+        alpha1 = (1.0 + math.sqrt(1.0 + 4.0 * alpha0 ** 2)) / 2.0
+
+        v_data = np.zeros(self.params.factor_num)
+        w_data.fill(0.0)
+        gamma = self.params.alpha / self.params.block_size
+        block_num = self.params.sample_num // self.params.block_size
+        auc, accuracy = 0, 0
+
+        # read in data
+        z_data_test, factor_num_test, sample_num_test = self.z_data_from_file(self.params.path_to_test_file,
+                                                                              self.params.isfirst)
+        self.normalize_z_data(z_data_test, factor_num_test, sample_num_test)
+
+        random.seed(1)
+
+        for iter in range(self.params.iter_num):
+            print(f"\n{iter + 1}-th iteration started (plain)!!!")
+
+            eta = (1 - alpha0) / alpha1
+
+            self.params.start_time()
+            # update w_data and v_data
+            block_id = random.randint(0, block_num - 1)
+            self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
+            elapsed_time = self.params.end_time()
+            self.params.print_time("Plain Update", elapsed_time)
+
+            # self.test_auroc(self, auc, accuracy, z_data_test, factor_num_test, sample_num_test, w_data, self.params.isfirst)
+            self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
+
+            alpha0 = alpha1
+            alpha1 = (1.0 + math.sqrt(1.0 + 4.0 * alpha0 ** 2)) / 2.0
+
+    def plain_update(self, w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id):
+        # Select zData Block
+        z_block_data = np.zeros((self.params.block_size, self.params.factor_num))
+        for i in range(self.params.block_size):
+            for j in range(self.params.factor_num):
+                index = block_id * self.params.block_size + i
+                # ensure index and j is not out of bound
+                if index < sample_num and j < len(z_data[0]):
+                    z_block_data[i, j] = z_data[index, j]
+                else:
+                    z_block_data[i, j] = 0.0
+
+        # Allocate arrays for gradient and inner product
+        grad = np.zeros(self.params.factor_num)
+        ip = np.zeros(self.params.block_size)
+
+        # Compute Inner Product and Sigmoid
+        self.plain_inner_product(ip, z_block_data, v_data, self.params.factor_num, self.params.block_size)
+        self.plain_sigmoid(grad, z_block_data, ip, gamma, self.params.factor_num, self.params.block_size)
+
+        # Update wData using vData
+        for i in range(self.params.factor_num):
+            tmp1 = v_data[i] + grad[i]
+
+            tmp2 = eta * w_data[i]
+            v_data[i] = tmp1 * (1.0 - eta) + tmp2
+            w_data[i] = tmp1
+
+    @staticmethod
+    def z_data_from_file(path, is_first):
+        data = []
+        with open(path, "r") as file:
+            lines = file.readlines()
+
+        factor_dim = len(lines[0].strip().split(","))
+        sample_dim = len(lines) - 1
+
+        for line in lines[1:]:
+            values = list(map(float, line.strip().split(",")))
+            data.append(values)
+
+        z_data = np.zeros((sample_dim, factor_dim))
+
+        if is_first:
+            for j in range(sample_dim):
+                z_data[j, 0] = 2 * data[j][0] - 1
+                for i in range(1, factor_dim):
+                    z_data[j, i] = z_data[j, 0] * data[j][i]
+        else:
+            for j in range(sample_dim):
+                z_data[j, 0] = 2 * data[j][factor_dim - 1] - 1
+                for i in range(1, factor_dim):
+                    z_data[j, i] = z_data[j, 0] * data[j][i - 1]
+        return z_data, factor_dim, sample_dim
+
+    @staticmethod
+    def normalize_z_data(z_data, factor_dim, sample_dim):
+        z_data = np.array(z_data)
+        for i in range(factor_dim):
+            m = np.max(np.abs(z_data[:, i]))
+            if m > 1e-10:
+                z_data[:, i] /= m
+        return z_data
+
+    @staticmethod
+    def shuffle_z_data(z_data, factor_dim, sample_dim):
+        np.random.seed(1)
+        tmp = np.zeros(factor_dim)
+
+        for i in range(sample_dim):
+            idx = i + np.random.randint(0, sample_dim - i)
+
+            tmp[:] = z_data[i]
+            z_data[i] = z_data[idx]
+            z_data[idx] = tmp
+
+        return z_data
+
+    def load_and_encrypt_data(self, cryptoContext, block_array, z_data, openfhe_context):
+        for iter in range(self.params.iter_num):
+            block_id = block_array[iter]
+            if block_id in self.enc_data_cache:
+                continue
+
+            enc_data = []
+            for j in range(self.params.cnum):
+                pz_data = np.zeros(self.params.slots, dtype=np.float64)
+
+                for k in range(self.params.block_size):
+                    for l in range(self.params.batch):
+                        if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(
+                            z_data[0]):
+                            pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][
+                                self.params.batch * j + l]
+
+                enc_z = openfhe_context.encrypt(pz_data, cryptoContext.device, 1, 0, self.params.encode_slots)
+                enc_data.append(enc_z)
+
+            self.enc_data_cache[block_id] = enc_data
+
+    def decrypt_w_data(self, cryptoContext, enc_w_data, factor_num, openfhe_context):
+        # Decrypt the weights
+        w_data = np.zeros(factor_num)
+        for i in range(self.params.cnum):
+            result = openfhe_context.decrypt(enc_w_data[i])
+            for j in range(self.params.batch):
+                if self.params.batch * i + j < factor_num:
+                    w_data[self.params.batch * i + j] = result[j]
+        return w_data
+
+    def decrypt_w_data_and_save(self, cryptoContext, enc_w_data, factor_num, file_name, openfhe_context):
+        w_data = np.zeros(factor_num)
+        for i in range(self.params.cnum):
+            result = openfhe_context.decrypt(enc_w_data[i])
+            for j in range(self.params.batch):
+                if self.params.batch * i + j < factor_num:
+                    w_data[self.params.batch * i + j] = result[j]
+
+        with open(file_name, 'w') as file:
+            for i in range(factor_num):
+                file.write(f"{i + 1}, {w_data[i]}\n")
+
+    def decrypt_and_print(self, cryptoContext, msg, cipher):
+        result = self.params.openfhe_context.decrypt(cipher)
+        # dp = result.GetRealPackedValue()
+        print(f"{msg} = [{', '.join(map(str, result[:10]))}]")
+
+    @staticmethod
+    def test_auroc(self, z_data, factor_dim, sample_dim, w_data, is_first):
+        # print first 10 elements of z_data
+        print("\t - wData = [", end="")
+        for i in range(min(10, len(w_data))):
+            print(w_data[i], end=", ")
+            if i == 9:
+                print(w_data[i], "]")
+
+        TN = 0
+        FP = 0
+        theta_TN = []
+        theta_FP = []
+
+        # compute TN, FP, AUC, accuracy
+        for i in range(sample_dim):
+            if z_data[i][0] > 0:
+                if self.innerproduct(z_data[i], w_data, factor_dim) < 0:
+                    TN += 1
+                theta_TN.append(z_data[i][0] * self.innerproduct(z_data[i][1:], w_data[1:], factor_dim - 1))
+            else:
+                if self.innerproduct(z_data[i], w_data, factor_dim) < 0:
+                    FP += 1
+                theta_FP.append(z_data[i][0] * self.innerproduct(z_data[i][1:], w_data[1:], factor_dim - 1))
+
+        accuracy = (sample_dim - TN - FP) / sample_dim
+        print("\t - Accuracy:", accuracy)
+        print("\t - TN:", TN, ", FP:", FP)
+
+        auc = 0.0
+        if not theta_FP or not theta_TN:
+            print("\t - n_test_yi = 0 : cannot compute AUC")
+        else:
+            for theta_tn in theta_TN:
+                for theta_fp in theta_FP:
+                    if theta_fp <= theta_tn:
+                        auc += 1
+            auc /= len(theta_TN) * len(theta_FP)
+            print("\t - AUC:", auc)
+
+        return auc, accuracy
 
     @fhe.utils.profile_python_function
     def inner_product(self, cryptoContext, enc_z_data, enc_v_data):
@@ -149,45 +369,6 @@ class SecureML:
             for l in range(self.params.b_bits, self.params.s_bits):
                 tmp = fhe.homo_rotate(enc_grad[i], 1 << l, cryptoContext)
                 enc_grad[i] = fhe.homo_add(enc_grad[i], tmp, cryptoContext)
-
-    def innerproduct(self, vec1, vec2, size):
-        ip = 0.0
-        for i in range(size):
-            ip += vec1[i] * vec2[i]
-        return ip
-
-    def plain_inner_product(self, ip, z_data, v_data, factor_num, block_size):
-        for i in range(block_size):
-            ip[i] = self.innerproduct(v_data, z_data[i][:factor_num], factor_num)
-
-    def plain_sigmoid(self, grad, z_data, ip, gamma, factor_num, sample_num):
-        for i in range(sample_num):
-            tmp = self.params.degree3[0] + self.params.degree3[1] * ip[i] + self.params.degree3[3] * ip[i] ** 3
-            tmp *= gamma  # 缩放
-            for j in range(len(z_data[0])):
-                grad[j] += tmp * z_data[i][j]
-
-    def load_and_encrypt_data(self, cryptoContext, block_array, z_data, openfhe_context):
-        for iter in range(self.params.iter_num):
-            block_id = block_array[iter]
-            if block_id in self.enc_data_cache:
-                continue
-
-            enc_data = []
-            for j in range(self.params.cnum):
-                pz_data = np.zeros(self.params.slots, dtype=np.float64)
-
-                for k in range(self.params.block_size):
-                    for l in range(self.params.batch):
-                        if (self.params.block_size * block_id + k) < len(z_data) and (self.params.batch * j + l) < len(
-                            z_data[0]):
-                            pz_data[self.params.batch * k + l] = z_data[self.params.block_size * block_id + k][
-                                self.params.batch * j + l]
-
-                enc_z = openfhe_context.encrypt(pz_data, cryptoContext.device, 1, 0, self.params.encode_slots)
-                enc_data.append(enc_z)
-
-            self.enc_data_cache[block_id] = enc_data
 
     def update(self, cryptoContext, enc_w_data, enc_v_data, gamma, eta, block_id):
         enc_data = self.enc_data_cache.get(block_id)
@@ -270,190 +451,6 @@ class SecureML:
                 #     # compute performance metrics of models
                 #     self.test_auroc(self,self.z_data_test,self.factor_num_test,self.sample_num_test,dw_data,self.params.is_first)
 
-    def plain_training(self, cryptoContext, w_data, z_data, factor_num, sample_num):
-        gamma = 0
-        eta = 0
-        alpha0 = 0.01
-        alpha1 = (1.0 + math.sqrt(1.0 + 4.0 * alpha0 ** 2)) / 2.0
-
-        v_data = np.zeros(self.params.factor_num)
-        w_data.fill(0.0)
-        gamma = self.params.alpha / self.params.block_size
-        block_num = self.params.sample_num // self.params.block_size
-        auc, accuracy = 0, 0
-
-        # read in data
-        z_data_test, factor_num_test, sample_num_test = self.z_data_from_file(self.params.path_to_test_file,
-                                                                              self.params.isfirst)
-        self.normalize_z_data(z_data_test, factor_num_test, sample_num_test)
-
-        random.seed(1)
-
-        for iter in range(self.params.iter_num):
-            print(f"\n{iter + 1}-th iteration started (plain)!!!")
-
-            eta = (1 - alpha0) / alpha1
-
-            self.params.start_time()
-            # update w_data and v_data
-            block_id = random.randint(0, block_num - 1)
-            self.plain_update(w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id)
-            elapsed_time = self.params.end_time()
-            self.params.print_time("Plain Update", elapsed_time)
-
-            # self.test_auroc(self, auc, accuracy, z_data_test, factor_num_test, sample_num_test, w_data, self.params.isfirst)
-            self.test_auroc(self, z_data_test, factor_num_test, sample_num_test, w_data, self.params.is_first)
-
-            alpha0 = alpha1
-            alpha1 = (1.0 + math.sqrt(1.0 + 4.0 * alpha0 ** 2)) / 2.0
-
-    def plain_update(self, w_data, v_data, z_data, gamma, eta, factor_num, sample_num, block_id):
-        # Select zData Block
-        z_block_data = np.zeros((self.params.block_size, self.params.factor_num))
-        for i in range(self.params.block_size):
-            for j in range(self.params.factor_num):
-                index = block_id * self.params.block_size + i
-                # ensure index and j is not out of bound
-                if index < sample_num and j < len(z_data[0]):
-                    z_block_data[i, j] = z_data[index, j]
-                else:
-                    z_block_data[i, j] = 0.0
-
-        # Allocate arrays for gradient and inner product
-        grad = np.zeros(self.params.factor_num)
-        ip = np.zeros(self.params.block_size)
-
-        # Compute Inner Product and Sigmoid
-        self.plain_inner_product(ip, z_block_data, v_data, self.params.factor_num, self.params.block_size)
-        self.plain_sigmoid(grad, z_block_data, ip, gamma, self.params.factor_num, self.params.block_size)
-
-        # Update wData using vData
-        for i in range(self.params.factor_num):
-            tmp1 = v_data[i] + grad[i]
-
-            tmp2 = eta * w_data[i]
-            v_data[i] = tmp1 * (1.0 - eta) + tmp2
-            w_data[i] = tmp1
-
-    def decrypt_w_data(self, cryptoContext, enc_w_data, factor_num, openfhe_context):
-        # Decrypt the weights
-        w_data = np.zeros(factor_num)
-        for i in range(self.params.cnum):
-            result = openfhe_context.decrypt(enc_w_data[i])
-            for j in range(self.params.batch):
-                if self.params.batch * i + j < factor_num:
-                    w_data[self.params.batch * i + j] = result[j]
-        return w_data
-
-    def decrypt_w_data_and_save(self, cryptoContext, enc_w_data, factor_num, file_name, openfhe_context):
-        w_data = np.zeros(factor_num)
-        for i in range(self.params.cnum):
-            result = openfhe_context.decrypt(enc_w_data[i])
-            for j in range(self.params.batch):
-                if self.params.batch * i + j < factor_num:
-                    w_data[self.params.batch * i + j] = result[j]
-
-        with open(file_name, 'w') as file:
-            for i in range(factor_num):
-                file.write(f"{i + 1}, {w_data[i]}\n")
-
-    def decrypt_and_print(self, cryptoContext, msg, cipher):
-        result = self.params.openfhe_context.decrypt(cipher)
-        # dp = result.GetRealPackedValue()
-        print(f"{msg} = [{', '.join(map(str, result[:10]))}]")
-
-    @staticmethod
-    def z_data_from_file(path, is_first):
-        data = []
-        with open(path, "r") as file:
-            lines = file.readlines()
-
-        factor_dim = len(lines[0].strip().split(","))
-        sample_dim = len(lines) - 1
-
-        for line in lines[1:]:
-            values = list(map(float, line.strip().split(",")))
-            data.append(values)
-
-        z_data = np.zeros((sample_dim, factor_dim))
-
-        if is_first:
-            for j in range(sample_dim):
-                z_data[j, 0] = 2 * data[j][0] - 1
-                for i in range(1, factor_dim):
-                    z_data[j, i] = z_data[j, 0] * data[j][i]
-        else:
-            for j in range(sample_dim):
-                z_data[j, 0] = 2 * data[j][factor_dim - 1] - 1
-                for i in range(1, factor_dim):
-                    z_data[j, i] = z_data[j, 0] * data[j][i - 1]
-        return z_data, factor_dim, sample_dim
-
-    @staticmethod
-    def normalize_z_data(z_data, factor_dim, sample_dim):
-        z_data = np.array(z_data)
-        for i in range(factor_dim):
-            m = np.max(np.abs(z_data[:, i]))
-            if m > 1e-10:
-                z_data[:, i] /= m
-        return z_data
-
-    @staticmethod
-    def shuffle_z_data(z_data, factor_dim, sample_dim):
-        np.random.seed(1)
-        tmp = np.zeros(factor_dim)
-
-        for i in range(sample_dim):
-            idx = i + np.random.randint(0, sample_dim - i)
-
-            tmp[:] = z_data[i]
-            z_data[i] = z_data[idx]
-            z_data[idx] = tmp
-
-        return z_data
-
-    @staticmethod
-    def test_auroc(self, z_data, factor_dim, sample_dim, w_data, is_first):
-        # print first 10 elements of z_data
-        print("\t - wData = [", end="")
-        for i in range(min(10, len(w_data))):
-            print(w_data[i], end=", ")
-            if i == 9:
-                print(w_data[i], "]")
-
-        TN = 0
-        FP = 0
-        theta_TN = []
-        theta_FP = []
-
-        # compute TN, FP, AUC, accuracy
-        for i in range(sample_dim):
-            if z_data[i][0] > 0:
-                if self.innerproduct(z_data[i], w_data, factor_dim) < 0:
-                    TN += 1
-                theta_TN.append(z_data[i][0] * self.innerproduct(z_data[i][1:], w_data[1:], factor_dim - 1))
-            else:
-                if self.innerproduct(z_data[i], w_data, factor_dim) < 0:
-                    FP += 1
-                theta_FP.append(z_data[i][0] * self.innerproduct(z_data[i][1:], w_data[1:], factor_dim - 1))
-
-        accuracy = (sample_dim - TN - FP) / sample_dim
-        print("\t - Accuracy:", accuracy)
-        print("\t - TN:", TN, ", FP:", FP)
-
-        auc = 0.0
-        if not theta_FP or not theta_TN:
-            print("\t - n_test_yi = 0 : cannot compute AUC")
-        else:
-            for theta_tn in theta_TN:
-                for theta_fp in theta_FP:
-                    if theta_fp <= theta_tn:
-                        auc += 1
-            auc /= len(theta_TN) * len(theta_FP)
-            print("\t - AUC:", auc)
-
-        return auc, accuracy
-
 
 def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBudget_list, file, file_test, is_first,
          num_iter, learning_rate, num_thread, is_encrypted, print_all=False):
@@ -462,6 +459,9 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBud
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
 
     params = Params(z_data.shape[1] - 1, z_data.shape[0], num_iter, learning_rate, num_thread, encode_slots)
+    params.iter_per_boot = (cryptoContext.maxLevelsRemaining - 1) // 5  # todo: poor work around
+    params.firstBootPlace = (cryptoContext.L - 1) // 5  # todo: poor work around
+    params.prt()
     cryptoContext.cryptoContext = cryptoContext
     cryptoContext.openfhe_context = openfhe_context
     cryptoContext.logBsSlots_list = logBsSlots_list
@@ -539,13 +539,13 @@ def main():
     print(f"Training Data = {file1}")
     print(f"Testing Data = {file2}")
 
-    maxLevelsRemaining = 30
+    maxLevelsRemaining = 16
     logBsSlots_list = [8]  # for compact mnist data, the nearest power of 2 for 14*14 is 2^8
     logN = 16
     dnum = 3
     dcrtBits = 59
     firstMod = 60
-    levelBudget_list = [[4, 4]]
+    levelBudget_list = [[2, 2]]
     secretKeyDist = "SPARSE_TERNARY"
     rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     device = "cuda"  # "cpu" # "cuda"
@@ -565,7 +565,9 @@ def main():
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR, config=config))
-
+    print("cryptoContext: ", cryptoContext)
+    cryptoContext.openfhe_context = openfhe_context
+    cryptoContext.maxLevelsRemaining = maxLevelsRemaining  # todo: poor work around
     test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBudget_list, file1, file2, is_first,
          num_iter, learning_rate, num_thread, is_encrypted, print_all=PRINT_ALL)
 
