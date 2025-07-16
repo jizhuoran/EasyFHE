@@ -17,6 +17,7 @@ TEST_TXT = INPUT_DATA_DIR / "MNIST_test.txt"
 DATA_DIR = os.environ["DATA_DIR"]
 encData_DIR = DATA_DIR + "/helr/encData/"
 
+BS_cnt = 0
 
 class Params:
     def __init__(self, factor_num, sample_num, iter_num, alpha, num_thread, slots):
@@ -29,8 +30,9 @@ class Params:
         self.p_bits = 59
         self.l_bits = 5
         self.degree3 = [0.5, -0.0843, 0.0, 0.0002]
-        self.iter_per_boot = 5
-        self.firstBootPlace = 5
+        self.iter_per_boot = None
+        self.firstBootPlace = None
+        self.plaintext_mask1 = None
 
         self.kdeg = 3
 
@@ -58,6 +60,8 @@ class Params:
 
         self.start_time_val = None
         self.end_time_val = None
+
+
 
     def prt(self):
         print("***********************************")
@@ -379,17 +383,40 @@ class SecureML:
 
         enc_grad = [None] * self.params.cnum
         self.sigmoid(cryptoContext, enc_grad, enc_data, enc_ip, gamma)
+        iter = self.params.curr_iter
+        if ((iter+1) > (self.params.firstBootPlace - 1) and
+            ((iter + 1) == self.params.firstBootPlace or
+            (BS_cnt + 1 == self.params.iter_per_boot and iter < self.params.iter_num-1))):
 
-        for i in range(self.params.cnum):
-            enc_w_data[i] = enc_w_data[i].deep_copy()
-            enc_w_data[i] = fhe.homo_add(enc_w_data[i], enc_grad[i], cryptoContext)
-            tmp2 = fhe.homo_mul_scalar_double(enc_w_data[i], eta, cryptoContext)
-            tmp2 = fhe.homo_rescale(tmp2, 1, cryptoContext)
+            pvals1 = np.zeros(self.params.slots, dtype=np.float64)
+            pvals3 = np.zeros(self.params.slots, dtype=np.float64)
+            for i in range(0, self.params.slots, 2 * self.params.batch):
+                for j in range(self.params.batch):
+                    pvals1[i + j] = eta
+                    pvals3[i + j] = -eta
+            plaintext_eta = fhe.encode(pvals1, "eta", 0, self.params.encode_slots, False, cryptoContext)
+            plaintext_neg_eta = fhe.encode(pvals3, "eta", 0, self.params.encode_slots, False, cryptoContext)
 
-            enc_v_data[i] = fhe.homo_mul_scalar_double(enc_w_data[i], 1.0 - eta, cryptoContext)
-            enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext)
 
-            enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp2, cryptoContext)
+            for i in range(self.params.cnum):
+                tmp2 = fhe.homo_mul_pt(enc_w_data[i], plaintext_eta, cryptoContext)
+                enc_w_data[i] = fhe.homo_add(enc_w_data[i], enc_grad[i], cryptoContext)
+                enc_v_data[i] = fhe.homo_mul_pt(enc_w_data[i], plaintext_neg_eta, cryptoContext)
+
+                enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp2, cryptoContext)
+                enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext)
+                enc_v_data[i] = fhe.homo_add(enc_v_data[i], enc_w_data[i], cryptoContext)
+
+        else:
+            for i in range(self.params.cnum):
+                tmp2 = fhe.homo_mul_scalar_double(enc_w_data[i], eta, cryptoContext)
+                tmp2 = fhe.homo_rescale(tmp2, 1, cryptoContext)
+                enc_w_data[i] = fhe.homo_add(enc_w_data[i], enc_grad[i], cryptoContext)
+
+                enc_v_data[i] = fhe.homo_mul_scalar_double(enc_w_data[i], 1.0 - eta, cryptoContext)
+                enc_v_data[i] = fhe.homo_rescale(enc_v_data[i], 1, cryptoContext)
+
+                enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp2, cryptoContext)
 
         print("Update finished!")
 
@@ -403,8 +430,10 @@ class SecureML:
         alpha0 = 0.01
         alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
         gamma = self.params.alpha / self.params.block_size
-
+        global BS_cnt
+        BS_cnt = 0
         for iter in range(self.params.iter_num):
+            self.params.curr_iter = iter #todo: poor work around
             print(f"\n{iter + 1}-th iteration started !!!")
 
             eta = (1 - alpha0) / alpha1
@@ -428,18 +457,29 @@ class SecureML:
             # update alpha
             alpha0 = alpha1
             alpha1 = (1.0 + np.sqrt(1.0 + 4.0 * alpha0 * alpha0)) / 2.0
-
-            if iter % self.params.iter_per_boot == self.params.iter_per_boot - 1 and iter < self.params.iter_num - 1:
+            BS_cnt += 1
+            if ((iter+1) >= self.params.firstBootPlace and  # 已经到达 Boot 区间
+                ((iter+1) == self.params.firstBootPlace or  # 第一次 Boot
+                 (BS_cnt == self.params.iter_per_boot and iter < self.params.iter_num))): # 周期满且不是最后一次迭代
+                BS_cnt = 0
                 print("\nBootstrapping START!!!")
 
                 self.params.start_time()
 
                 # bootstrap encWData and encVData
                 for i in range(self.params.cnum):
-                    enc_w_data[i] = fhe.homo_bootstrap(enc_w_data[i], cryptoContext.L, logBsSlots_list[0],
+                    enc_v_data[i] = torch.fhe.homo_ops.slot_resize(enc_v_data[i], self.params.batch * 2, cryptoContext)
+                    encV_encW = fhe.homo_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots_list[0],
                                                        levelBudget_list[0], cryptoContext)
-                    enc_v_data[i] = fhe.homo_bootstrap(enc_v_data[i], cryptoContext.L, logBsSlots_list[0],
-                                                       levelBudget_list[0], cryptoContext)
+                    enc_w_data[i] = fhe.homo_mul_pt(encV_encW, self.params.plaintext_mask1, cryptoContext)
+                    enc_w_data[i] = fhe.homo_rescale(enc_w_data[i], 1, cryptoContext)
+                    enc_v_data[i] = fhe.homo_sub(encV_encW, enc_w_data[i], cryptoContext)
+                    tmp = fhe.homo_rotate(enc_v_data[i], 256, cryptoContext)
+                    enc_v_data[i] = fhe.homo_add(enc_v_data[i], tmp, cryptoContext)
+
+                    tmp = fhe.homo_rotate(enc_w_data[i], -256, cryptoContext)
+                    enc_w_data[i] = fhe.homo_add(enc_w_data[i], tmp, cryptoContext)
+
 
                 elapsed_time = self.params.end_time()
                 self.params.print_time("bootstrapping", elapsed_time)
@@ -459,17 +499,24 @@ def test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBud
     z_data = SecureML.normalize_z_data(z_data, factor_num, sample_num)
 
     params = Params(z_data.shape[1] - 1, z_data.shape[0], num_iter, learning_rate, num_thread, encode_slots)
-    params.iter_per_boot = (cryptoContext.maxLevelsRemaining - 1) // 5  # todo: poor work around
-    params.firstBootPlace = (cryptoContext.L - 1) // 5  # todo: poor work around
-    params.prt()
-    cryptoContext.cryptoContext = cryptoContext
-    cryptoContext.openfhe_context = openfhe_context
-    cryptoContext.logBsSlots_list = logBsSlots_list
     depth = cryptoContext.L - 1
     params.depth = depth
     params.path_to_file = file
     params.path_to_test_file = file_test
     params.isfirst = is_first
+    params.iter_per_boot = (cryptoContext.maxLevelsRemaining - 1) // 5  # todo: poor work around
+    params.firstBootPlace = (cryptoContext.L - 3) // 5  # todo: poor work around
+
+    pvals0 = np.zeros(params.slots, dtype=np.float64)
+    for j in range(params.batch):
+        pvals0[j] = 0.0
+    for i in range(params.batch, params.slots, params.batch * 2):
+        for j in range(params.batch):
+            pvals0[i + j] = 1.0
+    params.plaintext_mask1 = fhe.encode(pvals0, "plaintext_mask1", 0, params.encode_slots, False,
+                                      cryptoContext)  # todo: poor work around, should not be encoded to level 0
+
+    params.prt()
 
     print("Setting up crypto context...")
     params.start_time()
@@ -539,11 +586,11 @@ def main():
     print(f"Training Data = {file1}")
     print(f"Testing Data = {file2}")
 
-    maxLevelsRemaining = 16
-    logBsSlots_list = [8]  # for compact mnist data, the nearest power of 2 for 14*14 is 2^8
+    maxLevelsRemaining = 12
+    logBsSlots_list = [9]  # for compact mnist data, the nearest power of 2 for 14*14 is 2^8 * 2, the last *2 for merge boot
     logN = 16
     dnum = 3
-    dcrtBits = 59
+    dcrtBits = 52
     firstMod = 60
     levelBudget_list = [[2, 2]]
     secretKeyDist = "SPARSE_TERNARY"
@@ -554,7 +601,12 @@ def main():
     i = 1
     while i < encode_slots:
         appRotIndex_list.append(i)
+        if i<=128:
+            appRotIndex_list.append(-i)
         i *= 2
+    appRotIndex_list.append(256) # # for merge and split in bootstrapping preprocess and postprocess
+    appRotIndex_list.append(-256)
+    print(appRotIndex_list)
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
@@ -568,6 +620,7 @@ def main():
     print("cryptoContext: ", cryptoContext)
     cryptoContext.openfhe_context = openfhe_context
     cryptoContext.maxLevelsRemaining = maxLevelsRemaining  # todo: poor work around
+    cryptoContext.logBsSlots_list = logBsSlots_list
     test(cryptoContext, openfhe_context, encode_slots, logBsSlots_list, levelBudget_list, file1, file2, is_first,
          num_iter, learning_rate, num_thread, is_encrypted, print_all=PRINT_ALL)
 
