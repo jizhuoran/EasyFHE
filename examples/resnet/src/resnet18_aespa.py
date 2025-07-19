@@ -28,6 +28,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 total = 1
 SAVE_END = False
 SAVE_MIDDLE = False
+DIRECT_LOAD = True
 pre_encode_type = "middle"
 pkl_path = "/data/yhh/data/encode_20250703_223228.pkl"
 
@@ -35,6 +36,7 @@ pkl_path = "/data/yhh/data/encode_20250703_223228.pkl"
 # total=1
 # SAVE_END=False
 # SAVE_MIDDLE=True
+# DIRECT_LOAD = False
 # pre_encode_type = None
 # pkl_path = None
 
@@ -67,6 +69,10 @@ print("secretKeyDist: ", secretKeyDist)
 print("rescaleTech: ", rescaleTech)
 print("\n\n")
 
+print("device: ", device)
+print("DIRECT_LOAD: ", DIRECT_LOAD)
+print("pre_encode_type: ", pre_encode_type)
+print("pkl_path: ", pkl_path)
 
 def homo_rescale_list(input_list, level, cryptoContext):
     res = []
@@ -213,7 +219,6 @@ def layer1_32K(input, cryptoContext):
     res2 = homo_Aespa_perfect_square_32K(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
 
     return res2
-
 
 
 @fhe.utils.profile_python_function
@@ -500,6 +505,7 @@ def resnet18():
 
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
     cryptoContext.pre_encode_type = pre_encode_type
+    cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
     load_weight(pkl_path, cryptoContext)
     print("start executeResNet18")
     cryptoContext.openfhe_context = openfhe_context

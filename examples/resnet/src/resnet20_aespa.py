@@ -27,6 +27,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
+# DIRECT_LOAD = True
 pre_encode_type = "middle"
 pkl_path = "/data/yhh/data/encode_20250613_155340.pkl"
 
@@ -34,6 +35,7 @@ pkl_path = "/data/yhh/data/encode_20250613_155340.pkl"
 # total=1
 # SAVE_END=False
 # SAVE_MIDDLE=True
+DIRECT_LOAD = False
 # pre_encode_type = None
 # pkl_path = None
 
@@ -64,6 +66,10 @@ print("levelBudget_list: ", levelBudget_list)
 print("secretKeyDist: ", secretKeyDist)
 print("rescaleTech: ", rescaleTech)
 print("\n\n")
+print("device: ", device)
+print("DIRECT_LOAD: ", DIRECT_LOAD)
+print("pre_encode_type: ", pre_encode_type)
+print("pkl_path: ", pkl_path)
 
 
 def initial_layer(input, cryptoContext):
@@ -400,6 +406,7 @@ def resnet20():
 
     cryptoContext.weight_path = weight_dir  # fixme: work around only
     cryptoContext.pre_encode_type = pre_encode_type
+    cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
