@@ -46,13 +46,13 @@ weight_dir = "../weights_aespa_18/"
 
 rotate_index_list = [-32768, -16384, -8192, -4096, -1024, -768, -256, -192, -64, -48, -32, -16, -15, -8, -1,
                      1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576, 49152, 98304]
-maxLevelsRemaining = 15
-logBsSlots_list = [15]
+maxLevelsRemaining = 26
+logBsSlots_list = []
 logN = 17
 dnum = 1
 dcrtBits = 55
 firstMod = 60
-levelBudget_list = [[4, 4]]
+levelBudget_list = []
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
@@ -130,10 +130,10 @@ def initial_layer_32K(input, cryptoContext):
     # conv3*3 [64,32,32]
     scale = 1
     print("initial_layer input slots", input.slots)
-
+    cryptoContext.DIRECT_LOAD = False # todo: to be removed
     res = conv_initial_32K(input, 32, 1, 64, 2, scale, cryptoContext)
     res = homo_rescale_list(res,1, cryptoContext)
-
+    cryptoContext.DIRECT_LOAD = True # todo: to be removed
     res = homo_Aespa_perfect_square_32K(res, "conv1bn1", cryptoContext)
 
     return res
@@ -244,6 +244,9 @@ def layer2(input, cryptoContext):
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
+    print("after downsample and asepa and conv and add")
+    return res1
+
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
     res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
     # layer[2]block[1]
@@ -298,6 +301,8 @@ def layer2_32K(input, cryptoContext):
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
+    print("after downsample and asepa and conv and add")
+    return res1
 
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
     res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
@@ -464,13 +469,34 @@ def executeResNet18(cryptoContext):
         # input = torch.tensor(image_vector, device="cuda",dtype=torch.float32)
         # input = torch.stack([input[i * 1024: (i + 1) * 1024].view(32, 32) for i in range(3)], dim=0)
         # x , fea = model(input,fea_out=True)
+
+
+        # in_ct = openfhe_context.encrypt(
+        #     image_vector,
+        #     device,
+        #     1,
+        #     10,
+        #     64 * 32 * 32,
+        # )
+
+        # 改17为16用的
+
         in_ct = openfhe_context.encrypt(
             image_vector,
             device,
             1,
-            10,
+            0,
             64 * 32 * 32,
         )
+
+        in_ct_16 = openfhe_context.encrypt(
+            image_vector,
+            device,
+            1,
+            0,
+            32 * 32 * 32,
+        )
+
         print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
         cryptoContext.openfhe_context = openfhe_context
@@ -478,9 +504,87 @@ def executeResNet18(cryptoContext):
         firstLayer = initial_layer(in_ct, cryptoContext)
         resLayer1 = layer1(firstLayer, cryptoContext)
         resLayer2 = layer2(resLayer1, cryptoContext)
-        resLayer3 = layer3(resLayer2, cryptoContext)
-        resLayer4 = layer4(resLayer3, cryptoContext)
-        finalRes = final_layer(resLayer4, cryptoContext)
+        finalRes = resLayer2
+
+
+        clear_result = openfhe_context.decrypt(finalRes)
+        clear_result = clear_result.cpu().numpy().reshape(-1)
+        golden_result = openfhe_context.decrypt(finalRes)
+        golden_result = golden_result.cpu().numpy().reshape(-1)
+        print("clear_result shape: ", clear_result.shape)
+        print("mid: ", clear_result.shape[0] // 2)
+        mid = clear_result.shape[0]//2
+        offset = 0
+        print(clear_result[offset:offset+10])
+        print(clear_result[mid+offset:mid+offset+10])
+
+        pkl_path_tmp = "/data/yhh/data/keep/encode_20250719_225738.pkl"
+        load_weight(pkl_path_tmp, cryptoContext)
+        firstlayer_32K = initial_layer_32K(in_ct_16, cryptoContext)  # todo: should be used with new read in files, only read in 32K slots
+        resLayer1_32K = layer1_32K(firstlayer_32K, cryptoContext)
+
+        cryptoContext.DIRECT_LOAD = False
+        resLayer2_32K = layer2_32K(resLayer1_32K, cryptoContext)
+        finalRes_32K = resLayer2_32K
+
+
+        ## new
+        if  isinstance(finalRes_32K, torch.fhe.ciphertext.Cipher):
+            clear_result = openfhe_context.decrypt(finalRes_32K)
+            clear_result = clear_result.cpu().numpy().reshape(-1)
+            print("clear_result shape: ", clear_result.shape)
+            print("mid: ", clear_result.shape[0] // 2)
+            mid = clear_result.shape[0] // 2
+            offset = 0
+            print(clear_result[offset:offset+10])
+            print(clear_result[mid+offset:mid + offset + 10])
+
+            if finalRes_32K.noise_deg>1:
+                finalRes_32K = fhe.homo_rescale(finalRes_32K, 1, cryptoContext)
+            if finalRes.noise_deg>1:
+                finalRes = fhe.homo_rescale(finalRes, 1, cryptoContext)
+            finalRes_32K = fhe.homo_sub(finalRes_32K, finalRes, cryptoContext)
+            clear_result = openfhe_context.decrypt(finalRes_32K)
+            clear_result = clear_result.cpu().numpy().reshape(-1)
+            print("clear_result shape: ", clear_result.shape)
+            print("mid: ", clear_result.shape[0] // 2)
+
+            threshold = 1.0e-05
+            idx = np.flatnonzero(abs(clear_result) > threshold)[:10]  # first 10 flat indices
+            print(idx)
+
+            print("max element", clear_result.max(),)
+            print("index of max element", np.argmax(clear_result))
+            mid = clear_result.shape[0] // 2
+            offset = 256
+            print(clear_result[offset:offset+10])
+            print(clear_result[mid+offset:mid + offset + 10])
+
+            if abs(clear_result.max())<1e-05:
+                print("ok")
+            else:
+                print("GG")
+        elif isinstance(finalRes_32K, list):
+            clear_result0 = openfhe_context.decrypt(finalRes_32K[0])
+            clear_result1 = openfhe_context.decrypt(finalRes_32K[1])
+            clear_result0 = clear_result0.cpu().numpy().reshape(-1)
+            clear_result1 = clear_result1.cpu().numpy().reshape(-1)
+            print(clear_result0[:10])
+            print(clear_result1[:10])
+            print("finalRes_32K[0].slots, finalRes_32K[1].slots",finalRes_32K[0].slots, finalRes_32K[1].slots)
+            slots = finalRes_32K[0].slots
+            clear_result = np.concatenate((clear_result0[:slots], clear_result1[:slots]))
+            ok = np.allclose(golden_result, clear_result, atol=1e-5, rtol=0)  # True / False
+            print("ok: ", ok)
+
+        else:
+            print("finalRes_32K is not a Ciphertext or list, it is: ", type(finalRes_32K))
+
+
+        # resLayer2 = layer2(resLayer1, cryptoContext)
+        # resLayer3 = layer3(resLayer2, cryptoContext)
+        # resLayer4 = layer4(resLayer3, cryptoContext)
+        # finalRes = final_layer(resLayer4, cryptoContext)
         print("after processing image ", i, "time: ", datetime.datetime.now())
         print("time: ", time.time() - start_time)
 
@@ -523,31 +627,31 @@ def executeResNet18(cryptoContext):
         # loss = torch.sum((fea_out - temp) ** 2)
         # print('resLayer4', loss)
 
-        try:
-            clear_result = openfhe_context.decrypt(finalRes)
-            clear_result = clear_result.cpu().numpy().reshape(-1)
-            clear_result = clear_result[:10]
-            print(clear_result)
-            max_element_idx = np.argmax(clear_result)
-        except RuntimeError as e:
-            print(f"Decryption failed: {e}")
-            clear_result = None
-            max_element_idx = 11
-
-        print("For image ", i)
-        # if clear_result is not None:
+    #     try:
+    #         clear_result = openfhe_context.decrypt(finalRes)
+    #         clear_result = clear_result.cpu().numpy().reshape(-1)
+    #         clear_result = clear_result[:10]
         #     print(clear_result)
-        # else:
-        #     print("Decryption failed, clear_result is None.")
-        print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
-        if label == max_element_idx:
-            correct += 1
-        message = f"correct/total: {correct}/{(i + 1)}"
-        print(colored(message, "red"))
-        if (i + 1) % 100 == 0:
-            print("\n\n")
-
-    print(f"\n\ncorrect/total: {correct}/{total}")
+    #         max_element_idx = np.argmax(clear_result)
+    #     except RuntimeError as e:
+    #         print(f"Decryption failed: {e}")
+    #         clear_result = None
+    #         max_element_idx = 11
+    #
+    #     print("For image ", i)
+    #     # if clear_result is not None:
+    #     #     print(clear_result)
+    #     # else:
+    #     #     print("Decryption failed, clear_result is None.")
+    #     print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
+    #     if label == max_element_idx:
+    #         correct += 1
+    #     message = f"correct/total: {correct}/{(i + 1)}"
+    #     print(colored(message, "red"))
+    #     if (i + 1) % 100 == 0:
+    #         print("\n\n")
+    #
+    # print(f"\n\ncorrect/total: {correct}/{total}")
 
 
 def resnet18():

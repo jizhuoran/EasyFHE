@@ -87,7 +87,7 @@ def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
             print(f"error: {e}")
 
         values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
-        name = "{}".format(val_name) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        name = "{}_{}".format(val_name, slots) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
