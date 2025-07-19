@@ -87,7 +87,7 @@ def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
             print(f"error: {e}")
 
         values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
-        name = "{}_{}".format(val_name, slots) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        name = "{}".format(val_name) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
@@ -420,12 +420,23 @@ def mask_channel(n, num_channel, spatial_size, num_cipher, cur_limbs, cryptoCont
         return encoded
 
 
-DIRECT_LOAD = False
+def read_values_from_file_32K_Aespa(val_name, level, slots, num_cipher, cryptoContext, scale=1.0):
+    if cryptoContext.DIRECT_LOAD:
+        encoded_list = []
+        for idx in range(num_cipher):
+            full_name = "{}_{}_{}_{}".format(val_name, idx, level, slots)
+            if cryptoContext.pre_encode_type == "middle":
+                name = f"{val_name}_{idx}"
+            else:
+                name = full_name
 
-if not DIRECT_LOAD:
-    pass
+            encoded = fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
+            encoded_list.append(encoded)
 
-    def read_values_from_file_32K_Aespa(val_name, level, slots, num_cipher, cryptoContext, scale=1.0):
+        return encoded_list
+
+
+    else:
         # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
         values = []
         filename = cryptoContext.weight_path + val_name + '.bin'
@@ -458,15 +469,34 @@ if not DIRECT_LOAD:
             end = min(start + chunk_len, len(values))  # cap at len(values)
             part = values[start:end]
 
-            name = f"{val_name}_{idx}"  # e.g. foo_0, foo_1, …
+            name = f"{val_name}_{idx}"
             print(name)
             encoded = fhe.encode(part, name, level, slots, False, cryptoContext)
             encoded_list.append(encoded)
 
         return encoded_list
 
+# for two ciphers only
+def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, left_len, cryptoContext, scale=1.0):
+    if cryptoContext.DIRECT_LOAD:
+        encoded_list = []
 
-    def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, left_len, cryptoContext, scale=1.0):
+        full_name0 = "{}_{}_left_{}_{}".format(val_name_list[0], left_len, level, slots)
+        full_name1 = "{}_{}_right_{}_{}".format(val_name_list[0], left_len, level, slots)
+        if cryptoContext.pre_encode_type == "middle":
+            name0 = "{}_{}_left".format(val_name_list[0], left_len)  # todo: poor work around, left_len could be removed in name, for debugging only
+            name1 = "{}_{}_right".format(val_name_list[0], left_len)
+        else:
+            name0 = full_name0
+            name1 = full_name1
+
+        encoded0 = fhe.encode(cryptoContext.pre_encoded[name0], full_name0, level, slots, False, cryptoContext)
+        encoded1 = fhe.encode(cryptoContext.pre_encoded[name1], full_name1, level, slots, False, cryptoContext)
+        encoded_list.append(encoded0)
+        encoded_list.append(encoded1)
+
+        return encoded_list
+    else:
         # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
         values_list = []
         for val_name in val_name_list:
