@@ -1,3 +1,4 @@
+import math
 import os
 import pickle
 
@@ -42,8 +43,6 @@ normalized_deltas = [
 
 
 def log2_int(x):
-    import math
-
     return int(math.log2(x))
 
 
@@ -203,11 +202,96 @@ else:
         except IOError as e:
             print(f"error: {e}")
 
-        values = np.array(values, dtype=np.double)
-        name = "{}".format(val_name)
+        values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        name = "{}_{}".format(val_name, slots) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
+
+    def read_values_from_file_32K_Aespa(val_name, level, slots, num_cipher, cryptoContext, scale=1.0):
+        # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
+        values = []
+        filename = cryptoContext.weight_path + val_name + '.bin'
+        if not os.path.isfile(filename):
+            print(f"Failed to open file: {filename}")
+            return values
+
+        try:
+            with open(filename, 'r') as file:
+                for row in file:
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num * scale)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        values = np.array(values, dtype=np.double)
+
+        if num_cipher <= 0:
+            raise ValueError("num_cipher must be positive")
+
+        chunk_len = math.ceil(len(values) / num_cipher)  # per-chunk size
+        encoded_list = []
+
+        for idx in range(num_cipher):
+            start = idx * chunk_len
+            end = min(start + chunk_len, len(values))  # cap at len(values)
+            part = values[start:end]
+
+            name = f"{val_name}_{idx}"  # e.g. foo_0, foo_1, …
+            print(name)
+            encoded = fhe.encode(part, name, level, slots, False, cryptoContext)
+            encoded_list.append(encoded)
+
+        return encoded_list
+
+
+    def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, left_len, cryptoContext, scale=1.0):
+        # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
+        values_list = []
+        for val_name in val_name_list:
+            values = []
+            filename = cryptoContext.weight_path + val_name + '.bin'
+            if not os.path.isfile(filename):
+                print(f"Failed to open file: {filename}")
+                return values
+
+            try:
+                with open(filename, 'r') as file:
+                    for row in file:
+                        for value in row.strip().split(','):
+                            try:
+                                num = float(value)
+                                values.append(num * scale)
+                            except ValueError:
+                                print(f"unconvert:: {value}")
+            except IOError as e:
+                print(f"error: {e}")
+
+            values = np.array(values, dtype=np.double)
+            values_list.append(values)
+
+        half_channel = num_channels // 2
+        total_len = len(values_list[0])
+        mid = total_len // 2 # todo: only support 2 ciphertexts for now
+        channel_size = total_len//num_channels
+
+        pivot0 = int(left_len * channel_size)
+        ct0_weights = np.concatenate([values_list[1][:pivot0], values_list[0][pivot0:mid]], axis=0)
+
+        pivot1 = int((left_len + half_channel) * channel_size)
+        ct1_weights = np.concatenate([values_list[1][mid:pivot1], values_list[0][pivot1:]], axis=0)
+
+        name0 = "{}_{}_left".format(val_name_list[0], left_len) #todo: poor work around, left_len could be removed in name, for debugging only
+        name1 = "{}_{}_right".format(val_name_list[0], left_len)
+        print(name0)
+        print(name1)
+        encoded0 = fhe.encode(ct0_weights, name0, level, slots, False, cryptoContext)
+        encoded1 = fhe.encode(ct1_weights, name1, level, slots, False, cryptoContext)
+        return encoded0, encoded1
 
 
     def read_fc_weight(num_channel, spatial_size, level, slots, cryptoContext):

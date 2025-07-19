@@ -189,10 +189,8 @@ def layer1_32K(input, cryptoContext):
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         input = drop_list(input, res1, cryptoContext) # drop_last_elements ADD BY ZRJI
 
-    A2 = [read_values_from_file_32K_aespa(f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input[0].cur_limbs, input[0].slots,0,
-                               cryptoContext, scale),
-          read_values_from_file_32K_aespa(f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input[1].cur_limbs, input[1].slots,1,
-                               cryptoContext, scale)]
+    A2 = read_values_from_file_32K_Aespa(f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input[1].cur_limbs, input[1].slots,2,
+                               cryptoContext, scale)
     A2y = homo_mul_pt_list(input, A2, cryptoContext)
     res1 = homo_add_list(res1, A2y, cryptoContext)
     res1 = homo_rescale_list(res1, 1, cryptoContext) # RESCALE ADD BY ZRJI
@@ -207,10 +205,8 @@ def layer1_32K(input, cryptoContext):
     res2 = conv_32K(res2, 32, 1, 64, -1024, 2, 2, 0, 2, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
         res1 = drop_list(res1, res2, cryptoContext) # drop_last_elements ADD BY ZRJI
-    A2 = [read_values_from_file_32K_aespa(f"layer{2}-conv{2}bn{2}-A2", cryptoContext.L - res1[0].cur_limbs, res1[0].slots, 0,
-                                          cryptoContext, scale),
-          read_values_from_file_32K_aespa(f"layer{2}-conv{2}bn{2}-A2", cryptoContext.L - res1[1].cur_limbs, res1[1].slots, 1,
-                                          cryptoContext, scale)]
+    A2 = read_values_from_file_32K_Aespa(f"layer{2}-conv{2}bn{2}-A2", cryptoContext.L - res1[1].cur_limbs, res1[1].slots, 2,
+                                          cryptoContext, scale)
     A2y = homo_mul_pt_list(res1, A2, cryptoContext)
     res2 = homo_add_list(res2, A2y, cryptoContext)
     res2 = homo_rescale_list(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
@@ -524,6 +520,38 @@ def homo_Aespa_perfect_square(x, filename, cryptoContext):
     n2 = read_values_from_file(n2_filename, cryptoContext.L - perfect_squre.cur_limbs, slots, cryptoContext, scale)
     res = fhe.homo_add_pt(perfect_squre, n2, cryptoContext)
     return res
+
+
+def homo_Aespa_perfect_square_32K(x, filename, cryptoContext):
+    n1_filename = f"{filename}-n1"
+    n2_filename = f"{filename}-n2"
+    scale = 1
+    results = []
+
+    if x[0].noise_deg>1:
+        x = homo_rescale_list(x, 1, cryptoContext)
+
+    limbs = cryptoContext.L-x[0].cur_limbs
+    slots = x[0].slots
+    n1 = read_values_from_file_32K_Aespa(n1_filename, limbs, slots, 2, cryptoContext, scale)
+    n2 = read_values_from_file_32K_Aespa(n2_filename, limbs+1, slots, 2, cryptoContext, scale)
+
+    for idx, ct in enumerate(x):
+        # 1) Align scale (one-step rescale)
+        ct = fhe.homo_rescale(ct, ct.noise_deg - 1, cryptoContext)
+
+        # 2) Add first plaintext correction, then square-and-rescale
+        # input x = origin sqrt(a2) * x
+        tmp_sq = fhe.homo_square(
+            fhe.homo_add_pt(ct, n1[idx], cryptoContext),
+            cryptoContext,
+        )
+        tmp_sq = fhe.homo_rescale(tmp_sq, 1, cryptoContext)
+
+        # 3) Add second plaintext correction
+        results.append(fhe.homo_add_pt(tmp_sq, n2[idx], cryptoContext))
+
+    return results
 
 
 if __name__ == "__main__":

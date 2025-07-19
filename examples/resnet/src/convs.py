@@ -201,10 +201,8 @@ def convbn_dx_32K(input, num_channel, rot_offset, layer, n, channel_offset, bias
 
     finalsum0 = fhe.homo_rescale(finalsum0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     finalsum1 = fhe.homo_rescale(finalsum1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    bias1 = [read_values_from_file_32K_aespa(f"layer{layer}dx-conv{n}bn{n}-bias" + biasoff, cryptoContext.L - finalsum0.cur_limbs,
-                                  finalsum0.slots, 0, cryptoContext, scale),
-             read_values_from_file_32K_aespa(f"layer{layer}dx-conv{n}bn{n}-bias" + biasoff, cryptoContext.L - finalsum1.cur_limbs,
-                                  finalsum1.slots, 1, cryptoContext, scale)]
+    bias1 = read_values_from_file_32K_Aespa(f"layer{layer}dx-conv{n}bn{n}-bias" + biasoff, cryptoContext.L - finalsum0.cur_limbs,
+                                  finalsum0.slots, 2, cryptoContext, scale)
     finalsum0 = fhe.homo_add_pt(finalsum0, bias1[0], cryptoContext)
     finalsum1 = fhe.homo_add_pt(finalsum1, bias1[1], cryptoContext)
 
