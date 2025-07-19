@@ -485,6 +485,8 @@ def downsample256to64(c1, c2, num_channel, cryptoContext):
         downsampledchannels = fhe.homo_rotate(downsampledchannels, -(256 - 64), cryptoContext)
 
     downsampledchannels = fhe.homo_rotate(downsampledchannels, (256 - 64) * (num_channel * 2), cryptoContext)
+
+    # fixme: 原版这部分在显式的做slot resize的工作，和最后的slot resize操作是重复的，这个问题和1024-256 version是一致的。
     downsampledchannels = fhe.homo_add(downsampledchannels,
                                        fhe.homo_rotate(downsampledchannels, -(downsampledchannels.slots // 4),
                                                        cryptoContext), cryptoContext)
@@ -499,6 +501,66 @@ def downsample256to64(c1, c2, num_channel, cryptoContext):
                                                          cryptoContext)
 
     return downsampledchannels
+
+
+@fhe.utils.profile_python_function
+def downsample256to64_32K(c1, c2, num_channel, cryptoContext):
+    cipher_list = [c1, c2]
+    num_cipher = 2
+    result_list = []
+    for cipher in cipher_list:
+        fullpack = cipher # now slots is 32768, for 32K version
+        fullpack = fhe.homo_mul_pt(
+            fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext),
+            gen_mask(2, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
+        fullpack = fhe.homo_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_mul_pt(
+            fhe.homo_add(fullpack,
+                         fhe.homo_rotate(
+                             fhe.homo_rotate(fullpack, 1, cryptoContext), 1, cryptoContext), cryptoContext),
+            gen_mask(4, fullpack.cur_limbs, fullpack.slots, cryptoContext), cryptoContext)
+        fullpack = fhe.force_rescale(fullpack, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        fullpack = fhe.homo_add(fullpack,
+                                fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext)
+
+        downsampledrows = choose_zero(fullpack.slots, cryptoContext)
+        downsampledrows = fhe.drop_last_elements(downsampledrows, downsampledrows.cur_limbs - fullpack.cur_limbs,
+                                                 cryptoContext)  # drop_last_elements ADD BY ZRJI
+
+        assert fullpack.noise_deg == 1
+        for i in range(32):
+            masked = fhe.homo_mul_pt(fullpack,
+                                     mask_first_n_mod2(8, 256, i, num_channel, fullpack.cur_limbs, fullpack.slots,
+                                                       cryptoContext), cryptoContext) # fixme: note: remove `2*` in original version cause we do not merge cipher when logN=16
+            downsampledrows = fhe.homo_add(downsampledrows, masked, cryptoContext)
+            if i < 31:
+                fullpack = fhe.homo_rotate(fullpack, 24, cryptoContext)
+
+        downsampledrows = fhe.force_rescale(downsampledrows, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+        downsampledchannels = choose_zero(fullpack.slots, cryptoContext)
+        downsampledchannels = fhe.drop_last_elements(downsampledchannels,
+                                                     downsampledchannels.cur_limbs - downsampledrows.cur_limbs,
+                                                     cryptoContext)  # drop_last_elements ADD BY ZRJI
+        assert downsampledrows.noise_deg == 1
+
+        for i in range(num_channel): # fixme: note: remove `2*` in original version cause we do not merge cipher when logN=16
+            masked = fhe.homo_mul_pt(downsampledrows,
+                                     mask_channel(i, num_channel, 256, num_cipher, downsampledrows.cur_limbs, cryptoContext),
+                                     cryptoContext) # fixme: input 瞎凑的，不知道这个函数在干什么
+            downsampledchannels = fhe.homo_add(downsampledchannels, masked, cryptoContext)
+            downsampledchannels = fhe.homo_rotate(downsampledchannels, -(256 - 64), cryptoContext)
+
+        downsampledchannels = fhe.homo_rotate(downsampledchannels, (256 - 64) * num_channel, cryptoContext) # fixme: note: remove `2*` in original version cause we do not merge cipher when logN=16
+
+        result_list.append(downsampledchannels)
+
+    cipher_merged = fhe.homo_add(result_list[0],
+                                 fhe.homo_rotate(result_list[1], -8192, cryptoContext),
+                                 cryptoContext)
+    cipher_merged = fhe.homo_rescale(cipher_merged, 1, cryptoContext)
+    cipher_merged = fhe.homo_ops.slot_resize(cipher_merged, 16384, cryptoContext) # fixme: could be removed, should not hardcode
+    return cipher_merged
+
 
 
 @fhe.utils.profile_python_function
