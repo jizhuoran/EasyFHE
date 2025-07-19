@@ -69,7 +69,7 @@ print("\n\n")
 print("device: ", device)
 print("DIRECT_LOAD: ", DIRECT_LOAD)
 print("pre_encode_type: ", pre_encode_type)
-print("pkl_path: ", pkl_path)
+print("pkl_path=", pkl_path)
 
 
 def initial_layer(input, cryptoContext):
