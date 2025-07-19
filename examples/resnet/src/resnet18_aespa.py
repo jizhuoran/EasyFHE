@@ -244,10 +244,9 @@ def layer3(input, cryptoContext):
 
     res1dx1 = convbn_dx(boot_in, 128, -256, 5, 1, 128, "2", scaleDx, cryptoContext)
 
-    fullpackSx = downsample256to64(res1sx0, res1sx1, 128, cryptoContext)
-    fullpackDx = downsample256to64(res1dx0, res1dx1, 128, cryptoContext)
-
-
+    fullpackSx = downsample256to64_32K(res1sx0, res1sx1, 128, cryptoContext)
+    fullpackDx = downsample256to64_32K(res1dx0, res1dx1, 128, cryptoContext)
+    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)
     print("layer3 after downsample slots", fullpackSx.slots)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
