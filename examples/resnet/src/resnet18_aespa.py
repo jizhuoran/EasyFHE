@@ -2,7 +2,7 @@ import datetime
 import os
 import sys
 import time
-import traceback
+import traceback, warnings
 
 sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
@@ -46,13 +46,13 @@ weight_dir = "../weights_aespa_18/"
 
 rotate_index_list = [-32768, -16384, -8192, -4096, -1024, -768, -256, -192, -64, -48, -32, -16, -15, -8, -1,
                      1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576, 49152, 98304]
-maxLevelsRemaining = 26
-logBsSlots_list = []
-logN = 17
+maxLevelsRemaining = 15
+logBsSlots_list = [15]
+logN = 16
 dnum = 1
 dcrtBits = 55
 firstMod = 60
-levelBudget_list = []
+levelBudget_list = [[4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
@@ -114,69 +114,17 @@ def homo_add_list(input0_list,intput1_list,cryptoContext):
         res.append(fhe.homo_add(input0_list[idx], intput1_list[idx], cryptoContext))
     return res
 
-@fhe.utils.profile_python_function
-def initial_layer(input, cryptoContext):
-    # conv3*3 [64,32,32]
-    scale = 1
-    print("initial_layer input slots", input.slots)
-    res = conv_initial(input, 32, 1, 64, scale, cryptoContext)
-    res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
-    return res
-
 
 @fhe.utils.profile_python_function
 def initial_layer_32K(input, cryptoContext):
     # conv3*3 [64,32,32]
     scale = 1
     print("initial_layer input slots", input.slots)
-    cryptoContext.DIRECT_LOAD = False # todo: to be removed
     res = conv_initial_32K(input, 32, 1, 64, 2, scale, cryptoContext)
     res = homo_rescale_list(res,1, cryptoContext)
-    cryptoContext.DIRECT_LOAD = True # todo: to be removed
     res = homo_Aespa_perfect_square_32K(res, "conv1bn1", cryptoContext)
 
     return res
-
-
-@fhe.utils.profile_python_function
-def layer1(input, cryptoContext):
-    scale = 1
-    # layer[0],block[0],conv1
-    # input = [64,32,32]
-    print("layer1 input slots", input.slots)
-    res1 = conv(input, 32, 1, 64, -1024, 1, 1, 0, scale, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
-    # layer[0],block[0],conv2 and shorcut
-    res1 = conv(res1, 32, 1, 64, -1024, 1, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        input = fhe.drop_last_elements(input, input.cur_limbs - res1.cur_limbs,
-                                       cryptoContext)  # drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(f"layer{1}-conv{2}bn{2}-A2", cryptoContext.L - input.cur_limbs, input.slots,
-                               cryptoContext, scale)
-    A2y = fhe.homo_mul_pt(input, A2, cryptoContext)
-    res1 = fhe.homo_add(res1, A2y, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res1 = homo_Aespa_perfect_square(res1, f"layer{1}-conv{2}bn{2}", cryptoContext)
-
-    # layer[0],block[1],conv1
-    res2 = conv(res1, 32, 1, 64, -1024, 2, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{1}bn{1}", cryptoContext)
-
-    # layer[0],block[1],conv2
-    res2 = conv(res2, 32, 1, 64, -1024, 2, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(f"layer{2}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, res1.slots, cryptoContext,
-                               scale)
-    A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
-    res2 = fhe.homo_add(res2, A2y, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res2 = homo_Aespa_perfect_square(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
-    return res2
 
 
 @fhe.utils.profile_python_function
@@ -222,52 +170,6 @@ def layer1_32K(input, cryptoContext):
 
 
 @fhe.utils.profile_python_function
-def layer2(input, cryptoContext):
-    # after down sample [128,16,16]
-    scaleSx = 1
-    scaleDx = 1
-
-    boot_in = input
-    print("layer2 input slots", input.slots)
-
-    res1sx0 = conv(boot_in, 32, 1, 64, -1024, 3, 1, 0, scaleSx, cryptoContext)
-    res1sx1 = conv(boot_in, 32, 1, 64, -1024, 3, 1, 64, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # RESCALE ADD BY ZRJI
-    res1dx0 = convbn_dx(boot_in, 64, -1024, 3, 1, 0, "1", scaleDx, cryptoContext)
-    res1dx1 = convbn_dx(boot_in, 64, -1024, 3, 1, 64, "2", scaleDx, cryptoContext)
-    fullpackSx = downsample1024to256(res1sx0, res1sx1, 64, 2, cryptoContext)
-    fullpackDx = downsample1024to256(res1dx0, res1dx1, 64, 2, cryptoContext)
-    print("layer2 after downsample", fullpackSx.slots)
-    fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
-    fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
-    res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    print("after downsample and asepa and conv and add")
-    return res1
-
-    res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
-    # layer[2]block[1]
-    scale = 1
-    res2 = conv(res1, 16, 1, 128, -256, 4, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{1}bn{1}", cryptoContext)
-    res2 = conv(res2, 16, 1, 128, -256, 4, 2, 0, scale, cryptoContext)
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
-    A2 = read_values_from_file(f"layer{4}-conv{2}bn{2}-A2", cryptoContext.L - res1.cur_limbs, res1.slots, cryptoContext,
-                               scale)
-    A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
-    res2 = fhe.homo_add(res2, A2y, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    res2 = homo_Aespa_perfect_square(res2, f"layer{4}-conv{2}bn{2}", cryptoContext)
-    return res2
-
-
-@fhe.utils.profile_python_function
 def layer2_32K(input, cryptoContext):
     # after down sample [128,16,16]
     scaleSx = 1
@@ -301,9 +203,6 @@ def layer2_32K(input, cryptoContext):
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    print("after downsample and asepa and conv and add")
-    return res1
-
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
     res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
 
@@ -347,6 +246,8 @@ def layer3(input, cryptoContext):
 
     fullpackSx = downsample256to64(res1sx0, res1sx1, 128, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, 128, cryptoContext)
+
+
     print("layer3 after downsample slots", fullpackSx.slots)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
 
@@ -445,7 +346,6 @@ def final_layer(input, cryptoContext):
 def executeResNet18(cryptoContext):
     openfhe_context = cryptoContext.openfhe_context
 
-    cryptoContext.zero_64K = openfhe_context.encrypt(np.zeros(2 ** 16), device, 2, 0, 2 ** 16)
     cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2 ** 15), device, 2, 0, 2 ** 15)
     cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2 ** 14), device, 2, 0, 2 ** 14)
 
@@ -471,120 +371,23 @@ def executeResNet18(cryptoContext):
         # x , fea = model(input,fea_out=True)
 
 
-        # in_ct = openfhe_context.encrypt(
-        #     image_vector,
-        #     device,
-        #     1,
-        #     10,
-        #     64 * 32 * 32,
-        # )
-
-        # 改17为16用的
-
-        in_ct = openfhe_context.encrypt(
-            image_vector,
-            device,
-            1,
-            0,
-            64 * 32 * 32,
-        )
-
         in_ct_16 = openfhe_context.encrypt(
             image_vector,
             device,
             1,
-            0,
+            10,
             32 * 32 * 32,
         )
 
         print("start processing image ", i, "time: ", datetime.datetime.now())
         start_time = time.time()
         cryptoContext.openfhe_context = openfhe_context
-        # 密文推理
-        firstLayer = initial_layer(in_ct, cryptoContext)
-        resLayer1 = layer1(firstLayer, cryptoContext)
-        resLayer2 = layer2(resLayer1, cryptoContext)
-        finalRes = resLayer2
-
-
-        clear_result = openfhe_context.decrypt(finalRes)
-        clear_result = clear_result.cpu().numpy().reshape(-1)
-        golden_result = openfhe_context.decrypt(finalRes)
-        golden_result = golden_result.cpu().numpy().reshape(-1)
-        print("clear_result shape: ", clear_result.shape)
-        print("mid: ", clear_result.shape[0] // 2)
-        mid = clear_result.shape[0]//2
-        offset = 0
-        print(clear_result[offset:offset+10])
-        print(clear_result[mid+offset:mid+offset+10])
-
-        pkl_path_tmp = "/data/yhh/data/keep/encode_20250719_225738.pkl"
-        load_weight(pkl_path_tmp, cryptoContext)
-        firstlayer_32K = initial_layer_32K(in_ct_16, cryptoContext)  # todo: should be used with new read in files, only read in 32K slots
+        firstlayer_32K = initial_layer_32K(in_ct_16, cryptoContext)  # we modify the read in files, to cut off the redundant zeros for the intial layer
         resLayer1_32K = layer1_32K(firstlayer_32K, cryptoContext)
-
-        cryptoContext.DIRECT_LOAD = False
         resLayer2_32K = layer2_32K(resLayer1_32K, cryptoContext)
-        finalRes_32K = resLayer2_32K
-
-
-        ## new
-        if  isinstance(finalRes_32K, torch.fhe.ciphertext.Cipher):
-            clear_result = openfhe_context.decrypt(finalRes_32K)
-            clear_result = clear_result.cpu().numpy().reshape(-1)
-            print("clear_result shape: ", clear_result.shape)
-            print("mid: ", clear_result.shape[0] // 2)
-            mid = clear_result.shape[0] // 2
-            offset = 0
-            print(clear_result[offset:offset+10])
-            print(clear_result[mid+offset:mid + offset + 10])
-
-            if finalRes_32K.noise_deg>1:
-                finalRes_32K = fhe.homo_rescale(finalRes_32K, 1, cryptoContext)
-            if finalRes.noise_deg>1:
-                finalRes = fhe.homo_rescale(finalRes, 1, cryptoContext)
-            finalRes_32K = fhe.homo_sub(finalRes_32K, finalRes, cryptoContext)
-            clear_result = openfhe_context.decrypt(finalRes_32K)
-            clear_result = clear_result.cpu().numpy().reshape(-1)
-            print("clear_result shape: ", clear_result.shape)
-            print("mid: ", clear_result.shape[0] // 2)
-
-            threshold = 1.0e-05
-            idx = np.flatnonzero(abs(clear_result) > threshold)[:10]  # first 10 flat indices
-            print(idx)
-
-            print("max element", clear_result.max(),)
-            print("index of max element", np.argmax(clear_result))
-            mid = clear_result.shape[0] // 2
-            offset = 256
-            print(clear_result[offset:offset+10])
-            print(clear_result[mid+offset:mid + offset + 10])
-
-            if abs(clear_result.max())<1e-05:
-                print("ok")
-            else:
-                print("GG")
-        elif isinstance(finalRes_32K, list):
-            clear_result0 = openfhe_context.decrypt(finalRes_32K[0])
-            clear_result1 = openfhe_context.decrypt(finalRes_32K[1])
-            clear_result0 = clear_result0.cpu().numpy().reshape(-1)
-            clear_result1 = clear_result1.cpu().numpy().reshape(-1)
-            print(clear_result0[:10])
-            print(clear_result1[:10])
-            print("finalRes_32K[0].slots, finalRes_32K[1].slots",finalRes_32K[0].slots, finalRes_32K[1].slots)
-            slots = finalRes_32K[0].slots
-            clear_result = np.concatenate((clear_result0[:slots], clear_result1[:slots]))
-            ok = np.allclose(golden_result, clear_result, atol=1e-5, rtol=0)  # True / False
-            print("ok: ", ok)
-
-        else:
-            print("finalRes_32K is not a Ciphertext or list, it is: ", type(finalRes_32K))
-
-
-        # resLayer2 = layer2(resLayer1, cryptoContext)
-        # resLayer3 = layer3(resLayer2, cryptoContext)
-        # resLayer4 = layer4(resLayer3, cryptoContext)
-        # finalRes = final_layer(resLayer4, cryptoContext)
+        resLayer3 = layer3(resLayer2_32K, cryptoContext)
+        resLayer4 = layer4(resLayer3, cryptoContext)
+        finalRes = final_layer(resLayer4, cryptoContext)
         print("after processing image ", i, "time: ", datetime.datetime.now())
         print("time: ", time.time() - start_time)
 
@@ -627,31 +430,31 @@ def executeResNet18(cryptoContext):
         # loss = torch.sum((fea_out - temp) ** 2)
         # print('resLayer4', loss)
 
-    #     try:
-    #         clear_result = openfhe_context.decrypt(finalRes)
-    #         clear_result = clear_result.cpu().numpy().reshape(-1)
-    #         clear_result = clear_result[:10]
+        try:
+            clear_result = openfhe_context.decrypt(finalRes)
+            clear_result = clear_result.cpu().numpy().reshape(-1)
+            clear_result = clear_result[:10]
+            print(clear_result)
+            max_element_idx = np.argmax(clear_result)
+        except RuntimeError as e:
+            print(f"Decryption failed: {e}")
+            clear_result = None
+            max_element_idx = 11
+
+        print("For image ", i)
+        # if clear_result is not None:
         #     print(clear_result)
-    #         max_element_idx = np.argmax(clear_result)
-    #     except RuntimeError as e:
-    #         print(f"Decryption failed: {e}")
-    #         clear_result = None
-    #         max_element_idx = 11
-    #
-    #     print("For image ", i)
-    #     # if clear_result is not None:
-    #     #     print(clear_result)
-    #     # else:
-    #     #     print("Decryption failed, clear_result is None.")
-    #     print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
-    #     if label == max_element_idx:
-    #         correct += 1
-    #     message = f"correct/total: {correct}/{(i + 1)}"
-    #     print(colored(message, "red"))
-    #     if (i + 1) % 100 == 0:
-    #         print("\n\n")
-    #
-    # print(f"\n\ncorrect/total: {correct}/{total}")
+        # else:
+        #     print("Decryption failed, clear_result is None.")
+        print("ground truth: ", label, "\tprediction: ", max_element_idx, "\tindex: ", index, )
+        if label == max_element_idx:
+            correct += 1
+        message = f"correct/total: {correct}/{(i + 1)}"
+        print(colored(message, "red"))
+        if (i + 1) % 100 == 0:
+            print("\n\n")
+
+    print(f"\n\ncorrect/total: {correct}/{total}")
 
 
 def resnet18():
