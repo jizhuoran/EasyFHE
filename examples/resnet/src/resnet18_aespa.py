@@ -115,11 +115,20 @@ def homo_add_list(input0_list,intput1_list,cryptoContext):
     return res
 
 
+def homo_bootstrap_list(input0_list, dropLevel, logbsSlots, levelBudgets, cryptoContext):
+    res = []
+    for idx, input_ in enumerate(input0_list):
+        res.append(fhe.homo_bootstrap(input0_list[idx], cryptoContext.L - dropLevel,
+                                      logbsSlots, levelBudgets, cryptoContext))
+    return res
+
+
 @fhe.utils.profile_python_function
 def initial_layer_32K(input, cryptoContext):
     # conv3*3 [64,32,32]
     scale = 1
     print("initial_layer input slots", input.slots)
+    print("initial_layer input limbs", input.cur_limbs)
     res = conv_initial_32K(input, 32, 1, 64, 2, scale, cryptoContext)
     res = homo_rescale_list(res,1, cryptoContext)
     res = homo_Aespa_perfect_square_32K(res, "conv1bn1", cryptoContext)
@@ -133,6 +142,7 @@ def layer1_32K(input, cryptoContext):
     # layer[0],block[0],conv1
     # input = [64,32,32]
     print("layer1 input slots", input[0].slots)
+    print("layer1 input limbs", input[0].cur_limbs)
     res1 = conv_32K(input, 32, 1, 64, -1024, 1, 1, 0,2, scale, cryptoContext)
     res1 = homo_rescale_list(res1, 1, cryptoContext)
     res1 = homo_Aespa_perfect_square_32K(res1, f"layer{1}-conv{1}bn{1}", cryptoContext)
@@ -164,6 +174,10 @@ def layer1_32K(input, cryptoContext):
     A2y = homo_mul_pt_list(res1, A2, cryptoContext)
     res2 = homo_add_list(res2, A2y, cryptoContext)
     res2 = homo_rescale_list(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+
+
+    res2 = homo_bootstrap_list(res2, 3, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
     res2 = homo_Aespa_perfect_square_32K(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
 
     return res2
@@ -177,6 +191,7 @@ def layer2_32K(input, cryptoContext):
 
     boot_in = input
     print("layer2 input slots", input[0].slots)
+    print("layer2 input limbs", input[0].cur_limbs)
     res1sx0 = conv_32K(boot_in, 32, 1, 64, -1024, 3, 1, 0, 2, scaleSx, cryptoContext)
     res1sx1 = conv_32K(boot_in, 32, 1, 64, -1024, 3, 1, 64, 2, scaleSx, cryptoContext)
     res1sx0 = homo_rescale_list(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
@@ -375,7 +390,7 @@ def executeResNet18(cryptoContext):
             image_vector,
             device,
             1,
-            10,
+            cryptoContext.L - 12,
             32 * 32 * 32,
         )
 
