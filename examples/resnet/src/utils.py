@@ -1,6 +1,7 @@
 import math
 import os
 import pickle
+import time
 
 import numpy as np
 
@@ -51,6 +52,10 @@ def load_weight(encode_weight_path, cryptoContext):
             pre_encoded = pickle.load(f)
         # print("pre_encoded", pre_encoded)
         load_checkpoint = getattr(cryptoContext, "LOAD_CHECKPOINT", False) # mainly for debugging
+
+        torch.cuda.synchronize()
+        start = time.time()
+
         for key, _ in pre_encoded.items():
             if cryptoContext.pre_encode_type == "middle":
                 if  load_checkpoint:
@@ -59,6 +64,11 @@ def load_weight(encode_weight_path, cryptoContext):
                 pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")
             elif cryptoContext.pre_encode_type == "end":
                 pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
+
+        torch.cuda.synchronize()
+        end = time.time()
+        print("load weight time", end - start)
+
         cryptoContext.pre_encoded = pre_encoded
 
         cryptoContext.LOAD_CHECKPOINT = False # mainly for debugging

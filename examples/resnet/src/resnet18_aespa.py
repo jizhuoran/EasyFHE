@@ -360,6 +360,7 @@ def executeResNet18(cryptoContext):
 
     print("=====================================================")
     correct = 0
+    time_list = []
     for i in range(total):
         # input image size 64*32*32 = 2^16
         image_vector, label, index = read_image(i)
@@ -379,6 +380,7 @@ def executeResNet18(cryptoContext):
         )
 
         print("start processing image ", i, "time: ", datetime.datetime.now())
+        torch.cuda.synchronize()
         start_time = time.time()
         cryptoContext.openfhe_context = openfhe_context
         firstlayer_32K = initial_layer_32K(in_ct_16, cryptoContext)  # we modify the read in files, to cut off the redundant zeros for the intial layer
@@ -387,8 +389,12 @@ def executeResNet18(cryptoContext):
         resLayer3 = layer3(resLayer2_32K, cryptoContext)
         resLayer4 = layer4(resLayer3, cryptoContext)
         finalRes = final_layer(resLayer4, cryptoContext)
+        torch.cuda.synchronize()
+        end_time = time.time()
+        print("time: ", end_time - start_time)
         print("after processing image ", i, "time: ", datetime.datetime.now())
-        print("time: ", time.time() - start_time)
+        time_list.append(end_time - start_time)
+
 
         # 对比明密文loss
         # conv_init = fea[0].flatten().reshape(-1)
@@ -454,7 +460,11 @@ def executeResNet18(cryptoContext):
             print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
+    avg = sum(time_list) / len(time_list)
+    min_val = min(time_list)
 
+    print("avg:", avg)
+    print("min_val:", min_val)
 
 def resnet18():
     if not os.path.exists(DATA_DIR):
@@ -464,11 +474,14 @@ def resnet18():
                                      SAVE_MIDDLE=SAVE_MIDDLE,
                                      SAVE_END=SAVE_END,
                                      PTX_TWIN=False)
+    start = time.time()
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
-
+    end=time.time()
+    print("load context time", end - start)
+    print("current time: ", datetime.datetime.now())
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
     cryptoContext.pre_encode_type = pre_encode_type
     cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
