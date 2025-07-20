@@ -27,9 +27,8 @@ DATA_DIR = os.environ["DATA_DIR"]
 # # config2
 total = 1
 SAVE_END = False
-SAVE_MIDDLE = True
+SAVE_MIDDLE = False
 DIRECT_LOAD = True
-LOAD_CHECKPOINT = True
 pre_encode_type = "middle"
 pkl_path = "/data/yhh/data//encode_20250720_023633.pkl"
 
@@ -50,7 +49,7 @@ rotate_index_list = [-32768, -16384, -8192, -4096, -1024, -768, -256, -192, -64,
 maxLevelsRemaining = 15
 logBsSlots_list = [15]
 logN = 16
-dnum = 1
+dnum = 6
 dcrtBits = 55
 firstMod = 60
 levelBudget_list = [[4, 4]]
@@ -473,7 +472,6 @@ def resnet18():
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
     cryptoContext.pre_encode_type = pre_encode_type
     cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
-    cryptoContext.LOAD_CHECKPOINT = LOAD_CHECKPOINT
     load_weight(pkl_path, cryptoContext)
     print("start executeResNet18")
     cryptoContext.openfhe_context = openfhe_context
