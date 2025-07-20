@@ -755,8 +755,9 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
     if cipher.is_ext:
         if (
-            cipher.cur_limbs != plaintext.cur_limbs
-            or cipher.noise_deg != plaintext.noise_deg
+            # cipher.cur_limbs != plaintext.cur_limbs # to support requirement for bootstrapping with different remaining limbs
+            # or
+            cipher.noise_deg != plaintext.noise_deg
             or cipher.scaling_factor != plaintext.scaling_factor
             or cipher.is_ext != plaintext.is_ext
         ):
@@ -767,14 +768,22 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
                 f"  cipher.scaling_factor = {cipher.scaling_factor}, plaintext.scaling_factor = {plaintext.scaling_factor}\n"
                 f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}"
             )
+        if cipher.cur_limbs != plaintext.cur_limbs:
+            # fixme: fix it if the cat introduce too much overhead
+            cv_ = torch.cat([
+                            plaintext.cv[0][:cipher.cur_limbs * cryptoContext.N],
+                            plaintext.cv[0][plaintext.cur_limbs * cryptoContext.N:]])
+            tmp_pt = plaintext.cipher_like(cv_)
+        else:
+            tmp_pt = plaintext
         moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
         mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
-        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
-        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv0 = F.cv_mul(cipher.cv[0], tmp_pt.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], tmp_pt.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
         return cipher.cipher_like(
             [cv0, cv1],
-            scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
-            noise_deg=cipher.noise_deg + plaintext.noise_deg,
+            scaling_factor=cipher.scaling_factor * tmp_pt.scaling_factor,
+            noise_deg=cipher.noise_deg + tmp_pt.noise_deg,
         )
     else:
         ctmorphed = plaintext.cipher_like(plaintext.cv)  # MorphPlaintext in openfhe

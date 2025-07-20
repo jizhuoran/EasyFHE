@@ -27,7 +27,7 @@ logN = 16
 dnum = 6
 dcrtBits = 56
 firstMod = 60
-levelBudget_list = [[4, 4]]
+levelBudget_list = [[4,4]]
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 path = DATA_DIR
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
@@ -50,6 +50,7 @@ cryptoContext, openfhe_context = utils.try_load_context(
     config=config,
 )
 print(f"length of rot list: {len(rot_list)}")
+print(f"level budget: {levelBudget_list}")
 print("cryptoContext: ", cryptoContext)
 
 encode_slots = (1<<(logN-1))
@@ -73,12 +74,12 @@ cipher = openfhe_context.encrypt(
 repeat = 2
 for j in range(len(logBsSlots_list)):
     result = BS.eval_bootstrap(
-        cipher, cryptoContext.L, logBsSlots_list[j], levelBudget_list[0], cryptoContext
+        cipher, cryptoContext.L-6, logBsSlots_list[j], levelBudget_list[0], cryptoContext
     )
     start_time = time.time()
     for i in range(repeat):
         result = BS.eval_bootstrap(
-            cipher, cryptoContext.L, logBsSlots_list[j], levelBudget_list[0], cryptoContext
+            cipher, cryptoContext.L-6, logBsSlots_list[j], levelBudget_list[0], cryptoContext
         )
     end_time = time.time()
     print(f"Time taken for bootstrapping slots {logBsSlots_list[j]}: ", (end_time - start_time)/repeat)
