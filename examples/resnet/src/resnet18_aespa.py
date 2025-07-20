@@ -25,7 +25,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 # pkl_path = "/data/yhh/data/encode_20250611_234607.pkl"
 
 # # config2
-total = 1
+total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
 DIRECT_LOAD = True
@@ -46,13 +46,13 @@ weight_dir = "../weights_aespa_18/"
 
 rotate_index_list = [-32768, -16384, -8192, -4096, -1024, -768, -256, -192, -64, -48, -32, -16, -15, -8, -1,
                      1, 2, 4, 8, 12, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576, 49152, 98304]
-maxLevelsRemaining = 15
+maxLevelsRemaining = 9
 logBsSlots_list = [15]
 logN = 16
 dnum = 6
-dcrtBits = 55
-firstMod = 60
-levelBudget_list = [[4, 4]]
+dcrtBits = 52
+firstMod = 55
+levelBudget_list = [[5, 5]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
 device = "cuda"
@@ -115,12 +115,24 @@ def homo_add_list(input0_list,intput1_list,cryptoContext):
     return res
 
 
-def homo_bootstrap_list(input0_list, dropLevel, logbsSlots, levelBudgets, cryptoContext):
-    res = []
-    for idx, input_ in enumerate(input0_list):
-        res.append(fhe.homo_bootstrap(input0_list[idx], cryptoContext.L - dropLevel,
-                                      logbsSlots, levelBudgets, cryptoContext))
-    return res
+def homo_bootstrap_list(in_, dropLevel, logbsSlots, levelBudgets, cryptoContext):
+    # print("max L0: ", cryptoContext.L- dropLevel)
+
+    if isinstance(in_, list):
+        res = []
+        for idx, input_ in enumerate(in_):
+            print(f"inBS_{idx}!!!!!")
+            print("cipher.cur_limbs", input_.cur_limbs)
+            print("cipher.noise_deg", input_.noise_deg)
+            res.append(fhe.homo_bootstrap(in_[idx], cryptoContext.L - dropLevel,
+                                          logbsSlots, levelBudgets, cryptoContext))
+        return res
+    else:
+        print(f"inBS!!!!!")
+        print("cipher.cur_limbs", in_.cur_limbs)
+        print("cipher.noise_deg", in_.noise_deg)
+        return fhe.homo_bootstrap(in_, cryptoContext.L - dropLevel,
+                                  logbsSlots, levelBudgets, cryptoContext)
 
 
 @fhe.utils.profile_python_function
@@ -175,8 +187,7 @@ def layer1_32K(input, cryptoContext):
     res2 = homo_add_list(res2, A2y, cryptoContext)
     res2 = homo_rescale_list(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
 
-
-    res2 = homo_bootstrap_list(res2, 3, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res2 = homo_bootstrap_list(res2, maxLevelsRemaining - 9, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     res2 = homo_Aespa_perfect_square_32K(res2, f"layer{2}-conv{2}bn{2}", cryptoContext)
 
@@ -196,8 +207,7 @@ def layer2_32K(input, cryptoContext):
     res1sx1 = conv_32K(boot_in, 32, 1, 64, -1024, 3, 1, 64, 2, scaleSx, cryptoContext)
     res1sx0 = homo_rescale_list(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1sx1 = homo_rescale_list(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = drop_levels(boot_in, 2, cryptoContext)
+
     res1dx0 = convbn_dx_32K(boot_in, 64, -1024, 3, 1, 0, "1", 2, scaleDx, cryptoContext)
     res1dx1 = convbn_dx_32K(boot_in, 64, -1024, 3, 1, 64, "2", 2, scaleDx, cryptoContext)
 
@@ -205,6 +215,9 @@ def layer2_32K(input, cryptoContext):
                   downsample1024to256_32K(res1sx1[0], res1sx1[1], 32, 2, cryptoContext)]
     fullpackSx = fhe.homo_add(fullpackSx[0],
                               fhe.homo_rotate(fullpackSx[1], -16384, cryptoContext), cryptoContext)
+
+    fullpackSx = homo_bootstrap_list(fullpackSx, maxLevelsRemaining - 4, logBsSlots_list[0], levelBudget_list[0],
+                                     cryptoContext)
 
     fullpackDx = [downsample1024to256_32K(res1dx0[0], res1dx0[1], 32, 2, cryptoContext),
                   downsample1024to256_32K(res1dx1[0], res1dx1[1], 32, 2, cryptoContext)]
@@ -218,8 +231,9 @@ def layer2_32K(input, cryptoContext):
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{3}-conv{1}bn{1}", cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 128, -256, 3, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
+    res1 = homo_bootstrap_list(res1, maxLevelsRemaining-7, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
     res1 = homo_Aespa_perfect_square(res1, f"layer{3}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
 
 
     # layer[2]block[1]
@@ -253,12 +267,13 @@ def layer3(input, cryptoContext):
     res1sx1 = conv(boot_in, 16, 1, 128, -256, 5, 1, 128, scaleSx, cryptoContext)
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 128, -256, 5, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 128, -256, 5, 1, 128, "2", scaleDx, cryptoContext)
 
+    [res1sx0, res1sx1] = homo_bootstrap_list([res1sx0, res1sx1], maxLevelsRemaining-9, logBsSlots_list[0], levelBudget_list[0],
+                                             cryptoContext)
+    [res1dx0, res1dx1] = homo_bootstrap_list([res1dx0, res1dx1], maxLevelsRemaining-9, logBsSlots_list[0], levelBudget_list[0],cryptoContext)
     fullpackSx = downsample256to64_32K(res1sx0, res1sx1, 128, cryptoContext)
     fullpackDx = downsample256to64_32K(res1dx0, res1dx1, 128, cryptoContext)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)
@@ -267,8 +282,10 @@ def layer3(input, cryptoContext):
 
     fullpackSx = conv(fullpackSx, 8, 1, 256, -64, 5, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
+
+    res1 = homo_bootstrap_list(res1, maxLevelsRemaining-7, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
     res1 = homo_Aespa_perfect_square(res1, f"layer{5}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
 
     scale = 1
     res2 = conv(res1, 8, 1, 256, -64, 6, 1, 0, scale, cryptoContext)
@@ -298,14 +315,17 @@ def layer4(input, cryptoContext):
     res1sx1 = conv(boot_in, 8, 1, 256, -64, 7, 1, 256, scaleSx, cryptoContext)
     res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 256, -64, 7, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 256, -64, 7, 1, 256, "2", scaleDx, cryptoContext)
 
+    [res1sx0, res1sx1] = homo_bootstrap_list([res1sx0, res1sx1], maxLevelsRemaining-9, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    [res1dx0, res1dx1] = homo_bootstrap_list([res1dx0, res1dx1], maxLevelsRemaining-7, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
+
+
     fullpackSx = downsample64to16(res1sx0, res1sx1, 256, cryptoContext)
-    fullpackDx = downsample64to16(res1dx0, res1dx1, 256, cryptoContext)
+    fullpackDx = downsample64to16(res1dx0, res1dx1, 256, cryptoContext) # 7
     print("layer4 after downsample slots", fullpackSx.slots)
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{7}-conv{1}bn{1}", cryptoContext)
@@ -314,7 +334,8 @@ def layer4(input, cryptoContext):
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
     res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
     res1 = homo_Aespa_perfect_square(res1, f"layer{7}-conv{2}bn{2}", cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, 15, [4, 4], cryptoContext)
+
+    res1 = homo_bootstrap_list(res1, maxLevelsRemaining-4, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
 
     scale = 1
     res2 = conv(res1, 4, 1, 512, -16, 8, 1, 0, scale, cryptoContext)
@@ -331,6 +352,9 @@ def layer4(input, cryptoContext):
     A2y = fhe.homo_mul_pt(res1, A2, cryptoContext)
     res2 = fhe.homo_add(res2, A2y, cryptoContext)
     res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+
+    res2 = homo_bootstrap_list(res2, maxLevelsRemaining-4, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+
     res2 = homo_Aespa_perfect_square(res2, f"layer{8}-conv{2}bn{2}", cryptoContext)
     return res2
 
@@ -475,9 +499,9 @@ def executeResNet18(cryptoContext):
             print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
-    avg = sum(time_list) / len(time_list)
+    avg = sum(time_list[1:]) / (len(time_list)-1)
     min_val = min(time_list)
-
+    print(f"ver3: {time_list}")
     print("avg:", avg)
     print("min_val:", min_val)
 
@@ -495,6 +519,8 @@ def resnet18():
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
     end=time.time()
+    print("cryptoContext: ", cryptoContext)
+
     print("load context time", end - start)
     print("current time: ", datetime.datetime.now())
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
