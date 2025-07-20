@@ -49,12 +49,19 @@ def load_weight(encode_weight_path, cryptoContext):
     if cryptoContext.DIRECT_LOAD:
         with open(encode_weight_path, 'rb') as f:
             pre_encoded = pickle.load(f)
+        # print("pre_encoded", pre_encoded)
+        load_checkpoint = getattr(cryptoContext, "LOAD_CHECKPOINT", False) # mainly for debugging
         for key, _ in pre_encoded.items():
             if cryptoContext.pre_encode_type == "middle":
+                if  load_checkpoint:
+                    _ = fhe.encode(pre_encoded[key], key, 0, pre_encoded[key].slots, False,
+                                   cryptoContext)  # fixme: so far the `is_ext` for weights is always False, it should be add to PreEncodeValues
                 pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")
             elif cryptoContext.pre_encode_type == "end":
                 pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
         cryptoContext.pre_encoded = pre_encoded
+
+        cryptoContext.LOAD_CHECKPOINT = False # mainly for debugging
     else:
         pass
 

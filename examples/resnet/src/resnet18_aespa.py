@@ -27,8 +27,9 @@ DATA_DIR = os.environ["DATA_DIR"]
 # # config2
 total = 1
 SAVE_END = False
-SAVE_MIDDLE = False
+SAVE_MIDDLE = True
 DIRECT_LOAD = True
+LOAD_CHECKPOINT = True
 pre_encode_type = "middle"
 pkl_path = "/data/yhh/data//encode_20250720_023633.pkl"
 
@@ -472,6 +473,7 @@ def resnet18():
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
     cryptoContext.pre_encode_type = pre_encode_type
     cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
+    cryptoContext.LOAD_CHECKPOINT = LOAD_CHECKPOINT
     load_weight(pkl_path, cryptoContext)
     print("start executeResNet18")
     cryptoContext.openfhe_context = openfhe_context
