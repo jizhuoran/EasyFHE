@@ -27,15 +27,15 @@ DATA_DIR = os.environ["DATA_DIR"]
 total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
-# DIRECT_LOAD = True
+DIRECT_LOAD = True
 pre_encode_type = "middle"
-pkl_path = "/data/yhh/data/encode_20250613_155340.pkl"
+pkl_path = "/data/yhh/data/encode_20250721_205409.pkl"
 
 # # config3
 # total=1
 # SAVE_END=False
 # SAVE_MIDDLE=True
-DIRECT_LOAD = False
+# DIRECT_LOAD = False
 # pre_encode_type = None
 # pkl_path = None
 
@@ -48,9 +48,9 @@ rotate_index_list = [-8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, 
 maxLevelsRemaining = 11
 logBsSlots_list = [14]
 logN = 16
-dnum = 3
-dcrtBits = 56
-firstMod = 60
+dnum = 6
+dcrtBits = 52
+firstMod = 55
 levelBudget_list = [[4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FIXEDMANUAL"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
@@ -72,6 +72,7 @@ print("pre_encode_type: ", pre_encode_type)
 print("pkl_path=", pkl_path)
 
 
+@fhe.utils.profile_python_function
 def initial_layer(input, cryptoContext):
     scale = 1  # normalized_deltas[0][0]
     res = conv_initial(input, 32, 1, 16, scale, cryptoContext)
@@ -79,7 +80,7 @@ def initial_layer(input, cryptoContext):
     res = homo_Aespa_perfect_square(res, "conv1bn1", cryptoContext)
     return res
 
-
+@fhe.utils.profile_python_function
 def layer1(input, cryptoContext):
     scale = 1  # normalized_deltas[1][0]
     # layer[0],block[0],conv1
@@ -140,7 +141,7 @@ def layer1(input, cryptoContext):
 
     return res3
 
-
+@fhe.utils.profile_python_function
 def layer2(input, cryptoContext):
     scaleSx = 1  # normalized_deltas[2][0]
     scaleDx = 1  # normalized_deltas[2][1]
@@ -205,7 +206,7 @@ def layer2(input, cryptoContext):
 
     return res3
 
-
+@fhe.utils.profile_python_function
 def layer3(input, cryptoContext):
     scaleSx = 1  # normalized_deltas[3][0]
     scaleDx = 1  # normalized_deltas[3][1]
@@ -268,7 +269,7 @@ def layer3(input, cryptoContext):
 
     return res3
 
-
+@fhe.utils.profile_python_function
 def final_layer(input, cryptoContext):
     # 64*8*8
     res = rotsum(input, 64, cryptoContext)
@@ -305,6 +306,7 @@ def executeResNet20(cryptoContext):
     # model = change_all_HerPN_by_PAF_MutalChannel(model)
 
     print("=====================================================")
+    time_list = []
     correct = 0
     for i in range(total):
         image_vector, label, index = read_image(i)
@@ -325,14 +327,18 @@ def executeResNet20(cryptoContext):
 
         cryptoContext.openfhe_context = openfhe_context
         # 密文推理
+        torch.cuda.synchronize()
+        start_time = time.time()
         firstLayer = initial_layer(in_ct, cryptoContext)
         resLayer1 = layer1(firstLayer, cryptoContext)
         resLayer2 = layer2(resLayer1, cryptoContext)
         resLayer3 = layer3(resLayer2, cryptoContext)
         finalRes = final_layer(resLayer3, cryptoContext)
+        torch.cuda.synchronize()
+        end_time = time.time()
+        print("time: ", end_time - start_time)
         print("after processing image ", i, "time: ", datetime.datetime.now())
-        print("time: ", time.time() - start_time)
-
+        time_list.append(end_time - start_time)
         # 对比明密文loss
         # conv_init = fea[0].flatten().reshape(-1)
         # init_out = openfhe_context.decrypt(firstLayer).cpu().numpy().reshape(-1)
@@ -389,7 +395,11 @@ def executeResNet20(cryptoContext):
             print("\n\n")
 
     print(f"\n\ncorrect/total: {correct}/{total}")
-
+    avg = sum(time_list[1:]) / (len(time_list)-1)
+    min_val = min(time_list)
+    print(f"!!!ver4: {time_list}")
+    print("avg:", avg)
+    print("min_val:", min_val)
 
 def resnet20():
     if not os.path.exists(DATA_DIR):
