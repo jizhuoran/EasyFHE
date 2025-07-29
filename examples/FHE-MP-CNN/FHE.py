@@ -378,6 +378,8 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
                 cryptoContext.cnt +=1
                 if cryptoContext.config.SAVE_MIDDLE == False:
                     full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1, 1 << logn)
+                    if cryptoContext.pre_encode_type =="end":
+                        name = full_name
                     value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - ctxt_rot[i1][i2].cur_limbs, 1 << logn,
                                False, cryptoContext)
                 else:
@@ -424,6 +426,8 @@ def multiplexed_parallel_convolution_seal(openfhe_context,cryptoContext,input:Te
             cryptoContext.cnt += 1
             if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                if cryptoContext.pre_encode_type == "end":
+                    name = full_name
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
@@ -468,6 +472,8 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
     cryptoContext.cnt += 1
     if cryptoContext.config.SAVE_MIDDLE == False:
         full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - input.cipher.cur_limbs, 1, 1 << logn)
+        if cryptoContext.pre_encode_type == "end":
+            name = full_name
         value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - input.cipher.cur_limbs, 1 << logn,
                            False, cryptoContext)
     else:
@@ -557,6 +563,8 @@ def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B
             cryptoContext.cnt+=1
             if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                if cryptoContext.pre_encode_type == "end":
+                    name = full_name
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
@@ -613,6 +621,8 @@ def matrix_multiplication_seal(openfhe_context,cryptoContext,input,matrix,bias,q
         cryptoContext.cnt += 1
         if cryptoContext.config.SAVE_MIDDLE == False:
             full_name = "{}_{}_{}_{}".format(name, cryptoContext.L - temp.cur_limbs, 1, 1 << logn)
+            if cryptoContext.pre_encode_type == "end":
+                name = full_name
             value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L - temp.cur_limbs, 1 << logn,
                                False, cryptoContext)
         else:
@@ -685,6 +695,8 @@ def multiplexed_parallel_downsampling_seal(openfhe_context,cryptoContext,input):
             cryptoContext.cnt+=1
             if cryptoContext.config.SAVE_MIDDLE == False:
                 full_name = "{}_{}_{}_{}".format(name, cryptoContext.L-temp.cur_limbs, 1, 1<<logn)
+                if cryptoContext.pre_encode_type == "end":
+                    name = full_name
                 value = fhe.encode(cryptoContext.pre_encoded[name], full_name, cryptoContext.L-temp.cur_limbs, 1<<logn, False, cryptoContext)
             else:
                 print(name)
