@@ -25,7 +25,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 # pkl_path = "/data/yhh/data/encode_20250611_234607.pkl"
 
 # # config2
-total = 1
+total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
 DIRECT_LOAD = True
@@ -279,8 +279,9 @@ def layer3(input, cryptoContext):
     fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)
     print("layer3 after downsample slots", fullpackSx.slots)
     fullpackSx = homo_Aespa_perfect_square(fullpackSx, f"layer{5}-conv{1}bn{1}", cryptoContext)
-
-    fullpackSx = conv(fullpackSx, 8, 1, 256, -64, 5, 2, 0, scaleDx, cryptoContext)
+    cryptoContext.DIRECT_LOAD=False
+    fullpackSx = conv_bsgs(fullpackSx, 8, 1, 256, -64, 5, 2, 0, scaleDx, 2, cryptoContext)
+    cryptoContext.DIRECT_LOAD=True
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
 
     res1 = homo_bootstrap_list(res1, maxLevelsRemaining-7, logBsSlots_list[0], levelBudget_list[0], cryptoContext)

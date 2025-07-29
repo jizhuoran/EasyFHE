@@ -109,6 +109,52 @@ def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
 
+
+
+def read_values_from_file_bsgs(val_name, level, slots, bstep, b_idx, cryptoContext, scale=1.0):
+    if cryptoContext.DIRECT_LOAD:
+        full_name = "{}_{}_{}".format(val_name, level, slots)
+        if cryptoContext.pre_encode_type == "middle":
+            name = "{}".format(val_name)
+        else:
+            name = full_name
+        return fhe.encode(cryptoContext.pre_encoded[name], full_name, level, slots, False, cryptoContext)
+    else:
+        # print("read_values_from_file", filename, "level", level, "slots", slots, "scale", scale)
+        values = []
+        filename = cryptoContext.weight_path + val_name + '.bin'
+        if not os.path.isfile(filename):
+            print(f"Failed to open file: {filename}")
+            return values
+
+        try:
+            with open(filename, 'r') as file:
+                for row in file:
+                    for value in row.strip().split(','):
+                        try:
+                            num = float(value)
+                            values.append(num * scale)
+                        except ValueError:
+                            print(f"unconvert:: {value}")
+        except IOError as e:
+            print(f"error: {e}")
+
+        values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        values = np.asarray(values[:slots], dtype=np.double)
+        block_size = slots // bstep  # 每份的长度
+        assert slots % bstep == 0, "slots 必须能被 bstep 整除"
+
+        # 先 reshape 成 [bstep, block_size]，再按行循环移位，使第 b_idx 份排到最前
+        values = np.roll(values.reshape(bstep, block_size), -b_idx, axis=0).ravel()
+
+        name = "{}".format(val_name) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        print(name)
+        encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
+        return encoded
+
+
+
+
 def read_fc_weight(num_channel, spatial_size, level, slots, cryptoContext):
     if cryptoContext.DIRECT_LOAD:
         full_name = "fc_{}_{}".format(level, slots)

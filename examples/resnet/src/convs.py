@@ -103,6 +103,78 @@ def conv(input, img_width, padding, num_channel, rot_offset, layer, n, channel_o
     return finalsum
 
 
+#separate example
+# @fhe.utils.profile_python_function
+# def conv_merge2(input, img_width, padding, num_channel, rot_offset, layer, n, channel_offset, scale, cryptoContext):
+#     if input.noise_deg > 1:
+#         input = fhe.force_rescale(input, 1, cryptoContext)
+#
+#     c_rotations = rot_input(input, img_width, padding, cryptoContext)
+#     intra = 2
+#     intra_offset = num_channel//intra
+#     for j in range(num_channel//intra):
+#         k_rows = []
+#         for k in range(9):
+#             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",
+#                                             cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
+#             k_rows.append(encoded)
+#         partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+#
+#         k_rows = []
+#         for k in range(9):
+#             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset + intra_offset}-k{k + 1}",
+#                                             cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
+#             k_rows.append(encoded)
+#         partial_sum1 = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+#
+#         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
+#         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
+#
+#         finalsum1 = partial_sum1.deep_copy() if j == 0 else fhe.homo_add(finalsum1, partial_sum1,
+#                                                                                             cryptoContext)
+#         finalsum1 = fhe.homo_rotate(finalsum1, rot_offset, cryptoContext)
+#         if j==num_channel//intra-1:
+#             finalsum1 = fhe.homo_rotate(finalsum1,8192, cryptoContext)
+#
+#
+#     finalsum = fhe.homo_add(finalsum1, finalsum, cryptoContext)
+#     finalsum = fhe.homo_rotate(finalsum, -8192, cryptoContext) #fixme: 可以合并到前面最后一次转里头去
+#
+#     return finalsum
+
+@fhe.utils.profile_python_function
+def conv_bsgs(input, img_width, padding, num_channel, rot_offset, layer, n, channel_offset, scale, b_step, cryptoContext):
+    if input.noise_deg > 1:
+        input = fhe.force_rescale(input, 1, cryptoContext)
+
+    g_step = num_channel // b_step
+    c_rotations_list = []
+    for i in range(b_step): #fixme: use more keys in `rot_input`, and add hoisting for `tmp`
+        tmp = input
+        if b_step != 0:
+            tmp = fhe.homo_rotate(input, (input.slots//b_step)*i, cryptoContext)
+        c_rotations = rot_input(tmp, img_width, padding, cryptoContext)
+        c_rotations_list.append(c_rotations)
+
+    for j in range(g_step):
+        for i in range(b_step):
+            k_rows = []
+            for k in range(9):
+                encoded = read_values_from_file_bsgs(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset + i * g_step}-k{k + 1}",
+                                                cryptoContext.L - input.cur_limbs, input.slots, b_step, i, cryptoContext, scale)
+                k_rows.append(encoded)
+            tmp_partial_sum = fhe.fused_pairwise_mac(c_rotations_list[i], k_rows, cryptoContext)
+
+            partial_sum = tmp_partial_sum.deep_copy() if i==0 else fhe.homo_add(partial_sum, tmp_partial_sum, cryptoContext)
+
+        finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
+        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
+
+    finalsum = fhe.homo_rotate(finalsum, (input.slots//b_step), cryptoContext) #fixme: 可以合并到前面最后一次转里头去
+
+    return finalsum
+
+
 @fhe.utils.profile_python_function
 def conv_32K(input, img_width, padding, num_channel, rot_offset, layer, n, channel_offset, num_cipher, scale, cryptoContext):
     if input[0].noise_deg > 1:
