@@ -22,16 +22,20 @@ DATA_DIR = os.environ["DATA_DIR"]
 # pkl_path = "/data/yhh/data/encode_20250612_201417.pkl"
 
 # # config2
+LOAD_CHECKPOINT = False
 total = 10
 SAVE_END = False
 SAVE_MIDDLE = False
+DIRECT_LOAD = True
 pre_encode_type = "middle"
-pkl_path = "/data/yhh/data/encode_20250612_201417.pkl"
+pkl_path = "/data/yhh/data//encode_20250730_094600.pkl"
 
 # # config3
 # total=1
 # SAVE_END=False
 # SAVE_MIDDLE=True
+# LOAD_CHECKPOINT = False
+# DIRECT_LOAD = False
 # pre_encode_type = None
 # pkl_path = None
 
@@ -397,6 +401,7 @@ def resnet20():
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
 
+    cryptoContext.DIRECT_LOAD = DIRECT_LOAD
     cryptoContext.weight_path = weight_dir  # fixme: workaround only
     cryptoContext.pre_encode_type = pre_encode_type
     load_weight(pkl_path, cryptoContext)
