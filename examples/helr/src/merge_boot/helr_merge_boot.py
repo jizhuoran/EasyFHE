@@ -15,7 +15,7 @@ TRAIN_TXT = INPUT_DATA_DIR / "MNIST_train.txt"
 TEST_TXT = INPUT_DATA_DIR / "MNIST_test.txt"
 
 DATA_DIR = os.environ["DATA_DIR"]
-encData_DIR = DATA_DIR + "/helr/encData/"
+
 
 BS_cnt = 0
 
@@ -610,8 +610,6 @@ def main():
 
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
-    if not os.path.exists(encData_DIR):
-        raise ValueError(f"Directory {encData_DIR} does not exist!")
 
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True)
     cryptoContext, openfhe_context = (
