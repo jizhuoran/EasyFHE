@@ -47,16 +47,16 @@ static void innerproduct_template(
   auto barret_k_ptr =
       reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
   const int max_threads = omp_get_max_threads();
-//  omp_set_num_threads(max_threads);
+  omp_set_num_threads(max_threads);
   for (uint32_t j = 0; j < beta; ++j) {
     const uint64_t* d2_ptr = modup_out_ptr + j * param_degree * length;
     const uint64_t* d_ax_ptr = ax_ptr + j * param_degree * sizeQP;
     const uint64_t* d_bx_ptr = bx_ptr + j * param_degree * sizeQP;
 
-//#pragma omp parallel for schedule(static) num_threads(max_threads)
+#pragma omp parallel for collapse(2)  schedule(static) num_threads(max_threads)
     for (uint64_t idx = 0; idx < length; ++idx) {
-        const int prime_idx = (idx < curr_limbs) ? 0 : gap;
         for (uint64_t k = 0; k < param_degree; ++k) {
+        const int prime_idx = (idx < curr_limbs) ? 0 : gap;
         auto i = idx * param_degree + k;
         const uint64_t op1 = d2_ptr[i];
         const uint64_t op2_ax = d_ax_ptr[i + param_degree * prime_idx];
