@@ -151,7 +151,7 @@ def conv_bsgs(input, img_width, padding, num_channel, rot_offset, layer, n, chan
     c_rotations_list = []
     for i in range(b_step): #fixme: use more keys in `rot_input`, and add hoisting for `tmp`
         tmp = input
-        if b_step != 0:
+        if i != 0:
             tmp = fhe.homo_rotate(input, (input.slots//b_step)*i, cryptoContext)
         c_rotations = rot_input(tmp, img_width, padding, cryptoContext)
         c_rotations_list.append(c_rotations)
