@@ -999,6 +999,15 @@ def fused_pairwise_mac(ctxs, ptxs, cryptoContext):
     """
     Fused operation for pmul and sum
     """
+
+    if cryptoContext.device=="cpu":
+        sum = homo_mul_pt(ctxs[0],ptxs[0],cryptoContext)
+        for i in range(1,9):
+            tmp = homo_mul_pt(ctxs[i],ptxs[i],cryptoContext)
+            sum = homo_add(tmp, sum, cryptoContext)
+
+        return sum
+
     if len(ctxs) != 9 or len(ptxs) != 9:
         raise ValueError("The length of ctxs and ptxs must be 9, but got {} and {}".format(len(ctxs), len(ptxs)))
 
