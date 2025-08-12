@@ -666,7 +666,7 @@ def eval_poly_ps(x, coefficients, cryptoContext):
 
 
     if degree(divqr_q) > k:
-        qu = inner_eval_poly_ps(x, divqr_q, k, m - 1, powers, powers2)
+        qu = inner_eval_poly_ps(x, divqr_q, k, m - 1, powers, powers2, cryptoContext)
     else:
         qcopy = np.copy(divqr_q)
         qcopy.resize(k, refcheck=False)
@@ -685,7 +685,7 @@ def eval_poly_ps(x, coefficients, cryptoContext):
     if np.allclose(s2, divqr_q):
         su = qu.deep_copy()
     elif degree(s2) > k:
-        su = inner_eval_poly_ps(x, s2, k, m - 1, powers, powers2)
+        su = inner_eval_poly_ps(x, s2, k, m - 1, powers, powers2,cryptoContext)
     else:
         # ds = k from construction
         # perform scalar multiplication for all other terms and sum them up if there are non-zero coefficients
