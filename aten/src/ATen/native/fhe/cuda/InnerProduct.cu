@@ -24,6 +24,7 @@ __global__ void sum_reduce_fused(
     const size_t mult_length,
     const size_t batch,
     size_t curr_limbs,
+    size_t special_mod_start,
     size_t gap,
     const uint64_t* primes,
     const uint64_t* barret_ks,
@@ -31,16 +32,17 @@ __global__ void sum_reduce_fused(
   const int idx = blockIdx.y;
   const int i = blockIdx.y * N + blockIdx.x * blockDim.x + threadIdx.x;
   const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : gap);
+  const int swk_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : (special_mod_start-curr_limbs));
   uint128_t accum_ax{0, 0};
   uint128_t accum_bx{0, 0};
   for (int batch_idx = 0; batch_idx < batch; batch_idx++) {
     const int stride = N * mult_length * batch_idx;
     const int in_ptr_stride = N * length * batch_idx;
     const uint64_t op1 = in_ptr[in_ptr_stride + i];
-    const uint64_t op2_ax = eval_ax[i + N * prime_idx + stride];
+    const uint64_t op2_ax = eval_ax[i + N * swk_idx + stride];
     const auto mul_ax = mult_64_64_128(op1, op2_ax);
     inplace_add_128_128(mul_ax, accum_ax);
-    const uint64_t op2_bx = eval_bx[i + N * prime_idx + stride];
+    const uint64_t op2_bx = eval_bx[i + N * swk_idx + stride];
     const auto mul_bx = mult_64_64_128(op1, op2_bx);
     inplace_add_128_128(mul_bx, accum_bx);
   }
@@ -67,6 +69,7 @@ static void innerproduct_template(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t L,
     int64_t N,
     const Tensor& primes,
@@ -77,8 +80,10 @@ static void innerproduct_template(
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   const int length = (curr_limbs + sizeP);
-  const int mult_length = (L + sizeP);
+  // printf("length = %d\n", length);
+  const int mult_length = (special_mod_start + sizeP);
   auto gap = L - curr_limbs;
+  // printf("bata= %d\n", beta);
 
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
@@ -104,6 +109,7 @@ static void innerproduct_template(
       mult_length,
       beta,
       curr_limbs,
+      special_mod_start,
       gap,
       primes_ptr,
       barret_k_ptr,
@@ -118,6 +124,7 @@ Tensor innerproduct_cuda(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t L,
     int64_t N,
     const Tensor& primes,
@@ -135,6 +142,7 @@ Tensor innerproduct_cuda(
       ax,
       curr_limbs,
       alpha,
+      special_mod_start,
       L,
       N,
       primes,

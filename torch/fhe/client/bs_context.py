@@ -414,38 +414,9 @@ class BsContext:
         self.S2C_rot_in = rot_in
         self.S2C_rot_out = rot_out
 
-    # Placeholder function for SelectLayers, which needs to be defined as per the logic in your system.
-    def SelectLayers(self, logBsSlots, budget):
-        layers = math.ceil(logBsSlots / budget)
-        rows = logBsSlots // layers
-        rem = logBsSlots % layers
 
-        dim = rows
-        if rem != 0:
-            dim = rows + 1
-
-        # The above choice ensures dim <= budget
-        if dim < budget:
-            layers -= 1
-            rows = logBsSlots // layers
-            rem = logBsSlots - rows * layers
-            dim = rows
-
-            if rem != 0:
-                dim = rows + 1
-
-            # The above choice ensures dim >= budget
-            while dim != budget:
-                rows -= 1
-                rem = logBsSlots - rows * layers
-                dim = rows
-                if rem != 0:
-                    dim = rows + 1
-
-        return [layers, rows, rem]
-
-    def GetCollapsedFFTParams(self, slots, levelBudget, dim1):
-        dims = self.SelectLayers(int(math.log2(slots)), levelBudget)
+    def GetCollapsedFFTParams(self, slots: object, levelBudget: object, dim1: object) -> CKKS_Boot_Params:
+        dims = self.select_layers(int(math.log2(slots)), levelBudget)
         layersCollapse = dims[0]
         remCollapse = dims[2]
 

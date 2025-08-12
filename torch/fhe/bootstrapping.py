@@ -76,42 +76,84 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     return ciphertext
 
 
-def get_collapsed_fft_params(slots: int, level_budget: int):
-    log_slots = int(math.log2(slots))
-    levels = math.ceil(log_slots / level_budget)
-    rem = log_slots % levels
+def select_layers(log_slots, budget): # fixme: poor work around, should be call from bsContext?
+    layers = int(math.ceil(log_slots / budget))
+    rows = int(log_slots // layers)
+    rem = log_slots % layers
 
-    total_rots = (1 << (levels + 1)) - 1
-    shift = 2 if total_rots > 7 else 1
-    giant_step = 1 << (levels // 2 + shift)
-    baby_step = (total_rots + 1) // giant_step
+    dim = rows
+    if rem != 0:
+        dim = rows + 1
 
-    if rem:
-        rem_rots = (1 << (rem + 1)) - 1
-        shift = 2 if rem_rots > 7 else 1
-        rem_giant = 1 << (rem // 2 + shift)
-        rem_baby = (rem_rots + 1) // rem_giant
+    # Ensure dim <= budget
+    if dim < budget:
+        layers -= 1
+        rows = log_slots // layers
+        rem = log_slots - rows * layers
+        dim = rows
+
+        if rem != 0:
+            dim = rows + 1
+
+        # Ensure dim >= budget
+        while dim != budget:
+            rows -= 1
+            rem = log_slots - rows * layers
+            dim = rows
+            if rem != 0:
+                dim = rows + 1
+
+    return [int(layers), int(rows), int(rem)]
+
+def get_collapsed_fft_params(slots: object, levelBudget: object, dim1=0): # fixme: poor work around, should be call from bsContext?
+    dims = select_layers(int(math.log2(slots)), levelBudget)
+    layersCollapse = dims[0]
+    remCollapse = dims[2]
+
+    flagRem = 1 if remCollapse != 0 else 0
+
+    numRotations = (1 << (layersCollapse + 1)) - 1
+    numRotationsRem = (1 << (remCollapse + 1)) - 1
+
+    # Computing the baby-step b and the giant-step g for the collapsed layers for decoding.
+    if dim1 == 0 or dim1 > numRotations:
+        if numRotations > 7:
+            g = 1 << (int(layersCollapse / 2) + 2)
+        else:
+            g = 1 << (int(layersCollapse / 2) + 1)
     else:
-        rem_rots = rem_baby = rem_giant = 0
+        g = dim1
 
-    return levels, rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant
+    b = (numRotations + 1) // g
+    bRem = 0
+    gRem = 0
+
+    if flagRem:
+        if numRotationsRem > 7:
+            gRem = 1 << (int(remCollapse / 2) + 2)
+        else:
+            gRem = 1 << (int(remCollapse / 2) + 1)
+        bRem = (numRotationsRem + 1) // gRem
+
+    # If this return statement changes then CKKS_BOOT_PARAMS should be altered as well
+    return int(levelBudget),layersCollapse,remCollapse,int(numRotations),b,g,int(numRotationsRem),bRem,gRem
 
 
 def compute_parameters(slots: int, level_budget: int, M: int, direction: str):
     def reduce_rotation(idx: int, size: int):
         return idx & (size - 1) if (size & (size - 1)) == 0 else idx % size
 
-    levels, rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant = \
+    _, layersCollapse, rem, total_rots, baby_step, giant_step, rem_rots, rem_baby, rem_giant = \
         get_collapsed_fft_params(slots, level_budget)
     flag_rem = int(rem != 0)
 
     if direction == 'C2S':
-        exp_fn = lambda s: (s - flag_rem) * levels + rem
+        exp_fn = lambda s: (s - flag_rem) * layersCollapse + rem
         loop = range(level_budget - 1, -1 + flag_rem, -1)
         in_div = slots
         rem_index = 0
     else:
-        exp_fn = lambda s: s * levels
+        exp_fn = lambda s: s * layersCollapse
         loop = range(level_budget - flag_rem)
         in_div = M // 4
         rem_index = level_budget - flag_rem
@@ -281,7 +323,7 @@ def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 
 
 # note: EvalBootstrap in ckksrns-fhe.cpp
-#@utils.profile_pytorch_function
+# @utils.profile_pytorch_function
 def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
@@ -705,8 +747,6 @@ def eval_slim_bootstrap(ciphertext, L0, logBsSlots, level_budgets,cryptoContext)
 
 @decorator_factory
 def homo_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext):
-
-    # cryptoContext.BsContext = cryptoContext.BsContext_map[str(logBsSlots)]
 
     result = eval_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext)
 

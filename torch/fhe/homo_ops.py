@@ -554,6 +554,7 @@ def homo_rescale(ct, levels, cryptoContext):
 def _homo_rescale_internal(ct, levels, cryptoContext):
     assert levels in (0, 1), f"input level = {levels}, only support 0 or 1"
     assert ct.cur_limbs-levels > 0, "there aren't enough limbs to be rescaled"
+    assert ct.noise_deg-levels >= 1, f"ct.noise_deg = {ct.noise_deg}, rescaled levels = {levels}, there aren't enough noise_deg to be rescaled"
     if levels == 0:
         return ct.deep_copy()
 
@@ -591,6 +592,7 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
+            cryptoContext.L,
             cryptoContext.mult_swk_bx,
             cryptoContext.mult_swk_ax,
             cryptoContext,
@@ -609,6 +611,7 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
+            cryptoContext.L,
             cryptoContext.mult_swk_bx,
             cryptoContext.mult_swk_ax,
             cryptoContext,
@@ -654,7 +657,8 @@ def homo_rotate(in0, index, cryptoContext):
         return in0.deep_copy()
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.get_rotation_key(norm_index)
-    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
+    special_mod_start = cryptoContext.config.MAX_RNS_LIMBS_BY_ROT_EVK.get(index, cryptoContext.L)
+    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, special_mod_start, swk[0], swk[1], cryptoContext))
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 
@@ -754,8 +758,9 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
     if cipher.is_ext:
         if (
-            cipher.cur_limbs != plaintext.cur_limbs
-            or cipher.noise_deg != plaintext.noise_deg
+            # cipher.cur_limbs != plaintext.cur_limbs # to support requirement for bootstrapping with different remaining limbs
+            # or
+            cipher.noise_deg != plaintext.noise_deg
             or cipher.scaling_factor != plaintext.scaling_factor
             or cipher.is_ext != plaintext.is_ext
         ):
@@ -766,14 +771,22 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
                 f"  cipher.scaling_factor = {cipher.scaling_factor}, plaintext.scaling_factor = {plaintext.scaling_factor}\n"
                 f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}"
             )
+        if cipher.cur_limbs != plaintext.cur_limbs:
+            # fixme: fix it if the cat introduce too much overhead
+            cv_ = torch.cat([
+                            plaintext.cv[0][:cipher.cur_limbs * cryptoContext.N],
+                            plaintext.cv[0][plaintext.cur_limbs * cryptoContext.N:]])
+            tmp_pt = plaintext.cipher_like(cv_)
+        else:
+            tmp_pt = plaintext
         moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
         mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
-        cv0 = F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
-        cv1 = F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv0 = F.cv_mul(cipher.cv[0], tmp_pt.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
+        cv1 = F.cv_mul(cipher.cv[1], tmp_pt.cv[0], moduli, mu, cipher.cur_limbs + cryptoContext.K)
         return cipher.cipher_like(
             [cv0, cv1],
-            scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
-            noise_deg=cipher.noise_deg + plaintext.noise_deg,
+            scaling_factor=cipher.scaling_factor * tmp_pt.scaling_factor,
+            noise_deg=cipher.noise_deg + tmp_pt.noise_deg,
         )
     else:
         ctmorphed = plaintext.cipher_like(plaintext.cv)  # MorphPlaintext in openfhe
@@ -930,7 +943,7 @@ def encode(
             f"scaling_factor = {scaling_factor}. " \
             "Either max_encoded_value should be less than 1e-20, or the log2 of the scaled value should be less than 61."
 
-    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.double, device=cryptoContext.device)
+    middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.float, device=cryptoContext.device)
     # print("slots: ", slots, "shape", middle_value.encoded_values.shape)
     middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots) #TODO workaround, to remove this in the future
     pt_encode = torch.encode(

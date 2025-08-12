@@ -27,7 +27,9 @@ def _mult_rot_key_and_sum_ext(digits, index, cryptoContext):
     assert digits.is_ext == True
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.get_rotation_key(norm_index)
-    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
+
+    special_mod_start = cryptoContext.config.MAX_RNS_LIMBS_BY_ROT_EVK.get(index, cryptoContext.L)
+    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, special_mod_start=special_mod_start,context=cryptoContext,
                                  swk_bx=swk[0], swk_ax=swk[1])
     return digits.cipher_like(sum_mult, is_ext=True)
 

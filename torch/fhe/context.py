@@ -36,8 +36,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
     secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
     sigma = get_item("sigma", gpufhe_content_map)
-    False,
-    False,
     primes = get_item("primes", gpufhe_content_map)
     barret_k = get_item("barret_k", gpufhe_content_map)
     barret_ratio = get_item("barret_ratio", gpufhe_content_map)
@@ -558,3 +556,20 @@ class Context:
             return self.precompute_auto_map[key].cuda()
         else:
             return self.precompute_auto_map[key]
+
+
+    def __repr__(self):
+        s = []
+        s.append(f"{'L:':20} {self.L}")
+        s.append(f"{'logBsSlots:':20} {self.logBsSlots_list}")
+        s.append(f"{'N:':20} {self.N}")
+        s.append(f"{'dnum:':20} {self.dnum}")
+        s.append(f"{'dcrtBits:':20} {self.dcrtBits}")
+        # s.append(f"{'firstMod:':20} {self.firstMod}")  # todo: to add
+        s.append(f"{'K:':20} {self.K}")
+        s.append(f"{'levelBudget_list:':20} {self.levelBudget}")
+        s.append(f"{'rescaleTech:':20} {self.rescaleTech}")
+        s.append(f"{'secretKeyDist:':20} {self.secretKeyDist}")
+        s.append(f"{'device:':20} {self.device}")
+        return "<Context>\n" + "\n".join(s)
+

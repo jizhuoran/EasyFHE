@@ -49,6 +49,14 @@ class Cipher:
     def shallow_copy(self):
         return self.cipher_like(self.cv, cipher_id="copy")
 
+    def cuda(self):
+        cv = [x.cuda() for x in self.cv]
+        return self.cipher_like(cv, cipher_id="to_cuda")
+
+    def cpu(self):
+        cv = [x.cpu() for x in self.cv]
+        return self.cipher_like(cv, cipher_id="to_cpu")
+
     def __repr__(self):
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):

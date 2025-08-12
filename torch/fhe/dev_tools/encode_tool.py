@@ -47,7 +47,8 @@ def pre_encode(x, slots, cryptoContext):
         cryptoContext.encode_bitrev_indices[int(math.log2(slots))]
     )
 
-    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64)
+    inverse_array = np.array(inverse_complex, dtype=np.complex128).view(np.float64).astype(np.float32)
+
     inverse_array = inverse_array.reshape(1, -1)
     max_encoded_value = np.max(np.abs(inverse_array))
 
@@ -73,15 +74,14 @@ def save_middle_encode(func):
     def wrapper(*args, **kwargs):
         if func.__name__ == "encode":
             input, name, _, slots, _, cryptoContext = args
-            if isinstance(input, list) or isinstance(input, np.ndarray):
-                encoded_val = pre_encode(input, slots, cryptoContext)
-                middle_encoded_vals[name] = encoded_val
+            if cryptoContext.DIRECT_LOAD == False: # only save when the middle is not generated
+                if isinstance(input, list) or isinstance(input, np.ndarray):
+                    encoded_val = pre_encode(input, slots, cryptoContext)
+                    middle_encoded_vals[name] = encoded_val
             elif isinstance(input, PreEncodeValues):
                 # If input is already a PreEncodeValues, we can skip pre-encoding
-                save_val = input.deep_copy()
-                save_val.encoded_values = save_val.encoded_values.cpu().numpy()
-                middle_encoded_vals[name] = save_val
-                # print(input.encoded_values.shape)
+                if getattr(cryptoContext, "LOAD_CHECKPOINT", False): # avoid adding same val with `full_name` again
+                    middle_encoded_vals[name] = input
             else:
                 raise TypeError(f"Unsupported input type: {type(input)}. Expected list, numpy.ndarray, or PreEncodeValues.")
             # assert isinstance(input, list) or isinstance(input, np.ndarray), \

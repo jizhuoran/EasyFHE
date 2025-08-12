@@ -20,6 +20,7 @@ static void innerproduct_template(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t level,
     int64_t param_degree,
     const Tensor& primes,
@@ -31,7 +32,7 @@ static void innerproduct_template(
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - level;
   const int length = (curr_limbs + sizeP);
-  int gap = level - curr_limbs;
+  int gap = special_mod_start - curr_limbs;
   __uint128_t* accum_bx_ptr =
       reinterpret_cast<__uint128_t*>(workspace.data_ptr<uint64_t>());
   __uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
@@ -47,16 +48,16 @@ static void innerproduct_template(
   auto barret_k_ptr =
       reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
   const int max_threads = omp_get_max_threads();
-//  omp_set_num_threads(max_threads);
+  omp_set_num_threads(max_threads);
   for (uint32_t j = 0; j < beta; ++j) {
     const uint64_t* d2_ptr = modup_out_ptr + j * param_degree * length;
     const uint64_t* d_ax_ptr = ax_ptr + j * param_degree * sizeQP;
     const uint64_t* d_bx_ptr = bx_ptr + j * param_degree * sizeQP;
 
-//#pragma omp parallel for schedule(static) num_threads(max_threads)
+#pragma omp parallel for collapse(2)  schedule(static) num_threads(max_threads)
     for (uint64_t idx = 0; idx < length; ++idx) {
-        const int prime_idx = (idx < curr_limbs) ? 0 : gap;
         for (uint64_t k = 0; k < param_degree; ++k) {
+        const int prime_idx = (idx < curr_limbs) ? 0 : gap;
         auto i = idx * param_degree + k;
         const uint64_t op1 = d2_ptr[i];
         const uint64_t op2_ax = d_ax_ptr[i + param_degree * prime_idx];
@@ -94,6 +95,7 @@ Tensor innerproduct_cpu(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t L,
     int64_t N,
     const Tensor& primes,
@@ -110,6 +112,7 @@ Tensor innerproduct_cpu(
       ax,
       curr_limbs,
       alpha,
+      special_mod_start,
       L,
       N,
       primes,
