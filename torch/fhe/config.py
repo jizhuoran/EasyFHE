@@ -39,3 +39,4 @@ class Config:
             import warnings
             warnings.warn("\033[31mMAX_RNS_LIMBS_BY_ROT_EVK is set and may lead to potential errors.\033[0m")
 
+        return val
