@@ -20,6 +20,7 @@ static void innerproduct_template(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t level,
     int64_t param_degree,
     const Tensor& primes,
@@ -31,7 +32,7 @@ static void innerproduct_template(
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - level;
   const int length = (curr_limbs + sizeP);
-  int gap = level - curr_limbs;
+  int gap = special_mod_start - curr_limbs;
   __uint128_t* accum_bx_ptr =
       reinterpret_cast<__uint128_t*>(workspace.data_ptr<uint64_t>());
   __uint128_t* accum_ax_ptr = accum_bx_ptr + modup_out.size(-1);
@@ -94,6 +95,7 @@ Tensor innerproduct_cpu(
     const Tensor& ax,
     int64_t curr_limbs,
     int64_t alpha,
+    int64_t special_mod_start,
     int64_t L,
     int64_t N,
     const Tensor& primes,
@@ -110,6 +112,7 @@ Tensor innerproduct_cpu(
       ax,
       curr_limbs,
       alpha,
+      special_mod_start,
       L,
       N,
       primes,

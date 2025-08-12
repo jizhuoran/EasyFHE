@@ -592,6 +592,7 @@ def homo_mul(in0, in1, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
+            cryptoContext.L,
             cryptoContext.mult_swk_bx,
             cryptoContext.mult_swk_ax,
             cryptoContext,
@@ -610,6 +611,7 @@ def homo_square(in0, cryptoContext):
         F.cv_keyswitch(
             res.cv[2],
             res.cur_limbs,
+            cryptoContext.L,
             cryptoContext.mult_swk_bx,
             cryptoContext.mult_swk_ax,
             cryptoContext,
@@ -655,7 +657,8 @@ def homo_rotate(in0, index, cryptoContext):
         return in0.deep_copy()
     norm_index = cryptoContext.norm_rot_index(index)
     swk = cryptoContext.get_rotation_key(norm_index)
-    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, swk[0], swk[1], cryptoContext))
+    special_mod_start = cryptoContext.config.MAX_RNS_LIMBS_BY_ROT_EVK.get(index, cryptoContext.L)
+    res = in0.cipher_like(F.cv_keyswitch(in0.cv[1], in0.cur_limbs, special_mod_start, swk[0], swk[1], cryptoContext))
 
     res.cv[0] = F.cv_add(in0.cv[0], res.cv[0], cryptoContext.moduliQ, in0.cur_limbs)
 

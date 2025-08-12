@@ -36,8 +36,6 @@ def parse_content_map(gpufhe_content_map, device, config):
     max_num_moduli = get_item("max_num_moduli", gpufhe_content_map)
     secretKeyDist = get_item("secretKeyDist", gpufhe_content_map)
     sigma = get_item("sigma", gpufhe_content_map)
-    False,
-    False,
     primes = get_item("primes", gpufhe_content_map)
     barret_k = get_item("barret_k", gpufhe_content_map)
     barret_ratio = get_item("barret_ratio", gpufhe_content_map)

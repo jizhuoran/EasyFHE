@@ -203,6 +203,7 @@ def cv_moddown(
 def cv_innerproduct(
     x: Tensor,
     curr_limbs: int,
+    special_mod_start: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
     context: Context
@@ -215,6 +216,7 @@ def cv_innerproduct(
         ax=swk_ax,
         curr_limbs=curr_limbs,
         alpha= context.alpha,
+        special_mod_start = special_mod_start,
         L=context.L,
         N=context.N,
         primes=context.primes,
@@ -228,6 +230,7 @@ def cv_innerproduct(
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
+    special_mod_start: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
     context: Context,
@@ -240,6 +243,7 @@ def cv_keyswitch(
     inner_product = cv_innerproduct(
         modup_res.reshape(-1),
         cur_limbs,
+        special_mod_start,
         swk_bx,
         swk_ax,
         context

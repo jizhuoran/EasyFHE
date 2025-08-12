@@ -10,6 +10,7 @@ class Config:
         TIME_OPS=False,
         COUNT_OPS=False,
         ENCODE_BS_FFT=True,
+        MAX_RNS_LIMBS_BY_ROT_EVK={},
         SAVE_MIDDLE=False,
         SAVE_END=False
     ):
@@ -22,6 +23,7 @@ class Config:
         self.TIME_OPS=TIME_OPS
         self.COUNT_OPS=COUNT_OPS
         self.ENCODE_BS_FFT=ENCODE_BS_FFT
+        self.MAX_RNS_LIMBS_BY_ROT_EVK = MAX_RNS_LIMBS_BY_ROT_EVK
 
         self.SAVE_MIDDLE=SAVE_MIDDLE
         self.SAVE_END=SAVE_END
@@ -32,3 +34,8 @@ class Config:
             val += 1
         if self.ENCODE_BS_FFT:
             val += 2
+        if self.MAX_RNS_LIMBS_BY_ROT_EVK:
+            val += 4
+            import warnings
+            warnings.warn("\033[31mMAX_RNS_LIMBS_BY_ROT_EVK is set and may lead to potential errors.\033[0m")
+

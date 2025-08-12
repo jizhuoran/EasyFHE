@@ -674,15 +674,31 @@ class __FOR_SAVE_ONLY_Context:
         self.mult_swk_bx = np.array(MULT_SWK[0].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
         self.mult_swk_ax = np.array(MULT_SWK[1].reshape(self.dnum, L + K, self.N), dtype=np.uint64)
 
+
+        max_rns_limbs_by_rot_evk = config.MAX_RNS_LIMBS_BY_ROT_EVK
+        alpha = (L+dnum-1)//dnum
         #half_key
         for key, ROT_SWK in rot_swk_map.items():
             for autoIdx, bx, ax in ROT_SWK:
                 rotIdx = autoIdx2rotIdx_map[autoIdx]
                 if rotIdx < 0: # the same as `norm_rot_index(self, i)` in class Context
                     rotIdx = self.N // 2 + rotIdx
+                limb = max_rns_limbs_by_rot_evk.get(int(rotIdx))
+                if limb is None:
+                    limb = L
+                beta = ((limb + alpha - 1) // alpha)
+                reshaped_bx = np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N)
+                reshaped_ax = np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N)
+
                 self.total_left_rot_key_map[int(rotIdx)] = [
-                    np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N),
-                    np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N),
+                    np.concatenate([
+                        reshaped_bx[:beta, :limb, :],
+                        reshaped_bx[:beta, L:L + K, :]
+                    ], axis=1),
+                    np.concatenate([
+                        reshaped_ax[:beta, :limb, :],
+                        reshaped_ax[:beta, L:L + K, :]
+                    ], axis=1),
                 ]
                 self.total_precompute_auto_map[int(rotIdx)] = self.compute_auto_map(int(autoIdx), self.N)
 
