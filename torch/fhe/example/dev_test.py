@@ -458,6 +458,7 @@ def encode_test_case(
         utils.try_load_context(maxLevelsRemaining, [], logBsSlots_list, logN, dnum, dcrtBits, firstMod,
                                levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
                                config=config))
+    cryptoContext.DIRECT_LOAD = False
     ############
     ## test 1 ##
     ############
