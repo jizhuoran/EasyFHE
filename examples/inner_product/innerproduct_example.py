@@ -69,9 +69,9 @@ def homo_inner_product_hoisting_mult_down(cipher_A, cipher_B, n, cryptoContext):
     in0, in1 = homo_ops._adjust_for_mult(in0, in1, cryptoContext)
     res = homo_ops._cipher_mul(in0, in1, cryptoContext)
     digits = fhe.modup_to_ext(res.cipher_like([res.cv[2]]), cryptoContext)
-    swk = [cryptoContext.swk_bx, cryptoContext.swk_ax,]
-    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, context=cryptoContext,
-                                 swk_bx=swk[0], swk_ax=swk[1])
+    swk = [cryptoContext.mult_swk_bx, cryptoContext.mult_swk_ax]
+    sum_mult = F.cv_innerproduct(digits.cv[0].reshape(-1), curr_limbs=digits.cur_limbs, special_mod_start=cryptoContext.L,
+                                 context=cryptoContext, swk_bx=swk[0], swk_ax=swk[1])
 
     ax = fhe.extract_cv(res,1, cryptoContext)
     sum_mult_ax = fhe.moddown_from_ext(digits.cipher_like([sum_mult[1]]),cryptoContext)
