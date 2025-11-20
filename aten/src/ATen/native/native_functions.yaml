@@ -16022,6 +16022,10 @@
     CPU: encode_cpu
     CUDA: encode_cuda
 
+- func: encrypt(Tensor ptx, Tensor pk0, Tensor pk1, int l, int logn, int nh, Tensor moduliP_scalar, Tensor moduliQ_scalar, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CPU: encrypt_cpu
 
 - func: pre_encode(Tensor input, int slots, int M, Tensor rotGroup, Tensor ksiPows, Tensor bitrev) -> Tensor
   device_check: NoCheck
