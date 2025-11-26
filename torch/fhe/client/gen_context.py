@@ -123,11 +123,12 @@ def gen_contexts(
 
     boot_cnst_map = {}
     if NO_BS == False: # need to do BS
+        from .bs_context import GetEvalBootstrapAutoIdx2RotIdxMap
         for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
             cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
             cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
             ROT_SWK = cc.GetEvalRotateKey()
-            AUTOIDX_TO_ROTIDX = cc.GetEvalBootstrapAutoIdx2RotIdxMap(logBsSlots)
+            AUTOIDX_TO_ROTIDX = GetEvalBootstrapAutoIdx2RotIdxMap(cc, logBsSlots)
             rot_swk_map[str(logBsSlots)] = ROT_SWK
             autoIdx2rotIdx_map.update(AUTOIDX_TO_ROTIDX)
         N = int(2 ** logN)
