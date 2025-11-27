@@ -127,7 +127,14 @@ def gen_contexts(
             cc.EvalBootstrapSetup(level_budget, [0, 0], 1 << logBsSlots)
             cc.EvalBootstrapKeyGen(keys.secretKey, 1 << logBsSlots)
             ROT_SWK = cc.GetEvalRotateKey()
-            AUTOIDX_TO_ROTIDX = cc.GetEvalBootstrapAutoIdx2RotIdxMap(logBsSlots)
+            from .bs_context import BsContext as BsContext
+            AUTOIDX_TO_ROTIDX = BsContext(
+                    2**logN,
+                    logBsSlots,
+                    0,
+                    openfhe_secretKeyDist,
+                    None
+                ).GetEvalBootstrapAutoIdx2RotIdxMap(level_budget, [0, 0], logBsSlots)
             rot_swk_map[str(logBsSlots)] = ROT_SWK
             autoIdx2rotIdx_map.update(AUTOIDX_TO_ROTIDX)
         N = int(2 ** logN)

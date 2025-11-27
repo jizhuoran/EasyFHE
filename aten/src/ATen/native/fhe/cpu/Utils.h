@@ -41,6 +41,19 @@ static inline uint64_t barret_reduction_128_64(
   return (r >= p) ? r - p : r;
 }
 
+
+inline uint64_t mul_mod_barrett(
+    uint64_t a,
+    uint64_t b,
+    uint64_t p,
+    uint64_t mu, // ratio
+    unsigned shift_bits // k
+) {
+  __uint128_t prod = (__uint128_t)a * b;
+  return barret_reduction_128_64(prod, p, mu, shift_bits);
+}
+
+
 #if defined(__BMI2__) && (defined(__x86_64__) || defined(_M_X64))
 #include <immintrin.h>
 inline uint64_t umul64hi(uint64_t a, uint64_t b) {
