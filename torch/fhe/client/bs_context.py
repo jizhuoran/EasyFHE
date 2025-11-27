@@ -161,6 +161,7 @@ class BsContext:
         secretKeyDist,
         BOOT_CNST
     ):
+        self.N = N
         self.M = N * 2
         self.Nh = N >> 1
         self.logslot = logslot
@@ -173,14 +174,15 @@ class BsContext:
         # NOT USED OUTSIDE
         self.m_U0Pre = None
         self.m_U0hatTPre = None
-        self.m_U0hatTPreFFT_mx = BOOT_CNST["C2S"]
-        self.m_U0PreFFT_mx = BOOT_CNST["S2C"]
-        self.m_U0hatTPreFFT_dim = BOOT_CNST["C2S_dim"]
-        self.m_U0PreFFT_dim = BOOT_CNST["S2C_dim"]
-        self.m_U0hatTPreFFT_limbs = BOOT_CNST["C2S_limbs"]
-        self.m_U0PreFFT_limbs = BOOT_CNST["S2C_limbs"]
-        self.m_U0hatTPreFFT_scaling_factor = BOOT_CNST["U0hatTPreFFTScalingFactor"]
-        self.m_U0PreFFT_scaling_factor = BOOT_CNST["U0PreFFTScalingFactor"]
+        if BOOT_CNST != None:
+            self.m_U0hatTPreFFT_mx = BOOT_CNST["C2S"]
+            self.m_U0PreFFT_mx = BOOT_CNST["S2C"]
+            self.m_U0hatTPreFFT_dim = BOOT_CNST["C2S_dim"]
+            self.m_U0PreFFT_dim = BOOT_CNST["S2C_dim"]
+            self.m_U0hatTPreFFT_limbs = BOOT_CNST["C2S_limbs"]
+            self.m_U0PreFFT_limbs = BOOT_CNST["S2C_limbs"]
+            self.m_U0hatTPreFFT_scaling_factor = BOOT_CNST["U0hatTPreFFTScalingFactor"]
+            self.m_U0PreFFT_scaling_factor = BOOT_CNST["U0PreFFTScalingFactor"]
 
         coefficientsSparse = np.array(
             [
@@ -1268,124 +1270,53 @@ class BsContext:
         return result
 
 
-def FindBootstrapRotationIndices(cc, slots: int, M: int):
-    from enum import IntEnum
-    class _CKKSBootParams(IntEnum):
-        LEVEL_BUDGET = 0
-        LAYERS_COLL = 1
-        LAYERS_REM = 2
-        NUM_ROTATIONS = 3
-        BABY_STEP = 4
-        GIANT_STEP = 5
-        NUM_ROTATIONS_REM = 6
-        BABY_STEP_REM = 7
-        GIANT_STEP_REM = 8
+    def _add_bsgs_rotations(self, index_list,
+                            num_rotations: int,
+                            g: int,
+                            b: int,
+                            scaling_factor: int,
+                            mod_j: int,
+                            mod_i: int):
+        """公共小辅助：在给定 scaling_factor 和模数下添加一层 BSGS 旋转索引。"""
+        half_rots = 1 - ((num_rotations + 1) // 2)
+        for j in range(half_rots, g + half_rots):
+            index_list.append(self.reduce_rotation(j * scaling_factor, mod_j))
+        for i in range(b):
+            index_list.append(self.reduce_rotation((g * i) * scaling_factor, mod_i))
 
-    def _coerce_params_map(raw_map):
-        if isinstance(raw_map, dict):
-            return {int(k): v for k, v in raw_map.items()}
-        if hasattr(raw_map, "items"):
-            return {int(k): v for k, v in raw_map.items()}
-        raise TypeError("Bootstrapping parameter map must be dict-like")
-
-    def _get_bootstrap_params(cc, slots: int, *, use_encoding_params: bool):
-        mapping = cc.Getm_bootPrecomMap_paramsEnc() if use_encoding_params else cc.Getm_bootPrecomMap_paramsDec()
-        mapping = _coerce_params_map(mapping)
-        key = int(slots)
-        if key not in mapping:
-            raise KeyError(f"Bootstrapping parameters for slots={slots} not found")
-        return [int(value) for value in mapping[key]]
-
-    def reduce_rotation(index: int, slots: int) -> int:
-        def IsPowerOfTwo(value: int) -> bool:
-            """Python 等价实现：utilities.h::IsPowerOfTwo"""
-
-            return value > 0 and (value & (value - 1)) == 0
-
-        """Python 等价实现：ckksrns-utils.cpp::reduce_rotation"""
-
-        islots = int(slots)
-        if islots <= 0:
-            raise ValueError("slots must be positive")
-
-        if IsPowerOfTwo(islots):
-            n = islots.bit_length() - 1
-            if index >= 0:
-                return index - ((index >> n) << n)
-            return index + islots + ((abs(index) >> n) << n)
-
-        return (islots + index % islots) % islots
-
-
-    def FindCoeffsToSlotsRotationIndices(cc, slots: int, M: int):
-        """Python 等价实现：ckksrns-fhe.cpp::FindCoeffsToSlotsRotationIndices"""
-
+    def _find_fft_rotation_indices(self, level_budget_vec: list,
+                                   dim1_vec: list,
+                                   slots: int,
+                                   M: int,
+                                   budget_idx: int,
+                                   dim1_idx: int,
+                                   coeffs_to_slots: bool):
+        """
+        合并后的核心实现。
+        coeffs_to_slots=True  对应原 FindCoeffsToSlotsRotationIndices
+        coeffs_to_slots=False 对应原 FindSlotsToCoeffsRotationIndices
+        """
         slots = int(slots)
         M = int(M)
-        params = _get_bootstrap_params(cc, slots, use_encoding_params=True)
 
-        levelBudget = int(params[_CKKSBootParams.LEVEL_BUDGET])
-        layersCollapse = int(params[_CKKSBootParams.LAYERS_COLL])
-        remCollapse = int(params[_CKKSBootParams.LAYERS_REM])
-        numRotations = int(params[_CKKSBootParams.NUM_ROTATIONS])
-        b = int(params[_CKKSBootParams.BABY_STEP])
-        g = int(params[_CKKSBootParams.GIANT_STEP])
-        numRotationsRem = int(params[_CKKSBootParams.NUM_ROTATIONS_REM])
-        bRem = int(params[_CKKSBootParams.BABY_STEP_REM])
-        gRem = int(params[_CKKSBootParams.GIANT_STEP_REM])
+        # 获取对应 index 的 collapsed FFT 参数
+        params = self.GetCollapsedFFTParams(
+            slots, level_budget_vec[budget_idx], dim1_vec[dim1_idx]
+        )
 
-        flagRem = 0 if remCollapse == 0 else 1
-
-        indexList = []
-        indexListSz = b + g - 2 + bRem + gRem - 2 + 1 + M
-        if indexListSz < 0:
-            raise ValueError("indexListSz can not be negative")
-
-        for s in range(levelBudget - 1, flagRem - 1, -1):
-            scalingFactor = 1 << ((s - flagRem) * layersCollapse + remCollapse)
-            halfRots = 1 - ((numRotations + 1) // 2)
-            for j in range(halfRots, g + halfRots):
-                indexList.append(reduce_rotation(j * scalingFactor, slots))
-            for i in range(b):
-                indexList.append(reduce_rotation((g * i) * scalingFactor, M // 4))
-
-        if flagRem:
-            halfRots = 1 - ((numRotationsRem + 1) // 2)
-            for j in range(halfRots, gRem + halfRots):
-                indexList.append(reduce_rotation(j, slots))
-            for i in range(bRem):
-                indexList.append(reduce_rotation(gRem * i, M // 4))
-
-        m = slots * 4
-        if m != M:
-            ratio = M // m
-            j = 1
-            while j < ratio:
-                indexList.append(j * slots)
-                j <<= 1
-
-        return indexList
-
-
-    def FindSlotsToCoeffsRotationIndices(cc, slots: int, M: int):
-        """Python 等价实现：ckksrns-fhe.cpp::FindSlotsToCoeffsRotationIndices"""
-
-        slots = int(slots)
-        M = int(M)
-        params = _get_bootstrap_params(cc, slots, use_encoding_params=False)
-
-        levelBudget = int(params[_CKKSBootParams.LEVEL_BUDGET])
-        layersCollapse = int(params[_CKKSBootParams.LAYERS_COLL])
-        remCollapse = int(params[_CKKSBootParams.LAYERS_REM])
-        numRotations = int(params[_CKKSBootParams.NUM_ROTATIONS])
-        b = int(params[_CKKSBootParams.BABY_STEP])
-        g = int(params[_CKKSBootParams.GIANT_STEP])
-        numRotationsRem = int(params[_CKKSBootParams.NUM_ROTATIONS_REM])
-        bRem = int(params[_CKKSBootParams.BABY_STEP_REM])
-        gRem = int(params[_CKKSBootParams.GIANT_STEP_REM])
+        levelBudget = params.level_budget
+        layersCollapse = params.layers_coll
+        remCollapse = params.layers_rem
+        numRotations = params.num_rotations
+        b = params.baby_step
+        g = params.giant_step
+        numRotationsRem = params.num_rotations_rem
+        bRem = params.baby_step_rem
+        gRem = params.giant_step_rem
 
         flagRem = 0 if remCollapse == 0 else 1
-        if levelBudget < flagRem:
+        # 只在 Slots->Coeffs 的路径上保留原有检查
+        if not coeffs_to_slots and levelBudget < flagRem:
             raise ValueError("levelBudget can not be less than flagRem")
 
         indexList = []
@@ -1393,23 +1324,64 @@ def FindBootstrapRotationIndices(cc, slots: int, M: int):
         if indexListSz < 0:
             raise ValueError("indexListSz can not be negative")
 
-        for s in range(0, levelBudget - flagRem):
-            scalingFactor = 1 << (s * layersCollapse)
-            halfRots = 1 - ((numRotations + 1) // 2)
-            for j in range(halfRots, g + halfRots):
-                indexList.append(reduce_rotation(j * scalingFactor, M // 4))
-            for i in range(b):
-                indexList.append(reduce_rotation((g * i) * scalingFactor, M // 4))
+        # 主体层循环
+        if coeffs_to_slots:
+            # 原 FindCoeffsToSlotsRotationIndices:
+            # for s in range(levelBudget - 1, flagRem - 1, -1):
+            for s in range(levelBudget - 1, flagRem - 1, -1):
+                scalingFactor = 1 << ((s - flagRem) * layersCollapse + remCollapse)
+                self._add_bsgs_rotations(
+                    index_list=indexList,
+                    num_rotations=numRotations,
+                    g=g,
+                    b=b,
+                    scaling_factor=scalingFactor,
+                    mod_j=slots,  # j 部分模 slots
+                    mod_i=M // 4,  # i 部分模 M//4
+                )
+        else:
+            # 原 FindSlotsToCoeffsRotationIndices:
+            # for s in range(0, levelBudget - flagRem):
+            for s in range(0, levelBudget - flagRem):
+                scalingFactor = 1 << (s * layersCollapse)
+                self._add_bsgs_rotations(
+                    index_list=indexList,
+                    num_rotations=numRotations,
+                    g=g,
+                    b=b,
+                    scaling_factor=scalingFactor,
+                    mod_j=M // 4,  # j/i 都是模 M//4
+                    mod_i=M // 4,
+                )
 
+        # 余数层（rem）处理
         if flagRem:
-            s = levelBudget - flagRem
-            scalingFactor = 1 << (s * layersCollapse)
-            halfRots = 1 - ((numRotationsRem + 1) // 2)
-            for j in range(halfRots, gRem + halfRots):
-                indexList.append(reduce_rotation(j * scalingFactor, M // 4))
-            for i in range(bRem):
-                indexList.append(reduce_rotation((gRem * i) * scalingFactor, M // 4))
+            if coeffs_to_slots:
+                # 原 Coeffs->Slots: j 不再乘 scalingFactor，只是 reduce_rotation(j, slots)
+                self._add_bsgs_rotations(
+                    index_list=indexList,
+                    num_rotations=numRotationsRem,
+                    g=gRem,
+                    b=bRem,
+                    scaling_factor=1,  # 等价于原来的“不乘”
+                    mod_j=slots,
+                    mod_i=M // 4,
+                )
+            else:
+                # 原 Slots->Coeffs: 有一层额外 scalingFactor
+                s = levelBudget - flagRem
+                scalingFactor = 1 << (s * layersCollapse)
+                self._add_bsgs_rotations(
+                    index_list=indexList,
+                    num_rotations=numRotationsRem,
+                    g=gRem,
+                    b=bRem,
+                    scaling_factor=scalingFactor,
+                    mod_j=M // 4,
+                    mod_i=M // 4,
+                )
 
+        # slots*4 != M 时额外的 2^k * slots 旋转
         m = slots * 4
         if m != M:
             ratio = M // m
@@ -1419,33 +1391,102 @@ def FindBootstrapRotationIndices(cc, slots: int, M: int):
                 j <<= 1
 
         return indexList
-    res = []
-    res.extend(FindCoeffsToSlotsRotationIndices(cc, slots, M))
-    res.extend(FindSlotsToCoeffsRotationIndices(cc, slots, M))
-    res = set(res)
-    res.discard(0)
-    res.discard(M // 4)
-    return list(sorted(res))
+
+    def FindCoeffsToSlotsRotationIndices(self, levelBudget: list,
+                                         dim1: list,
+                                         slots: int,
+                                         M: int):
+        """Python 等价实现：ckksrns-fhe.cpp::FindCoeffsToSlotsRotationIndices"""
+        return self._find_fft_rotation_indices(
+            level_budget_vec=levelBudget,
+            dim1_vec=dim1,
+            slots=slots,
+            M=M,
+            budget_idx=0,
+            dim1_idx=0,
+            coeffs_to_slots=True,
+        )
+
+    def FindSlotsToCoeffsRotationIndices(self, levelBudget: list,
+                                         dim1: list,
+                                         slots: int,
+                                         M: int):
+        """Python 等价实现：ckksrns-fhe.cpp::FindSlotsToCoeffsRotationIndices"""
+        return self._find_fft_rotation_indices(
+            level_budget_vec=levelBudget,
+            dim1_vec=dim1,
+            slots=slots,
+            M=M,
+            budget_idx=1,
+            dim1_idx=1,
+            coeffs_to_slots=False,
+        )
 
 
-def GetEvalBootstrapAutoIdx2RotIdxMap(cc, logBsSlots: int):
-    """Python 等价实现：bindings.cpp::GetEvalBootstrapAutoIdx2RotIdxMap lambda"""
+    def FindBootstrapRotationIndices(self, levelBudget: list, dim1: list, slots: int, M: int):
+        res = []
+        res.extend(self.FindCoeffsToSlotsRotationIndices(levelBudget, dim1, slots, M))
+        res.extend(self.FindSlotsToCoeffsRotationIndices(levelBudget, dim1, slots, M))
+        res = set(res)
+        res.discard(0)
+        res.discard(M // 4) #todo: does not support conjugate variant
+        return list(sorted(res))
 
-    logBsSlots = int(logBsSlots)
-    slots = 1 << logBsSlots
-    ring_dim = int(cc.GetRingDimension())
-    M = ring_dim * 2
+    def find_auto_index(self, i):
+        def inv_mod(a, m): #note: check all the output value before merge with func: invMod!! These two values may differ by m!!
+            m0, x0, x1 = m, 0, 1
+            if m == 1:
+                return 0
+            while a > 1:
+                q = a // m
+                m, a = a % m, m
+                x0, x1 = x1 - q * x0, x0
+            if x1 < 0:
+                x1 += m0
+            return x1
 
-    rotIndices = FindBootstrapRotationIndices(cc, slots, M)
-    Nover2 = ring_dim // 2
+        m = (self.N << 1)
 
-    autoIdx2rotIdx_map = {}
-    for rot in rotIndices:
-        adj_rot = int(rot)
-        if adj_rot < 0:
-            adj_rot = Nover2 - abs(adj_rot)
-        auto_idx = int(cc.FindAutomorphismIndex(int(adj_rot)))
-        autoIdx2rotIdx_map[auto_idx] = adj_rot
+        if i == 0:
+            return 1
 
-    return autoIdx2rotIdx_map
+        # Conjugation automorphism
+        if i == m - 1:
+            return i
+
+        # Generator
+        if i < 0:
+            g0 = inv_mod(5, m)
+        else:
+            g0 = 5
+
+        i_unsigned = abs(i)
+
+        g = g0
+        for j in range(1, int(i_unsigned)):
+            g = (g * g0) % m
+
+        return g
+
+
+    def GetEvalBootstrapAutoIdx2RotIdxMap(self, levelBudget: list, dim1: list, logBsSlots: int):
+        """Python 等价实现：bindings.cpp::GetEvalBootstrapAutoIdx2RotIdxMap lambda"""
+
+        logBsSlots = int(logBsSlots)
+        slots = 1 << logBsSlots
+        ring_dim = self.N
+        M = ring_dim * 2
+
+        rotIndices = self.FindBootstrapRotationIndices(levelBudget, dim1, slots, M)
+        Nover2 = ring_dim // 2
+
+        autoIdx2rotIdx_map = {}
+        for rot in rotIndices:
+            adj_rot = int(rot)
+            if adj_rot < 0:
+                adj_rot = Nover2 - abs(adj_rot)
+            auto_idx = int(self.find_auto_index(int(adj_rot)))
+            autoIdx2rotIdx_map[auto_idx] = adj_rot
+
+        return autoIdx2rotIdx_map
 
