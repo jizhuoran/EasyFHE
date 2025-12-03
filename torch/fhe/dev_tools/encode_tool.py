@@ -8,28 +8,6 @@ import torch
 DATA_DIR = os.environ["DATA_DIR"]
 
 
-# def _fft_special_inv(vals, M, rotGroup, ksiPows, bitrev):
-#     vals_size = len(vals)
-#     len_size = vals_size
-#     while len_size >= 1:
-#         len_h = len_size >> 1
-#         len_q = len_size << 2
-#         gap = M // len_q
-#
-#         for i in range(0, vals_size, len_size):
-#             for j in range(len_h):
-#                 idx = (len_q - (rotGroup[j] % len_q)) * gap
-#                 u = vals[i + j] + vals[i + j + len_h]
-#                 v = vals[i + j] - vals[i + j + len_h]
-#                 v *= ksiPows[idx]
-#                 vals[i + j] = u
-#                 vals[i + j + len_h] = v
-#         len_size >>= 1
-#
-#     vals[:] = vals[bitrev]
-#     vals /= vals_size
-#     return vals
-
 
 def pre_encode(x, slots, cryptoContext):
 

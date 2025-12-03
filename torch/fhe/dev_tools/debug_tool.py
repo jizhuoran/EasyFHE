@@ -123,7 +123,7 @@ def plaintext_twin(func):
                     assert args[1] // args[0].slots == (args[1] + args[0].slots - 1) // args[0].slots # only support slots be power of 2
                     repeat_times = args[1] // args[0].slots
                     res.ptx_twin = np.tile(args[0].ptx_twin[:args[0].slots], repeat_times)
-            elif func.__name__ == "fused_pairwise_mac": # fixme: poor work around, simply assert fused_pairwise_mac is definitely correct
+            elif func.__name__ == "fused_pairwise_mac":
                 cryptoContext = args[-1]
                 decrypted_result = cryptoContext.openfhe_context.decrypt(res)
                 decrypted_result = decrypted_result.cpu().numpy().reshape(-1)[:len(res.ptx_twin)]

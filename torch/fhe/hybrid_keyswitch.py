@@ -9,7 +9,7 @@ def key_switch_P_ext(cipher, cryptoContext):
     cv = [
         torch.cat((
             F.cv_mul_scalar(cv, cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-            torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device=cryptoContext.device).reshape(-1, cryptoContext.N) # fixme: optimize torch.cat?
+            torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device=cryptoContext.device).reshape(-1, cryptoContext.N)
         ), dim=0)
         for cv in cipher.cv
     ]

@@ -76,7 +76,7 @@ def apply_double_angle_iterations(ciphertext, cryptoContext):
     return ciphertext
 
 
-def select_layers(log_slots, budget): # fixme: poor work around, should be call from bsContext?
+def select_layers(log_slots, budget):
     layers = int(math.ceil(log_slots / budget))
     rows = int(log_slots // layers)
     rem = log_slots % layers
@@ -105,7 +105,7 @@ def select_layers(log_slots, budget): # fixme: poor work around, should be call 
 
     return [int(layers), int(rows), int(rem)]
 
-def get_collapsed_fft_params(slots: object, levelBudget: object, dim1=0): # fixme: poor work around, should be call from bsContext?
+def get_collapsed_fft_params(slots: object, levelBudget: object, dim1=0):
     dims = select_layers(int(math.log2(slots)), levelBudget)
     layersCollapse = dims[0]
     remCollapse = dims[2]
@@ -328,8 +328,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
-    # cryptoContext.slots = slots #fixme: bad assignment!
-    # precom = cryptoContext.BsContext
     moduliQ_scalar = cryptoContext.moduliQ_scalar
     rescaleTech = cryptoContext.rescaleTech
 
@@ -338,7 +336,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
         assert False, "FLEXIBLEAUTOEXT is not supported yet."
         # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
         # as it is multiplied by auxiliary plaintext
-        # todo: to be implemented, should raise less modulus
+
 
     q = moduliQ_scalar[0]
     q_double = float(q)
@@ -373,7 +371,7 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
 
     correction = (
             correctionFactor - deg
-    )  # fixme: originally a uint32_t in OpenFHE
+    )  # note: originally a uint32_t in OpenFHE
     post = 2**deg
     pre = 1.0 / post
     scalar = round(post)
@@ -404,7 +402,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
     ctxtDec = None  # Initialize decrypted ciphertext
-    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
     isLTBootstrap = level_budgets[0] == 1 and level_budgets[1] == 1
 
     if slots == M // 4:  # FULLY PACKED CASE
@@ -525,224 +522,6 @@ def eval_bootstrap(ciphertext, L0, logBsSlots, level_budgets, cryptoContext):
     ctxtDec = homo_ops.homo_mul_scalar_int(ctxtDec, corFactor, cryptoContext)
 
     return ctxtDec
-
-
-def eval_slim_bootstrap(ciphertext, L0, logBsSlots, level_budgets,cryptoContext):
-    M = cryptoContext.M
-    N = cryptoContext.N
-    slots = 1 << logBsSlots
-    # cryptoContext.slots = slots #fixme: bad assignment!
-    # precom = cryptoContext.BsContext
-    moduliQ_scalar = cryptoContext.moduliQ_scalar
-    rescaleTech = cryptoContext.rescaleTech
-
-
-    if rescaleTech == "FLEXIBLEAUTOEXT":
-        assert False, "FLEXIBLEAUTOEXT is not supported yet."
-        # For FLEXIBLEAUTOEXT we raised ciphertext does not include extra modulus
-        # as it is multiplied by auxiliary plaintext
-        # todo: to be implemented, should raise less modulus
-
-    q = moduliQ_scalar[0]
-    q_double = float(q)
-
-    p = cryptoContext.dcrtBits  # Equivalent to dcrbits in OpenFHE
-    powP = 2**p
-    deg = utils.round_half_away_from_zero(math.log2(q_double / powP))
-
-    if (
-        rescaleTech == "FLEXIBLEAUTO"
-        or rescaleTech == "FLEXIBLEAUTOEXT"
-    ):
-        tmp = utils.round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
-        if tmp < 7:
-            correctionFactor = 7
-        elif tmp > 13:
-            correctionFactor = 13
-        else:
-            correctionFactor = int(tmp)
-    else:
-        correctionFactor = 9
-
-
-    if deg > int(correctionFactor):
-        print(
-            "Warning: Degree [",
-            deg,
-            "] must be less than or equal to the correction factor[",
-            correctionFactor,
-            "].",
-        )
-
-    correction = (
-            correctionFactor - deg
-    )  # fixme: originally a uint32_t in OpenFHE
-    post = 2**deg
-    pre = 1.0 / post
-    scalar = round(post)
-
-    ctxtDec = None  # Initialize decrypted ciphertext
-    # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    isLTBootstrap = level_budgets[0] == 1 and level_budgets[1] == 1
-
-    if slots == M//4:
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(ciphertext, slots, level_budgets[1], cryptoContext)
-    else:
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ciphertext, cryptoContext)
-        else:
-             ctxtDec = eval_slots_to_coeffs(ciphertext, slots, level_budgets[1], cryptoContext)
-
-        ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
-        ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
-
-
-    # -------------------
-    # raising the modulus
-    # -------------------
-    # In FLEXIBLEAUTO, raising the ciphertext to a larger number
-    # of towers is a bit more complex, because we need to adjust
-    # it's scaling factor to the one that corresponds to the level
-    # it's being raised to.
-    # Increasing the modulus
-
-    tmp = ctxtDec
-    tmp = homo_ops.force_rescale(tmp, tmp.noise_deg - 1, cryptoContext)
-    tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
-
-    # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
-    # CKKS bootstrapping faster.
-    raised = mod_raise(tmp, L0, cryptoContext)
-
-    # In openFHE, K_UNIFORM = 512, K_SPARSE = 28, K_SPARSE is dealt in bs_matrix precompute
-    k = 1.0 if cryptoContext.secretKeyDist == "SPARSE_TERNARY" else 512
-    constantEvalMult = pre * (1.0 / (k * N))
-    raised = homo_ops.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
-
-    # ctxtDec = None  # Initialize decrypted ciphertext
-    # # todo: align with openfhe, but should be refactored. since when only one lb=1, none of them go into EvalLinearTransform.
-    # isLTBootstrap = (precom.paramsEnc.level_budget == 1) and (
-    #         precom.paramsDec.level_budget == 1
-    # )
-
-    if slots == M // 4:  # FULLY PACKED CASE
-        # need to call internal modular reduction so it also works for FLEXIBLEAUTO
-        raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
-
-        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEncI = homo_ops.homo_sub(ctxtEnc, conj, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-        ctxtEncI = mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
-
-        if ctxtEnc.noise_deg == 2: # noise_deg of ctxtEnc and ctxtEncI should be the same
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.force_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        # ---------------------------------
-        # Running Approximate Mod Reduction
-        # ---------------------------------
-        # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_bootstrapping_chebyshev(
-            ctxtEnc, -1, 1, cryptoContext
-        )
-        ctxtEncI = approx.eval_bootstrapping_chebyshev(
-            ctxtEncI, -1, 1, cryptoContext
-        )
-
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = homo_ops.force_rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
-        ctxtEncI = apply_double_angle_iterations(ctxtEncI, cryptoContext)
-
-        mult_by_monomial_inplace(ctxtEncI, M // 4, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        # if isLTBootstrap:
-        #     ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        # else:
-        #     ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
-
-    else:  # SPARSELY PACKED CASE
-        # -------------------
-        # Running PartialSum
-        # -------------------
-
-        for step in range(int(math.log2(N // (2 * slots)))):
-            temp = homo_ops.homo_rotate(raised, (1 << step) * slots, cryptoContext)
-            raised = homo_ops.homo_add(raised, temp, cryptoContext)
-
-        # ---------------------
-        # Running CoeffsToSlots
-        # ---------------------
-        raised = homo_ops.force_rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(raised, slots, level_budgets[0], cryptoContext)
-
-        conj = homo_ops.homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEnc = homo_ops.homo_add(ctxtEnc, conj, cryptoContext)
-
-        if ctxtEnc.noise_deg ==2 :
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, 1, cryptoContext)
-
-        # ---------------------------------
-        # Running Approximate Mod Reduction
-        # ---------------------------------
-
-        # Evaluate Chebyshev series for the sine wave
-        ctxtEnc = approx.eval_bootstrapping_chebyshev(ctxtEnc, -1, 1, cryptoContext)
-
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        ctxtEnc = apply_double_angle_iterations(ctxtEnc, cryptoContext)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        # openfhetodo: See if we can remove the extra level in FLEXIBLEAUTO
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = homo_ops.force_rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        # if isLTBootstrap:
-        #     ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        # else:
-        #     ctxtDec = eval_slots_to_coeffs(precom.m_U0PreFFT, ctxtEnc, cryptoContext)
-        #
-        # ctxtDec_rot = homo_ops.homo_rotate(ctxtDec, slots, cryptoContext)
-        # ctxtDec = homo_ops.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
-
-    # 64-bit only: scale back the message to its original scale.
-    corFactor = 1 << round(correction)
-    ctxtEnc = homo_ops.homo_mul_scalar_int(ctxtEnc, corFactor, cryptoContext)
-
-    return ctxtEnc
 
 
 @decorator_factory

@@ -78,7 +78,3 @@ This guide explains how to set up the GPU-FHE framework based on PyTorch along w
     cp openfhe.cpython*.so ~/PNP/GPU-FHE/torch/fhe/client/
     cd ../../
     ```
-
-## Getting Started
-
-The example program can be found in the `./GPU-FHE/dev.py` file.

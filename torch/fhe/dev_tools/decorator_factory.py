@@ -1,5 +1,3 @@
-import functools
-from ..compiler.compiler import frontend
 from .debug_tool import *
 from .encode_tool import save_middle_encode, save_end_encode
 from ..utils import call_counter, profile_python_function
@@ -24,8 +22,6 @@ def decorator_factory(func):
                 decorators.append(auto_sync)
             if config.PTX_TWIN:
                 decorators.append(plaintext_twin)
-            if config.COMPILER:
-                decorators.append(frontend)
             if config.CHECK_CIPHER:
                 decorators.append(check_meta_equal)
             if config.SAVE_MIDDLE:

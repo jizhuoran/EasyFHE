@@ -3,7 +3,7 @@ from .context import *
 from . import homo_ops
 import numpy as np
 
-BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
+BASE_NUM_LEVELS_TO_DROP = 1
 
 
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext: Context):

@@ -316,50 +316,6 @@ def cv_drop_last_element_and_scale(
     return rescale.reshape(-1, context.N)
 
 
-# def cv_rescale( #todo: deprecated, to be removed, as well as inner functions
-#     input: Tensor,
-#     cur_limbs: int,
-#     context: Context,
-#     inplace: bool = False,
-# ) -> Tensor:
-#     if inplace:
-#         rescale = torch.rescale_(
-#             context.rescale_out,
-#             input,
-#             curr_limbs=cur_limbs,
-#             level=context.L,
-#             param_degree=context.N,
-#             param_primes=context.primes,
-#             param_barret_ratio=context.barret_ratio,
-#             param_barret_k=context.barret_k,
-#             param_power_of_roots_shoup=context.power_of_roots_shoup,
-#             param_power_of_roots=context.power_of_roots,
-#             inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-#             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-#             q_inv_mod_q=context.q_inv_mod_q,
-#             q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
-#         )
-#     else:
-#         rescale = torch.rescale(
-#             context.rescale_out,
-#             input,
-#             curr_limbs=cur_limbs,
-#             level=context.L,
-#             param_degree=context.N,
-#             param_primes=context.primes,
-#             param_barret_ratio=context.barret_ratio,
-#             param_barret_k=context.barret_k,
-#             param_power_of_roots_shoup=context.power_of_roots_shoup,
-#             param_power_of_roots=context.power_of_roots,
-#             inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-#             inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-#             q_inv_mod_q=context.q_inv_mod_q,
-#             q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
-#         )
-
-#     return rescale.reshape(-1, context.N)
-
-
 def cv_automorphism_transform(
     input: Tensor,
     cur_limbs: int,

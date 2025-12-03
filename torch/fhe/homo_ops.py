@@ -7,7 +7,7 @@ from . import hybrid_keyswitch
 from .dev_tools.decorator_factory import decorator_factory
 
 
-BASE_NUM_LEVELS_TO_DROP = 1  # todo: to be removed?
+BASE_NUM_LEVELS_TO_DROP = 1
 
 # drop last elem is a inplace operation now
 def _drop_last_elements(ct, num_levels, cryptoContext, inplace=False):
@@ -515,7 +515,7 @@ def _cipher_automorphism(in0, index, cryptoContext):
     cv = [F.cv_automorphism_transform(cv, limbs, norm_index, cryptoContext) for cv in in0.cv]
     return in0.cipher_like(cv)
 
-# todo: input len of in0.cv could be 1
+
 @decorator_factory
 def cipher_automorphism(in0, index, cryptoContext):
     return _cipher_automorphism(in0, index, cryptoContext)
@@ -772,7 +772,6 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
                 f"  cipher.is_ext = {cipher.is_ext}, plaintext.is_ext = {plaintext.is_ext}"
             )
         if cipher.cur_limbs != plaintext.cur_limbs:
-            # fixme: fix it if the cat introduce too much overhead
             cv_ = torch.cat([
                             plaintext.cv[0][:cipher.cur_limbs * cryptoContext.N],
                             plaintext.cv[0][plaintext.cur_limbs * cryptoContext.N:]])
@@ -945,7 +944,7 @@ def encode(
 
     middle_value.encoded_values = torch.tensor(middle_value.encoded_values, dtype=torch.float, device=cryptoContext.device)
     # print("slots: ", slots, "shape", middle_value.encoded_values.shape)
-    middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots) #TODO workaround, to remove this in the future
+    middle_value.encoded_values = middle_value.encoded_values.reshape(-1, 2 * slots)
     pt_encode = torch.encode(
         input=middle_value.encoded_values,
         N=cryptoContext.N,

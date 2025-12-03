@@ -115,7 +115,7 @@ def pre_encode(x, slots):
         raise ValueError(f"The number of slots [{slots}] is less than the size of data [{len(inverse)}]")
 
     # Clears all imaginary values as CKKS for complex numbers
-    if all(isinstance(x, complex) for x in inverse): #todo: here is different from the pre_encode function in encode_tool.py! should be carefully handled!
+    if all(isinstance(x, complex) for x in inverse):
         inverse_complex = inverse
     else:
         inverse_complex = np.array([complex(v.real, 0.0) for v in inverse])
@@ -439,8 +439,8 @@ class BsContext:
         scaleEnc = pre / k # k is for homo_mod implemented by eval_chebyshev_series, pre is probably for bs precision issues
         scaleDec = 1 / pre # pre is probably for bs precision issues (https://openfhe.discourse.group/t/scaling-factor-for-bootstrap-matrices/2002)
 
-        lEnc = context.L - self.paramsEnc.level_budget - 1 # todo: could be set outside to support random lRemain
-        lDec = maxLevelsRemaining + 1 # todo: could be set outside to support random lRemain
+        lEnc = context.L - self.paramsEnc.level_budget - 1
+        lDec = maxLevelsRemaining + 1
 
         self.m_U0hatTPreFFT = self.eval_coeffs_to_slots_precompute(self.logslot, level_budget, dim1, scaleEnc, lEnc, context)
         self.m_U0PreFFT = self.eval_slots_to_coeffs_precompute(self.logslot, level_budget, dim1, scaleDec, lDec, context)
@@ -1058,7 +1058,7 @@ class BsContext:
             encode_params_ksiPows.append(cmath.exp(1j * angle))
         encode_params_ksiPows.append(encode_params_ksiPows[0])
 
-        # encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist() #fixme: why it is correct in `pre_encode
+        # encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128).view(np.float64).tolist()
         encode_params_ksiPows = np.array(encode_params_ksiPows, dtype=np.complex128)
         encode_params_rotGroup = np.array(encode_params_rotGroup)
 
@@ -1315,7 +1315,7 @@ class BsContext:
         res.extend(self.FindSlotsToCoeffsRotationIndices(levelBudget, dim1, slots, M))
         res = set(res)
         res.discard(0)
-        res.discard(M // 4) #todo: does not support conjugate variant
+        res.discard(M // 4)
         return list(sorted(res))
 
     def find_auto_index(self, i):
