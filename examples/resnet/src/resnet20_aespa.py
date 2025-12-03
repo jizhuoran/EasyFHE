@@ -424,9 +424,9 @@ def resnet20():
                              levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
                              config=config))
     print("cryptoContext: ", cryptoContext)
-    cryptoContext.weight_path = weight_dir  # fixme: work around only
+    cryptoContext.weight_path = weight_dir
     cryptoContext.pre_encode_type = pre_encode_type
-    cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
+    cryptoContext.DIRECT_LOAD = DIRECT_LOAD
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")

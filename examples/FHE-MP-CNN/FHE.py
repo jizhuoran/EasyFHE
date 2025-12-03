@@ -5,8 +5,6 @@ sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import torch.fhe as fhe
 import torch
-import os
-from examples.utils import approx
 from examples.utils.comp.comp import *
 from examples.utils.utils import *
 import datetime, time
@@ -499,7 +497,7 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
                 idx = int(ki * ki * u3 + ki * (v1 % ki) + v2 % ki)
                 g[v4] = (running_mean[idx] * weight[idx] / math.sqrt(running_var[idx] + epsilon) - bias[idx]) / B
         value = np.array(g, dtype=np.double)
-        value = -value  # fixme: original: `temp=fhe.homo_sub(temp,cipher_g,cryptoContext)`, there is no homo_sub_pt currently, therefore do the negation before encode
+        value = -value #negate
         value = fhe.encode(value, name, cryptoContext.L - input.cipher.cur_limbs, 1 << logn, False, cryptoContext)
 
     temp=input.cipher
@@ -507,28 +505,6 @@ def multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input:Ten
     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
     return output
 
-# def ReLu_seal(openfhe_context,cryptoContext,input,comp_no, deg, alpha, tree, scaled_val, scalingfactor,public_key, secret_key, relin_keys, B):
-#     ki=input.k
-#     hi=input.h
-#     ci=input.c
-#     wi=input.w
-#     ti=input.t
-#     pi=input.p
-#     logn=input.logn
-#     ko=ki
-#     ho=hi
-#     wo=wi
-#     co=ci
-#     to=ti
-#     po=pi
-#     if(hi*wi*ci>(1<<logn)):
-#         raise ValueError(f"hi*wi*ci should not be larger than n")
-#     temp = input.cipher
-#     scale=1.7
-#     deg=15
-#     temp=homo_relu(temp,B,deg,cryptoContext)
-#     output=TensorCipher(ko, ho, wo, co, to, po,logn,temp)
-#     return output
 
 @fhe.utils.profile_python_function
 def averagepooling_seal_scale(openfhe_context,cryptoContext,input:TensorCipher,B):
@@ -735,10 +711,6 @@ def multiplexed_parallel_batch_norm_seal_print(openfhe_context,cryptoContext,inp
     output=multiplexed_parallel_batch_norm_seal(openfhe_context,cryptoContext,input, bias, running_mean, running_var, weight, epsilon, B, end)
     return output
 
-# def approx_ReLU_seal_print(openfhe_context,cryptoContext,input,comp_no,deg,alpha,tree,scaled_val, scalingfactor,public_key,secret_key,relin_keys,B):
-#     output=ReLu_seal(openfhe_context,cryptoContext,input,comp_no, deg, alpha, tree, scaled_val, scalingfactor,public_key, secret_key, relin_keys, B)
-#     return output
-
 def averagepooling_seal_scale_print(openfhe_context,cryptoContext,input,B):
     output=averagepooling_seal_scale(openfhe_context,cryptoContext,input,B)
     return output
@@ -748,7 +720,6 @@ def fully_connected_seal_print(openfhe_context,cryptoContext,input,matrix,bias,q
     return output
 
 
-# @fhe.utils.profile_pytorch_function
 def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     start=time.time()
     sum=0
@@ -761,33 +732,19 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     scaled_val = 1.7
     eval_type = EvalType.ODDBABY
 
-    boundary_K = 25
-    boot_deg = 59
-    scale_factor = 2
-    inverse_deg = 1
     logN = 16
-    loge = 10
     logn = 15
     n = 1 << logn
-    logn_1 = 14 # todo: check if could be leveraged
-    logn_2 = 13 # todo: check if could be leveraged
-    logn_3 = 12 # todo: check if could be leveraged
     logp = 55
     logq = 60
     rotation_kinds=[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,66,84,124,128,132,256,512,959,960,990,991,1008,1023,1024,1036,1064,1092,1952,1982,1983,2016,2044,2047,2048,2072,2078,2100,3007,3024,3040,3052,3070,3071,3072,3080,3108,4031,4032,4062,4063,4095,4096,5023,5024,5054,5055,5087,5118,5119,5120,6047,6078,6079,6111,6112,6142,6143,6144,7071,7102,7103,7135,7166,7167,7168,8095,8126,8127,8159,8190,8191,8192,9149,9183,9184,9213,9215,9216,10173,10207,10208,10237,10239,10240,11197,11231,11232,11261,11263,11264,12221,12255,12256,12285,12287,12288,13214,13216,13246,13278,13279,13280,13310,13311,13312,14238,14240,14270,14302,14303,14304,14334,14335,15262,15264,15294,15326,15327,15328,15358,15359,15360,16286,16288,16318,16350,16351,16352,16382,16383,16384,17311,17375,18335,18399,18432,19359,19423,20383,20447,20480,21405,21406,21437,21469,21470,21471,21501,21504,22429,22430,22461,22493,22494,22495,22525,22528,23453,23454,23485,23517,23518,23519,23549,24477,24478,24509,24541,24542,24543,24573,24576,25501,25565,25568,25600,26525,26589,26592,26624,27549,27613,27616,27648,28573,28637,28640,28672,29600,29632,29664,29696,30624,30656,30688,30720,31648,31680,31712,31743,31744,31774,32636,32640,32644,32672,32702,32704,32706,32735,32736,32737,32759,32760,32761,32762,32763,32764,32765,32766,32767,131071,]
 
-
-    log_special_prime = 51
-    log_integer_part = logq - logp - loge + 5
-    # remaining_level = 13 # maybe not enough # for cheby only relu
     remaining_level = 17 # original 16 for original relu
     boot_level = 14
     total_level = remaining_level + boot_level
     dnum = 3
     logBsSlots_list = [14]
     levelBudget_list = [[4, 4],]
-    # logBsSlots_list = [14,13,12] # note: need to change the input index in `homo_bootstrap` simultaneously
-    # levelBudget_list = [[3, 3], [3, 3],[3,3]]
     rescaleTech = "FLEXIBLEAUTO"
 
     device = "cuda" # "cuda" # "cpu"
@@ -907,7 +864,6 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 
         vec = [0.0 for _ in range(1<<logn)]
         vec[:len(image)] = image[:len(image)]
-        # scale_temp=pow(2.0,logq)
         cipher_temp= openfhe_context.encrypt(vec, cryptoContext.device, 1, cryptoContext.L-20, 1<<logn ) # note: one more boot after first relu if use -18
         cnn=TensorCipher(1,32,32,3,3,init_p,logn,cipher_temp)
 
@@ -976,7 +932,6 @@ if __name__ == "__main__":
     print("current time: ", datetime.datetime.now())
     start_time = time.perf_counter()
     ResNet_cifar10_seal_sparse(20, 0, 0)
-    # ResNet_cifar10_seal_sparse(56, 0, 0)
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"total execution time: {elapsed_time:.4f} seconds")

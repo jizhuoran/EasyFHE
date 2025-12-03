@@ -9,7 +9,7 @@ import numpy as np
 
 DATA_DIR = os.environ["DATA_DIR"]
 DEBUG = True
-polyDeg_in_compare_and_swap = 119  # todo: should be set outside?
+polyDeg_in_compare_and_swap = 119
 
 def compare_and_swap(a1, a2, a3, a4, cryptoContext):
     a1_sub_a2 = fhe.homo_sub(a1, a2,cryptoContext)

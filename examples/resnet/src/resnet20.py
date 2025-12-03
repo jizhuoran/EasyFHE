@@ -455,9 +455,9 @@ def resnet20():
 
     print("load context time", end - start)
     print("current time: ", datetime.datetime.now())
-    cryptoContext.weight_path = weight_dir  # fixme: workaround only
+    cryptoContext.weight_path = weight_dir
     cryptoContext.pre_encode_type = pre_encode_type
-    cryptoContext.DIRECT_LOAD = DIRECT_LOAD  # fixme: work around only
+    cryptoContext.DIRECT_LOAD = DIRECT_LOAD
     cryptoContext.LOAD_CHECKPOINT = LOAD_CHECKPOINT
     load_weight(pkl_path, cryptoContext)
 

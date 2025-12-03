@@ -60,7 +60,7 @@ def load_weight(encode_weight_path, cryptoContext):
             if cryptoContext.pre_encode_type == "middle":
                 if  load_checkpoint:
                     _ = fhe.encode(pre_encoded[key], key, 0, pre_encoded[key].slots, False,
-                                   cryptoContext)  # fixme: so far the `is_ext` for weights is always False, it should be add to PreEncodeValues
+                                   cryptoContext)
                 pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")
             elif cryptoContext.pre_encode_type == "end":
                 pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
@@ -103,8 +103,8 @@ def read_values_from_file(val_name, level, slots, cryptoContext, scale=1.0):
         except IOError as e:
             print(f"error: {e}")
 
-        values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
-        name = "{}".format(val_name) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        values = np.array(values[:slots], dtype=np.double)
+        name = "{}".format(val_name)
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
@@ -139,7 +139,7 @@ def read_values_from_file_bsgs(val_name, level, slots, bstep, b_idx, cryptoConte
         except IOError as e:
             print(f"error: {e}")
 
-        values = np.array(values[:slots], dtype=np.double) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        values = np.array(values[:slots], dtype=np.double)
         values = np.asarray(values[:slots], dtype=np.double)
         block_size = slots // bstep  # 每份的长度
         assert slots % bstep == 0, "slots 必须能被 bstep 整除"
@@ -147,7 +147,7 @@ def read_values_from_file_bsgs(val_name, level, slots, bstep, b_idx, cryptoConte
         # 先 reshape 成 [bstep, block_size]，再按行循环移位，使第 b_idx 份排到最前
         values = np.roll(values.reshape(bstep, block_size), -b_idx, axis=0).ravel()
 
-        name = "{}".format(val_name) # todo: [:slots] is poor work around to tailor weights in initial layer for both logN17 and logN16 version
+        name = "{}".format(val_name)
         print(name)
         encoded = fhe.encode(values, name, level, slots, False, cryptoContext)
         return encoded
@@ -268,7 +268,7 @@ def mask_mod(n, custom_val, cur_limbs, slots, cryptoContext):
         encoded = fhe.encode(vec, name, level, slots, False, cryptoContext)
         return encoded
 
-def mask_scecond_n(n, cur_limbs, slots, cryptoContext):  # fixme: fix typo in scecond, regen all the pkls
+def mask_scecond_n(n, cur_limbs, slots, cryptoContext):
     if cryptoContext.DIRECT_LOAD:
         full_name = "mask_scecond_n_{}_{}_{}".format(n, cur_limbs, slots)
         if cryptoContext.pre_encode_type == "middle":
@@ -547,7 +547,7 @@ def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, le
         full_name0 = "{}_{}_left_{}_{}".format(val_name_list[0], left_len, level, slots)
         full_name1 = "{}_{}_right_{}_{}".format(val_name_list[0], left_len, level, slots)
         if cryptoContext.pre_encode_type == "middle":
-            name0 = "{}_{}_left".format(val_name_list[0], left_len)  # todo: poor work around, left_len could be removed in name, for debugging only
+            name0 = "{}_{}_left".format(val_name_list[0], left_len)
             name1 = "{}_{}_right".format(val_name_list[0], left_len)
         else:
             name0 = full_name0
@@ -586,7 +586,7 @@ def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, le
 
         half_channel = num_channels // 2
         total_len = len(values_list[0])
-        mid = total_len // 2 # todo: only support 2 ciphertexts for now
+        mid = total_len // 2
         channel_size = total_len//num_channels
 
         pivot0 = int(left_len * channel_size)
@@ -595,7 +595,7 @@ def read_values_from_file_32K_conv(val_name_list, level, slots, num_channels, le
         pivot1 = int((left_len + half_channel) * channel_size)
         ct1_weights = np.concatenate([values_list[1][mid:pivot1], values_list[0][pivot1:]], axis=0)
 
-        name0 = "{}_{}_left".format(val_name_list[0], left_len) #todo: poor work around, left_len could be removed in name, for debugging only
+        name0 = "{}_{}_left".format(val_name_list[0], left_len)
         name1 = "{}_{}_right".format(val_name_list[0], left_len)
         print(name0)
         print(name1)
