@@ -82,6 +82,116 @@ class ResNet18_HerPN(nn.Module):
 def get_resnet18_HerPN(num_classes):
     return ResNet18_HerPN(block=BasicBlock_HerPN,num_classes=num_classes)
 
+def conv3x3(in_planes, out_planes, stride=1):
+    """标准 3x3 Conv，padding=1，no bias（和 ResNet 一致）"""
+    return nn.Conv2d(
+        in_planes,
+        out_planes,
+        kernel_size=3,
+        stride=stride,
+        padding=1,
+        bias=False,
+    )
+
+
+class BasicBlock(nn.Module):
+    expansion = 1  # CIFAR ResNet20 里通道不扩展
+
+    def __init__(self, in_planes, planes, stride=1):
+        super().__init__()
+
+        # 主分支：conv-bn-relu-conv-bn
+        self.conv1 = conv3x3(in_planes, planes, stride)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.relu = nn.ReLU(inplace=True)
+
+        self.conv2 = conv3x3(planes, planes, stride=1)
+        self.bn2 = nn.BatchNorm2d(planes)
+
+        # shortcut 分支（identity 或 1x1 conv）
+        self.downsample = None
+        if stride != 1 or in_planes != planes:
+            self.downsample = nn.Sequential(
+                nn.Conv2d(
+                    in_planes,
+                    planes,
+                    kernel_size=1,
+                    stride=stride,
+                    bias=False,
+                ),
+                nn.BatchNorm2d(planes),
+            )
+
+    def forward(self, x):
+        identity = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            identity = self.downsample(x)
+
+        out += identity
+        out = self.relu(out)
+
+        return out
+class ResNet20(nn.Module):
+    def __init__(self, block, num_classes=10):
+        super().__init__()
+        self.in_planes = 16
+
+        # CIFAR 用 3x3 conv 起步，不像 ImageNet 有 7x7 + maxpool
+        self.conv1 = nn.Conv2d(
+            3, 16,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            bias=False,
+        )
+        self.bn1 = nn.BatchNorm2d(16)
+        self.relu = nn.ReLU(inplace=True)
+
+        # ResNet-20: 每个 stage 3 个 block，共 3 个 stage => 3 * 3 * 2 + 2 = 20 层
+        self.layer1 = self._make_layer(block, 16, num_blocks=3, stride=1)  # 32x32
+        self.layer2 = self._make_layer(block, 32, num_blocks=3, stride=2)  # 16x16
+        self.layer3 = self._make_layer(block, 64, num_blocks=3, stride=2)  # 8x8
+
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(64, num_classes)
+
+    def _make_layer(self, block, planes, num_blocks, stride):
+        """构造一个 stage（多个 BasicBlock_HerPN 串起来）"""
+        strides = [stride] + [1] * (num_blocks - 1)
+        layers = []
+        for s in strides:
+            layers.append(block(self.in_planes, planes, stride=s))
+            self.in_planes = planes
+        return nn.Sequential(*layers)
+
+    def forward(self, x):
+        # stem
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+
+        # 3 个 stage
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+
+        # global pooling + FC
+        x = self.avgpool(x)            # [B, 64, 1, 1]
+        x = torch.flatten(x, 1)        # [B, 64]
+        x = self.fc(x)                 # [B, num_classes]
+        return x
+
+
+def get_resnet20(num_classes):
+    return ResNet20(block=BasicBlock, num_classes=num_classes)
 
 class BasicBlock_HerPN(nn.Module):
     expansion: int = 1
@@ -380,13 +490,20 @@ def change_all_HerPN_by_PAF_MutalChannel(model):
 def get_Aespa_MutalChannel_PAF_resnet20():
     model_path = './ResNet20_Aespa.pth'
     model = get_resnet20_HerPN(num_classes=10)
-    model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
+    model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
     model = change_all_HerPN_by_PAF_MutalChannel(model)
     return model
 
 def get_Aespa_MutalChannel_PAF_resnet18():
     model_path = './ResNet18_Aespa.pth'
     model = get_resnet18_HerPN(num_classes=10)
-    model.load_state_dict(torch.load(model_path, map_location="cuda:0"), strict=False)
+    model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
     model = change_all_HerPN_by_PAF_MutalChannel(model)
+    return model
+
+
+def get_original_resnet20():
+    model_path = './ResNet20.pth'
+    model = get_resnet20(num_classes=10)
+    model.load_state_dict(torch.load(model_path, map_location="cpu"), strict=False)
     return model
