@@ -9,8 +9,8 @@
 #include <omp.h>
 #include <iostream>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
-#include "ATen/native/fhe/cpu/arithmetic.h"
 #include "ATen/native/fhe/cpu/NttImpl.h"
+#include "ATen/native/fhe/cpu/arithmetic.h"
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace at::native {
@@ -35,10 +35,11 @@ static void drop_last_element_scale_template(
     Tensor& workspace) {
   const int end_length = curr_limbs - 1;
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-  auto workspace_ptr = reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
+  auto workspace_ptr =
+      reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
   auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
   iNTT_impl(
-    workspace_ptr,
+      workspace_ptr,
       from_ptr,
       end_length,
       1,
@@ -49,9 +50,13 @@ static void drop_last_element_scale_template(
       param_primes,
       inverse_scaled_power_of_roots_div_two);
 
-
   switch_modulus(
-    workspace_ptr + param_degree * end_length, to_ptr, param_primes, curr_limbs - 1, curr_limbs - 1, param_degree);
+      workspace_ptr + param_degree * end_length,
+      to_ptr,
+      param_primes,
+      curr_limbs - 1,
+      curr_limbs - 1,
+      param_degree);
 
   int start_op2_idx = (level - curr_limbs + l) * (level - 1);
 
@@ -88,24 +93,23 @@ static void drop_last_element_scale_template(
       workspace_ptr,
       param_primes);
 
-    vadd_mod(
-        param_degree,
-        end_length,
-        to_ptr,
-        to_ptr,
-        workspace_ptr,
-        param_primes.data_ptr<uint64_t>());
+  vadd_mod(
+      param_degree,
+      end_length,
+      to_ptr,
+      to_ptr,
+      workspace_ptr,
+      param_primes.data_ptr<uint64_t>());
 
-
-//   vec_add_mod_batch(
-//       to_ptr,
-//       from_ptr,
-//       param_primes,
-//       param_barret_ratio,
-//       param_barret_k,
-//       end_length,
-//       param_degree,
-//       to_ptr);
+  //   vec_add_mod_batch(
+  //       to_ptr,
+  //       from_ptr,
+  //       param_primes,
+  //       param_barret_ratio,
+  //       param_barret_k,
+  //       end_length,
+  //       param_degree,
+  //       to_ptr);
 }
 
 Tensor drop_last_element_scale_cpu(
