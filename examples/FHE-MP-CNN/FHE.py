@@ -806,19 +806,18 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 
     print("cryptoContext: ", cryptoContext)
 
-    cryptoContext.cnt = int(0) # todo: should be removed if there is better naming rules for ptx
+    cryptoContext.cnt = int(0)
 
     pkl_path = None
     if config.SAVE_MIDDLE==False:
         if layer_num == 20:
-            file_name = "encode_20250506_152909"
+            file_name = ""
         elif layer_num == 56:
-            file_name = "encode_20250506_224353"
+            file_name = ""
         else:
             raise ValueError("pkl ungenerated")
 
         cryptoContext.pre_encode_type = "middle"
-        load_encode_pkl(file_name, DATA_DIR)
         pkl_path = os.path.join(DATA_DIR, file_name + ".pkl")
 
         # pkl_path = "" # encode end pkl, should be generated from encode middle pkl
@@ -840,8 +839,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     cryptoContext.ones_Nh = ctxt_1
 
     half_vec = np.full(Nh, 0.5, dtype=np.float64)
-    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, cryptoContext.device, 1, 0,
-                                                        Nh)  # fixme: should check if slots here cant be hardcoded to Nh
+    cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, cryptoContext.device, 1, 0, Nh)
     cryptoContext.cipher_half = cipher_half
 
     print("==> Generating evaluation tree...")
@@ -887,7 +885,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
     cipher_pool = [None for _ in range(14)]
 
     for image_id in range(start_image_id,end_image_id+1):
-        cryptoContext.cnt = int(0)  # todo: should be removed if there is better naming rules for encode_middle_vals
+        cryptoContext.cnt = int(0)
         image = [0.0 for _ in range(n)]
 
         # get image label

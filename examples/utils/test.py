@@ -1,10 +1,8 @@
 import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-import torch.fhe.homo_ops as homo_ops
-from torch.fhe.bootstrapping import eval_bootstrap, homo_double_bootstrap, homo_bootstrap
+import torch
 import torch.fhe.utils as utils
-import torch.fhe.bs_context
 import numpy as np
 from termcolor import colored
 

@@ -9,7 +9,7 @@ import math
 DATA_DIR = os.environ["DATA_DIR"]
 
 
-encode_slots = int(1 << (16 - 1)) #todo: to be redesigned? how to assign
+encode_slots = int(1 << (16 - 1))
 
 rnn_ih = []
 rnn_hh = []
@@ -96,10 +96,9 @@ def fhe_rnn(b_id):
     batch_size = int(encode_slots // EMBEDDING_SIZE)
 
     logN = 16
-    # encode_slots = int(1 << (logN - 1)) # fixme: bad assignment
     maxLevelsRemaining = 10
     appRotIndex_list = [-(i * int(batch_size)) for i in range(EMBEDDING_SIZE)]
-    logBsSlots_list = [int(math.log2(encode_slots))] # fixme: bad assignment
+    logBsSlots_list = [int(math.log2(encode_slots))]
     dnum = 1
     dcrtBits = 46
     firstMod = 50

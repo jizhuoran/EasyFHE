@@ -36,14 +36,14 @@ def Sort(input_length=8):
         rotate_index_list.append(i)
         rotate_index_list.append(-i)
         i <<= 1  # 左移等效于乘以 2
-    logBsSlots_list = [int(math.log2(input_length))] # fixme: align with encode slots(encode slots should align with n)?
+    logBsSlots_list = [int(math.log2(input_length))]
     logN = 14
     dnum = 3
     dcrtBits = 59
     firstMod = 60
     levelBudget_list = [[2,2]]
     secretKeyDist = "SPARSE_TERNARY"
-    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL" # todo: note that original is FLEXIBLEAUTOEXT
+    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
     device = "cuda"
     if not os.path.exists(DATA_DIR):
         raise ValueError(f"Directory {DATA_DIR} does not exist!")
@@ -123,18 +123,6 @@ def Sort(input_length=8):
                     total_error += (clear_result[i]-sorted_input_msg[i])**2
                 print("Avg error: ", total_error/n)
 
-            # if (DEBUG) {
-            #     cc->Decrypt(keyPair.secretKey, input_ct, &plaintextDec);
-            #     plaintextDec->SetLength(encodedLength);
-            #     auto tmp_result = plaintextDec->GetRealPackedValue();
-            #     std::sort(tmp_result.begin(), tmp_result.end(), std::less<double>()); #todo: ??? why sort the encrypted result
-            #     double total_error = 0;
-            #     for (size_t i = 0; i < encodedLength; i++) {
-            #       total_error += (tmp_result[i]-input_msg[i]) * (tmp_result[i]-input_msg[i]);
-            #     }
-            #    std::cout<<"Avg error: "<< total_error/encodedLength << std::endl;
-            # }
-
         k *= 2
 
     # // Level consumption: ~12 level
@@ -145,47 +133,6 @@ def Sort(input_length=8):
     clear_result = openfhe_context.decrypt(input_ct)
     clear_result = clear_result.cpu().numpy().reshape(-1)
     print("Actual output: ", clear_result[:10])
-
-    # total_error = 0.0
-    # for i in range(n):
-    #     total_error += (clear_result[i] - sorted_input_msg[i]) ** 2
-    # print("Avg error: ", total_error / n)
-
-
-    # todo: to be continued
-    # // Compute the average difference and magnitude of the complex numbers
-    # std::vector<double> differences;
-    # std::vector<double> magnitudes;
-    # std::vector<double> ratio_avg;
-    #
-    # for (size_t i = 0; i < input_msg.size(); ++i)
-    # {
-    #     double magnitude = std::abs(finalResult[i]);
-    #     magnitudes.push_back(magnitude);
-    #     differences.push_back(std::abs(input_msg[i] - magnitude));
-    #     ratio_avg.push_back(differences[i] / magnitude);
-    # }
-    #
-    # // Compute the average difference
-    # double avgDifference = std::accumulate(differences.begin(), differences.end(), 0.0) / differences.size();
-    #
-    # // Compute the average magnitude of the complex numbers
-    # double avgMagnitude = std::accumulate(magnitudes.begin(), magnitudes.end(), 0.0) / magnitudes.size();
-    #
-    # double ratioavg = std::accumulate(ratio_avg.begin(), ratio_avg.end(), 0.0) / ratio_avg.size();
-    # // Compute the average difference divided by the average magnitude
-    # double ratio = avgDifference / avgMagnitude;
-    # FILE* fp = fopen("input_msg.bin", "wb");
-    # fwrite(input_msg.data(), sizeof(double), input_msg.size(), fp);
-    # fclose(fp);
-    # fp = fopen("output.bin", "wb");
-    # fwrite(tmp_result.data(), sizeof(double), tmp_result.size(), fp);
-    # fclose(fp);
-    #
-    # std::cout << "Average difference: " << avgDifference << std::endl;
-    # std::cout << "Average magnitude of complex numbers: " << avgMagnitude << std::endl;
-    # std::cout << "Average difference / Average magnitude: " << ratio << std::endl;
-    # std::cout << "Average (difference / magnitude): " << ratioavg << std::endl;
 
 
 
