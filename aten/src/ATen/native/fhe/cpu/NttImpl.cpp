@@ -1,9 +1,12 @@
 #include "ATen/native/fhe/cpu/NttImpl.h"
+#include <immintrin.h>
 #include <omp.h>
+#include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <thread>
 #include "ATen/native/fhe/cpu/Utils.h"
-
 namespace at::native {
 
 void iNTT_impl(
@@ -56,7 +59,79 @@ void iNTT_impl(
         out_ptr[j + t0] = hiVal;
       }
     }
+#ifdef USE_AVX512
+    for (uint32_t m = n >> 2, t = 2, logt = 2; m > 1;
+         m >>= 1, t <<= 1, ++logt) {
+      for (uint32_t i = 0; i < m; ++i) {
+        auto omega = inverse_power_of_roots_div_two_ptr[i + m + base_prime_idx];
+        auto preconOmega =
+            inverse_scaled_power_of_roots_div_two_ptr[i + m + base_prime_idx];
 
+        __m512i vec_omega = _mm512_set1_epi64(omega);
+        __m512i vec_precon = _mm512_set1_epi64(preconOmega);
+        __m512i vec_modulus = _mm512_set1_epi64(modulus);
+        uint32_t j_start = i << logt;
+        uint32_t j_end = j_start + t;
+        uint32_t j = j_start;
+        for (; j + 8 <= j_end; j += 8) {
+          __m512i vec_lo = _mm512_loadu_si512(&out_ptr[j + base]);
+          __m512i vec_hi = _mm512_loadu_si512(&out_ptr[j + t + base]);
+          fhe::butt_intt_local_avx512(
+              vec_lo, vec_hi, vec_omega, vec_precon, vec_modulus);
+          _mm512_storeu_si512(&out_ptr[j + base], vec_lo);
+          _mm512_storeu_si512(&out_ptr[j + t + base], vec_hi);
+        }
+        for (; j < j_end; ++j) {
+          auto loVal = out_ptr[j + base];
+          auto hiVal = out_ptr[j + t + base];
+          fhe::butt_intt_local(loVal, hiVal, omega, preconOmega, modulus);
+          out_ptr[j + base] = loVal;
+          out_ptr[j + t + base] = hiVal;
+        }
+      }
+    }
+
+    auto omega = inverse_power_of_roots_div_two_ptr[1 + base_prime_idx];
+    auto preconOmega =
+        inverse_scaled_power_of_roots_div_two_ptr[1 + base_prime_idx];
+    uint32_t j2 = n >> 1;
+    __m512i vec_omega = _mm512_set1_epi64(omega);
+    __m512i vec_precon = _mm512_set1_epi64(preconOmega);
+    __m512i vec_modulus = _mm512_set1_epi64(modulus);
+    uint32_t j1 = 0;
+    for (; j1 + 8 <= j2; j1 += 8) {
+      __m512i vec_lo = _mm512_loadu_si512(&out_ptr[j1 + base]);
+      __m512i vec_hi = _mm512_loadu_si512(&out_ptr[j1 + j2 + base]);
+
+      fhe::butt_intt_local_avx512(
+          vec_lo, vec_hi, vec_omega, vec_precon, vec_modulus);
+      for (int i = 0; i < 8; i++) {
+        __mmask8 lo_mask =
+            _mm512_cmp_epu64_mask(vec_lo, vec_modulus, _MM_CMPINT_GT);
+        __mmask8 hi_mask =
+            _mm512_cmp_epu64_mask(vec_hi, vec_modulus, _MM_CMPINT_GT);
+        vec_lo = _mm512_mask_sub_epi64(vec_lo, lo_mask, vec_lo, vec_modulus);
+        vec_hi = _mm512_mask_sub_epi64(vec_hi, hi_mask, vec_hi, vec_modulus);
+      }
+      _mm512_storeu_si512(&out_ptr[j1 + base], vec_lo);
+      _mm512_storeu_si512(&out_ptr[j1 + j2 + base], vec_hi);
+    }
+    for (; j1 < j2; ++j1) {
+      auto loVal = (out_ptr)[j1 + base];
+      auto hiVal = (out_ptr)[j1 + j2 + base];
+      fhe::butt_intt_local(loVal, hiVal, omega, preconOmega, modulus);
+      for (int i = 0; i < 8; i++) {
+        if (loVal > modulus) {
+          loVal -= modulus;
+        }
+        if (hiVal > modulus) {
+          hiVal -= modulus;
+        }
+      }
+      (out_ptr)[j1 + base] = loVal;
+      (out_ptr)[j1 + j2 + base] = hiVal;
+    }
+#else
     // ---------- Pass ≥ 1 : m, t, logt ----------
     for (uint32_t m = n >> 2, t = 2, logt = 2; m > 1;
          m >>= 1, t <<= 1, ++logt) {
@@ -94,6 +169,7 @@ void iNTT_impl(
       (out_ptr)[j1 + base] = loVal;
       (out_ptr)[j1 + j2 + base] = hiVal;
     }
+#endif
   }
 }
 
@@ -128,6 +204,7 @@ void NTT_impl(
   auto param_power_of_roots_ptr = reinterpret_cast<uint64_t*>(
       param_power_of_roots.data_ptr<uint64_t>()); // rootOfUnityTable
   const int64_t n = param_degree >> 1;
+
 #pragma omp parallel for schedule(static) num_threads(max_threads)
   for (int bach = 0; bach < batch; ++bach) {
     auto modulus = param_primes_ptr[start_prime_idx + bach];
@@ -135,6 +212,35 @@ void NTT_impl(
     auto base = primeidx * param_degree;
     for (uint32_t m = 1, t = n, logt = GetMSB(t); m < n;
          m <<= 1, t >>= 1, --logt) {
+#ifdef USE_AVX512
+      for (uint32_t i = 0; i < m; ++i) {
+        auto omega = param_power_of_roots_ptr[i + m + base];
+        auto preconOmega = param_power_of_roots_shoup_ptr[i + m + base];
+        __m512i vec_omega = _mm512_set1_epi64(omega);
+        __m512i vec_precon = _mm512_set1_epi64(preconOmega);
+        __m512i vec_modulus = _mm512_set1_epi64(modulus);
+        uint32_t j_start = i << logt;
+        uint32_t j_end = j_start + t;
+        uint32_t j = j_start;
+        for (; j + 8 <= j_end; j += 8) {
+          __m512i vec_a1, vec_b1;
+          vec_a1 = _mm512_loadu_si512(&inout_ptr[j + base]);
+          vec_b1 = _mm512_loadu_si512(&inout_ptr[j + t + base]);
+          fhe::butt_ntt_local_avx512(
+              vec_a1, vec_b1, vec_omega, vec_precon, vec_modulus);
+
+          _mm512_storeu_si512(&inout_ptr[j + base], vec_a1);
+          _mm512_storeu_si512(&inout_ptr[j + t + base], vec_b1);
+        }
+        for (; j < j_end; ++j) {
+          uint64_t a1 = (inout_ptr)[j + base];
+          uint64_t b1 = (inout_ptr)[j + t + base];
+          fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+          (inout_ptr)[j + base] = a1;
+          (inout_ptr)[j + t + base] = b1;
+        }
+      }
+#else
       for (uint32_t i = 0; i < m; ++i) {
         auto omega = param_power_of_roots_ptr[i + m + base]; // S
         auto preconOmega =
@@ -148,6 +254,7 @@ void NTT_impl(
           (inout_ptr)[j1 + t + base] = b1;
         }
       }
+#endif
     }
     for (uint32_t i = 0; i < (n << 1); i += 2) {
       auto omega = param_power_of_roots_ptr[(i >> 1) + n + base];
@@ -206,6 +313,36 @@ void NTT_except_some_range_impl(
     uint64_t base = primeidx * param_degree;
     for (uint32_t m = 1, t = n, logt = GetMSB(t); m < n;
          m <<= 1, t >>= 1, --logt) {
+#ifdef USE_AVX512
+      for (uint32_t i = 0; i < m; ++i) {
+        auto omega = param_power_of_roots_ptr[i + m + base_prime_idx];
+        auto preconOmega =
+            param_power_of_roots_shoup_ptr[i + m + base_prime_idx];
+        __m512i vec_omega = _mm512_set1_epi64(omega);
+        __m512i vec_precon = _mm512_set1_epi64(preconOmega);
+        __m512i vec_modulus = _mm512_set1_epi64(modulus);
+        uint32_t j_start = i << logt;
+        uint32_t j_end = j_start + t;
+        uint32_t j = j_start;
+        for (; j + 8 <= j_end; j += 8) {
+          __m512i vec_a1, vec_b1;
+          vec_a1 = _mm512_loadu_si512(&op_ptr[j + base]);
+          vec_b1 = _mm512_loadu_si512(&op_ptr[j + t + base]);
+          fhe::butt_ntt_local_avx512(
+              vec_a1, vec_b1, vec_omega, vec_precon, vec_modulus);
+
+          _mm512_storeu_si512(&op_ptr[j + base], vec_a1);
+          _mm512_storeu_si512(&op_ptr[j + t + base], vec_b1);
+        }
+        for (; j < j_end; ++j) {
+          uint64_t a1 = (op_ptr)[j + base];
+          uint64_t b1 = (op_ptr)[j + t + base];
+          fhe::butt_ntt_local(a1, b1, omega, preconOmega, modulus);
+          (op_ptr)[j + base] = a1;
+          (op_ptr)[j + t + base] = b1;
+        }
+      }
+#else
       for (uint32_t i = 0; i < m; ++i) {
         auto omega = param_power_of_roots_ptr[i + m + base_prime_idx]; // S
         auto preconOmega = param_power_of_roots_shoup_ptr
@@ -218,6 +355,7 @@ void NTT_except_some_range_impl(
           (op_ptr)[j1 + t + base] = b1;
         }
       }
+#endif
     }
     for (uint32_t i = 0; i < (n << 1); i += 2) {
       auto omega = param_power_of_roots_ptr[(i >> 1) + n + base_prime_idx];

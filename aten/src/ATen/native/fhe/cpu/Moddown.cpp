@@ -6,6 +6,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <immintrin.h>
 #include <omp.h>
 #include <iostream>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
@@ -28,11 +29,47 @@ void moddown_kernel(
     uint64_t* to) {
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);
+
 #pragma omp parallel for schedule(static) num_threads(max_threads)
   for (int out_prime_idx = 0; out_prime_idx < end_length; out_prime_idx++) {
     const auto prime = d_primes[out_prime_idx];
     const auto barret_ratio = d_barret_ratio[out_prime_idx];
     const auto barret_k = d_barret_k[out_prime_idx];
+#ifdef USE_AVX512
+    __m512i prime_vec = _mm512_set1_epi64(prime);
+    __m512i barret_ratio_vec = _mm512_set1_epi64(barret_ratio);
+    int degree_idx = 0;
+    for (; degree_idx + 7 < degree_; degree_idx += 8) {
+      __uint128_t accum_array[8];
+      for (int i = 0; i < 8; i++) {
+        accum_array[i] = accumulate_in_modup(
+            ptr,
+            degree_,
+            hat_mod_end,
+            start_length,
+            degree_idx + i,
+            out_prime_idx);
+      }
+      uint64_t lo_array[8], hi_array[8];
+      for (int i = 0; i < 8; i++) {
+        lo_array[i] = uint64_t(accum_array[i]);
+        hi_array[i] = uint64_t(accum_array[i] >> 64);
+      }
+      __m512i accum_lo = _mm512_loadu_si512((__m512i*)lo_array);
+      __m512i accum_hi = _mm512_loadu_si512((__m512i*)hi_array);
+      __m512i result = fhe::barret_reduction_128_64_avx512(
+          accum_lo, accum_hi, prime_vec, barret_ratio_vec, barret_k);
+      _mm512_storeu_si512(
+          (__m512i*)(to + out_prime_idx * degree_ + degree_idx), result);
+    }
+    for (; degree_idx < degree_; degree_idx++) {
+      __uint128_t accum = accumulate_in_modup(
+          ptr, degree_, hat_mod_end, start_length, degree_idx, out_prime_idx);
+      uint64_t out =
+          barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
+      to[out_prime_idx * degree_ + degree_idx] = out;
+    }
+#else
     for (int degree_idx = 0; degree_idx < degree_; degree_idx++) {
       __uint128_t accum = accumulate_in_modup(
           ptr, degree_, hat_mod_end, start_length, degree_idx, out_prime_idx);
@@ -41,6 +78,7 @@ void moddown_kernel(
           barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
       to[out_prime_idx * degree_ + degree_idx] = out;
     }
+#endif
   }
 }
 } // namespace fhe
@@ -222,7 +260,7 @@ Tensor moddown_cpu(
   auto res = at::empty({curr_limbs * N}, in.options());
   auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
   moddown_cpu_template(
-    res,
+      res,
       in,
       curr_limbs,
       L,

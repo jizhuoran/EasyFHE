@@ -6,6 +6,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <immintrin.h>
 #include <omp.h>
 #include <iostream>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
@@ -13,7 +14,6 @@
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
 namespace fhe {
-
 __uint128_t accumulate_in_modup(
     const uint64_t* ptr,
     const int degree,
@@ -29,7 +29,6 @@ __uint128_t accumulate_in_modup(
   }
   return accum;
 }
-
 void subInplace_(
     size_t degree,
     size_t batch,
@@ -55,15 +54,14 @@ void vec_mod_batch_(
     const uint64_t* op1,
     const uint64_t batch,
     uint64_t* to) {
-  STRIDED_LOOP_START((degree_ * batch), i);
-  const int out_prime_idx = i / degree_;
-  const int op1_idx = i % degree_;
-  const auto prime = d_primes[out_prime_idx];
-  const auto barret_ratio = d_barret_ratio[out_prime_idx];
-  const auto barret_k = d_barret_k[out_prime_idx];
-  to[i] = barret_reduction_64_64(op1[op1_idx], prime, barret_ratio, barret_k);
-
-  STRIDED_LOOP_END;
+  for (int i = 0; i < degree_ * batch; i++) {
+    const int out_prime_idx = i / degree_;
+    const int op1_idx = i % degree_;
+    const auto prime = d_primes[out_prime_idx];
+    const auto barret_ratio = d_barret_ratio[out_prime_idx];
+    const auto barret_k = d_barret_k[out_prime_idx];
+    to[i] = barret_reduction_64_64(op1[op1_idx], prime, barret_ratio, barret_k);
+  }
 }
 
 void switch_modulus_(
@@ -118,23 +116,37 @@ void const_mult_batch(
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);
 #pragma omp parallel for num_threads(max_threads)
-  for (int i = 0; i < degree * batch; i++) {
-    const int op2_idx = start_op2_idx + i / degree;
-    const int prime_idx = i / degree + start_prime_idx;
-    const auto prime = primes[prime_idx];
+  for (int batch_idx = 0; batch_idx < batch; batch_idx++) {
+    const int op2_idx = start_op2_idx + batch_idx;
+    const int prime_idx = batch_idx + start_prime_idx;
+    const uint64_t prime = primes[prime_idx];
+    const __m512i vec_op2 = _mm512_set1_epi64(op2[op2_idx]);
+    const __m512i vec_op2_psinv = _mm512_set1_epi64(op2_psinv[op2_idx]);
+    const __m512i vec_prime = _mm512_set1_epi64(prime);
 
-    uint64_t out = fhe::mul_and_reduce_shoup(
-        op1[start_op1_idx * degree + i],
-        op2[op2_idx],
-        op2_psinv[op2_idx],
-        prime);
+    const uint64_t* src = &op1[start_op1_idx * degree + batch_idx * degree];
+    uint64_t* dst = &to[start_op1_idx * degree + batch_idx * degree];
 
-    if (out >= prime)
-      out -= prime;
-    to[start_op1_idx * degree + i] = out;
+    size_t i = 0;
+    for (; i + 8 <= degree; i += 8) {
+      __m512i vec_op1 = _mm512_loadu_si512(&src[i]);
+      __m512i result = fhe::mul_and_reduce_shoup_avx512_full(
+          vec_op1, vec_op2, vec_op2_psinv, vec_prime);
+      __mmask8 mask = _mm512_cmp_epu64_mask(result, vec_prime, _MM_CMPINT_GE);
+      result = _mm512_mask_sub_epi64(result, mask, result, vec_prime);
+
+      _mm512_storeu_si512(&dst[i], result);
+    }
+    for (; i < degree; i++) {
+      uint64_t out = fhe::mul_and_reduce_shoup(
+          src[i], op2[op2_idx], op2_psinv[op2_idx], prime);
+
+      if (out >= prime)
+        out -= prime;
+      dst[i] = out;
+    }
   }
 }
-
 void const_mult_batch_(
     uint64_t* op1_ptr,
     const Tensor& op2,
