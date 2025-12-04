@@ -23,17 +23,6 @@ def load_weight(encode_weight_path, cryptoContext):
             pre_encoded[key].cv = [torch.tensor(pre_encoded[key].cv[0], dtype=torch.uint64, device="cuda")]
     cryptoContext.pre_encoded = pre_encoded
 
-
-# @fhe.utils.profile_python_function
-# def homo_relu(ciphertext, cryptoContext):
-#     scale = 1
-#     degree = 119
-#     def scaled_relu_function(x):
-#         return 0 if x < 0 else scale * x
-#
-#     result = approx.eval_chebyshev_function(scaled_relu_function, ciphertext, -1, 1, degree, cryptoContext)
-#     return result
-
 @fhe.utils.profile_python_function
 def homo_relu(cipher_x, cryptoContext):
     alpha = 13
@@ -751,7 +740,7 @@ def ResNet_cifar10_seal_sparse(layer_num,start_image_id,end_image_id):
 
     print("start")
     config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
-                                     SAVE_MIDDLE=False
+                                     SAVE_MIDDLE=True
                                      )
     cryptoContext, openfhe_context = (
         fhe.try_load_context(remaining_level, rotation_kinds, logBsSlots_list, logN, dnum, logp, logq,

@@ -1,23 +1,36 @@
-This repo contains source code for sorting benchmark. 
+# EasyFHE Sort Example
 
-Prerequisite:
-- GPU-FHE
-- OpenFHE--catslab version
+This repository provides a sort example for EasyFHE, a cryptographic framework designed for efficient homomorphic encryption.
 
-1. Run the project
+## Setup and Prerequisites
 
-Run:
+1. **Environment Configuration:**  
+   Prior to running the example, ensure that the system environment variable `DATA_DIR` is set to the directory path where the cryptographic context will be stored.
+
+## Running the Example
+
+After completing the setup, execute the following command in the repository's root directory:
+
 ```bash
-cd examples/sort/src
-python3 ./sort.py
+python3 sort.py
 ```
 
-2. Change the hyperparameters
+### First Run Considerations
 
-- Length of the input array could be easily changed by input a different number into the **Sorting** function. **Sorting** function will then perform sorting on an array with the length of your input.
+- **Context Generation:**  
+  On the initial execution, EasyFHE will generate the required cryptographic context. This context will be stored in the directory specified by `DATA_DIR`. Note that this generation process may take several minutes, even on high-end systems.
 
-- Hyperparameters for non-linear function and FHE scheme should be kept untouched unless you are familiar with FHE, openFHE and GPU-FHE.
+- **Subsequent Runs:**  
+  On later executions, EasyFHE will load the pre-generated context from the file, which significantly reduces the startup time.
 
----
+## Performance
 
-original repo: https://github.com/FHE-Applications/FHE-Applications/tree/master/dev/CKKS-App/Sorting
+*To be written.* (TBW)
+
+## Project Team
+
+The sort example is developed and actively maintained by:
+- [Honghui You](https://github.com/youhonghui)
+- [Zhuoran Ji](https://github.com/jizhuoran)
+
+Contributions from the broader community are welcome and greatly appreciated.

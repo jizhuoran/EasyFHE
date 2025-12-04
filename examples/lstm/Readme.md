@@ -21,3 +21,10 @@ original readme
  - Reference input: https://drive.google.com/file/d/1K9-qQrTl2kKaoeZG-ElDu2_3bif1JCsW/view?usp=sharing
 
 Its original repo is https://github.com/FHE-Applications/FHE-Applications/tree/master/dev/CKKS-App/LSTM
+
+## Project Team
+
+The resnet example is developed and actively maintained by:
+- [Yusi Chen](https://github.com/chenyusii)
+- [Honghui You](https://github.com/youhonghui)
+Contributions from the broader community are welcome and greatly appreciated.

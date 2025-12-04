@@ -12,8 +12,8 @@ DATA_DIR = os.environ["DATA_DIR"]
 global_num_slots = 1<<14
 # origin_input_folder = "../src/tmp_embeddings/"
 # input_folder="src/tmp_embeddings/"
-logBsSlots_list = [14] # todo: do not use global variable
-levelBudget_list = [[4,4]] # todo: do not use global variable
+logBsSlots_list = [14]
+levelBudget_list = [[4,4]]
 
 def log2_int(x):
     import math
@@ -259,7 +259,7 @@ def encoder1(cryptoContext,openfhe_context):
     value_b= read_plain_repeated_input(cryptoContext, "layer0_attself_value_bias",
                                        cryptoContext.L - inputs[0].cur_limbs, 1, global_num_slots, 1.0)
 
-    V=matmulRE1(inputs,value_w,value_b,cryptoContext) #fixme: 250410, yhh debug uptil here #为什么上面的value_w的level，把cryptoContext.L-inputs[0].cur_limbs换成 cryptoContext.L-score.cur_limbs-2 可以复现，进去之后第二个会g
+    V=matmulRE1(inputs,value_w,value_b,cryptoContext)
     V_wrapped=wrapUpRepeated(V,cryptoContext)
 
     output=matmulRE2(unwrapped_scores,V_wrapped,128,128,cryptoContext)
@@ -386,7 +386,6 @@ def encoder2(inputs,cryptoContext):
     scores=fhe.homo_mul_scalar_double(scores,1/500.0,cryptoContext) # Here values are scaled down in order to achieve better accuracy with bootstrapping
     scores=fhe.homo_bootstrap(scores,cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     # use `homo_mul_scalar_int` instead of `homo_mul_scalar_double` to avoid overflow when computing `_get_element_for_eval_mult`
-    # todo: yhh: see if this scaling up and down is necessary?
     # scores=fhe.homo_mul_scalar_double(scores,500.0,cryptoContext)
     scores=fhe.homo_mul_scalar_int(scores,500,cryptoContext)
 
@@ -522,14 +521,6 @@ def BERT_Tiny():
 
     if not os.path.exists(input_folder):
         raise ValueError(f"Directory {input_folder} does not exist!")
-
-    #todo: add setup_environment function
-    #  根据BERT-TINT C++版本的代码改写为Python版本
-    #
-    
-    # text = input_text
-    # setup_environment(text)
-    # global_num_slots = 1<<14
 
     # generate context
     # levelsUsedBeforeBootstrap = 12+4
@@ -681,58 +672,6 @@ def read_plain_expanded_input_tensor(filename):
     return  x
 
 
-# def setup_environment(text:str):
-#     """
-#     本函数为BERT-TINY复现项目下从C++版本移植为Python版本：
-#     C++版本如下：
-#     void setup_environment(string text) {
-#         string command;
-#         filesystem::remove_all("../src/tmp_embeddings");
-#         system("mkdir ../src/tmp_embeddings");
-#         input_folder = "../src/tmp_embeddings/";
-#         text = "[CLS] " + text + " [SEP]";
-#         cout << "\nCLIENT-SIDE\nTokenizing the following sentence: '" << text << "'" << endl;
-#         command = "python3 ../src/python/ExtractEmbeddings.py \"" + text + "\"";
-#         system(command.c_str());
-#         verbose = false;
-#         return;
-#     """
-#     # Todo：修改脚本目录
-#     # 1. 清理并重建临时目录
-#     tmp_dir = "../src/tmp_embeddings"
-#     if os.path.exists(tmp_dir):
-#         shutil.rmtree(tmp_dir)  # 递归删除目录
-#     os.makedirs(tmp_dir, exist_ok=True)  # 自动创建多级目录
-#     input_folder = tmp_dir + "/"
-#     # 2. 文本预处理
-#     processed_text = f"[CLS] {text} [SEP]"
-#     print(f"\nCLIENT-SIDE\nTokenizing the following sentence: '{processed_text}'")
-#     # 3. 调用Python脚本
-#     ExtractEmbeddings(processed_text)
-#     # script_path = "../src/python/ExtractEmbeddings.py"
-#     # command = ["python3", script_path, processed_text]
-#     # try:
-#     #     # 使用subprocess.run调用脚本
-#     #     result = subprocess.run(
-#     #         command,
-#     #         check=True,
-#     #         capture_output=True,
-#     #         text=True
-#     #     )
-#     #     if result.returncode != 0:
-#     #         print(f"Script execution failed: {result.stderr}")
-#     #
-#     # except subprocess.CalledProcessError as e:
-#     #
-#     #     print(f"Error executing script: {str(e)}")
-
-
 if __name__ == "__main__":
-    data_dirs = [entry.name for entry in os.scandir('./tmp_embeddings') if entry.is_dir()]
-    data_dirs.sort(key=int)
-    # for data_dir in data_dirs:
-    #     input_folder = origin_input_folder+data_dir+'/'
-    #     BERT_Tiny()
-
-    input_folder = "./tmp_embeddings/0/" # "this is a bad movie" # todo: gen embeddings, tackle the server side part
+    input_folder = "./tmp_embeddings/0/" # "this is a bad movie"
     BERT_Tiny()

@@ -1,19 +1,48 @@
-This repo contains source code for resnet20 benchmark. 
+# Homomorphic Encryption Example with ResNet-20 on CIFAR-10
 
-Prerequisite:
-- GPU-FHE
-- OpenFHE--catslab version
+This repository provides an example implementation of homomorphic encryption applied to a ResNet-20 model trained on the CIFAR-10 dataset. The design and implementation closely follow the methodology described in the paper "[Encrypted Image Classification with Low Memory Footprint using Fully Homomorphic Encryption](https://eprint.iacr.org/2024/460.pdf)", which details the packing strategy and algorithm design.
 
-1. Run the project
+## Setup and Prerequisites
 
-set `NEW_VERSION = False` for the first time, and then set true
+1. **Environment Configuration:**  
+   Set the system environment variable `DATA_DIR` to the path of a directory where the dataset and pre-encoded weights will be stored.
 
-Run:
+2. **Download Required Files:**  
+   Download the prepared CIFAR-10 dataset and pre-encoded weights from [this link](https://1drv.ms/f/c/bf37f4266c3f52d0/EudeJ2juTltFvAnRS8yypz0BVMYR65X7sQvEyCXleme8gQ?e=paaZNk).  
+
+   Place both the dataset and the weights into the directory specified by `DATA_DIR`.
+
+## Running the Example
+
+Once the prerequisites are completed, run the example by executing the following command in the repository’s root directory:
+
 ```bash
-cd examples/resnet/src
-python3 ./resnet.py
+python3 resnet20.py
 ```
 
----
+### First Run Considerations
 
-original repo: https://github.com/narger-ef/LowMemoryFHEResNet20
+- **Context Generation:**  
+  On the first run, EasyFHE will generate the corresponding cryptographic context, which will be saved to the `DATA_DIR` directory. This process can take several minutes on high-end machines.
+
+- **Subsequent Runs:**  
+  For later executions, EasyFHE will load the pre-generated context from the file, resulting in a significantly faster startup time.
+
+## Implementation Details
+
+The implementation in `resnet20.py` is directly based on the techniques described in "[Encrypted Image Classification with Low Memory Footprint using Fully Homomorphic Encryption](https://eprint.iacr.org/2024/460.pdf)". Although this implementation demonstrates the potential of homomorphic encryption for deep learning, the current design may not be optimal for GPU acceleration. We welcome contributions that propose and implement more efficient algorithmic designs.
+The implementation in `resnet20_aespa.py` and `resnet18_aespa.py` integrates square function for activation described in "[AESPA: Accuracy Preserving Low-degree Polynomial Activation for Fast Private Inference](https://arxiv.org/pdf/2201.06699)" based on the above mentioned `resnet_20.py`.
+
+## Performance
+
+TBW
+
+## Project Team
+
+The resnet example is developed and actively maintained by:
+- [Honghui You](https://github.com/youhonghui)
+- [Kanyu Ye](https://github.com/kanyuYe)
+- [Yuhang Fan](https://github.com/Azathoth13)
+- [Zhuoran Ji](https://github.com/jizhuoran)
+
+Contributions from the broader community are welcome and greatly appreciated.

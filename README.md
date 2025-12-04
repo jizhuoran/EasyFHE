@@ -1,6 +1,74 @@
-![PyTorch Logo](https://github.com/pytorch/pytorch/raw/main/docs/source/_static/img/pytorch-logo-dark.png)
+# EasyFHE
 
---------------------------------------------------------------------------------
+EasyFHE is an emerging Fully Homomorphic Encryption (FHE) framework designed to empower users to develop FHE programs with the ease and flexibility of PyTorch. Built on the foundation of PyTorch and leveraging OpenFHE's cutting-edge algorithms, EasyFHE aims to simplify FHE programming by abstracting away the underlying cryptographic and GPU management complexities. In essence, if you are comfortable with PyTorch, you will find EasyFHE equally accessible.
+
+## Key Features
+
+- **Homomorphic Operations with GPU Acceleration:**  
+  EasyFHE provides robust support for homomorphic operations, similar to those available in OpenFHE, but enhanced with strong GPU acceleration to significantly improve computational efficiency.
+
+- **User-Friendly Development:**  
+  The framework is designed with user experience in mind. Developers can concentrate solely on their computation logic, while EasyFHE handles the intricate details of FHE protocols and GPU resource management.
+
+- **Efficient Bootstrapping:**  
+  Experience bootstrapping operations as fast as approximately 200ms on an A100 GPU for parameters such as N = 65536, slot = 32768, and L = 30, ensuring practical performance for complex FHE computations.
+
+## Installation
+
+To install EasyFHE, use pip. Due to the size of the wheel file, it is not hosted on PyPI. Instead, please download the appropriate wheel file for your platform and Python version from the [release page](https://1drv.ms/f/c/bf37f4266c3f52d0/EudeJ2juTltFvAnRS8yypz0BVMYR65X7sQvEyCXleme8gQ?e=paaZNk). For example, to install the version for Python 3.12 on Linux, run:
+
+```bash
+pip install easyfhe-0.0.1-cp312-cp312-linux_x86_64.whl
+```
+
+Alternatively, if you prefer to install EasyFHE from source, clone the repository and follow the build instructions analogous to those provided by PyTorch.
+
+## Example Applications
+
+EasyFHE comes with a suite of demonstrative examples that illustrate how to implement FHE programs using the framework. These examples include:
+
+- Dot Product Calculation (Released)
+- Bootstrapping (Released)
+- Logistic Regression (Released)
+- ResNet-20 (Released)
+- BertTiny(Released)
+- Sort(Released)
+- LSTM(Released)
+
+Additional features and examples are under active development, and community feedback is highly encouraged.
+
+## Development Status and Safety
+
+**WARNING:** EasyFHE is currently in the alpha stage. The library is actively under development, and as such, some features may be subject to change, and occasional bugs may be encountered. Nevertheless, the underlying FHE scheme ensures that even if computation routines encounter issues, as long as the encryption/decryption components remain secure, there is NO any leakage of sensitive information.
+
+## Project Team
+
+EasyFHE is primarily developed by the CatsLab research group at Shandong University, under the leadership of [Lei Ju](https://scholar.google.com/citations?user=7DZXXBQAAAAJ) and [Zhuoran Ji](https://scholar.google.com/citations?user=_A0743MAAAAJ). The project is actively maintained by:
+- [Zhuoran Ji](https://github.com/jizhuoran)
+- [Honghui You](https://github.com/youhonghui)
+- [Wenzhe Wang](https://github.com/Kelly-Zhe)
+- [Haoping Yang](https://github.com/er1ciac)
+- [Kanyu Ye](https://github.com/kanyuYe)
+- [Yuhang Fan](https://github.com/Azathoth13)
+- [Yusi Chen](https://github.com/chenyusii)
+
+Contributions from the broader community are welcome and greatly appreciated.
+
+## License
+
+EasyFHE is distributed under the GPL-3.0 license.
+
+---
+
+Your feedback is invaluable to us, and we welcome contributions to enhance the project further. Please star and watch the repository if you are interested in following its development.
+
+
+========================
+========================
+
+Below is the original README of PyTorch, where you can find the installation guild
+
+
 
 PyTorch is a Python package that provides two high-level features:
 - Tensor computation (like NumPy) with strong GPU acceleration
@@ -169,6 +237,8 @@ Professional, or Community Editions. You can also install the build tools from
 https://visualstudio.microsoft.com/visual-cpp-build-tools/. The build tools *do not*
 come with Visual Studio Code by default.
 
+\* We highly recommend installing an [Anaconda](https://www.anaconda.com/download) environment. You will get a high-quality BLAS library (MKL) and you get controlled dependency versions regardless of your Linux distro.
+
 An example of environment setup is shown below:
 
 * Linux:
@@ -221,7 +291,7 @@ Other potentially useful environment variables may be found in `setup.py`.
 
 #### Get the PyTorch Source
 ```bash
-git clone https://github.com/pytorch/pytorch
+git clone --recursive https://github.com/pytorch/pytorch
 cd pytorch
 # if you are updating an existing checkout
 git submodule sync
@@ -271,6 +341,13 @@ conda install -c conda-forge libuv=1.39
 
 #### Install PyTorch
 **On Linux**
+
+If you would like to compile PyTorch with [new C++ ABI](https://gcc.gnu.org/onlinedocs/libstdc++/manual/using_dual_abi.html) enabled, then first run this command:
+```bash
+export _GLIBCXX_USE_CXX11_ABI=1
+```
+
+Please **note** that starting from PyTorch 2.5, the PyTorch build with XPU supports both new and old C++ ABIs. Previously, XPU only supported the new C++ ABI. If you want to compile with Intel GPU support, please follow [Intel GPU Support](#intel-gpu-support).
 
 If you're compiling for AMD ROCm then first run this command:
 ```bash
@@ -353,16 +430,6 @@ Please make sure [the common prerequisites](#prerequisites) as well as [the prer
 Then PyTorch can be built with the command:
 
 ```cmd
-:: CMD Commands:
-:: Set the CMAKE_PREFIX_PATH to help find corresponding packages
-:: %CONDA_PREFIX% only works after `conda activate custom_env`
-
-if defined CMAKE_PREFIX_PATH (
-    set "CMAKE_PREFIX_PATH=%CONDA_PREFIX%\Library;%CMAKE_PREFIX_PATH%"
-) else (
-    set "CMAKE_PREFIX_PATH=%CONDA_PREFIX%\Library"
-)
-
 python setup.py develop
 ```
 

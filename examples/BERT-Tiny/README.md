@@ -1,3 +1,25 @@
+This repo contains source code for FHE-Bert-Tiny benchmark. 
+
+Prerequisite:
+- GPU-FHE
+- OpenFHE-catslab version
+
+1. Run the project
+
+Run:
+```bash
+cd examples/BERT-Tiny/src
+python3 ./FHE-BERT-Tiny.py
+```
+
+## Project Team
+
+The resnet example is developed and actively maintained by:
+- [Kanyu Ye](https://github.com/kanyuYe)
+- [Honghui You](https://github.com/youhonghui)
+Contributions from the broader community are welcome and greatly appreciated.
+
+---
 # Transformer-based Language Models and Homomorphic Encryption: an intersection with BERT-tiny
 <center>
 <img src="imgs/console.png" alt="Console presentation image" width=90% >
