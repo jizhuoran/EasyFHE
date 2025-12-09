@@ -115,6 +115,7 @@ void const_mult_batch(
     uint64_t* to) {
   const int max_threads = omp_get_max_threads();
   omp_set_num_threads(max_threads);
+#ifdef USE_AVX512
 #pragma omp parallel for num_threads(max_threads)
   for (int batch_idx = 0; batch_idx < batch; batch_idx++) {
     const int op2_idx = start_op2_idx + batch_idx;
@@ -146,6 +147,24 @@ void const_mult_batch(
       dst[i] = out;
     }
   }
+#else
+#pragma omp parallel for num_threads(max_threads)
+  for (int i = 0; i < degree * batch; i++) {
+    const int op2_idx = start_op2_idx + i / degree;
+    const int prime_idx = i / degree + start_prime_idx;
+    const auto prime = primes[prime_idx];
+
+    uint64_t out = fhe::mul_and_reduce_shoup(
+        op1[start_op1_idx * degree + i],
+        op2[op2_idx],
+        op2_psinv[op2_idx],
+        prime);
+
+    if (out >= prime)
+      out -= prime;
+    to[start_op1_idx * degree + i] = out;
+  }
+#endif
 }
 void const_mult_batch_(
     uint64_t* op1_ptr,
