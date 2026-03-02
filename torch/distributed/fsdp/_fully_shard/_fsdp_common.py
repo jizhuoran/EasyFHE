@@ -1,4 +1,5 @@
 # mypy: allow-untyped-defs
+import functools
 import math
 import traceback
 from dataclasses import dataclass
@@ -11,6 +12,18 @@ import torch.nn as nn
 from torch.distributed._composable.contract import _get_registry
 from torch.distributed.tensor import DeviceMesh, DTensor, Shard
 from torch.distributed.tensor._dtensor_spec import DTensorSpec
+
+
+def _dynamo_disable(func):
+    """Disable dynamo tracing for FSDP hooks."""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return torch._dynamo.disable(
+            func, recursive=True, reason="skipping FSDP hooks"
+        )(*args, **kwargs)
+
+    return wrapper
 
 
 _compiled_autograd_enabled: bool = False
