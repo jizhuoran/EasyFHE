@@ -20,13 +20,7 @@ from torch.distributed.utils import _apply_to_tensors, _to_kwargs
 from torch.utils._pytree import tree_flatten
 
 from ._fsdp_api import MixedPrecisionPolicy
-from ._fsdp_common import (
-    _cast_fp_tensor,
-    _dynamo_disable,
-    compiled_autograd_enabled,
-    detect_compiled_autograd,
-    TrainingState,
-)
+from ._fsdp_common import _cast_fp_tensor, _dynamo_disable, TrainingState
 from ._fsdp_param_group import FSDPCommContext, FSDPParamGroup
 
 
@@ -141,8 +135,7 @@ class FSDPState(_State):
         self._lazy_init()
         if self._state_ctx.iter_forward_root is not None:
             return args, kwargs
-        if not compiled_autograd_enabled():
-            logger.debug("FSDP::root_pre_forward")
+        logger.debug("FSDP::root_pre_forward")
         self._state_ctx.iter_forward_root = self
         with torch.profiler.record_function("FSDP::root_pre_forward"):
             # Wait for optimizer before implicitly prefetched all-gathers
@@ -182,7 +175,6 @@ class FSDPState(_State):
             raise RuntimeError(
                 f"{self._state_name} requires a single root module but got {self._modules}"
             )
-        detect_compiled_autograd()
         root_module = self._modules[0]
         visited_states: set[FSDPState] = set()
         for module_name, module in root_module.named_modules():
@@ -317,6 +309,7 @@ class FSDPState(_State):
                 )
         return output
 
+    @_dynamo_disable
     def _pre_backward(self, grad: torch.Tensor) -> torch.Tensor:
         self._training_state = TrainingState.PRE_BACKWARD
         self._register_root_post_backward_final_callback()
@@ -328,9 +321,9 @@ class FSDPState(_State):
                 FSDPParamGroup._prefetch_unshard(target_param_group, "backward")
         return grad
 
+    @_dynamo_disable
     def _root_post_backward_final_callback(self) -> None:
-        if not compiled_autograd_enabled():
-            logger.debug("FSDP::root_post_backward")
+        logger.debug("FSDP::root_post_backward")
         with torch.profiler.record_function("FSDP::root_post_backward_callback"):
             for state in self._state_ctx.all_states:
                 for fsdp_param_group in state._fsdp_param_groups:
