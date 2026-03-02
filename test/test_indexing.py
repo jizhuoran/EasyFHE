@@ -34,7 +34,6 @@ from torch.testing._internal.common_dtype import (
 )
 from torch.testing._internal.common_utils import (
     DeterministicGuard,
-    MACOS_VERSION,
     parametrize,
     run_tests,
     serialTest,
@@ -1824,11 +1823,7 @@ class TestIndexing(TestCase):
         size = (3, 4, 5)
         index_dtypes = [torch.int, torch.long]
         include_selfs = [True, False]
-        # See https://github.com/pytorch/pytorch/issues/176159
-        is_mps_noncontig_broken = (
-            device == "mps:0" and reduce == "mean" and MACOS_VERSION < 15.0
-        )
-        noncontig_opts = [True, False] if not is_mps_noncontig_broken else [False]
+        noncontig_opts = [True, False]
         amin_init = float("inf") if dtype.is_floating_point else torch.iinfo(dtype).max
         amax_init = -float("inf") if dtype.is_floating_point else torch.iinfo(dtype).min
         reduction_init = {"prod": 1, "mean": 0, "amin": amin_init, "amax": amax_init}
@@ -1884,10 +1879,7 @@ class TestIndexing(TestCase):
                             if include_self
                             else torch.zeros_like(expected)
                         )
-                        if is_mps_noncontig_broken:
-                            counts = counts.index_add(0, idx, torch.ones_like(src))
-                        else:
-                            counts.index_add_(0, idx, torch.ones_like(src))
+                        counts.index_add_(0, idx, torch.ones_like(src))
                         counts.masked_fill_(counts == 0, 1)
                         if dtype.is_floating_point:
                             expected.div_(counts)
