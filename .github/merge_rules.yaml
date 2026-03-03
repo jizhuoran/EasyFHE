@@ -38,23 +38,6 @@
   - Lint
   - pull
 
-- name: NVFuser
-  patterns:
-  - test/test_jit_cuda_fuser.py
-  - torch/csrc/jit/codegen/fuser/cuda/**
-  - torch/csrc/jit/codegen/cuda/**
-  - benchmarks/cpp/nvfuser/**
-  approved_by:
-  - csarofeen
-  - ngimel
-  - jjsjann123
-  - kevinstephano
-  - ptrblck
-  mandatory_checks_name:
-  - EasyCLA
-  - Lint
-  - pull
-
 - name: OSS CI
   patterns:
   - .github/**
