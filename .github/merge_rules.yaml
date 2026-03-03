@@ -47,7 +47,6 @@
   - tools/**
   approved_by:
   - alband
-  - dagitses
   - pytorch/pytorch-dev-infra
   mandatory_checks_name:
   - EasyCLA
