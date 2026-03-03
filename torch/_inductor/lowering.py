@@ -768,8 +768,25 @@ def make_pointwise(
     return inner
 
 
-def make_foreach_pointwise(pw_fn, allow_alpha=False):
-    def inner(*inputs: list[list[TensorBox]], alpha=1):
+def make_foreach_pointwise(pw_fn, allow_alpha=False, scalar_kwarg="alpha"):
+    def inner(*inputs: list[list[TensorBox]], alpha=1, value=1):
+        # For ops like addcmul/addcdiv, the scalar `value` arrives as a
+        # positional arg (not keyword) due to the ATen schema. Extract it
+        # from the end of inputs if present.
+        # pyrefly: ignore [bad-assignment]
+        inputs = list(inputs)
+        if (
+            scalar_kwarg == "value"
+            and inputs
+            and not isinstance(inputs[-1], (list, tuple))
+        ):
+            # pyrefly: ignore [missing-attribute]
+            scalar_val = inputs.pop()
+        elif scalar_kwarg == "value":
+            scalar_val = value
+        else:
+            scalar_val = alpha
+
         realize_outputs = (
             len(V.graph.current_node.users) == 0
             or V.graph.current_node.target in inplace_foreach_ops
@@ -798,7 +815,7 @@ def make_foreach_pointwise(pw_fn, allow_alpha=False):
 
         def apply_fn(args):
             if allow_alpha:
-                return pw_fn(*args, alpha=alpha)
+                return pw_fn(*args, **{scalar_kwarg: scalar_val})
             else:
                 return pw_fn(*args)
 
@@ -1076,8 +1093,11 @@ def register_foreach_pointwise(
     aten_fn,
     pointwise_lowering_fn,
     allow_alpha=False,
+    scalar_kwarg="alpha",
 ):
-    fn = make_foreach_pointwise(pointwise_lowering_fn, allow_alpha=allow_alpha)
+    fn = make_foreach_pointwise(
+        pointwise_lowering_fn, allow_alpha=allow_alpha, scalar_kwarg=scalar_kwarg
+    )
     fn = _register_foreach_lowering(aten_fn, fn)
     return fn
 
@@ -7193,26 +7213,12 @@ def addcdiv(self, tensor1, tensor2, *, value=1):
     )
 
 
-def _foreach_addcmul_scalar(self, tensor1, tensor2, value=1):
-    """
-    Foreach version of addcmul with scalar value parameter.
-    Uses foreach_group_loop for consistent grouping behavior.
-    """
-    realize_outputs = (
-        len(V.graph.current_node.users) == 0
-        or V.graph.current_node.target in inplace_foreach_ops
-        or cur_node_has_non_foreach_users()
-    )
-
-    groups = group_foreach_args(zip(self, tensor1, tensor2))
-
-    def apply_fn(args):
-        return addcmul(*args, value=value)
-
-    return foreach_group_loop(groups, len(self), apply_fn, realize_outputs)
-
-
-_register_foreach_lowering(aten._foreach_addcmul.Scalar, _foreach_addcmul_scalar)
+_foreach_addcmul_scalar = register_foreach_pointwise(
+    aten._foreach_addcmul.Scalar, addcmul, allow_alpha=True, scalar_kwarg="value"
+)
+_foreach_addcdiv_scalar = register_foreach_pointwise(
+    aten._foreach_addcdiv.Scalar, addcdiv, allow_alpha=True, scalar_kwarg="value"
+)
 
 
 register_pointwise_numeric_ldf64(aten.cos)
@@ -7414,6 +7420,16 @@ register_foreach_inplace(
 )
 register_foreach_inplace(
     aten._foreach_copy_.default, aten._foreach_copy.default, foreach_copy
+)
+register_foreach_inplace(
+    aten._foreach_addcmul_.Scalar,
+    aten._foreach_addcmul.Scalar,
+    _foreach_addcmul_scalar,
+)
+register_foreach_inplace(
+    aten._foreach_addcdiv_.Scalar,
+    aten._foreach_addcdiv.Scalar,
+    _foreach_addcdiv_scalar,
 )
 
 
