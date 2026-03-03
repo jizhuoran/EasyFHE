@@ -202,11 +202,11 @@
   - aten/src/ATen/mps/**
   - aten/src/ATen/native/mps/**
   approved_by:
-  - kulinseth
   - alband
   - malfet
-  - razarmehr
   - DenisVieriu97
+  - kurtamohler
+
   mandatory_checks_name:
   - EasyCLA
   - Lint
