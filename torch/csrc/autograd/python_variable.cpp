@@ -2258,10 +2258,6 @@ static bool dtensor_spec_has_symints(py::handle spec) {
   return contains_any_symint(shape);
 }
 
-// set to false to bail out of the C++ fast path for ops that need pytree
-// flattening (e.g. future pytree custom ops)
-static constexpr bool kRunPytreeWithFastPath = true;
-
 static std::optional<std::pair<NativeOpSchema, /*ComputeMesh*/ py::object>>
 create_native_op_schema(
     const c10::OperatorHandle& op,
@@ -2271,7 +2267,7 @@ create_native_op_schema(
   // operating on IValues instead of Python stuff.
 
   py::object runtime_schema_info = get_runtime_schema_info_for_op(py_op);
-  if (!kRunPytreeWithFastPath && runtime_schema_info &&
+  if (runtime_schema_info &&
       checked_istrue(py::handle(runtime_schema_info)
                          .attr(dtensor_interned_strings.needs_pytree)
                          .ptr())) {
@@ -2279,6 +2275,7 @@ create_native_op_schema(
     // now since only a minority of ops need it.
     return std::nullopt;
   }
+
   OperatorArgsKwargsView args_kwargs(op, *stack);
   auto native_info = unpack_runtime_schema_info(
       py::handle(runtime_schema_info), args_kwargs.num_positional_args());
@@ -2322,99 +2319,58 @@ create_native_op_schema(
     comparison_key.emplace_back(std::move(arg));
   };
 
-  const auto handle_non_tensor_or_undefined =
-      [&comparison_key, &comparison_key_hash](c10::IValue arg) {
-        // We reach here when arg is TensorFlavor::NON_TENSOR
-        // (not a Tensor at all or undefined Tensor)
-        // We coerce undefined Tensor to None, just as we do when
-        // converting IValues to PyObject. (same behaviour as
-        // handle_non_dtensor_arg)
-        if (arg.isTensor() && !arg.toTensor().defined()) {
-          arg = c10::IValue();
-        }
-        comparison_key_hash =
-            c10::hash_combine(comparison_key_hash, c10::IValue::hash(arg));
-        comparison_key.emplace_back(std::move(arg));
-      };
-
+  Py_ssize_t idx = 0;
   const bool allow_implicit_replication =
       at::get_dtensor_allow_implicit_replication();
-
-  const auto handle_exactly_dtensor = [&](const auto py_tensor) {
-    py::object spec = py_tensor.attr(dtensor_interned_strings._spec);
-    if (dtensor_spec_has_symints(spec)) {
-      // Symints are unhashable, so we can't use the cache for
-      // sharding propagation. bail out to slow path.
-      return true;
-    }
-    handle_dtensor_arg(std::move(spec));
-    if (compute_mesh.is_none()) {
-      compute_mesh = py::reinterpret_borrow<py::object>(
-          py_tensor.attr(dtensor_interned_strings.device_mesh));
-    }
-    return false;
-  };
-
-  const auto handle_exactly_tensor = [&](const auto py_tensor) {
-    if (compute_mesh.is_none()) {
-      compute_mesh = try_find_mesh_from_args(op, args_kwargs);
-    }
-    handle_dtensor_arg(try_replicate_spec_for_scalar_tensor(
-        allow_implicit_replication, py_op, py_tensor, compute_mesh));
-  };
-
-  Py_ssize_t idx = 0;
-
   for (auto argument_it = args_kwargs.args_begin();
        argument_it != args_kwargs.args_end();
        ++argument_it) {
     const auto& arg = *argument_it;
     const auto [tensor_flavor, py_tensor] = check_for_dtensor_or_tensor(arg);
-
     switch (tensor_flavor) {
       case TensorFlavor::EXACTLY_DTENSOR:
       case TensorFlavor::DTENSOR_SUBCLASS: {
-        bool is_symint = handle_exactly_dtensor(py_tensor);
-        if (is_symint) {
+        py::object spec = py_tensor.attr(dtensor_interned_strings._spec);
+        if (dtensor_spec_has_symints(spec)) {
+          // Symints are unhashable, so we can't use the cache for
+          // sharding propagation. bail out to slow path.
           return std::nullopt;
+        }
+        handle_dtensor_arg(std::move(spec));
+        if (compute_mesh.is_none()) {
+          compute_mesh = py::reinterpret_borrow<py::object>(
+              py_tensor.attr(dtensor_interned_strings.device_mesh));
         }
         break;
       }
       case TensorFlavor::EXACTLY_TENSOR:
       case TensorFlavor::NON_DTENSOR_TENSOR_SUBCLASS: {
-        handle_exactly_tensor(py_tensor);
+        if (compute_mesh.is_none()) {
+          compute_mesh = try_find_mesh_from_args(op, args_kwargs);
+        }
+        handle_dtensor_arg(try_replicate_spec_for_scalar_tensor(
+            allow_implicit_replication, py_op, py_tensor, compute_mesh));
         break;
       }
       case TensorFlavor::NON_TENSOR: {
         // Check if this is a list/tuple that might contain DTensors (e.g.,
         // torch.cat)
-        if (arg.isList()) {
+        if (arg.isList() && compute_mesh.is_none()) {
           const auto list = arg.toList();
-          comparison_key_hash = hash_combine(comparison_key_hash, list.size());
-          comparison_key.emplace_back(static_cast<int64_t>(list.size()));
-          // pytree unflattening
           for (const auto& item : list) {
             const auto [item_flavor, item_py_tensor] =
                 check_for_dtensor_or_tensor(item);
             if (item_flavor == TensorFlavor::EXACTLY_DTENSOR ||
                 item_flavor == TensorFlavor::DTENSOR_SUBCLASS) {
-              bool is_symint = handle_exactly_dtensor(item_py_tensor);
-              if (is_symint) {
-                return std::nullopt;
-              }
-            } else if (
-                item_flavor == TensorFlavor::EXACTLY_TENSOR ||
-                item_flavor == TensorFlavor::NON_DTENSOR_TENSOR_SUBCLASS) {
-              handle_exactly_tensor(item_py_tensor);
-            } else { // non-tensor
-              handle_non_tensor_or_undefined(item);
+              compute_mesh = py::reinterpret_borrow<py::object>(
+                  item_py_tensor.attr(dtensor_interned_strings.device_mesh));
+              break;
             }
           }
-        } else {
-          // non DTensor/Tensor args (i.e. int/float/bool), just add to
-          // local_args
-          handle_non_dtensor_arg(idx, arg);
         }
+        // non DTensor/Tensor args (i.e. int/float/bool), just add to
+        // local_args
+        handle_non_dtensor_arg(idx, arg);
         break;
       }
       default:
@@ -2460,43 +2416,36 @@ create_native_op_schema(
       switch (tensor_flavor) {
         case TensorFlavor::EXACTLY_DTENSOR:
         case TensorFlavor::DTENSOR_SUBCLASS: {
-          bool is_symint = handle_exactly_dtensor(py_tensor);
-          if (is_symint) {
-            return std::nullopt;
+          handle_dtensor_arg(py_tensor.attr(dtensor_interned_strings._spec));
+          if (compute_mesh.is_none()) {
+            compute_mesh = py::reinterpret_borrow<py::object>(
+                py_tensor.attr(dtensor_interned_strings.device_mesh));
           }
           break;
         }
         case TensorFlavor::EXACTLY_TENSOR:
         case TensorFlavor::NON_DTENSOR_TENSOR_SUBCLASS: {
-          handle_exactly_tensor(py_tensor);
+          handle_dtensor_arg(try_replicate_spec_for_scalar_tensor(
+              allow_implicit_replication, py_op, py_tensor, compute_mesh));
           break;
         }
         case TensorFlavor::NON_TENSOR: {
-          if (argument_it->isList()) {
+          // Check if this is a list/tuple that might contain DTensors (e.g.,
+          // torch.cat)
+          if (argument_it->isList() && compute_mesh.is_none()) {
             const auto list = argument_it->toList();
-            comparison_key_hash =
-                hash_combine(comparison_key_hash, list.size());
-            comparison_key.emplace_back(static_cast<int64_t>(list.size()));
             for (const auto& item : list) {
               const auto [item_flavor, item_py_tensor] =
                   check_for_dtensor_or_tensor(item);
               if (item_flavor == TensorFlavor::EXACTLY_DTENSOR ||
                   item_flavor == TensorFlavor::DTENSOR_SUBCLASS) {
-                bool is_symint = handle_exactly_dtensor(item_py_tensor);
-                if (is_symint) {
-                  return std::nullopt;
-                }
-              } else if (
-                  item_flavor == TensorFlavor::EXACTLY_TENSOR ||
-                  item_flavor == TensorFlavor::NON_DTENSOR_TENSOR_SUBCLASS) {
-                handle_exactly_tensor(item_py_tensor);
-              } else { // non-tensor
-                handle_non_tensor_or_undefined(item);
+                compute_mesh = py::reinterpret_borrow<py::object>(
+                    item_py_tensor.attr(dtensor_interned_strings.device_mesh));
+                break;
               }
             }
-          } else {
-            handle_non_dtensor_arg(native_info.static_argnum, *argument_it);
           }
+          handle_non_dtensor_arg(native_info.static_argnum, *argument_it);
           break;
         }
         default:
