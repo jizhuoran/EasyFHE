@@ -4837,6 +4837,11 @@ class TestFXAPIBackwardCompatibility(JitTestCase):
 
         # Forward ref
         if isinstance(t, str):
+            # Normalize "X | None" string annotations to Optional format
+            if t.endswith(" | None"):
+                inner = t[: -len(" | None")]
+                result = f"Optional[{inner}]"
+                return result if recursive else f"'{result}'"
             if recursive:
                 return t
             else:
@@ -4876,7 +4881,7 @@ class TestFXAPIBackwardCompatibility(JitTestCase):
 
         if origin in {tuple, tuple}:
             return f"Tuple{contained_type_str}"
-        if origin == typing.Union:
+        if origin == typing.Union or isinstance(t, types.UnionType):
             # Annoying hack to detect Optional
             if len(contained) == 2 and (contained[0] is type(None)) ^ (
                 contained[1] is type(None)
