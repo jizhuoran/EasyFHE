@@ -4,7 +4,7 @@ import functools
 import itertools
 import operator
 from collections.abc import Callable, Iterable, Sequence
-from typing import cast, Optional, TypeAlias, TypeVar, Union
+from typing import cast, TypeAlias, TypeVar
 
 import torch
 from torch._prims_common import DimsSequenceType, DimsType
@@ -32,9 +32,9 @@ from torch.distributed.tensor.placement_types import (
 
 def _get_registration_wrapper(
     registration_fn,
-    op: Union[torch._ops.OpOverload, list[torch._ops.OpOverload]],
-    schema_info: Optional[RuntimeSchemaInfo],
-    arg_names_that_require_specializing_cache_strategy: Optional[list[str]],
+    op: torch._ops.OpOverload | list[torch._ops.OpOverload],
+    schema_info: RuntimeSchemaInfo | None,
+    arg_names_that_require_specializing_cache_strategy: list[str] | None,
 ):
     def wrapper(impl):
         overloads = op if isinstance(op, list) else [op]

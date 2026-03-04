@@ -1,7 +1,7 @@
 # Copyright (c) Meta Platforms, Inc. and affiliates
 import functools
 from collections.abc import Callable, Sequence
-from typing import cast, Optional
+from typing import cast
 
 import torch
 from torch._ops import OpOverload
@@ -633,7 +633,7 @@ def single_mesh_dim_linear_pointwise_strategy(
 def single_mesh_dim_common_pointwise_strategy(
     args_schema: ArgsType,
     linearity: int = -1,
-    scalar_tensor_idx: Optional[int] = None,
+    scalar_tensor_idx: int | None = None,
 ) -> list[list[Placement | _ShardingPlaceholder]]:
     # TODO rename
     tensor_arg_strategies: list[TensorMeta] = [
