@@ -361,7 +361,11 @@ def _check_capability():
     if torch.version.cuda is None:  # on ROCm we don't want this check
         return
 
-    code_ccs = [_extract_arch_version(cc) for cc in get_arch_list()]
+    arch_list = get_arch_list()
+    if len(arch_list) == 0:
+        return
+
+    code_ccs = [_extract_arch_version(cc) for cc in arch_list]
     for d in range(device_count()):
         major, minor = get_device_capability(d)
         device_cc = 10 * major + minor
