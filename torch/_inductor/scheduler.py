@@ -4438,8 +4438,9 @@ class Scheduler:
                         # pyrefly: ignore [missing-attribute]
                         multi_node.finalize_as_triton_caller(ms_fused_choice)
 
-                    # pyrefly: ignore [missing-attribute]
-                    multi_node._choice_timings[None] = new_timings
+                    if bench_epilogue:
+                        # pyrefly: ignore [missing-attribute]
+                        multi_node._choice_timings[None] = new_timings
                     return True
                 else:
                     return False
@@ -4770,12 +4771,12 @@ class Scheduler:
         )
         new_possible_fusions = []
         for n1, n2 in possible_fusions:
-            if is_prologue_fusion(n1, n2) and n1 in epilogue_template_nodes:
+            if is_prologue_fusion(n1, n2) and n2 in epilogue_template_nodes:
                 deferred_prologue_fusions.append((n1, n2))
             else:
                 new_possible_fusions.append((n1, n2))
 
-        possible_fusions = new_possible_fusions
+        return new_possible_fusions
 
     def fuse_nodes_once(
         self,
@@ -4820,7 +4821,9 @@ class Scheduler:
             and config.prologue_fusion
             and config.epilogue_fusion
         ):
-            self._handle_template_overlap(possible_fusions, deferred_prologue_fusions)
+            possible_fusions = self._handle_template_overlap(
+                possible_fusions, deferred_prologue_fusions
+            )
 
         self._try_fusion_pairs(
             possible_fusions,
