@@ -16,11 +16,6 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-# Valid modes for inductor backend
-_INDUCTOR_MODES = frozenset(
-    {"default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"}
-)
-
 
 class GraphIdFilter:
     """
@@ -196,37 +191,19 @@ class GraphBackendRouter(_GraphRouterBase[Any]):
         ">10:aot_eager"             - IDs > 10 use aot_eager
         "<=3:eager;4-10:aot_eager"  - IDs 0-3 use eager, 4-10 use aot_eager
 
-    Special backend values:
-        "eager"                     - Run in eager mode (no compilation)
-        "aot_eager"                 - AOT Autograd with eager execution
-        "aot_eager_decomp_partition" - AOT Autograd with partitioner and decomps
-        "inductor"                  - Default inductor backend
-        "inductor:reduce-overhead"  - Inductor with reduce-overhead mode (cudagraphs)
-        "inductor:max-autotune"     - Inductor with max-autotune mode
+    Supported backends include "eager", "aot_eager", "aot_eager_decomp_partition",
+    "inductor", and any other registered backend.
     """
 
     def __init__(self, config_str: str) -> None:
         super().__init__(config_str, "backend")
 
     def _parse_value_str(self, value_str: str) -> Any | None:
-        """Look up a backend, supporting 'backend:mode' format for inductor."""
-        import torch
-
+        """Look up a backend by name."""
         from .backends.registry import lookup_backend
         from .eval_frame import cached_backends
 
-        backend: Any = None
-        if ":" in value_str:
-            parts = value_str.split(":", 1)
-            backend_name, mode = parts[0], parts[1]
-
-            if backend_name == "inductor" and mode in _INDUCTOR_MODES:
-                backend = torch._TorchCompileInductorWrapper(
-                    mode=mode, options=None, dynamic=None
-                )
-
-        if backend is None:
-            backend = lookup_backend(value_str)
+        backend = lookup_backend(value_str)
 
         # Register the backend so its reset() is called during torch._dynamo.reset()
         assert backend is not None, "Invalid override backend: " + value_str
