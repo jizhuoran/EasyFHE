@@ -333,6 +333,44 @@ class TestBackendOverrideIntegration(TestCase):
         result = self._run_with_override(device, "0:aot_eager;>=2:inductor")
         self.assertEqual(result, ["aot_eager", "inductor", "inductor"])
 
+    def test_override_with_backward(self, device):
+        """Verify that backend override works when backward compilation occurs."""
+        from torch._dynamo.graph_id_filter import (
+            _create_backend_router,
+            get_backend_override_for_compile_id,
+        )
+
+        torch._dynamo.reset()
+        _create_backend_router.cache_clear()
+        overrides_applied = []
+        original_get_override = get_backend_override_for_compile_id
+
+        def tracking_get_override(compile_id, config_str):
+            result = original_get_override(compile_id, config_str)
+            if result is not None:
+                overrides_applied.append(compile_id.frame_id)
+            return result
+
+        def fn(x):
+            return (x * 2 + 1).sum()
+
+        with (
+            patch.object(
+                torch._dynamo.config, "debug_backend_override", ">=0:aot_eager"
+            ),
+            patch(
+                "torch._dynamo.output_graph.get_backend_override_for_compile_id",
+                tracking_get_override,
+            ),
+        ):
+            compiled_fn = torch.compile(fn, backend="eager")
+            x = torch.randn(10, device=device, requires_grad=True)
+            result = compiled_fn(x)
+            result.backward()
+
+        self.assertEqual(overrides_applied, [0])
+        self.assertIsNotNone(x.grad)
+
 
 instantiate_device_type_tests(
     TestBackendOverrideIntegration, globals(), only_for=["cpu", "cuda"]
@@ -584,6 +622,55 @@ class TestInductorConfigOverrideIntegration(TestCase):
         self.assertEqual(len(configs_applied), 2)
         self.assertIn({"triton.cudagraphs": False}, configs_applied)
         self.assertIn({"triton.cudagraph_skip_dynamic_graphs": False}, configs_applied)
+
+    def test_config_override_backward_propagation(self, device):
+        """
+        Verify that inductor config overrides propagate to backward compilation.
+
+        The config_patches must be passed to compile_fx (not just ambient
+        patching) so that compile_fx can wrap inner_compile and ensure the
+        patches are active during lazy backward compilation.
+        """
+        import torch._functorch.config
+        from torch._dynamo.graph_id_filter import _create_config_router
+        from torch._inductor import compile_fx as compile_fx_mod
+
+        torch._dynamo.reset()
+        _create_config_router.cache_clear()
+
+        config_patches_received: list[dict] = []
+        original_compile_fx = compile_fx_mod.compile_fx
+
+        def tracking_compile_fx(model_, example_inputs_, *args, **kwargs):
+            cp = kwargs.get("config_patches")
+            if cp is not None:
+                config_patches_received.append(dict(cp))
+            return original_compile_fx(model_, example_inputs_, *args, **kwargs)
+
+        def fn(x):
+            return (x * 2 + 1).sum()
+
+        with (
+            patch.object(
+                torch._dynamo.config,
+                "debug_inductor_config_override",
+                "0:triton.cudagraph_skip_dynamic_graphs=False",
+            ),
+            patch.object(compile_fx_mod, "compile_fx", tracking_compile_fx),
+        ):
+            compiled_fn = torch.compile(fn)
+            x = torch.randn(10, device=device, requires_grad=True)
+            result = compiled_fn(x)
+            result.backward()
+
+        # config_patches should be passed directly to compile_fx (not ambient
+        # patching), which then wraps inner_compile to cover backward.
+        self.assertTrue(len(config_patches_received) > 0)
+        self.assertIn(
+            {"triton.cudagraph_skip_dynamic_graphs": False},
+            config_patches_received,
+        )
+        self.assertIsNotNone(x.grad)
 
 
 instantiate_device_type_tests(
