@@ -392,7 +392,6 @@ class PallasTestsMixin:
                 expected = fn(x, y)
                 self.assertEqual(result, expected)
 
-    @skip_if_tpu
     def test_different_shapes(self):
         """Test with different tensor shapes."""
         if self.DEVICE == "cuda":
@@ -950,7 +949,6 @@ class PallasTestsMixin:
                 expected = fn(a, b)
                 self.assertEqual(result, expected)
 
-    @skip_if_tpu
     def test_sign(self):
         """Test sign operation."""
 
@@ -1374,7 +1372,6 @@ class PallasTestsMixin:
         expected = fn(a, b)
         self.assertEqual(result, expected)
 
-    @skip_if_tpu
     def test_warpgroup_size_2d_128x128(self):
         """Test 2D tensor with 128x128 and tiling-exercising sizes."""
 
@@ -1569,7 +1566,6 @@ class PallasTestsMixin:
         self.assertEqual(result, expected)
 
     @skip_if_cuda
-    @skip_if_tpu
     def test_nanogpt(self):
         """Test a minimal NanoGPT-style transformer block.
 
