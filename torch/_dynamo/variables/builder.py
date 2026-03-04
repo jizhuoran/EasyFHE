@@ -3950,6 +3950,7 @@ def _automatic_dynamic(
         tensor_source=source,
         shape_env_to_source_to_symbol_cache=shape_env_to_source_to_symbol_cache,
         shape_ids=getattr(e, "_dynamo_shape_ids", None),
+        unbacked_bounds=getattr(e, "_dynamo_unbacked_bounds", None),
     )
 
 

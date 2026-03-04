@@ -2238,6 +2238,8 @@ class StatelessSymbolicContext(SymbolicContext, Generic[_P1, _T1]):
     view_base_context: SymbolicContext | None = None
     # Maps dimension index to shape_id.
     shape_ids: dict[int, str | None] | None = None
+    # Maps dimension index to (min, max) bounds for unbacked dimensions.
+    unbacked_bounds: dict[int, tuple[int | None, int | None]] | None = None
     # TODO: add storage offset and stride symbolic_context
 
     def __post_init__(self) -> None:
@@ -5265,6 +5267,8 @@ class ShapeEnv:
             # If so, we allocate a fresh symbol but add a runtime equality check
             # via torch._check against the existing symbols with the same shape_id.
             shape_id = None
+            unbacked_min = None
+            unbacked_max = None
             if (
                 isinstance(symbolic_context, StatelessSymbolicContext)
                 and symbolic_context.shape_ids is not None
@@ -5274,9 +5278,29 @@ class ShapeEnv:
                 if isinstance(source, TensorPropertySource) and source.idx is not None:
                     shape_id = symbolic_context.shape_ids.get(source.idx)
 
+            # Check for unbacked bounds
+            if (
+                isinstance(symbolic_context, StatelessSymbolicContext)
+                and symbolic_context.unbacked_bounds is not None
+            ):
+                from torch._dynamo.source import TensorPropertySource
+
+                if isinstance(source, TensorPropertySource) and source.idx is not None:
+                    bounds = symbolic_context.unbacked_bounds.get(source.idx)
+                    if bounds is not None:
+                        unbacked_min, unbacked_max = bounds
+
             # Always allocate a fresh unbacked symbol
             out = self.create_unbacked_symint(source).node.expr
             self._constrain_range_for_size(out)
+
+            # Apply min/max bounds via torch._check if specified
+            if unbacked_min is not None or unbacked_max is not None:
+                out_symint = self.create_symintnode(out, hint=None)
+                if unbacked_min is not None:
+                    torch._check(out_symint >= unbacked_min)
+                if unbacked_max is not None:
+                    torch._check(out_symint <= unbacked_max)
 
             # Add runtime equality check for shape_id if applicable
             if shape_id is not None:
