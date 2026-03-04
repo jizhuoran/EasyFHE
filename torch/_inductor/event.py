@@ -15,26 +15,15 @@ Attributes:
 from __future__ import annotations
 
 import dataclasses
-import functools
 import itertools
 
 from torch._inductor.codegen.wrapper import IndentedBuffer, WrapperLine
 from torch._inductor.stream_constants import (
-    DEFAULT_STREAM,
     DEFAULT_STREAM_IDX,
     ENTRANCE_EVENT,
     EVENT_NAME_TEMPLATE,
-    STREAM_NAME_TEMPLATE,
 )
-
-
-@functools.lru_cache
-def get_stream_name(stream_idx: int) -> str:
-    """Generate CUDA Stream name from stream index number."""
-    if stream_idx == 0:
-        return DEFAULT_STREAM
-    else:
-        return STREAM_NAME_TEMPLATE.format(stream_idx=stream_idx)
+from torch._inductor.stream_utils import get_stream_name
 
 
 @dataclasses.dataclass(eq=False)
