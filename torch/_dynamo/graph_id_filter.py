@@ -223,12 +223,17 @@ class GraphConfigRouter(_GraphRouterBase[dict[str, Any]]):
     The router parses a configuration string with rules in the format:
         "filter1:config1;filter2:config2;..."
 
-    Rules are evaluated in order, and the first matching rule wins.
+    All matching rules are aggregated: configs from all matching rules are merged
+    into a single dict. Conflicting keys (same key, different value) raise an error.
     Config format is "key=value" or "key1=value1,key2=value2" for multiple settings.
 
     Examples:
         "0-5:triton.cudagraph_skip_dynamic_graphs=False"
         ">10:triton.cudagraphs=False,triton.cudagraph_trees=False"
+
+        With "0:a=1;>=0:b=2", graph 0 gets {"a": 1, "b": 2} (both rules match).
+        With "0:a=1;>=0:a=2", graph 0 raises an error (conflicting values for "a").
+        With "0:a=1;>=0:a=1", graph 0 gets {"a": 1} (same value is not a conflict).
     """
 
     def __init__(self, config_str: str) -> None:
@@ -250,6 +255,20 @@ class GraphConfigRouter(_GraphRouterBase[dict[str, Any]]):
             return int(value_str)
         except ValueError:
             return value_str
+
+    def _match_rules(self, graph_id: int) -> dict[str, Any] | None:
+        """Aggregate configs from all matching rules. Conflicts raise an error."""
+        result: dict[str, Any] = {}
+        for f, value in self._rules:
+            if graph_id in f:
+                for k, v in value.items():
+                    if k in result and result[k] != v:
+                        raise ValueError(
+                            f"Conflicting config override for graph {graph_id}: "
+                            f"key '{k}' has value {result[k]!r} and {v!r}"
+                        )
+                    result[k] = v
+        return result if result else None
 
     def _parse_value_str(self, value_str: str) -> dict[str, Any] | None:
         """Parse a config string like 'key1=val1,key2=val2' into a dict."""
