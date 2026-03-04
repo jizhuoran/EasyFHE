@@ -7090,7 +7090,7 @@ def addcmul(self, tensor1, tensor2, *, value=1):
         dtype.is_floating_point
         and not torch.version.hip
         and device is not None
-        and device.type == "cuda"
+        and device.type in ["cuda", "xpu"]
     )
 
     def inner_fn(idx):
@@ -7165,7 +7165,7 @@ def addcdiv(self, tensor1, tensor2, *, value=1):
         dtype.is_floating_point
         and not torch.version.hip
         and device is not None
-        and device.type == "cuda"
+        and device.type in ["cuda", "xpu"]
     )
 
     def inner_fn(idx):
