@@ -107,24 +107,3 @@ jobs:
 
       - name: Upload usage metrics
         uses: pytorch/test-infra/.github/actions/upload-claude-usage@main
-
-      - name: Upload logs to S3
-        if: always()
-        continue-on-error: true
-        run: |
-          ISSUE_NUM="${{ steps.issue.outputs.number }}"
-          S3_KEY="review-logs/${ISSUE_NUM}.log"
-          if [ -f /tmp/triage_hooks.log ]; then
-            COMBINED=/tmp/combined_triage.log
-            # Download existing log if present, then append new content
-            if aws s3 cp "s3://gha-artifacts/${S3_KEY}" "$COMBINED" 2>/dev/null; then
-              echo "" >> "$COMBINED"
-              cat /tmp/triage_hooks.log >> "$COMBINED"
-            else
-              cp /tmp/triage_hooks.log "$COMBINED"
-            fi
-            aws s3 cp "$COMBINED" "s3://gha-artifacts/${S3_KEY}"
-            echo "Uploaded logs to s3://gha-artifacts/${S3_KEY}"
-          else
-            echo "No logs to upload"
-          fi
