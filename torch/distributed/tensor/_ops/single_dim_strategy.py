@@ -281,6 +281,25 @@ class _PreparedSingleDimStrategy:
             op_schema.op, op_schema.args_meta, op_schema.kwargs_meta
         )
 
+        # Validate strategy length against the op schema. The schema is the
+        # ground truth for num_outputs; combined with num_inputs (which counts
+        # all tensor args + kwargs), it gives the expected strategy length.
+        # A mismatch means the strategy is missing kwargs placements or has
+        # extra entries.
+        if len(strategies_with_placeholders) > 0:
+            schema_num_outputs = sum(
+                1 for r in op_schema.op._schema.returns if "Tensor" in str(r.type)
+            )
+            expected_len = schema_num_outputs + num_inputs
+            actual_len = len(strategies_with_placeholders[0])
+            if actual_len != expected_len:
+                raise AssertionError(
+                    f"Strategy length {actual_len} != expected {expected_len} "
+                    f"(schema_outputs={schema_num_outputs} + inputs={num_inputs}) "
+                    f"for {op_schema.op}. Strategies must include placements "
+                    f"for all outputs, args, and tensor kwargs."
+                )
+
         # Compute num_outputs from strategy structure or output_tensor_meta
         if len(strategies_with_placeholders) > 0:
             num_outputs = len(strategies_with_placeholders[0]) - num_inputs

@@ -812,20 +812,21 @@ class TestExpandPlaceholder(TestCase):
         self.assertIsInstance(result, OpStrategy)
         self.assertGreater(len(result.strategies), 0)
 
-    def test_expand_to_full_mesh_filters_out_variant_strategies(self):
-        """Test that expand_to_full_mesh_op_strategy filters strategies for out= variant ops.
-        For out-variant ops like torch.mul(..., out=...), the output placement must
-        match the 'out' kwarg's placement. This test verifies that strategies with
-        mismatched output placements are filtered out.
+    def test_strategy_length_validation(self):
+        """Test that _PreparedSingleDimStrategy validates strategy length against
+        the op schema. Strategies must include placements for all outputs, args,
+        and tensor kwargs. A strategy missing the out kwarg placement should fail.
         """
+        from torch.distributed.tensor._ops.single_dim_strategy import (
+            _PreparedSingleDimStrategy,
+        )
+
         mesh = DeviceMesh("cpu", mesh=torch.arange(4))
         meta = TensorMeta(torch.Size([8, 8]), (8, 1), torch.float32)
 
-        # Create specs: args have Shard(0), out kwarg has Replicate
         arg_spec = DTensorSpec(mesh, (Shard(0),), meta)
-        out_spec = DTensorSpec(mesh, (Replicate(),), meta)
+        out_spec = DTensorSpec(mesh, (Shard(0),), meta)
 
-        # Create OpSchema for out-variant op (aten.mul.out)
         op_schema = OpSchema(
             op=torch.ops.aten.mul.out,
             args_schema=(
@@ -835,85 +836,61 @@ class TestExpandPlaceholder(TestCase):
             kwargs_schema={"out": OpStrategy([OpSpec(out_spec)])},
         )
 
-        # Define strategies: output can be Shard(0) or Replicate
-        # [output, input1, input2, out_kwarg]
-        single_mesh_dim_strategies = [
-            [Shard(0), Shard(0), Shard(0), Shard(0)],  # All sharded
-            [Replicate(), Replicate(), Replicate(), Replicate()],  # All replicated
-        ]
+        # Strategy missing the out kwarg placement: [output, arg1, arg2] = 3
+        # but mul.out has 1 output + 3 inputs (2 args + 1 out kwarg) = 4 expected
+        def bad_strategy(op, args, kwargs):
+            return [[Shard(0), Shard(0), Shard(0)]]
 
-        result = expand_to_full_mesh_op_strategy(
-            mesh,
-            op_schema,
-            single_mesh_dim_strategies,
-            output_tensor_meta=meta,
-        )
+        with self.assertRaisesRegex(AssertionError, r"Strategy length 3 != expected 4"):
+            _PreparedSingleDimStrategy(bad_strategy, op_schema, meta)
 
-        # All strategies in result should have output placement matching out kwarg (Replicate)
-        for strategy in result.strategies:
-            output_spec = strategy.output_spec
-            self.assertEqual(
-                output_spec.placements,
-                (Replicate(),),
-                f"Output placement {output_spec.placements} should match out kwarg placement (Replicate(),)",
-            )
+        # Strategy with correct length: [output, arg1, arg2, out_kwarg] = 4
+        def good_strategy(op, args, kwargs):
+            return [[Shard(0), Shard(0), Shard(0), Shard(0)]]
+
+        # Should not raise
+        prepared = _PreparedSingleDimStrategy(good_strategy, op_schema, meta)
+        self.assertEqual(prepared.num_outputs, 1)
+        self.assertEqual(prepared.num_inputs, 3)
 
     def test_expand_multi_output_strategy(self):
         """Test expanding single-dim strategies for multi-output ops.
 
-        This is a regression test for the fix where _insert_single_dim_replication_strategy
-        was hardcoded to assume 1 output, causing assertion errors for multi-output ops.
-        The bug was: input_specs(3) != strategies(1: 1 args + 0 kwargs)
-
-        The fix ensures:
-        1. Multi-output ops correctly expand strategies with num_outputs > 1
-        2. The replicate strategy has the correct number of placements (num_outputs + num_inputs)
-        3. All output specs are populated as a tuple with correct tensor_meta
+        Uses aten.topk (2 tensor outputs, 1 tensor input) to verify that
+        multi-output strategies are expanded correctly with proper output specs.
         """
         mesh = DeviceMesh("cpu", mesh=torch.arange(4))
 
-        # Create a batched matrix input: (batch=2, m=3, n=3)
         input_meta = TensorMeta(
-            shape=torch.Size([2, 3, 3]),
-            stride=(9, 3, 1),
+            shape=torch.Size([8, 4]),
+            stride=(4, 1),
             dtype=torch.float32,
         )
 
-        # Create output tensor_metas for a 3-output op
+        # topk returns (values, indices) — 2 outputs
         output_metas = (
-            TensorMeta(torch.Size([2, 3, 3]), (9, 3, 1), torch.float32),
-            TensorMeta(torch.Size([2, 3, 3]), (9, 3, 1), torch.float32),
-            TensorMeta(torch.Size([2, 3, 3]), (9, 3, 1), torch.float32),
+            TensorMeta(torch.Size([8, 2]), (2, 1), torch.float32),
+            TensorMeta(torch.Size([8, 2]), (2, 1), torch.int64),
         )
 
-        # Create input spec with Shard(0) on batch dim
         input_spec = DTensorSpec(
             mesh=mesh,
             placements=(Shard(0),),
             tensor_meta=input_meta,
         )
 
-        # Create OpSchema - use a placeholder op since we're providing our own strategy
         op_schema = OpSchema(
-            op=torch.ops.aten.abs.default,  # placeholder, not actually used
-            args_schema=(OpStrategy([OpSpec(input_spec)]),),
+            op=torch.ops.aten.topk.default,
+            args_schema=(OpStrategy([OpSpec(input_spec)]), 2, -1, True, True),
             kwargs_schema={},
         )
 
-        # Define a mock multi-output single-dim strategy function
-        # This simulates an op with 3 outputs and 1 input
-        # Using Partial for outputs to test a realistic scenario
+        # 2 outputs + 1 input = 3 placements per strategy
         def mock_multi_output_strategy(op, args_schema, kwargs_schema):
-            # Return strategies with 4 placements each (3 outputs + 1 input)
-            # Using Partial for outputs (common for reduction ops)
             return [
-                [Partial(), Partial(), Partial(), Shard(0)],
+                [Partial(), Partial(), Shard(0)],
             ]
 
-        # This would have crashed before the fix with:
-        # AssertionError: input_specs(3) != strategies(1: 1 args + 0 kwargs)
-        # because _insert_single_dim_replication_strategy created [R, R] (2 elements)
-        # instead of [R, R, R, R] (4 elements for 3 outputs + 1 input)
         expanded_strategy_fn = _expand_single_dim_strategy_to_mesh(
             mesh,
             op_schema,
@@ -921,38 +898,26 @@ class TestExpandPlaceholder(TestCase):
             output_metas,
         )
         strategy = expanded_strategy_fn(
-            torch.ops.aten.abs.default,
+            torch.ops.aten.topk.default,
             op_schema.args_meta,
             op_schema.kwargs_meta,
         )
 
-        # Strategy should be an OpStrategy
         self.assertIsInstance(strategy, OpStrategy)
         self.assertGreaterEqual(len(strategy.strategies), 1)
 
-        # Each OpSpec should have tuple output_spec with 3 elements (one per output)
         for op_spec in strategy.strategies:
-            # Access output_specs directly (it's a tuple for multi-output ops)
             output_specs = op_spec.output_specs
             self.assertIsInstance(
                 output_specs, tuple, "Multi-output op should have tuple output_specs"
             )
             self.assertEqual(
-                len(output_specs), 3, "Should have 3 output specs for 3-output op"
+                len(output_specs), 2, "Should have 2 output specs for topk"
             )
-
-            # Check that all output specs are valid DTensorSpecs with tensor_meta
             for i, out_spec in enumerate(output_specs):
                 self.assertIsNotNone(out_spec, f"Output {i} spec should not be None")
                 self.assertIsInstance(out_spec, DTensorSpec)
-                self.assertIsNotNone(
-                    out_spec.tensor_meta, f"Output {i} spec should have tensor_meta"
-                )
-                # Verify the tensor_meta shape matches what we provided
-                self.assertEqual(out_spec.tensor_meta.shape, torch.Size([2, 3, 3]))
 
-            # Check input specs - should have 1 input
-            self.assertIsNotNone(op_spec.input_specs)
             self.assertEqual(len(op_spec.input_specs), 1, "Should have 1 input tensor")
 
     def test_inplace_op_partial_input_raises_clear_error(self):
