@@ -48,6 +48,10 @@ def bundle_triton_into_fx_graph_cache_default() -> bool | None:
     )
 
 
+def autotune_at_compile_time_default() -> bool | None:
+    return get_tristate_env("TORCHINDUCTOR_AUTOTUNE_AT_COMPILE_TIME")
+
+
 def static_cuda_launcher_default() -> bool:
     STATIC_CUDA_LAUNCHER_VERSION = 2
 
@@ -1617,7 +1621,7 @@ class triton:
 
     # Tune the generated Triton kernels at compile time instead of first time they run
     # Setting to None means uninitialized
-    autotune_at_compile_time: bool | None = None
+    autotune_at_compile_time: bool | None = autotune_at_compile_time_default()
 
     # We use random tensors for autotune by default. Setting this as true will let us
     # use inputs from sample inputs to autotune user defined triton kernels.
