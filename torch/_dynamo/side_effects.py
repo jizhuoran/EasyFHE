@@ -355,6 +355,15 @@ class SideEffects:
 
     def load_cell(self, cellvar: VariableTracker) -> VariableTracker:
         assert isinstance(cellvar, variables.CellVariable)
+        # Track cell source during subgraph tracing so that mutations to the
+        # cell (e.g. nonlocal counter = 3) are detected by the reuse mechanism.
+        output_graph = self.output_graph_weakref()
+        if output_graph:
+            cell_source = getattr(cellvar, "source", None)
+            if cell_source is not None:
+                output_graph.current_tx.output.current_tracer.traced_sources.add(
+                    cell_source
+                )
         if self.has_pending_mutation_of_attr(cellvar, "cell_contents"):
             return self.load_attr(cellvar, "cell_contents", check=False)
         if cellvar.pre_existing_contents:

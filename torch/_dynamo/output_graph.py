@@ -3307,6 +3307,10 @@ class SubgraphTracer(fx.Tracer):
         # was first detected and allowed (not raised).  None means no side
         # effect; non-None means one occurred.
         self.side_effect_stack: traceback.StackSummary | None = None
+        # All sources accessed via VariableBuilder (and cell loads) during
+        # this subtracer's trace. Used by invoke_subgraph reuse to collect
+        # guards and detect mutations on captured variables.
+        self.traced_sources: OrderedSet[Source] = OrderedSet()
 
         # True if this tracer is currently tracing (reconstructing) into a Python generator
         self.is_reconstructing_generator = False
