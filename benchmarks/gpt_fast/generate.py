@@ -2,6 +2,7 @@ import dataclasses
 import itertools
 import platform
 import time
+from typing import Optional
 
 import torchao
 from common import Experiment, register_experiment
@@ -29,12 +30,12 @@ compiled = False
 class GPTModelConfig:
     name: str
     module: type
-    mode: str | None
+    mode: Optional[str]
     quantizer: type
     token_per_sec: float
     memory_bandwidth: float
     compilation_time: float
-    batch_size: int | None = None
+    batch_size: Optional[int] = None
 
 
 def device_sync(device):
@@ -61,7 +62,7 @@ def multinomial_sample_one_no_sync(
     return torch.argmax(probs_sort / q, dim=-1, keepdim=True).to(dtype=torch.int)
 
 
-def logits_to_probs(logits, temperature: float = 1.0, top_k: int | None = None):
+def logits_to_probs(logits, temperature: float = 1.0, top_k: Optional[int] = None):
     logits = logits / max(temperature, 1e-5)
 
     if top_k is not None:
@@ -72,7 +73,7 @@ def logits_to_probs(logits, temperature: float = 1.0, top_k: int | None = None):
     return probs
 
 
-def sample(logits, temperature: float = 1.0, top_k: int | None = None):
+def sample(logits, temperature: float = 1.0, top_k: Optional[int] = None):
     probs = logits_to_probs(logits[0, -1], temperature, top_k)
     idx_next = multinomial_sample_one_no_sync(probs)
     return idx_next, probs

@@ -8,7 +8,7 @@ import platform
 import timeit
 from collections import namedtuple
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Optional
 
 import benchmark_utils
 
@@ -598,7 +598,7 @@ class BenchmarkRunner:
             @dataclass
             class BenchmarkInfo:
                 name: str
-                mode: str | None
+                mode: Optional[str]
                 dtype: str
                 extra_info: dict[str, Any]
 
@@ -614,7 +614,7 @@ class BenchmarkRunner:
                 name: str
                 unit: str
                 benchmark_values: list[float]
-                target_value: float | None
+                target_value: Optional[float]
 
             @dataclass
             class BenchmarkRecord:

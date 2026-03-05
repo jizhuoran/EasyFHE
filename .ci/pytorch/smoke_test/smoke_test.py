@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import Optional
 
 import torch
 import torch._dynamo
@@ -204,7 +205,7 @@ def test_cuda_gds_errors_captured() -> None:
         )
 
 
-def find_pypi_package_version(package: str) -> str | None:
+def find_pypi_package_version(package: str) -> Optional[str]:
     from importlib import metadata
 
     dists = metadata.distributions()
