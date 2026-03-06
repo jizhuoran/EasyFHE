@@ -1536,22 +1536,32 @@ def _compile(
                 payload_fn=lambda: dis.Bytecode(code).dis(),
             )
         out_code = None
+        from .graph_id_filter import get_dynamo_config_override_for_compile_id
+
+        dynamo_config_override = get_dynamo_config_override_for_compile_id(
+            compile_id, config.debug_dynamo_config_override
+        )
         try:
-            dynamo_output = compile_frame(
-                code,
-                globals,
-                locals,
-                builtins,
-                closure,
-                compiler_fn,
-                one_graph,
-                restart_reasons,
-                export=export,
-                export_constraints=export_constraints,
-                frame_state=frame_state,
-                distributed_state=distributed_state,
-                package=package,
-            )
+            with (
+                config.patch(dynamo_config_override)
+                if dynamo_config_override
+                else contextlib.nullcontext()
+            ):
+                dynamo_output = compile_frame(
+                    code,
+                    globals,
+                    locals,
+                    builtins,
+                    closure,
+                    compiler_fn,
+                    one_graph,
+                    restart_reasons,
+                    export=export,
+                    export_constraints=export_constraints,
+                    frame_state=frame_state,
+                    distributed_state=distributed_state,
+                    package=package,
+                )
         except exc.SkipFrame as e:
             if one_graph:
                 log.debug("No graph captured with export/fullgraph=True")
