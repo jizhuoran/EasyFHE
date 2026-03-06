@@ -97,7 +97,6 @@ jobs:
         uses: pytorch/pytorch/.github/actions/checkout-pytorch@main
         with:
           no-sudo: true
-          submodules: false
 
       - name: Setup Windows
         uses: ./.github/actions/setup-win
