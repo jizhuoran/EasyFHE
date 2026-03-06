@@ -18304,18 +18304,14 @@ op_db: list[OpInfo] = [
     OpInfo('qr',
            op=torch.qr,
            dtypes=floating_and_complex_types(),
+           dtypesIfMPS=floating_types(),
            sample_inputs_func=sample_inputs_linalg_qr_geqrf,
            supports_forward_ad=True,
            supports_fwgrad_bwgrad=True,
            # In-place ops
            check_batched_gradgrad=False,
            decorators=[skipCUDAIfNoCusolver, skipCPUIfNoLapack],
-           skips=(
-               # MPS supports float32 only for linalg_qr (which torch.qr aliases)
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_dtypes', device_type='mps'),
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', device_type='mps',
-                            dtypes=(torch.complex64,)),
-           )),
+           ),
     UnaryUfuncInfo('rad2deg',
                    ref=np.degrees,
                    decorators=(precisionOverride({torch.bfloat16: 7e-1,
@@ -19278,6 +19274,7 @@ op_db: list[OpInfo] = [
                *args, **kwargs
            ),
            dtypes=floating_and_complex_types(),
+           dtypesIfMPS=floating_types(),
            # Runs very slowly on slow gradcheck - alternatively reduce input sizes
            gradcheck_fast_mode=True,
            supports_out=False,
@@ -19312,11 +19309,6 @@ op_db: list[OpInfo] = [
                # MPS matmul aborts with uint8 input
                DecorateInfo(unittest.skip("MPS driver aborts process on uint8 matmul"), 'TestCommon', 'test_dtypes',
                             device_type='mps'),
-               # svd_lowrank calls linalg_qr internally, MPS linalg_qr supports float32 only
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_noncontiguous_samples',
-                            device_type='mps', dtypes=(torch.complex64,)),
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_variant_consistency_eager',
-                            device_type='mps', dtypes=(torch.complex64,)),
            )),
     OpInfo('pca_lowrank',
            op=lambda *args, **kwargs: wrapper_set_seed(
@@ -19324,6 +19316,7 @@ op_db: list[OpInfo] = [
                *args, **kwargs
            ),
            dtypes=floating_and_complex_types(),
+           dtypesIfMPS=floating_types(),
            # Runs very slowly on slow gradcheck - alternatively reduce input sizes
            gradcheck_fast_mode=True,
            supports_out=False,
@@ -19361,12 +19354,6 @@ op_db: list[OpInfo] = [
                DecorateInfo(unittest.expectedFailure, 'TestSchemaCheckModeOpInfo', 'test_schema_correctness',
                             dtypes=(torch.complex64, torch.complex128)),
                DecorateInfo(unittest.skip('output is non-deterministic'), 'TestCommon', 'test_compare_cpu'),
-               # pca_lowrank calls linalg_qr internally, MPS linalg_qr supports float32 only
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_dtypes', device_type='mps'),
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_noncontiguous_samples',
-                            device_type='mps', dtypes=(torch.complex64,)),
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_variant_consistency_eager',
-                            device_type='mps', dtypes=(torch.complex64,)),
            )),
     BinaryUfuncInfo('polar',
                     dtypes=floating_types(),

@@ -1937,27 +1937,13 @@ op_db: list[OpInfo] = [
         aten_name="linalg_qr",
         op=torch.linalg.qr,
         dtypes=floating_and_complex_types(),
+        dtypesIfMPS=floating_types(),
         supports_forward_ad=True,
         supports_fwgrad_bwgrad=True,
         # In-place ops
         check_batched_gradgrad=False,
         sample_inputs_func=sample_inputs_linalg_qr_geqrf,
         decorators=[skipCUDAIfNoCusolver, skipCPUIfNoLapack],
-        skips=(
-            # MPS doesn't support complex types for linalg.qr yet
-            DecorateInfo(
-                unittest.expectedFailure,
-                "TestCommon",
-                "test_dtypes",
-                device_type="mps",
-            ),
-            DecorateInfo(
-                unittest.expectedFailure,
-                "TestCommon",
-                device_type="mps",
-                dtypes=(torch.complex64,),
-            ),
-        ),
     ),
     OpInfo(
         "linalg.slogdet",
