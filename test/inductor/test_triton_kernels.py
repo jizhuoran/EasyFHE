@@ -30,7 +30,6 @@ from torch.testing._internal import common_utils
 from torch.testing._internal.common_utils import parametrize, skipIfWindows, skipIfXpu
 from torch.testing._internal.inductor_utils import (
     get_func_call,
-    get_kernel_launch,
     GPU_TYPE,
     HAS_CUDA_AND_TRITON,
     HAS_GPU,
@@ -4922,8 +4921,11 @@ class TestUserKernelEpilogueFusion(torch._inductor.test_case.TestCase):
         torch._inductor.config.epilogue_fusion_user_defined_triton_kernel = True
 
     def check_code(self, code_str, num_kernels, num_allocs, num_deallocs):
+        from torch._inductor import config
+
+        kernel_launch = "call_" if config.cpp_wrapper else ".run("
         FileCheck().check(get_func_call()).check_count(
-            get_kernel_launch(),
+            kernel_launch,
             num_kernels,
             exactly=True,
         ).run(code_str)
@@ -4935,8 +4937,6 @@ class TestUserKernelEpilogueFusion(torch._inductor.test_case.TestCase):
 
         # skip the deallocation check when using cpp_wrapper; most deallocations happen
         # outside of our control via RAIIAtenTensorHandle
-        from torch._inductor import config
-
         if num_deallocs is not None and not config.cpp_wrapper:
             FileCheck().check(get_func_call()).check_count(
                 "del", num_deallocs, exactly=True
