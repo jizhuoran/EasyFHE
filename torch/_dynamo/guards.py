@@ -5199,10 +5199,14 @@ def install_guard(*guards: Guard, skip: int = 0) -> None:
     """
     from torch._guards import TracingContext
 
+    guards_context = TracingContext.get().guards_context
+    if guards_context.skip_install:
+        return
+
     collect_debug_stack = guards_log.isEnabledFor(
         logging.DEBUG
     ) or verbose_guards_log.isEnabledFor(logging.DEBUG)
-    add = TracingContext.get().guards_context.dynamo_guards.add
+    add = guards_context.dynamo_guards.add
     for guard in guards:
         assert isinstance(guard, Guard)
         if is_from_skip_guard_source(guard.originating_source):
