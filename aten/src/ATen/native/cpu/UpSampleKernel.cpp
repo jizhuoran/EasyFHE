@@ -150,8 +150,23 @@ inline scalar_t interpolate_non_separable(char* src, char** data, const int64_t*
   return InterpolateNonSeparable<n, scalar_t, opmath_t, index_t, interp_size>::eval(src, data, strides, i);
 }
 
+// ---- Separable interpolation ----
+//
+// Used by: bilinear/bicubic with antialias=True, and bilinear/bicubic uint8
+// (as fallback when AVX isn't supported).
+// Processes one spatial dimension at a time. The outer loop over dimensions
+// is in upsample_separable_Nd_kernel_impl.
+//
+// Call chain:
+//   upsample_separable_Nd_kernel_impl  (loops over dims)
+//     -> upsample_separable_1d
+//       -> basic_loop_separable_1d_horizontal  (for last spatial dim, i.e. W)
+//         -> interpolate_separable_1d
+//       -> basic_loop_separable_1d_vertical  (for other spatial dims, e.g. H, D)
+//         -> interpolate_separable_1d_zero_strides
+
 template <typename scalar_t, typename index_t>
-inline scalar_t interpolate_aa_single_dim_zero_strides(
+inline scalar_t interpolate_separable_1d_zero_strides(
     char* src,
     char** data,
     const index_t ids_stride) {
@@ -175,7 +190,7 @@ inline scalar_t interpolate_aa_single_dim_zero_strides(
 }
 
 template <typename scalar_t, typename index_t>
-inline scalar_t interpolate_aa_single_dim(
+inline scalar_t interpolate_separable_1d(
     char* src,
     char** data,
     const int64_t* strides,
@@ -290,7 +305,7 @@ inline void basic_loop_non_separable(char** data, const int64_t* strides, int64_
 }
 
 template <typename scalar_t>
-inline void basic_loop_aa_vertical(
+inline void basic_loop_separable_1d_vertical(
     char** data,
     const int64_t* strides,
     int64_t n,
@@ -302,13 +317,13 @@ inline void basic_loop_aa_vertical(
 
   for (const auto i : c10::irange(n)) {
     *(scalar_t*)&dst[i * strides[0]] =
-        interpolate_aa_single_dim_zero_strides<scalar_t, int64_t>(
+        interpolate_separable_1d_zero_strides<scalar_t, int64_t>(
             src + i * strides[1], &data[2], ids_stride);
   }
 }
 
 template <>
-inline void basic_loop_aa_vertical<uint8_t>(
+inline void basic_loop_separable_1d_vertical<uint8_t>(
     char** data,
     const int64_t* strides,
     int64_t n,
@@ -346,7 +361,7 @@ inline void basic_loop_aa_vertical<uint8_t>(
 }
 
 template <typename scalar_t>
-inline void basic_loop_aa_horizontal(
+inline void basic_loop_separable_1d_horizontal(
     char** data,
     const int64_t* strides,
     int64_t n,
@@ -359,20 +374,20 @@ inline void basic_loop_aa_horizontal(
   if (strides[1] == 0) {
     for (const auto i : c10::irange(n)) {
       *(scalar_t*)&dst[i * strides[0]] =
-          interpolate_aa_single_dim<scalar_t, int64_t>(
+          interpolate_separable_1d<scalar_t, int64_t>(
               src, &data[2], &strides[2], i, ids_stride);
     }
   } else {
     for (const auto i : c10::irange(n)) {
       *(scalar_t*)&dst[i * strides[0]] =
-          interpolate_aa_single_dim<scalar_t, int64_t>(
+          interpolate_separable_1d<scalar_t, int64_t>(
               src + i * strides[1], &data[2], &strides[2], i, ids_stride);
     }
   }
 }
 
 template <>
-inline void basic_loop_aa_horizontal<uint8_t>(
+inline void basic_loop_separable_1d_horizontal<uint8_t>(
     char** data,
     const int64_t* strides,
     int64_t n,
@@ -448,7 +463,7 @@ void upsample_non_separable(at::TensorIterator& iter)
 }
 
 template <typename scalar_t, typename scale_type, nearest_idx_fn_t nearest_idx_fn>
-void cpu_upsample_nearest_channels_last(
+void upsample_nearest_channels_last(
     const Tensor& output_,
     const Tensor& input_,
     const scale_type& scales) {
@@ -553,7 +568,7 @@ inline VecType<scalar_t> interpolate(const scalar_t* t, accscalar_t w, Args... a
 }
 
 template <typename scalar_t, typename scale_type>
-void cpu_upsample_linear_channels_last(
+void upsample_linear_channels_last(
     const Tensor& output_,
     const Tensor& input_,
     bool align_corners,
@@ -939,7 +954,7 @@ struct HelperInterpBase {
   weights as double, but then convert them to int16 via some conversion logic
   detailed below. This allows us to compute all interpolation operation (sum of
   multiplications) as ints instead of floats. The result is converted back into
-  uint8 in basic_loop_aa_horizontal<uint8_t> (and vertical)
+  uint8 in basic_loop_separable_1d_horizontal<uint8_t> (and vertical)
 
   In essence the idea is to avoid a multiplication between a float (the
   weight) and an int (the pixel value) and instead run a multiplication between
@@ -1485,28 +1500,8 @@ void upsample_non_separable_Nd_kernel_impl(
   }
 }
 
-template <typename scalar_t, bool is_horizontal>
-void cpu_upsample_generic_aa(at::TensorIterator& iter, unsigned int weights_precision) {
-
-  auto loop = [&](char** data, const int64_t* strides, int64_t n) {
-    if constexpr (is_horizontal) {
-
-      // Strides are : X 0 | 8 8 8 0 8  (Channels first)
-      // Strides are : X X | 0 0 0 0 0  (Channels last)
-      basic_loop_aa_horizontal<scalar_t>(data, strides, n, weights_precision);
-    } else {
-      // Strides are : X Y | 0 0 0 0 0 (Channels first)
-      // Strides are : X X | 0 0 0 0 0 (Channels last)
-      // upsampling data between contiguous dimensions (aka vertical resampling)
-      basic_loop_aa_vertical<scalar_t>(data, strides, n, weights_precision);
-    }
-  };
-
-  iter.for_each(loop);
-}
-
 template <int out_ndims, typename scale_type, class F, bool is_horizontal>
-void _separable_upsample_non_separable_Nd_kernel_impl_single_dim(
+void upsample_separable_1d(
     const Tensor& output,
     const Tensor& input,
     int interp_dim,
@@ -1567,8 +1562,19 @@ void _separable_upsample_non_separable_Nd_kernel_impl_single_dim(
   auto iter = config.build();
 
   AT_DISPATCH_FLOATING_TYPES_AND(
-      at::ScalarType::Byte, iter.dtype(), "upsample_generic_Nd_aa", [&] {
-        cpu_upsample_generic_aa<scalar_t, is_horizontal>(iter, weights_precision);
+      at::ScalarType::Byte, iter.dtype(), "upsample_separable_1d", [&] {
+        auto loop = [&](char** data, const int64_t* strides, int64_t n) {
+          if constexpr (is_horizontal) {
+            // Strides are : X 0 | 8 8 8 0 8  (Channels first)
+            // Strides are : X X | 0 0 0 0 0  (Channels last)
+            basic_loop_separable_1d_horizontal<scalar_t>(data, strides, n, weights_precision);
+          } else {
+            // Strides are : X Y | 0 0 0 0 0 (Channels first)
+            // Strides are : X X | 0 0 0 0 0 (Channels last)
+            basic_loop_separable_1d_vertical<scalar_t>(data, strides, n, weights_precision);
+          }
+        };
+        iter.for_each(loop);
       });
 }
 
@@ -1577,7 +1583,7 @@ void _separable_upsample_non_separable_Nd_kernel_impl_single_dim(
 // (dtype == uint8 and mode in ("bilinear", "bicubic")): this is used as
 // fallback in these settings when AVX isn't supported.
 template <int out_ndims, typename scale_type, class F>
-void separable_upsample_non_separable_Nd_kernel_impl(
+void upsample_separable_Nd_kernel_impl(
     const Tensor& output,
     const Tensor& input,
     bool align_corners,
@@ -1596,29 +1602,29 @@ void separable_upsample_non_separable_Nd_kernel_impl(
   at::Tensor temp_output, temp_input = input;
 
   int interp_dim = 0;
-  // Precompute the number of single dim resize method invocations
+  // Precompute the number of 1d resize ops
   // to avoid copying temporary buffer to output
-  int num_single_dim_ops = 0;
+  int num_1d_ops = 0;
   for (const auto i : c10::irange(out_ndims)) {
     interp_dim = 2 + out_ndims - 1 - i;
     if (output_shape[interp_dim] != input_shape[interp_dim]) {
-      num_single_dim_ops += 1;
+      num_1d_ops += 1;
     }
   }
 
-  // upsampling data within the contiguous dimension (aka horizontal resampling)
+  // Horizontal resampling (last spatial dim, i.e. W)
   interp_dim = 2 + out_ndims - 1;
   if (output_shape[interp_dim] != input_shape[interp_dim]) {
 
-    num_single_dim_ops -= 1;
-    if (num_single_dim_ops > 0) {
+    num_1d_ops -= 1;
+    if (num_1d_ops > 0) {
       temp_oshape[interp_dim] = output_shape[interp_dim];
       temp_output = at::empty(temp_oshape, input.options());
     } else {
       temp_output = output;
     }
 
-    _separable_upsample_non_separable_Nd_kernel_impl_single_dim<
+    upsample_separable_1d<
         out_ndims,
         scale_t,
         F,
@@ -1627,20 +1633,20 @@ void separable_upsample_non_separable_Nd_kernel_impl(
     temp_input = temp_output;
   }
 
-  // upsampling data between contiguous dimensions (aka vertical resampling)
+  // Vertical resampling (remaining spatial dims, e.g. H, D)
   for (const auto i : c10::irange(1, out_ndims)) {
     interp_dim = 2 + out_ndims - 1 - i;
     if (output_shape[interp_dim] != input_shape[interp_dim]) {
 
-      num_single_dim_ops -= 1;
-      if (num_single_dim_ops > 0) {
+      num_1d_ops -= 1;
+      if (num_1d_ops > 0) {
         temp_oshape[interp_dim] = output_shape[interp_dim];
         temp_output = at::empty(temp_oshape, input.options());
       } else {
         temp_output = output;
       }
 
-      _separable_upsample_non_separable_Nd_kernel_impl_single_dim<
+      upsample_separable_1d<
           out_ndims,
           scale_t,
           F,
@@ -1667,22 +1673,24 @@ void _upsample_nearest_exact1d_kernel_impl(
     output, input, false, {scales_w});
 }
 
-int _use_vectorized_kernel_cond_2d(
+int _use_channels_last_kernel_2d(
     const Tensor& output,
     const Tensor& input) {
-      // This condition is used to know whether we should dispatch to a vectorized
-      // kernel, or to the more general upsample_non_separable_Nd_kernel_impl(). For now,
-      // the vectorized kernels are only optimized for channels_last and when C >= 4
-      // (shape = NCHW). For a very wide range of use-cases (typically image or mask
-      // resizing where we have C < 4), using upsample_non_separable_Nd_kernel_impl() is
-      // actually faster. On top of that, benchmarks showed that this also depends on
-      // the *output* size (output_H + output_W), for both upsampling and
-      // downsampling. The current 128 threshold was determined through benchmarks.
+      // This condition is used to know whether we should dispatch to a
+      // channels-last-optimized kernel, or to the more general
+      // upsample_non_separable_Nd_kernel_impl(). For now, the channels-last kernels
+      // are only optimized for channels_last and when C >= 4 (shape = NCHW).
+      // For a very wide range of use-cases (typically image or mask resizing
+      // where we have C < 4), using upsample_non_separable_Nd_kernel_impl() is
+      // actually faster. On top of that, benchmarks showed that this also
+      // depends on the *output* size (output_H + output_W), for both
+      // upsampling and downsampling. The current 128 threshold was determined
+      // through benchmarks.
       return ((input.is_contiguous(at::MemoryFormat::ChannelsLast)) && (input.size(1) > 3)) || ((output.size(-2) + output.size(-1)) <= 128);
 }
 
-int _use_vectorized_kernel_cond_3d(
-    // Similar to _use_vectorized_kernel_cond_2d() but for 3d resampling (e.g. videos)
+int _use_channels_last_kernel_3d(
+    // Similar to _use_channels_last_kernel_2d() but for 3d resampling (e.g. videos)
     // Note that unlike the 2d case, this is not subject to small output size
     // overhead - hence the absence of the 128 threshold in the condition.
     const Tensor& output,
@@ -1696,10 +1704,10 @@ void upsample_nearest2d_kernel_impl(
     const Tensor& input,
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
-  if (_use_vectorized_kernel_cond_2d(output, input)) {
+  if (_use_channels_last_kernel_2d(output, input)) {
     AT_DISPATCH_FLOATING_TYPES_AND3(kByte, kBFloat16, kHalf,
         input.scalar_type(), "upsample_nearest2d_channels_last", [&] {
-      cpu_upsample_nearest_channels_last<scalar_t, scale_t, nearest_idx>(output, input, {scales_h, scales_w});
+      upsample_nearest_channels_last<scalar_t, scale_t, nearest_idx>(output, input, {scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpNearest>(
@@ -1712,9 +1720,9 @@ void _upsample_nearest_exact2d_kernel_impl(
     const Tensor& input,
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
-  if (_use_vectorized_kernel_cond_2d(output, input)) {
+  if (_use_channels_last_kernel_2d(output, input)) {
     AT_DISPATCH_FLOATING_TYPES_AND3(kByte, kBFloat16, kHalf, input.scalar_type(), "upsample_nearest2d_channels_last", [&] {
-      cpu_upsample_nearest_channels_last<scalar_t, scale_t, nearest_exact_idx>(output, input, {scales_h, scales_w});
+      upsample_nearest_channels_last<scalar_t, scale_t, nearest_exact_idx>(output, input, {scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpNearestExact>(
@@ -1728,10 +1736,10 @@ void upsample_nearest3d_kernel_impl(
     std::optional<double> scales_d,
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
-  if (_use_vectorized_kernel_cond_3d(output, input)) {
+  if (_use_channels_last_kernel_3d(output, input)) {
     AT_DISPATCH_FLOATING_TYPES_AND3(kByte, kBFloat16, kHalf,
         input.scalar_type(), "upsample_nearest3d_channels_last", [&] {
-      cpu_upsample_nearest_channels_last<scalar_t, scale_t, nearest_idx>(output, input, {scales_d, scales_h, scales_w});
+      upsample_nearest_channels_last<scalar_t, scale_t, nearest_idx>(output, input, {scales_d, scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<3, scale_t, HelperInterpNearest>(
@@ -1745,9 +1753,9 @@ void _upsample_nearest_exact3d_kernel_impl(
     std::optional<double> scales_d,
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
-  if (_use_vectorized_kernel_cond_3d(output, input)) {
+  if (_use_channels_last_kernel_3d(output, input)) {
     AT_DISPATCH_FLOATING_TYPES_AND3(kByte, kBFloat16, kHalf, input.scalar_type(), "upsample_nearest3d_channels_last", [&] {
-      cpu_upsample_nearest_channels_last<scalar_t, scale_t, nearest_exact_idx>(output, input, {scales_d, scales_h, scales_w});
+      upsample_nearest_channels_last<scalar_t, scale_t, nearest_exact_idx>(output, input, {scales_d, scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<3, scale_t, HelperInterpNearestExact>(
@@ -1772,14 +1780,14 @@ void upsample_bilinear2d_kernel_impl_float(
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
 
-  // See note above about _use_vectorized_kernel_cond_2d(output, input). The extra cond is present
+  // See note above about _use_channels_last_kernel_2d(output, input). The extra cond is present
   // because benchmarks showed that with only 1 thread, images (C == 3) were
-  // slightly faster with the vectorized kernel than with the generic one.
+  // slightly faster with the channels-last kernel than with the generic one.
   // That's not the case for masks though (C == 1), which strongly benefit from
   // using the generic kernel.
-  if ((_use_vectorized_kernel_cond_2d(output, input)) || (at::get_num_threads() == 1 && input.size(1) == 3)) {
+  if ((_use_channels_last_kernel_2d(output, input)) || (at::get_num_threads() == 1 && input.size(1) == 3)) {
     AT_DISPATCH_FLOATING_TYPES_AND2(kBFloat16, kHalf, input.scalar_type(), "upsample_bilinear2d_channels_last", [&] {
-      cpu_upsample_linear_channels_last<scalar_t, scale_t>(output, input, align_corners, {scales_h, scales_w});
+      upsample_linear_channels_last<scalar_t, scale_t>(output, input, align_corners, {scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpLinear>(
@@ -1810,7 +1818,7 @@ void upsample_bilinear2d_kernel_impl(
           /*antialias=*/false);
       }
     #endif  // CPU_CAPABILITY_AVX2
-    return separable_upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpLinear>(
+    return upsample_separable_Nd_kernel_impl<2, scale_t, HelperInterpLinear>(
       output, input, align_corners, {scales_h, scales_w},
       /*antialias=*/false);
   }
@@ -1841,7 +1849,7 @@ void upsample_bilinear2d_aa_kernel_impl(
       }
     #endif  // CPU_CAPABILITY_AVX2
   }
-  return separable_upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpLinear>(
+  return upsample_separable_Nd_kernel_impl<2, scale_t, HelperInterpLinear>(
     output, input, align_corners, {scales_h, scales_w},
     /*antialias=*/true);
 }
@@ -1853,9 +1861,9 @@ void upsample_trilinear3d_kernel_impl(
     std::optional<double> scales_d,
     std::optional<double> scales_h,
     std::optional<double> scales_w) {
-  if ((_use_vectorized_kernel_cond_3d(output, input))) {
+  if ((_use_channels_last_kernel_3d(output, input))) {
     AT_DISPATCH_FLOATING_TYPES_AND2(kBFloat16, kHalf, input.scalar_type(), "upsample_trilinear3d_channels_last", [&] {
-      cpu_upsample_linear_channels_last<scalar_t, scale_t>(output, input, align_corners, {scales_d, scales_h, scales_w});
+      upsample_linear_channels_last<scalar_t, scale_t>(output, input, align_corners, {scales_d, scales_h, scales_w});
     });
   } else {
     upsample_non_separable_Nd_kernel_impl<3, scale_t, HelperInterpLinear>(
@@ -1886,7 +1894,7 @@ void upsample_bicubic2d_kernel_impl(
           /*antialias=*/false);
       }
     #endif  // CPU_CAPABILITY_AVX2
-    return separable_upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpCubic>(
+    return upsample_separable_Nd_kernel_impl<2, scale_t, HelperInterpCubic>(
       output, input, align_corners, {scales_h, scales_w},
       /*antialias=*/false);
   }
@@ -1918,7 +1926,7 @@ void upsample_bicubic2d_aa_kernel_impl(
       }
     #endif  // CPU_CAPABILITY_AVX2
   }
-  return separable_upsample_non_separable_Nd_kernel_impl<2, scale_t, HelperInterpCubic>(
+  return upsample_separable_Nd_kernel_impl<2, scale_t, HelperInterpCubic>(
     output, input, align_corners, {scales_h, scales_w},
     /*antialias=*/true);
 }
@@ -1927,7 +1935,7 @@ template <
     typename scalar_t,
     typename scale_type,
     class F>
-void cpu_upsample_genNd_backward_aa(
+void upsample_separable_Nd_backward_aa(
     const Tensor& grad_input_,
     const Tensor& grad_output_,
     bool align_corners,
@@ -2045,7 +2053,7 @@ void upsample_bilinear2d_aa_backward_kernel_impl(
     std::optional<double> scales_w) {
   AT_DISPATCH_FLOATING_TYPES(
       grad_output.scalar_type(), "upsample_bilinear2d_aa_backward_cpu", [&] {
-        cpu_upsample_genNd_backward_aa<scalar_t, scale_t, HelperInterpLinear>(
+        upsample_separable_Nd_backward_aa<scalar_t, scale_t, HelperInterpLinear>(
             grad_input, grad_output, align_corners, {scales_h, scales_w});
       });
 }
@@ -2058,7 +2066,7 @@ void upsample_bicubic2d_aa_backward_kernel_impl(
     std::optional<double> scales_w) {
   AT_DISPATCH_FLOATING_TYPES(
       grad_output.scalar_type(), "upsample_bicubic2d_aa_backward_cpu", [&] {
-        cpu_upsample_genNd_backward_aa<scalar_t, scale_t, HelperInterpCubic>(
+        upsample_separable_Nd_backward_aa<scalar_t, scale_t, HelperInterpCubic>(
             grad_input, grad_output, align_corners, {scales_h, scales_w});
       });
 }
