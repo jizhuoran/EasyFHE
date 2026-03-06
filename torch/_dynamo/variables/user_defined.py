@@ -1409,6 +1409,22 @@ class UserDefinedObjectVariable(UserDefinedVariable):
                 else:
                     args = [desc_var, self, value]  # __set__(desc, self, value)
                 return func_var.call_function(tx, args, {})
+
+            # Handle Python property descriptors whose __set__ is a C slot
+            # wrapper (not a Python function), which the above check misses.
+            # Mirrors the property getter handling in var_getattr.
+            descriptor = inspect.getattr_static(type(self.value), name_str, None)
+            if isinstance(descriptor, property) and descriptor.fset is not None:
+                fset_source = None
+                if self.cls_source:
+                    fset_source = AttrSource(
+                        self.get_source_by_walking_mro(tx, name_str), "fset"
+                    )
+                fset_var = VariableTracker.build(
+                    tx, descriptor.fset, source=fset_source
+                )
+                return fset_var.call_function(tx, [self, value], {})
+
             # NOTE: else we assume the descriptor (if any) has a
             # side-effect-free `__set__` as far as Dynamo tracing is concerned.
 
