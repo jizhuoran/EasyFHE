@@ -1851,6 +1851,7 @@ test_attention_microbenchmark() {
 }
 
 test_openreg() {
+  git submodule update --init --depth 1 third_party/googletest
   python test/run_test.py --openreg --verbose
   assert_git_not_dirty
 }
