@@ -285,13 +285,12 @@ class SubclassCreationMeta:
             has_symbolic = any(placeholders)
 
             if has_symbolic:
-                start = curr_start_idx
                 end = start_idx + sum(placeholders)
-                it_args = iter(all_args[start:end])
+                it_args = iter(all_args[start_idx:end])
                 it_placeholders = iter(placeholders)
                 return pytree.tree_map_only(
                     lambda _: next(it_placeholders), lambda _: next(it_args), outer
-                ), start + len(placeholders)
+                ), end
             else:
                 return outer, start_idx
 
