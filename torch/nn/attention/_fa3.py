@@ -408,6 +408,7 @@ def _fa3_flash_attention_forward_impl(
     alibi_slopes: torch.Tensor | None = None,
     out: torch.Tensor | None = None,
     block_table: torch.Tensor | None = None,
+    compute_auxiliary: bool = True,
 ):
     error = _fa3_forward_support_error(
         query,
@@ -443,9 +444,14 @@ def _fa3_flash_attention_forward_impl(
         v_descale,
         block_table,
     )
-    rng_state = torch.zeros((2,), dtype=torch.uint64, device=query.device)
-    philox_offset = torch.zeros((), dtype=torch.uint64, device=query.device)
-    debug_mask = torch.empty(0, dtype=query.dtype, device=query.device)
+    if compute_auxiliary:
+        rng_state = torch.zeros((2,), dtype=torch.uint64, device=query.device)
+        philox_offset = torch.zeros((), dtype=torch.uint64, device=query.device)
+        debug_mask = torch.empty(0, dtype=query.dtype, device=query.device)
+    else:
+        rng_state = None
+        philox_offset = None
+        debug_mask = None
     return out, lse, rng_state, philox_offset, debug_mask
 
 
@@ -490,6 +496,7 @@ def _fa3_flash_attention_forward_no_dropout_inplace_impl(
         alibi_slopes=alibi_slopes,
         out=out,
         block_table=block_table,
+        compute_auxiliary=False,
     )
     return lse
 
