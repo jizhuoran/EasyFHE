@@ -760,8 +760,12 @@ struct ExpandableSegment {
         &desc,
         1));
 #else
+    // NOLINTNEXTLINE(performance-no-int-to-ptr)
     C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemSetAccess_(
-        ptr_ + begin * segment_size_, (end - begin) * segment_size_, &desc, 1));
+        reinterpret_cast<CUdeviceptr>(ptr() + begin * segment_size_),
+        (end - begin) * segment_size_,
+        &desc,
+        1));
 #endif
   }
 
@@ -769,14 +773,15 @@ struct ExpandableSegment {
     for (auto i : c10::irange(begin, end)) {
 #ifdef USE_ROCM
       C10_CUDA_CHECK(hipMemMap(
-          reinterpret_cast<char*>(ptr_) + i * segment_size_,
+          ptr() + i * segment_size_,
           segment_size_,
           0,
           handles_.at(i).value().handle,
           0ULL));
 #else
+      // NOLINTNEXTLINE(performance-no-int-to-ptr)
       C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemMap_(
-          ptr_ + i * segment_size_,
+          reinterpret_cast<CUdeviceptr>(ptr() + i * segment_size_),
           segment_size_,
           0,
           // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
@@ -811,10 +816,12 @@ struct ExpandableSegment {
       handles_.at(i) = std::nullopt;
 #ifdef USE_ROCM
       C10_CUDA_CHECK(hipMemUnmap(
-          reinterpret_cast<char*>(ptr_) + segment_size_ * i, segment_size_));
+          ptr() + segment_size_ * i, segment_size_));
 #else
+      // NOLINTNEXTLINE(performance-no-int-to-ptr)
       C10_CUDA_DRIVER_CHECK(DriverAPI::get()->cuMemUnmap_(
-          ptr_ + segment_size_ * i, segment_size_));
+          reinterpret_cast<CUdeviceptr>(ptr() + segment_size_ * i),
+          segment_size_));
 #endif
       if (h.shareable_handle) {
         close(std::get<int>(*h.shareable_handle));
