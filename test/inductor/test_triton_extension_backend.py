@@ -5,7 +5,7 @@ import string
 import sys
 import unittest
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch._dynamo
@@ -193,9 +193,9 @@ class TritonExtensionBackendTests(BaseExtensionBackendTests):
             @staticmethod
             def create(
                 is_subgraph: bool,
-                subgraph_name: Optional[str],
-                parent_wrapper: Optional[PythonWrapperCodegen],
-                partition_signatures: Optional[ir.GraphPartitionSignature] = None,
+                subgraph_name: str | None,
+                parent_wrapper: PythonWrapperCodegen | None,
+                partition_signatures: ir.GraphPartitionSignature | None = None,
             ):
                 if is_subgraph:
                     if subgraph_name is None:
