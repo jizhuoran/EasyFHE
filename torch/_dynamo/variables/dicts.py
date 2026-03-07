@@ -466,9 +466,8 @@ class ConstDictVariable(VariableTracker):
                     f"Debug representation of the key is {arg.debug_repr()!r}"
                 )
             except Exception:
-                error_message = VariableTracker.build(
-                    tx, f"Dict key lookup failed for {str(arg)}"
-                )
+                error_message = f"Dict key lookup failed for {str(arg)}"
+            error_message = VariableTracker.build(tx, error_message)
             raise_observed_exception(KeyError, tx, args=[error_message])
         return self.items[key]
 
@@ -898,9 +897,10 @@ class ConstDictVariable(VariableTracker):
                 new_dict_vt.items.update(args[0].items)  # type: ignore[attr-defined]
                 return new_dict_vt
             else:
-                err_msg = (
+                err_msg = VariableTracker.build(
+                    tx,
                     f"unsupported operand type(s) for |: '{self.python_type().__name__}'"
-                    f"and '{other.python_type().__name__}'"
+                    f"and '{other.python_type().__name__}'",
                 )
                 raise_observed_exception(TypeError, tx, args=[err_msg])
         elif name == "__ior__":
