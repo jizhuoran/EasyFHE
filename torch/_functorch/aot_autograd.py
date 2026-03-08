@@ -123,6 +123,7 @@ from ._aot_autograd.schemas import (  # noqa: F401
     InputAliasInfo,
     JointWithDescriptors,
     MutationType,
+    OpaqueMeta,
     OutputAliasInfo,
     OutputType,
     SerializableAOTDispatchCompiler,

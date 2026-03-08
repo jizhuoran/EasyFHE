@@ -13,6 +13,7 @@ from typing_extensions import ParamSpec
 
 import torch
 import torch.utils._pytree as pytree
+from torch._opaque_base import OpaqueBase
 from torch.compiler import is_compiling
 from torch.utils._contextlib import _DecoratorContextManager
 from torch.utils._python_dispatch import is_traceable_wrapper_subclass
@@ -1031,9 +1032,16 @@ def _apply_func_to_inner_tensors_of_same_dim(
     attrs, _ctx = t.__tensor_flatten__()
     assert isinstance(t, torch.Tensor)
     for attr in attrs:
-        inner = getattr(t, attr)
-        if inner.dim() == t.dim():
-            func(inner, *args, **kwargs)
+        match getattr(t, attr):
+            case torch.Tensor() as inner:
+                if inner.dim() == t.dim():
+                    func(inner, *args, **kwargs)
+            case OpaqueBase():
+                pass
+            case unexpected:
+                raise AssertionError(
+                    f"expected Tensor or OpaqueBase, got {type(unexpected)}"
+                )
 
 
 @dataclass(frozen=True, slots=True)
