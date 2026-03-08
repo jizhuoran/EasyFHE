@@ -2931,6 +2931,11 @@ class PythonWrapperCodegen(CodeGen):
         if config.triton.unique_user_kernel_names:
             # We replace the original_name with the unique name.
             kernel_src = kernel_src.replace(f"def {original_name}(", f"def {name}(")
+        if config.cpp_wrapper:
+            # With cpp_wrapper + autotune_at_compile_time=False, the source is
+            # further embedded in a C++ raw string inside a Python r"""...""" wrapper.
+            # So we need to add backslash here.
+            kernel_src = kernel_src.replace('"""', '\\"\\"\\"')
         kernel_src = kernel_src.replace("'''", "\\'\\'\\'")
         compile_wrapper.splice(kernel_src)
 
