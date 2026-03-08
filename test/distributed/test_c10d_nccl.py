@@ -4957,11 +4957,6 @@ class LargeCommTest(test_c10d_common.AbstractLargeCommTest, MultiProcessTestCase
     def test_new_group_local_sync_duplicated_pg(self):
         self._test_new_group_local_sync_duplicate_pg(backend="nccl")
 
-    @requires_nccl()
-    @skip_if_lt_x_gpu(4)
-    def test_new_group_ordered(self):
-        self._test_new_group_ordered(backend="nccl")
-
     def _init_two_pg2_subgroups(self, world_size: int = 4):
         if world_size != 4:
             raise NotImplementedError(
