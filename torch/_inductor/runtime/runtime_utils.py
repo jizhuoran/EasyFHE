@@ -366,6 +366,10 @@ def _pallas_tile_size(
     If *dim* is already <= alignment the full dimension is used (no tiling
     on this axis).
     """
+    if dim == 0:
+        # Tile size >= 1 avoids division by zero in JAX's _pad_to_block_dimension
+        return alignment if is_tpu else 1
+
     if is_tpu:
         # On TPU, Mosaic requires block dimensions to perfectly align to hardware
         # registers (128 for inner, 8 for outer). We MUST pad the block spec up to
