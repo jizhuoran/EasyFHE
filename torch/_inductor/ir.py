@@ -7553,6 +7553,11 @@ class UserDefinedTritonKernel(ExternKernel):
 
     @override
     def get_read_writes(self) -> dependencies.ReadWrites:
+        # Limit the new `get_read_writes` to `epilogue_fusion_user_defined_triton_kernel`
+        # to avoid potential regression to existing models.
+        if not config.epilogue_fusion_user_defined_triton_kernel:
+            return super().get_read_writes()
+
         # maps formal arg name to actual arg name
         read_renames = {
             formal_arg_dep.name: self.kernel_args[formal_arg_dep.name].get_name()
