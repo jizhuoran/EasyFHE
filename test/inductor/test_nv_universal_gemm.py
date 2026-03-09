@@ -12,11 +12,16 @@ from torch._inductor.template_heuristics.nv_universal_gemm import (
     NVUniversalGemmHeuristics,
 )
 from torch._inductor.test_case import run_tests, TestCase
-from torch._inductor.utils import ensure_nv_universal_gemm_available, run_and_get_code
+from torch._inductor.utils import (
+    ensure_nv_universal_gemm_available,
+    ensure_nvmatmul_heuristics_available,
+    run_and_get_code,
+)
 from torch.testing._internal.common_utils import (
     instantiate_parametrized_tests,
     parametrize,
 )
+from torch.utils._ordered_set import OrderedSet
 
 
 # TODO(nikhilap): Remove Blackwell restriction once cutlass_api includes H100 kernels
@@ -559,6 +564,45 @@ class TestNVUniversalGemmHeuristics(TestCase):
                 # Test count > available kernels (should return all 3)
                 result = heuristics.filter_kernels(kernels, inputs, count=10)
                 self.assertEqual(len(result), 3)
+
+
+@unittest.skipIf(
+    not (
+        ensure_nv_universal_gemm_available()
+        and is_datacenter_blackwell_arch()
+        and ensure_nvmatmul_heuristics_available()
+    ),
+    "Requires cutlass_api, nvMatmulHeuristics, and Blackwell GPU",
+)
+class TestNVUniversalGemmHeuristicsIntegration(TestCase):
+    """Integration tests for nvMatmulHeuristics with real library calls."""
+
+    def test_fp4_heuristic_configs(self):
+        """Test that nvMatmulHeuristics returns configs for FP4 blockscaled GEMM."""
+        heuristics = NVUniversalGemmHeuristics()
+
+        m, n, k = 256, 512, 1024
+        configs = heuristics._get_heuristic_configs(
+            m,
+            n,
+            k,
+            dtype_a=torch.float4_e2m1fn_x2,
+            layout_a="row",
+            layout_b="col",
+            count=5,
+            valid_configs=OrderedSet(),
+            accumulator_type=torch.float32,
+            dtype_b=torch.float4_e2m1fn_x2,
+            out_dtype=torch.float32,
+        )
+
+        self.assertGreater(
+            len(configs), 0, "nvMatmulHeuristics returned no FP4 configs"
+        )
+        for cfg in configs:
+            self.assertGreater(cfg.tile_m, 0)
+            self.assertGreater(cfg.tile_n, 0)
+            self.assertGreater(cfg.estimated_runtime, 0)
 
 
 @unittest.skipIf(
