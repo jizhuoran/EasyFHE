@@ -1952,6 +1952,7 @@ class ConstructorMoverPass:
                     del cpu_indeg[user]
                 elif (
                     self.allow_inputs
+                    and self.is_on_target_device(user)
                     and self.all_inputs_are_cpu_scalar_or_on_target_device(user)
                 ):
                     # this node takes only cpu scalar tensors or gpu tensors as inputs
