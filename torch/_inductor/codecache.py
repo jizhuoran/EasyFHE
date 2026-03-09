@@ -3094,18 +3094,6 @@ class CppPythonBindingsCodeCache(CppCodeCache):
         #include <cstdlib>
         #include <cerrno>
 
-        #ifndef _MSC_VER
-        #if __cplusplus < 202002L
-        // C++20 (earlier) code
-        // https://en.cppreference.com/w/cpp/language/attributes/likely
-        #define likely(x)       __builtin_expect(!!(x), 1)
-        #define unlikely(x)     __builtin_expect(!!(x), 0)
-        #endif
-        #else
-        #define likely(x) (x)
-        #define unlikely(x) (x)
-        #endif
-
         // This is defined in guards.cpp so we don't need to import PyTorch headers that are slooow.
         // We manually link it below to workaround issues with fbcode build.
         static void* (*_torchinductor_pyobject_tensor_data_ptr)(PyObject* obj);
@@ -3116,19 +3104,19 @@ class CppPythonBindingsCodeCache(CppCodeCache):
         }}
         template <> inline int64_t parse_arg<int64_t>(PyObject* args, size_t n) {{
             auto result = PyLong_AsSsize_t(PyTuple_GET_ITEM(args, n));
-            if(unlikely(result == -1 && PyErr_Occurred()))
+            if(result == -1 && PyErr_Occurred()) [[unlikely]]
                 throw std::runtime_error("expected int arg");
             return result;
         }}
         template <> inline uintptr_t parse_arg<uintptr_t>(PyObject* args, size_t n) {{
             auto result = PyLong_AsVoidPtr(PyTuple_GET_ITEM(args, n));
-            if(unlikely(result == reinterpret_cast<void*>(-1) && PyErr_Occurred()))
+            if(result == reinterpret_cast<void*>(-1) && PyErr_Occurred()) [[unlikely]]
                 throw std::runtime_error("expected int arg");
             return reinterpret_cast<uintptr_t>(result);
         }}
         template <> inline float parse_arg<float>(PyObject* args, size_t n) {{
             auto result = PyFloat_AsDouble(PyTuple_GET_ITEM(args, n));
-            if(unlikely(result == -1.0 && PyErr_Occurred()))
+            if(result == -1.0 && PyErr_Occurred()) [[unlikely]]
                 throw std::runtime_error("expected float arg");
             return static_cast<float>(result);
         }}
@@ -3137,9 +3125,9 @@ class CppPythonBindingsCodeCache(CppCodeCache):
 
         static PyObject* {entry_func}_py(PyObject* self, PyObject* args) {{
             try {{
-                if(unlikely(!PyTuple_CheckExact(args)))
+                if(!PyTuple_CheckExact(args)) [[unlikely]]
                     throw std::runtime_error("tuple args required");
-                if(unlikely(PyTuple_GET_SIZE(args) != {arg_len}))
+                if(PyTuple_GET_SIZE(args) != {arg_len}) [[unlikely]]
                     throw std::runtime_error("requires {arg_len} args");
                 {call_entry_func}
             }} catch(std::exception const& e) {{
