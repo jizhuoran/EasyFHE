@@ -148,9 +148,9 @@ class GraphModule(torch.nn.Module):
         l_other_ = L_other_
         l_alpha_ = L_alpha_
 
-        mul: "f32[4]" = torch.mul(l_other_, l_alpha_);  l_other_ = l_alpha_ = None
-        add_: "f32[4]" = l_x_.add_(mul);  l_x_ = mul = None
-        return (add_,)
+        fma_default: "f32[4]" = torch.ops.prims.fma.default(l_other_, l_alpha_, l_x_);  l_other_ = l_alpha_ = None
+        copy_: "f32[4]" = l_x_.copy_(fma_default);  l_x_ = fma_default = None
+        return (copy_,)
 """,
         )
 
@@ -571,7 +571,11 @@ class GraphModule(torch.nn.Module):
     @skipIfCrossRef
     @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
     def test_addcmul_tensor_value_numerics(self):
-        """Compiled addcmul_ with tensor value matches eager."""
+        """Compiled addcmul_ with tensor value matches eager.
+
+        Not bitwise on CPU: inductor may decompose fma to mul+add rather
+        than emitting a hardware fma instruction.
+        """
 
         def fn(x, tensor1, tensor2, value):
             return x.addcmul_(tensor1, tensor2, value=value)
@@ -600,7 +604,7 @@ class GraphModule(torch.nn.Module):
 
         expected = fn(x.clone(), tensor1, tensor2, value)
         actual = torch.compile(fn, fullgraph=True)(x.clone(), tensor1, tensor2, value)
-        self.assertEqual(expected, actual)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
 
     @skipIfCrossRef
     @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
@@ -616,7 +620,25 @@ class GraphModule(torch.nn.Module):
 
         expected = fn(x.clone(), other, alpha)
         actual = torch.compile(fn, fullgraph=True)(x.clone(), other, alpha)
-        self.assertEqual(expected, actual)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
+
+    @skipIfCrossRef
+    @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
+    def test_add_tensor_alpha_fma_matches_aten_cuda(self):
+        """On CUDA, ATen add_ with tensor alpha extracts the scalar and uses
+        fma(other, alpha, self). Our decomposition must use fma to match."""
+        torch.manual_seed(42)
+        x = torch.randn(64, 64, device="cuda")
+        other = torch.randn(64, 64, device="cuda")
+        alpha = torch.tensor(2.3, device="cuda")
+
+        def fn(x, other, alpha):
+            return x.add_(other, alpha=alpha)
+
+        expected = fn(x.clone(), other, alpha)
+        actual = torch.compile(fn, fullgraph=True)(x.clone(), other, alpha)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
 
     @skipIfCrossRef
     @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
@@ -638,40 +660,51 @@ class GraphModule(torch.nn.Module):
 
         expected = fn(x.clone(), t1)
         actual = torch.compile(fn, fullgraph=True)(x.clone(), t1)
-        self.assertEqual(expected, actual)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
 
     @skipIfCrossRef
     @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
     @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
-    def test_addcmul_scalar_value_neq_1_cuda(self):
-        """On CUDA, ATen addcmul_ with value!=1 uses mul+add (no fma).
-
-        The polyfill self.add_(t1 * t2, alpha=value) matches this. Inductor's
-        add lowering then applies fma for the alpha multiply, but since ATen
-        also fuses this with nvcc --fmad, both paths agree.
-        """
+    def test_addcmul_scalar_value_cuda(self):
+        """Compiled addcmul_ with scalar value matches eager on CUDA."""
         torch.manual_seed(42)
         x = torch.randn(64, 64, device="cuda")
         t1 = torch.randn(64, 64, device="cuda")
         t2 = torch.randn(64, 64, device="cuda")
-        value = torch.tensor(0.5)
+
+        def fn(x, t1, t2):
+            return x.addcmul_(t1, t2, value=0.5)
+
+        expected = fn(x.clone(), t1, t2)
+        actual = torch.compile(fn, fullgraph=True)(x.clone(), t1, t2)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
+
+    @skipIfCrossRef
+    @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
+    def test_addcmul_tensor_value_cuda(self):
+        """Compiled addcmul_ with tensor value matches eager on CUDA."""
+        torch.manual_seed(42)
+        x = torch.randn(64, 64, device="cuda")
+        t1 = torch.randn(64, 64, device="cuda")
+        t2 = torch.randn(64, 64, device="cuda")
+        value = torch.tensor(0.5, device="cuda")
 
         def fn(x, t1, t2, value):
             return x.addcmul_(t1, t2, value=value)
 
         expected = fn(x.clone(), t1, t2, value)
         actual = torch.compile(fn, fullgraph=True)(x.clone(), t1, t2, value)
-        self.assertEqual(expected, actual)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
 
     @skipIfCrossRef
     @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
     @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
     def test_addcdiv_scalar_value_cuda(self):
-        """On CUDA, ATen addcdiv_ computes self + value * (t1 / t2).
+        """Compiled addcdiv_ with scalar value matches eager on CUDA.
 
-        nvcc fuses the multiply-add into fma. The scalar alpha path through
-        add_(quotient, alpha=value) gets fma via inductor's lowering, matching
-        ATen's behavior.
+        Not bitwise: ATen inlines the division into fma(alpha, t1/t2, input)
+        which nvcc can optimize differently than separate div + fma kernels.
         """
         torch.manual_seed(42)
         x = torch.randn(64, 64, device="cuda")
@@ -684,6 +717,44 @@ class GraphModule(torch.nn.Module):
         expected = fn(x.clone(), t1, t2)
         actual = torch.compile(fn, fullgraph=True)(x.clone(), t1, t2)
         self.assertEqual(expected, actual)
+
+    @skipIfCrossRef
+    @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
+    def test_addcdiv_tensor_value_cuda(self):
+        """Compiled addcdiv_ with tensor value matches eager on CUDA.
+
+        Not bitwise: ATen inlines the division into fma(alpha, t1/t2, input)
+        which nvcc can optimize differently than separate div + fma kernels.
+        """
+        torch.manual_seed(42)
+        x = torch.randn(64, 64, device="cuda")
+        t1 = torch.randn(64, 64, device="cuda")
+        t2 = torch.randn(64, 64, device="cuda") + 0.1
+        value = torch.tensor(-0.01, device="cuda")
+
+        def fn(x, t1, t2, value):
+            return x.addcdiv_(t1, t2, value=value)
+
+        expected = fn(x.clone(), t1, t2, value)
+        actual = torch.compile(fn, fullgraph=True)(x.clone(), t1, t2, value)
+        self.assertEqual(expected, actual)
+
+    @skipIfCrossRef
+    @torch._dynamo.config.patch(enable_dynamo_decompositions=True)
+    @unittest.skipUnless(torch.cuda.is_available(), "requires CUDA")
+    def test_add_scalar_alpha_cuda(self):
+        """Compiled add_ with scalar alpha matches eager on CUDA."""
+        torch.manual_seed(42)
+        x = torch.randn(64, 64, device="cuda")
+        other = torch.randn(64, 64, device="cuda")
+
+        def fn(x, other):
+            return x.add_(other, alpha=2.3)
+
+        expected = fn(x.clone(), other)
+        actual = torch.compile(fn, fullgraph=True)(x.clone(), other)
+        self.assertEqual(expected, actual, atol=0, rtol=0)
 
 
 if __name__ == "__main__":

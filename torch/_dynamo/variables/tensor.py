@@ -1555,19 +1555,18 @@ class TensorVariable(VariableTracker):
         *,
         alpha: VariableTracker | None = None,
     ) -> VariableTracker | None:
-        # Decompose only for tensor alpha to avoid item() graph breaks.
-        # Scalar alpha passes through to ATen where the inductor lowering emits
-        # FMA. addcmul_ and addcdiv_ route through here via alpha=value so this
-        # is the single place that handles the scalar/tensor distinction.
+        # Tensor alpha: ATen would call .item() and fma internally.
+        # Use fma directly to avoid the item() graph break.
         if (
             alpha is not None
             and isinstance(alpha, TensorVariable)
             and config.enable_dynamo_decompositions
         ):
-            result = variables.TorchInGraphFunctionVariable(torch.mul).call_function(
-                tx, [other, alpha], {}
-            )
-            return self.call_method(tx, "add_", [result], {})
+            from torch._inductor import inductor_prims
+
+            fma_var = variables.TorchInGraphFunctionVariable(inductor_prims.fma)
+            result = fma_var.call_function(tx, [other, alpha, self], {})
+            return self.call_method(tx, "copy_", [result], {})
         return None
 
     def method_addcdiv_(
