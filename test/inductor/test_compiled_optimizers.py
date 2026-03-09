@@ -1103,12 +1103,32 @@ def _make_bitwise_test(optim_cls, **optim_kwargs):
     return test_fn
 
 
+_BITWISE_CAPTURABLE_OPTIMS = (
+    Adam,
+    AdamW,
+    Adadelta,
+    Adamax,
+    ASGD,
+    NAdam,
+    RAdam,
+    RMSprop,
+    Rprop,
+)
+# SGD doesn't support capturable but has no item() calls
+# so it compiles without graph breaks and can be tested bitwise.
+_BITWISE_NON_CAPTURABLE_OPTIMS = (SGD,)
 for optim_cls, name, kwargs, scheduler_cls in COMPILED_OPT_KWARG_DB:
     if (
-        optim_cls in (Adam, AdamW, Adadelta, Adamax, ASGD, NAdam, RAdam, RMSprop, Rprop)
-        and kwargs.get("capturable", False)
-        and kwargs.get("device") == GPU_TYPE
+        kwargs.get("device") == GPU_TYPE
         and "tensor_lr" not in name
+        and scheduler_cls is None
+        and (
+            (
+                optim_cls in _BITWISE_CAPTURABLE_OPTIMS
+                and kwargs.get("capturable", False)
+            )
+            or optim_cls in _BITWISE_NON_CAPTURABLE_OPTIMS
+        )
     ):
         optim_kwargs = {
             k: v for k, v in kwargs.items() if k not in ("device", "kernel_count")
