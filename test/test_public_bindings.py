@@ -366,6 +366,7 @@ class TestPublicBindings(TestCase):
             "torch._inductor.codegen.cpp_micro_gemm",
             "torch._inductor.codegen.cpp_template_kernel",
             "torch._inductor.kernel.vendored_templates.cutedsl.kernels.cutedsl_grouped_gemm",  # depends on cutlass
+            "torch._inductor.kernel.vendored_templates.cutedsl.dense_blockscaled_gemm_persistent",  # depends on cutlass
             "torch._inductor.runtime.triton_helpers",
             "torch.ao.pruning._experimental.data_sparsifier.lightning.callbacks.data_sparsity",
             "torch.backends._coreml.preprocess",
