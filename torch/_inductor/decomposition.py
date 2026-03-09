@@ -32,6 +32,7 @@ from torch._inductor.utils import pad_listlike
 from torch._prims_common import (
     elementwise_dtypes,
     ELEMENTWISE_TYPE_PROMOTION_KIND,
+    suggest_memory_format,
     type_to_dtype,
 )
 from torch._refs import native_layer_norm as decomp_native_layer_norm
@@ -136,6 +137,8 @@ decomps_to_exclude: list[torch._ops.OpOverload | torch._ops.OpOverloadPacket] = 
     aten.addcdiv_,
     aten._foreach_addcdiv.Scalar,
     aten._foreach_addcdiv_,
+    aten.lerp,
+    aten.lerp_,
 ]
 
 remove_decompositions(decompositions, decomps_to_exclude)
@@ -148,6 +151,38 @@ def register_decomposition(
         if op in decompositions:
             log.warning("duplicate decomp: %s", ops)
     return decomp.register_decomposition(ops, decompositions)
+
+
+@register_decomposition([aten.lerp.Scalar])
+def _lerp_scalar(start: torch.Tensor, end: torch.Tensor, weight: float) -> torch.Tensor:
+    # Decompose into sub + add(alpha=weight) so that the add lowering emits FMA,
+    # matching eager CUDA's dual-formula (see aten/src/ATen/native/Lerp.h).
+    # Convert end to start's memory format so the output preserves start's layout,
+    # matching eager TensorIterator behavior.
+    fmt = suggest_memory_format(start)
+    if fmt != torch.contiguous_format:
+        end = end.contiguous(memory_format=fmt)
+    diff = end - start
+    if weight >= 0.5 or weight <= -0.5:
+        return torch.add(end, diff, alpha=-(1.0 - weight))
+    return torch.add(start, diff, alpha=weight)
+
+
+@register_decomposition([aten.lerp.Tensor])
+def _lerp_tensor(
+    start: torch.Tensor, end: torch.Tensor, weight: torch.Tensor
+) -> torch.Tensor:
+    # Same dual-formula as foreach_lerp polyfill: decompose into sub + addcmul.
+    # Convert end to start's memory format so the output preserves start's layout.
+    fmt = suggest_memory_format(start)
+    if fmt != torch.contiguous_format:
+        end = end.contiguous(memory_format=fmt)
+    diff = end - start
+    mask = weight.abs() >= 0.5
+    neg_omw = -(1.0 - weight)
+    w = torch.where(mask, neg_omw, weight)
+    base = torch.where(mask, end, start)
+    return torch.addcmul(base, w, diff, value=1)
 
 
 @register_decomposition([aten.embedding_dense_backward])
