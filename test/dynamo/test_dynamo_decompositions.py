@@ -44,7 +44,7 @@ class GraphModule(torch.nn.Module):
         l_value_ = L_value_
 
         mul: "f32[4]" = l_tensor1_ * l_tensor2_;  l_tensor1_ = l_tensor2_ = None
-        mul_1: "f32[4]" = mul * l_value_;  mul = l_value_ = None
+        mul_1: "f32[4]" = torch.mul(mul, l_value_);  mul = l_value_ = None
         add_: "f32[4]" = l_x_.add_(mul_1);  l_x_ = mul_1 = None
         return (add_,)
 """,

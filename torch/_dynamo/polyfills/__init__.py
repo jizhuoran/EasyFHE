@@ -536,7 +536,7 @@ def foreach_pow_scalar(
 def addcmul_inplace(
     self, tensor1: torch.Tensor, tensor2: torch.Tensor, value: Any
 ) -> None:
-    return self.add_(tensor1 * tensor2 * value)
+    return self.add_(tensor1 * tensor2, alpha=value)
 
 
 def predicate(obj: object) -> bool:
