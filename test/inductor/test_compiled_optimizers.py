@@ -1106,7 +1106,6 @@ def _make_bitwise_test(optim_cls, **optim_kwargs):
 for optim_cls, name, kwargs, scheduler_cls in COMPILED_OPT_KWARG_DB:
     if (
         optim_cls in (Adam, AdamW, Adadelta, Adamax, ASGD, NAdam, RAdam, RMSprop, Rprop)
-        and kwargs.get("foreach", False)
         and kwargs.get("capturable", False)
         and kwargs.get("device") == GPU_TYPE
         and "tensor_lr" not in name
