@@ -99,11 +99,6 @@ def _fa3_register_kernels() -> Library:
         "_flash_attention_forward", _fa3_flash_attention_forward_impl_default, "CUDA"
     )
     lib.impl(
-        "_flash_attention_forward_no_dropout_inplace",
-        _fa3_flash_attention_forward_no_dropout_inplace_impl,
-        "CUDA",
-    )
-    lib.impl(
         "_scaled_dot_product_flash_attention",
         _fa3_scaled_dot_product_flash_attention_forward_impl_default,
         "CUDA",
@@ -447,51 +442,6 @@ def _fa3_flash_attention_forward_impl(
     philox_offset = torch.zeros((), dtype=torch.uint64, device=query.device)
     debug_mask = torch.empty(0, dtype=query.dtype, device=query.device)
     return out, lse, rng_state, philox_offset, debug_mask
-
-
-def _fa3_flash_attention_forward_no_dropout_inplace_impl(
-    out: torch.Tensor,
-    query: torch.Tensor,
-    key: torch.Tensor,
-    value: torch.Tensor,
-    cum_seq_q: torch.Tensor | None,
-    cum_seq_k: torch.Tensor | None,
-    max_q: int,
-    max_k: int,
-    dropout_p: float,
-    is_causal: bool,
-    return_debug_mask: bool,
-    *,
-    scale: float | None = None,
-    window_size_left: int = -1,
-    window_size_right: int = -1,
-    seqused_k: torch.Tensor | None = None,
-    alibi_slopes: torch.Tensor | None = None,
-    block_table: torch.Tensor | None = None,
-):
-    _, lse, _, _, _ = _fa3_flash_attention_forward_impl(
-        query,
-        key,
-        value,
-        cum_seq_q,
-        cum_seq_k,
-        max_q,
-        max_k,
-        dropout_p,
-        is_causal,
-        return_debug_mask,
-        None,
-        None,
-        None,
-        scale=scale,
-        window_size_left=window_size_left,
-        window_size_right=window_size_right,
-        seqused_k=seqused_k,
-        alibi_slopes=alibi_slopes,
-        out=out,
-        block_table=block_table,
-    )
-    return lse
 
 
 def _fa3_flash_attention_forward_impl_default(
