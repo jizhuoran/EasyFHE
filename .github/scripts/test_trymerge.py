@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # Tests implemented in this file are relying on GitHub GraphQL APIs
 # In order to avoid test flakiness, results of the queries
 # are cached in gql_mocks.json
@@ -8,14 +7,12 @@
 # GraphQL queries in trymerge.py, please make sure to delete `gql_mocks.json`
 # And re-run the test locally with ones PAT
 
-from __future__ import annotations
-
 import gzip
 import json
 import os
 import warnings
 from hashlib import sha256
-from typing import Any
+from typing import Any, Optional
 from unittest import main, mock, skip, TestCase
 from urllib.error import HTTPError
 
@@ -150,8 +147,8 @@ def mock_revert(
     pr: GitHubPR,
     *,
     dry_run: bool = False,
-    comment_id: int | None = None,
-    reason: str | None = None,
+    comment_id: Optional[int] = None,
+    reason: Optional[str] = None,
 ) -> None:
     pass
 

@@ -449,5 +449,5 @@ def standalone_compile(
 
 @dataclasses.dataclass
 class _CudagraphAnnotation:
-    fwd: bool | None
-    bwd: bool | None
+    fwd: Optional[bool]
+    bwd: Optional[bool]
