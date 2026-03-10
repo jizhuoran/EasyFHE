@@ -6016,6 +6016,12 @@ class Scheduler:
         if free_symbol_is_type(write.index, SymT.TMP):
             return False
 
+        # Non-injective scatter: range vars absent from write index mean
+        # multiple iterations hit the same location. Can't fuse the reader
+        # in or it will see partially-written state between iterations.
+        if not OrderedSet(write.var_names) <= write.index.free_symbols:
+            return False
+
         real_name = self.mutation_real_name[weak_dep.mutating_buf]
         relevant_reading_nodes = [node1]
         if isinstance(node1, ForeachKernelSchedulerNode):
