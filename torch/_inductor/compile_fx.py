@@ -2890,12 +2890,6 @@ def _compile_fx_main(
             with V.set_fake_mode(fake_mode), compiled_autograd._disable(), context():
                 return inference_compiler(unlifted_gm, example_inputs_)
 
-        orig_fake_mode = V.get_fake_mode()
-
-        def wrapped_run_pre_grad_passes(*args):
-            with V.set_fake_mode(orig_fake_mode):
-                return run_pre_grad_passes(*args)
-
         with (
             V.set_fake_mode(fake_mode),
             torch._guards.tracing(tracing_context),
@@ -2916,7 +2910,7 @@ def _compile_fx_main(
                     cudagraphs=compiler_config_extra.cudagraphs,
                     boxed_forward_device_index=compiler_config_extra.forward_device,
                     ignore_shape_env=ignore_shape_env,
-                    pre_grad_passes=wrapped_run_pre_grad_passes,
+                    pre_grad_passes=run_pre_grad_passes,
                 )(model_, example_inputs_)
             except ShortenTraceback as e:
                 # We will also shorten the traceback inside dynamo.
