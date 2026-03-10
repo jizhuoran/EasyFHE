@@ -1235,6 +1235,7 @@ class TestDeserialize(TestCase):
                 if isinstance(orig, torch.Tensor) and orig.dtype not in [
                     torch.float8_e4m3fn,
                     torch.float8_e5m2,
+                    torch.float8_e8m0fnu,
                 ]:
                     if orig.is_meta:
                         self.assertEqual(orig, loaded)
@@ -1898,7 +1899,11 @@ def forward(self, x):
         self.assertTrue(torch.allclose(ep.module()(), roundtrip_ep.module()()))
 
     def test_serialize_float8(self):
-        for dtype in [torch.float8_e5m2, torch.float8_e4m3fn]:
+        for dtype in [
+            torch.float8_e5m2,
+            torch.float8_e4m3fn,
+            torch.float8_e8m0fnu,
+        ]:
 
             class MyModule(torch.nn.Module):
                 def forward(self, x):
