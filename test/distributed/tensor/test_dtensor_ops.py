@@ -438,7 +438,6 @@ dtensor_fails_no_strategy = {
     xfail("max_pool2d_with_indices_backward"),
     xfail("multinomial"),
     xfail("nanquantile"),
-    xfail("nansum"),
     xfail("native_batch_norm"),
     xfail("nn.functional.adaptive_avg_pool1d"),
     xfail("nn.functional.adaptive_avg_pool2d"),

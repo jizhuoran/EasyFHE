@@ -335,6 +335,7 @@ LINEAR_REDUCTION_OP_MAP = {
     aten.amax.out: "max",
     aten.amin.default: "min",
     aten.amin.out: "min",
+    aten.nansum.default: "sum",
 }
 
 # argmax/argmin return indices which cannot be combined with P(max/min).
