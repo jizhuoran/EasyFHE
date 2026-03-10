@@ -6,6 +6,8 @@ import contextlib
 import functools
 import logging
 import os
+import sys
+from unittest import mock
 
 import torch
 import torch._dynamo.testing
@@ -44,6 +46,19 @@ from torch.utils._triton import (
     has_triton_package,
     has_triton_tensor_descriptor_host_tma,
 )
+
+
+@contextlib.contextmanager
+def _dump_launch_params(value: str):
+    launch_params_file = f"{os.path.abspath(sys.argv[0])}.launch_params"
+    if value == "1" and os.path.exists(launch_params_file):
+        os.remove(launch_params_file)
+    with mock.patch.dict(os.environ, {"TORCHINDUCTOR_DUMP_LAUNCH_PARAMS": value}):
+        try:
+            yield
+        finally:
+            if value == "1" and os.path.exists(launch_params_file):
+                os.remove(launch_params_file)
 
 
 if HAS_GPU:
@@ -949,10 +964,6 @@ def forward(self, x_1, output_1):
     @common_utils.parametrize("grid_type", [1, 2, 3])
     @common_utils.parametrize("tdlp", ["0", "1"])
     def test_triton_kernel_2d_autotune(self, grad, dynamic, backend, grid_type, tdlp):
-        import os
-
-        os.environ["TORCHINDUCTOR_DUMP_LAUNCH_PARAMS"] = tdlp
-
         def call_triton(x: torch.Tensor, y: torch.Tensor, output: torch.Tensor):
             x_elements = output.size()[0]
             y_elements = output.size()[1]
@@ -981,11 +992,13 @@ def forward(self, x_1, output_1):
         output = torch.zeros_like(t1, requires_grad=grad)
 
         torch_result = call_triton(t1, t2, output)
-        compiled_func = torch.compile(
-            call_triton, backend=backend, fullgraph=True, dynamic=dynamic
-        )
-        output2 = torch.zeros_like(t1, requires_grad=grad)
-        self.assertEqual(compiled_func(t1, t2, output2), torch_result)
+
+        with _dump_launch_params(tdlp):
+            compiled_func = torch.compile(
+                call_triton, backend=backend, fullgraph=True, dynamic=dynamic
+            )
+            output2 = torch.zeros_like(t1, requires_grad=grad)
+            self.assertEqual(compiled_func(t1, t2, output2), torch_result)
 
     @requires_gpu
     @common_utils.parametrize("dynamic", [False, True])
@@ -1425,8 +1438,6 @@ def forward(self, x_1, output_1):
     @common_utils.parametrize("dump_launch_params", ["0", "1"])
     @common_utils.parametrize("dynamic", [False, True])
     def test_triton_kernel_equal_to_1_arg(self, dynamic, dump_launch_params):
-        os.environ["TORCHINDUCTOR_DUMP_LAUNCH_PARAMS"] = dump_launch_params
-
         @triton.jit
         def add_kernel_half_n_elements(
             in_ptr0,
@@ -1455,23 +1466,25 @@ def forward(self, x_1, output_1):
         x = torch.randn(2, device=GPU_TYPE)
         y = torch.randn(2, device=GPU_TYPE)
         eager_out = f(x, y)
-        compiled_out, sources = run_and_get_code(
-            torch.compile(f, dynamic=dynamic), x, y
-        )
 
-        if triton_version_uses_attrs_dict():
-            self.assertFalse("equal_to" in sources[0])
-        else:
-            if dynamic:
-                # when half_n_elements passed to the Triton kernel is
-                # dynamic, equal_to_1 specialization can't be enforced
+        with _dump_launch_params(dump_launch_params):
+            compiled_out, sources = run_and_get_code(
+                torch.compile(f, dynamic=dynamic), x, y
+            )
 
-                # also, equal_to_1 specialization doesn't occur (or appear in the signature)
-                # for newer versions of triton (i.e. the ones where triton_version_uses_attrs_dict() == True)
-                self.assertTrue(_triton_get_ast_equal_to_str(()) in sources[0])
+            if triton_version_uses_attrs_dict():
+                self.assertFalse("equal_to" in sources[0])
             else:
-                self.assertTrue(_triton_get_ast_equal_to_str((3,)) in sources[0])
-        self.assertEqual(compiled_out, eager_out)
+                if dynamic:
+                    # when half_n_elements passed to the Triton kernel is
+                    # dynamic, equal_to_1 specialization can't be enforced
+
+                    # also, equal_to_1 specialization doesn't occur (or appear in the signature)
+                    # for newer versions of triton (i.e. the ones where triton_version_uses_attrs_dict() == True)
+                    self.assertTrue(_triton_get_ast_equal_to_str(()) in sources[0])
+                else:
+                    self.assertTrue(_triton_get_ast_equal_to_str((3,)) in sources[0])
+            self.assertEqual(compiled_out, eager_out)
 
     @requires_gpu
     @common_utils.parametrize("dynamic", [False, True])
