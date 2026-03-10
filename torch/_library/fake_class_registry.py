@@ -64,6 +64,10 @@ class FakeScriptObject:
             "(but note that this is more difficult)."
         )
 
+    def __getitem__(self, key):
+        # This is needed for DeviceMesh support
+        return self.real_obj[key]
+
     def __eq__(self, other):
         if isinstance(other, FakeScriptObject):
             return self.real_obj == other.real_obj

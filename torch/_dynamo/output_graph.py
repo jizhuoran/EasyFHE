@@ -1420,6 +1420,27 @@ class OutputGraph(OutputGraphCommon):
                 )
 
             # HACKY CODE REGION END
+        elif is_opaque_type(type(target)):
+            # HACKY CODE REGION BEGIN
+            # Same as SymInt/SymFloat above: piggybacking on self.nn_modules
+            # to store opaque objects as graph attributes.
+
+            tracer = self.current_tracer
+            if not self.is_root_tracer():
+                tracer = self.root_tracer
+
+            def wrap_name(module_key: str) -> VariableTracker:
+                fake_script_obj = torch._library.fake_class_registry.maybe_to_fake_obj(
+                    self.fake_mode, target
+                )
+                proxy = tracer.create_proxy("get_attr", module_key, (), {})
+                set_example_value(proxy.node, fake_script_obj)
+                return torch._dynamo.variables.script_object.TorchScriptObjectVariable.create(
+                    proxy, fake_script_obj, **options
+                )
+
+            # HACKY CODE REGION END
+
         else:
 
             def wrap_name(module_key: str) -> VariableTracker:

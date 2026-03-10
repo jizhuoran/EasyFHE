@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import torch
 import torch.distributed as dist
 import torch.utils._pytree as pytree
+from torch._dynamo.functional_export import _dynamo_graph_capture_for_export
 from torch._dynamo.test_case import run_tests, TestCase
 from torch._dynamo.testing import (
     AotEagerAndRecordGraphs,
@@ -1098,6 +1099,25 @@ def forward(self, arg0_1, arg1_1, arg2_1):
             torch.library._register_effectful_op(
                 "_TestOpaqueObject::noisy_inject", None
             )
+
+    def test_install_free_opaque_object(self):
+        rng = RNGState(0)
+        x = torch.ones(2, 3)
+
+        def fn(x):
+            return torch.ops._TestOpaqueObject.noisy_inject(x, rng)
+
+        gm = _dynamo_graph_capture_for_export(fn)(x)
+        self.assertExpectedInline(
+            gm.code.strip(),
+            """\
+def forward(self, x):
+    arg_0, = fx_pytree.tree_flatten_spec(([x], {}), self._in_spec)
+    l_flat_args_0_ = arg_0
+    l__self____export_root___closure___0_cell_contents = self.L__self____export_root___closure___0_cell_contents
+    res = torch.ops._TestOpaqueObject.noisy_inject(l_flat_args_0_, l__self____export_root___closure___0_cell_contents);  l_flat_args_0_ = l__self____export_root___closure___0_cell_contents = None
+    return pytree.tree_unflatten((res,), self._out_spec)""",  # noqa: B950
+        )
 
     def test_compile1(self):
         def foo(rng_state, x):
