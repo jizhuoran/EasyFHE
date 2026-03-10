@@ -20713,8 +20713,6 @@ op_db: list[OpInfo] = [
                # "AssertionError: RuntimeError not raised : Expected RuntimeError when doing an unsafe cast
                # from a result of dtype torch.float32 into an out= with dtype torch.long"
                DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_out', device_type='cuda'),
-               # The following dtypes did not work in forward but are listed by the OpInfo: {torch.bfloat16, torch.float16}.
-               DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_dtypes', device_type='mps'),
            )),
     OpInfo('bincount',
            dtypes=integral_types_and(),

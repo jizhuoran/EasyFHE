@@ -623,7 +623,6 @@ if torch.backends.mps.is_available():
                 torch.float16,
             ],
             # Unsupported dtypes
-            "histc": [torch.float16, torch.bfloat16],
             # GEMM on MPS is not supported for integral types
             "nn.functional.linear": [
                 torch.int16,
