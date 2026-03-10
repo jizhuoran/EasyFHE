@@ -45,13 +45,155 @@ from cutlass.pipeline import pipeline_init_arrive, pipeline_init_wait
 import torch
 
 
+"""
+This example provides an experimental implementation of the SM100 batched dense blockscaled GEMM kernel, please note that the APIs and implementation details related to this kernel may change in future releases.
+
+A high-performance persistent batched dense blockscaled GEMM example for the NVIDIA Blackwell SM100 architecture
+using CUTE DSL.
+- Matrix A is MxKxL, L is batch dimension, A can be row-major("K") or column-major("M") for MXF8 input type and can only be row-major("K") for MXF4/NVF4 input type
+- Matrix B is NxKxL, L is batch dimension, B can be row-major("N") or column-major("K") for MXF8 input type and can only be row-major("K") for MXF4/NVF4 input type
+- Matrix C is MxNxL, L is batch dimension, C can be row-major("N") or column-major("M")
+- Matrix SFA layout is filled internally according to A shape and BlockScaledBasicChunk, which has M×ceil_div(K, sf_vec_size)×L elements respectively
+- Matrix SFB layout is filled internally according to B shape and BlockScaledBasicChunk, which has N×ceil_div(K, sf_vec_size)×L elements respectively
+
+This GEMM kernel supports the following features:
+    - Utilizes Tensor Memory Access (TMA) for efficient memory operations
+    - Utilizes Blackwell's tcgen05.mma for matrix multiply-accumulate (MMA) operations (including 2cta mma instructions)
+    - Implements TMA multicast with cluster to reduce L2 memory traffic
+    - Support persistent tile scheduling to better overlap memory load/store with mma between tiles
+    - Support warp specialization to avoid explicit pipelining between mainloop load and mma
+
+This GEMM works as follows:
+1. DMA warp: Load A and B matrices from global memory (GMEM) to shared memory (SMEM) using TMA operations.
+2. MMA warp:
+    - Load scale factor A/B from shared memory (SMEM) to tensor memory (TMEM) using tcgen05.cp instruction.
+    - Perform matrix multiply-accumulate (MMA) operations using tcgen05.mma instruction.
+3. EPILOGUE warp:
+    - Load completed accumulator from tensor memory (TMEM) to registers (RMEM) using tcgen05.ld.
+    - Type convert C matrix to output type.
+    - Optionally store C matrix from registers (RMEM) to shared memory (SMEM) to global memory (GMEM) with TMA operations,
+      or directly store C matrix from registers (RMEM) to global memory (GMEM) without TMA operations.
+    - Optionally accept an elementwise lambda function epilogue_op to apply to the output tensor:
+      e.g., relu can set epilogue_op = lambda x: cute.where(x > 0, x, cute.full_like(x, 0))
+
+SM100 tcgen05.mma.kind.block_scale instructions operate as follows:
+- Read matrix A from SMEM
+- Read matrix B from SMEM
+- Read scalefactor A from TMEM
+- Read scalefactor B from TMEM
+- Write accumulator to TMEM
+The accumulator in TMEM must then be loaded to registers before writing back to GMEM.
+
+Input arguments to this example is shown below:
+
+.. code-block:: bash
+
+    python examples/blackwell/dense_blockscaled_gemm_persistent.py             \
+      --ab_dtype Float4E2M1FN --sf_dtype Float8E8M0FNU --sf_vec_size 16        \
+      --c_dtype Float16                                                        \
+      --mma_tiler_mn 256,128 --cluster_shape_mn 2,1                            \
+      --mnkl 8192,8192,1024,1
+
+To collect performance with NCU profiler:
+
+.. code-block:: bash
+
+    ncu python examples/blackwell/dense_blockscaled_gemm_persistent.py         \
+      --ab_dtype Float4E2M1FN --sf_dtype Float8E8M0FNU --sf_vec_size 16        \
+      --c_dtype Float16                                                        \
+      --mma_tiler_mn 256,128 --cluster_shape_mn 2,1                            \
+      --mnkl 8192,8192,1024,1                                                  \
+      --warmup_iterations 1 --iterations 10 --skip_ref_check
+
+
+Constraints:
+* Supported input data types: mxf8, mxf4, nvf4
+  see detailed valid dtype combinations in below Sm100BlockScaledPersistentDenseGemmKernel class documentation
+* A/B tensor must have the same data type, mixed data type is not supported (e.g., mxf8 x mxf4)
+* Mma tiler M must be 128 or 256(use_2cta_instrs)
+* Mma tiler N must be 64/128/192/256
+* Cluster shape M/N must be positive and power of 2, total cluster size <= 16
+* Cluster shape M must be multiple of 2 if Mma tiler M is 256(use_2cta_instrs)
+* The contiguous dimension of A/B/C tensors must be at least 16 bytes aligned,
+  i.e, number of elements is a multiple of 16 and 32 for Float8 and Float4, respectively.
+"""
+
+
 class Sm100BlockScaledPersistentDenseGemmKernel:
+    """This class implements batched matrix multiplication (C = A x SFA x B x SFB) with support for various data types
+    and architectural features specific to Blackwell GPUs with persistent tile scheduling and warp specialization.
+
+    :param sf_vec_size: Scalefactor vector size.
+    :type sf_vec_size: int
+    :param mma_tiler_mn: Shape of the Matrix Multiply-Accumulate (MMA) tile (M,N)
+    :type mma_tiler_mn: Tuple[int, int]
+    :param cluster_shape_mn: Cluster dimensions (M,N) for parallel processing
+    :type cluster_shape_mn: Tuple[int, int]
+
+    :note: In current version, A and B tensor must have the same data type
+        - i.e., Float8E4M3FN for A and Float8E5M2 for B is not supported
+
+    :note: Supported combinations of A/B data types, SF data typs and SF vector size:
+        - MXF8: A/B: Float8E5M2/Float8E4M3FN + SF: Float8E8M0FNU + sf_vec_size: 32
+        - MXF4: A/B: Float4E2M1FN + SF: Float8E8M0FNU + sf_vec_size: 32
+        - NVF4: A/B: Float4E2M1FN + SF: Float8E8M0FNU/Float8E4M3FN + sf_vec_size: 16
+
+    :note: Supported accumulator data types:
+        - Float32
+
+    :note: Supported C data types:
+        - Float32
+        - Float16/BFloat16
+        - Float8E4M3FN/Float8E5M2
+    :note: Constraints:
+        - MMA tiler M must be 128 or 256 (use_2cta_instrs)
+        - MMA tiler N must be 64/128/192/256
+        - Cluster shape M must be multiple of 2 if Mma tiler M is 256
+        - Cluster shape M/N must be positive and power of 2, total cluster size <= 16
+        - Also, Cluster shape M/N must be <= 4 for scale factor multicasts due to limited size of scale factors
+
+    Example:
+        >>> # xdoctest: +SKIP(requires cutlass)
+        >>> gemm = Sm100BlockScaledPersistentDenseGemmKernel(
+        ...     sf_vec_size=16, mma_tiler_mn=(256, 128), cluster_shape_mn=(2, 1)
+        ... )
+        >>> gemm(
+        ...     a_tensor,
+        ...     b_tensor,
+        ...     sfa_tensor,
+        ...     sfb_tensor,
+        ...     c_tensor,
+        ...     max_active_clusters,
+        ...     stream,
+        ... )
+    """
+
     def __init__(
         self,
         sf_vec_size: int,
         mma_tiler_mn: Tuple[int, int],
         cluster_shape_mn: Tuple[int, int],
     ):
+        """Initializes the configuration for a Blackwell dense GEMM kernel.
+
+        This configuration includes several key aspects:
+
+        1.  MMA Instruction Settings (tcgen05):
+            - acc_dtype: Data types for MMA accumulator, always set to Float32
+            - sf_vec_size: Scalefactor A/B vector size.
+            - mma_tiler_mn: The (M, N) shape of the MMA instruction tiler.
+
+        2.  Cluster Shape:
+            - cluster_shape_mn: The (ClusterM, ClusterN) shape of the CTA cluster.
+
+        :param sf_vec_size: Scalefactor vector size.
+        :type sf_vec_size: int
+        :param mma_tiler_mn: Tuple (M, N) shape of the MMA instruction.
+        :type mma_tiler_mn: Tuple[int, int]
+        :param cluster_shape_mn: Tuple (ClusterM, ClusterN) shape of the cluster.
+        :type cluster_shape_mn: Tuple[int, int]
+        """
+
         self.acc_dtype = cutlass.Float32
         self.sf_vec_size = sf_vec_size
         self.use_2cta_instrs = mma_tiler_mn[0] == 256
@@ -90,7 +232,18 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         self.num_tmem_alloc_cols = SM100_TMEM_CAPACITY_COLUMNS
 
     def _setup_attributes(self):
-        """ """
+        """Set up configurations that are dependent on GEMM inputs
+
+        This method configures various attributes based on the input tensor properties
+        (data types, leading dimensions) and kernel settings:
+        - Configuring tiled MMA
+        - Computing MMA/cluster/tile shapes
+        - Computing cluster layout
+        - Computing multicast CTAs for A/B/SFA/SFB
+        - Computing epilogue subtile
+        - Setting up A/B/SFA/SFB/C stage counts in shared memory
+        - Computing A/B/SFA/SFB/C shared memory layout
+        """
         # Compute mma instruction shapes
         # (MMA_Tile_Shape_M, MMA_Tile_Shape_N, MMA_Inst_Shape_K)
         self.mma_inst_shape_mn = (
@@ -256,6 +409,32 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         stream: cuda.CUstream,
         epilogue_op: cutlass.Constexpr = lambda x: x,
     ):
+        """Execute the GEMM operation in steps:
+        - Setup static attributes before smem/grid/tma computation
+        - Setup TMA load/store atoms and tensors
+        - Compute grid size with regard to hardware constraints
+        - Define shared storage for kernel
+        - Launch the kernel synchronously
+
+        :param a_tensor: Input tensor A
+        :type a_tensor: cute.Tensor
+        :param b_tensor: Input tensor B
+        :type b_tensor: cute.Tensor
+        :param sfa_tensor: Scale factor tensor A
+        :type sfa_tensor: cute.Tensor
+        :param sfb_tensor: Scale factor tensor B
+        :type sfb_tensor: cute.Tensor
+        :param c_tensor: Output tensor C
+        :type c_tensor: cute.Tensor
+        :param max_active_clusters: Maximum number of active clusters
+        :type max_active_clusters: cutlass.Constexpr
+        :param stream: CUDA stream for asynchronous execution
+        :type stream: cuda.CUstream
+        :param epilogue_op: Optional elementwise lambda function to apply to the output tensor
+        :type epilogue_op: cutlass.Constexpr
+        :raises TypeError: If input data types are incompatible with the MMA instruction.
+        """
+
         # Convert from torch convention to CuTe convention.
         # CUTLASS API passes tensors as A:(L,M,K) B:(L,K,N) C:(L,M,N)
         # but CuTe DSL kernels expect A:(M,K,L) B:(N,K,L) C:(M,N,L).
@@ -1373,6 +1552,20 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         sSF: cute.Tensor,
         tSF: cute.Tensor,
     ) -> Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]:
+        """
+        Make tiledCopy for smem to tmem load for scale factor tensor, then use it to partition smem memory (source) and tensor memory (destination).
+
+        :param sSF: The scale factor tensor in smem
+        :type sSF: cute.Tensor
+        :param tSF: The scale factor tensor in tmem
+        :type tSF: cute.Tensor
+
+        :return: A tuple containing (tiled_copy_s2t, tCsSF_compact_s2t, tCtSF_compact_s2t) where:
+            - tiled_copy_s2t: The tiled copy operation for smem to tmem load for scale factor tensor(s2t)
+            - tCsSF_compact_s2t: The partitioned scale factor tensor in smem
+            - tSF_compact_s2t: The partitioned scale factor tensor in tmem
+        :rtype: Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]
+        """
         # (MMA, MMA_MN, MMA_K, STAGE)
         tCsSF_compact = cute.filter_zeros(sSF)
         # (MMA, MMA_MN, MMA_K)
@@ -1405,6 +1598,26 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         epi_tile: cute.Tile,
         use_2cta_instrs: Union[cutlass.Boolean, bool],
     ) -> Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]:
+        """
+        Make tiledCopy for tensor memory load, then use it to partition tensor memory (source) and register array (destination).
+
+        :param tidx: The thread index in epilogue warp groups
+        :type tidx: cutlass.Int32
+        :param tAcc: The accumulator tensor to be copied and partitioned
+        :type tAcc: cute.Tensor
+        :param gC_mnl: The global tensor C
+        :type gC_mnl: cute.Tensor
+        :param epi_tile: The epilogue tiler
+        :type epi_tile: cute.Tile
+        :param use_2cta_instrs: Whether use_2cta_instrs is enabled
+        :type use_2cta_instrs: bool
+
+        :return: A tuple containing (tiled_copy_t2r, tTR_tAcc, tTR_rAcc) where:
+            - tiled_copy_t2r: The tiled copy operation for tmem to register copy(t2r)
+            - tTR_tAcc: The partitioned accumulator tensor
+            - tTR_rAcc: The accumulated tensor in register used to hold t2r results
+        :rtype: Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]
+        """
         # Make tiledCopy for tensor memory load
         copy_atom_t2r = sm100_utils.get_tmem_load_op(
             self.cta_tile_shape_mnk,
@@ -1447,6 +1660,25 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         tidx: cutlass.Int32,
         sC: cute.Tensor,
     ) -> Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]:
+        """
+        Make tiledCopy for shared memory store, then use it to partition register array (source) and shared memory (destination).
+
+        :param tiled_copy_t2r: The tiled copy operation for tmem to register copy(t2r)
+        :type tiled_copy_t2r: cute.TiledCopy
+        :param tTR_rC: The partitioned accumulator tensor
+        :type tTR_rC: cute.Tensor
+        :param tidx: The thread index in epilogue warp groups
+        :type tidx: cutlass.Int32
+        :param sC: The shared memory tensor to be copied and partitioned
+        :type sC: cute.Tensor
+        :type sepi: cute.Tensor
+
+        :return: A tuple containing (tiled_copy_r2s, tRS_rC, tRS_sC) where:
+            - tiled_copy_r2s: The tiled copy operation for register to smem copy(r2s)
+            - tRS_rC: The partitioned tensor C (register source)
+            - tRS_sC: The partitioned tensor C (smem destination)
+        :rtype: Tuple[cute.TiledCopy, cute.Tensor, cute.Tensor]
+        """
         copy_atom_r2s = sm100_utils.get_smem_store_op(
             self.c_layout, self.c_dtype, self.acc_dtype, tiled_copy_t2r
         )
@@ -1466,6 +1698,26 @@ class Sm100BlockScaledPersistentDenseGemmKernel:
         epi_tile: cute.Tile,
         sC: cute.Tensor,
     ) -> Tuple[cute.CopyAtom, cute.Tensor, cute.Tensor]:
+        """Make tiledCopy for global memory store, then use it to:
+        partition shared memory (source) and global memory (destination) for TMA store version.
+
+        :param tidx: The thread index in epilogue warp groups
+        :type tidx: cutlass.Int32
+        :param atom: The copy_atom_c to be used for TMA store version, or tiled_copy_t2r for none TMA store version
+        :type atom: cute.CopyAtom or cute.TiledCopy
+        :param gC_mnl: The global tensor C
+        :type gC_mnl: cute.Tensor
+        :param epi_tile: The epilogue tiler
+        :type epi_tile: cute.Tile
+        :param sC: The shared memory tensor to be copied and partitioned
+        :type sC: cute.Tensor
+
+        :return: A tuple containing (tma_atom_c, bSG_sC, bSG_gC) where:
+            - tma_atom_c: The TMA copy atom
+            - bSG_sC: The partitioned shared memory tensor C
+            - bSG_gC: The partitioned global tensor C
+        :rtype: Tuple[cute.CopyAtom, cute.Tensor, cute.Tensor]
+        """
         # (EPI_TILE_M, EPI_TILE_N, EPI_M, EPI_N, RestM, RestN, RestL)
         gC_epi = cute.flat_divide(
             gC_mnl[((None, None), 0, 0, None, None, None)], epi_tile
