@@ -983,14 +983,12 @@ def _query_dtensor_rules(
         )
         if strategy_result:
             for combo in strategy_result:
-                if len(combo) >= num_tensors + 1:
-                    output_plc = combo[0]
-                    input_plcs = tuple(combo[1 : num_tensors + 1])
-                    # single_dim_strategy returns one output placement;
-                    # duplicate for all outputs (matches propagator behavior)
+                if len(combo) >= n_outputs + num_tensors:
+                    output_plcs = combo[:n_outputs]
+                    input_plcs = tuple(combo[n_outputs : n_outputs + num_tensors])
                     rule_key: ComboKey = (
                         tuple(str(p) for p in input_plcs),
-                        tuple(str(output_plc) for _ in range(n_outputs)),
+                        tuple(str(p) for p in output_plcs),
                     )
                     normalized_rule = normalize_combo_key(
                         rule_key, input_shapes, output_shapes
