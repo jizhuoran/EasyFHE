@@ -448,6 +448,7 @@ dtensor_fails_no_strategy = {
     xfail("nanmean"),
     xfail("nanmedian"),
     xfail("nanquantile"),
+    xfail("nansum"),
     xfail("native_batch_norm"),
     xfail("nn.functional.adaptive_avg_pool1d"),
     xfail("nn.functional.adaptive_avg_pool2d"),
