@@ -509,11 +509,6 @@ std::unordered_map<std::string, std::string> saveNcclMeta(
         map.emplace(kP2pSrc, std::to_string(groupRanks[rank]));
       }
     }
-
-    auto seqNum = debugInfo->getSequenceNumber();
-    if (seqNum >= 0) {
-      map.emplace(kSeqNum, std::to_string(seqNum));
-    }
   }
 
   map.emplace(
