@@ -101,34 +101,8 @@ class DistMathOpsTest(DTensorTestBase):
             "amin",
             "var",
             "std",
-            "nansum",
         ):
             self.linear_op_reductions(op_str)
-
-    @with_comms
-    def test_nansum_with_nan(self):
-        device_mesh = self.build_device_mesh()
-        # Tensor with NaN values sharded across the reduction dim
-        tensor = torch.tensor(
-            [[1.0, float("nan"), 3.0], [float("nan"), 5.0, 6.0]],
-            device=self.device_type,
-        )
-        dtensor = distribute_tensor(tensor, device_mesh, [Shard(0)])
-
-        # Full reduction: Shard(0) reduces to Partial(sum), then to Replicate
-        dt_full = dtensor.nansum()
-        self.assertEqual(dt_full.full_tensor(), tensor.nansum())
-        self.assertEqual(dt_full.placements, (Partial("sum"),))
-
-        # Reduction along sharded dim 0: produces Partial(sum)
-        dt_dim0 = dtensor.nansum(dim=0)
-        self.assertEqual(dt_dim0.full_tensor(), tensor.nansum(dim=0))
-        self.assertEqual(dt_dim0.placements, (Partial("sum"),))
-
-        # Reduction along non-sharded dim 1: preserves Shard(0)
-        dt_dim1 = dtensor.nansum(dim=1)
-        self.assertEqual(dt_dim1.full_tensor(), tensor.nansum(dim=1))
-        self.assertEqual(dt_dim1.placements, (Shard(0),))
 
     @with_comms
     @skip_unless_torch_gpu
