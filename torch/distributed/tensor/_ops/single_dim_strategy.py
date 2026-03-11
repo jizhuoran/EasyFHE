@@ -387,8 +387,13 @@ class _PreparedSingleDimStrategy:
             for placements, input_spec in zip(input_placements, input_specs)
         ]
         if not all(
-            is_tensor_shardable(spec.tensor_meta.shape, spec)
-            for spec in arg_specs
+            is_tensor_shardable(
+                spec.tensor_meta.shape,
+                spec,
+                allow_unbacked_sharding=self.allow_unbacked_sharding,
+            )
+            or (self.allow_uneven_sharding and input_spec.placements == spec.placements)
+            for spec, input_spec in zip(arg_specs, input_specs)
             if spec.tensor_meta is not None
         ):
             return None
@@ -933,8 +938,11 @@ def _dijkstra_expand_single_dim_strategy_to_mesh(
     if _collect_all_matches is not None and first_result is not None:
         return first_result
 
-    raise AssertionError(
-        f"No valid strategy found for op_schema {op_schema} "
-        f"on {mesh}. "
-        f"Explored {len(visited)} strategy combinations."
+    logger.warning(
+        "Dijkstra search exhausted without finding a valid strategy for "
+        "%s on %s (explored %d combinations); falling back to full expansion",
+        op_schema,
+        mesh,
+        len(visited),
     )
+    return None
