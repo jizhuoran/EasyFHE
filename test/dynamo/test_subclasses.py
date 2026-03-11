@@ -487,6 +487,59 @@ class SubclassTests(torch._dynamo.test_case.TestCase):
         self.assertIsInstance(out, BaseTorchFunction)
         self.assertEqual(out, out_opt)
 
+    def test_torch_function_subclass_with_mode(self):
+        # Subclass __torch_function__ must still be inlined when a
+        # TorchFunctionMode is active, otherwise the runtime wrapper
+        # (DisableTorchFunctionSubclass) is not applied and the subclass
+        # dispatch fires twice.
+        class ScaledTensor(torch.Tensor):
+            @staticmethod
+            def __new__(cls, data):
+                return torch.Tensor._make_subclass(cls, data)
+
+            @classmethod
+            def __torch_function__(cls, func, types, args=(), kwargs=None):
+                kwargs = kwargs or {}
+                raw = super().__torch_function__(func, types, args, kwargs)
+                if isinstance(raw, torch.Tensor) and func is torch.add:
+                    return raw * 2.0
+                return raw
+
+        class NoopMode(torch.overrides.TorchFunctionMode):
+            def __torch_function__(self, func, types, args=(), kwargs=None):
+                return func(*args, **(kwargs or {}))
+
+        a = ScaledTensor(torch.tensor([1.0, 2.0]))
+        b = ScaledTensor(torch.tensor([3.0, 4.0]))
+
+        with NoopMode():
+            eager = torch.add(a, b)
+            torch._dynamo.reset()
+            compiled = torch.compile(torch.add, backend="eager")(a, b)
+        self.assertEqual(eager, compiled)
+
+    def test_torch_function_reentrant_dispatch(self):
+        class ScaledTensor(torch.Tensor):
+            @staticmethod
+            def __new__(cls, data):
+                return torch.Tensor._make_subclass(cls, data)
+
+            @classmethod
+            def __torch_function__(cls, func, types, args=(), kwargs=None):
+                kwargs = kwargs or {}
+                raw = super().__torch_function__(func, types, args, kwargs)
+                if isinstance(raw, torch.Tensor) and func is torch.add:
+                    return raw * 2.0
+                return raw
+
+        a = ScaledTensor(torch.tensor([1.0, 2.0]))
+        b = ScaledTensor(torch.tensor([3.0, 4.0]))
+
+        eager = torch.add(a, b)
+        torch._dynamo.reset()
+        compiled = torch.compile(torch.add, backend="eager")(a, b)
+        self.assertEqual(eager, compiled)
+
     def test_torch_function_state_graph_break(self):
         @torch.compile(backend="eager")
         def fn(x):
