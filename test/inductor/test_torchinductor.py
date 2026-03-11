@@ -10354,7 +10354,7 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
 
     # From https://github.com/pytorch/pytorch/issues/93384
     def test_max_pool2d_with_indices_backward6(self):
-        # dilation is not 1. Should still generate kernels.
+        # dilation is not 1. Should fallback
         def fn(a, b, c):
             return aten.max_pool2d_with_indices_backward(
                 a, b, [3, 2], [2, 1], [1, 1], [1, 2], False, c
@@ -10378,7 +10378,7 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
                 indices,
             ],
         )
-        assertGeneratedKernelCountEqual(self, 1)
+        assertGeneratedKernelCountEqual(self, 0)
 
     def test_issue102546(self):
         def fn(x):
