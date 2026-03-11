@@ -910,6 +910,16 @@ Tip: To see a more detailed error message, either pass `debug=True` to
 `torch.utils.checkpoint.checkpoint(...)` or wrap the code block
 with `with torch.utils.checkpoint.set_checkpoint_debug_enabled(True):` to
 enable checkpoint‑debug mode globally.
+
+If this error occurs under torch.compile with automatic_dynamic_shapes enabled,
+it may be because the recomputation selected a different compiled graph than the
+forward pass (e.g., a dynamic graph instead of the original static graph).
+To fix this, either:
+  - Use torch._dynamo.mark_dynamic() to explicitly mark varying dimensions as
+    dynamic upfront, avoiding the static-to-dynamic transition.
+  - Set torch._dynamo.config.cache_entry_use_lru = False to disable LRU cache
+    reordering, which can change which graph is checked first between forward
+    and recompute.
 """
 
 
