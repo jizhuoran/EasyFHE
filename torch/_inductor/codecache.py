@@ -3982,6 +3982,7 @@ class CUTLASSCodeCache:
     def cache_clear(cls) -> None:
         cls.cache.clear()
         cls.aot_kernels_o.clear()
+        cls.write.cache_clear()
 
     @staticmethod
     @lru_cache(maxsize=4)
