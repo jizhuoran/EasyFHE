@@ -236,3 +236,6 @@ torch/backends/cudnn/ @eqy @syed-ahmed @Aidyn-A
 /torch/sparse/ @amjames @pearu @nikitaved
 /test/test_sparse.py @amjames @pearu @nikitaved
 /test/test_sparse_csr.py @amjames @pearu @nikitaved
+
+# Python/DSL native ops
+/torch/_native/ @slayton58 @drisspg
