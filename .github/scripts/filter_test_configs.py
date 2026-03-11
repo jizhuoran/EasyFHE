@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # ruff: noqa: LOG015
-from __future__ import annotations
 
 import json
 import logging
@@ -9,17 +8,14 @@ import re
 import subprocess
 import sys
 import warnings
+from collections.abc import Callable
 from enum import Enum
 from functools import cache
 from logging import info
-from typing import Any, TYPE_CHECKING
+from typing import Any, Optional
 from urllib.request import Request, urlopen
 
 import yaml
-
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 REENABLE_TEST_REGEX = "(?i)(Close(d|s)?|Resolve(d|s)?|Fix(ed|es)?) (#|https://github.com/pytorch/pytorch/issues/)([0-9]+)"
@@ -30,7 +26,7 @@ PREFIX = "test-config/"
 logging.basicConfig(level=logging.INFO)
 
 
-def is_cuda_or_rocm_job(job_name: str | None) -> bool:
+def is_cuda_or_rocm_job(job_name: Optional[str]) -> bool:
     if not job_name:
         return False
 
@@ -39,7 +35,7 @@ def is_cuda_or_rocm_job(job_name: str | None) -> bool:
 
 # Supported modes when running periodically. Only applying the mode when
 # its lambda condition returns true
-SUPPORTED_PERIODICAL_MODES: dict[str, Callable[[str | None], bool]] = {
+SUPPORTED_PERIODICAL_MODES: dict[str, Callable[[Optional[str]], bool]] = {
     # Memory leak check is only needed for CUDA and ROCm jobs which utilize GPU memory
     "mem_leak_check": is_cuda_or_rocm_job,
     "rerun_disabled_tests": lambda job_name: True,
@@ -214,7 +210,7 @@ def filter_selected_test_configs(
 
 
 def set_periodic_modes(
-    test_matrix: dict[str, list[Any]], job_name: str | None
+    test_matrix: dict[str, list[Any]], job_name: Optional[str]
 ) -> dict[str, list[Any]]:
     """
     Apply all periodic modes when running under a schedule
@@ -270,7 +266,7 @@ def remove_disabled_jobs(
 def _filter_jobs(
     test_matrix: dict[str, list[Any]],
     issue_type: IssueType,
-    target_cfg: str | None = None,
+    target_cfg: Optional[str] = None,
 ) -> dict[str, list[Any]]:
     """
     An utility function used to actually apply the job filter
@@ -470,7 +466,7 @@ def set_output(name: str, val: Any) -> None:
         print(f"::set-output name={name}::{val}")
 
 
-def parse_reenabled_issues(s: str | None) -> list[str]:
+def parse_reenabled_issues(s: Optional[str]) -> list[str]:
     # NB: When the PR body is empty, GitHub API returns a None value, which is
     # passed into this function
     if not s:
@@ -506,8 +502,8 @@ def perform_misc_tasks(
     test_matrix: dict[str, list[Any]],
     job_name: str,
     pr_body: str,
-    branch: str | None = None,
-    tag: str | None = None,
+    branch: Optional[str] = None,
+    tag: Optional[str] = None,
 ) -> None:
     """
     In addition to apply the filter logic, the script also does the following

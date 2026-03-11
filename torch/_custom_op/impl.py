@@ -59,7 +59,9 @@ def warn_deprecated():
     )
 
 
-def custom_op(qualname: str, manual_schema: str | None = None) -> typing.Callable:
+def custom_op(
+    qualname: str, manual_schema: typing.Optional[str] = None
+) -> typing.Callable:
     r"""
     This API is deprecated, please use torch.library.custom_op instead
     """
@@ -153,7 +155,7 @@ class CustomOp:
         self.__name__ = None  # mypy requires this
         # NB: Some of these impls are registered as kernels to DispatchKeys.
         # Modifying the _impls dict directly won't do anything in that case.
-        self._impls: dict[str, FuncAndLocation | None] = {}
+        self._impls: dict[str, typing.Optional[FuncAndLocation]] = {}
         # See NOTE [CustomOp autograd kernel indirection]
         self._registered_autograd_kernel_indirection = False
 
@@ -218,7 +220,7 @@ class CustomOp:
 
     def impl(
         self,
-        device_types: str | typing.Iterable[str],
+        device_types: typing.Union[str, typing.Iterable[str]],
         _stacklevel=2,
     ) -> typing.Callable:
         r"""
