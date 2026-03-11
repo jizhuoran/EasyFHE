@@ -4060,8 +4060,16 @@ def _wrap_to_fake_tensor_and_record_impl(
             and isinstance(fake_e, FakeTensor)
             and (sym_val := fake_e.item_memo) is not None
         ):
+            # Match the peephole in FakeTensorConverter.from_real_tensor that
+            # strips FloatTensorSource before calling create_symbol.  Without
+            # this, the tracked fake source name won't match source_to_var and
+            # produce_guards_verbose will report "(unknown source)".
+            if isinstance(source, FloatTensorSource):
+                item_source = source.base
+            else:
+                item_source = CallMethodItemSource(source)
             tx.output.tracked_fakes.append(
-                TrackedFake(sym_val, CallMethodItemSource(source), symbolic_context)
+                TrackedFake(sym_val, item_source, symbolic_context)
             )
 
         if is_traceable_wrapper_subclass(fake_e):
