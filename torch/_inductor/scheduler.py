@@ -1913,28 +1913,7 @@ class FusedSchedulerNode(BaseSchedulerNode):
         assert node1.scheduler is node2.scheduler
         assert isinstance(node1, (SchedulerNode, FusedSchedulerNode))
         if node1.is_template() and isinstance(node2, ExternKernelSchedulerNode):
-            # Fuse multi outputs template and its outputs
-            #   * Node1 has memorydep of MultiOutput in reads
-            #   * Node2 has StarDep of MultiOutput in writes
-            # Rewrite the Node2' StarDep to MemoryDep, because calculate score_fusion_memory
-            # of the template node and its epilogue requires the same type of dependencies
-            assert isinstance(node2.node, MultiOutput)
-            assert len(node2.read_writes.writes) == 1
-            assert isinstance(next(iter(node2.read_writes.writes)), StarDep)
-            name = next(iter(node2.read_writes.writes)).name
-            template_nodes = [node for node in node1.get_nodes() if node.is_template()]
-            assert len(template_nodes) == 1
-            template_node = template_nodes[0]
-            assert len(template_node.read_writes.writes) == 1
-            write = next(iter(template_node.read_writes.writes))
-            assert isinstance(write, MemoryDep)
-            node2.read_writes.writes = OrderedSet(
-                [
-                    MemoryDep(
-                        name, write.index, write.var_names, write.size, write.mode
-                    ),
-                ]
-            )
+            assert isinstance(node2.node, ir.MultiOutput)
         else:
             assert isinstance(node2, (SchedulerNode, FusedSchedulerNode))
         nodes = list(itertools.chain(node1.get_nodes(), node2.get_nodes()))
@@ -6148,12 +6127,19 @@ class Scheduler:
             score = MixOrderReduction.get_fusion_score(node1, node2)
             return _construct_return_value(score, 0, True)
 
-        # for evaluating fusion memory scores of UserDefinedTritonKernel,
-        # we use a slightly different logic which allows matching StarDep with MemoryDep in certain scenarios.
-        # (See the checks we make in `can_fuse_epilogue()` that makes this possible)
+        # For UserDefinedTritonKernel, the write deps are StarDep that won't
+        # match the epilogue's MemoryDep via set intersection.  For templates,
+        # a view/reshape between the template output and epilogue can produce
+        # different index expressions that don't match via set intersection.
+        # Fall back to name-based matching so that the fusion score reflects
+        # the actual shared buffers.
         if (
-            isinstance(node1.node, ir.UserDefinedTritonKernel)
-            and node1.node.can_fuse_epilogue()
+            (
+                isinstance(node1.node, ir.UserDefinedTritonKernel)
+                and node1.node.can_fuse_epilogue()
+            )
+            or node1.is_template()
+            or node2.is_template()
         ):
             node1_deps = node1.read_writes.reads | node1.read_writes.writes
             node2_deps = node2.read_writes.reads | node2.read_writes.writes
@@ -6161,8 +6147,8 @@ class Scheduler:
             def _match(dep1: Dep, dep2: Dep):
                 if dep1 == dep2:
                     return True
-                if (isinstance(dep1, StarDep) and isinstance(dep2, MemoryDep)) or (
-                    isinstance(dep1, StarDep) and isinstance(dep2, MemoryDep)
+                if isinstance(dep1, (StarDep, MemoryDep)) and isinstance(
+                    dep2, (StarDep, MemoryDep)
                 ):
                     return dep1.name == dep2.name
                 return False
