@@ -8633,6 +8633,26 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
                 (a, b, c),
             )
 
+    @xfail_if_mps  # dtypes mismatch
+    def test_nll_loss_backward_1d_input(self):
+        # 1D input with 1D target used to crash the decomposition because
+        # target.unsqueeze(0) produced a 2D index for a 1D scatter.
+        def fn(a, b, c):
+            return aten.nll_loss_backward(
+                a, b, c, None, 0, 10, torch.tensor(1.0, device=self.device)
+            )
+
+        # 1D target — validation requires target.size(0) == self.size(0)
+        self.common(
+            fn,
+            (torch.randn(1), torch.randn(3), torch.tensor([2, 0, 1])),
+        )
+        # scalar target (the no_batch_dim path in the C++ kernel)
+        self.common(
+            fn,
+            (torch.randn(1), torch.randn(3), torch.tensor(2)),
+        )
+
     def test_isinf(self):
         def fn(x):
             return x.isinf(), x.isnan()
