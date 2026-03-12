@@ -1477,7 +1477,6 @@ class TestManualOverlapBucketing(TestComputeCommReorderingMultiProc):
             [
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_weight_",
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_bias_",
-                "l_args_0_",
                 "linear",
             ],
         )
@@ -1489,7 +1488,6 @@ class TestManualOverlapBucketing(TestComputeCommReorderingMultiProc):
             [
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_weight_",
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_bias_",
-                "l_args_0_",
                 "linear",
                 "l_func_self_modules_layers_modules_0_modules_proj_parameters_weight_",
                 "l_func_self_modules_layers_modules_0_modules_proj_parameters_bias_",
@@ -1510,7 +1508,6 @@ class TestManualOverlapBucketing(TestComputeCommReorderingMultiProc):
             [
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_weight_",
                 "l_func_self_modules_layers_modules_0_modules_wq_parameters_bias_",
-                "l_args_0_",
                 "linear",
             ],
         )
