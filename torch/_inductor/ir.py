@@ -42,7 +42,8 @@ from torch._export.serde.serialize import GraphModuleSerializer
 from torch._higher_order_ops.auto_functionalize import can_auto_functionalize
 from torch._inductor import metrics
 from torch._inductor.utils import get_free_symbols
-from torch._library.opaque_object import is_opaque_type
+from torch._library.fake_class_registry import FakeScriptObject
+from torch._library.opaque_object import is_opaque_value
 from torch._prims_common import (
     compute_required_storage_length,
     is_boolean_dtype,
@@ -118,7 +119,6 @@ from .virtualized import ops, OpsValue, V
 
 
 if TYPE_CHECKING:
-    from torch._library.fake_class_registry import FakeScriptObject
     from torch.fx.experimental.symbolic_shapes import SympyBoolean
     from torch.fx.node import Argument
 
@@ -257,6 +257,7 @@ def validate_ir(node_or_nodes: _NodeOrNodes | None) -> None:
                     int,
                     EffectfulKernel,
                     ShapeAsConstantBuffer,
+                    OpaqueMultiOutput,
                 ),
             ), (
                 f"Found {type(nodes)}, which is not a supported top level IR node. See [Note: Inductor IR]"
@@ -584,6 +585,9 @@ class IRNode:
                 TemplateBuffer,
             ),
         )
+
+    def wrap_for_lowering(self) -> IRNode:
+        return TensorBox.create(self)
 
     def _post_init_setattr(self, attr: str, value: Any) -> None:
         # Intended for use in __post_init__ for enforcing an invariant on a dataclass
@@ -6293,6 +6297,8 @@ class ExternKernel(InputsKernel):
                 example_args.append(V.graph.torchbind_constants[x.get_name()])
             elif isinstance(x, TorchBindObject):
                 example_args.append(x.get_value())
+            elif isinstance(x, OpaqueMultiOutput):
+                example_args.append(x.opaque_example_value)
             elif isinstance(x, torch._inductor.ir.GeneratorState):
                 device_index = x.device.index
                 assert x.device.type == "cuda" and device_index is not None
@@ -6449,7 +6455,7 @@ class ExternKernel(InputsKernel):
             # TODO(jansel): impose layout preference on realized buffer
             x.realize()
             return x
-        if isinstance(x, (NonTensorObj, ShapeAsConstantBuffer)):
+        if isinstance(x, (NonTensorObj, ShapeAsConstantBuffer, OpaqueMultiOutput)):
             return x
         return cls.copy_input(x)
 
@@ -8314,6 +8320,10 @@ class FallbackKernel(ExternKernelAlloc):
             return devices[0]
         if isinstance(example_output, torch.Tensor):
             return example_output.device
+        if isinstance(
+            example_output, (torch._C.ScriptObject, FakeScriptObject)
+        ) or is_opaque_value(example_output):
+            return torch.device("cpu")
         if isinstance(example_output, (list, tuple)):
             device_set = OrderedSet(
                 # pyrefly: ignore [bad-argument-type]
@@ -8324,6 +8334,8 @@ class FallbackKernel(ExternKernelAlloc):
             devices = [device for device in device_set if device]
             if len(devices) == 1:
                 return devices[0]
+            if not devices:
+                return None
             for device in devices:
                 assert isinstance(device, torch.device)
                 if is_gpu(device.type):
@@ -8716,6 +8728,15 @@ class FallbackKernel(ExternKernelAlloc):
                 return output
             elif isinstance(output, torch.SymInt):
                 return output.node.expr
+            elif isinstance(
+                output, (torch._C.ScriptObject, FakeScriptObject)
+            ) or is_opaque_value(output):
+                return OpaqueMultiOutput(
+                    NoneLayout(device=device),
+                    packed,
+                    indices,
+                    output,
+                )
             else:
                 assert output is None, (
                     f"FallbackKernel output type {type(output)} is not supported"
@@ -8863,6 +8884,23 @@ class MultiOutput(ExternKernel):
             writes=write_rw.writes,
             index_exprs=OrderedSet(),
         )
+
+
+class OpaqueMultiOutput(MultiOutput):
+    """MultiOutput for opaque objects."""
+
+    def __init__(
+        self,
+        layout: OutputSpec,
+        input: IRNode,
+        indices: list[tuple[Any, ...]],
+        opaque_value: Any,
+    ) -> None:
+        super().__init__(layout, input, indices, skip_size_stride_alignment_checks=True)
+        self.opaque_example_value = opaque_value
+
+    def wrap_for_lowering(self) -> OpaqueMultiOutput:
+        return self
 
 
 class AllocatingMultiOutput(MultiOutput):
@@ -10070,7 +10108,7 @@ class TorchBindObject(NonTensorObj):
         # Returns the sum of all tensors in the flattened object
         real_script_obj = self.get_real_obj()
 
-        if is_opaque_type(type(real_script_obj)):
+        if is_opaque_value(real_script_obj):
             return 0
 
         assert hasattr(real_script_obj, "__obj_flatten__")
