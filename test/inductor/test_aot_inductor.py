@@ -5127,11 +5127,7 @@ class AOTInductorTestsTemplate:
             dtype=torch.complex64,
             device=self.device,
         )
-        x2 = torch.tensor(
-            128,
-            dtype=torch.complex128 if self.device != "mps" else torch.complex64,
-            device=self.device,
-        )
+        x2 = torch.tensor(128, dtype=torch.complex128, device=self.device)
         inputs.append(x0)
         inputs.append(x1)
         inputs.append(x2)
