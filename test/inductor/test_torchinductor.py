@@ -7317,10 +7317,13 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             )
 
     @config.patch(force_disable_caches=True)
-    @skip_if_cpp_wrapper("run_and_get_kernels issue")
     def test_deterministic_codegen(self):
         if "cpu" in str(self.device) and config.is_fbcode():
             raise unittest.SkipTest("cpp packaging is wacky in fbcode")
+        if "cpu" in str(self.device) and config.cpp_wrapper:
+            raise unittest.SkipTest(
+                "run_and_get_kernels can't extract kernels from CPU cpp_wrapper code"
+            )
 
         @torch.compile(fullgraph=True)
         def a(x):
@@ -7367,10 +7370,13 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
         self.assertEqual(coda_c0, coda_c2)
 
     @config.patch(force_disable_caches=True)
-    @skip_if_cpp_wrapper("run_and_get_kernels issue")
     def test_deterministic_codegen_on_graph_break(self):
         if "cpu" in str(self.device) and config.is_fbcode():
             raise unittest.SkipTest("cpp packaging is wacky in fbcode")
+        if "cpu" in str(self.device) and config.cpp_wrapper:
+            raise unittest.SkipTest(
+                "run_and_get_kernels can't extract kernels from CPU cpp_wrapper code"
+            )
 
         def a(x):
             return x.cos().sin().softmax(-1)
@@ -7383,8 +7389,15 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             return x
 
         x = torch.randn(16, 256, device=self.device)
-        _, (code0, code1) = _run_and_get_stripped_kernels(b, x)
-        self.assertEqual(code0, code1)
+        if config.cpp_wrapper and config.triton.autotune_at_compile_time is False:
+            # With lazy compile, both graph segments produce identical code
+            # (no unique .cubin paths), so run_and_get_code deduplicates them
+            # and only 1 kernel is returned.
+            _, codes = _run_and_get_stripped_kernels(b, x)
+            self.assertEqual(len(codes), 1)
+        else:
+            _, (code0, code1) = _run_and_get_stripped_kernels(b, x)
+            self.assertEqual(code0, code1)
 
     @config.patch(
         {
@@ -7395,10 +7408,13 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             "triton.native_matmul": False,
         }
     )
-    @skip_if_cpp_wrapper("run_and_get_kernels issue")
     def test_deterministic_codegen_with_suffix(self):
         if "cpu" in str(self.device) and config.is_fbcode():
             raise unittest.SkipTest("cpp packaging is wacky in fbcode")
+        if "cpu" in str(self.device) and config.cpp_wrapper:
+            raise unittest.SkipTest(
+                "run_and_get_kernels can't extract kernels from CPU cpp_wrapper code"
+            )
 
         @torch.compile(fullgraph=True)
         def a(x):
@@ -9821,10 +9837,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             f(*args)
             self.assertEqual(cloned_args, args)
 
-    @skip_if_cpp_wrapper(
-        "Without major redesign, cpp_wrapper will not support custom ops that are "
-        "defined in Python."
-    )
     @config.patch(implicit_fallbacks=True)
     def test_fallback_mutable_op_list_tensor(self):
         @torch.library.custom_op(
@@ -9925,10 +9937,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             self.assertEqual(cloned_args, args)
 
     @config.patch(implicit_fallbacks=True)
-    @skip_if_cpp_wrapper(
-        "Without major redesign, cpp_wrapper will not support custom ops that are "
-        "defined in Python."
-    )
     def test_fallback_mutable_op_list(self):
         with torch.library._scoped_library("mylib", "FRAGMENT") as m:
 
@@ -13091,7 +13099,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
 
     @requires_gpu()
     @skip_if_not_triton
-    @skip_if_cpp_wrapper("skip cpp_wrapper tests")
     @config.patch(implicit_fallbacks=True)
     def test_generated_code_has_size_stride_assert(self):
         def foo(x):
@@ -13128,7 +13135,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
 
     @requires_gpu()
     @skip_if_not_triton
-    @skip_if_cpp_wrapper("skip cpp_wrapper tests")
     @config.patch(implicit_fallbacks=True)
     def test_generated_code_has_alignment_assert(self):
         def foo(x):
@@ -13252,10 +13258,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
 
     @requires_gpu()
     @config.patch(implicit_fallbacks=True)
-    @skip_if_cpp_wrapper(
-        "Without major redesign, cpp_wrapper will not support custom ops that are "
-        "defined in Python."
-    )
     @tf32_on_and_off(0.005)
     def test_mutable_custom_op_fixed_layout2(self):
         with torch.library._scoped_library("mylib", "DEF") as lib:
@@ -13314,10 +13316,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
                 self.assertNotEqual(bar_strides[0], expected_stride)
 
     @config.patch(implicit_fallbacks=True)
-    @skip_if_cpp_wrapper(
-        "Without major redesign, cpp_wrapper will not support custom ops that are "
-        "defined in Python."
-    )
     def test_mutable_custom_op_fixed_layout(self):
         with torch.library._scoped_library("mylib", "DEF") as lib:
             lib.define(
@@ -13393,10 +13391,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             net = torch.compile(model)
             out = net(input_t)
 
-    @skip_if_cpp_wrapper(
-        "Without major redesign, cpp_wrapper will not support custom ops that are "
-        "defined in Python."
-    )
     @config.patch(implicit_fallbacks=True)
     def test_custom_op_default_layout_constraint(self):
         with torch.library._scoped_library("mylib", "DEF") as lib:
@@ -14548,11 +14542,11 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
                 r"raise RuntimeError\('u.* >= 0'\)"
             ).run(code[0])
 
-    @lowering.force_fallback(aten.sort.default)
     @unittest.skipIf(
         config.cpp_wrapper,
         "Inductor does not generate size/stride asserts for cpp_wrapper",
     )
+    @lowering.force_fallback(aten.sort.default)
     def test_size_asserts_for_multi_output_fallback(self):
         @torch.compile
         def f(x):
@@ -15177,8 +15171,8 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
         self.assertEqual(fn(*args), torch.compile(fn)(*args))
 
     @unittest.skipIf(
-        config.cpp_wrapper,
-        "cpp_wrapper enables autotune_at_compile_time which disables this decomposition",
+        config.triton.autotune_at_compile_time is not False,
+        "autotune_at_compile_time doesn't work for test with indexing",
     )
     @parametrize("dtype", [torch.int32, torch.int64])
     @parametrize("nd", [1, 2])
@@ -15218,7 +15212,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
             "triton.native_matmul": False,
         }
     )
-    @skip_if_cpp_wrapper("cpp output code is different")
     def test_allow_reuse_disable_if_exceed_peak(self):
         @torch.compile
         def fn(inp):  # 1*N^2
@@ -15388,7 +15381,10 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
         self.assertTrue("'NaN or Inf found'" in code)
         torch.testing.assert_close(out, fn(x))
 
-    @skip_if_cpp_wrapper("skip cpp wrapper")
+    @unittest.skipIf(
+        config.triton.autotune_at_compile_time is not False,
+        "autotune_at_compile_time doesn't work for test with indexing",
+    )
     @requires_gpu_and_triton
     def test_repeat_interleave_decomposition_has_clamp(self):
         repeat = torch.ones(2560, dtype=torch.int64, device=GPU_TYPE)
@@ -15516,7 +15512,6 @@ def forward(self, arg0_1: "Sym(s77)", arg1_1: "Sym(s27)", arg2_1: "Sym(s53)", ar
 
     @skip_if_halide
     @requires_cuda_and_triton
-    @skip_if_cpp_wrapper("skip cpp wrapper")
     def test_triton_argmin_argmax_transpose_logical_index(self):
         def fn(x):
             x.tan_()
@@ -16926,8 +16921,10 @@ if RUN_GPU:
                 func_and_kernel_torch
             )
 
+        @skip_if_cpp_wrapper(
+            "profile_bandwidth is not supported with cpp_wrapper",
+        )
         @patch.object(config, "profile_bandwidth", True)
-        @skip_if_cpp_wrapper("cpp output code is different")
         def test_bandwidth_profiler(self):
             @torch.compile(backend="inductor")
             def fn(x):
@@ -16983,7 +16980,6 @@ if RUN_GPU:
 
         @skipIfRocm
         @unittest.skipIf(IS_FBCODE, "fbcode system python does not provide torch")
-        @skip_if_cpp_wrapper("cpp error msg is different")
         def test_indirect_device_assert(self):
             dir_path = os.path.dirname(os.path.realpath(__file__))
             test_path = os.path.join(dir_path, "indirect_assert_helper.py")
