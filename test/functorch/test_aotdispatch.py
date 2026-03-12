@@ -9208,6 +9208,45 @@ class TestAOTAutogradWithDynamo(TestAOTAutograd):
         self.assertEqual(ref_inps_after_fw, inps_after_fw)
         self.assertEqual(ref_inps_after_bw, inps_after_bw)
 
+    def test_mutations_in_bw_requires_grad_input(self):
+        # Inplace mutation of a requires_grad=True forward input during the
+        # backward pass should not trigger the check_inplace error
+        class AF(torch.autograd.Function):
+            @staticmethod
+            def forward(ctx, dummy, inplace_tensor):
+                ctx.save_for_backward(inplace_tensor)
+                return dummy.clone()
+
+            @staticmethod
+            def backward(ctx, grad_output):
+                (inplace_tensor,) = ctx.saved_tensors
+                inplace_tensor.mul_(2.0)
+                return grad_output, None
+
+        def fn(dummy, inplace_tensor):
+            return AF.apply(dummy, inplace_tensor)
+
+        def _inps():
+            dummy = torch.zeros((2,), requires_grad=True)
+            # requires_grad=True is what triggered the bug
+            inplace_tensor = torch.ones((2,), requires_grad=True)
+            return dummy, inplace_tensor
+
+        inps = _inps()
+        out = fn(*inps)
+        ref_inps_after_fw = [x.clone().detach() for x in inps]
+        out.sum().backward()
+        ref_inps_after_bw = [x.clone().detach() for x in inps]
+
+        inps = _inps()
+        out = torch.compile(fn, backend="aot_eager", fullgraph=True)(*inps)
+        inps_after_fw = [x.clone().detach() for x in inps]
+        out.sum().backward()
+        inps_after_bw = [x.clone().detach() for x in inps]
+
+        self.assertEqual(ref_inps_after_fw, inps_after_fw)
+        self.assertEqual(ref_inps_after_bw, inps_after_bw)
+
     def test_mutation_of_input_in_fw_and_bw(self):
         class AF(torch.autograd.Function):
             @staticmethod
