@@ -60,6 +60,7 @@ from torch._inductor.template_heuristics.triton import (
     CUDAPersistentTMATemplateConfigHeuristic,
     GemmConfig,
     get_shared_memory_checker_opts,
+    ROCmMMTemplateConfigHeuristic,
     XPUMMTemplateConfigHeuristic,
     XPUPersistentTMATemplateConfigHeuristic,
 )
@@ -2229,9 +2230,6 @@ class TestMaxAutotune(TestCase):
                     self.assertTrue(decompose_count <= num_decompose_k_splits)
 
     @unittest.skipIf(
-        TEST_WITH_ROCM, "exhaustive currently only thoroughly tested on NVIDIA"
-    )
-    @unittest.skipIf(
         config.triton.native_matmul,
         "native matmul takes different tuning configs",
     )
@@ -2248,11 +2246,15 @@ class TestMaxAutotune(TestCase):
         with mock.patch(
             "torch._inductor.template_heuristics.registry.get_template_heuristic"
         ) as config_mock:
-            config_heuristics = (
-                XPUMMTemplateConfigHeuristic()
-                if GPU_TYPE == "xpu"
-                else CUDAMMTemplateConfigHeuristic()
-            )
+            # Create heuristic instance and modify it before setting as mock return value
+            # On ROCm, use ROCmMMTemplateConfigHeuristic; on XPU use XPUMMTemplateConfigHeuristic;
+            # otherwise use CUDAMMTemplateConfigHeuristic
+            if GPU_TYPE == "xpu":
+                config_heuristics = XPUMMTemplateConfigHeuristic()
+            elif torch.version.hip:
+                config_heuristics = ROCmMMTemplateConfigHeuristic()
+            else:
+                config_heuristics = CUDAMMTemplateConfigHeuristic()
 
             # Traditionally, this would be set of all possible configs
             # We mock out the code path for the sake of the unit test
