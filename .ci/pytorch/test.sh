@@ -447,6 +447,8 @@ test_dynamo_wrapped_shard() {
 }
 
 test_einops() {
+  pip install einops==0.5.0
+  time python test/run_test.py --einops --verbose --upload-artifacts-while-running
   pip install einops==0.6.1
   time python test/run_test.py --einops --verbose --upload-artifacts-while-running
   pip install einops==0.7.0
