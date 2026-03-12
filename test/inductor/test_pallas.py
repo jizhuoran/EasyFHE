@@ -466,13 +466,11 @@ class PallasTestsMixin:
                 expected = operate_on_tensor(x_t_contiguous)
                 self.assertEqual(result, expected)
 
-    @skip_if_tpu
     @skip_if_cuda(reason="strided access not supported in Pallas GPU (Mosaic) backend")
     def test_strided_int_pallas(self):
         """Test strided access patterns with the Pallas backend."""
 
         def fn(x):
-            # Access every other element (strided access)
             return x[::2] * 2.0
 
         compiled = self._compile(fn)
@@ -482,13 +480,11 @@ class PallasTestsMixin:
         expected = fn(x)
         self.assertEqual(result, expected)
 
-    @skip_if_tpu
     @skip_if_cuda(reason="strided access not supported in Pallas GPU (Mosaic) backend")
     def test_strided_offset_pallas(self):
         """Test strided access with offset."""
 
         def fn(x):
-            # Access every other element starting from index 1
             return x[1::2] + 1.0
 
         compiled = self._compile(fn)
@@ -1223,7 +1219,7 @@ class PallasTestsMixin:
         self.assertEqual(result, expected)
 
     @skip_if_cuda
-    @skip_if_tpu
+    @skip_if_tpu  # stack+where fusion doesn't broadcast correctly on TPU yet
     def test_rope_interleaved(self):
         """Test Rotary Position Embedding with interleaved halves.
 
@@ -1248,7 +1244,7 @@ class PallasTestsMixin:
         self.assertEqual(result, expected)
 
     @skip_if_cuda
-    @skip_if_tpu
+    @skip_if_tpu  # output last dim 10 not 128-aligned, Mosaic rejects it
     def test_chained_stride_slice(self):
         """Test that chained stride slices compose into a single strided access.
 
@@ -1262,6 +1258,71 @@ class PallasTestsMixin:
 
         # last dim = 480 which is divisible by 24
         x = torch.randn(4, 480, device=self.DEVICE)
+        result = compiled(x)
+        expected = fn(x)
+        self.assertEqual(result, expected)
+
+    @skip_if_cuda
+    @skip_if_tpu  # store uses flatten+scatter, unsupported on Mosaic
+    def test_strided_multi_dim(self):
+        """Test strided access on multiple dimensions simultaneously."""
+
+        def fn(x):
+            return x[::2, ::3] + 1.0
+
+        compiled = self._compile(fn)
+
+        # 8 % 2 == 0 and 12 % 3 == 0
+        x = torch.randn(8, 12, device=self.DEVICE)
+        result = compiled(x)
+        expected = fn(x)
+        self.assertEqual(result, expected)
+
+    @skip_if_cuda
+    @skip_if_tpu  # falls back to flatten+gather, unsupported on Mosaic
+    def test_strided_non_divisible(self):
+        """Test strided access where dim is not divisible by stride.
+
+        Falls back to flatten+gather on CPU (blocks tiling).
+        """
+
+        def fn(x):
+            return x[::3] * 2.0
+
+        compiled = self._compile(fn)
+
+        # 16 % 3 != 0 → should fall back
+        x = torch.arange(16, dtype=torch.float32, device=self.DEVICE)
+        result = compiled(x)
+        expected = fn(x)
+        self.assertEqual(result, expected)
+
+    @skip_if_cuda
+    def test_strided_large_offset(self):
+        """Test strided access where offset >= stride (skip blocks)."""
+
+        def fn(x):
+            return x[5::2] + 1.0
+
+        compiled = self._compile(fn)
+
+        # offset=5, stride=2: skip=2, r=1 → reshape(5,2)[2:,1]
+        x = torch.arange(10, dtype=torch.float32, device=self.DEVICE)
+        result = compiled(x)
+        expected = fn(x)
+        self.assertEqual(result, expected)
+
+    @skip_if_cuda
+    @skip_if_tpu  # store uses scatter, unsupported on Mosaic
+    def test_strided_large_offset_2d(self):
+        """Test 2D strided access where offset >= stride on last dim."""
+
+        def fn(x):
+            return x[:, 5::2] * 2.0
+
+        compiled = self._compile(fn)
+
+        x = torch.randn(4, 8, device=self.DEVICE)
         result = compiled(x)
         expected = fn(x)
         self.assertEqual(result, expected)
