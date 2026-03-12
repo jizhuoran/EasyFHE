@@ -2561,6 +2561,16 @@
       ]
     }
   ],
+  "GB2977": [
+    {
+      "Gb_type": "wrap_jit_function: missing _torchdynamo_inline",
+      "Context": "type: {type(value).__name__}",
+      "Explanation": "Dynamo expected a JIT function with a _torchdynamo_inline attribute, but the object does not have one.",
+      "Hints": [
+        "It may be possible to write Dynamo tracing rules for this code. Please report an issue to PyTorch if you encounter this graph break often and it is causing performance issues."
+      ]
+    }
+  ],
   "GB0211": [
     {
       "Gb_type": "torch.nn.Module with a non-function custom __getattr__",

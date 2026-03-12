@@ -978,7 +978,7 @@ from user code:
             "LazyVariableTracker(unrealized: <class 'function'>)", all_lines[0]
         )
         self.assertIn(
-            "LazyVariableTracker(realized: UserFunctionVariable())", all_lines[3]
+            "LazyVariableTracker(unrealized: <class 'torch.Tensor'>)", all_lines[3]
         )
 
     @make_logging_test(graph_breaks=True)
