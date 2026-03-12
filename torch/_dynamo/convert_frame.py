@@ -79,6 +79,7 @@ from torch.utils._python_dispatch import (
     _disable_current_modes,
     any_torch_dispatch_mode_on_stack,
     is_in_any_mode_without_ignore_compile_internals,
+    is_traceable_wrapper_subclass,
 )
 from torch.utils._traceback import CapturedTraceback, format_traceback_short
 
@@ -2331,6 +2332,21 @@ class CatchErrorsWrapper:
         ):
             # nametuple constructor/_make
             return ConvertFrameReturn()
+
+        if (
+            frame.f_code.co_name == "__init__"
+            and frame.f_code.co_argcount > 0
+            and frame.f_code.co_varnames
+            and is_traceable_wrapper_subclass(
+                frame.f_locals.get(frame.f_code.co_varnames[0])
+            )
+        ):
+            # Skip tracing __init__ of traceable wrapper subclasses: self is
+            # partially initialized at this point (attributes set by __init__
+            # don't exist yet), so faking it would call __tensor_flatten__ and
+            # crash. Run eagerly instead, matching @torch._disable_dynamo behavior.
+            return ConvertFrameReturn()
+
         if torch._dynamo.utils.get_optimize_ddp_mode() == "ddp_optimizer":
             ddp_module = DistributedDataParallel._get_active_ddp_module()
             if ddp_module:

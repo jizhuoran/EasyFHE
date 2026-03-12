@@ -376,6 +376,41 @@ class CtxSubclassTensor(torch.Tensor):
         return return_and_correct_aliasing(func, args, kwargs, out)
 
 
+class DeferredInitSubclass(torch.Tensor):
+    """
+    A traceable wrapper subclass that calls super().__init__() BEFORE
+    setting instance attributes (similar to torchao patterns).
+    """
+
+    @staticmethod
+    def __new__(cls, data, scale):
+        return torch.Tensor._make_wrapper_subclass(
+            cls, data.shape, dtype=data.dtype, device=data.device
+        )
+
+    def __init__(self, data, scale):
+        super().__init__()
+        self._data = data
+        self._scale = scale
+
+    def __tensor_flatten__(self):
+        return ["_data"], {"_scale": self._scale}
+
+    @classmethod
+    def __tensor_unflatten__(cls, inner_tensors, ctx, outer_size, outer_stride):
+        return cls(inner_tensors["_data"], ctx["_scale"])
+
+    @classmethod
+    def __torch_dispatch__(cls, func, types, args, kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        args_inner = pytree.tree_map_only(DeferredInitSubclass, lambda x: x._data, args)
+        out = func(*args_inner, **kwargs)
+        if isinstance(out, torch.Tensor):
+            return DeferredInitSubclass(out, args[0]._scale)
+        return out
+
+
 def func(a):
     return a.sin()
 
@@ -3382,6 +3417,33 @@ class <lambda>(torch.nn.Module):
         )
 """,  # noqa: B950
         )
+
+    def test_deferred_init_subclass_init_not_traced(self):
+        """
+        Tracing a function that constructs a DeferredInitSubclass must not crash.
+
+        The bug: when Dynamo's frame hook intercepts __init__ as a root frame,
+        self is partially initialised (attributes not yet set by __init__).
+        Previously, wrap_tensor would call __tensor_flatten__ on this
+        partially-initialised self and raise AttributeError.
+
+        The fix skips tracing __init__ of traceable wrapper subclasses at the
+        frame level (convert_frame.py), so __init__ runs eagerly like
+        @torch._disable_dynamo would.
+        """
+        # Compile __init__ directly, simulating the root-frame interception
+        # scenario that occurs in practice (e.g. Diffusers + TorchAO + Dynamo).
+        compiled_init = torch.compile(
+            DeferredInitSubclass.__init__, backend="eager", fullgraph=False
+        )
+        data = torch.randn(4, 4)
+        shell = DeferredInitSubclass.__new__(DeferredInitSubclass, data, 2.0)
+
+        # Should not raise AttributeError from __tensor_flatten__ on partial self
+        compiled_init(shell, data, 2.0)
+
+        self.assertEqual(shell._data, data)
+        self.assertEqual(shell._scale, 2.0)
 
 
 instantiate_parametrized_tests(SubclassTests)
