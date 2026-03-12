@@ -846,6 +846,19 @@ def _dijkstra_expand_single_dim_strategy_to_mesh(
         candidate_placements = tuple(tuple(ps) for ps in new_input_placements)
         if candidate_placements in visited:
             return
+        # Check that the NET transition (original -> proposed) is feasible.
+        # Individual hops may each be valid (e.g. S->R then R->P) while the
+        # net redistribution (S->P) is unsupported by the runtime planner.
+        original_p = initial_placements[input_idx][mesh_dim]
+        net_cost, _ = _compute_placement_transition_cost(
+            original_p,
+            new_placement,
+            mesh_topo,
+            mesh_dim,
+            initial_comm_bytes_gb[input_idx],
+        )
+        if net_cost == float("inf"):
+            return
         step_cost, new_comm_bytes = _compute_placement_transition_cost(
             old_placement,
             new_placement,
