@@ -1536,7 +1536,6 @@ class GraphLowering(torch.fx.Interpreter):
                     ir.EffectfulKernel,
                     ir.ShapeAsConstantBuffer,
                     TorchBindObject,
-                    ir.OpaqueMultiOutput,
                 ),
             )
             for x in result
@@ -1869,7 +1868,7 @@ class GraphLowering(torch.fx.Interpreter):
                 result.realize()
 
             if (is_output or is_input_for_as_strided) and isinstance(
-                n.meta.get("val"), torch.Tensor
+                n.meta["val"], torch.Tensor
             ):
                 if is_user_visible:
                     strides = self.user_visible_output_strides.get(n)

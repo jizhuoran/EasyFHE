@@ -889,7 +889,7 @@ class TestOpaqueObject(TestCase):
         self.assertEqual(size, 0)
 
     def test_custom_op_reference_return(self):
-        @torch.compile(backend="inductor", fullgraph=True)
+        @torch.compile(backend="eager", fullgraph=True)
         def f(x):
             c1 = torch.ops._TestOpaqueObject.create_counter(0, 10)
             c2, c3 = torch.ops._TestOpaqueObject.create_counter2(0, 10)
