@@ -5396,6 +5396,11 @@ class ChoiceCaller:
         # Use this to shuttle information between ChoieCaller generation
         # and the end of benchmarking
         self.annotations: dict[Any, Any] = {}
+        # Subclass-overridden attributes for subgraph-based choices
+        self.gm: torch.fx.GraphModule | None = None
+        self.decomposition: Callable[..., Any] | None = None
+        self.decomposition_kwargs: dict[str, Any] = {}
+        self.config_patches: dict[str, Any] = {}
 
     def benchmark(self, *args: Any, out: torch.Tensor) -> float:
         algo = self.to_callable()
