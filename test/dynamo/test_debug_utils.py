@@ -763,6 +763,55 @@ instantiate_device_type_tests(
 )
 
 
+class TestConfigOverrideValidation(TestCase):
+    def setUp(self):
+        super().setUp()
+        from torch._dynamo.graph_id_filter import (
+            _validate_backend_names,
+            _validate_dynamo_config_keys,
+            _validate_inductor_config_keys,
+        )
+
+        _validate_backend_names.cache_clear()
+        _validate_dynamo_config_keys.cache_clear()
+        _validate_inductor_config_keys.cache_clear()
+        torch._dynamo.reset()
+
+    def tearDown(self):
+        torch._dynamo.reset()
+        super().tearDown()
+
+    @torch._dynamo.config.patch(
+        debug_backend_override="0:not_a_real_backend",
+    )
+    def test_invalid_backend_raises_on_compile(self):
+        def fn(x):
+            return x + 1
+
+        with self.assertRaisesRegex(ValueError, "not_a_real_backend"):
+            torch.compile(fn, backend="eager")(torch.randn(4))
+
+    @torch._dynamo.config.patch(
+        debug_dynamo_config_override="0:nonexistent_dynamo_option=True",
+    )
+    def test_invalid_dynamo_config_raises_on_compile(self):
+        def fn(x):
+            return x + 1
+
+        with self.assertRaisesRegex(ValueError, "nonexistent_dynamo_option"):
+            torch.compile(fn, backend="eager")(torch.randn(4))
+
+    @torch._dynamo.config.patch(
+        debug_inductor_config_override="0:nonexistent_inductor_option=True",
+    )
+    def test_invalid_inductor_config_raises_on_compile(self):
+        def fn(x):
+            return x + 1
+
+        with self.assertRaisesRegex(ValueError, "nonexistent_inductor_option"):
+            torch.compile(fn, backend="eager")(torch.randn(4))
+
+
 class TestDynamoConfigOverrideIntegration(TestCase):
     def setUp(self):
         super().setUp()

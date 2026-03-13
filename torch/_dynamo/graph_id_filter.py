@@ -323,8 +323,65 @@ def _create_backend_router(config_str: str) -> GraphBackendRouter:
 
 
 @functools.lru_cache
+def _validate_backend_names(config_str: str) -> str | None:
+    """Return an error message if any backend name is invalid, else None."""
+    if not config_str or not config_str.strip():
+        return None
+    from .backends.registry import lookup_backend
+
+    for rule_str in config_str.split(";"):
+        rule_str = rule_str.strip()
+        if not rule_str or ":" not in rule_str:
+            continue
+        backend_name = rule_str[rule_str.find(":") + 1 :].strip()
+        if not backend_name:
+            continue
+        try:
+            lookup_backend(backend_name)
+        except Exception:
+            return (
+                f"TORCH_COMPILE_OVERRIDE_BACKENDS: "
+                f"'{backend_name}' is not a valid backend, "
+                f"see `torch._dynamo.list_backends()` for available backends"
+            )
+    return None
+
+
+@functools.lru_cache
+def _validate_inductor_config_keys(config_str: str) -> str | None:
+    """Return an error message if any config key is invalid, else None."""
+    router = GraphConfigRouter(config_str)
+    from torch._inductor import config
+
+    for _, config_dict in router._rules:
+        for key in config_dict:
+            if not hasattr(config, key):
+                return (
+                    f"TORCH_COMPILE_OVERRIDE_INDUCTOR_CONFIGS: "
+                    f"'{key}' is not a valid torch._inductor.config option"
+                )
+    return None
+
+
+@functools.lru_cache
+def _validate_dynamo_config_keys(config_str: str) -> str | None:
+    """Return an error message if any config key is invalid, else None."""
+    router = GraphConfigRouter(config_str)
+    from torch._dynamo import config
+
+    for _, config_dict in router._rules:
+        for key in config_dict:
+            if not hasattr(config, key):
+                return (
+                    f"TORCH_COMPILE_OVERRIDE_DYNAMO_CONFIGS: "
+                    f"'{key}' is not a valid torch._dynamo.config option"
+                )
+    return None
+
+
+@functools.lru_cache
 def _create_inductor_config_router(config_str: str) -> GraphConfigRouter:
-    """Create and cache GraphConfigRouter instances based on config string."""
+    """Create and cache GraphConfigRouter for inductor config overrides."""
     return GraphConfigRouter(config_str)
 
 
