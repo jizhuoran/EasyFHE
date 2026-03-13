@@ -11,11 +11,12 @@ architectures:
     * Latest XPU
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
 from pathlib import Path
-from typing import Optional
 
 
 SCRIPT_DIR = Path(__file__).absolute().parent
@@ -299,8 +300,8 @@ def list_without(in_list: list[str], without: list[str]) -> list[str]:
 def generate_libtorch_matrix(
     os: str,
     release_type: str,
-    arches: Optional[list[str]] = None,
-    libtorch_variants: Optional[list[str]] = None,
+    arches: list[str] | None = None,
+    libtorch_variants: list[str] | None = None,
 ) -> list[dict[str, str]]:
     if arches is None:
         arches = ["cpu"]
@@ -359,8 +360,8 @@ def generate_libtorch_matrix(
 
 def generate_wheels_matrix(
     os: str,
-    arches: Optional[list[str]] = None,
-    python_versions: Optional[list[str]] = None,
+    arches: list[str] | None = None,
+    python_versions: list[str] | None = None,
 ) -> list[dict[str, str]]:
     package_type = "wheel"
     if os == "linux" or os == "linux-aarch64" or os == "linux-s390x":

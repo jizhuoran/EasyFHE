@@ -160,7 +160,7 @@ class _Namespace:
         self._used_names: set[str] = set()
         self._base_count: dict[str, int] = {}
 
-    def create_name(self, candidate: str, obj: Optional[Any]) -> str:
+    def create_name(self, candidate: str, obj: Any | None) -> str:
         """Create a unique name.
 
         Arguments:
