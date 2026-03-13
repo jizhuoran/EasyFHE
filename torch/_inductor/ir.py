@@ -5206,8 +5206,9 @@ class ComputedBuffer(OperationBuffer):
 
 class TemplateBuffer(OperationBuffer):
     """
-    Represents a Triton (in the future other type) of template operator
-    that we can fuse an epilogue onto.
+    Base class for template operators that support epilogue and prologue fusion.
+    Subclasses: TritonTemplateBuffer (built-in Triton templates),
+    HelionTemplateBuffer (Helion kernels), etc.
     """
 
     def __init__(
@@ -5215,6 +5216,8 @@ class TemplateBuffer(OperationBuffer):
         layout: OutputSpec,
         inputs: Sequence[IRNode],
         make_kernel_render: Callable[..., Any] | None,
+        mutated_inputs: Iterable[IRNode] | None = None,
+        allowed_prologue_inps: OrderedSet[str] | None = None,
     ) -> None:
         super().__init__(name=None, layout=layout)
         self.inputs = InputsKernel.unwrap_storage(inputs)
@@ -5224,8 +5227,42 @@ class TemplateBuffer(OperationBuffer):
         # Annotations dict for storing metadata (e.g., KernelTemplateChoice)
         self.annotations: dict[str, Any] = {}
 
+        # Inputs that the kernel mutates in-place
+        self.mutated_inputs = mutated_inputs
+        self.mutation_outputs: list[MutationOutput] = []
+        if mutated_inputs is not None:
+            first_input = self.inputs[0]
+            assert isinstance(first_input, IRNode), type(first_input)
+            device = first_input.get_device()
+            self.mutation_outputs = [
+                MutationOutput(NoneLayout(device=device), buf, self)
+                for buf in mutated_inputs
+            ]
+        # Input buffer names eligible for prologue fusion.
+        self.allowed_prologue_inps: OrderedSet[str] = (
+            allowed_prologue_inps or OrderedSet()
+        )
+
     def get_read_writes(self) -> dependencies.ReadWrites:
         return self.extract_read_writes(normalize=True)
+
+    def _read_deps_from_inputs(self, normalize: bool) -> OrderedSet[dependencies.Dep]:
+        """Build read dependencies from all inputs."""
+        reads: OrderedSet[dependencies.Dep] = OrderedSet()
+        for inp_raw in self.inputs:
+            assert isinstance(inp_raw, (ReinterpretView, Buffer)), type(inp_raw)
+            inp: ReinterpretView | Buffer = inp_raw
+            assert isinstance(inp.layout, Layout), type(inp.layout)
+            inp_indexer = inp.layout.make_indexer()
+
+            def dummy(index: Sequence[Any], rindex: Sequence[Any]) -> Any:
+                assert len(rindex) == 0
+                return ops.load(inp.get_name(), inp_indexer(index))
+
+            reads |= dependencies.extract_read_writes(
+                dummy, inp.get_size(), (), normalize=normalize
+            ).reads
+        return reads
 
     def extract_read_writes(self, normalize: bool = False) -> dependencies.ReadWrites:
         name = self.get_name()
@@ -5238,22 +5275,7 @@ class TemplateBuffer(OperationBuffer):
         deps = dependencies.extract_read_writes(
             dummy, self.get_size(), (), normalize=normalize
         )
-
-        for inp in self.inputs:
-            assert isinstance(inp, (ReinterpretView, Buffer)), type(inp)
-            assert isinstance(inp.layout, Layout), type(inp.layout)
-
-            indexer = inp.layout.make_indexer()
-
-            def dummy(index: Sequence[Any], rindex: Sequence[Any]) -> Any:
-                assert len(rindex) == 0
-                # pyrefly: ignore [missing-attribute]
-                return ops.load(inp.get_name(), indexer(index))
-
-            deps.reads |= dependencies.extract_read_writes(
-                dummy, inp.get_size(), (), normalize=normalize
-            ).reads
-
+        deps.reads |= self._read_deps_from_inputs(normalize)
         return deps
 
     def get_reduction_size(self) -> Sequence[Expr]:
@@ -5282,14 +5304,8 @@ class TemplateBuffer(OperationBuffer):
         """Whether this template produces multiple outputs via MultiOutputLayout."""
         return isinstance(self.layout, MultiOutputLayout)
 
-    def can_fuse_multi_output_epilogue(self, snode: object) -> bool:
-        """Whether scheduler node can be fused as an epilogue of this multi-output template.
-
-        Returns ``False`` by default.  Subclasses may override to support
-        additional fusion patterns (e.g. epilogue fusion with multi-output
-        extraction and pointwise operations).
-        """
-        return False
+    def get_allowed_prologue_inps(self) -> OrderedSet[str]:
+        return self.allowed_prologue_inps
 
 
 class TritonTemplateBuffer(TemplateBuffer):
@@ -5310,19 +5326,12 @@ class TritonTemplateBuffer(TemplateBuffer):
         We work around this by creating an extra input buffer during the lowering
         and we mark them as mutated inputs.
         """
-        super().__init__(layout, inputs, make_kernel_render)
-        self.mutated_inputs = mutated_inputs
-        self.outputs: list[Buffer] = [self]
-        if mutated_inputs is not None:
-            assert isinstance(self.inputs[0], IRNode), type(self.inputs[0])
-            device = self.inputs[0].get_device()
-            self.outputs += [
-                MutationOutput(NoneLayout(device=device), buf, self)
-                for buf in mutated_inputs
-            ]
-
-        self.allowed_prologue_inps = (
-            allowed_prologue_inps if allowed_prologue_inps else OrderedSet()
+        super().__init__(
+            layout,
+            inputs,
+            make_kernel_render,
+            mutated_inputs=mutated_inputs,
+            allowed_prologue_inps=allowed_prologue_inps,
         )
 
         self.subgraph_inps: list[IRNode | sympy.Expr | None] | None = None
@@ -5353,10 +5362,7 @@ class TritonTemplateBuffer(TemplateBuffer):
         return res
 
     def get_outputs(self) -> list[Buffer]:
-        return self.outputs
-
-    def get_allowed_prologue_inps(self) -> OrderedSet[str]:
-        return self.allowed_prologue_inps
+        return [self, *self.mutation_outputs]
 
     def __str__(self) -> str:
         out = f"TritonTemplateBuffer(layout={self.layout})"
