@@ -395,12 +395,14 @@ class BaseUserFunctionVariable(VariableTracker):
     def get_dict_vt(self, tx: "InstructionTranslator") -> "DunderDictVariable":
         if self.dict_vt is None:
             dict_proxy: dict[str, VariableTracker] = {}
-            if hasattr(self, "fn"):  # Use `.get_function()` instead?
+
+            if not istype(self, NestedUserFunctionVariable):
+                fn = self.get_function()
                 dict_proxy = {
                     name: VariableTracker.build(
                         tx, value, source=self.source and AttrSource(self.source, name)
                     )
-                    for name, value in self.fn.__dict__.items()
+                    for name, value in fn.__dict__.items()
                 }
             self.dict_vt = variables.DunderDictVariable.create(tx, self, dict_proxy)
         return self.dict_vt
@@ -445,8 +447,46 @@ class BaseUserFunctionVariable(VariableTracker):
     def has_self(self) -> bool:
         raise NotImplementedError
 
+    def get_function(self) -> types.FunctionType:
+        raise NotImplementedError
+
     def get_module(self) -> str:
         return self.get_globals()["__name__"]
+
+    def var_getattr(self, tx: "InstructionTranslator", name: str):
+        fn_dict = self.get_dict_vt(tx)
+
+        # missing: __globals__, __closure__, __kwdefautls__, __defaults__
+        if name in ("__name__", "__qualname__", "__doc__", "__module__", "__code__"):
+            val = getattr(self, f"get_{name[2:-2]}")()
+            if fn_dict.contains(name):
+                return fn_dict.getitem(name)
+            return ConstantVariable.create(
+                val, source=self.source and AttrSource(self.source, name)
+            )
+        elif name == "__dict__":
+            return fn_dict
+        elif name == "__annotations__":
+            return fn_dict.getitem_or_default(
+                name,
+                lambda: variables.ConstDictVariable(
+                    {},
+                    mutation_type=ValueMutationNew(),
+                ),
+            )
+        elif name == "__type_params__":
+            return fn_dict.getitem_or_default(
+                name,
+                lambda: variables.TupleVariable(
+                    [],
+                    mutation_type=ValueMutationNew(),
+                ),
+            )
+        else:
+            if fn_dict.contains(name):
+                return fn_dict.getitem(name)
+            else:
+                raise_observed_exception(AttributeError, tx)
 
     def call_function(
         self,
@@ -636,7 +676,7 @@ class UserFunctionVariable(BaseUserFunctionVariable):
 
     def var_getattr(self, tx: "InstructionTranslator", name: str) -> VariableTracker:
         if name == "__dict__":
-            return self.get_dict_vt(tx)
+            return super().var_getattr(tx, name)
         elif name in cmp_name_to_op_mapping:
             return variables.GetAttrVariable(self, name)
         source = self.get_source()
@@ -1868,55 +1908,24 @@ class NestedUserFunctionVariable(BaseUserFunctionVariable):
         return func
 
     def var_getattr(self, tx: "InstructionTranslator", name: str) -> VariableTracker:
-        fn_dict = self.get_dict_vt(tx)
-
-        # Some dunder attributes (__name__, __doc__, etc) are stored in the C
-        # field slot. I guess it won't be too bad if we store them in the
-        # __dict__ field.
-
-        # annotations should be stored in the __dict__ field
-        if name == "__annotations__":
-            return self.get_dict_vt(tx).getitem_or_default(
-                name,
-                lambda: variables.ConstDictVariable(
-                    {},
-                    source=self.source and AttrSource(self.source, "__annotations__"),
-                    mutation_type=ValueMutationNew(),
-                ),
-            )
-        elif name == "__code__":
-            return self.code
-        elif name == "__defaults__":
+        if name in (
+            "__annotations__",
+            "__dict__",
+            "__doc__",
+            "__code__",
+            "__module__",
+            "__name__",
+            "__qualname__",
+            "__type_params__",
+        ):
+            return super().var_getattr(tx, name)
+        if name == "__defaults__":
             d = getattr(self, "defaults", None)
             return d.as_python_constant() if d else ConstantVariable.create(None)
-        elif name == "__dict__":
-            return self.get_dict_vt(tx)
-        elif name == "__type_params__":
-            return fn_dict.getitem_or_default(
-                name,
-                lambda: variables.TupleVariable(
-                    [],
-                    source=self.source and AttrSource(self.source, "__type_params__"),
-                ),
-            )
-        elif name in ("__name__", "__qualname__", "__doc__", "__module__"):
-            val = getattr(self, f"get_{name[2:-2]}")()
-            return fn_dict.getitem_or_default(
-                name,
-                lambda: ConstantVariable.create(
-                    val, source=self.source and AttrSource(self.source, name)
-                ),
-            )
         elif name in cmp_name_to_op_mapping:
             return variables.GetAttrVariable(self, name)
         else:
-            if fn_dict.contains(name):
-                return fn_dict.getitem(name)
-            else:
-                # should `var_getattr` raise AttributeError if not found?
-                # I'm wondering if this method is a helper that it is faster
-                # than going through BuiltinVariable(getattr).call_function(...)
-                raise_observed_exception(AttributeError, tx)
+            return super().var_getattr(tx, name)
 
     def has_closure(self) -> bool:
         return self.closure is not None
@@ -2355,7 +2364,7 @@ class WrappedSkipFunctionVariable(SkipFunctionVariable):
         codegen.extend_output(create_call_function(1, False))
 
 
-class WrapperUserFunctionVariable(VariableTracker):
+class WrapperUserFunctionVariable(BaseUserFunctionVariable):
     """
     Used to represent a wrapper object that contains the actual callable as an
     attribute. For example, torch.jit.script/trace have the original function at
@@ -2368,13 +2377,24 @@ class WrapperUserFunctionVariable(VariableTracker):
         self.wrapper_obj = wrapper_obj
         self.attr_to_trace = attr_to_trace
 
+    def get_module(self) -> str:
+        return self.wrapper_obj.__module__
+
+    def get_name(self) -> str:
+        return self.wrapper_obj.__name__
+
+    def get_code(self) -> types.CodeType:
+        return self.get_function().__code__
+
     def var_getattr(self, tx: "InstructionTranslator", name: str) -> VariableTracker:
         if name == self.attr_to_trace:
             val = getattr(self.wrapper_obj, self.attr_to_trace)
             source = self.source and AttrSource(self.source, name)
             return VariableTracker.build(tx, val, source)
-
         return super().var_getattr(tx, name)
+
+    def get_function(self):
+        return getattr(self.wrapper_obj, self.attr_to_trace)
 
     def self_args(self) -> list[VariableTracker]:
         return []
