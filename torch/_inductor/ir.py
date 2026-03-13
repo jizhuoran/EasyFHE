@@ -8855,30 +8855,6 @@ class MultiOutput(ExternKernel):
             and len(inp.get_inputs_that_alias_output()) > 0
         ]
 
-    def get_read_writes(self) -> dependencies.ReadWrites:
-        # Reads: StarDep on parent (we don't know which elements of the
-        # packed output we index into — conservative is correct).
-        reads: OrderedSet[dependencies.Dep] = OrderedSet()
-        for inp in self.inputs:
-            if isinstance(inp, IRNode):
-                reads.add(dependencies.StarDep(inp.get_name()))
-
-        # Writes: build proper MemoryDep from our FixedLayout so the
-        # scheduler can match our write with downstream epilogue reads.
-        name = self.get_name()
-        indexer = self.get_layout().make_indexer()
-
-        def dummy(index: Sequence[Any], rindex: Sequence[Any]) -> Any:
-            assert len(rindex) == 0
-            return ops.store(name, indexer(index), "fake")
-
-        write_rw = dependencies.extract_read_writes(dummy, self.get_size(), ())
-        return dependencies.ReadWrites(
-            reads=reads,
-            writes=write_rw.writes,
-            index_exprs=OrderedSet(),
-        )
-
 
 class OpaqueMultiOutput(MultiOutput):
     """MultiOutput for opaque objects."""
