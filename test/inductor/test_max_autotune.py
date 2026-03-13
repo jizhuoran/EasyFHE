@@ -1017,8 +1017,12 @@ class TestMaxAutotune(TestCase):
         f_c = torch.compile(mode="max-autotune-no-cudagraphs")(f)
         _, code = run_and_get_code(f_c, inps[0], inps[1])
         self.assertEqual(f_c(*inps), f(*inps), atol=0.03, rtol=0.25)
+        # x has multi-consumers (cat + add), so cat skips pointwise_cat
+        # and uses ConcatKernel.  cos is no longer fused into cat, giving
+        # one extra kernel launch compared to the single-consumer case.
+        count = 3 if (using_triton_mm or config.triton.native_matmul) else 2
         FileCheck().check(get_func_call()).check_count(
-            get_kernel_launch(), 2, exactly=True
+            get_kernel_launch(), count, exactly=True
         ).run(code[0])
 
         def f(x, y):

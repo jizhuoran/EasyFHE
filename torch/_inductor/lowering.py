@@ -1930,6 +1930,7 @@ def quantized_decomposed_dequantize_per_tensor_tensor(
 
 @register_lowering(aten.cat)
 def cat(inputs, dim=0):
+    """Lower aten.cat, choosing between pointwise_cat and ConcatKernel."""
     cpu_device = inputs[0].get_device().type == "cpu"
     if cpu_device and all(
         input.get_dtype() in [torch.int8, torch.uint8] for input in inputs
@@ -2044,10 +2045,34 @@ def cat(inputs, dim=0):
 
         # horizontal fuse in case all inputs will require a copy kernel anyway.
         # only horizontally fuse pointwise kernels
+
+        # Skip pointwise_cat when any cat input has a fusible (pointwise)
+        # multi-consumer — ConcatKernel + NonOwningLayout avoids redundant
+        # reads.  Non-fusible users (e.g. matmul) don't benefit, so they
+        # should not prevent pointwise_cat.
+        def any_input_has_multi_consumers() -> bool:
+            cat_node = V.current_node
+            if cat_node is None:
+                return False
+            fx_args = cat_node.args[0]  # aten.cat format: cat(input_list, dim)
+            if not isinstance(fx_args, (list, tuple)):
+                return False
+
+            def has_fusible_multi_consumer(arg):
+                if not hasattr(arg, "users") or len(arg.users) <= 1:
+                    return False
+                return any(is_pointwise_use(u) for u in arg.users if u is not cat_node)
+
+            return any(has_fusible_multi_consumer(arg) for arg in fx_args)
+
+        has_multi_consumers = any_input_has_multi_consumers()
+
         horizontal_fuse_cat = all(
             should_lower_cat_input(inp) for inp in inputs
         ) and not any(can_fuse_reduction(t) for t in inputs)
-        if fuse_pointwise_use or (horizontal_fuse_cat and not fusable_reduction):
+        if not has_multi_consumers and (
+            fuse_pointwise_use or (horizontal_fuse_cat and not fusable_reduction)
+        ):
             return pointwise_cat(inputs, dim)
 
     return TensorBox(ir.ConcatKernel.create(inputs, dim))
