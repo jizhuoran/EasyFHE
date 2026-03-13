@@ -917,9 +917,11 @@ forward pass (e.g., a dynamic graph instead of the original static graph).
 To fix this, either:
   - Use torch._dynamo.mark_dynamic() to explicitly mark varying dimensions as
     dynamic upfront, avoiding the static-to-dynamic transition.
-  - Set torch._dynamo.config.cache_entry_use_lru = False to disable LRU cache
+  - Call torch._C._dynamo.eval_frame._set_lru_cache(False) to disable LRU cache
     reordering, which can change which graph is checked first between forward
     and recompute.
+See https://github.com/pytorch/pytorch/issues/166926 for more details and
+workaround examples.
 """
 
 
