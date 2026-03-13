@@ -451,6 +451,13 @@ class DistTensorOpsTest(DTensorContinuousTestBase):
         self.assertTrue(dist_tensor_1.is_same_size(dist_tensor_3))
         self.assertFalse(input_tensor_2.is_same_size(dist_tensor_3))
 
+    def test_is_pinned(self):
+        device_mesh = self.build_device_mesh()
+        shard_spec = [Shard(0)]
+
+        dt = DTensor.from_local(torch.ones(4, 4), device_mesh, shard_spec)
+        self.assertFalse(dt.is_pinned())
+
     def _test_op(self, mesh, op_call, *args, **kwargs):
         out = op_call(*args, **kwargs)
         dtc = DTensorConverter(mesh, args, kwargs)
