@@ -1045,9 +1045,7 @@ class TestFullyShardPrefetch(FSDPTest):
         n_layers = 3
         reshard_after_forward = True
         # use checkpoint wrapper instead of torch.utils
-        model_args = ModelArgs(
-            n_layers=n_layers, checkpoint_activations=False, weight_tying=False
-        )
+        model_args = ModelArgs(n_layers=n_layers, checkpoint_activations=False)
         model = Transformer(model_args)
         apply_activation_checkpointing(
             model, check_fn=lambda m: isinstance(m, TransformerBlock)
@@ -1269,9 +1267,7 @@ class TestFullyShardPrefetch(FSDPTest):
     @skip_if_lt_x_gpu(2)
     def test_fully_shard_multi_module_backward_prefetch(self):
         n_layers = 5
-        model_args = ModelArgs(
-            n_layers=n_layers, checkpoint_activations=True, weight_tying=False
-        )
+        model_args = ModelArgs(n_layers=n_layers, checkpoint_activations=True)
         model = Transformer(model_args)
         for i in range(n_layers):
             if i == 0:
