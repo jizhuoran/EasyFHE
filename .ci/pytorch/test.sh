@@ -371,6 +371,16 @@ test_python_smoke_xpu() {
   assert_git_not_dirty
 }
 
+test_dtensor() {
+  # Dynamically discover all test files under test/distributed/tensor/
+  # so new tests are automatically picked up.
+  # shellcheck disable=SC2046
+  time python test/run_test.py \
+    --include $(find test/distributed/tensor -name 'test_*.py' -printf '%P\n' | sed 's|\.py$||; s|^|distributed/tensor/|' | sort | tr '\n' ' ') \
+    --verbose $PYTHON_TEST_EXTRA_OPTION --upload-artifacts-while-running
+  assert_git_not_dirty
+}
+
 test_h100_distributed() {
   # Distributed tests at H100
   time python test/run_test.py --include distributed/_composable/test_composability/test_pp_composability.py  $PYTHON_TEST_EXTRA_OPTION --upload-artifacts-while-running
@@ -2057,6 +2067,8 @@ elif [[ "${TEST_CONFIG}" == smoke_b200 ]]; then
   test_python_smoke_b200
 elif [[ "${TEST_CONFIG}" == smoke_xpu ]]; then
   test_python_smoke_xpu
+elif [[ "${TEST_CONFIG}" == dtensor ]]; then
+  test_dtensor
 elif [[ "${TEST_CONFIG}" == h100_distributed ]]; then
   test_h100_distributed
 elif [[ "${TEST_CONFIG}" == "h100-symm-mem" ]]; then
