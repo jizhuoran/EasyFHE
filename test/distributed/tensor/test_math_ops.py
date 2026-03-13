@@ -1258,6 +1258,39 @@ class DistMathOpsTest(DTensorTestBase):
             self.assertEqual(dtensor_result.full_tensor(), local_result)
 
     @with_comms
+    def test_prims_fma(self):
+        from torch._inductor import inductor_prims
+
+        device_mesh = self.build_device_mesh()
+        a = torch.randn(12, 8)
+        b = torch.randn(12, 8)
+        c = torch.randn(12, 8)
+        dt_a = distribute_tensor(a, device_mesh, [Shard(0)])
+        dt_b = distribute_tensor(b, device_mesh, [Shard(0)])
+        dt_c = distribute_tensor(c, device_mesh, [Shard(0)])
+
+        # All DTensor inputs
+        local_result = inductor_prims.fma(a, b, c)
+        dtensor_result = inductor_prims.fma(dt_a, dt_b, dt_c)
+        self.assertEqual(dtensor_result.full_tensor(), local_result)
+        self.assertTrue(dtensor_result.placements[0].is_shard(dim=0))
+
+        # Scalar tensor input (mimics the alpha argument in add_)
+        scalar = torch.tensor(2.0)
+        local_result = inductor_prims.fma(a, scalar, c)
+        dtensor_result = inductor_prims.fma(dt_a, scalar, dt_c)
+        self.assertEqual(dtensor_result.full_tensor(), local_result)
+        self.assertTrue(dtensor_result.placements[0].is_shard(dim=0))
+
+        # Replicate placement
+        dt_a_rep = distribute_tensor(a, device_mesh, [Replicate()])
+        dt_c_rep = distribute_tensor(c, device_mesh, [Replicate()])
+        local_result = inductor_prims.fma(a, scalar, c)
+        dtensor_result = inductor_prims.fma(dt_a_rep, scalar, dt_c_rep)
+        self.assertEqual(dtensor_result.full_tensor(), local_result)
+        self.assertTrue(dtensor_result.placements[0].is_replicate())
+
+    @with_comms
     def test_prims_view_of(self):
         device_mesh = self.build_device_mesh()
         x = torch.randn(12, 8)
