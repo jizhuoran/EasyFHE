@@ -6406,6 +6406,25 @@ not ___dict_contains('cccccccc', G['sys'].modules)""",
         opt_fn(torch.int16, torch.ShortTensor)
         opt_fn(torch.bool, torch.BoolTensor)
 
+    @unittest.skipIf(not torch.distributed.is_available(), "requires distributed")
+    def test_or_union_type_opaque_class(self):
+        # Test that or_ on opaque class types (e.g. Shard | _StridedShard)
+        # doesn't cause a graph break.
+        from torch.distributed.tensor import Shard
+        from torch.distributed.tensor.placement_types import _StridedShard
+
+        cnt = torch._dynamo.testing.CompileCounter()
+
+        @torch.compile(backend=cnt, fullgraph=True)
+        def fn(x):
+            _ = Shard | _StridedShard
+            return x + 1
+
+        x = torch.randn(4)
+        result = fn(x)
+        self.assertEqual(result, x + 1)
+        self.assertEqual(cnt.frame_count, 1)
+
     def test_nan(self):
         def f(x, n):
             return x * 2 + n
