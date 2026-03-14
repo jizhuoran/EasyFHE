@@ -355,7 +355,7 @@ class UserDefinedClassVariable(UserDefinedVariable):
         if ConstantVariable.is_literal(obj):
             return VariableTracker.build(tx, obj)
         elif isinstance(obj, enum.Enum):
-            return VariableTracker.build(tx, obj)
+            return VariableTracker.build(tx, obj, source)
         elif self.value is collections.OrderedDict:
             return variables.GetAttrVariable(self, name)
         elif name in getattr(self.value, "__dict__", {}) or (

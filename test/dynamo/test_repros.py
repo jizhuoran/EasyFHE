@@ -8940,6 +8940,43 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
         result = f(torch.tensor(0.0))
         self.assertEqual(result.item(), 4.0)
 
+    def test_enum_with_class_values(self):
+        # Enum whose members are user-defined classes; calling .value()
+        # instantiates the class, which Dynamo can't trace.
+        from enum import Enum
+
+        class AvgMetric:
+            def __init__(self):
+                self.sum = None
+                self.count = 0
+
+            def append(self, x):
+                if self.count > 0:
+                    self.sum = self.sum + x
+                else:
+                    self.sum = x.clone()
+                self.count += 1
+
+        class GlobalReduction(Enum):
+            AVG = AvgMetric
+
+        class ScalarLogger:
+            def __init__(self):
+                self.metrics = {}
+
+            def log(self, key, value, global_reduction):
+                if key not in self.metrics:
+                    self.metrics[key] = global_reduction.value()
+                self.metrics[key].append(value)
+
+        @torch.compile(backend="eager", fullgraph=True)
+        def fn(logger, x):
+            logger.log("test", x, GlobalReduction.AVG)
+            return x + 1
+
+        logger = ScalarLogger()
+        fn(logger, torch.tensor(1.0))
+
 
 instantiate_parametrized_tests(ReproTests)
 
