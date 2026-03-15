@@ -2548,6 +2548,81 @@ class CollectiveFunctionRewriteVariable(UserFunctionVariable):
                 ],
             )
 
+        if self.fn == dist.batch_isend_irecv:
+            if not config.enable_p2p_compilation:
+                unimplemented(
+                    gb_type="P2P compilation disabled for batch_isend_irecv",
+                    context=f"{self.fn}",
+                    explanation="P2P compilation is disabled.",
+                    hints=[
+                        "Set TORCHDYNAMO_ENABLE_P2P_COMPILATION=1 to enable.",
+                    ],
+                )
+
+            p2p_ops = kwargs["p2p_op_list"]
+            if not isinstance(p2p_ops, variables.ListVariable):
+                raise torch._dynamo.exc.InternalTorchDynamoError(
+                    "`P2POp` used incorrectly"
+                )
+
+            ops = list()
+            peers = list()
+            tags = list()
+            tensors = list()
+            group_var: VariableTracker | None = None
+
+            for item in p2p_ops.items:
+                if item.python_type() is not dist.P2POp:
+                    raise torch._dynamo.exc.InternalTorchDynamoError(
+                        "`P2POp` used incorrectly"
+                    )
+
+                op_var = item.var_getattr(tx, "op")
+                if op_var.is_python_constant():
+                    op = op_var.as_python_constant()
+                    if op not in (dist.isend, dist.irecv):
+                        raise torch._dynamo.exc.InternalTorchDynamoError(
+                            f"unexpected P2POp op {op}"
+                        )
+                    op_var = variables.ConstantVariable.create(op.__name__)
+                elif hasattr(op_var, "get_name"):
+                    op_var = variables.ConstantVariable.create(op_var.get_name())
+                else:
+                    raise torch._dynamo.exc.InternalTorchDynamoError(
+                        f"unexpected P2POp op variable {op_var}"
+                    )
+
+                ops.append(op_var)
+                tensors.append(item.var_getattr(tx, "tensor"))
+                peers.append(item.var_getattr(tx, "peer"))
+                tags.append(item.var_getattr(tx, "tag"))
+                if group_var is None:
+                    group_var = item.var_getattr(tx, "group")
+
+            assert group_var is not None
+            new_args: tuple[VariableTracker, ...] = ()
+            new_kwargs: dict[str, VariableTracker] = {
+                "op_list": variables.ListVariable(ops),
+                "peer_list": variables.ListVariable(peers),
+                "tag_list": variables.ListVariable(tags),
+                "tensors": variables.ListVariable(tensors),
+                "group_name": group_var,
+            }
+            return self.replacement_var.call_function(tx, new_args, new_kwargs)
+
+        if self.fn in (dist.isend, dist.irecv):
+            if not config.enable_p2p_compilation:
+                unimplemented(
+                    gb_type="P2P compilation disabled for isend/irecv",
+                    context=f"{self.fn}",
+                    explanation="P2P compilation is disabled.",
+                    hints=[
+                        "Set TORCHDYNAMO_ENABLE_P2P_COMPILATION=1 to enable.",
+                    ],
+                )
+
+            return self.replacement_var.call_function(tx, args, kwargs)
+
         if self.fn in (
             dist.all_reduce,
             dist.reduce_scatter_tensor,
