@@ -667,16 +667,14 @@ def _extract_rules_from_op_strategy(
             continue
         if isinstance(spec.output_specs, tuple):
             output_plcs: list[Placement] = []
-            has_none = False
             for out_spec in spec.output_specs:
                 if out_spec is None:
-                    # None means the output placement is undefined for this
-                    # strategy (e.g. indices under P(max) reduction). Skip it.
-                    has_none = True
-                    break
+                    raise NotImplementedError(
+                        f"Strategy has None in output_specs, indicating mixed "
+                        f"tensor/non-tensor outputs which the validator does not "
+                        f"support. output_specs: {spec.output_specs}"
+                    )
                 output_plcs.append(out_spec.placements[0])
-            if has_none:
-                continue
         else:
             # Single DTensorSpec — the propagator duplicates it for all
             # outputs of multi-output ops, so we do the same here.
