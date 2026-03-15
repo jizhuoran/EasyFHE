@@ -3018,21 +3018,6 @@ def get_torch_obj_rule_map() -> dict[Any, type["VariableTracker"]]:
                     )
                 else:
                     d[obj] = v
-    # Inline copy.deepcopy and its internal helpers so dynamo traces through
-    # the Python implementation rather than graph-breaking.  The copy module
-    # stays in BUILTIN_SKIPLIST so that other copy functions (e.g. copy.copy)
-    # are still skipped.
-    d[copy.deepcopy] = UserFunctionVariable
-    for _name in (
-        "_deepcopy_atomic",
-        "_deepcopy_list",
-        "_deepcopy_tuple",
-        "_deepcopy_dict",
-        "_keep_alive",
-    ):
-        _fn = getattr(copy, _name, None)
-        if _fn is not None:
-            d[_fn] = UserFunctionVariable
     return d
 
 
@@ -3192,6 +3177,7 @@ def _builtin_function_ids() -> dict[int, str]:
     rv.update(
         {
             id(cast): "typing.cast",
+            id(copy.deepcopy): "copy.deepcopy",
         }
     )
     return rv
