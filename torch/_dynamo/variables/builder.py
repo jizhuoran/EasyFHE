@@ -2458,6 +2458,12 @@ class VariableBuilder:
             **options,
         )
 
+        # Track input tensors for attribute mutation, matching how
+        # handle_traced_output tracks intermediate tensors with AttributeMutationNew.
+        # This enables setattr on input tensors (e.g. tensor.custom_attr = val)
+        # without graph breaking.
+        self.tx.output.side_effects.track_object_existing(value, tensor_variable)
+
         if value._is_view():
             # If value is a view, add its base tensor to the tracked fakes list.
             # This is so we are able to access the correct source for its symbolic

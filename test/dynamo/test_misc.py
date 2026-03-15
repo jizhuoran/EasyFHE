@@ -1004,6 +1004,31 @@ graph():
         self.assertEqual(res.grad, ref.grad)
         self.assertEqual(res.foo, ref.foo)
 
+    def test_input_tensor_custom_attr_mutation(self):
+        def f(x, flag):
+            x.offloading_activation = flag
+            return x + 1
+
+        opt_f = torch.compile(f, backend="eager", fullgraph=True)
+        x = torch.ones(5)
+
+        res = opt_f(x, True)
+        self.assertEqual(res, torch.ones(5) + 1)
+        self.assertTrue(x.offloading_activation)
+
+    def test_intermediate_tensor_custom_attr_mutation(self):
+        def f(x, flag):
+            y = x + 1
+            y.offloading_activation = flag
+            return y
+
+        opt_f = torch.compile(f, backend="eager", fullgraph=True)
+        x = torch.ones(5)
+
+        res = opt_f(x, True)
+        self.assertEqual(res, torch.ones(5) + 1)
+        self.assertTrue(res.offloading_activation)
+
     def test_closure_recompiles(self):
         cnt = CompileCounter()
 
