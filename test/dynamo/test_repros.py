@@ -8977,6 +8977,24 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
         logger = ScalarLogger()
         fn(logger, torch.tensor(1.0))
 
+    def test_flag_enum_contains(self):
+        from enum import auto, Flag
+
+        class LocalReduction(Flag):
+            MEAN = auto()
+            SUM = auto()
+            MAX = auto()
+
+        @torch.compile(backend="eager", fullgraph=True)
+        def fn(x, local_reduction):
+            if LocalReduction.MEAN in local_reduction:
+                return x.mean()
+            return x.sum()
+
+        x = torch.tensor([1.0, 2.0, 3.0])
+        self.assertEqual(fn(x, LocalReduction.MEAN | LocalReduction.SUM), x.mean())
+        self.assertEqual(fn(x, LocalReduction.SUM | LocalReduction.MAX), x.sum())
+
 
 instantiate_parametrized_tests(ReproTests)
 

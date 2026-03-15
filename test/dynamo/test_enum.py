@@ -428,7 +428,6 @@ class EnumTests(torch._dynamo.test_case.TestCase):
         res = opt_fn(x, Priority.HIGH)
         self.assertEqual(ref, res)
 
-    @unittest.expectedFailure  # TODO: Support Flag enum membership check
     def test_flag_enum(self):
         """Test Flag enum operations."""
 
