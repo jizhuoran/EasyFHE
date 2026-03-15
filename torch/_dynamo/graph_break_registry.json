@@ -865,6 +865,17 @@
       "Hints": []
     }
   ],
+  "GB0719": [
+    {
+      "Gb_type": "Reconstruction of FakeIdVariable",
+      "Context": "str(self.value)",
+      "Explanation": "A fake id produced by id() on a compile-time container cannot be reconstructed across a graph break.",
+      "Hints": [
+        "Avoid using id() on containers in code that may graph-break.",
+        "It may be possible to write Dynamo tracing rules for this code. Please report an issue to PyTorch if you encounter this graph break often and it is causing performance issues."
+      ]
+    }
+  ],
   "GB0072": [
     {
       "Gb_type": "Inplace op on input tensor",
