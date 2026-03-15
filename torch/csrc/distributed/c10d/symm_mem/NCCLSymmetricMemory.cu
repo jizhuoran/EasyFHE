@@ -136,6 +136,8 @@ NCCLAllocMap::iterator find_allocation_covering(
 
 } // namespace
 
+// Before NCCL 2.29, we can use device-side APIs to get peer pointers.
+#if NCCL_VERSION_CODE < NCCL_VERSION(2, 29, 0)
 #ifdef NCCL_HAS_SYMMEM_DEVICE_SUPPORT
 static __global__ void build_ptr_dev(
   ncclWindow_t  handle,
@@ -149,7 +151,8 @@ static __global__ void build_ptr_dev(
       buffer[peer] = ncclGetLsaPointer(handle, offset, peer);
   }
 }
-#endif
+#endif // NCCL_HAS_SYMMEM_DEVICE_SUPPORT
+#endif // NCCL_VERSION_CODE < NCCL_VERSION(2, 29, 0)
 
 class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
  public:
@@ -167,10 +170,10 @@ class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
     auto* ncclPg = dynamic_cast<c10d::ProcessGroupNCCL*>(
         group->getBackend(c10::DeviceType::CUDA).get());
     TORCH_CHECK(ncclPg != nullptr, "backend must be a NCCL process group");
-    ncclComm_t comm = reinterpret_cast<ncclComm_t>(ncclPg->getCommPtr());
+    comm_ = reinterpret_cast<ncclComm_t>(ncclPg->getCommPtr());
 
     C10D_NCCL_CHECK(
-      ncclCommWindowRegister(comm, allocation->ptr, buffer_size_, &buffer_win_, NCCL_WIN_COLL_SYMMETRIC),
+      ncclCommWindowRegister(comm_, allocation->ptr, buffer_size_, &buffer_win_, NCCL_WIN_COLL_SYMMETRIC),
       c10::str(
           "Failed to window register segment with ptr ",
           allocation->ptr,
@@ -179,15 +182,14 @@ class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
           " on rank ",
           rank_));
 
-    void* signal_pad_ptr;
     const size_t signal_pad_size = get_signal_pad_size();
     C10D_NCCL_CHECK(
-        ncclMemAlloc(&signal_pad_ptr, signal_pad_size), "ncclMemAlloc failed");
+        ncclMemAlloc(&signal_pad_ptr_, signal_pad_size), "ncclMemAlloc failed");
     C10D_NCCL_CHECK(
-    ncclCommWindowRegister(comm, signal_pad_ptr, signal_pad_size, &signal_handle_, NCCL_WIN_COLL_SYMMETRIC),
+    ncclCommWindowRegister(comm_, signal_pad_ptr_, signal_pad_size, &signal_handle_, NCCL_WIN_COLL_SYMMETRIC),
     c10::str(
         "Failed to window register segment with ptr ",
-        signal_pad_ptr,
+        signal_pad_ptr_,
         ", size ",
         signal_pad_size,
         " on rank ",
@@ -198,7 +200,7 @@ class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
     // Create NCCL device communicator if it doesn't exist. Skip if it already exists.
     auto& mr = NCCLDevCommManager::get(c10::Device(c10::DeviceType::CUDA, device_idx_));
     // Each CTA will need a separate barrier. Assume `symm_max_nblocks` as a starting point.
-    mr.try_emplace_devcomm(group_name_, comm, /*LSA*/ symm_max_nblocks, /*GIN*/ symm_max_nblocks);
+    mr.try_emplace_devcomm(group_name_, comm_, /*LSA*/ symm_max_nblocks, /*GIN*/ 0);
 
     const size_t arr_size = sizeof(void*) * world_size_;
     buffers_dev_ = reinterpret_cast<void**>(
@@ -270,7 +272,40 @@ class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
   NCCLPeerAllocInfo& operator=(const NCCLPeerAllocInfo& other) = delete;
   NCCLPeerAllocInfo(NCCLPeerAllocInfo&& other) = default;
   NCCLPeerAllocInfo& operator=(NCCLPeerAllocInfo&& other) = default;
-  ~NCCLPeerAllocInfo() = default;
+
+  ~NCCLPeerAllocInfo() {
+    if (is_finalizing()) {
+      return;
+    }
+    c10::cuda::CUDAGuard guard(device_idx_);
+    if (buffer_win_ != nullptr) {
+      auto res = ncclCommWindowDeregister(comm_, buffer_win_);
+      if (res != ncclSuccess) {
+        LOG(WARNING) << "ncclCommWindowDeregister failed for buffer_win: "
+                     << ncclGetErrorString(res);
+      }
+    }
+    if (signal_handle_ != nullptr) {
+      auto res = ncclCommWindowDeregister(comm_, signal_handle_);
+      if (res != ncclSuccess) {
+        LOG(WARNING) << "ncclCommWindowDeregister failed for signal_handle: "
+                     << ncclGetErrorString(res);
+      }
+    }
+    if (signal_pad_ptr_ != nullptr) {
+      auto res = ncclMemFree(signal_pad_ptr_);
+      if (res != ncclSuccess) {
+        LOG(WARNING) << "ncclMemFree failed for signal_pad: "
+                     << ncclGetErrorString(res);
+      }
+    }
+    if (buffers_dev_ != nullptr) {
+      c10::cuda::CUDACachingAllocator::raw_delete(buffers_dev_);
+    }
+    if (signal_pads_dev_ != nullptr) {
+      c10::cuda::CUDACachingAllocator::raw_delete(signal_pads_dev_);
+    }
+  }
 
  private:
   size_t buffer_size_;
@@ -279,14 +314,15 @@ class NCCLPeerAllocInfo : public c10::intrusive_ptr_target {
   int world_size_;
   std::vector<void*> buffers_;
   std::vector<void*> signal_pads_;
-  void** buffers_dev_;
-  void** signal_pads_dev_;
+  void** buffers_dev_{nullptr};
+  void** signal_pads_dev_{nullptr};
   std::string group_name_;
-  ncclWindow_t buffer_win_;
-  ncclWindow_t signal_handle_;
+  ncclWindow_t buffer_win_{nullptr};
+  ncclWindow_t signal_handle_{nullptr};
+  void* signal_pad_ptr_{nullptr};
   // Multicast address
   void* mc_addr_{nullptr};
-
+  ncclComm_t comm_{nullptr};
   friend class NCCLSymmetricMemory;
 };
 
