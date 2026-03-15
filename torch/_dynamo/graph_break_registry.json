@@ -1002,16 +1002,6 @@
       ]
     }
   ],
-  "GB3341": [
-    {
-      "Gb_type": "enum __contains__ TypeError",
-      "Context": "{search} in {self.value}",
-      "Explanation": "Flag enum __contains__ raised TypeError for incompatible operand type",
-      "Hints": [
-        "It may be possible to write Dynamo tracing rules for this code. Please report an issue to PyTorch if you encounter this graph break often and it is causing performance issues."
-      ]
-    }
-  ],
   "GB0084": [
     {
       "Gb_type": "Non-constant attribute given to `super().__delattr__()`",

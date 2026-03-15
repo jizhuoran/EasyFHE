@@ -775,11 +775,6 @@ class ConstDictVariable(VariableTracker):
 
             arg_hashable = args and is_hashable(args[0])
             if not arg_hashable:
-                if isinstance(self, SetVariable):
-                    # CPython's set.__contains__ handles unhashable
-                    # elements by falling back to linear scan with ==.
-                    # https://github.com/python/cpython/blob/788c3291172b55efa7cf8b33a315e4b0fe63540c/Objects/setobject.c#L2512-L2514
-                    return self._set_contains_unhashable(tx, args[0])
                 raise_unhashable(args[0], tx)
 
             self.install_dict_contains_guard(tx, args)
@@ -1234,24 +1229,6 @@ class SetVariable(ConstDictVariable):
     def reconstruct(self, codegen: "PyCodegen") -> None:
         codegen.foreach([x.vt for x in self.set_items])
         codegen.append_output(create_instruction("BUILD_SET", arg=len(self.set_items)))
-
-    def _set_contains_unhashable(
-        self,
-        tx: "InstructionTranslator",
-        arg: VariableTracker,
-    ) -> VariableTracker:
-        # CPython's set.__contains__ catches TypeError from unhashable
-        # elements and falls back to linear scan with ==.
-        if arg.is_python_constant():
-            search = arg.as_python_constant()
-            for item in self.set_items:
-                if (
-                    item.vt.is_python_constant()
-                    and item.vt.as_python_constant() == search
-                ):
-                    return variables.CONSTANT_VARIABLE_TRUE
-            return variables.CONSTANT_VARIABLE_FALSE
-        return super().call_method(tx, "__contains__", [arg], {})
 
     def _fast_set_method(
         self,
