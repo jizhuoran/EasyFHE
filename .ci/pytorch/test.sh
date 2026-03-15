@@ -404,6 +404,7 @@ test_h100_symm_mem() {
   export NVSHMEM_SYMMETRIC_SIZE=4G
   # Disable NVLink Switch features (not available on AWS H100 instances)
   export NVSHMEM_DISABLE_NVLS=1
+  export NCCL_NVLS_ENABLE=0
   _run_symm_mem_tests
 }
 
