@@ -2363,6 +2363,18 @@ def compile_fx_forward(
             ),
         )
 
+        # Snapshot stack traces on the output node before passes run,
+        # as later passes may strip stack_trace from individual nodes.
+        output = output_node(gm)
+        output.meta["output_stack_traces"] = [
+            (
+                arg.meta.get("stack_trace")
+                if isinstance(arg, torch.fx.node.Node)
+                else None
+            )
+            for arg in output.args[0]  # type: ignore[union-attr]
+        ]
+
         inputs_devices = get_inputs_devices(example_inputs, gm)
         gm = _recursive_joint_graph_passes(gm, input_device=next(iter(inputs_devices)))
 

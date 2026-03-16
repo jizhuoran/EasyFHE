@@ -2312,6 +2312,63 @@ if HAS_CUDA_AND_TRITON:
 
             FileCheck().check("overwritten").check("x * x * x").run(repr(exc.exception))
 
+        def test_output_node_has_stack_traces_inference(self):
+            """Test that output_stack_traces on the output node provides
+            stack traces even when a post-grad pass strips them from arg nodes
+            in inference mode."""
+
+            def strip_stack_traces(graph):
+                for node in graph.nodes:
+                    if node.op not in ("placeholder", "output"):
+                        node.meta.pop("stack_trace", None)
+
+            with config.patch(post_grad_custom_post_pass=strip_stack_traces):
+
+                @torch.compile(mode="reduce-overhead")
+                def foo(x):
+                    return x * x * x
+
+                inp = torch.rand([4], device="cuda")
+                out = foo(inp).detach()
+                out2 = foo(inp).detach()
+
+                with self.assertRaises(Exception) as exc:
+                    out + out
+
+                self.assertIn("x * x * x", repr(exc.exception))
+
+        def test_output_node_has_stack_traces_training(self):
+            """Test that output_stack_traces on the output node provides
+            stack traces even when a post-grad pass strips them from arg nodes
+            in training mode (fwd/bwd graph split via partitioner)."""
+
+            def strip_stack_traces(graph):
+                for node in graph.nodes:
+                    if node.op not in ("placeholder", "output"):
+                        node.meta.pop("stack_trace", None)
+
+            with config.patch(post_grad_custom_post_pass=strip_stack_traces):
+
+                @torch.compile(mode="reduce-overhead")
+                def foo(x):
+                    return x * x * x
+
+                inp = torch.rand([4], device="cuda", requires_grad=True)
+                # Complete fwd+bwd to compile both graphs
+                torch.compiler.cudagraph_mark_step_begin()
+                foo(inp).sum().backward()
+
+                # Now trigger the dealloc error
+                torch.compiler.cudagraph_mark_step_begin()
+                out = foo(inp).detach()
+                torch.compiler.cudagraph_mark_step_begin()
+                out2 = foo(inp).detach()
+
+                with self.assertRaises(Exception) as exc:
+                    out + out
+
+                self.assertIn("x * x * x", repr(exc.exception))
+
         @unittest.skipIf(not torch.backends.cudnn.is_available(), "requires cudnn")
         def test_conv_benchmark(self):
             with torch.backends.cudnn.flags(
