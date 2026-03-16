@@ -1038,6 +1038,27 @@ class NestedGraphBreakTests(torch._dynamo.test_case.TestCaseWithNestedGraphBreak
         # multiplication by 32, 64, 128, 256
         self.assertEqual(cnts.op_count, 4)
 
+    def test_resume_closure_different_module_globals(self):
+        # Tests that resume functions with freevars (closures) from inlined
+        # frames get the correct f_globals. Without the factory fix,
+        # MAKE_FUNCTION inherits the root frame's globals, so the resume
+        # function for `inner` would not find HELPER_CONSTANT.
+        try:
+            from . import _test_nested_graph_breaks_helper
+        except ImportError:
+            import _test_nested_graph_breaks_helper
+
+        def outer(x):
+            return _test_nested_graph_breaks_helper.closure_with_graph_break(x) + 2
+
+        cnts = torch._dynamo.testing.CompileCounter()
+        opt_fn = torch._dynamo.optimize(backend=cnts)(outer)
+        x = torch.zeros(3)
+        res = outer(x)
+        ref = opt_fn(x)
+        self.assertEqual(ref, res)
+        self.assertEqual(cnts.frame_count, 2)
+
     def test_error_on_graph_break_nested(self):
         # error_on_graph_break in a nested frame
         cnts = torch._dynamo.testing.CompileCounter()
