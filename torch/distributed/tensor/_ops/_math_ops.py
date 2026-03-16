@@ -1160,13 +1160,17 @@ def nll_loss_backward_strategy(op_schema: OpSchema) -> OpStrategy:
                 generate_redistribute_costs(weight_strategy, weight_expected_spec)
             )
 
-        # total_weight should always be replicated
+        # total_weight is only used by the backward kernel for reduction='mean'.
+        # For reduction='sum' or 'none', it is unused, so no redistribution needed.
         total_weight_src_spec = total_weight_strategy.strategies[idx].output_spec
-        total_weight_expected_spec = DTensorSpec(
-            mesh=mesh,
-            placements=_replicate_dims_start_at(total_weight_src_spec.placements),
-            tensor_meta=total_weight_src_spec.tensor_meta,
-        )
+        if reduction == Reduction.MEAN.value:
+            total_weight_expected_spec = DTensorSpec(
+                mesh=mesh,
+                placements=_replicate_dims_start_at(total_weight_src_spec.placements),
+                tensor_meta=total_weight_src_spec.tensor_meta,
+            )
+        else:
+            total_weight_expected_spec = total_weight_src_spec
         op_args_target_specs.append(total_weight_expected_spec)
         redistribute_costs.append(
             generate_redistribute_costs(

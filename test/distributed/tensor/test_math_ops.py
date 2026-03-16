@@ -1463,6 +1463,64 @@ class DistMathOpsTest(DTensorTestBase):
         self.assertEqual(result.full_tensor(), expected)
         self.assertTrue(result.placements[0].is_shard(0))
 
+    @with_comms
+    @skip_unless_torch_gpu
+    def test_nll_loss_backward_comm_counts(self):
+        """Test backward comm counts for nll_loss/cross_entropy with Shard(0) inputs.
+
+        When inputs are Shard(0), nll_loss_forward produces total_weight as
+        Partial(sum). The backward strategy requires total_weight to be Replicate
+        for reduction='mean' (where total_weight is used to normalize gradients),
+        but NOT for reduction='sum' or 'none' (where total_weight is unused by
+        the backward kernel). This test verifies that the unnecessary all-reduce
+        is avoided for 'sum' and 'none' reductions.
+        """
+        device_mesh = self.build_device_mesh()
+        comm_mode = CommDebugMode()
+
+        channel_size = 16
+        # Expected backward all-reduce counts per reduction mode:
+        # - "sum": 0 (total_weight unused in backward)
+        # - "none": 0 (total_weight unused in backward)
+        # - "mean": 1 (total_weight needed to normalize gradients)
+        expected_backward_allreduce = {"sum": 0, "none": 0, "mean": 1}
+
+        for reduction, expected_allreduce_count in expected_backward_allreduce.items():
+            x = torch.rand(8, channel_size, device=self.device_type, requires_grad=True)
+            target = torch.randint(channel_size, (8,), device=self.device_type)
+
+            dist_x = distribute_tensor(x, device_mesh, [Shard(0)])
+            dist_target = distribute_tensor(target, device_mesh, [Shard(0)])
+
+            dist_loss = torch.nn.functional.cross_entropy(
+                dist_x, dist_target, reduction=reduction
+            )
+
+            with comm_mode:
+                if reduction == "none":
+                    dist_loss.sum().backward()
+                else:
+                    dist_loss.backward()
+
+            allreduce_count = comm_mode.get_comm_counts().get(funcol.all_reduce, 0)
+            self.assertEqual(
+                allreduce_count,
+                expected_allreduce_count,
+                f"reduction='{reduction}': expected {expected_allreduce_count} "
+                f"backward all-reduce(s), got {allreduce_count}. "
+                f"Full comm counts: {pformat(dict(comm_mode.get_comm_counts()))}",
+            )
+
+            # Verify correctness
+            local_loss = torch.nn.functional.cross_entropy(
+                x, target, reduction=reduction
+            )
+            if reduction == "none":
+                local_loss.sum().backward()
+            else:
+                local_loss.backward()
+            self.assertEqual(dist_x.grad.full_tensor(), x.grad)
+
 
 DistMathOpsTestWithLocalTensor = create_local_tensor_test_class(
     DistMathOpsTest,
