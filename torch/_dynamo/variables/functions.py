@@ -1648,6 +1648,11 @@ class WrappedUserMethodVariable(UserMethodVariable):
         args: Sequence[VariableTracker],
         kwargs: dict[str, VariableTracker],
     ) -> VariableTracker:
+        if config.nested_graph_breaks:
+            wrapper_fn = UserFunctionVariable(polyfills._fn_with_ctx)
+            return wrapper_fn.call_function(
+                tx, [self.context, self.wrapped] + list(args), kwargs
+            )
         self.context.enter(tx)
         result = super().call_function(tx, args, kwargs)
         self.context.exit(tx)
@@ -1677,6 +1682,11 @@ class WrappedUserFunctionVariable(UserFunctionVariable):
         args: Sequence[VariableTracker],
         kwargs: dict[str, VariableTracker],
     ) -> VariableTracker:
+        if config.nested_graph_breaks:
+            wrapper_fn = UserFunctionVariable(polyfills._fn_with_ctx)
+            return wrapper_fn.call_function(
+                tx, [self.context, self.wrapped] + list(args), kwargs
+            )
         self.context.enter(tx)
         result = super().call_function(tx, args, kwargs)
         self.context.exit(tx)
@@ -2059,6 +2069,11 @@ class WrappedNestedUserFunctionVariable(NestedUserFunctionVariable):
         args: Sequence[VariableTracker],
         kwargs: dict[str, VariableTracker],
     ) -> VariableTracker:
+        if config.nested_graph_breaks:
+            wrapper_fn = UserFunctionVariable(polyfills._fn_with_ctx)
+            return wrapper_fn.call_function(
+                tx, [self.context, self.wrapped] + list(args), kwargs
+            )
         self.context.enter(tx)
         result = super().call_function(tx, args, kwargs)
         self.context.exit(tx)
@@ -2324,6 +2339,11 @@ class WrappedSkipFunctionVariable(SkipFunctionVariable):
         args: Sequence[VariableTracker],
         kwargs: dict[str, VariableTracker],
     ) -> VariableTracker:
+        if config.nested_graph_breaks:
+            wrapper_fn = UserFunctionVariable(polyfills._fn_with_ctx)
+            return wrapper_fn.call_function(
+                tx, [self.context, self.wrapped] + list(args), kwargs
+            )
         self.context.enter(tx)
         result = super().call_function(tx, args, kwargs)
         self.context.exit(tx)
