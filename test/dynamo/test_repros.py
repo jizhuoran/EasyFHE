@@ -8956,8 +8956,6 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
         self.assertEqual(result.item(), 4.0)
 
     def test_enum_with_class_values(self):
-        # Enum whose members are user-defined classes; calling .value()
-        # instantiates the class, which Dynamo can't trace.
         from enum import Enum
 
         class AvgMetric:
@@ -8991,6 +8989,28 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
 
         logger = ScalarLogger()
         fn(logger, torch.tensor(1.0))
+
+    def test_class_attr_mutation_recompiles(self):
+        class GlobalState:
+            factor = 1.0
+
+        cnt = torch._dynamo.testing.CompileCounter()
+
+        @torch.compile(backend=cnt)
+        def fn(x):
+            return x * GlobalState.factor
+
+        x = torch.tensor([4.0])
+
+        GlobalState.factor = 1.0
+        result1 = fn(x)
+        self.assertEqual(result1, torch.tensor([4.0]))
+        self.assertEqual(cnt.frame_count, 1)
+
+        GlobalState.factor = 10.0
+        result2 = fn(x)
+        self.assertEqual(result2, torch.tensor([40.0]))
+        self.assertEqual(cnt.frame_count, 2)
 
 
 instantiate_parametrized_tests(ReproTests)
