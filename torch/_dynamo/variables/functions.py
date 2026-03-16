@@ -3495,14 +3495,64 @@ class SparseTensorCreationSkipVariable(SkipFunctionVariable):
         )
 
 
-class TritonSetAllocatorSkipVariable(SkipFunctionVariable):
+def emit_noargs_leaf_function_to_graph(
+    tx: "InstructionTranslator",
+    real_impl: Callable[[], None],
+    name: str,
+) -> None:
+    """Emit an invoke_leaf_function node for a side-effectful function with no
+    tensor inputs or outputs.
+
+    The function is captured as a closure inside _LeafCallable objects and
+    registered as a static attribute on the graph module.  Because
+    invoke_leaf_function is registered as EffectType.ORDERED, effect tokens
+    prevent DCE and maintain execution ordering relative to other ops.
+
+    Use this when Dynamo needs to preserve a pure-side-effect call (like
+    setting global runtime state) in the compiled graph so that it replays
+    at the correct position at runtime.
     """
-    Skip variable for triton.set_allocator with a clear message to move it outside the compiled region.
-    """
+    import torch.utils._pytree as pytree
+    from torch._higher_order_ops.invoke_leaf_function import (
+        _LeafCallable,
+        invoke_leaf_function,
+        make_leaf_function_wrappers,
+    )
+
+    def fake_impl():
+        return None
+
+    captured_out_spec: list[pytree.TreeSpec | None] = [None]
+    wrapped_real, wrapped_fake = make_leaf_function_wrappers(
+        real_impl, fake_impl, captured_out_spec
+    )
+
+    real_callable = _LeafCallable(wrapped_real)
+    fake_callable = _LeafCallable(wrapped_fake)
+    input_spec = pytree.tree_flatten(((), {}))[1]
+
+    def make_proxy(attr_name: str, val: Any) -> Any:
+        proxy = tx.output.register_static_attr_and_return_proxy(attr_name, val)
+        proxy.node.type = type(val)
+        return proxy
+
+    invoke_args = (
+        make_proxy(f"{name}_real_fn", real_callable),
+        make_proxy(f"{name}_fake_fn", fake_callable),
+        make_proxy(f"{name}_input_spec", input_spec),
+        "",  # mutated_flat_indices
+    )
+    tx.output.create_proxy("call_function", invoke_leaf_function, invoke_args, {})
+
+
+class TritonSetAllocatorVariable(VariableTracker):
+    """Trace triton.set_allocator as an invoke_leaf_function node in the
+    graph so that it executes at the right point at runtime, ordered by
+    effect tokens."""
 
     def __init__(self, value: Any, **kwargs: Any) -> None:
-        reason = "triton.set_allocator is not supported inside torch.compile"
-        super().__init__(value, reason=reason, **kwargs)
+        super().__init__(**kwargs)
+        self.value = value
 
     def call_function(
         self,
@@ -3510,15 +3560,16 @@ class TritonSetAllocatorSkipVariable(SkipFunctionVariable):
         args: Sequence[VariableTracker],
         kwargs: dict[str, VariableTracker],
     ) -> VariableTracker:
-        unimplemented(
-            gb_type="triton.set_allocator not supported",
-            context="triton.set_allocator called inside compiled region",
-            explanation=(
-                "triton.set_allocator is not supported inside torch.compile. "
-                "It modifies global Triton allocator state and cannot be traced."
-            ),
-            hints=[
-                "Move triton.set_allocator() outside of the torch.compile region "
-                "(call it before the compiled function)."
-            ],
-        )
+        assert len(args) == 1 and not kwargs
+        alloc_fn = args[0].as_python_constant()
+
+        # Emit an invoke_leaf_function node so it runs at runtime.
+        set_allocator = self.value
+
+        def real_impl():
+            set_allocator(alloc_fn)
+            return None
+
+        emit_noargs_leaf_function_to_graph(tx, real_impl, "set_alloc")
+
+        return CONSTANT_VARIABLE_NONE

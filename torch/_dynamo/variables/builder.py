@@ -214,7 +214,7 @@ from .functions import (
     FunctoolsPartialVariable,
     SysFunctionVariable,
     TritonKernelVariable,
-    TritonSetAllocatorSkipVariable,
+    TritonSetAllocatorVariable,
     UserFunctionVariable,
     WrapperUserFunctionVariable,
 )
@@ -1371,7 +1371,7 @@ class VariableBuilder:
         elif value is TensorDescriptor.from_tensor:
             return CreateTMADescriptorStableVariable()
         elif value is set_allocator:
-            return TritonSetAllocatorSkipVariable(value)
+            return TritonSetAllocatorVariable(value)
         elif isinstance(value, torch.amp.autocast_mode.autocast):
             self.install_guards(GuardBuilder.ID_MATCH)
             return AutocastModeVariable(
