@@ -1324,6 +1324,34 @@ class NestedGraphBreakTests(torch._dynamo.test_case.TestCaseWithNestedGraphBreak
         self.assertEqual(gn(inp), inp + 3)
         self.assertEqual(cnts.frame_count, 2)
 
+    def test_step_graph_break_frame_values_not_corrupted(self):
+        """Bytecode generation bug in step_graph_break corrupted parent frame
+        locals when the parent had a non-empty operand stack (num_stack > 0).
+        """
+
+        def inner(x):
+            x = x + 1
+            x = x + 1
+            torch._dynamo.step_unsupported()
+            return x
+
+        cnts = torch._dynamo.testing.CompileCounter()
+
+        @torch.compile(backend=cnts)
+        def fn(x):
+            x = x + 1
+            y = (x, inner(x))
+            return x, y
+
+        x = torch.tensor([1.0, 2.0])
+        result = fn(x)
+        self.assertEqual(result[0], torch.tensor([2.0, 3.0]))
+        self.assertEqual(
+            result[1], (torch.tensor([2.0, 3.0]), torch.tensor([4.0, 5.0]))
+        )
+        self.assertEqual(cnts.frame_count, 1)
+        self.assertEqual(cnts.op_count, 3)
+
     def test_contextmanager_graph_break_in_init(self):
         """Graph break in _GeneratorContextManager.__init__ when the generator
         function is @torch._disable_dynamo (the DDP pattern)."""
