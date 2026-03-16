@@ -1324,6 +1324,29 @@ class NestedGraphBreakTests(torch._dynamo.test_case.TestCaseWithNestedGraphBreak
         self.assertEqual(gn(inp), inp + 3)
         self.assertEqual(cnts.frame_count, 2)
 
+    def test_contextmanager_graph_break_in_init(self):
+        """Graph break in _GeneratorContextManager.__init__ when the generator
+        function is @torch._disable_dynamo (the DDP pattern)."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        @torch._disable_dynamo(recursive=False)
+        def my_ctx():
+            yield
+
+        cnts = torch._dynamo.testing.CompileCounter()
+
+        @torch.compile(backend=cnts)
+        def fn(x):
+            x = x + 1
+            with my_ctx():
+                x = x + 2
+            return x + 3
+
+        inp = torch.randn(3)
+        self.assertEqual(fn(inp), inp + 6)
+        self.assertEqual(cnts.frame_count, 1)
+
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
