@@ -1392,19 +1392,11 @@ class VariableBuilder:
         elif inspect.getattr_static(value, "__script_if_tracing_wrapper", False):
             self.install_guards(GuardBuilder.TYPE_MATCH)
             return WrapperUserFunctionVariable(
-                value,
-                "__original_fn",
-                source=self.source,
-                mutation_type=AttributeMutationExisting(),
+                value, "__original_fn", source=self.source
             )
         elif is_lru_cache_wrapped_function(value):
             self.install_guards(GuardBuilder.TYPE_MATCH)
-            return WrapperUserFunctionVariable(
-                value,
-                "__wrapped__",
-                source=self.source,
-                mutation_type=AttributeMutationExisting(),
-            )
+            return WrapperUserFunctionVariable(value, "__wrapped__", source=self.source)
         elif value is sys.exc_info or (
             sys.version_info >= (3, 11) and value is sys.exception
         ):
@@ -1414,10 +1406,7 @@ class VariableBuilder:
         ):
             self.install_guards(GuardBuilder.TYPE_MATCH)
             return WrapperUserFunctionVariable(
-                value,
-                "_torchdynamo_inline",
-                source=self.source,
-                mutation_type=AttributeMutationExisting(),
+                value, "_torchdynamo_inline", source=self.source
             )
         elif value is collections.namedtuple:
             self.install_guards(GuardBuilder.ID_MATCH)
