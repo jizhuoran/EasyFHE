@@ -5818,11 +5818,10 @@ class Scheduler:
                 return False
 
             template = node2.get_template_node_or_throw()
-            if not isinstance(template, ir.TritonTemplateBuffer):
-                why("prologue fusion only supported for TritonTemplates")
-                return False
-
             allowed_prologue_inps = template.get_allowed_prologue_inps()
+            if not allowed_prologue_inps:
+                why("template has no allowed prologue inputs")
+                return False
 
             unsupported_prologue_args = (
                 OrderedSet(inp.get_name() for inp in template.inputs)  # type: ignore[union-attr]
@@ -5866,13 +5865,21 @@ class Scheduler:
             if not self.check_prologue_fusion_heuristics_fusable(node1, node2, why):
                 return False
 
-        if node1.is_template() and (
-            node2.has_aliasing_or_mutation()
-            or node2.is_reduction()
-            or not config.epilogue_fusion
-        ):
-            why("template epilogue not satisfied")
-            return False
+        if node1.is_template():
+            if (
+                node2.has_aliasing_or_mutation()
+                or node2.is_reduction()
+                or not config.epilogue_fusion
+            ):
+                why("template epilogue not satisfied")
+                return False
+            template_buf = node1.get_template_node()
+            assert template_buf is not None
+            if template_buf.is_multi_outputs_template() and not isinstance(
+                node2.node, ir.ComputedBuffer
+            ):
+                why("multi-output template epilogue requires ComputedBuffer")
+                return False
 
         if (node1.get_buffer_names() & V.graph.no_fuse_buffer_names) or (
             node2.get_buffer_names() & V.graph.no_fuse_buffer_names
@@ -7757,6 +7764,14 @@ class BaseScheduling:  # noqa: docstring_linter
             return False
         if not template_buf.is_multi_outputs_template():
             return False
+
+        if isinstance(node2.node, ir.MultiOutput):
+            return (
+                len(node2.node.inputs) == 1
+                and isinstance(node2.node.inputs[0], ir.IRNode)
+                and node2.node.inputs[0].get_name() == template_buf.get_name()
+            )
+
         return False
 
     def fuse(

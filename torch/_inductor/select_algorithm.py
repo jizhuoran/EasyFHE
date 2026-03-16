@@ -365,6 +365,11 @@ class SubgraphInfo:
     range_tree_nodes: dict[sympy.Symbol, "IterationRangesEntry"] | None = None
     numels: dict[str, sympy.Expr] | None = None
 
+    # Mapping from original range-tree root variable names (e.g. "xindex")
+    # to renamed prologue variables (e.g. "_prologue_x_xindex").  Used by
+    # prologue hooks to apply text-level renames in a structured way.
+    root_var_renames: dict[str, str] = dataclasses.field(default_factory=dict)
+
     def __post_init__(self):
         self.only_copy_if_non_none_fields = (
             "range_trees",
@@ -611,6 +616,7 @@ class TritonTemplateKernel(TritonKernel):
         self.template_mask: str | None = None
         self.template_out_shape: str | tuple[str] | None = None
         self.ops_handler: V.WrapperHandler | None = None  # type: ignore[name-defined]
+        self.root_var_renames: dict[str, str] = {}
 
         # When caching is enabled, the generated code is not dependent on the input nodes names, or
         # symbolic sizes names.
@@ -718,6 +724,28 @@ class TritonTemplateKernel(TritonKernel):
         )
         with self.set_subgraph_body(body_name):
             yield
+
+    def _make_independent_subgraph(self, subgraph_name, numel, **extra_fields):
+        """Create a subgraph with fresh independent range trees.
+
+        Used by external template backends for epilogue/prologue hooks
+        that need their own range tree state.
+        """
+        groups = {"x": V.graph.sizevars.simplify(numel), "r0_": sympy.S.One}
+        self.subgraph_bodies[subgraph_name] = SubgraphInfo(
+            body=IndentedBuffer(),
+            cse=self.cse.clone(),
+            range_trees=self.construct_range_trees(
+                pid_cache=None,
+                inside_reduction=False,
+                is_reduction=False,
+                numels=groups,
+                no_x_dim=False,
+            ),
+            range_tree_nodes={},
+            numels=groups,
+            **extra_fields,
+        )
 
     def _setup_contiguous_index_state(
         self,
@@ -1818,6 +1846,107 @@ class TritonTemplateKernel(TritonKernel):
                             self.split_and_set_ranges(prologue_node.get_ranges())
                         )
                     self.cse.invalidate(OrderedSet())
+
+
+class ExternalTritonTemplateKernel(TritonTemplateKernel):
+    """TritonTemplateKernel variant for external template backends (e.g. Helion).
+
+    Orchestrates prologue/epilogue fusion by running Inductor's codegen ops
+    (store, load, indexing) on fused scheduler nodes, capturing the generated
+    code into subgraph buffers.  The backend's ``render()`` callable handles
+    hook setup and AST generation, while the standard ``codegen_template_body``
+    handles hook finalization and subgraph codegen.
+
+    Also implements ``call_kernel`` and ``emit_kernel_override`` for
+    post-codegen emission of the fused kernel.
+
+    Subclasses TritonTemplateKernel for subgraph body management and
+    template indexing support.
+    """
+
+    def __init__(self, template_buffer: "ir.TemplateBuffer") -> None:
+        class _RealOutputNode:
+            def get_size(self) -> list:
+                return list(template_buffer.get_size())
+
+            def get_layout(self):
+                return template_buffer.get_layout()
+
+            def get_name(self) -> str:
+                return template_buffer.get_name()
+
+        # Pass dummy values for TritonTemplateKernel params that are only
+        # relevant for standalone Triton kernel codegen (grid, warps, etc.).
+        super().__init__(
+            kernel_name="",
+            input_nodes=(),
+            output_node=_RealOutputNode(),
+            defines={},
+            num_stages=0,
+            num_warps=1,
+            grid_fn=None,
+            meta={},
+            call_sizes=[],
+            hint_override=None,
+        )
+        self._template_buffer = template_buffer
+        # Extra inputs needed by fused ops beyond the template's own I/O
+        self._extra_inputs: dict[str, str] = {}
+        # Prologue primary source buffers, populated by load_input
+        self._prologue_source_buffers: dict[str, str | None] = {}
+        # Simplified epilogue interface: {output_param: epilogue_idx}
+        self._epilogue_idx_by_param: dict[str, int] = {}
+        # Output params that must keep their original tl.store
+        self._epilogue_keep_store: OrderedSet[str] = OrderedSet()
+        # Store target buffers: {buf_name: param_name}
+        self._extra_store_targets: dict[str, str] = {}
+        # Prologue variable names per input param
+        self._prologue_vars: dict[str, dict[str, str]] = {}
+        # Import lines for emit_kernel_override, populated by external render
+        self._kernel_imports: list[str] = []
+        # Call emission state, populated by _setup_fusion_hooks / external render
+        self._call_preamble: list[str] = []
+        self._call_args: list[str] = []
+
+    def call_kernel(self, name, node=None, deallocate_ws=True):
+        """Emit the kernel call and multi-output unpacking."""
+        tb = self._template_buffer
+        wrapper = V.graph.wrapper_code
+        for line in self._call_preamble:
+            wrapper.writeline(line)
+        output_name = tb.get_name()
+        wrapper.writeline(f"{output_name} = {name}({', '.join(self._call_args)})")
+        # Unpack multi-output children from the kernel result
+        for mo_name, mo in sorted(tb._multi_output_children.items()):
+            if mo_name not in self.removed_buffers:
+                idx_str = output_name
+                for _, idx in mo.indices:
+                    idx_str = f"{idx_str}[{idx}]"
+                wrapper.writeline(f"{mo_name} = {idx_str}")
+
+    def emit_kernel_override(
+        self,
+        wrapper,
+        src_code,
+        kernel_name,
+        node_schedule,
+        kernel_path,
+        get_kernel_metadata,
+    ):
+        origins, detailed = get_kernel_metadata(node_schedule, wrapper)
+        wrapper.header.writeline(f"# kernel path: {kernel_path}\n{origins}\n{detailed}")
+        for imp in self._kernel_imports:
+            wrapper.add_import_once(imp)
+        # Hooks may reference standard Inductor runtime modules
+        wrapper.add_import_once(
+            "from torch._inductor.runtime import triton_helpers, triton_heuristics"
+        )
+        wrapper.add_import_once(
+            "from torch._inductor.runtime.triton_helpers import libdevice, math as tl_math"
+        )
+        wrapper.header.splice(src_code, strip=True)
+        wrapper.header.writeline("")
+        return True
 
 
 @functools.cache

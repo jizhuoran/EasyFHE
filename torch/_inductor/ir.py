@@ -5218,6 +5218,7 @@ class TemplateBuffer(OperationBuffer):
         make_kernel_render: Callable[..., Any] | None,
         mutated_inputs: Iterable[IRNode] | None = None,
         allowed_prologue_inps: OrderedSet[str] | None = None,
+        named_inputs: dict[str, IRNode] | None = None,
     ) -> None:
         super().__init__(name=None, layout=layout)
         self.inputs = InputsKernel.unwrap_storage(inputs)
@@ -5226,6 +5227,19 @@ class TemplateBuffer(OperationBuffer):
         V.graph.register_operation(self)
         # Annotations dict for storing metadata (e.g., KernelTemplateChoice)
         self.annotations: dict[str, Any] = {}
+
+        # Output buffer names eligible for epilogue fusion.
+        # Maps buffer name → kernel parameter name (e.g. "buf3" → "result").
+        self.epilogue_fusable_outputs: dict[str, str] = {}
+        # For multi-output kernels: maps child buffer name → MultiOutput
+        # node.  Used by call_kernel to emit tuple-unpacking lines.
+        self._multi_output_children: dict[str, MultiOutput] = {}
+        # Maps kernel parameter name → IRNode for each tensor input.
+        # Used by ExternalTritonTemplateKernel to set up prologue fusion and
+        # by HelionTemplateBuffer to resolve call arguments.
+        self._named_inputs: dict[str, IRNode] = (
+            dict(named_inputs) if named_inputs else {}
+        )
 
         # Inputs that the kernel mutates in-place
         self.mutated_inputs = mutated_inputs
@@ -5265,6 +5279,30 @@ class TemplateBuffer(OperationBuffer):
         return reads
 
     def extract_read_writes(self, normalize: bool = False) -> dependencies.ReadWrites:
+        """Extract read/write dependencies for this TemplateBuffer.
+
+        When the layout is MultiOutputLayout (multi-output templates), the
+        buffer itself has no data layout, so we cannot build an indexer.
+        Instead, synthesize a trivial write dep and derive read deps from
+        the named tensor inputs (``_named_inputs``).  For single-output
+        templates with a concrete layout, fall through to the standard path.
+        """
+        if isinstance(self.layout, MultiOutputLayout):
+            writes: OrderedSet[dependencies.Dep] = OrderedSet(
+                [
+                    dependencies.MemoryDep(
+                        self.get_name(), sympy.Integer(0), var_names=(), size=()
+                    ),
+                ]
+            )
+            return dependencies.ReadWrites(
+                reads=self._read_deps_from_inputs(normalize),
+                writes=writes,
+                index_exprs=OrderedSet(),
+                range_vars=None,
+                var_ranges=None,
+            )
+
         name = self.get_name()
         indexer = self.get_layout().make_indexer()
 
@@ -5307,6 +5345,62 @@ class TemplateBuffer(OperationBuffer):
     def get_allowed_prologue_inps(self) -> OrderedSet[str]:
         return self.allowed_prologue_inps
 
+    @classmethod
+    def realize_template_input(cls, tb: TensorBox) -> IRNode:
+        """Realize a TensorBox, preserving MultiOutput layout (unlike ExternKernel.realize_input)."""
+        if isinstance(tb, TensorBox) and isinstance(tb.data, MultiOutput):
+            return tb.data
+        result = ExternKernel.realize_input(tb)
+        if isinstance(result, StorageBox):
+            result = result.data
+        if isinstance(result.layout, FlexibleLayout):  # type: ignore[union-attr]
+            result.freeze_layout()
+        return result
+
+    @classmethod
+    def build_multi_outputs(
+        cls,
+        template_buf: TemplateBuffer,
+        structured: object,
+        *,
+        direct_alias_at_leaf: dict[int, IRNode] | None = None,
+        on_tensor_leaf: Callable[[str, MultiOutput, list[tuple[type, int]], int], None]
+        | None = None,
+        on_non_tensor_leaf: Callable[[int], None] | None = None,
+    ) -> tuple[TensorBox, ...]:
+        """Walk a structured output tree, creating MultiOutput nodes for tensor leaves."""
+        seen_outputs: dict[int, TensorBox] = {}
+        leaf_counter = itertools.count()
+
+        def walk(output: object, indices: list[tuple[type, int]]) -> list[TensorBox]:
+            if isinstance(output, (list, tuple)):
+                results: list[TensorBox] = []
+                for i, item in enumerate(output):
+                    results.extend(walk(item, [*indices, (type(output), i)]))
+                return results
+            leaf_idx = next(leaf_counter)
+            if isinstance(output, torch.Tensor):
+                if direct_alias_at_leaf and leaf_idx in direct_alias_at_leaf:
+                    return [TensorBox.create(direct_alias_at_leaf[leaf_idx])]
+                tid = id(output)
+                if tid in seen_outputs:
+                    return [seen_outputs[tid]]
+                mo = MultiOutput(
+                    FallbackKernel.tensor_to_layout(output), template_buf, indices
+                )
+                template_buf._multi_output_children[mo.get_name()] = mo
+                if on_tensor_leaf is not None:
+                    on_tensor_leaf(mo.get_name(), mo, indices, leaf_idx)
+                tb = TensorBox(mo)
+                seen_outputs[tid] = tb
+                return [tb]
+            # Non-tensor leaf (int, SymInt, None, etc.)
+            if on_non_tensor_leaf is not None:
+                on_non_tensor_leaf(leaf_idx)
+            return []
+
+        return tuple(walk(structured, []))
+
 
 class TritonTemplateBuffer(TemplateBuffer):
     def __init__(
@@ -5333,6 +5427,8 @@ class TritonTemplateBuffer(TemplateBuffer):
             mutated_inputs=mutated_inputs,
             allowed_prologue_inps=allowed_prologue_inps,
         )
+        assert self.name is not None
+        self.epilogue_fusable_outputs = {self.name: self.name}
 
         self.subgraph_inps: list[IRNode | sympy.Expr | None] | None = None
         self.subgraph_outs: list[IRNode | None] | None = None
