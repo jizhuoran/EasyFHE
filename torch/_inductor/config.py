@@ -373,6 +373,11 @@ dynamic_scale_rblock = os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "1")
 # but the mul gets fused with other pointwise ops instead.
 force_fuse_int_mm_with_mul = False
 
+# Prevent unfusing addmm into mm+add for bf16/fp16 to avoid precision loss
+# from extra truncation at the mm output. Set to False to allow unfusing
+# (may improve perf at the cost of accuracy for some models).
+keep_addmm_fused_for_half_dtypes = True
+
 # DEPRECATED. This setting is ignored.
 use_mixed_mm = True
 
