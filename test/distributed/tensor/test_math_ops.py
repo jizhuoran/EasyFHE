@@ -1424,6 +1424,45 @@ class DistMathOpsTest(DTensorTestBase):
         self.assertTrue(result.placements[0].is_shard(dim=0))
         self.assertEqual(result.full_tensor(), x)
 
+    @with_comms
+    def test_pooling_ops(self):
+        device_mesh = self.build_device_mesh()
+
+        # Single-output pooling
+        inp_4d = torch.randn(8, 3, 16, 16, device=self.device_type)
+        dt_4d = distribute_tensor(inp_4d, device_mesh, [Shard(0)])
+
+        for op, args in [
+            (torch.nn.functional.avg_pool2d, (3,)),
+            (torch.nn.functional.adaptive_avg_pool2d, ((4, 4),)),
+        ]:
+            expected = op(inp_4d, *args)
+            result = op(dt_4d, *args)
+            self.assertEqual(result.full_tensor(), expected)
+            self.assertTrue(result.placements[0].is_shard(0))
+
+        # Dual-output pooling (values + indices)
+        for op, args, kwargs in [
+            (
+                torch.nn.functional.adaptive_max_pool2d,
+                ((4, 4),),
+                {"return_indices": True},
+            ),
+        ]:
+            exp_val, exp_idx = op(inp_4d, *args, **kwargs)
+            dt_val, dt_idx = op(dt_4d, *args, **kwargs)
+            self.assertEqual(dt_val.full_tensor(), exp_val)
+            self.assertTrue(dt_val.placements[0].is_shard(0))
+
+        # 3D pooling
+        inp_5d = torch.randn(8, 3, 8, 8, 8, device=self.device_type)
+        dt_5d = distribute_tensor(inp_5d, device_mesh, [Shard(0)])
+
+        expected = torch.nn.functional.avg_pool3d(inp_5d, 3)
+        result = torch.nn.functional.avg_pool3d(dt_5d, 3)
+        self.assertEqual(result.full_tensor(), expected)
+        self.assertTrue(result.placements[0].is_shard(0))
+
 
 DistMathOpsTestWithLocalTensor = create_local_tensor_test_class(
     DistMathOpsTest,
