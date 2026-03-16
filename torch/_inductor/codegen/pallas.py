@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-import itertools
 import math
 import typing_extensions
 from typing import Any, cast, TYPE_CHECKING
@@ -14,7 +13,6 @@ from torch.utils._ordered_set import OrderedSet
 from torch.utils._sympy.functions import ModularIndexing
 
 from .. import config
-from ..ir import ComputedBuffer
 from ..runtime.runtime_utils import torch_dtype_to_jax
 from ..utils import get_fused_kernel_name, get_kernel_metadata
 from ..virtualized import V
@@ -859,27 +857,35 @@ class PallasKernel(SIMDKernel):
         # Determine device type once at initialization
         device = V.graph.get_current_device_or_throw()
         self.is_gpu = device.type == "cuda"
+        self.is_tpu = device.type == "tpu"
         # Use TMA (Tensor Memory Accelerator) for GPU to handle non-aligned tensor sizes
         # TMA automatically masks OOB accesses, eliminating the need for explicit
         # padding to multiples of 128. Uses lax.fori_loop with direct TMA primitives.
         self.use_emit_pipeline = self.is_gpu  # Enable TMA approach for GPU
-        # Legacy: warpgroup padding (enabled when TMA approach is disabled)
-        self.use_warpgroup_padding = self.is_gpu and not self.use_emit_pipeline
         # Track which output param each store uses: list of (out_ptr_name, store_line)
         self.store_with_output: list[tuple[str, str]] = []
         # Track load index expressions for reduction axis detection
         self.load_index_exprs: dict[str, sympy.Expr] = {}
         # Track outputs that need to be readable (for scatter operations)
         self.outputs_need_read: OrderedSet[str] = OrderedSet()
-        # Track if any load in this kernel used transpose
-        # Used to avoid double transpose (load + store)
-        self.has_transposed_load = False
+        # Map input buffer names to their detected permutation tuples.
+        self.permuted_input_buffers: dict[str, tuple[int, ...]] = {}
+        self.collapsed_reshape_inputs: dict[str, tuple[int, ...]] = {}
+        self.collapsed_output_shape: tuple[int, ...] | None = None
+        self._cpu_max_grid_product: int | None = None
+        # Precompute output buffer names from scheduler nodes so that the
+        # load path can check output shapes before stores are processed.
+        self._output_buffer_names: list[str] = []
+        for snode in self.features.scheduler_nodes():
+            for dep in snode.read_writes.writes:
+                self._output_buffer_names.append(dep.name)
         # Track which iteration variables are actually used in the kernel
         self.used_iter_vars: OrderedSet[sympy.Symbol] = OrderedSet()
+        # Iteration vars that have been emitted in tile-relative form
+        # (safe for tiling even when they appear in the compute body)
+        self.tile_relative_iter_vars: OrderedSet[sympy.Symbol] = OrderedSet()
         # Track if any load/store uses flatten-based indexing (buf[...].flatten()[idx])
         self.has_flatten_indexing = False
-        # Track input buffers that are accessed with transposed last-2 dims
-        self.transposed_input_buffers: OrderedSet[str] = OrderedSet()
         # Strided input buffers: map graph buffer name -> per-dim
         # (stride, offset, skip) triples.  Used to reshape inputs outside
         # the kernel and generate static indexing inside
@@ -1283,120 +1289,323 @@ class PallasKernel(SIMDKernel):
             strides[i] = strides[i + 1] * shape[i + 1]
         return strides
 
-    def _get_expected_output_shape(self) -> list:
-        """Get the expected output shape from iteration variables.
+    @staticmethod
+    def _map_coeffs_to_dims(coeffs: list[int], strides: list[int]) -> list[int] | None:
+        """Map coefficient values to dimension indices via stride matching.
 
-        Iteration variables are shaped for broadcasting. For 2D outputs:
-        - First var (e.g., y0) gets shape (1, N) - innermost dimension
-        - Second var (e.g., x1) gets shape (M, 1) - outermost dimension
-        The broadcast result is (M, N).
+        Returns a list where entry k is the dimension whose stride equals
+        coeffs[k], or None if the mapping is ambiguous or incomplete.
         """
-        # Collect variable lengths
-        var_items = list(self.range_tree_nodes.items())
-        broadcast_vars = []
-        for var_sym, entry in var_items:
-            length = self._safe_int(entry.length)
-            if length is not None:
-                broadcast_vars.append(length)
+        stride_to_dim: dict[int, int] = {}
+        for d, s in enumerate(strides):
+            if s in stride_to_dim:
+                return None  # duplicate strides
+            stride_to_dim[s] = d
+        mapping: list[int] = []
+        for c in coeffs:
+            d = stride_to_dim.get(c)
+            if d is None:
+                return None
+            mapping.append(d)
+        if len(OrderedSet(mapping)) != len(coeffs):
+            return None
+        return mapping
 
-        if len(broadcast_vars) <= 1:
-            return broadcast_vars
+    @staticmethod
+    def _get_actual_out_strides(out_buf, n: int) -> list[int] | None:
+        """Extract actual output buffer strides from its layout."""
+        layout = getattr(out_buf, "get_layout", lambda: None)()
+        if layout is None:
+            return None
+        stride_raw = getattr(layout, "stride", None)
+        if stride_raw is None or len(stride_raw) != n:
+            return None
+        strides: list[int] = []
+        for s in stride_raw:
+            v = int(s) if isinstance(s, (int, sympy.Integer)) else None
+            if v is None:
+                return None
+            strides.append(v)
+        return strides
 
-        # For 2D case: variables are reshaped in reverse order
-        # First var is innermost (last dim), second var is outermost (first dim)
-        # So output shape is [second_var_length, first_var_length, ...]
-        return list(reversed(broadcast_vars))
+    def _compute_store_coeffs(self, ordered: list) -> dict | None:
+        """Compute store-side linearization coefficients from range tree nesting.
 
-    def _is_transposed_access(self, name: str, index: sympy.Expr) -> bool:
-        """Check if buffer access needs transpose.
+        The tree structure encodes the output iteration order: later
+        trees (prefix ``x``) are innermost, earlier trees (``y``, ``z``)
+        are outer.  Within a tree, dict order goes inner-to-outer.
+        The innermost variable gets coefficient 1; each successive
+        variable (moving outward) multiplies by the previous range.
 
-        Transpose on load is needed when:
-        1. Non-square buffers: dimensions are swapped relative to iteration vars
-        2. Square buffers: index coefficient pattern indicates transposed access
-           (first iteration var has larger coefficient than second)
+        Returns ``{sympy.Symbol: int}`` mapping each RT var to its store
+        coefficient, or ``None`` on failure.
+        """
+        prefix_groups: dict[str, list] = {}
+        prefix_order: list[str] = []
+        for v in ordered:
+            node = self.range_tree_nodes[v]
+            p = node.prefix
+            if p not in prefix_groups:
+                prefix_groups[p] = []
+                prefix_order.append(p)
+            prefix_groups[p].append(v)
+        inner_to_outer: list = []
+        for p in reversed(prefix_order):
+            inner_to_outer.extend(prefix_groups[p])
+        coeffs: dict = {}
+        coeff = 1
+        for v in inner_to_outer:
+            sz = self._safe_int(self.range_tree_nodes[v].length)
+            if sz is None:
+                return None
+            coeffs[v] = coeff
+            coeff *= sz
+        return coeffs
+
+    def _get_full_load_permutation(
+        self, name: str, index: sympy.Expr
+    ) -> tuple[int, ...] | None:
+        """Return permutation for a full-array load, or None.
+
+        Computes the permutation by mapping each range-tree variable to
+        both an output dimension (via store coefficients + actual output
+        strides) and an input dimension (via load coefficients + input
+        C-contiguous strides).  The permutation is then:
+
+            perm[out_dim] = in_dim   for each RT variable
+
+        Using actual output strides (not C-contiguous) is critical: the
+        scheduler may choose a non-standard output layout (e.g. column-
+        major) to optimise for transposed inputs.
+
+        When all dimensions collapse to a single flat RT variable (e.g.
+        (2,2,2,2,2) with all dims size 2), infers the permutation
+        directly from output strides vs input C-contiguous strides.
         """
         info = self._get_buffer_info(name)
-        if info is None:
-            return False
+        if not info:
+            return None
+        _, buf_size, _, _, is_contiguous = info
+        in_shape_raw = [self._safe_int(s) for s in buf_size]
+        if len(in_shape_raw) < 2 or None in in_shape_raw:
+            return None
+        in_shape: list[int] = cast(list[int], in_shape_raw)
+        if not is_contiguous:
+            return None  # .contiguous() at JAX boundary handles this
 
-        _, buf_size, _, actual_strides, _ = info
+        # Extract index coefficients for each non-reduction RT variable.
+        iter_used = self._get_used_iter_vars(index)
+        ordered = [
+            s
+            for s, e in self.range_tree_nodes.items()
+            if s in iter_used and not e.is_reduction
+        ]
+        if len(ordered) != len(in_shape):
+            # All dims may have collapsed to a single flat RT variable
+            # (e.g. (2,2,2,2,2) → single x0 of length 32).  In this
+            # case, infer the permutation directly from output strides
+            # vs input C-contiguous strides.
+            n = len(in_shape)
+            if len(ordered) == 1 and self._safe_int(
+                self.range_tree_nodes[ordered[0]].length
+            ) == math.prod(in_shape):
+                in_strides = self._c_contiguous_strides(in_shape)
+                for out_name in self._output_buffer_names:
+                    out_buf = V.graph.get_buffer(out_name)
+                    if out_buf is None:
+                        continue
+                    out_shape = [self._safe_int(s) for s in out_buf.get_size()]
+                    if any(s is None for s in out_shape) or len(out_shape) != n:
+                        continue
+                    actual = self._get_actual_out_strides(out_buf, n)
+                    if actual is None:
+                        break
+                    # Map each output dim to the input dim with the
+                    # same stride.
+                    perm = self._map_coeffs_to_dims(actual, in_strides)
+                    if perm is None:
+                        break
+                    if list(perm) == list(range(n)):
+                        return None
+                    return tuple(perm)
+            return None
+        coeffs_raw = [
+            self._get_index_coefficient(V.graph.sizevars.simplify(index), v)
+            for v in ordered
+        ]
+        if not all(isinstance(c, int) and c > 0 for c in coeffs_raw):
+            return None
+        coeffs: list[int] = cast(list[int], coeffs_raw)
 
-        # Only handle 2D buffers
-        if len(buf_size) != 2 or len(actual_strides) != 2:
-            return False
+        n = len(ordered)
+        in_strides = self._c_contiguous_strides(in_shape)
+        store_coeffs = self._compute_store_coeffs(ordered)
 
-        size0 = self._safe_int(buf_size[0])
-        size1 = self._safe_int(buf_size[1])
-        if size0 is None or size1 is None or size0 <= 1 or size1 <= 1:
-            return False
+        # --- Primary path: dimension-mapping with actual output strides ---
+        if store_coeffs is not None:
+            for out_name in self._output_buffer_names:
+                out_buf = V.graph.get_buffer(out_name)
+                if out_buf is None:
+                    continue
+                out_shape = [self._safe_int(s) for s in out_buf.get_size()]
+                if any(s is None for s in out_shape) or len(out_shape) != n:
+                    continue
 
-        s0 = actual_strides[0]
-        s1 = actual_strides[1]
-        if s0 is None or s1 is None:
-            return False
+                actual = self._get_actual_out_strides(out_buf, n)
+                if actual is not None:
+                    rt_to_out = self._map_coeffs_to_dims(
+                        [store_coeffs[v] for v in ordered], actual
+                    )
+                    rt_to_in = self._map_coeffs_to_dims(list(coeffs), in_strides)
+                    if rt_to_out is not None and rt_to_in is not None:
+                        perm = [0] * n
+                        for k in range(n):
+                            perm[rt_to_out[k]] = rt_to_in[k]
+                        if list(perm) == list(range(n)):
+                            return None
+                        return tuple(perm)
+                break
 
-        # Get iteration variable info
-        var_items = list(self.range_tree_nodes.items())
-        if len(var_items) < 2:
-            return False
+        return None
 
-        # Skip for reduction variables
+    def _get_collapsed_load_permutation(
+        self, name: str, index: sympy.Expr
+    ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+        """Handle permutation when range tree has collapsed dimensions.
 
-        if any(entry.is_reduction for _, entry in var_items):
-            return False
+        When simplify_and_reorder merges contiguous dims, the range tree
+        has fewer variables than the buffer's rank.  This method detects
+        the permutation in the collapsed space and returns
+        (collapsed_input_shape, perm) so the caller can generate:
+            jnp.permute_dims(load.reshape(collapsed_shape), perm)
 
-        # Extract coefficients from index expression
-        inner_var = var_items[0][0]
-        outer_var = var_items[1][0]
-        index = V.graph.sizevars.simplify(index)
+        Uses index coefficients on both sides: load-index coefficients
+        map vars to collapsed input dims, and store-side coefficients
+        (derived from the range tree nesting) map vars to collapsed
+        output dims.  Both sets of strides are always unique, so
+        matching is unambiguous even with duplicate group sizes.
+        """
+        info = self._get_buffer_info(name)
+        if not info:
+            return None
+        _, buf_size, _, _, is_contiguous = info
+        in_shape_raw = [self._safe_int(s) for s in buf_size]
+        if len(in_shape_raw) < 2 or None in in_shape_raw:
+            return None
+        in_shape: list[int] = cast(list[int], in_shape_raw)
+        if not is_contiguous:
+            return None
 
-        inner_coeff = self._get_index_coefficient(index, inner_var)
-        outer_coeff = self._get_index_coefficient(index, outer_var)
+        iter_used = self._get_used_iter_vars(index)
+        ordered = [
+            s
+            for s, e in self.range_tree_nodes.items()
+            if s in iter_used and not e.is_reduction
+        ]
+        n = len(ordered)
+        if n < 2 or n >= len(in_shape):
+            return None
+        ranges_raw = [self._safe_int(self.range_tree_nodes[v].length) for v in ordered]
+        if None in ranges_raw:
+            return None
+        ranges: list[int] = cast(list[int], ranges_raw)
+        if math.prod(ranges) != math.prod(in_shape):
+            return None
 
-        if inner_coeff != 0 and outer_coeff != 0:
-            # Only transpose for standard row-major buffers (stride[0] = size[1], stride[1] = 1)
-            is_standard_row_major = s0 == size1 and s1 == 1
-            if not is_standard_row_major:
-                return False
+        # Group consecutive input dims (right-to-left) to match ranges
+        in_groups = self._group_dims_to_ranges(in_shape, ranges)
+        if in_groups is None:
+            return None
 
-            # Only transpose if output is column-major (indicates actual transpose op)
-            output_is_column_major = self._has_column_major_output()
-            if not output_is_column_major:
-                return False
+        # Compute collapsed input strides (row-major) and use load-index
+        # coefficients to map each range tree var to a collapsed input dim.
+        # Strides are always unique, so this is unambiguous even when
+        # group sizes are duplicated.
+        collapsed_in_strides = [0] * n
+        stride = 1
+        for i in range(n - 1, -1, -1):
+            collapsed_in_strides[i] = stride
+            stride *= in_groups[i]
 
-            # Check if coefficients indicate transposed access
-            inner_matches_s0 = abs(inner_coeff - s0) < abs(inner_coeff - s1)
-            outer_matches_s1 = abs(outer_coeff - s1) < abs(outer_coeff - s0)
-            return inner_matches_s0 and outer_matches_s1
+        simplified = V.graph.sizevars.simplify(index)
+        in_coeffs_raw = [self._get_index_coefficient(simplified, v) for v in ordered]
+        if not all(isinstance(c, int) and c > 0 for c in in_coeffs_raw):
+            return None
+        in_coeffs: list[int] = cast(list[int], in_coeffs_raw)
 
-        return False
+        in_stride_to_dim = {s: i for i, s in enumerate(collapsed_in_strides)}
+        var_to_in_dim = []
+        for coeff in in_coeffs:
+            dim = in_stride_to_dim.get(coeff)
+            if dim is None:
+                return None
+            var_to_in_dim.append(dim)
 
-    def _has_column_major_output(self) -> bool:
-        """Check if any output buffer has column-major stride layout."""
-        output_buffers = getattr(self.args, "output_buffers", {})
-        # Check both explicit output buffers and graph buffers (which may not
-        # be populated during load).
-        buf_names = itertools.chain(output_buffers, V.graph.name_to_buffer)
-        for buf_name in buf_names:
-            out_buf = V.graph.get_buffer(buf_name)
+        store_coeffs = self._compute_store_coeffs(ordered)
+        if store_coeffs is None:
+            return None
+
+        # Find the output-side mapping using store coefficients.
+        for out_name in self._output_buffer_names:
+            out_buf = V.graph.get_buffer(out_name)
             if out_buf is None:
                 continue
-            if buf_name not in output_buffers and not isinstance(
-                out_buf, ComputedBuffer
-            ):
+            out_shape_raw = [self._safe_int(s) for s in out_buf.get_size()]
+            if any(s is None for s in out_shape_raw) or len(out_shape_raw) < 2:
                 continue
-            layout = getattr(out_buf, "get_layout", lambda: None)()
-            if layout is None:
+            out_shape: list[int] = cast(list[int], out_shape_raw)
+            if math.prod(out_shape) != math.prod(in_shape):
                 continue
-            out_stride = getattr(layout, "stride", None)
-            if out_stride is None or len(out_stride) < 2:
+            out_groups = self._group_dims_to_ranges(out_shape, list(in_groups))
+            if out_groups is None:
                 continue
-            out_s0 = self._safe_int(out_stride[0])
-            out_s1 = self._safe_int(out_stride[1])
-            if out_s0 is not None and out_s1 is not None and out_s0 < out_s1:
-                return True
 
-        return False
+            # Compute collapsed output strides and match store coefficients.
+            collapsed_out_strides = [0] * n
+            stride = 1
+            for i in range(n - 1, -1, -1):
+                collapsed_out_strides[i] = stride
+                stride *= out_groups[i]
+
+            out_stride_to_dim = {s: j for j, s in enumerate(collapsed_out_strides)}
+            var_to_out_dim = []
+            for v in ordered:
+                j = out_stride_to_dim.get(store_coeffs[v])
+                if j is None:
+                    return None
+                var_to_out_dim.append(j)
+
+            # Build perm: perm[out_dim] = in_dim
+            perm = [0] * n
+            for k in range(n):
+                perm[var_to_out_dim[k]] = var_to_in_dim[k]
+            if perm == list(range(n)):
+                return None
+            return (tuple(in_groups), tuple(perm))
+        return None
+
+    @staticmethod
+    def _group_dims_to_ranges(dims: list[int], ranges: list[int]) -> list[int] | None:
+        """Group consecutive dims (right-to-left) to match range values.
+
+        Returns collapsed shape (left-to-right) or None if no valid grouping.
+        """
+        available = list(ranges)
+        groups: list[int] = []
+        product = 1
+        for i in range(len(dims) - 1, -1, -1):
+            product *= dims[i]
+            try:
+                idx = available.index(product)
+            except ValueError:
+                continue
+            groups.append(product)
+            available.pop(idx)
+            product = 1
+        if product != 1 or available:
+            return None
+        groups.reverse()
+        return groups
 
     def _get_index_expr(self, index: sympy.Expr) -> tuple[str, bool]:
         """Get the index expression string and whether it needs flattening."""
@@ -1577,6 +1786,11 @@ class PallasKernel(SIMDKernel):
         - Broadcasting (inputs have different shapes or output differs)
         - Non-contiguous tensors (strided, transposed)
         """
+        # TMA flattens to 1D tiles, incompatible with permutation detection
+        # which emits jnp.permute_dims expecting N-D input.
+        if self.permuted_input_buffers:
+            return False
+
         # Check for reductions
         reduction_numel = self._compute_reduction_numel()
         if reduction_numel is not None and reduction_numel > 1:
@@ -1924,6 +2138,16 @@ class PallasKernel(SIMDKernel):
             slice_str = f"{prefix}{offset_val}::{stride}"
         return slice_str, False
 
+    @staticmethod
+    def _gather_permute_expr(load_expr: str, perm: tuple[int, ...]) -> str:
+        """Generate gather-based permutation instead of jnp.permute_dims.
+
+        Avoids a Mosaic compiler bug where jnp.permute_dims produces
+        corrupted output tensors on TPU for 3D+ arrays.  Uses
+        pallas_permute which flattens to 1D and does a 1D gather.
+        """
+        return f"pallas_permute({load_expr}, {perm})"
+
     def _build_load_expr(
         self,
         buf: str,
@@ -1946,10 +2170,22 @@ class PallasKernel(SIMDKernel):
             # Direct indexing for contiguous access
             load_expr = f"{buf}[{index_str}]"
 
-            # Check for transposed access
-            if index_str == "..." and self._is_transposed_access(name, index):
-                load_expr = f"jnp.transpose({load_expr})"
-                self.has_transposed_load = True
+            if index_str == "..." and not self.is_gpu:
+                perm = self._get_full_load_permutation(name, index)
+                if perm is not None:
+                    load_expr = self._gather_permute_expr(load_expr, perm)
+                    self.permuted_input_buffers[name] = perm
+                else:
+                    collapsed = self._get_collapsed_load_permutation(name, index)
+                    if collapsed is not None:
+                        collapsed_shape, cperm = collapsed
+                        load_expr = f"jnp.permute_dims({load_expr}, {cperm})"
+                        # Don't store cperm in permuted_input_buffers as it's for the reshaped tensor
+                        # not the original shape, which causes issues later when used for tiling
+                        self.collapsed_reshape_inputs[name] = collapsed_shape
+                        self.collapsed_output_shape = tuple(
+                            collapsed_shape[p] for p in cperm
+                        )
 
             return load_expr
 
@@ -1982,18 +2218,28 @@ class PallasKernel(SIMDKernel):
     def _maybe_broadcast_1d_buffer(
         self, name: str, index: sympy.Expr, load_expr: str
     ) -> str:
-        """Reshape 1D buffers (e.g., batch norm mean) for higher-dim broadcasting."""
+        """Reshape 1D buffers for higher-dim broadcasting in reduction kernels.
+
+        When a 1D buffer (e.g. a reduction result from a prior kernel, or a
+        batch-norm parameter) is loaded into a kernel with 2+ iteration dims,
+        JAX right-aligns it for broadcasting: (N,) becomes (1, N).  This is
+        wrong when the buffer corresponds to a non-trailing axis; we reshape
+        to (N, 1, ...) so broadcasting matches the correct axis.
+        """
         buf_obj = V.graph.get_buffer(name)
         if buf_obj is None or len(buf_obj.get_size()) != 1:
+            return load_expr
+
+        # Only graph inputs, not intermediate buffers — intermediates are
+        # already shaped by the IR and their dim order may not match the
+        # reference buffer used below for axis inference.
+        if name.startswith("buf"):
             return load_expr
 
         buf_length = self._safe_int(buf_obj.get_size()[0])
         if buf_length is None:
             return load_expr
 
-        # Only graph inputs, not intermediate buffers or index tensors
-        if name.startswith("buf"):
-            return load_expr
         dtype = V.graph.get_dtype(name)
         if dtype is not None and not dtype.is_floating_point:
             return load_expr
@@ -2023,7 +2269,9 @@ class PallasKernel(SIMDKernel):
         if self._safe_int(entry.length) != buf_length:
             return load_expr
 
-        # Buffer length must uniquely match one iteration variable
+        # Buffer length must uniquely match one non-reduction iteration variable.
+        # If multiple pointwise vars share the same length (e.g. 2D pointwise
+        # kernel with both dims equal), the axis is ambiguous and we bail out.
         matching_vars = [
             v
             for v, e in self.range_tree_nodes.items()
@@ -2032,12 +2280,25 @@ class PallasKernel(SIMDKernel):
         if len(matching_vars) != 1:
             return load_expr
 
-        # Buffer length must uniquely match one ref buffer dimension
+        # Determine axis position from the iteration variable's position
+        # in the range tree (pointwise vars first, then reduction vars).
+        axis_pos = None
         matching_dims = [i for i, s in enumerate(ref_buf_size) if s == buf_length]
-        if len(matching_dims) != 1:
-            return load_expr
+        if len(matching_dims) == 1:
+            axis_pos = matching_dims[0]
+        else:
+            # Ambiguous by size (e.g. square tensor with reduction).
+            # Use the variable's position in the range tree.
+            pw_idx = 0
+            for sym, e in self.range_tree_nodes.items():
+                if sym == used_var:
+                    axis_pos = pw_idx
+                    break
+                if not e.is_reduction:
+                    pw_idx += 1
 
-        axis_pos = matching_dims[0]
+        if axis_pos is None:
+            return load_expr
         if axis_pos == len(ref_buf_size) - 1:
             return load_expr  # Last dim uses default broadcasting
 
@@ -2155,7 +2416,7 @@ class PallasKernel(SIMDKernel):
         - But input(s) have row-major stride
         - And we haven't already transposed on load
         """
-        if self.has_transposed_load:
+        if self.permuted_input_buffers:
             return False
 
         info = self._get_buffer_info(name)
@@ -2628,28 +2889,38 @@ class PallasKernel(SIMDKernel):
                 f"{out}[...] = jnp.full({out}.shape, _val) if _val.ndim == 0 else _val.reshape({out}.shape)",
             ]
         else:
-            # Check for scatter pattern (indirect indexing for stores)
-            scatter_info = self._detect_scatter_pattern(index, name)
-
-            if scatter_info is not None:
-                # Track iteration variables used in scatter index
-                self.used_iter_vars.update(self._get_used_iter_vars(index))
-                store_lines = [
-                    self._build_scatter_store_expr(out, value, scatter_info, name, mode)
-                ]
+            # When collapsed_output_shape is set, the load-side permutation
+            # already produces data in the correct layout for the collapsed
+            # output.  Force a full-array store ("...") so the scatter index
+            # (which was computed for the original output layout) does not
+            # rearrange the permuted data.
+            if self.collapsed_output_shape is not None:
+                store_lines = self._build_full_array_store_expr(out, value, False)
             else:
-                # Get base index expression
-                index_str, needs_flatten = self._get_index_expr(index)
+                # Check for scatter pattern (indirect indexing for stores)
+                scatter_info = self._detect_scatter_pattern(index, name)
 
-                # Check for im2col-like patterns
-                index_str, needs_flatten = self._check_im2col_pattern(
-                    index, index_str, needs_flatten
-                )
+                if scatter_info is not None:
+                    # Track iteration variables used in scatter index
+                    self.used_iter_vars.update(self._get_used_iter_vars(index))
+                    store_lines = [
+                        self._build_scatter_store_expr(
+                            out, value, scatter_info, name, mode
+                        )
+                    ]
+                else:
+                    # Get base index expression
+                    index_str, needs_flatten = self._get_index_expr(index)
 
-                # Build the store expression
-                store_lines = self._build_store_expr(
-                    out, name, index, value, index_str, needs_flatten, mode
-                )
+                    # Check for im2col-like patterns
+                    index_str, needs_flatten = self._check_im2col_pattern(
+                        index, index_str, needs_flatten
+                    )
+
+                    # Build the store expression
+                    store_lines = self._build_store_expr(
+                        out, name, index, value, index_str, needs_flatten, mode
+                    )
 
         for line in store_lines:
             self.stores.writeline(line)
@@ -2908,9 +3179,12 @@ class PallasKernel(SIMDKernel):
         # If iteration variables appear in the compute body (not just in
         # load/store index resolution that collapses to [...]), tiling is
         # unsafe because the arange-based vars have full-tensor shapes.
+        # Exception: vars emitted in tile-relative form are safe.
         if self.used_iter_vars:
             compute_text = "\n".join(str(line) for line in self.compute._lines)
             for var_sym in self.used_iter_vars:
+                if var_sym in self.tile_relative_iter_vars:
+                    continue
                 if str(var_sym) in compute_text:
                     return False
 
@@ -2943,7 +3217,7 @@ class PallasKernel(SIMDKernel):
                 ):
                     has_col_major_out = True
                     break
-        self.tile_has_transpose = self.has_transposed_load or has_col_major_out
+        self.tile_has_transpose = bool(self.permuted_input_buffers) or has_col_major_out
 
         # Count trailing reduction dimensions in the output shape that must
         # not be tiled (the kernel body needs the full reduction range).
@@ -2970,6 +3244,13 @@ class PallasKernel(SIMDKernel):
 
         if not ref_shape:
             return False
+
+        # For collapsed permutation kernels, override ref_shape with the
+        # collapsed output shape so all compatibility checks operate in
+        # collapsed-shape space.
+        if self.collapsed_output_shape is not None:
+            ref_shape = list(self.collapsed_output_shape)
+
         ref_nd = len(ref_shape)
 
         all_bufs = list(self.args.input_buffers) + out_bufs
@@ -2981,14 +3262,22 @@ class PallasKernel(SIMDKernel):
             _, buf_size, _, _, _ = info
             if len(buf_size) == 0:
                 continue  # scalar
-            int_size = [self._safe_int(s) for s in buf_size]
-            if any(s is None for s in int_size):
-                return False
+
+            # Use collapsed shapes when available so dimension checks
+            # operate in the same space as the kernel.
+            if buf_name in self.collapsed_reshape_inputs:
+                int_size = list(self.collapsed_reshape_inputs[buf_name])
+            elif self.collapsed_output_shape is not None and buf_name in out_bufs:
+                int_size = list(self.collapsed_output_shape)
+            else:
+                int_size = [self._safe_int(s) for s in buf_size]
+                if any(s is None for s in int_size):
+                    return False
             buf_nd = len(int_size)
 
             if buf_nd == ref_nd:
                 # Same ndim: check dimensions match or are broadcast (1).
-                # Allow transposed last-2 dims and strided buffers.
+                # Allow strided buffers (dims may differ after reshape).
                 is_strided = buf_name in self.strided_input_buffers
                 mismatch = False
                 for i in range(ref_nd):
@@ -3002,23 +3291,17 @@ class PallasKernel(SIMDKernel):
                     mismatch = True
                     break
 
-                if mismatch and ref_nd >= 2 and self.tile_has_transpose:
-                    # Check if last-2 dims are swapped (transpose pattern).
-                    # Only allow when the kernel actually transposes
-                    # (has_transposed_load or column-major output).
-                    if (
-                        int_size[-2] == ref_shape[-1]
-                        and int_size[-1] == ref_shape[-2]
+                if mismatch and buf_name in self.permuted_input_buffers:
+                    perm = self.permuted_input_buffers[buf_name]
+                    if not (
+                        len(perm) == ref_nd
                         and all(
-                            int_size[i] == ref_shape[i]
-                            or int_size[i] == 1
+                            int_size[perm[i]] == ref_shape[i]
+                            or int_size[perm[i]] == 1
                             or ref_shape[i] == 1
-                            for i in range(ref_nd - 2)
+                            for i in range(ref_nd)
                         )
                     ):
-                        if buf_name in self.args.input_buffers:
-                            self.transposed_input_buffers.add(buf_name)
-                    else:
                         return False
                 elif mismatch:
                     return False
@@ -3060,24 +3343,14 @@ class PallasKernel(SIMDKernel):
             return False
 
         # On CPU (interpret mode) each tile iteration has significant
-        # Python/JAX overhead, so cap the grid size to avoid regressions
-        # on large tensors.  On TPU the grid executes natively.
+        # Python/JAX overhead, so cap the grid size.  Store the cap
+        # so _codegen_tiled_specs can pass it to pallas_compute_tiling,
+        # which will scale up tiles to stay within the limit.
         is_tpu = V.graph.get_current_device_or_throw().type == "tpu"
         if not is_tpu:
-            from ..runtime.runtime_utils import pallas_compute_tiling
-
-            _, grid, _ = pallas_compute_tiling(
-                tuple(ref_shape),
-                transpose=self.tile_has_transpose,
-                skip_last_n=self.tile_skip_last_n,
-                exact_only=True,
-            )
-            _MAX_GRID_PRODUCT = 64
-            grid_product = 1
-            for g in grid:
-                grid_product *= g
-            if grid_product > _MAX_GRID_PRODUCT:
-                return False
+            self._cpu_max_grid_product = 64
+        else:
+            self._cpu_max_grid_product = None
 
         return True
 
@@ -3118,7 +3391,6 @@ class PallasKernel(SIMDKernel):
         }
 
         kernel_name = name or "<KERNEL_NAME>"
-        is_tpu = V.graph.get_current_device_or_throw().type == "tpu"
         interpret_is_cpu = V.graph.get_current_device_or_throw().type == "cpu"
         interpret_literal = "True" if interpret_is_cpu else "False"
 
@@ -3143,7 +3415,7 @@ class PallasKernel(SIMDKernel):
         # donated-buffer mechanism so only non-aliased outputs need a copy.
         if interpret_is_cpu:
             copy_output_indices = list(range(len(output_params)))
-        elif is_tpu:
+        elif self.is_tpu:
             copy_output_indices = []
         else:
             copy_output_indices = [
@@ -3155,7 +3427,7 @@ class PallasKernel(SIMDKernel):
         ctx = _CodegenContext(
             code=code,
             kernel_name=kernel_name,
-            is_tpu=is_tpu,
+            is_tpu=self.is_tpu,
             interpret_is_cpu=interpret_is_cpu,
             interpret_literal=interpret_literal,
             kernel_params=kernel_params,
@@ -3176,9 +3448,6 @@ class PallasKernel(SIMDKernel):
 
         self._codegen_imports(ctx)
 
-        # Generate kernel body into a separate buffer first.
-        # This allows us to discover all size variables (registered via rename_indexing)
-        # before generating the kernel signature.
         kernel_body = IndentedBuffer()
         with kernel_body.indent():
             self._codegen_iteration_vars(kernel_body, ctx)
@@ -3204,23 +3473,18 @@ class PallasKernel(SIMDKernel):
         # generated (used_iter_vars is populated during load/store codegen).
         self.tile_cpu_tpu = self._can_tile_cpu_tpu()
 
+        extra_kernel_params = ""
+        if self.tile_relative_iter_vars:
+            extra_kernel_params = ", _pallas_tile=None, _pallas_ax2g=None"
+
+        ctx.alias_pairs = self._compute_alias_pairs(ctx, aliasable_flags)
+
         # Emit the kernel function with the correct signature
-        kernel_signature = (
-            f"def {kernel_name}_kernel({', '.join(ctx.full_kernel_params)}):"
-        )
+        kernel_signature = f"def {kernel_name}_kernel({', '.join(ctx.full_kernel_params)}{extra_kernel_params}):"
         code.writeline(kernel_signature)
 
         with code.indent():
-            for line in kernel_body._lines:
-                if isinstance(line, str):
-                    code.writeline(line.lstrip())
-                else:
-                    code._lines.append(line)
-
-            # Filter stores to only emit those for outputs that are in kernel params.
-            for out_ptr, store_line in self.store_with_output:
-                if out_ptr in ctx.full_kernel_params:
-                    code.writeline(store_line)
+            self._emit_kernel_body(code, kernel_body, ctx)
 
         code.writeline("")
         jit_wrapper_name = f"{kernel_name}_jit_wrapper"
@@ -3245,18 +3509,7 @@ class PallasKernel(SIMDKernel):
         )
         code.writeline(f"def {jit_wrapper_name}({', '.join(wrapper_params)}):")
 
-        alias_pairs: list[tuple[int, int]] = []
-        for out_idx, name in enumerate(ctx.output_params):
-            if name.startswith("out_ptr"):
-                if aliasable_flags.get(name, False):
-                    alias_name = f"{name}_alias"
-                    input_idx = ctx.kernel_input_params.index(alias_name)
-                    alias_pairs.append((input_idx, out_idx))
-            else:
-                input_idx = ctx.kernel_input_params.index(name)
-                alias_pairs.append((input_idx, out_idx))
-        alias_map_literal = ", ".join(f"{i}: {o}" for (i, o) in alias_pairs)
-        ctx.alias_pairs = alias_pairs
+        alias_map_literal = ", ".join(f"{i}: {o}" for (i, o) in ctx.alias_pairs)
 
         has_zero_dim, has_unknown_dim = self._zero_dim_output_flags(ctx)
 
@@ -3279,8 +3532,12 @@ class PallasKernel(SIMDKernel):
                     "_pallas_out_shapes = tuple("
                     "s if len(s) > 0 else (1,) for s in out_shapes)"
                 )
+                if self.collapsed_output_shape is not None:
+                    code.writeline(
+                        f"_pallas_out_shapes = ({self.collapsed_output_shape},)"
+                    )
                 # Reshape aliased inputs to match promoted output shapes
-                for input_idx, out_idx in alias_pairs:
+                for input_idx, out_idx in ctx.alias_pairs:
                     param = ctx.kernel_input_params[input_idx]
                     code.writeline(
                         f"{param} = {param}.reshape(_pallas_out_shapes[{out_idx}])"
@@ -3295,6 +3552,15 @@ class PallasKernel(SIMDKernel):
                     self._codegen_tiled_specs(ctx)
                 else:
                     self._codegen_strided_reshapes(code, ctx.kernel_input_params)
+                    for param in ctx.kernel_input_params:
+                        buf_name = self._param_to_buf_name(param)
+                        cshape = (
+                            self.collapsed_reshape_inputs.get(buf_name)
+                            if buf_name
+                            else None
+                        )
+                        if cshape is not None:
+                            code.writeline(f"{param} = {param}.reshape({cshape})")
 
                     code.writeline("indexer = lambda n: lambda i: [jnp.int32(i)] * n")
                     code.writeline("out_specs_pallas = tuple(")
@@ -3310,10 +3576,22 @@ class PallasKernel(SIMDKernel):
                     )
                     code.writeline(")")
 
+                if self.tile_relative_iter_vars:
+                    if self.tile_cpu_tpu:
+                        code.writeline("_pallas_tile = _tile")
+                        code.writeline("_pallas_ax2g = _ax2g")
+                    else:
+                        code.writeline("_pallas_tile = _pallas_out_shapes[0]")
+                        code.writeline("_pallas_ax2g = {}")
+
                 # Wrap kernel with functools.partial to pass scalar arguments (size variables)
                 partial_args = []
                 for sv_param in ctx.size_var_params:
                     partial_args.append(f"{sv_param}={sv_param}")
+
+                if self.tile_relative_iter_vars:
+                    partial_args.append("_pallas_tile=_pallas_tile")
+                    partial_args.append("_pallas_ax2g=_pallas_ax2g")
 
                 if partial_args:
                     kernel_arg = f"functools.partial({kernel_name}_kernel, {', '.join(partial_args)}),"
@@ -3331,11 +3609,43 @@ class PallasKernel(SIMDKernel):
                     self._codegen_jit_wrapper_legacy_gpu(ctx, kernel_arg)
                 else:
                     self._codegen_jit_wrapper_cpu_tpu(
-                        ctx, kernel_arg, alias_pairs, alias_map_literal
+                        ctx, kernel_arg, ctx.alias_pairs, alias_map_literal
                     )
 
         self._codegen_main_entry(ctx, jit_wrapper_name)
         return code.getvalue()
+
+    @staticmethod
+    def _compute_alias_pairs(
+        ctx: _CodegenContext, aliasable_flags: dict[str, bool]
+    ) -> list[tuple[int, int]]:
+        alias_pairs: list[tuple[int, int]] = []
+        for out_idx, name in enumerate(ctx.output_params):
+            if name.startswith("out_ptr"):
+                if aliasable_flags.get(name, False):
+                    alias_name = f"{name}_alias"
+                    input_idx = ctx.kernel_input_params.index(alias_name)
+                    alias_pairs.append((input_idx, out_idx))
+            else:
+                input_idx = ctx.kernel_input_params.index(name)
+                alias_pairs.append((input_idx, out_idx))
+        return alias_pairs
+
+    def _emit_kernel_body(
+        self,
+        code: IndentedBuffer,
+        kernel_body: IndentedBuffer,
+        ctx: _CodegenContext,
+    ) -> None:
+        """Emit the kernel body lines and store operations into code."""
+        for line in kernel_body._lines:
+            if isinstance(line, str):
+                code.writeline(line.lstrip())
+            else:
+                code._lines.append(line)
+        for out_ptr, store_line in self.store_with_output:
+            if out_ptr in ctx.full_kernel_params:
+                code.writeline(store_line)
 
     def _codegen_imports(self, ctx: _CodegenContext) -> None:
         imports = """
@@ -3345,8 +3655,9 @@ import torch
 import jax
 import jax.numpy as jnp
 from jax.experimental import pallas as pl
+from torch.utils._ordered_set import OrderedSet
 from torch._inductor.runtime.runtime_utils import (
-    pallas_compute_tiling, pallas_make_block_spec,
+    pallas_compute_tiling, pallas_make_block_spec, pallas_permute,
     pallas_gpu_align_output_specs, pallas_gpu_pad_inputs,
     pallas_gpu_unpad_results,
     torch_dtype_to_jax_runtime,
@@ -3358,6 +3669,25 @@ from torch._inductor.runtime.runtime_utils import (
         elif not ctx.interpret_is_cpu:
             imports += "\nfrom jax.experimental.pallas import mosaic_gpu as plgpu"
         ctx.code.splice(imports, strip=True)
+
+    def _get_iter_var_axis(self, var_sym: sympy.Symbol) -> int | None:
+        """Map an iteration variable to its output tensor axis index.
+
+        Non-reduction variables map to axes 0, 1, 2, ... in order.
+        Reduction variables map to axes after all pointwise axes.
+        Returns None if the mapping cannot be determined.
+        """
+        pw_idx = 0
+        r_idx = 0
+        n_pw = sum(1 for _, e in self.range_tree_nodes.items() if not e.is_reduction)
+        for sym, entry in self.range_tree_nodes.items():
+            if sym == var_sym:
+                return pw_idx if not entry.is_reduction else n_pw + r_idx
+            if entry.is_reduction:
+                r_idx += 1
+            else:
+                pw_idx += 1
+        return None
 
     def _codegen_iteration_vars(
         self, kernel_body: IndentedBuffer, ctx: _CodegenContext
@@ -3476,7 +3806,34 @@ from torch._inductor.runtime.runtime_utils import (
                 arange = f"jnp.arange({length_str})"
                 kernel_body.writeline(f"{var_name} = {arange}.reshape({shape_str})")
             else:
-                kernel_body.writeline(f"{var_name} = jnp.arange({length_str})")
+                # Simple 1D arange — emit tile-relative form so tiling is safe.
+                # When grid=(1,), _pallas_tile[ax] == full length and
+                # pl.program_id(0) == 0, so this degenerates to jnp.arange(N).
+                # Only do this when the var actually appears in compute body
+                # (otherwise tiling is not blocked and the full arange is fine).
+                # Skip for scatter/index kernels where the iter var is used
+                # as a global index, not a data value.
+                compute_text = "\n".join(str(line) for line in self.compute._lines)
+                var_in_compute = var_name in compute_text
+                can_tile_relative = (
+                    var_in_compute
+                    and not self.is_gpu
+                    and not self.outputs_need_read
+                    and not self.has_flatten_indexing
+                    and not entry.is_reduction
+                )
+                axis_idx = (
+                    self._get_iter_var_axis(var_sym) if can_tile_relative else None
+                )
+                if axis_idx is not None:
+                    kernel_body.writeline(
+                        f"{var_name} = jnp.arange(_pallas_tile[{axis_idx}])"
+                        f" + pl.program_id(_pallas_ax2g.get({axis_idx}, 0))"
+                        f" * _pallas_tile[{axis_idx}]"
+                    )
+                    self.tile_relative_iter_vars.add(var_sym)
+                else:
+                    kernel_body.writeline(f"{var_name} = jnp.arange({length_str})")
 
     @staticmethod
     def _broadcast_axis_idx(
@@ -3634,7 +3991,7 @@ from torch._inductor.runtime.runtime_utils import (
             code.writeline(f"_all_sizes.append({param}.size)")
         code.writeline("for shape in out_shapes:")
         code.writeline("    _all_sizes.append(math.prod(shape))")
-        code.writeline("_unique_sizes = set(_all_sizes)")
+        code.writeline("_unique_sizes = OrderedSet(_all_sizes)")
         code.writeline(
             "_can_pad = len(_unique_sizes) == 1 and all(s > 1 for s in _unique_sizes)"
         )
@@ -3712,51 +4069,64 @@ from torch._inductor.runtime.runtime_utils import (
         reference output shape per numpy broadcast rules.
         """
         code = ctx.code
-        transpose_literal = "True" if self.tile_has_transpose else "False"
-
         skip_n = self.tile_skip_last_n
+        has_transpose = "True" if self.tile_has_transpose else "False"
         is_tpu_literal = "True" if ctx.is_tpu else "False"
+
+        # Collect per-input permutations for tiling alignment.
+        all_perms: list[tuple[int, ...] | None] = []
+        for p in ctx.kernel_input_params:
+            buf_name = self._param_to_buf_name(p)
+            all_perms.append(
+                self.permuted_input_buffers.get(buf_name) if buf_name else None
+            )
+
+        mgp = self._cpu_max_grid_product
+        mgp_arg = f", max_grid_product={mgp}" if mgp else ""
+        perms_arg = (
+            f", permutations={repr(all_perms)}"
+            if any(p is not None for p in all_perms)
+            else ""
+        )
         code.writeline(
             f"_tile, _grid, _ax2g = pallas_compute_tiling("
-            f"out_shapes[0], transpose={transpose_literal}, "
-            f"skip_last_n={skip_n}, exact_only=True, is_tpu={is_tpu_literal})"
+            f"_pallas_out_shapes[0], "
+            f"transpose={has_transpose}, "
+            f"skip_last_n={skip_n}, exact_only=len(_pallas_out_shapes[0]) < 2, "
+            f"is_tpu={is_tpu_literal}"
+            f"{perms_arg}{mgp_arg})"
         )
         code.writeline("_ng = len(_grid)")
-        code.writeline("_ref = out_shapes[0]")
+        code.writeline("_ref = _pallas_out_shapes[0]")
 
         code.writeline("out_specs_pallas = tuple(")
         code.writeline(
             "    pallas_make_block_spec(s, _ref, _tile, _ax2g, _ng, is_output=True)"
         )
-        code.writeline("    for s in out_shapes")
+        code.writeline("    for s in _pallas_out_shapes")
         code.writeline(")")
 
         self._codegen_strided_reshapes(code, ctx.kernel_input_params)
 
-        # Build per-input swap_last_two flags for transposed buffers
-        swap_flags = []
+        # Reshape collapsed inputs before building specs.
         for param in ctx.kernel_input_params:
-            # Map kernel param back to graph buffer name
-            buf_name = None
-            for graph_name, inner_name in self.args.input_buffers.items():
-                if inner_name == param:
-                    buf_name = graph_name
-                    break
-            is_swap = buf_name is not None and buf_name in self.transposed_input_buffers
-            swap_flags.append(is_swap)
+            buf_name = self._param_to_buf_name(param)
+            cshape = self.collapsed_reshape_inputs.get(buf_name) if buf_name else None
+            if cshape is not None:
+                code.writeline(f"{param} = {param}.reshape({cshape})")
 
-        if any(swap_flags):
-            swap_list = ", ".join(str(f) for f in swap_flags)
-            code.writeline(f"_swap_flags = [{swap_list}]")
-            input_list = ", ".join(ctx.kernel_input_params)
+        # Build input BlockSpecs (with per-input permutation when needed).
+        input_list = ", ".join(ctx.kernel_input_params)
+        if any(p is not None for p in all_perms):
+            perm_list = ", ".join(repr(p) for p in all_perms)
+            code.writeline(f"_perm_flags = [{perm_list}]")
             code.writeline("in_specs_pallas = tuple(")
             code.writeline(
-                f"    pallas_make_block_spec(i.shape, _ref, _tile, _ax2g, _ng, swap_last_two=s)"
-                f" for i, s in zip([{input_list}], _swap_flags)"
+                f"    pallas_make_block_spec(i.shape, _ref, _tile, _ax2g, _ng, permutation=p)"
+                f" for i, p in zip([{input_list}], _perm_flags)"
             )
             code.writeline(")")
         else:
-            input_list = ", ".join(ctx.kernel_input_params)
             code.writeline("in_specs_pallas = tuple(")
             code.writeline(
                 f"    pallas_make_block_spec(i.shape, _ref, _tile, _ax2g, _ng) for i in [{input_list}]"
