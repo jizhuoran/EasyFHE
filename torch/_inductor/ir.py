@@ -5257,6 +5257,14 @@ class TemplateBuffer(OperationBuffer):
             allowed_prologue_inps or OrderedSet()
         )
 
+    @property
+    def dtype(self) -> torch.dtype:
+        if isinstance(self.layout, MultiOutputLayout):
+            raise NotImplementedError(
+                "Multi-output templates do not have a single dtype"
+            )
+        return self.get_layout().dtype
+
     def get_read_writes(self) -> dependencies.ReadWrites:
         return self.extract_read_writes(normalize=True)
 
