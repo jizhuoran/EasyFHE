@@ -890,12 +890,6 @@ class BuiltinVariable(VariableTracker):
                         return VariableTracker.build(tx, op.__name__ != "is_")
                     if left is right:
                         return VariableTracker.build(tx, op(left, right))
-                    # VT identity is a reliable proxy for Python identity for
-                    # mutable containers created during tracing.  For types
-                    # like EnumVariable two distinct VTs can wrap the same
-                    # singleton, so we must not claim "is False" there.
-                    if isinstance(left, (ConstDictVariable, ListVariable)):
-                        return VariableTracker.build(tx, op(left, right))
                     if istype(left, variables.ObjectVariable) and istype(
                         right, variables.ObjectVariable
                     ):
@@ -3051,20 +3045,6 @@ class BuiltinVariable(VariableTracker):
             return VariableTracker.build(tx, id(args[0].value))
         elif istype(args[0], variables.FunctoolsPartialVariable):
             return VariableTracker.build(tx, id(args[0].fake_value))
-        elif isinstance(
-            args[0],
-            (
-                ConstantVariable,
-                ConstDictVariable,
-                ListVariable,
-                TupleVariable,
-                SetVariable,
-                SymNodeVariable,
-            ),
-        ):
-            from .constant import FakeIdVariable
-
-            return FakeIdVariable(id(args[0]))
         else:
             unimplemented(
                 gb_type="id() with unsupported args",
