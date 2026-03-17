@@ -30,10 +30,6 @@ from torch._subclasses import FakeTensor, FakeTensorMode
 from torch.export._tree_utils import reorder_kwargs
 from torch.fx.experimental.proxy_tensor import make_fx
 
-
-static_inputs_log = torch._logging.getArtifactLogger(
-    __name__, "cudagraph_static_inputs"
-)
 from . import config
 from ._aot_autograd.autograd_cache import (  # noqa: F401
     AOTAutogradCache,
