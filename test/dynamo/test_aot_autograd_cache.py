@@ -2721,6 +2721,69 @@ class AOTAutogradCacheTests(InductorTestCase):
             self.assertEqual(result2, result3)
             self.assertEqual(result3, result4)
 
+    def test_cache_hit_across_processes(self):
+        """
+        Verify that a second subprocess gets a cache hit from the first subprocess's
+        compilation, using a shared cache directory.
+        """
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            script = textwrap.dedent(
+                """
+                import json
+                import torch
+                import torch._dynamo
+                from torch._dynamo.utils import counters
+                from torch._inductor import config as inductor_config
+
+                inductor_config.fx_graph_cache = True
+                inductor_config.fx_graph_remote_cache = False
+                torch._dynamo.reset()
+
+                def fn(x, y):
+                    return x + y
+
+                compiled_fn = torch.compile(fn)
+                x = torch.randn(10)
+                y = torch.randn(10)
+                compiled_fn(x, y)
+
+                print(json.dumps(dict(counters["aot_autograd"])))
+                """
+            )
+
+            env = {**os.environ, "TORCHINDUCTOR_CACHE_DIR": cache_dir}
+
+            import json
+
+            # First subprocess - expect cache miss
+            result1 = subprocess.run(
+                [sys.executable, "-c", script],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result1.returncode, 0, result1.stderr)
+            counters1 = json.loads(result1.stdout.strip().splitlines()[-1])
+            self.assertEqual(counters1.get("autograd_cache_miss", 0), 1)
+            self.assertEqual(counters1.get("autograd_cache_hit", 0), 0)
+
+            # Second subprocess - expect cache hit
+            result2 = subprocess.run(
+                [sys.executable, "-c", script],
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(result2.returncode, 0, result2.stderr)
+            counters2 = json.loads(result2.stdout.strip().splitlines()[-1])
+            self.assertEqual(counters2.get("autograd_cache_miss", 0), 0)
+            self.assertEqual(counters2.get("autograd_cache_hit", 0), 1)
+
 
 @functorch_config.patch({"bundled_autograd_cache": True})
 class AOTAutogradCacheBundledTests(AOTAutogradCacheTests):
