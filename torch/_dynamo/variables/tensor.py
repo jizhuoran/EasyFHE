@@ -253,9 +253,10 @@ class TensorVariable(VariableTracker):
             version_before is not None
             and version_after is not None
             and version_after > version_before
-            and has_tensor_arg
         ):
-            self.synchronize_attributes(tx)
+            if has_tensor_arg:
+                self.synchronize_attributes(tx)
+            tx.output.check_input_mutation_on_current_stream(tx)
 
     def debug_repr(self) -> str:
         # TODO: strip off fake tensor from repr here

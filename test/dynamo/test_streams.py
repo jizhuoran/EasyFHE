@@ -1549,6 +1549,133 @@ class GraphModule(torch.nn.Module):
             # Should not raise due to signature mismatch
             torch.ops.streams.record_stream.default(t, 0)
 
+    @requires_cuda
+    def test_event_record_after_input_mutation_errors(self):
+        def fn(x):
+            s = torch.Stream()
+            e = torch.Event()
+            with s:
+                x.add_(1)
+                e.record()
+            return e
+
+        with self.assertRaisesRegex(RuntimeError, "An event was recorded on a stream"):
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda")
+            )
+
+    @requires_cuda
+    def test_event_record_after_input_mutation_stack_traces(self):
+        def fn(x):
+            s = torch.Stream()
+            e = torch.Event()
+            with s:
+                x.add_(1)
+                e.record()
+            return e
+
+        try:
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda")
+            )
+            self.fail("Expected RuntimeError")
+        except RuntimeError as e:
+            msg = str(e)
+            self.assertIn("Input mutation occurred here:", msg)
+            self.assertIn("x.add_(1)", msg)
+            self.assertIn("Event record occurred here:", msg)
+            self.assertIn("e.record()", msg)
+
+    @requires_cuda
+    def test_event_record_after_input_mutation_record_event(self):
+        def fn(x):
+            s = torch.Stream()
+            with s:
+                x.add_(1)
+                e = s.record_event()
+            return e
+
+        with self.assertRaisesRegex(RuntimeError, "An event was recorded on a stream"):
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda")
+            )
+
+    @requires_cuda
+    def test_event_record_after_input_mutation_through_view(self):
+        def fn(x):
+            s = torch.Stream()
+            e = torch.Event()
+            v = x.view(-1)
+            with s:
+                v.add_(1)
+                e.record()
+            return e
+
+        with self.assertRaisesRegex(RuntimeError, "An event was recorded on a stream"):
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda")
+            )
+
+    @requires_cuda
+    def test_event_record_after_input_mutation_input_event(self):
+        def fn(x, e):
+            s = torch.Stream()
+            with s:
+                x.add_(1)
+                e.record()
+            return x
+
+        with self.assertRaisesRegex(RuntimeError, "An event was recorded on a stream"):
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda"),
+                torch.Event(),
+            )
+
+    @requires_cuda
+    def test_event_record_before_input_mutation_no_error(self):
+        def fn(x):
+            s = torch.Stream()
+            e = torch.Event()
+            with s:
+                e.record()
+                x.add_(1)
+            return e
+
+        torch.compile(fn, backend="eager", fullgraph=True)(
+            torch.ones(2, 2, device="cuda")
+        )
+
+    @requires_cuda
+    def test_event_record_on_different_stream_no_error(self):
+        def fn(x):
+            s0 = torch.Stream()
+            s1 = torch.Stream()
+            e = torch.Event()
+            with s0:
+                x.add_(1)
+            with s1:
+                e.record()
+            return e
+
+        torch.compile(fn, backend="eager", fullgraph=True)(
+            torch.ones(2, 2, device="cuda")
+        )
+
+    @requires_cuda
+    def test_event_not_returned_no_error(self):
+        def fn(x):
+            s = torch.Stream()
+            e = torch.Event()
+            with s:
+                x.add_(1)
+                e.record()
+            return x
+
+        with self.assertRaisesRegex(RuntimeError, "An event was recorded on a stream"):
+            torch.compile(fn, backend="eager", fullgraph=True)(
+                torch.ones(2, 2, device="cuda")
+            )
+
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
