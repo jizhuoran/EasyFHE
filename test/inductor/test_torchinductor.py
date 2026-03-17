@@ -6122,6 +6122,24 @@ class CommonTemplate:
         if self.device != "cpu":
             assertGeneratedKernelCountEqual(self, 1)
 
+    def test_layer_norm_rejects_complex_inputs(self):
+        if self.device not in ("cpu", "cuda"):
+            raise unittest.SkipTest("Only validated on CPU/CUDA")
+
+        m = torch.nn.LayerNorm(10).to(self.device)
+        x = torch.randn(1, 1, 10, device=self.device, dtype=torch.complex64)
+
+        with self.assertRaises(RuntimeError):
+            m(x)
+
+        with self.assertRaises(RuntimeError) as compiled_error:
+            torch.compile(m)(x)
+
+        self.assertIn(
+            "native_layer_norm does not support complex inputs",
+            str(compiled_error.exception),
+        )
+
     @torch._functorch.config.patch("donated_buffer", True)
     def test_matmul_layer_norm(self):
         batch_size = 32

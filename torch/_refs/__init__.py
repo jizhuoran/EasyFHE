@@ -3457,6 +3457,10 @@ def native_layer_norm(
         + ", but got input of size "
         + str(input.shape),
     )
+    torch._check(
+        not input.is_complex(),
+        lambda: "native_layer_norm does not support complex inputs",
+    )
 
     input = contiguous(input)
     if weight is not None:
