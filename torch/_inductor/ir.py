@@ -8718,32 +8718,37 @@ class FallbackKernel(ExternKernelAlloc):
             ) = cls.process_kernel(kernel, *args, **kwargs)
 
         # Try to lower single output functional custom ops to their out-variant.
-        if isinstance(kernel, torch._ops.OpOverload):
+        if isinstance(kernel, torch._ops.OpOverload) and isinstance(
+            example_output, torch.Tensor
+        ):
             from torch._library._out_variant import (
                 _is_functional,
                 get_out_arg_names,
+                lookup_manual_out_variant,
                 to_out_variant,
             )
 
-            if _is_functional(kernel._schema) and isinstance(
-                example_output, torch.Tensor
-            ):
+            out_op = None
+            if _is_functional(kernel._schema):
                 out_op = to_out_variant(kernel)
-                if out_op is not None and len(get_out_arg_names(out_op)) == 1:
-                    layout = FixedLayout(
-                        device=example_output.device,
-                        dtype=example_output.dtype,
-                        size=[*example_output.shape],
-                        stride=[*example_output.stride()],
-                    )
-                    return ExternKernelOut(  # type: ignore[return-value]
-                        layout=layout,
-                        inputs=list(tensor_args),
-                        constant_args=list(non_tensor_args),
-                        kwargs=kwargs,
-                        python_kernel_name=_make_out_variant_kernel_name(out_op),
-                        op_overload=out_op,
-                    )
+            if out_op is None:
+                out_op = lookup_manual_out_variant(kernel)
+
+            if out_op is not None and len(get_out_arg_names(out_op)) == 1:
+                layout = FixedLayout(
+                    device=example_output.device,
+                    dtype=example_output.dtype,
+                    size=[*example_output.shape],
+                    stride=[*example_output.stride()],
+                )
+                return ExternKernelOut(  # type: ignore[return-value]
+                    layout=layout,
+                    inputs=list(tensor_args),
+                    constant_args=list(non_tensor_args),
+                    kwargs=kwargs,
+                    python_kernel_name=_make_out_variant_kernel_name(out_op),
+                    op_overload=out_op,
+                )
 
         # We need this extra check for input alignment since the example
         # inputs we created are always aligned.
