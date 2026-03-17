@@ -312,6 +312,23 @@ class TestUnbackedSymints(InductorTestCase):
         torch.testing.assert_close(actual, expected)
 
     @skipGPUIf(not HAS_GPU, "requires gpu and triton")
+    @dynamo_config.patch(
+        {"capture_scalar_outputs": True, "capture_dynamic_output_shape_ops": True}
+    )
+    def test_repeat_interleave_with_unbacked_scalar(self, device):
+        def fn(x, repeats):
+            return x.repeat_interleave(repeats.item())
+
+        example_inputs = (
+            torch.arange(4, device=device),
+            torch.scalar_tensor(3, dtype=torch.int64, device=device),
+        )
+
+        actual = torch.compile(fn, fullgraph=True, dynamic=True)(*example_inputs)
+        expected = fn(*example_inputs)
+        torch.testing.assert_close(actual, expected)
+
+    @skipGPUIf(not HAS_GPU, "requires gpu and triton")
     @dynamo_config.patch({"capture_scalar_outputs": True})
     @parametrize("dynamic", [False, True, None])
     def test_unbacked_slice_on_subclass(self, device, dynamic):
