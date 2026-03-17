@@ -339,6 +339,35 @@ class NumBytesMetricTests(TestCase):
         inp = (T(10), TI(10, mx=10))
         self.assertExpectedInline(count_numel(f, *inp), """30""")
 
+    @requires_gpu_and_triton
+    def test_delay_realize_cheap_outputs_shared_mask(self):
+        # Shared tril mask across multiple users gets eagerly materialized
+        # as an output buffer, inflating downstream read counts. With
+        # delay_realize_cheap_outputs, the mask stays inlined as index
+        # arithmetic, reducing memory traffic.
+        def f(x1, x2, x3):
+            mask = torch.tril(torch.ones(32, 32, device=x1.device))
+            return x1 + mask, x2 + mask, x3 + mask
+
+        inp = (
+            T(32, 32, grad=True),
+            T(32, 32, grad=True),
+            T(32, 32, grad=True),
+        )
+
+        # Without deferred realization: mask gets materialized as output buffer
+        with patch.object(config, "delay_realize_cheap_outputs", False):
+            metrics.reset()
+            torch.compile(f, backend=compile_but_use_eager)(*inp)
+            eager_bytes = metrics.num_bytes_accessed
+
+        # Default (deferred realization on): mask stays inlined
+        metrics.reset()
+        torch.compile(f, backend=compile_but_use_eager)(*inp)
+        deferred_bytes = metrics.num_bytes_accessed
+
+        self.assertLessEqual(deferred_bytes, eager_bytes)
+
 
 class FusionTests(TestCase):
     """

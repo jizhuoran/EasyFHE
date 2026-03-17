@@ -2007,6 +2007,19 @@ class GraphLowering(torch.fx.Interpreter):
                     if user.op == "output":
                         # pyrefly: ignore [missing-attribute]
                         if isinstance(result.data.data, (Pointwise, Reduction)):
+                            # Cheap-to-recompute nodes (0 buffer reads, e.g.
+                            # index arithmetic or constant fills) can be
+                            # deferred to realize_input at output processing.
+                            # This prevents cascade materialization where
+                            # shared constants inflate downstream read counts.
+                            if (
+                                config.delay_realize_cheap_outputs
+                                # pyrefly: ignore [missing-attribute]
+                                and result.data.num_reads() == 0
+                                # pyrefly: ignore [missing-attribute]
+                                and not result.data.has_large_inner_fn()
+                            ):
+                                continue
                             result.realize()
 
                 _data = result.data  # type: ignore[attr-defined]
