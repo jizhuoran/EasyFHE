@@ -198,6 +198,32 @@ class <lambda>(torch.nn.Module):
         self.assertEqual(s_act, s_exp)
 
     @requires_cuda
+    def test_cuda_current_stream_attrs(self):
+        """Verify that torch.cuda.current_stream() attributes are accessible
+        under torch.compile and match eager behavior."""
+
+        def fn_cuda_stream(x):
+            return torch.cuda.current_stream().cuda_stream
+
+        x = torch.zeros(1, device="cuda")
+        compiled = torch.compile(fn_cuda_stream, backend="eager", fullgraph=True)
+        self.assertEqual(compiled(x), fn_cuda_stream(x))
+
+    @requires_cuda
+    def test_cuda_current_stream_with_entered_stream(self):
+        """Verify that torch.cuda.current_stream().cuda_stream returns the
+        correct value when inside a stream context for a user-created stream."""
+
+        def fn(x, s):
+            with s:
+                return torch.cuda.current_stream().cuda_stream
+
+        s = torch.cuda.Stream()
+        x = torch.zeros(1, device="cuda")
+        compiled = torch.compile(fn, backend="eager", fullgraph=True)
+        self.assertEqual(compiled(x, s), fn(x, s))
+
+    @requires_cuda
     def test_nested_stream_enter_exit(self):
         def fn(x, y, s0, s1, s2):
             with s1:

@@ -438,6 +438,26 @@ class StreamVariable(StreamContextVariable):
         return fn
 
 
+class CudaStreamVariable(StreamVariable):
+    """Represents torch.cuda.Stream, preserving device-specific type and attributes."""
+
+    def python_type(self) -> type:
+        return torch.cuda.Stream
+
+    def var_getattr(self, tx: "InstructionTranslator", name: str) -> VariableTracker:
+        if name == "cuda_stream":
+            from ..guards import GuardBuilder, install_guard
+
+            if self.source:
+                install_guard(self.source.make_guard(GuardBuilder.EQUALS_MATCH))
+            if isinstance(self.value, torch.cuda.Stream):
+                return ConstantVariable.create(self.value.cuda_stream)
+            # For torch.Stream values (e.g. from torch.accelerator.current_stream),
+            # the default stream has cuda_stream == stream_id == 0.
+            return ConstantVariable.create(self.value.stream_id)
+        return super().var_getattr(tx, name)
+
+
 class EventVariable(VariableTracker):
     def __init__(
         self,
