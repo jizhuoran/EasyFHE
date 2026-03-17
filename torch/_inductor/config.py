@@ -300,7 +300,7 @@ joint_custom_post_pass: torch._inductor.custom_graph_pass.CustomGraphPassType = 
 # Registers a custom pregrad pass. Note that the pre-grad IR is 1.
 # non-functional, 2. non-normalized, and 3. prone to change. Ideally we should
 # use post-grad passes.
-pre_grad_custom_pass: Callable[[torch.fx.graph.Graph], None] | None = None
+pre_grad_custom_pass: torch._inductor.custom_graph_pass.CustomGraphPassType = None
 
 # Registers a custom pass to be run right before fusion in Inductor scheduler.
 # WARNING: Inductor scheduler IR is at prototype stage and subject to change,
@@ -2480,6 +2480,7 @@ _cache_config_ignore_prefix: list[str] = [
     "post_grad_custom_pre_pass",
     "joint_custom_pre_pass",
     "joint_custom_post_pass",
+    "pre_grad_custom_pass",
     "_fuse_ddp_communication_passes",
     "_pre_fusion_custom_pass",
     # tests assume that changes here don't invalidate cache

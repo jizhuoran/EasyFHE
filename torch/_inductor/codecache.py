@@ -912,7 +912,10 @@ class FxGraphHashDetails:
         self.torch_version = torch_key()
         self.system_info = CacheBase.get_system()
         self.inductor_config = config.save_config_portable(ignore_private_configs=False)
-        # Custom post grad passes should provide an ID to hash.
+        # Custom passes should provide an ID to hash.
+        self.pre_grad_custom_pass = self._get_custom_pass_detail(
+            config.pre_grad_custom_pass
+        )
         self.post_grad_custom_pre_pass = self._get_custom_pass_detail(
             config.post_grad_custom_pre_pass
         )
@@ -1586,8 +1589,13 @@ class FxGraphCache(GuardedCache[CompiledFxGraph]):
         Check some conditions that would preclude caching and raise BypassFxGraphCache
         to bypass in case caching is not possible.
         """
-        # Post grad custom passes must implement the CustomGraphPass or we don't
+        # Custom passes must implement the CustomGraphPass or we don't
         # know how to include them in the cache key calculation.
+        if config.pre_grad_custom_pass and (
+            not isinstance(config.pre_grad_custom_pass, CustomGraphPass)
+            or not config.pre_grad_custom_pass.uuid()
+        ):
+            raise BypassFxGraphCache("Unsupported pre grad custom pass")
         for p in (config.post_grad_custom_pre_pass, config.post_grad_custom_post_pass):
             if p and (not isinstance(p, CustomGraphPass) or not p.uuid()):
                 raise BypassFxGraphCache("Unsupported post grad custom pass")

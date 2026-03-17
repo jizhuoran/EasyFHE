@@ -27,7 +27,7 @@ from torch._functorch._aot_autograd.autograd_cache import (
 from torch._functorch._aot_autograd.schemas import AOTConfig
 from torch._guards import TracingContext
 from torch._inductor import config as inductor_config
-from torch._inductor.custom_graph_pass import CustomRuntimeEstimator
+from torch._inductor.custom_graph_pass import CustomGraphPass, CustomRuntimeEstimator
 from torch._inductor.runtime.runtime_utils import cache_dir
 from torch._inductor.runtime.triton_compat import tl, triton
 from torch._inductor.test_case import TestCase as InductorTestCase
@@ -53,16 +53,24 @@ from torch.utils.checkpoint import (
 )
 
 
-def custom_pre_grad_pass_remove_ident_muls(g: torch.fx.Graph) -> None:
+class CustomPreGradPassRemoveIdentMuls(CustomGraphPass):
     """
     Pre-grad pass that removes redundant identity multiplications (1 * x).
     """
-    for n in g.nodes:
-        if n.op == "call_function" and n.target is operator.mul:
-            lhs, rhs = n.args
-            if lhs == 1:
-                n.replace_all_uses_with(rhs)
-                g.erase_node(n)
+
+    def __call__(self, g: torch.fx.Graph) -> None:
+        for n in g.nodes:
+            if n.op == "call_function" and n.target is operator.mul:
+                lhs, rhs = n.args
+                if lhs == 1:
+                    n.replace_all_uses_with(rhs)
+                    g.erase_node(n)
+
+    def uuid(self):
+        return "custom_pre_grad_pass_remove_ident_muls_v1"
+
+
+custom_pre_grad_pass_remove_ident_muls = CustomPreGradPassRemoveIdentMuls()
 
 
 def aot_eager_regional_inductor():
@@ -2783,6 +2791,91 @@ class AOTAutogradCacheTests(InductorTestCase):
             counters2 = json.loads(result2.stdout.strip().splitlines()[-1])
             self.assertEqual(counters2.get("autograd_cache_miss", 0), 0)
             self.assertEqual(counters2.get("autograd_cache_hit", 0), 1)
+
+    def test_cache_hit_across_processes_pre_grad_custom_pass(self):
+        """
+        Verify that different pre-grad custom passes produce different cache keys
+        across processes, and that the same pass produces a cache hit.
+        """
+        import subprocess
+        import sys
+        import tempfile
+        import textwrap
+
+        with tempfile.TemporaryDirectory() as cache_dir:
+            # Script template that accepts a custom pass UUID
+            script_template = textwrap.dedent(
+                """
+                import json
+                import operator
+                import torch
+                import torch._dynamo
+                from torch._dynamo.utils import counters
+                from torch._inductor import config as inductor_config
+                from torch._inductor.custom_graph_pass import CustomGraphPass
+
+                inductor_config.fx_graph_cache = True
+                inductor_config.fx_graph_remote_cache = False
+                torch._dynamo.reset()
+
+                class TestPreGradPass(CustomGraphPass):
+                    def __init__(self, pass_uuid):
+                        self._uuid = pass_uuid
+
+                    def __call__(self, g):
+                        for n in g.nodes:
+                            if n.op == "call_function" and n.target is operator.mul:
+                                lhs, rhs = n.args
+                                if lhs == 1:
+                                    n.replace_all_uses_with(rhs)
+                                    g.erase_node(n)
+
+                    def uuid(self):
+                        return self._uuid
+
+                inductor_config.pre_grad_custom_pass = TestPreGradPass("{pass_uuid}")
+
+                def fn(x, y):
+                    return 1 * x + y
+
+                compiled_fn = torch.compile(fn)
+                x = torch.randn(10)
+                y = torch.randn(10)
+                compiled_fn(x, y)
+
+                print(json.dumps(dict(counters["aot_autograd"])))
+                """
+            )
+
+            env = {**os.environ, "TORCHINDUCTOR_CACHE_DIR": cache_dir}
+
+            def run_script(pass_uuid):
+                script = script_template.format(pass_uuid=pass_uuid)
+                result = subprocess.run(
+                    [sys.executable, "-c", script],
+                    env=env,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                import json
+
+                return json.loads(result.stdout.splitlines()[-1])
+
+            # First run with pass_uuid_A - expect cache miss
+            c1 = run_script("pass_uuid_A")
+            self.assertEqual(c1.get("autograd_cache_miss", 0), 1)
+            self.assertEqual(c1.get("autograd_cache_hit", 0), 0)
+
+            # Second run with same pass_uuid_A - expect cache hit
+            c2 = run_script("pass_uuid_A")
+            self.assertEqual(c2.get("autograd_cache_miss", 0), 0)
+            self.assertEqual(c2.get("autograd_cache_hit", 0), 1)
+
+            # Third run with different pass_uuid_B - expect cache miss
+            c3 = run_script("pass_uuid_B")
+            self.assertEqual(c3.get("autograd_cache_miss", 0), 1)
+            self.assertEqual(c3.get("autograd_cache_hit", 0), 0)
 
 
 @functorch_config.patch({"bundled_autograd_cache": True})
