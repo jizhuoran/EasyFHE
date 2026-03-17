@@ -211,35 +211,6 @@ class ProcessGroupAllocReduceScatter(ProcessGroupAllocMixin, ReduceScatter):
         )
 
 
-class SymmMemReduceScatter(SymmMemAllocMixin, ReduceScatter):
-    def __init__(
-        self,
-        group: dist.ProcessGroup,
-        backend: Literal["NCCL"] = "NCCL",
-    ) -> None:
-        super().__init__(group, backend)
-
-    def __call__(
-        self,
-        output_tensor: torch.Tensor,
-        input_tensor: torch.Tensor,
-        group: dist.ProcessGroup,
-        op: _ReduceOp,
-        async_op: bool = False,
-    ) -> dist.Work | None:
-        symm_mem.rendezvous(input_tensor, group=group.group_name)
-        symm_mem.rendezvous(output_tensor, group=group.group_name)
-        # Calling regular reduce-scatter would already cause libraries like NCCL to
-        # use its optimized reduce-scatter implementation for symmetric memory
-        return dist.reduce_scatter_tensor(
-            output=output_tensor,
-            input=input_tensor,
-            group=group,
-            op=op,
-            async_op=async_op,
-        )
-
-
 @torch.library.impl(lib, "all_gather_copy_in", "Meta")
 def all_gather_copy_in_meta(
     all_gather_inputs: list[torch.Tensor],
