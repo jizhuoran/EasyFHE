@@ -1218,6 +1218,21 @@ class ReproTests(torch._dynamo.test_case.TestCase):
         compiled_out = compiled_fn(x)
         self.assertEqual(eager_out, compiled_out)
 
+    # https://github.com/pytorch/pytorch/issues/166626
+    def test_inplace_add_from_meta_tensor_factory(self):
+        def fn(x):
+            log_det = torch.zeros(x.size(0), device=x.device)
+            log_det += torch.zeros(x.size(0), device="meta")
+            return log_det
+
+        x = torch.randn(2, 4)
+        eager_out = fn(x)
+        compiled_fn = torch.compile(fn, backend="eager", fullgraph=True)
+        compiled_out = compiled_fn(x)
+
+        self.assertEqual(eager_out.device, compiled_out.device)
+        self.assertEqual(eager_out, compiled_out)
+
     # https://github.com/pytorch/pytorch/issues/109053
     def test_view_dtype_overload(self):
         def f(x):
