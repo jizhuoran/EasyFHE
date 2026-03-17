@@ -2039,7 +2039,11 @@ def clamp_max(
 
 
 # https://pytorch.org/docs/stable/generated/torch.where.html
-# TODO: implement where.default
+@register_decomposition(aten.where.default)
+def _where_default(pred: Tensor) -> tuple[Tensor, ...]:
+    return torch.nonzero(pred, as_tuple=True)
+
+
 @register_decomposition(aten.where.self)
 @register_decomposition(aten.where.ScalarSelf)
 @register_decomposition(aten.where.ScalarOther)
