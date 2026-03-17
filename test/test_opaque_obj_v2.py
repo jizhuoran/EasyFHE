@@ -1673,6 +1673,20 @@ def forward(self, primals, tangents):
         self.assertEqual(res, x + x)
         self.assertEqual(cnt.frame_count, 2)
 
+    @parametrize("backend", ["eager", "aot_eager", "inductor"])
+    def test_value_type_graph_output(self, backend):
+        def foo(x):
+            return x * x, ValueConfig("square")
+
+        x = torch.randn(3, 3)
+        opt_f = torch.compile(foo, fullgraph=True, backend=backend)
+        res = opt_f(x)
+        self.assertEqual(res[1], ValueConfig("square"))
+
+        gm = _dynamo_graph_capture_for_export(foo)(x)
+        res = gm(x)
+        self.assertEqual(res[1], ValueConfig("square"))
+
     def test_value_type_graph_input(self):
         # Even though cfg is an input, it should not be an input to the dynamo
         # graph. Instead it should directly put in the graph argument as a
