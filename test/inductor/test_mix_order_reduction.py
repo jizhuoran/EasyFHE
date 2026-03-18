@@ -16,6 +16,7 @@ from torch.testing._internal.common_device_type import largeTensorTest
 from torch.testing._internal.common_utils import (
     instantiate_parametrized_tests,
     parametrize,
+    skipIfXpu,
 )
 from torch.testing._internal.inductor_utils import GPU_TYPE, HAS_GPU
 
@@ -758,6 +759,7 @@ class MixOrderReductionTest(TestBase):
         compile_metrics = torch._dynamo.utils._compilation_metrics
         self.assertEqual(len(compile_metrics), 1, "Don't recompile")
 
+    @skipIfXpu(msg="https://github.com/intel/intel-xpu-backend-for-triton/issues/6398")
     def test_additive_rnumel(self):
         """
         Fix https://github.com/pytorch/pytorch/issues/176375
