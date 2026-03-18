@@ -215,6 +215,9 @@ class NNModuleVariable(VariableTracker):
     def python_type(self) -> type:
         return self.module_type
 
+    def python_value_for_identity(self) -> object:
+        return self.value
+
     def _wrap_submodule(
         self,
         tx: "InstructionTranslator",
