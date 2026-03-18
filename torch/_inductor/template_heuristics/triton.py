@@ -814,7 +814,7 @@ class BaseConfigHeuristic(metaclass=BaseHeuristicSingleton):
                 key += (conf.epilogue_subtile, conf.warp_specialize, conf.flatten)
 
             # Add TlxGemmConfig specific fields to key if present
-            if config.is_fbcode() and config.triton.tlx_mode in ("allow", "force"):
+            if config.is_fbcode() and config.triton.enable_tlx_templates:
                 from torch._inductor.fb.tlx_templates.registry import (
                     get_tlx_config_key_and_kwargs,
                 )
