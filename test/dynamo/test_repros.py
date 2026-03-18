@@ -9012,6 +9012,22 @@ class ReproTestsDevice(torch._dynamo.test_case.TestCase):
         self.assertEqual(result2, torch.tensor([40.0]))
         self.assertEqual(cnt.frame_count, 2)
 
+    @skipIfHpu
+    @requires_cuda
+    def test_deterministic_pad_replicate_compile(self, device):
+        from torch.testing._internal.common_utils import DeterministicGuard
+
+        pad = torch.nn.ReplicationPad1d(2).to(device)
+        compiled_pad = torch.compile(pad, backend="aot_eager", fullgraph=True)
+        x = torch.randn(3, 3, device=device, requires_grad=True)
+        with DeterministicGuard(True):
+            ref = pad(x)
+            res = compiled_pad(x)
+            self.assertEqual(ref, res)
+            grad = torch.autograd.grad(res.sum(), x)
+            ref_grad = torch.autograd.grad(ref.sum(), x)
+            self.assertEqual(grad, ref_grad)
+
 
 instantiate_parametrized_tests(ReproTests)
 
