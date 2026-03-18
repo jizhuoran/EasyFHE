@@ -96,13 +96,7 @@ from ..utils import (
     tuple_methods,
     unpatched_nn_module_getattr,
 )
-from .base import (
-    MutationType,
-    NO_SUCH_SUBOBJ,
-    raise_type_error_exc,
-    ValueMutationNew,
-    VariableTracker,
-)
+from .base import MutationType, raise_type_error_exc, ValueMutationNew, VariableTracker
 from .dicts import ConstDictVariable, DefaultDictVariable, SetVariable
 
 
@@ -1117,6 +1111,10 @@ class UserDefinedEnumClassVariable(UserDefinedClassVariable):
         return super().var_getattr(tx, name)
 
 
+class NO_SUCH_SUBOBJ:
+    pass
+
+
 class RemovableHandleClass:
     # Dummy class to pass to python_type of
     # RemovableHandleVariable
@@ -1236,9 +1234,6 @@ class UserDefinedObjectVariable(UserDefinedVariable):
 
     def python_type(self) -> type:
         return self.value_type  # type: ignore[return-value]
-
-    def python_value_for_identity(self) -> object:
-        return self.value
 
     def as_python_constant(self) -> object:
         if self.is_pytree_constant_class and self.source:

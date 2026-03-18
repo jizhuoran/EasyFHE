@@ -71,7 +71,6 @@ from ..utils import (
 )
 from .base import (
     AsPythonConstantNotImplementedError,
-    NO_SUCH_SUBOBJ,
     raise_type_error_exc,
     VariableTracker,
 )
@@ -83,6 +82,10 @@ from .user_defined import call_random_fn, is_standard_setattr, UserDefinedObject
 if TYPE_CHECKING:
     from torch._dynamo.codegen import PyCodegen
     from torch._dynamo.symbolic_convert import InstructionTranslator
+
+
+class NO_SUCH_SUBOBJ:
+    pass
 
 
 class SuperVariable(VariableTracker):
@@ -1998,9 +2001,6 @@ class ObjectVariable(VariableTracker):
     def __init__(self, value: object, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self.value = value
-
-    def python_value_for_identity(self) -> object:
-        return self.value
 
     def python_type(self) -> type[object]:
         return object
