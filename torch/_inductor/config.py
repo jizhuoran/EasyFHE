@@ -660,6 +660,15 @@ use_dce: bool = True
 
 # Use fx graph passes
 use_pre_grad_passes: bool = True
+
+# "early": pre-grad passes run before cache lookup (every compile).
+# "late": pre-grad passes run after cache lookup (only on cache miss);
+#   requires custom passes to implement uuid() for the cache key.
+# "default": resolves to "late" when possible (no custom pass, or custom pass
+#   with uuid), falls back to "early" otherwise.
+pre_grad_pass_timing: Literal["early", "late", "default"] = "default"
+
+
 use_joint_graph_passes: bool = True
 use_post_grad_passes: bool = True
 
@@ -2485,6 +2494,8 @@ _cache_config_ignore_prefix: list[str] = [
     "_pre_fusion_custom_pass",
     # tests assume that changes here don't invalidate cache
     "always_complex_memory_overlap_TESTING_ONLY",
+    # timing affects cache structure, not cache content
+    "pre_grad_pass_timing",
     # cache related options are not relevant to cache results
     "fx_graph_cache",
     "fx_graph_remote_cache",
