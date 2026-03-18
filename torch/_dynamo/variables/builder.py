@@ -1372,16 +1372,19 @@ class VariableBuilder:
         elif value is set_allocator:
             return TritonSetAllocatorVariable(value)
         elif isinstance(value, torch.amp.autocast_mode.autocast):
-            self.install_guards(GuardBuilder.ID_MATCH)
-            return AutocastModeVariable(
-                target_values=[
-                    value.device,
-                    value.fast_dtype,
-                    value._enabled,
-                    value._cache_enabled,
-                ],
-                source=self.source,
-            )
+            if isinstance(value, torch.amp.autocast_mode._UnmanagedAutocast):
+                return self.wrap_user_defined(value)
+            else:
+                self.install_guards(GuardBuilder.ID_MATCH)
+                return AutocastModeVariable(
+                    target_values=[
+                        value.device,
+                        value.fast_dtype,
+                        value._enabled,
+                        value._cache_enabled,
+                    ],
+                    source=self.source,
+                )
         elif TorchCtxManagerClassVariable.is_matching_cls(value):
             if inspect.isclass(value):
                 self.install_guards(GuardBuilder.CLASS_MATCH)
@@ -3483,6 +3486,7 @@ def handle_traced_output(
             torch._C._get_mem_efficient_sdp_enabled,
             torch._C._get_math_sdp_enabled,
             torch._C._get_overrideable_sdp_enabled,
+            torch._C._is_autocast_available,
             "is_integer",
         ]
         + list(supported_const_comparison_op_values.keys())

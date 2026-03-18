@@ -965,6 +965,60 @@ class TorchInGraphFunctionVariable(BaseTorchVariable):
             torch._C._set_deterministic_algorithms(value)
             return CONSTANT_VARIABLE_NONE
 
+        @register(torch.autocast_increment_nesting)
+        def handle_autocast_increment_nesting(
+            self, tx: "InstructionTranslator"
+        ) -> VariableTracker:
+            tx.output.create_node(
+                "call_function", torch.autocast_increment_nesting, (), {}
+            )
+            prev = torch.autocast_increment_nesting()
+            tx.output.add_cleanup_hook(lambda: torch.autocast_decrement_nesting())
+            return VariableTracker.build(tx, prev)
+
+        @register(torch.autocast_decrement_nesting)
+        def handle_autocast_decrement_nesting(
+            self, tx: "InstructionTranslator"
+        ) -> VariableTracker:
+            tx.output.create_node(
+                "call_function", torch.autocast_decrement_nesting, (), {}
+            )
+            prev = torch.autocast_decrement_nesting()
+            tx.output.add_cleanup_hook(lambda: torch.autocast_increment_nesting())
+            return VariableTracker.build(tx, prev)
+
+        @register(torch.set_autocast_enabled)
+        def handle_set_autocast_enabled(
+            self,
+            tx: "InstructionTranslator",
+            device_type: VariableTracker,
+            enabled: VariableTracker,
+        ) -> VariableTracker:
+            tx.output.create_node(
+                "call_function",
+                torch.set_autocast_enabled,
+                (device_type.as_proxy(), enabled.as_proxy()),
+            )
+            dev_py_const = device_type.as_python_constant()
+            prev = torch.is_autocast_enabled(dev_py_const)
+            torch.set_autocast_enabled(dev_py_const, enabled.as_python_constant())
+            tx.output.add_cleanup_hook(
+                lambda: torch.set_autocast_enabled(dev_py_const, prev)
+            )
+            return CONSTANT_VARIABLE_NONE
+
+        @register(torch.set_autocast_cache_enabled)
+        def handle_set_autocast_cache_enabled(
+            self, tx: "InstructionTranslator", enabled: VariableTracker
+        ) -> VariableTracker:
+            tx.output.create_node(
+                "call_function", torch.set_autocast_cache_enabled, (enabled.as_proxy(),)
+            )
+            prev = torch.is_autocast_cache_enabled()
+            torch.set_autocast_cache_enabled(enabled.as_python_constant())
+            tx.output.add_cleanup_hook(lambda: torch.set_autocast_cache_enabled(prev))
+            return CONSTANT_VARIABLE_NONE
+
         @register(torch.are_deterministic_algorithms_enabled)
         def handle_are_deterministic_algorithms_enabled(
             self, tx: "InstructionTranslator"
