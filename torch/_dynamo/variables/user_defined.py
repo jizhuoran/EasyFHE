@@ -2094,7 +2094,11 @@ class UserDefinedObjectVariable(UserDefinedVariable):
     ) -> Source | None:
         """Wrap source for nn.Module instance dict attribute access if needed."""
         if (
-            source
+            (
+                torch._dynamo.config.inline_inbuilt_nn_modules
+                or isinstance(self, variables.FSDPManagedNNModuleVariable)
+            )
+            and source
             and isinstance(self, variables.UnspecializedNNModuleVariable)
             and (not tx.output.export or torch._dynamo.config.install_free_tensors)
         ):

@@ -80,6 +80,7 @@ class ResBlock(torch.nn.Module):
 
 
 class InstallParamsAsGraphAttrTests(torch._dynamo.test_case.TestCase):
+    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=True)
     @torch._dynamo.config.patch(install_free_tensors=False)
     def check_num_inputs_and_equality_no_install(
         self,
@@ -98,6 +99,7 @@ class InstallParamsAsGraphAttrTests(torch._dynamo.test_case.TestCase):
         self.assertEqual(actual_num_inputs, expected_num_inline_inputs)
         self.assertEqual(opt_fn(*example_inputs), fn_to_compile(*example_inputs))
 
+    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=True)
     @torch._dynamo.config.patch(install_free_tensors=True)
     def check_num_inputs_and_equality_install(
         self,
@@ -331,6 +333,7 @@ class InstallParamsAsGraphAttrTests(torch._dynamo.test_case.TestCase):
 
 
 class InstallParamsWhenExport(torch._dynamo.test_case.TestCase):
+    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=True)
     @torch._dynamo.config.patch(install_free_tensors=True)
     def check_export_matches_expectation(
         self,
@@ -473,6 +476,7 @@ class InstallParamsWhenExport(torch._dynamo.test_case.TestCase):
         inp = torch.randn((5, 5))
         self.check_export_matches_expectation(fn, 1, (inp,))
 
+    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=True)
     @torch._dynamo.config.patch(install_free_tensors=True)
     def test_modify_net_state(self) -> None:
         class Mod(torch.nn.Module):

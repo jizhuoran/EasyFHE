@@ -776,6 +776,7 @@ class TestMultiProc(DynamoDistributedMultiProcTestCase):
             first_graph_break = list(counters["graph_break"].keys())[0]  # noqa: RUF015
             self.assertIn("setattr() on Tensor.requires_grad", first_graph_break)
 
+    @config.patch(inline_inbuilt_nn_modules=False)
     @config.patch(enable_compiler_collectives=True)
     @skip_if_lt_x_gpu(1)
     def test_fsdp_unspecialized_forced_getattr_no_inline(self):

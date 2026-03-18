@@ -178,6 +178,7 @@ from .utils import (
     dataclass_fields,
     dict_keys,
     get_current_stream,
+    get_custom_getattr,
     get_torch_function_mode_stack,
     get_torch_function_mode_stack_at,
     guard_failures,
@@ -189,6 +190,7 @@ from .utils import (
     tensor_always_has_static_shape,
     tuple_iterator_getitem,
     tuple_iterator_len,
+    unpatched_nn_module_getattr,
     verify_guard_fn_signature,
 )
 
@@ -908,7 +910,13 @@ def raise_local_type_error(obj: Any) -> NoReturn:
 
 
 def should_optimize_getattr_on_nn_module(value: Any) -> bool:
-    return isinstance(value, torch.nn.Module)
+    # If inline_inbuilt_nn_modules flag is True, Dynamo has already traced
+    # through the __getattr__, and therefore it is always safe to optimize
+    # getattr on nn modules.
+    return isinstance(value, torch.nn.Module) and (
+        config.inline_inbuilt_nn_modules
+        or get_custom_getattr(value) is unpatched_nn_module_getattr
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -3249,7 +3257,8 @@ class GuardBuilder(GuardBuilderBase):
         if config._unsafe_skip_fsdp_module_guards and guard.is_fsdp_module():
             return
         # For tensors that are part of the Dynamo extracted Fx graph module, an
-        # ID_MATCH suffices.
+        # ID_MATCH suffices. Once we turn on inline_inbuilt_nn_modules, these
+        # will be lifted as inputs and have a TENSOR_MATCH guard.
         if match_on_id_for_tensor(guard):
             self.ID_MATCH(guard)
         else:
