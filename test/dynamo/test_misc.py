@@ -7180,14 +7180,9 @@ not ___dict_contains('cccccccc', G['sys'].modules)""",
 
         mod = Module()
 
-        error_message = ""
-        if torch._dynamo.config.inline_inbuilt_nn_modules:
-            error_message = r"Higher Order Operator: torch\.ops\.higher_order\.map_impl"
-        else:
-            error_message = "Can't inplace modify module params/buffers"
-
         with self.assertRaisesRegex(
-            torch._dynamo.exc.UncapturedHigherOrderOpError, error_message
+            torch._dynamo.exc.UncapturedHigherOrderOpError,
+            r"Higher Order Operator: torch\.ops\.higher_order\.map_impl",
         ):
             opt_fn = torch.compile(mod, backend="eager", fullgraph=True)
             opt_fn(torch.randn(3, 2))
@@ -12988,62 +12983,6 @@ fn
         opt_fn(inp, 2)
         c2 = _debug_get_cache_entry_list(fn.__code__)
         self.assertIs(c1[1], c2[0])
-
-    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=False)
-    @skipIfWindows(msg="TODO: (xuhancn) conform, AssertionError: False is not true")
-    def test_dynamo_cache_invalidate(self):
-        DeletedGuardManagerWrapper = torch._dynamo.guards.DeletedGuardManagerWrapper
-
-        class Mod(torch.nn.Module):
-            def __init__(self) -> None:
-                super(Mod, self).__init__()
-                self.fc = torch.nn.Linear(3, 3)
-
-            def forward(self, out):
-                return self.fc(out)
-
-        def fn(x, mod):
-            return mod(x)
-
-        opt_fn = torch.compile(fn, backend="eager")
-
-        m1 = Mod()
-        m2 = Mod()
-        m3 = Mod()
-        inp = torch.randn(3, 3)
-
-        # NOTE: assumes that each cache entry is guarded
-        # on unique Mod instance
-        opt_fn(inp, m1)
-        opt_fn(inp, m2)
-        opt_fn(inp, m3)
-
-        c1 = _debug_get_cache_entry_list(fn.__code__)
-        self.assertEqual(len(c1), 3)
-
-        # move cache entry to front
-        opt_fn(inp, m2)
-        c2 = _debug_get_cache_entry_list(fn.__code__)
-        self.assertIs(c1[1], c2[0])
-
-        # delete center of cache
-        del m3
-        c3 = _debug_get_cache_entry_list(fn.__code__)
-        self.assertEqual(len(c3), 3)
-        self.assertTrue(isinstance(c3[2].guard_manager, DeletedGuardManagerWrapper))
-
-        # delete end of cache
-        del m1
-        c4 = _debug_get_cache_entry_list(fn.__code__)
-        self.assertEqual(len(c4), 3)
-        self.assertTrue(isinstance(c4[1].guard_manager, DeletedGuardManagerWrapper))
-        self.assertTrue(isinstance(c4[2].guard_manager, DeletedGuardManagerWrapper))
-
-        del m2
-        c5 = _debug_get_cache_entry_list(fn.__code__)
-        self.assertTrue(isinstance(c5[0].guard_manager, DeletedGuardManagerWrapper))
-        self.assertTrue(isinstance(c5[1].guard_manager, DeletedGuardManagerWrapper))
-        self.assertTrue(isinstance(c5[2].guard_manager, DeletedGuardManagerWrapper))
 
     def test_inspect_signature_bind(self):
         import inspect

@@ -1,5 +1,4 @@
 # Owner(s): ["module: dynamo"]
-import time
 
 import torch
 import torch._dynamo.test_case
@@ -54,42 +53,6 @@ class RecModel(torch.nn.Module):
         for submodel in self.event_submodels.values():
             outputs.append(submodel(x))
         return torch.cat(outputs, dim=-1)
-
-
-class RuntimeAssertCompileTimeTests(torch._dynamo.test_case.TestCase):
-    """Regression test for _set_node_metadata_hook overhead in
-    insert_deferred_runtime_asserts (S603290).
-
-    With inline_inbuilt_nn_modules=False, call_module nodes cause _copy_attr
-    to install full module subtrees into the GraphModule, making gm.modules()
-    large. If the pass wraps every loop iteration with _set_node_metadata_hook
-    (which iterates gm.modules() on enter AND exit), the cost becomes
-    O(nodes * modules) — catastrophic for large models.
-    """
-
-    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=False)
-    def test_insert_runtime_assert_pass_time(self):
-        # Large model so overhead from O(nodes*modules) would be measurable.
-        model = RecModel(num_events=30, num_layers=10, num_embeddings=20, dim=128)
-        x = torch.randn(8, 128)
-
-        torch._dynamo.reset()
-        compiled = torch.compile(model, backend="eager")
-        t0 = time.perf_counter()
-        compiled(x)
-        total_s = time.perf_counter() - t0
-
-        pass_times = torch._dynamo.utils.compilation_time_metrics.get(
-            "insert_deferred_runtime_asserts", []
-        )
-        pass_s = sum(pass_times)
-
-        self.assertLess(
-            pass_s / total_s,
-            0.05,
-            f"insert_deferred_runtime_asserts took {pass_s * 1000:.1f}ms out of "
-            f"{total_s * 1000:.1f}ms ({pass_s / total_s * 100:.1f}% of compile time)",
-        )
 
 
 if __name__ == "__main__":
