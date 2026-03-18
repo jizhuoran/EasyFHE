@@ -25674,11 +25674,6 @@ python_ref_db = [
         skips=(
             # test error disabled since rhs non-tensor python scalar is supported
             DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_python_ref_errors'),
-            # TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64
-            DecorateInfo(
-                unittest.expectedFailure, 'TestCommon', 'test_python_ref',
-                device_type='mps', dtypes=(torch.float32, torch.float16,)
-            ),
         ),
     ),
     ElementwiseBinaryPythonRefInfo(
@@ -25687,11 +25682,6 @@ python_ref_db = [
         skips=(
             # test error disabled since rhs non-tensor python scalar is supported
             DecorateInfo(unittest.expectedFailure, 'TestCommon', 'test_python_ref_errors'),
-            # TypeError: Cannot convert a MPS Tensor to float64 dtype as the MPS framework doesn't support float64
-            DecorateInfo(
-                unittest.expectedFailure, 'TestCommon', 'test_python_ref',
-                device_type='mps', dtypes=(torch.float32, torch.float16,)
-            ),
         ),
     ),
     PythonRefInfo(
