@@ -473,6 +473,8 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._add_docstr",
         "torch._C._are_functorch_transforms_active",
         "torch._C._autograd_init",
+        "torch._C._autograd._saved_tensors_hooks_disable",
+        "torch._C._autograd._saved_tensors_hooks_enable",
         "torch._C._awaitable_nowait",
         "torch._C._awaitable_wait",
         "torch._C._awaitable",

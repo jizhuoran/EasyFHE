@@ -16,7 +16,10 @@ from torch._dynamo.testing import (
 )
 from torch._dynamo.utils import counters
 from torch.nn import functional as F
-from torch.testing._internal.common_cuda import PLATFORM_SUPPORTS_FLASH_ATTENTION
+from torch.testing._internal.common_cuda import (
+    PLATFORM_SUPPORTS_FLASH_ATTENTION,
+    TEST_MULTIGPU,
+)
 from torch.testing._internal.common_utils import (
     instantiate_parametrized_tests,
     parametrize,
@@ -588,6 +591,39 @@ class CtxManagerTests(torch._dynamo.test_case.TestCaseWithNestedGraphBreaks):
         opt_fn = torch.compile(backend="eager", fullgraph=True)(fn)
         res = opt_fn(x)
         self.assertEqual(ref, res)
+
+    @unittest.skipIf(not TEST_MULTIGPU, "Requires multiple gpus")
+    def test_cuda__exchange_device(self):
+        def fn(x):
+            dev = torch.cuda._exchange_device(0)
+            x = torch.sin(x + dev)
+            torch.cuda._maybe_exchange_device(dev)
+            return x
+
+        initial_dev = torch.cuda.current_device()
+        x = torch.randn((2, 2), device="cuda")
+        ref = fn(x)
+        opt_fn = torch.compile(backend="eager", fullgraph=True)(fn)
+        res = opt_fn(x)
+        self.assertEqual(ref, res)
+
+        # make sure we recompile if device changes
+        with torch.cuda.device(1):
+            ref = fn(x)
+            res = opt_fn(x)
+        self.assertEqual(ref, res)
+        self.assertEqual(torch.cuda.current_device(), initial_dev)
+
+    @unittest.skipIf(not torch.cuda.is_available(), "requires cuda")
+    def test_cuda__exchange_device_args(self):
+        @torch.compile(backend="eager", fullgraph=True)
+        def fn(args, kwargs):
+            torch.cuda._exchange_device(*args, **kwargs)
+
+        initial_dev = torch.cuda.current_device()
+        for args, kwargs in (((), ()), ((0, 0), ()), ((), ("kwarg",))):
+            self.assertRaises(torch._dynamo.exc.Unsupported, fn, args, kwargs)
+            self.assertEqual(torch.cuda.current_device(), initial_dev)
 
     def test_autograd_profiler_enabled(self):
         def fn(x):
@@ -1793,6 +1829,36 @@ class GraphModule(torch.nn.Module):
 
         _saved_tensors_hooks_enable = torch._C._autograd._saved_tensors_hooks_enable();  _saved_tensors_hooks_enable = None
         return (mul,)
+""",  # NOQA: B950
+        )
+
+    def test__saved_tensors_hooks_disable(self):
+        def fn(x):
+            y = x + 1
+            torch._C._autograd._saved_tensors_hooks_disable("This is not supported")
+            y *= 2
+            torch._C._autograd._saved_tensors_hooks_enable()
+            return y
+
+        eager = EagerAndRecordGraphs()
+        torch.compile(fn, backend=eager, fullgraph=True)(torch.randn(()))
+        graph = eager.graphs[0]
+        actual = normalize_gm(graph.print_readable(False))
+        self.assertExpectedInline(
+            actual,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, L_x_: "f32[]"):
+        l_x_ = L_x_
+
+        y: "f32[]" = l_x_ + 1;  l_x_ = None
+
+        _saved_tensors_hooks_disable = torch._C._autograd._saved_tensors_hooks_disable('This is not supported');  _saved_tensors_hooks_disable = None
+
+        y *= 2;  y_1: "f32[]" = y;  y = None
+
+        _saved_tensors_hooks_enable = torch._C._autograd._saved_tensors_hooks_enable();  _saved_tensors_hooks_enable = None
+        return (y_1,)
 """,  # NOQA: B950
         )
 

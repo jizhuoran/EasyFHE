@@ -1975,6 +1975,52 @@ class TorchInGraphFunctionVariable(BaseTorchVariable):
                 ),
             )
 
+        def exchange_device_helper(
+            tx: "InstructionTranslator",
+            args: Sequence[VariableTracker],
+            kwargs: dict[str, VariableTracker],
+            fn: Callable[[int], int | None],
+        ) -> VariableTracker:
+            if len(args) != 1 or kwargs:
+                raise_type_error_exc(
+                    tx,
+                    f"{fn.__name__} takes exactly one argument ({len(args)} given)",
+                )
+            current_device_source = CallFunctionNoArgsSource(
+                AttrSource(AttrSource(ImportSource("torch"), "cuda"), "current_device")
+            )
+            install_guard(current_device_source.make_guard(GuardBuilder.EQUALS_MATCH))
+            arg = args[0].as_python_constant()
+            prev = fn(arg)
+            tx.output.create_node(
+                "call_function",
+                fn,
+                (arg,),
+                {},
+            )
+            tx.output.add_cleanup_hook(lambda: torch.cuda.set_device(prev))
+            return VariableTracker.build(tx, prev)
+
+        @register(torch.cuda._exchange_device)
+        def handle_exchange_device(
+            self,
+            tx: "InstructionTranslator",
+            *args: VariableTracker,
+            **kwargs: VariableTracker,
+        ) -> VariableTracker:
+            return exchange_device_helper(tx, args, kwargs, torch.cuda._exchange_device)
+
+        @register(torch.cuda._maybe_exchange_device)
+        def handle_maybe_exchange_device(
+            self,
+            tx: "InstructionTranslator",
+            *args: VariableTracker,
+            **kwargs: VariableTracker,
+        ) -> VariableTracker:
+            return exchange_device_helper(
+                tx, args, kwargs, torch.cuda._maybe_exchange_device
+            )
+
         @register(torch.autograd.grad)
         def handle_autograd_grad(self, tx: "InstructionTranslator", *args, **kwargs):
             """
