@@ -5498,3 +5498,22 @@ register_inplace(aten.scatter_, aten.scatter)
 register_inplace(aten.scatter_add_, aten.scatter_add)
 register_inplace(aten.scatter_reduce_, aten.scatter_reduce)
 register_inplace(aten.silu_, aten.silu)
+
+
+@aten.one_hot.default.py_impl(DispatchKey.CompositeImplicitAutograd)
+def one_hot(self: Tensor, num_classes: int = -1) -> Tensor:
+    if num_classes == -1:
+        num_classes = int(self.max().item()) + 1
+    # _assert_async is side-effectful and won't be DCE'd
+    aten._assert_async.msg(
+        torch.all(self >= 0),
+        "one_hot: Class values must be non-negative.",
+    )
+    aten._assert_async.msg(
+        torch.all(self < num_classes),
+        "one_hot: Class values must be smaller than num_classes.",
+    )
+    return (
+        self.unsqueeze(-1)
+        == torch.arange(num_classes, dtype=self.dtype, device=self.device)
+    ).to(torch.int64)
