@@ -12,7 +12,6 @@ import torch
 from torch.distributed import is_available
 from torch.distributed._mesh_layout import _MeshLayout
 from torch.distributed._pycute import IntTuple, is_int, suffix_product
-from torch.types import IntLikeType
 from torch.utils._typing_utils import not_none
 
 
@@ -1221,7 +1220,7 @@ else:
             """
             return self._coordinate_on_dim
 
-        def _sym_get_coordinate(self, index: int) -> IntLikeType:
+        def _sym_get_coordinate(self, index: int) -> int:
             import torch.distributed.config as config
             from torch._guards import detect_fake_mode
 

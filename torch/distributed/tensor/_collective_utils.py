@@ -24,7 +24,6 @@ from torch.distributed.distributed_c10d import (
     scatter,
     Work,
 )
-from torch.types import IntLikeType
 
 
 logger = logging.getLogger(__name__)
@@ -192,9 +191,7 @@ def pad_tensor(tensor: torch.Tensor, pad_dim: int, pad_size: int) -> torch.Tenso
 
 
 @maybe_run_for_local_tensor
-def unpad_tensor(
-    tensor: torch.Tensor, pad_dim: int, pad_size: IntLikeType
-) -> torch.Tensor:
+def unpad_tensor(tensor: torch.Tensor, pad_dim: int, pad_size: int) -> torch.Tensor:
     from torch.fx.experimental.symbolic_shapes import guard_or_false
 
     if guard_or_false(pad_size == 0):

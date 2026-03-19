@@ -11,7 +11,6 @@ from torch.distributed._local_tensor import maybe_run_for_local_tensor
 from torch.distributed.device_mesh import _get_device_handle, DeviceMesh
 from torch.distributed.tensor._dtensor_spec import DTensorSpec
 from torch.distributed.tensor.placement_types import _StridedShard, Shard
-from torch.types import IntLikeType
 
 
 logger = getLogger(__name__)
@@ -392,8 +391,8 @@ class OffsetBasedRNGTracker(_RNGStateTracker):
         return start_offset_incr, end_offset_incr
 
     def _calc_shard_linear_idx(
-        self, shard_coord: Sequence[IntLikeType], shard_size: Sequence[IntLikeType]
-    ) -> IntLikeType:
+        self, shard_coord: list[int], shard_size: list[int]
+    ) -> int:
         return _calc_shard_linear_idx(shard_coord, shard_size)
 
 
@@ -412,8 +411,8 @@ def _calc_first_shard_size(spec: DTensorSpec) -> list[int]:
 
 
 def _calc_shard_info(
-    mesh_coordinate: Sequence[IntLikeType], spec: DTensorSpec
-) -> tuple[list[IntLikeType], list[IntLikeType]]:
+    mesh_coordinate: Sequence[int], spec: DTensorSpec
+) -> tuple[list[int], list[int]]:
     mesh = spec.mesh
     # note: dim_map does not allow double sharding which is the FSDP(fully_shard)+TP
     # case. Replace the custom logic with dim_map once we support it.
@@ -437,12 +436,10 @@ def _calc_shard_info(
         raise AssertionError
     mesh_size = mesh.shape
     shard_idx_by_dim = []
-    total_num_shards_by_dim: list[
-        IntLikeType
-    ] = []  # total number of shards on each tensor dim
+    total_num_shards_by_dim = []  # total number of shards on each tensor dim
     for mesh_dim in dim_map:
-        shard_idx: IntLikeType = 0
-        total_num_shards: IntLikeType = 1
+        shard_idx = 0
+        total_num_shards = 1
         # the tensor dim is sharded on more than 1 mesh dim
         if isinstance(mesh_dim, list):
             rank_coord = [mesh_coordinate[d] for d in mesh_dim]
@@ -457,12 +454,10 @@ def _calc_shard_info(
     return shard_idx_by_dim, total_num_shards_by_dim
 
 
-def _calc_shard_linear_idx(
-    shard_coord: Sequence[IntLikeType], shard_size: Sequence[IntLikeType]
-) -> IntLikeType:
+def _calc_shard_linear_idx(shard_coord: list[int], shard_size: list[int]) -> int:
     # compute shard linear index
-    shard_linear_idx: IntLikeType = 0
-    shard_coord_stride: IntLikeType = 1
+    shard_linear_idx = 0
+    shard_coord_stride = 1
     for idx, size in zip(reversed(shard_coord), reversed(shard_size)):
         shard_linear_idx += idx * shard_coord_stride
         shard_coord_stride *= size
