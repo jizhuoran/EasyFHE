@@ -92,6 +92,7 @@ from .constant import (
     CONSTANT_VARIABLE_NONE,
     ConstantVariable,
     EnumVariable,
+    FakeIdVariable,
 )
 from .dicts import (
     ConstDictVariable,
@@ -3026,26 +3027,29 @@ class BuiltinVariable(VariableTracker):
             nn_mod_variable = args[0]
             mod = tx.output.get_submodule(nn_mod_variable.module_key)
             return VariableTracker.build(tx, id(mod))
-        elif len(args) == 1 and isinstance(
-            args[0],
-            (variables.UserDefinedClassVariable, variables.UserDefinedObjectVariable),
-        ):
-            if args[0].source:
-                if isinstance(args[0], variables.UserDefinedClassVariable):
-                    install_guard(args[0].source.make_guard(GuardBuilder.CLASS_MATCH))
-                else:
-                    install_guard(args[0].source.make_guard(GuardBuilder.ID_MATCH))
-            constant_result = id(args[0].value)
-            return VariableTracker.build(tx, constant_result)
         elif len(args) == 1 and args[0].is_tensor():
             tensor_variable = cast(TensorVariable, args[0])
             return tensor_variable.call_id(tx)
-        elif istype(args[0], variables.UserFunctionVariable):
-            return VariableTracker.build(tx, id(args[0].fn))
-        elif istype(args[0], variables.SkipFunctionVariable):
-            return VariableTracker.build(tx, id(args[0].value))
         elif istype(args[0], variables.FunctoolsPartialVariable):
             return VariableTracker.build(tx, id(args[0].fake_value))
+        elif len(args) == 1:
+            arg = args[0]
+            if isinstance(
+                arg,
+                (
+                    variables.UserDefinedClassVariable,
+                    variables.UserDefinedObjectVariable,
+                ),
+            ):
+                if arg.source:
+                    if isinstance(arg, variables.UserDefinedClassVariable):
+                        install_guard(arg.source.make_guard(GuardBuilder.CLASS_MATCH))
+                    else:
+                        install_guard(arg.source.make_guard(GuardBuilder.ID_MATCH))
+            real_val = arg.get_real_python_backed_value()
+            if real_val is not NO_SUCH_SUBOBJ:
+                return VariableTracker.build(tx, id(real_val))
+            return FakeIdVariable(id(arg))
         else:
             unimplemented(
                 gb_type="id() with unsupported args",
