@@ -3693,8 +3693,7 @@
   structured_inherits: TensorIteratorBase
   variants: function
   dispatch:
-    CPU, CUDA: xlogy_out
-    MPS: xlogy_out_mps
+    CPU, CUDA, MPS: xlogy_out
   tags: pointwise
 
 - func: xlogy.OutScalar_Self(Scalar self, Tensor other, *, Tensor(a!) out) -> Tensor(a!)
