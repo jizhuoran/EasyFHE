@@ -47,12 +47,6 @@ static PyObject* THCPEvent_pynew(
   }
 
   THCPEvent* self = (THCPEvent*)ptr.get();
-  self->weakreflist = nullptr;
-  new (&self->event) c10::Event(
-      c10::DeviceType::CUDA,
-      (enable_timing ? c10::EventFlag::BACKEND_DEFAULT
-                     : c10::EventFlag::PYTORCH_DEFAULT));
-
   unsigned int flags = (blocking ? cudaEventBlockingSync : cudaEventDefault) |
       (enable_timing ? cudaEventDefault : cudaEventDisableTiming) |
       (interprocess ? cudaEventInterprocess : cudaEventDefault) |
