@@ -2,6 +2,7 @@
 
 """Tests for @leaf_function with make_fx, aot_function, and torch.compile."""
 
+import copy
 from functools import partial
 from unittest.mock import patch
 
@@ -2144,6 +2145,331 @@ class GraphModule(torch.nn.Module):
         x = torch.randn(3, 3)
         with self.assertRaisesRegex(AssertionError, "output structure mismatch"):
             torch.compile(fn, backend="eager")(x)
+
+    def test_leaf_function_nested_output(self):
+        @leaf_function
+        def nested_output_fn(linear1, linear2, linear3, x):
+            if x.sum() > 0:
+                return {
+                    "out": (linear1(x), linear2(x)),
+                    "extra": linear3(x),
+                    "count": 42,
+                }
+            else:
+                return {
+                    "out": (linear1(x) + 1, linear2(x) + 1),
+                    "extra": linear3(x) + 1,
+                    "count": 42,
+                }
+
+        @nested_output_fn.register_fake
+        def nested_output_fn_fake(linear1, linear2, linear3, x):
+            return {
+                "out": (linear1(x), linear2(x)),
+                "extra": linear3(x),
+                "count": 42,
+            }
+
+        class NestedOutputModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = torch.nn.Linear(3, 3)
+                self.linear2 = torch.nn.Linear(3, 3)
+                self.linear3 = torch.nn.Linear(3, 3)
+
+            def forward(self, x):
+                result = nested_output_fn(self.linear1, self.linear2, self.linear3, x)
+                return (
+                    result["out"][0] * result["count"]
+                    + result["out"][1]
+                    + result["extra"]
+                )
+
+        def args_fn():
+            return (torch.randn(3, 3, requires_grad=True),)
+
+        def loss_fn(out):
+            return out.sum()
+
+        self._test_leaf_function_helper(NestedOutputModule, args_fn, loss_fn)
+
+    def test_leaf_function_custom_pytree_output(self):
+        class Point:
+            x: torch.Tensor
+            y: torch.Tensor
+
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+
+        self.register_pytree_node(
+            Point,
+            lambda p: ((p.x, p.y), ()),
+            lambda xy, _: Point(xy[0], xy[1]),
+            serialized_type_name=f"{Point.__module__}.{Point.__qualname__}",
+        )
+
+        @leaf_function
+        def point_fn(linear1, linear2, x):
+            return (Point(linear1(x), linear2(x)), 0.5)
+
+        @point_fn.register_fake
+        def point_fn_fake(linear1, linear2, x):
+            return (Point(linear1(x), linear2(x)), 0.5)
+
+        class PointModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear1 = torch.nn.Linear(3, 3)
+                self.linear2 = torch.nn.Linear(3, 3)
+
+            def forward(self, x):
+                p, scale = point_fn(self.linear1, self.linear2, x)
+                return (p.x * scale, p.y * scale)
+
+        def args_fn():
+            return (torch.randn(3, 3, requires_grad=True),)
+
+        def loss_fn(out):
+            return out[0].sum() + out[1].sum()
+
+        self._test_leaf_function_helper(PointModule, args_fn, loss_fn)
+
+    def test_leaf_function_fake_requires_grad_ignored(self):
+        @leaf_function
+        def my_fn(x):
+            return (x * 2,)
+
+        @my_fn.register_fake
+        def my_fn_fake(x):
+            return (torch.empty_like(x).requires_grad_(False),)
+
+        from torch._dynamo.testing import EagerAndRecordGraphs
+
+        backend = EagerAndRecordGraphs()
+
+        @torch.compile(backend=backend, fullgraph=True)
+        def fn(x):
+            return my_fn(x)
+
+        x = torch.randn(3, 3, requires_grad=True)
+        out = fn(x)
+
+        self.assertTrue(out[0].requires_grad)
+        out[0].sum().backward()
+        self.assertIsNotNone(x.grad)
+
+        graph = backend.graphs[0]
+        for node in graph.graph.nodes:
+            if node.op == "call_function" and "invoke_leaf_function" in str(
+                node.target
+            ):
+                example_value = node.meta.get("example_value")
+                self.assertIsNotNone(example_value)
+                self.assertTrue(example_value[0].requires_grad)
+
+    @parametrize("backend", ["eager", "aot_eager"])
+    def test_leaf_function_input_mutation_non_grad(self, backend):
+        @leaf_function(mutates_args={"buf"})
+        def mutate_buffer(x, buf):
+            buf.add_(1)
+            return (x + buf,)
+
+        @mutate_buffer.register_fake
+        def mutate_buffer_fake(x, buf):
+            buf.add_(1)
+            return (x + buf,)
+
+        def fn(x, buf):
+            return mutate_buffer(x, buf)
+
+        x = torch.randn(3, 3)
+        buf = torch.randn(3, 3)
+
+        buf_eager = buf.clone()
+        result_eager = fn(x, buf_eager)
+        expected = x + buf + 1
+        self.assertEqual(result_eager[0], expected)
+        self.assertEqual(buf_eager, buf + 1)
+
+        compiled_fn = torch.compile(fn, backend=backend, fullgraph=True)
+        buf_compiled = buf.clone()
+        result_compiled = compiled_fn(x, buf_compiled)
+        self.assertEqual(result_compiled[0], expected)
+        self.assertEqual(buf_compiled, buf + 1)
+
+    @parametrize("backend", ["eager", "aot_eager"])
+    def test_leaf_function_input_mutation_mixed(self, backend):
+        @leaf_function(mutates_args={"buf"})
+        def mixed_fn(x, buf):
+            buf.mul_(2)
+            return (x * buf,)
+
+        @mixed_fn.register_fake
+        def mixed_fn_fake(x, buf):
+            buf.mul_(2)
+            return (x * buf,)
+
+        def fn(x, buf):
+            return mixed_fn(x, buf)
+
+        x = torch.randn(3, 3, requires_grad=True)
+        buf = torch.randn(3, 3)
+
+        buf_eager = buf.clone()
+        result_eager = fn(x, buf_eager)
+        expected = x * (buf * 2)
+        self.assertEqual(result_eager[0], expected)
+        self.assertEqual(buf_eager, buf * 2)
+
+        compiled_fn = torch.compile(fn, backend=backend, fullgraph=True)
+        buf_compiled = buf.clone()
+        result_compiled = compiled_fn(x, buf_compiled)
+        self.assertEqual(result_compiled[0], expected)
+        self.assertEqual(buf_compiled, buf * 2)
+
+    @parametrize("backend", ["eager", "aot_eager"])
+    def test_leaf_function_input_mutation_module_buffer(self, backend):
+        class MyModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("running_mean", torch.zeros(3))
+                self.linear = torch.nn.Linear(3, 3)
+
+            def forward(self, x):
+                return update_stats(self, x)
+
+        @leaf_function(mutates_args={"model.running_mean"})
+        def update_stats(model, x):
+            model.running_mean.add_(x.mean(dim=0))
+            return (model.linear(x),)
+
+        @update_stats.register_fake
+        def update_stats_fake(model, x):
+            model.running_mean.add_(x.mean(dim=0))
+            return (model.linear(x),)
+
+        mod = MyModule()
+        x = torch.randn(4, 3)
+
+        mod_eager = copy.deepcopy(mod)
+        result_eager = mod_eager(x)
+        expected_mean = torch.zeros(3) + x.mean(dim=0)
+        self.assertEqual(mod_eager.running_mean, expected_mean)
+
+        mod_compiled = copy.deepcopy(mod)
+        compiled_mod = torch.compile(mod_compiled, backend=backend, fullgraph=True)
+        result_compiled = compiled_mod(x)
+        self.assertEqual(result_compiled, result_eager)
+        self.assertEqual(mod_compiled.running_mean, expected_mean)
+
+    @parametrize("backend", ["eager", "aot_eager"])
+    def test_leaf_function_input_mutation_pytree(self, backend):
+        @leaf_function(mutates_args={"buffers"})
+        def update_buffers(x, buffers):
+            for buf in buffers:
+                buf.add_(1)
+            return (x + sum(buffers),)
+
+        @update_buffers.register_fake
+        def update_buffers_fake(x, buffers):
+            for buf in buffers:
+                buf.add_(1)
+            return (x + sum(buffers),)
+
+        def fn(x, buffers):
+            return update_buffers(x, buffers)
+
+        x = torch.randn(3, 3)
+        bufs = [torch.randn(3, 3), torch.randn(3, 3)]
+
+        bufs_eager = [b.clone() for b in bufs]
+        result_eager = fn(x, bufs_eager)
+        expected = x + (bufs[0] + 1) + (bufs[1] + 1)
+        self.assertEqual(result_eager[0], expected)
+        self.assertEqual(bufs_eager[0], bufs[0] + 1)
+        self.assertEqual(bufs_eager[1], bufs[1] + 1)
+
+        compiled_fn = torch.compile(fn, backend=backend, fullgraph=True)
+        bufs_compiled = [b.clone() for b in bufs]
+        result_compiled = compiled_fn(x, bufs_compiled)
+        self.assertEqual(result_compiled[0], expected)
+        self.assertEqual(bufs_compiled[0], bufs[0] + 1)
+        self.assertEqual(bufs_compiled[1], bufs[1] + 1)
+
+    @parametrize("backend", ["eager", "aot_eager"])
+    def test_leaf_function_input_mutation_pytree_fine_grained(self, backend):
+        @leaf_function(mutates_args={"buffers[0]"})
+        def update_first(x, buffers):
+            buffers[0].add_(1)
+            return (x + buffers[0] + buffers[1],)
+
+        @update_first.register_fake
+        def update_first_fake(x, buffers):
+            buffers[0].add_(1)
+            return (x + buffers[0] + buffers[1],)
+
+        def fn(x, buffers):
+            return update_first(x, buffers)
+
+        x = torch.randn(3, 3)
+        bufs = [torch.randn(3, 3), torch.randn(3, 3)]
+
+        bufs_eager = [b.clone() for b in bufs]
+        result_eager = fn(x, bufs_eager)
+        expected = x + (bufs[0] + 1) + bufs[1]
+        self.assertEqual(result_eager[0], expected)
+        self.assertEqual(bufs_eager[0], bufs[0] + 1)
+        self.assertEqual(bufs_eager[1], bufs[1])
+
+        compiled_fn = torch.compile(fn, backend=backend, fullgraph=True)
+        bufs_compiled = [b.clone() for b in bufs]
+        result_compiled = compiled_fn(x, bufs_compiled)
+        self.assertEqual(result_compiled[0], expected)
+        self.assertEqual(bufs_compiled[0], bufs[0] + 1)
+        self.assertEqual(bufs_compiled[1], bufs[1])
+
+    def test_leaf_function_mutates_args_invalid_parameter(self):
+        with self.assertRaisesRegex(ValueError, "refers to parameter 'buf'"):
+
+            @leaf_function(mutates_args={"buf"})
+            def bad_fn(x, buffers):
+                buffers.add_(1)
+                return (x + buffers,)
+
+        with self.assertRaisesRegex(ValueError, "refers to parameter 'mdl'"):
+
+            @leaf_function(mutates_args={"mdl.running_mean"})
+            def bad_fn2(x, model):
+                model.running_mean.add_(1)
+                return (x,)
+
+    def test_leaf_function_mutates_args_non_leaf_expression(self):
+        @leaf_function(mutates_args={"model"})
+        def bad_fn(x, model):
+            model.running_mean.add_(1)
+            return (x,)
+
+        @bad_fn.register_fake
+        def bad_fn_fake(x, model):
+            model.running_mean.add_(1)
+            return (x,)
+
+        class MyModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.register_buffer("running_mean", torch.zeros(3))
+
+            def forward(self, x):
+                return bad_fn(x, self)
+
+        mod = MyModule()
+        x = torch.randn(3)
+        compiled_fn = torch.compile(mod, backend="eager", fullgraph=True)
+        with self.assertRaisesRegex(
+            torch._dynamo.exc.UserError, "resolved to a non-leaf value"
+        ):
+            compiled_fn(x)
 
 
 instantiate_parametrized_tests(TestLeafFunctionDynamo)
