@@ -384,6 +384,9 @@ its type to `common_constant_types`.
             and self.as_python_constant() == other.as_python_constant()
         )
 
+    def get_real_python_backed_value(self) -> object:
+        return self.value
+
 
 CONSTANT_VARIABLE_NONE = ConstantVariable(None)
 CONSTANT_VARIABLE_TRUE = ConstantVariable(True)
@@ -427,6 +430,9 @@ class EnumVariable(VariableTracker):
         return f"EnumVariable({type(self.value)})"
 
     def as_python_constant(self) -> enum.Enum | enum.IntEnum:
+        return self.value
+
+    def get_real_python_backed_value(self) -> enum.Enum | enum.IntEnum:
         return self.value
 
     def var_getattr(self, tx: "InstructionTranslator", name: str) -> VariableTracker:
