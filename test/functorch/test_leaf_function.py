@@ -1,17 +1,25 @@
 # Owner(s): ["oncall: pt2"]
 
-"""Tests for @leaf_function with make_fx and aot_function."""
+"""Tests for @leaf_function with make_fx, aot_function, and torch.compile."""
 
 from functools import partial
+from unittest.mock import patch
 
 import torch
 import torch._dynamo.config as config
+import torch._dynamo.testing
 from functorch.compile import aot_function, nop
 from torch._dynamo.decorators import leaf_function
 from torch._dynamo.testing import normalize_gm
 from torch._higher_order_ops.invoke_leaf_function import invoke_leaf_function
 from torch.fx.experimental.proxy_tensor import make_fx
-from torch.testing._internal.common_utils import run_tests, skipIfTorchDynamo, TestCase
+from torch.testing._internal.common_utils import (
+    instantiate_parametrized_tests,
+    run_tests,
+    skipIfTorchDynamo,
+    TestCase,
+)
+from torch.testing._internal.dynamo_pytree_test_utils import PytreeRegisteringTestCase
 
 
 def extract_graph(fx_g, _, graph_cell):
@@ -821,6 +829,450 @@ class outer(torch.nn.Module):
             return (getitem, getitem_1)
 """,  # noqa: B950
         )
+
+
+@skipIfTorchDynamo("leaf_function tests manage their own compilation")
+class TestLeafFunctionDynamo(PytreeRegisteringTestCase):
+    def _assert_models_equal(
+        self,
+        model_expected,
+        model_test,
+        x_expected,
+        x_test,
+    ):
+        out_expected = model_expected(x_expected)
+        out_test = model_test(x_test)
+        self.assertEqual(out_expected, out_test)
+
+        loss_expected = out_expected.sum()
+        loss_test = out_test.sum()
+        loss_expected.backward()
+        loss_test.backward()
+        self.assertEqual(x_expected.grad, x_test.grad)
+
+        expected_grads = {
+            name: param.grad for name, param in model_expected.named_parameters()
+        }
+        test_grads = {name: param.grad for name, param in model_test.named_parameters()}
+
+        self.assertEqual(set(expected_grads.keys()), set(test_grads.keys()))
+        for name in expected_grads:
+            if expected_grads[name] is not None:
+                self.assertEqual(
+                    expected_grads[name],
+                    test_grads[name],
+                    msg=f"Gradient mismatch for parameter {name}",
+                )
+
+    def _test_leaf_function_helper(self, mod_class, args_fn, loss_fn):
+        import torch.utils._pytree as pytree
+        from torch._dynamo.testing import AotEagerAndRecordGraphs, EagerAndRecordGraphs
+
+        mod_eager = mod_class()
+        mod_compile_eager = mod_class()
+        mod_compile_eager.load_state_dict(dict(mod_eager.state_dict()))
+        mod_compile_aot = mod_class()
+        mod_compile_aot.load_state_dict(dict(mod_eager.state_dict()))
+
+        eager_backend = EagerAndRecordGraphs()
+        compiled_eager = torch.compile(
+            mod_compile_eager, backend=eager_backend, fullgraph=True
+        )
+
+        backend = AotEagerAndRecordGraphs()
+        compiled_aot = torch.compile(mod_compile_aot, backend=backend, fullgraph=True)
+
+        for _ in range(2):
+            mod_eager.zero_grad()
+            mod_compile_eager.zero_grad()
+            mod_compile_aot.zero_grad()
+
+            args = args_fn()
+            args_clone = pytree.tree_map(
+                lambda x: x.clone().detach().requires_grad_(x.requires_grad), args
+            )
+            args_clone2 = pytree.tree_map(
+                lambda x: x.clone().detach().requires_grad_(x.requires_grad), args
+            )
+
+            out_eager = mod_eager(*args)
+            loss_fn(out_eager).backward()
+
+            out_compile_eager = compiled_eager(*args_clone)
+            loss_fn(out_compile_eager).backward()
+
+            out_compile_aot = compiled_aot(*args_clone2)
+            loss_fn(out_compile_aot).backward()
+
+            self.assertEqual(out_eager, out_compile_eager)
+            self.assertEqual(out_eager, out_compile_aot)
+
+            for (name_eager, param_eager), (_, param_compile_eager), (
+                _,
+                param_compile_aot,
+            ) in zip(
+                mod_eager.named_parameters(),
+                mod_compile_eager.named_parameters(),
+                mod_compile_aot.named_parameters(),
+            ):
+                self.assertEqual(
+                    param_eager.grad,
+                    param_compile_eager.grad,
+                    msg=f"Gradient mismatch for {name_eager} between eager and compile_eager",
+                )
+                self.assertEqual(
+                    param_eager.grad,
+                    param_compile_aot.grad,
+                    msg=f"Gradient mismatch for {name_eager} between eager and compile_aot",
+                )
+
+            pytree.tree_map(
+                lambda x, compile_x: self.assertEqual(x.grad, compile_x.grad)
+                if isinstance(x, torch.Tensor) and x.requires_grad
+                else None,
+                args,
+                args_clone,
+            )
+            pytree.tree_map(
+                lambda x, compile_x: self.assertEqual(x.grad, compile_x.grad)
+                if isinstance(x, torch.Tensor) and x.requires_grad
+                else None,
+                args,
+                args_clone2,
+            )
+
+        return (
+            normalize_gm(eager_backend.graphs[0].print_readable(print_output=False)),
+            normalize_gm(backend.fw_graphs[0].print_readable(print_output=False)),
+            normalize_gm(backend.bw_graphs[0].print_readable(print_output=False)),
+        )
+
+    def test_leaf_function_simple(self):
+        @leaf_function
+        def non_tracable_forward(mod, x):
+            if x.sum() > 0:
+                return (mod.linear(x),)
+            else:
+                return (mod.linear(x) + x,)
+
+        @non_tracable_forward.register_fake
+        def non_tracable_forward_fake(mod, x):
+            return (mod.linear(x),)
+
+        class NonTracable(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(3, 3)
+
+            def forward(self, x):
+                return non_tracable_forward(self, x)
+
+        def args_fn():
+            return (torch.randn(3, 3, requires_grad=True),)
+
+        def loss_fn(out):
+            return out[0].sum()
+
+        dynamo_graph_str, fw_graph_str, bw_graph_str = self._test_leaf_function_helper(
+            NonTracable, args_fn, loss_fn
+        )
+        self.assertExpectedInline(
+            dynamo_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, L_x_: "f32[3, 3]", L_self_modules_linear_parameters_weight_: "f32[3, 3]", L_self_modules_linear_parameters_bias_: "f32[3]"):
+        l_x_ = L_x_
+        l_self_modules_linear_parameters_weight_ = L_self_modules_linear_parameters_weight_
+        l_self_modules_linear_parameters_bias_ = L_self_modules_linear_parameters_bias_
+
+        real_fn : torch._higher_order_ops.invoke_leaf_function._LeafCallable = self.real_fn
+        fake_fn : torch._higher_order_ops.invoke_leaf_function._LeafCallable = self.fake_fn
+        input_spec : torch.utils._pytree.TreeSpec = self.input_spec
+        invoke_leaf_function = torch.ops.higher_order.invoke_leaf_function(real_fn, fake_fn, input_spec, '', 0, l_self_modules_linear_parameters_weight_, l_self_modules_linear_parameters_bias_, l_x_);  real_fn = fake_fn = input_spec = l_self_modules_linear_parameters_weight_ = l_self_modules_linear_parameters_bias_ = l_x_ = None
+        getitem: "f32[3, 3]" = invoke_leaf_function[0];  invoke_leaf_function = None
+        return (getitem,)
+""",  # noqa: B950
+        )
+        self.assertExpectedInline(
+            fw_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, primals_1: "f32[0]", primals_2: "f32[3, 3]", primals_3: "f32[3, 3]", primals_4: "f32[3]"):
+        _opaque_obj0 = self._opaque_obj0
+        _opaque_obj1 = self._opaque_obj1
+        _tree_spec_constant0 = self._tree_spec_constant0
+        with_effects = torch.ops.higher_order.with_effects(primals_1, torch.ops.higher_order.invoke_leaf_function, _opaque_obj0, _opaque_obj1, _tree_spec_constant0, '', 0, primals_3, primals_4, primals_2, requires_grad_indices = (1, 2, 3));  primals_1 = _opaque_obj0 = _opaque_obj1 = _tree_spec_constant0 = primals_3 = primals_4 = primals_2 = None
+
+        getitem: "f32[0]" = with_effects[0]
+        getitem_1: "f32[3, 3]" = with_effects[1];  with_effects = None
+        return (getitem, getitem_1)
+""",  # noqa: B950
+        )
+        self.assertExpectedInline(
+            bw_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, tangents_1: "f32[3, 3]", tangents_token: "f32[0]"):
+        _opaque_obj2 = self._opaque_obj2
+        _opaque_obj3 = self._opaque_obj3
+        _tree_spec_constant1 = self._tree_spec_constant1
+        with_effects_1 = torch.ops.higher_order.with_effects(tangents_token, torch.ops.higher_order.invoke_leaf_function, _opaque_obj2, _opaque_obj3, _tree_spec_constant1, '', tangents_1, requires_grad_indices = ());  tangents_token = _opaque_obj2 = _opaque_obj3 = _tree_spec_constant1 = tangents_1 = None
+        getitem_2: "f32[0]" = with_effects_1[0]
+        getitem_4: "f32[3, 3]" = with_effects_1[2]
+        getitem_5: "f32[3]" = with_effects_1[3]
+        getitem_6: "f32[3, 3]" = with_effects_1[4];  with_effects_1 = None
+        return (getitem_6, getitem_4, getitem_5, getitem_2)
+""",  # noqa: B950
+        )
+
+    def test_leaf_function_with_logging(self):
+        @leaf_function
+        def logging_forward(mod, x):
+            print("Processing input")
+            return (mod.linear(x),)
+
+        @logging_forward.register_fake
+        def logging_forward_fake(mod, x):
+            return (mod.linear(x),)
+
+        class LoggingModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(3, 3)
+
+            def forward(self, x):
+                return logging_forward(self, x)
+
+        def args_fn():
+            return (torch.randn(3, 3, requires_grad=True),)
+
+        def loss_fn(out):
+            return out[0].sum()
+
+        with patch("builtins.print") as mock_print:
+            self._test_leaf_function_helper(LoggingModule, args_fn, loss_fn)
+            mock_print.assert_any_call("Processing input")
+            self.assertEqual(mock_print.call_count, 6)
+
+    def test_leaf_function_dynamic_autograd_module_config(self):
+        from torch._dynamo.testing import CompileCounterWithBackend
+
+        @leaf_function
+        def configurable_scale(mod, x):
+            if mod.use_double_scale:
+                return (mod.linear(x) * 2,)
+            else:
+                return (mod.linear(x) * 3,)
+
+        @configurable_scale.register_fake
+        def configurable_scale_fake(mod, x):
+            return (mod.linear(x),)
+
+        class ConfigurableModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(3, 3)
+                self.use_double_scale = True
+
+            def forward(self, x):
+                return configurable_scale(self, x)
+
+        mod_eager = ConfigurableModule()
+        mod_compiled = ConfigurableModule()
+        mod_compiled.load_state_dict(dict(mod_eager.state_dict()))
+
+        counter = CompileCounterWithBackend("aot_eager")
+        compiled_fn = torch.compile(mod_compiled, backend=counter, fullgraph=True)
+
+        x_value = torch.randn(3, 3)
+
+        mod_eager.use_double_scale = True
+        mod_compiled.use_double_scale = True
+
+        x1 = x_value.clone().requires_grad_(True)
+        x1_clone = x_value.clone().requires_grad_(True)
+
+        out_eager_1 = mod_eager(x1)
+        out_eager_1[0].sum().backward()
+
+        out_compiled_1 = compiled_fn(x1_clone)
+        out_compiled_1[0].sum().backward()
+
+        self.assertEqual(out_eager_1, out_compiled_1)
+        self.assertEqual(x1.grad, x1_clone.grad)
+
+        mod_eager.zero_grad()
+        mod_compiled.zero_grad()
+
+        mod_eager.use_double_scale = False
+        mod_compiled.use_double_scale = False
+
+        x2 = x_value.clone().requires_grad_(True)
+        x2_clone = x_value.clone().requires_grad_(True)
+
+        out_eager_2 = mod_eager(x2)
+        out_eager_2[0].sum().backward()
+
+        out_compiled_2 = compiled_fn(x2_clone)
+        out_compiled_2[0].sum().backward()
+
+        self.assertEqual(out_eager_2, out_compiled_2)
+        self.assertEqual(x2.grad, x2_clone.grad)
+
+        self.assertNotEqual(x1.grad, x2.grad)
+
+        self.assertEqual(counter.frame_count, 1)
+
+    def test_leaf_function_dynamic_autograd_closure(self):
+        from torch._dynamo.testing import CompileCounterWithBackend
+
+        closure_config = {"use_double_scale": True}
+
+        @leaf_function
+        def configurable_scale(x, y):
+            if closure_config["use_double_scale"]:
+                return (x @ y * 2,)
+            else:
+                return (x @ y * 3,)
+
+        @configurable_scale.register_fake
+        def configurable_scale_fake(x, y):
+            return (x @ y,)
+
+        def fn(x, y):
+            return configurable_scale(x, y)
+
+        counter = CompileCounterWithBackend("aot_eager")
+        compiled_fn = torch.compile(fn, backend=counter, fullgraph=True)
+
+        x_value = torch.randn(3, 3)
+        y_value = torch.randn(3, 3)
+
+        closure_config["use_double_scale"] = True
+
+        x1 = x_value.clone().requires_grad_(True)
+        y1 = y_value.clone().requires_grad_(True)
+        x1_clone = x_value.clone().requires_grad_(True)
+        y1_clone = y_value.clone().requires_grad_(True)
+
+        out_eager_1 = fn(x1, y1)
+        out_eager_1[0].sum().backward()
+
+        out_compiled_1 = compiled_fn(x1_clone, y1_clone)
+        out_compiled_1[0].sum().backward()
+
+        self.assertEqual(out_eager_1, out_compiled_1)
+        self.assertEqual(x1.grad, x1_clone.grad)
+        self.assertEqual(y1.grad, y1_clone.grad)
+
+        closure_config["use_double_scale"] = False
+
+        x2 = x_value.clone().requires_grad_(True)
+        y2 = y_value.clone().requires_grad_(True)
+        x2_clone = x_value.clone().requires_grad_(True)
+        y2_clone = y_value.clone().requires_grad_(True)
+
+        out_eager_2 = fn(x2, y2)
+        out_eager_2[0].sum().backward()
+
+        out_compiled_2 = compiled_fn(x2_clone, y2_clone)
+        out_compiled_2[0].sum().backward()
+
+        self.assertEqual(out_eager_2, out_compiled_2)
+        self.assertEqual(x2.grad, x2_clone.grad)
+        self.assertEqual(y2.grad, y2_clone.grad)
+
+        self.assertNotEqual(x1.grad, x2.grad)
+        self.assertNotEqual(y1.grad, y2.grad)
+
+        self.assertEqual(counter.frame_count, 1)
+
+    def test_leaf_function_closure_constants_without_grad(self):
+        closure_scale = 2.0
+        closure_tensor = torch.tensor([1.0, 2.0, 3.0])
+
+        @leaf_function
+        def closure_forward(mod, x):
+            out = mod.linear(x) * closure_scale * mod.scale
+            out = out + closure_tensor + mod.offset
+            return (out,)
+
+        @closure_forward.register_fake
+        def closure_forward_fake(mod, x):
+            return (mod.linear(x) + mod.offset,)
+
+        class ClosureModule(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(3, 3)
+                self.scale = 3.0
+                self.offset = torch.nn.Parameter(torch.ones(3))
+
+            def forward(self, x):
+                return closure_forward(self, x)
+
+        def args_fn():
+            return (torch.randn(3, 3, requires_grad=True),)
+
+        def loss_fn(out):
+            return out[0].sum()
+
+        dynamo_graph_str, fw_graph_str, bw_graph_str = self._test_leaf_function_helper(
+            ClosureModule, args_fn, loss_fn
+        )
+        self.assertExpectedInline(
+            dynamo_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, L_x_: "f32[3, 3]", L_self_parameters_offset_: "f32[3]", L_self_modules_linear_parameters_weight_: "f32[3, 3]", L_self_modules_linear_parameters_bias_: "f32[3]"):
+        l_x_ = L_x_
+        l_self_parameters_offset_ = L_self_parameters_offset_
+        l_self_modules_linear_parameters_weight_ = L_self_modules_linear_parameters_weight_
+        l_self_modules_linear_parameters_bias_ = L_self_modules_linear_parameters_bias_
+
+        real_fn : torch._higher_order_ops.invoke_leaf_function._LeafCallable = self.real_fn
+        fake_fn : torch._higher_order_ops.invoke_leaf_function._LeafCallable = self.fake_fn
+        input_spec : torch.utils._pytree.TreeSpec = self.input_spec
+        invoke_leaf_function = torch.ops.higher_order.invoke_leaf_function(real_fn, fake_fn, input_spec, '', 0, l_self_parameters_offset_, l_self_modules_linear_parameters_weight_, l_self_modules_linear_parameters_bias_, l_x_);  real_fn = fake_fn = input_spec = l_self_parameters_offset_ = l_self_modules_linear_parameters_weight_ = l_self_modules_linear_parameters_bias_ = l_x_ = None
+        getitem: "f32[3, 3]" = invoke_leaf_function[0];  invoke_leaf_function = None
+        return (getitem,)
+""",  # noqa: B950
+        )
+        self.assertExpectedInline(
+            fw_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, primals_1: "f32[0]", primals_2: "f32[3, 3]", primals_3: "f32[3]", primals_4: "f32[3, 3]", primals_5: "f32[3]"):
+        _opaque_obj0 = self._opaque_obj0
+        _opaque_obj1 = self._opaque_obj1
+        _tree_spec_constant0 = self._tree_spec_constant0
+        with_effects = torch.ops.higher_order.with_effects(primals_1, torch.ops.higher_order.invoke_leaf_function, _opaque_obj0, _opaque_obj1, _tree_spec_constant0, '', 0, primals_3, primals_4, primals_5, primals_2, requires_grad_indices = (1, 2, 3, 4));  primals_1 = _opaque_obj0 = _opaque_obj1 = _tree_spec_constant0 = primals_3 = primals_4 = primals_5 = primals_2 = None
+
+        getitem: "f32[0]" = with_effects[0]
+        getitem_1: "f32[3, 3]" = with_effects[1];  with_effects = None
+        return (getitem, getitem_1)
+""",  # noqa: B950
+        )
+        self.assertExpectedInline(
+            bw_graph_str,
+            """\
+class GraphModule(torch.nn.Module):
+    def forward(self, tangents_1: "f32[3, 3]", tangents_token: "f32[0]"):
+        _opaque_obj2 = self._opaque_obj2
+        _opaque_obj3 = self._opaque_obj3
+        _tree_spec_constant1 = self._tree_spec_constant1
+        with_effects_1 = torch.ops.higher_order.with_effects(tangents_token, torch.ops.higher_order.invoke_leaf_function, _opaque_obj2, _opaque_obj3, _tree_spec_constant1, '', tangents_1, requires_grad_indices = ());  tangents_token = _opaque_obj2 = _opaque_obj3 = _tree_spec_constant1 = tangents_1 = None
+        getitem_2: "f32[0]" = with_effects_1[0]
+        getitem_4: "f32[3]" = with_effects_1[2]
+        getitem_5: "f32[3, 3]" = with_effects_1[3]
+        getitem_6: "f32[3]" = with_effects_1[4]
+        getitem_7: "f32[3, 3]" = with_effects_1[5];  with_effects_1 = None
+        return (getitem_7, getitem_4, getitem_5, getitem_6, getitem_2)
+""",  # noqa: B950
+        )
+
+
+instantiate_parametrized_tests(TestLeafFunctionDynamo)
 
 
 if __name__ == "__main__":
