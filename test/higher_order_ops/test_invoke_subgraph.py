@@ -3573,6 +3573,188 @@ class GraphModule(torch.nn.Module):
             for ri, ei in zip(r, e):
                 self.assertEqual(ri, ei)
 
+    def test_subgraph_reuse_different_constants_retrace(self):
+        """Constant args with different values each require a fresh trace.
+
+        Three calls with three distinct scalar constants → call_count == 3.
+        """
+
+        @nested_compile_region
+        def gn(x, scale):
+            return x * scale
+
+        def fn(x):
+            a = gn(x, 1)
+            b = gn(x, 2)
+            c = gn(x, 3)
+            return a, b, c
+
+        x = torch.randn(4)
+        ref = fn(x)
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(fn, backend="aot_eager", fullgraph=True)(x)
+
+        for r, e in zip(res, ref):
+            self.assertEqual(r, e)
+        # Three distinct constants → three separate traces
+        self.assertEqual(count(), 3)
+
+    def test_subgraph_reuse_tuple_destructure_with_intermediates(self):
+        class Layer(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = torch.nn.Linear(8, 8, bias=False)
+
+            @nested_compile_region
+            def forward(self, x, residual):
+                h = self.linear(x)
+                h = h + residual
+                new_residual = h * 0.5
+                return h, new_residual
+
+        class Model(torch.nn.Module):
+            def __init__(self, num_layers):
+                super().__init__()
+                self.embed = torch.nn.Linear(8, 8, bias=False)
+                self.layers = torch.nn.ModuleList([Layer() for _ in range(num_layers)])
+
+            def forward(self, x, residual):
+                # embed gives x/residual requires_grad=True (same as layer outputs),
+                # so all layers see identical tensor metadata → single trace suffices.
+                x = self.embed(x)
+                residual = self.embed(residual)
+                for layer in self.layers:
+                    # Must support extra outputs
+                    hidden_states, residual = layer(x, residual)
+                    x = hidden_states
+                return x, residual
+
+        model = Model(3)
+        x = torch.randn(4, 8)
+        residual = torch.randn(4, 8)
+        ref = model(x, residual)
+
+        torch._dynamo.reset()
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(model, backend="aot_eager", fullgraph=True)(
+                x.clone(), residual.clone()
+            )
+        self.assertEqual(ref[0], res[0])
+        self.assertEqual(ref[1], res[1])
+        # All layers see identical tensor metadata (requires_grad=True throughout)
+        # so layers[1] and layers[2] reuse layers[0]'s trace.
+        self.assertEqual(count(), 1)
+
+    def test_subgraph_reuse_different_dynamic_symnodes(self):
+        @nested_compile_region
+        def gn(x, n):
+            return x * n
+
+        def fn(x):
+            a = gn(x, x.shape[0])
+            b = gn(x, x.shape[1])
+            return a, b
+
+        x = torch.ones(4, 6)
+        ref = fn(x)
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(fn, backend="aot_eager", dynamic=True)(x)
+
+        self.assertEqual(ref[0], res[0])
+        self.assertEqual(ref[1], res[1])
+        # s0 (dim 0) and s1 (dim 1) are distinct symbols → two separate traces
+        self.assertEqual(count(), 2)
+
+    def test_subgraph_reuse_cache_multiple_entries(self):
+        @nested_compile_region
+        def gn(x):
+            return x.sin()
+
+        def fn(x4, x8, x4_again):
+            a = gn(x4)
+            b = gn(x8)
+            c = gn(x4_again)
+            return a, b, c
+
+        x4 = torch.randn(4)
+        x8 = torch.randn(8)
+        x4_again = torch.randn(4)
+        ref = fn(x4, x8, x4_again)
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(fn, backend="aot_eager", fullgraph=True)(
+                x4, x8, x4_again
+            )
+
+        for r, e in zip(res, ref):
+            self.assertEqual(r, e)
+        self.assertEqual(count(), 2)
+
+    def test_subgraph_reuse_kwargs(self):
+        @nested_compile_region
+        def gn(x, *, scale=1.0):
+            return x * scale
+
+        def fn(x):
+            a = gn(x, scale=2.0)
+            b = gn(x, scale=2.0)
+            return a + b
+
+        x = torch.randn(8)
+        ref = fn(x)
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(fn, backend="aot_eager", fullgraph=True)(x)
+
+        self.assertEqual(ref, res)
+        self.assertEqual(count(), 1)
+
+    def test_subgraph_reuse_max_entries_raises(self):
+        """Exceeding max_reuse_entries raises RuntimeError."""
+
+        @nested_compile_region(max_reuse_entries=2)
+        def gn(x, c):
+            return x * c
+
+        def fn(x):
+            # Three distinct constants exceed the limit of 2
+            return gn(x, 1) + gn(x, 2) + gn(x, 3)
+
+        x = torch.randn(4)
+        with self.assertRaisesRegex(RuntimeError, "exceeded maximum reuse entries"):
+            torch.compile(fn, backend="aot_eager", fullgraph=True)(x)
+
+    def test_subgraph_reuse_module_different_instances_retrace(self):
+        """Different module instances with different weights require separate traces."""
+
+        class Mod(torch.nn.Module):
+            def __init__(self, c):
+                super().__init__()
+                self.c = c
+
+            @nested_compile_region
+            def forward(self, x):
+                return x * self.c
+
+        mod1 = Mod(5)
+        mod2 = Mod(10)
+
+        def fn(x):
+            return mod1(x) + mod2(x)
+
+        x = torch.randn(8)
+        ref = fn(x)
+
+        with self._count_speculate_calls() as count:
+            res = torch.compile(fn, backend="aot_eager", fullgraph=True)(x)
+
+        self.assertEqual(ref, res)
+        # mod1.c=5 and mod2.c=10 differ → two separate traces
+        self.assertEqual(count(), 2)
+
 
 @skipIfTorchDynamo("Not a torch._dynamo test")
 @parameterized_class(
