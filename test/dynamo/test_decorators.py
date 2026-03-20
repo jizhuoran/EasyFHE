@@ -1366,15 +1366,9 @@ class DecoratorTests(PytreeRegisteringTestCase):
         self.assertEqual(compiles, 2 if guarded else 1)
 
     def test_mark_static_address_guarded(self):
-        with torch._dynamo.config.patch("inline_inbuilt_nn_modules", True):
-            self._test_mark_static_address(guarded=True)
-
         self._test_mark_static_address(guarded=True)
 
     def test_mark_static_address_unguarded(self):
-        with torch._dynamo.config.patch("inline_inbuilt_nn_modules", True):
-            self._test_mark_static_address(guarded=False)
-
         self._test_mark_static_address(guarded=False)
 
     def test_class_methods(self):
@@ -1530,7 +1524,6 @@ class DecoratorTests(PytreeRegisteringTestCase):
         # Would have been 4 without stance
         self.assertEqual(cnts.op_count, 2)
 
-    @torch._dynamo.config.patch("inline_inbuilt_nn_modules", True)
     def test_mark_static_nn_module(self):
         @torch._dynamo.mark_static
         class Mock(torch.nn.Module):
