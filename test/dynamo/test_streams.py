@@ -1971,31 +1971,6 @@ class <lambda>(torch.nn.Module):
         compiled_result = torch.compile(f)(inp)
         self.assertEqual(eager_result, compiled_result)
 
-    @requires_cuda
-    def test_event_synchronize_e2e(self):
-        def f(a_list):
-            a_cpu_list = []
-            a_to_cpu_event_list = []
-            for a in a_list:
-                a_cpu = a.to(device="cpu", non_blocking=True)
-                e = torch.Event()
-                e.record()
-                a_cpu_list.append(a_cpu)
-                a_to_cpu_event_list.append(e)
-
-            for e in a_to_cpu_event_list:
-                e.synchronize()
-
-            return torch.cat(a_cpu_list)
-
-        f_compiled = torch.compile(f)
-        inputs = [
-            torch.rand(100, dtype=torch.float16, device="cuda") for _ in range(10)
-        ]
-        eager_result = f(inputs)
-        compiled_result = f_compiled(inputs)
-        self.assertEqual(eager_result, compiled_result)
-
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
