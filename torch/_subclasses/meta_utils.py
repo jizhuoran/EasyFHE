@@ -2024,15 +2024,21 @@ class MetaConverter(Generic[_TensorT]):
                 if t.grad is not None:
                     from torch._dynamo.source import AttrSource
 
-                    # TODO: Use a valid grad-specific symbolic context instead of recycling
-                    # the one from t. This isn't correct if e.g. t._is_view() != t.grad._is_view().
+                    grad_source = AttrSource(source, "grad")
+                    grad_symbolic_context = (
+                        all_dynamic_symbolic_context(
+                            t.grad, grad_source, shape_env, callback
+                        )
+                        if shape_env
+                        else None
+                    )
                     # pyrefly: ignore [unbound-name]
                     r.grad = self.meta_tensor(
                         t.grad,
                         shape_env,
                         callback,
-                        AttrSource(source, "grad"),
-                        symbolic_context,
+                        grad_source,
+                        grad_symbolic_context,
                     )
                 # pyrefly: ignore [unbound-name]
                 torch._C._set_conj(r, t.is_conj)
