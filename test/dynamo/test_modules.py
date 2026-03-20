@@ -2145,29 +2145,6 @@ class OptimizedModuleTest(torch._dynamo.test_case.TestCase):
             else:
                 self.assertEqual(cnts.frame_count, num_submodules)
 
-    @patch.object(torch._dynamo.config, "accumulated_recompile_limit", 2)
-    @patch.object(torch._dynamo.config, "inline_inbuilt_nn_modules", False)
-    def test_recompile_limit_on_freed_module(self):
-        class Mod(torch.nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.lin = torch.nn.Linear(5, 5)
-
-            def forward(self, x):
-                return self.lin(x)
-
-        def fn(x, mod):
-            return mod(x)
-
-        cnts = torch._dynamo.testing.CompileCounterWithBackend("eager")
-        opt_mod = torch.compile(fn, backend=cnts)
-        for _ in range(8):
-            mod = Mod()
-            opt_mod(torch.randn(5, 5), mod)
-
-        # fn compiles twice
-        self.assertEqual(cnts.frame_count, 2)
-
     def test_inline_inbuilt_nn_modules(self):
         size = (10, 10)
         recompile_limit = 1
@@ -2447,56 +2424,6 @@ class OptimizedModuleTest(torch._dynamo.test_case.TestCase):
         m._forward_hooks[handle.id] = new_forward_hook
         self.assertEqual(compiled_func(inp), outer_func(inp))
         self.assertEqual(compiled_func(inp).item(), 16)
-
-    @patch.object(torch._dynamo.config, "guard_nn_modules", False)
-    @patch.object(torch._dynamo.config, "skip_nnmodule_hook_guards", True)
-    @patch.object(torch._dynamo.config, "inline_inbuilt_nn_modules", False)
-    def test_hooks_skip_guards(self):
-        class TestModule(torch.nn.Module):
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return 2 * x + 1
-
-        m = TestModule()
-
-        def forward_hook(
-            module: torch.nn.Module, inputs: tuple[torch.Tensor], output: torch.Tensor
-        ) -> torch.Tensor:
-            return 2 * output + 1
-
-        handle = m.register_forward_hook(forward_hook)
-
-        def outer_func(tensor):
-            x = tensor * 2 + 1
-            y = m(x)
-            return y
-
-        inp = torch.tensor(1.0, requires_grad=True)
-
-        failure_reason = None
-
-        def guard_fail_fn(failure):
-            nonlocal failure_reason
-            failure_reason = failure[0]
-
-        cc = torch._dynamo.testing.CompileCounterWithBackend("aot_eager")
-        compiled_func = torch._dynamo.optimize(
-            guard_fail_fn=guard_fail_fn,
-            backend=cc,
-        )(outer_func)
-
-        m = TestModule()
-        handle = m.register_forward_hook(forward_hook)
-        failure_reason = None
-        self.assertEqual(compiled_func(inp), outer_func(inp))
-        self.assertEqual(compiled_func(inp).item(), 15)
-        self.assertEqual(cc.frame_count, 1)
-        self.assertEqual(cc.op_count, 6)
-
-        # if we remove the hook, dynamo shouldn't notice
-        handle.remove()
-        self.assertNotEqual(compiled_func(inp), outer_func(inp))
-        self.assertEqual(compiled_func(inp).item(), 15)
-        self.assertEqual(cc.frame_count, 1)
 
     def _forward_hook_test_helper(self, model):
         forward_handles = {}
@@ -2812,18 +2739,6 @@ class OptimizedModuleTest(torch._dynamo.test_case.TestCase):
         run = torch.compile(run, fullgraph=True, backend="eager")
         run()
         self.assertTrue(models[0].abc)
-
-    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=False)
-    def test_assign_does_not_exist(self):
-        class MyModule(torch.nn.Module):
-            def forward(self, x):
-                self.text_encoding = x + 1
-                return self.text_encoding
-
-        mod = MyModule()
-        out = torch.compile(mod, fullgraph=True, backend="eager")(torch.randn(10))
-        if mod.text_encoding is not out:
-            raise AssertionError("Expected mod.text_encoding to be out")
 
     def test_module_dict_iter_values(self):
         class MyModule(torch.nn.Module):

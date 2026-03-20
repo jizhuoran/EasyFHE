@@ -360,26 +360,6 @@ class OptimizeForInferenceTemplate(TestCase):
                 ).run(code[0])
                 self.assertEqual(out_eager, out)
 
-    # With inlining of inbuilt nn modules, Dynamo traces the innards of inbuilt
-    # module and does not modify the eager module.
-    @torch._dynamo.config.patch(inline_inbuilt_nn_modules=False)
-    def test_error_on_eager(self):
-        mod = ConvBN(3, 32, kernel_size=3, stride=2).eval().to(self.device)
-
-        x = torch.rand(3, 3, 32, 32).to(self.device)
-
-        @torch.compile()
-        def foo(mod, x):
-            return mod(x)
-
-        with torch.no_grad():
-            foo(mod, x)
-
-        with self.assertRaisesRegex(
-            RuntimeError, "Trying to run Pytorch Eager Module after Dynamo Freezing"
-        ):
-            mod(x)
-
     def test_static_indices_cudagraph(self):
         if self.device != "cuda":
             return
