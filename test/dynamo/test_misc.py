@@ -7248,11 +7248,7 @@ not ___dict_contains('cccccccc', G['sys'].modules)""",
 
         mod = Module()
 
-        error_message = ""
-        if torch._dynamo.config.inline_inbuilt_nn_modules:
-            error_message = r"Higher Order Operator: torch\.ops\.higher_order\.map_impl"
-        else:
-            error_message = "Can't inplace modify module params/buffers"
+        error_message = r"Higher Order Operator: torch\.ops\.higher_order\.map_impl"
 
         with self.assertRaisesRegex(
             torch._dynamo.exc.UncapturedHigherOrderOpError, error_message
