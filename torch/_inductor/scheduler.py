@@ -7445,12 +7445,6 @@ class Scheduler:
 
             self.enter_context(node)
 
-            # pyrefly: ignore [unbound-name]
-            if config.size_asserts:
-                V.graph.wrapper_code.codegen_deferred_input_asserts(
-                    dep.name for dep in node.read_writes.reads
-                )
-
             if device := node.get_device():
                 if (
                     device != self.current_device

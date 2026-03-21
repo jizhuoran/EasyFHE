@@ -78,7 +78,7 @@ from .triton_utils import config_of, should_unwrap_unspec_arg, signature_to_meta
 
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Sequence
+    from collections.abc import Iterator, Sequence
 
     import triton
 
@@ -1206,7 +1206,6 @@ class PythonWrapperCodegen(CodeGen):
 
     def __init__(self):
         super().__init__()
-        self._pending_input_asserts: dict[str, tuple[str, str]] = {}
         self._names_iter: Iterator[int] = count()
         self.args_to_buffers: dict[
             str, None | ir.TensorBox | ir.Buffer | ir.TorchBindObject
@@ -1548,7 +1547,7 @@ class PythonWrapperCodegen(CodeGen):
                 continue
             size = self.codegen_python_shape_tuple(buf.get_size())
             stride = self.codegen_python_shape_tuple(buf.get_stride())
-            self._pending_input_asserts[name] = (size, stride)
+            self.prefix.writeline(f"assert_size_stride({name}, {size}, {stride})")
 
     def codegen_input_nan_asserts(self) -> None:
         self.prefix.writeline("# make sure graph inputs are not nan/inf")
@@ -1640,16 +1639,6 @@ class PythonWrapperCodegen(CodeGen):
             self.codegen_input_size_asserts()
         if config.nan_asserts:
             self.codegen_input_nan_asserts()
-
-    # Input size/stride assertions are deferred from the top of call() to just
-    # before the first kernel that uses each input. This avoids a block of N
-    # sequential assert calls (~1 us each) on the critical path before the first
-    # GPU kernel launch. Called from the scheduler codegen loop.
-    def codegen_deferred_input_asserts(self, input_names: Iterable[str]) -> None:
-        for name in input_names:
-            if name in self._pending_input_asserts:
-                size, stride = self._pending_input_asserts.pop(name)
-                self.writeline(f"assert_size_stride({name}, {size}, {stride})")
 
     # this function (and below) takes the graph name as input so
     # that stream caching happens per graph instance. this
