@@ -1702,6 +1702,30 @@ class GraphModule(torch.nn.Module):
                 torch.ones(2, 2, device="cuda")
             )
 
+    @requires_cuda
+    def test_cuda_event_record_on_stream(self):
+        """torch.cuda.Event should be accepted by torch.Stream.record_event (C++ type check)."""
+        s = torch.Stream(device="cuda")
+        e = torch.cuda.Event()
+        # This hits THPStream_record_event in Stream.cpp which does a type check
+        s.record_event(e)
+
+    @requires_cuda
+    def test_event_record_wait_on_default_stream(self):
+        e = torch.cuda.Event()
+
+        def f(x):
+            y = x + 1
+            e.record()
+            e.wait()
+            return y + 1
+
+        f_compiled = torch.compile(f)
+        x = torch.randn(10, device="cuda")
+        eager_result = f(x)
+        compiled_result = f_compiled(x)
+        self.assertEqual(eager_result, compiled_result)
+
 
 if __name__ == "__main__":
     from torch._dynamo.test_case import run_tests
