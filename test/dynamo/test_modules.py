@@ -3239,6 +3239,26 @@ class OptimizedModuleTest(torch._dynamo.test_case.TestCase):
 
         helper()
 
+    def test_monkeypatching_forward_inside_compiled_region(self):
+        class Mod(torch.nn.Module):
+            def forward(self, x):
+                return x - 1
+
+        @torch.compile(backend="eager", fullgraph=True)
+        def fn(mod, x, y):
+            def patch(x):
+                return x + y
+
+            mod.forward = patch
+            return mod(x)
+
+        inp0 = torch.ones(3)
+        inp1 = torch.ones(3)
+        mod = Mod()
+
+        self.assertEqual(fn(mod, inp0, inp1), inp0 + inp1)
+        self.assertEqual(mod(inp0), inp0 + inp1)
+
     def test_user_defined_nn_module_dynamic(self):
         class Conv2d(torch.nn.Conv2d):
             def __init__(self, *args, **kwargs):
