@@ -193,6 +193,7 @@ class CudaReproTests(TestCase):
         self.assertEqual(compiled_out["ten0"], eager_out["ten0"])
         self.assertEqual(compiled_out["ten1"], eager_out["ten1"])
 
+    @skipIfXpu(msg="RuntimeError, torch-xpu-ops: 2891")
     def test_effn_attn_bias_padding(self):
         batch_size, num_heads, seq_len, head_dim = 2, 32, 512, 128
 
@@ -245,6 +246,7 @@ class CudaReproTests(TestCase):
     # Greatest absolute difference: 0.07861328125 at index (14, 13, 1008, 36) (up to 1e-05 allowed)
     # Greatest relative difference: 2.90625 at index (14, 13, 1008, 36) (up to 0.016 allowed)
     @skipIfRocmArch(MI350_ARCH)
+    @skipIfXpu(msg="RuntimeError, torch-xpu-ops: 2697")
     def test_effn_attn_bias_padding_misaligned(self):
         seqlen_start = 1008
 
@@ -880,6 +882,7 @@ class CudaReproTests(TestCase):
             check_lowp=False,
         )
 
+    @skipIfXpu(msg="TypeError, torch-xpu-ops: 3004")
     def test_memory_history_inductor(self):
         def called_inside_compile(x, w, b):
             a = x @ w + b
@@ -896,7 +899,7 @@ class CudaReproTests(TestCase):
 
         def record_memory_history(value: bool):
             if torch.xpu.is_available():
-                torch.xpu._record_memory_history(value)
+                torch.xpu.memory._record_memory_history(value)
             else:
                 torch.cuda.memory._record_memory_history(value)
 
@@ -1449,6 +1452,7 @@ class CudaReproTests(TestCase):
             torch._dynamo.reset()
             gc.collect()
 
+    @skipIfXpu(msg="AssertionError, torch-xpu-ops: #3007")
     @unittest.skipIf(
         not PLATFORM_SUPPORTS_FLASH_ATTENTION, "flash attention not supported"
     )
@@ -1523,7 +1527,7 @@ class CudaReproTests(TestCase):
         torch.manual_seed(0)
         torch.cuda.manual_seed_all(0)
 
-        x = torch.rand(1000, device="cuda", dtype=torch.float32)
+        x = torch.rand(1000, device=device_type, dtype=torch.float32)
 
         def fn(x):
             x_bf16 = x.to(torch.bfloat16)
@@ -1555,6 +1559,7 @@ class CudaReproTests(TestCase):
 
         self.assertEqual(expected, actual)
 
+    @skipIfXpu(msg="AssertionError, torch-xpu-ops: #2554")
     @torch._inductor.config.patch(emulate_precision_casts=True)
     def test_emulate_precision_casts_min_pow_chain(self):
         torch.manual_seed(0)
@@ -2638,7 +2643,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         self.assertEqual(eager_out, compile_out)
 
     @skipIfXpu(
-        msg="Explicit attn_mask should not be set when is_causal=True - xpu-ops: 2802"
+        msg="Explicit attn_mask should not be set when is_causal=True - torch-xpu-ops: 2802"
     )
     def test_qwen2_7b_sdpa_input_alignment_requires_recompile(self):
         # SDPA constraints ensures inputs have alignment (8).
@@ -2769,7 +2774,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
 
                 self.assertEqual(eager_div, compiled_div)
 
-    @skipIfXpu(msg="triton dependency - xpu-ops: 2554")
+    @skipIfXpu(msg="triton dependency - torch-xpu-ops: 2554")
     @config.patch({"eager_numerics.division_rounding": False})
     @xfailIfROCm
     def test_truediv_base_not_bitwise_equivalent(self):
@@ -2796,7 +2801,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         from decimal import Decimal
 
         x = -127.0
-        x_ten = torch.tensor([x], dtype=torch.float32, device="cuda")
+        x_ten = torch.tensor([x], dtype=torch.float32, device=device_type)
 
         def fn(x):
             return 2.0**x
@@ -2806,7 +2811,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
 
         self.assertTrue(compile_decimal > Decimal(0))
 
-    @skipIfXpu(msg="Decimal object comparison failed - xpu-ops: 2810")
+    @skipIfXpu(msg="Decimal object comparison failed - torch-xpu-ops: 2810")
     @skipIfRocm(msg="ROCm preserves subnormals by default")
     @config.patch({"eager_numerics.disable_ftz": False})
     def test_not_disabling_ftz_yields_zero(self):
@@ -2823,6 +2828,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
 
         self.assertEqual(compile_decimal, Decimal(0))
 
+    @skipIfXpu(msg="AssertionError: torch-xpu-ops: #3006")
     @config.patch(
         {"triton.use_block_ptr": True, "triton.codegen_upcast_to_fp32": False}
     )
@@ -2831,7 +2837,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         def fn(input: torch.Tensor) -> torch.Tensor:
             return torch.argmax(input, dim=0)
 
-        input = torch.randn(20, 20, device="cuda", dtype=torch.float16)
+        input = torch.randn(20, 20, device=device_type, dtype=torch.float16)
         _, code = run_and_get_code(fn, input)
         # There should not be any conversions to float16 in this code, since the input
         # is already float16 and the output is int64.
@@ -2845,7 +2851,7 @@ def triton_poi_fused_add_reflection_pad2d_0(in_ptr0, in_ptr1, out_ptr0, xnumel, 
         def fn(x):
             return torch.reciprocal(x)
 
-        x = torch.randn(1000, device="cuda", dtype=torch.float32) + 0.1
+        x = torch.randn(1000, device=device_type, dtype=torch.float32) + 0.1
         self.common(fn, [x])
 
 

@@ -58,18 +58,19 @@ from torch.testing._internal.common_optimizers import (
     optim_db,
     optims,
 )
-from torch.testing._internal.common_utils import parametrize, skipIfRocm, skipIfWindows
+from torch.testing._internal.common_utils import (
+    parametrize,
+    skipIfRocm,
+    skipIfWindows,
+    skipIfXpu,
+)
 from torch.testing._internal.inductor_utils import (
     GPU_TYPE,
     HAS_CPU,
     HAS_GPU,
     has_triton,
 )
-from torch.testing._internal.triton_utils import (
-    requires_cuda_and_triton,
-    requires_gpu,
-    requires_gpu_and_triton,
-)
+from torch.testing._internal.triton_utils import requires_gpu, requires_gpu_and_triton
 
 
 def get_inputs(optim):
@@ -992,7 +993,7 @@ class CompiledOptimizerTests(TestCase):
 
 
 @skipIfRocm(msg="ROCm may have different numerical behavior")
-@requires_cuda_and_triton
+@requires_gpu_and_triton
 class CompiledOptimizerBitwiseTests(TestCase):
     """
     Tests that compiled optimizers produce bitwise identical results to eager
@@ -1085,7 +1086,8 @@ for optim_cls, name, kwargs, scheduler_cls in COMPILED_OPT_KWARG_DB:
 
 def _make_bitwise_test(optim_cls, kernel_count=None, **optim_kwargs):
     @skipIfRocm(msg="ROCm may have different numerical behavior")
-    @requires_cuda_and_triton
+    @skipIfXpu(msg="AttributeError, torch-xpu-ops: #2999")
+    @requires_gpu_and_triton
     @config.patch(
         {
             "score_fusion_memory_threshold": 1,
