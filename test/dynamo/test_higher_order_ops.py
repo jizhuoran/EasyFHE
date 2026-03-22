@@ -38,7 +38,6 @@ from torch.testing._internal.common_utils import (
     xfailIfTorchDynamo,
 )
 from torch.testing._internal.hop_db import hop_db
-from torch.testing._internal.inductor_utils import GPU_TYPE
 from torch.testing._internal.logging_utils import LoggingTestCase, make_logging_test
 from torch.testing._internal.triton_utils import (
     requires_cuda_and_triton,
@@ -3385,7 +3384,7 @@ class GraphModule(torch.nn.Module):
         with self.assertRaisesRegex(RuntimeError, msg):
             fn_with_hints(x, y)
 
-    @requires_gpu_and_triton
+    @requires_cuda_and_triton
     def test_wrap_inductor_compiled_regions_option(self):
         """
         Test that wrap_inductor_compiled_regions option wraps compiled regions
@@ -3407,8 +3406,8 @@ class GraphModule(torch.nn.Module):
         def fn_not_wrapped(x, y):
             return torch.matmul(x, y)
 
-        x = torch.randn(4, 4, device=GPU_TYPE)
-        y = torch.randn(4, 4, device=GPU_TYPE)
+        x = torch.randn(4, 4, device="cuda")
+        y = torch.randn(4, 4, device="cuda")
 
         # Test wrapped version - HOP should be visible in DebugMode
         with DebugMode() as debug_mode_wrapped:
@@ -3429,7 +3428,7 @@ class GraphModule(torch.nn.Module):
         self.assertEqual(result_wrapped, expected)
         self.assertEqual(result_not_wrapped, expected)
 
-    @requires_gpu_and_triton
+    @requires_cuda_and_triton
     def test_wrap_inductor_compiled_regions_with_backward(self):
         """
         Test that wrap_inductor_compiled_regions works correctly with autograd.
@@ -3444,8 +3443,8 @@ class GraphModule(torch.nn.Module):
         def fn(x, y):
             return torch.matmul(x, y)
 
-        x = torch.randn(4, 4, device=GPU_TYPE, requires_grad=True)
-        y = torch.randn(4, 4, device=GPU_TYPE, requires_grad=True)
+        x = torch.randn(4, 4, device="cuda", requires_grad=True)
+        y = torch.randn(4, 4, device="cuda", requires_grad=True)
 
         # Clone for eager comparison
         x_eager = x.detach().clone().requires_grad_(True)
