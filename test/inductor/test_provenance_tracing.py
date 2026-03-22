@@ -29,7 +29,10 @@ from torch._inductor.utils import run_and_get_code, run_and_get_cpp_code
 from torch._inductor.virtualized import V
 from torch.testing._internal.common_utils import IS_MACOS
 from torch.testing._internal.inductor_utils import GPU_TYPE
-from torch.testing._internal.triton_utils import requires_gpu_and_triton
+from torch.testing._internal.triton_utils import (
+    requires_cuda_and_triton,
+    requires_gpu_and_triton,
+)
 
 
 try:
@@ -610,7 +613,7 @@ class TestProvenanceTracingStackTraces(TestCase):
     @torch._inductor.config.patch(
         {"trace.provenance_tracking_level": 2, "max_autotune_gemm_backends": "ATEN"}
     )
-    @requires_gpu_and_triton
+    @requires_cuda_and_triton
     def test_deferred_triton_kernels(self):
         def foo(m, inp):
             a = m(inp)
@@ -618,8 +621,8 @@ class TestProvenanceTracingStackTraces(TestCase):
 
         foo_c = torch.compile(mode="max-autotune-no-cudagraphs")(foo)
 
-        m = torch.nn.Linear(512, 512, bias=True).half().to(GPU_TYPE)
-        inp = torch.rand([1, 512]).half().to(GPU_TYPE)
+        m = torch.nn.Linear(512, 512, bias=True).half().cuda()
+        inp = torch.rand([1, 512]).half().cuda()
 
         with self._setup_provenance_capture() as payload_buffer:
             with torch.no_grad():
@@ -899,21 +902,16 @@ class ProvenanceTracingKernelContextTemplate:
                 code
             )
 
-            if self.device == "cuda" or self.device == "xpu":
-                device_type = torch.accelerator.current_accelerator().type
+            if self.device == "cuda":
                 FileCheck().check(
-                    f"""KernelContextGuard _ctx("aoti_torch_{device_type}_mm_out", R"("""
-                ).check(
-                    f"AOTI_TORCH_ERROR_CODE_CHECK(aoti_torch_{device_type}_mm_out("
-                ).check(
+                    """KernelContextGuard _ctx("aoti_torch_cuda_mm_out", R"("""
+                ).check("AOTI_TORCH_ERROR_CODE_CHECK(aoti_torch_cuda_mm_out(").check(
                     """KernelContextGuard _ctx("triton_poi_fused_addmm_relu_sigmoid_0", R"("""
                 ).check("call_triton_poi_fused_addmm_relu_sigmoid_0(").check(
                     """KernelContextGuard _ctx("triton_poi_fused_mul_1", R"("""
                 ).check("call_triton_poi_fused_mul_1(").check(
-                    f"""KernelContextGuard _ctx("aoti_torch_{device_type}_mm_out", R"""
-                ).check(
-                    f"AOTI_TORCH_ERROR_CODE_CHECK(aoti_torch_{device_type}_mm_out("
-                ).check(
+                    """KernelContextGuard _ctx("aoti_torch_cuda_mm_out", R"("""
+                ).check("AOTI_TORCH_ERROR_CODE_CHECK(aoti_torch_cuda_mm_out(").check(
                     """ KernelContextGuard _ctx("triton_poi_fused_addmm_gelu_2", R"("""
                 ).check("call_triton_poi_fused_addmm_gelu_2(").run(code)
             else:
@@ -944,17 +942,15 @@ copy_tests(
 
 
 @unittest.skipIf(sys.platform == "darwin", "No CUDA on MacOS")
-@unittest.skipIf(
-    not torch.cuda.is_available() and not torch.xpu.is_available(), "No CUDA and no XPU"
-)
+@unittest.skipIf(not torch.cuda.is_available(), "No CUDA")
 class TestProvenanceTracingKernelContextGpu(TestCase):
-    device = GPU_TYPE
+    device = "cuda"
 
 
 copy_tests(
     ProvenanceTracingKernelContextTemplate,
     TestProvenanceTracingKernelContextGpu,
-    GPU_TYPE,
+    "cuda",
 )
 
 
