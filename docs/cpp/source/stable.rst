@@ -227,8 +227,9 @@ Header-Only Utilities
 ---------------------
 
 The ``torch::headeronly`` namespace provides header-only versions of common
-PyTorch types and utilities. These can be used without linking against libtorch,
-making them ideal for maintaining binary compatibility across PyTorch versions.
+PyTorch types and utilities. These can be used without linking against libtorch
+at all! This portability makes them ideal for maintaining binary compatibility
+across PyTorch versions.
 
 Error Checking
 ^^^^^^^^^^^^^^
@@ -240,6 +241,11 @@ Error Checking
    #include <torch/headeronly/util/Exception.h>
 
    STD_TORCH_CHECK(condition, "Error message with ", variable, " interpolation");
+
+Wherever you used ``TORCH_CHECK`` before, you can replace usage with ``STD_TORCH_CHECK``
+to remove the need to link against libtorch. The only difference is that when the
+condition check fails, ``TORCH_CHECK`` throws a fancier ``c10::Error`` while
+``STD_TORCH_CHECK`` throws a ``std::runtime_error``.
 
 Core Types
 ^^^^^^^^^^
