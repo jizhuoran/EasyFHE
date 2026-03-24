@@ -14640,6 +14640,20 @@ fn
 
         self.assertEqual(x_ref.grad, x_test.grad)
 
+    def test_detach_inplace_on_intermediate_updates_metadata(self):
+        def fn(x):
+            y = x * 2
+            y.detach_()
+            return y + 1, y.requires_grad, y.grad_fn is None
+
+        x = torch.randn(3, 3, requires_grad=True)
+        ref = fn(x.clone())
+        result = torch.compile(fn, backend="eager", fullgraph=True)(x.clone())
+
+        self.assertEqual(ref, result)
+        self.assertFalse(result[1])
+        self.assertTrue(result[2])
+
     def test_requires_grad_on_intermediate(self):
         def fn(x):
             y = x * 2
