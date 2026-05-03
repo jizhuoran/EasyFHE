@@ -6,237 +6,252 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <immintrin.h>
 #include <omp.h>
-#include <iostream>
+#ifdef USE_AVX512
+#include <immintrin.h>
+#endif
+
 #include "ATen/native/fhe/cpu/CommonOperation.h"
 #include "ATen/native/fhe/cpu/NttImpl.h"
+
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
-namespace fhe {
 
-void moddown_kernel(
-    int degree_,
-    uint64_t* d_primes,
-    uint64_t* d_barret_ratio,
-    uint64_t* d_barret_k,
-    int log_degree_,
-    const uint64_t* ptr,
-    const uint64_t* hat_mod_end,
-    const int hat_mod_end_size,
-    const uint64_t start_length, // it should be the size of the Auxiliary CRT
-                                 // basis {P} = {p_1,...,p_k}
-    const uint64_t end_length, // it should be curr_limbs
-    uint64_t* to) {
+namespace {
+
+using at::Tensor;
+using at::native::NTT_impl;
+using at::native::const_mult_batch;
+using at::native::iNTT_impl;
+
+void const_sub_mult_batch(
+    uint64_t* out_ptr,
+    const uint64_t* op1_ptr,
+    const uint64_t* cnst_ptr,
+    const uint64_t* cnst_psinv_ptr,
+    int64_t batch,
+    int64_t N,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* primes_ptr) {
+  const size_t L_OUTN = L_OUT * static_cast<size_t>(N);
+  const size_t BL_OUTN = L_OUTN * num_cipher;
+  const size_t L_INN = L_IN * static_cast<size_t>(N);
+  const size_t BL_INN = L_INN * num_cipher;
+
   const int max_threads = omp_get_max_threads();
-  omp_set_num_threads(max_threads);
+#pragma omp parallel for collapse(3) schedule(static) num_threads(max_threads)
+  for (size_t cv_id = 0; cv_id < num_cv; ++cv_id) {
+    for (size_t cipher_id = 0; cipher_id < num_cipher; ++cipher_id) {
+      for (int64_t limb = 0; limb < batch; ++limb) {
+        uint64_t* to = out_ptr + cv_id * BL_OUTN + cipher_id * L_OUTN + limb * N;
+        const uint64_t* from = op1_ptr + cv_id * BL_INN + cipher_id * L_INN + limb * N;
 
-#pragma omp parallel for schedule(static) num_threads(max_threads)
-  for (int out_prime_idx = 0; out_prime_idx < end_length; out_prime_idx++) {
-    const auto prime = d_primes[out_prime_idx];
-    const auto barret_ratio = d_barret_ratio[out_prime_idx];
-    const auto barret_k = d_barret_k[out_prime_idx];
-#ifdef USE_AVX512
-    __m512i prime_vec = _mm512_set1_epi64(prime);
-    __m512i barret_ratio_vec = _mm512_set1_epi64(barret_ratio);
-    int degree_idx = 0;
-    for (; degree_idx + 7 < degree_; degree_idx += 8) {
-      __uint128_t accum_array[8];
-      for (int i = 0; i < 8; i++) {
-        accum_array[i] = accumulate_in_modup(
-            ptr,
-            degree_,
-            hat_mod_end,
-            start_length,
-            degree_idx + i,
-            out_prime_idx);
-      }
-      uint64_t lo_array[8], hi_array[8];
-      for (int i = 0; i < 8; i++) {
-        lo_array[i] = uint64_t(accum_array[i]);
-        hi_array[i] = uint64_t(accum_array[i] >> 64);
-      }
-      __m512i accum_lo = _mm512_loadu_si512((__m512i*)lo_array);
-      __m512i accum_hi = _mm512_loadu_si512((__m512i*)hi_array);
-      __m512i result = fhe::barret_reduction_128_64_avx512(
-          accum_lo, accum_hi, prime_vec, barret_ratio_vec, barret_k);
-      _mm512_storeu_si512(
-          (__m512i*)(to + out_prime_idx * degree_ + degree_idx), result);
-    }
-    for (; degree_idx < degree_; degree_idx++) {
-      __uint128_t accum = accumulate_in_modup(
-          ptr, degree_, hat_mod_end, start_length, degree_idx, out_prime_idx);
-      uint64_t out =
-          barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
-      to[out_prime_idx * degree_ + degree_idx] = out;
-    }
-#else
-    for (int degree_idx = 0; degree_idx < degree_; degree_idx++) {
-      __uint128_t accum = accumulate_in_modup(
-          ptr, degree_, hat_mod_end, start_length, degree_idx, out_prime_idx);
+        const uint64_t prime = primes_ptr[limb];
+        const uint64_t cnst = cnst_ptr[limb];
+        const uint64_t cnst_psinv = cnst_psinv_ptr[limb];
 
-      uint64_t out =
-          barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
-      to[out_prime_idx * degree_ + degree_idx] = out;
+        for (int64_t n = 0; n < N; ++n) {
+          const uint64_t val = fhe::sub_mod(from[n], to[n], prime);
+          uint64_t out = fhe::mul_and_reduce_shoup(val, cnst, cnst_psinv, prime);
+          if (out >= prime) {
+            out -= prime;
+          }
+          to[n] = out;
+        }
+      }
     }
-#endif
   }
 }
-} // namespace fhe
-namespace at::native {
 
-static void moddown_impl(
+void moddown_impl(
+    uint64_t* to_ptr,
     uint64_t* from_ptr,
-    const int64_t param_degree,
-    const int64_t param_log_degree,
-    const int64_t param_alpha_,
-    const int64_t start_length,
-    const int64_t end_length,
+    size_t N,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    size_t sizeP,
+    size_t end_length,
     const Tensor& primes,
     const Tensor& prod_q_i_mod_q_j_moddown,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    uint64_t* to_ptr) {
-  const auto prod_q_i_mod_q_j = prod_q_i_mod_q_j_moddown[0];
-  AT_DISPATCH_V2(
-      kUInt64,
-      "moddownImpl",
-      AT_WRAP([&]() {
-        const int block_dim = 256;
-        const int grid_dim = param_degree * end_length / block_dim;
-        auto ptr = from_ptr + param_degree * end_length;
-        auto primes_ptr =
-            reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-        auto param_barret_ratio_ptr = reinterpret_cast<uint64_t*>(
-            param_barret_ratio.data_ptr<uint64_t>());
-        auto param_barret_k_ptr =
-            reinterpret_cast<uint64_t*>(param_barret_k.data_ptr<uint64_t>());
-        auto prod_q_i_mod_q_j_ptr =
-            reinterpret_cast<uint64_t*>(prod_q_i_mod_q_j.data_ptr<uint64_t>());
-        fhe::moddown_kernel(
-            param_degree,
-            primes_ptr,
-            param_barret_ratio_ptr,
-            param_barret_k_ptr,
-            param_log_degree,
-            ptr,
-            prod_q_i_mod_q_j_ptr,
-            start_length * end_length,
-            param_alpha_,
-            end_length,
-            to_ptr);
-      }),
-      kUInt64);
+    const Tensor& barret_ratio,
+    const Tensor& barret_k) {
+  const size_t L_OUTN = L_OUT * N;
+  const size_t BL_OUTN = L_OUTN * num_cipher;
+  const size_t L_INN = L_IN * N;
+  const size_t BL_INN = L_INN * num_cipher;
+
+  const auto prod_q_i_mod_q_j = prod_q_i_mod_q_j_moddown;
+  const auto* primes_ptr = primes.data_ptr<uint64_t>();
+  const auto* barret_ratio_ptr = barret_ratio.data_ptr<uint64_t>();
+  const auto* barret_k_ptr = barret_k.data_ptr<uint64_t>();
+  const auto* hat_mod_end = prod_q_i_mod_q_j.data_ptr<uint64_t>();
+
+  const int max_threads = omp_get_max_threads();
+#pragma omp parallel for collapse(3) schedule(static) num_threads(max_threads)
+  for (size_t cv_id = 0; cv_id < num_cv; ++cv_id) {
+    for (size_t cipher_id = 0; cipher_id < num_cipher; ++cipher_id) {
+      for (size_t out_idx = 0; out_idx < end_length; ++out_idx) {
+        uint64_t* to = to_ptr + cv_id * BL_OUTN + cipher_id * L_OUTN + out_idx * N;
+        const uint64_t* ptr =
+            from_ptr + cv_id * BL_INN + cipher_id * L_INN + end_length * N;
+
+        const auto prime = primes_ptr[out_idx];
+        const auto ratio = barret_ratio_ptr[out_idx];
+        const auto k = barret_k_ptr[out_idx];
+
+#ifdef USE_AVX512
+        const __m512i prime_vec = _mm512_set1_epi64(prime);
+        const __m512i ratio_vec = _mm512_set1_epi64(ratio);
+        size_t degree_idx = 0;
+        for (; degree_idx + 8 <= N; degree_idx += 8) {
+          __m512i accum_lo = _mm512_setzero_si512();
+          __m512i accum_hi = _mm512_setzero_si512();
+          for (size_t i = 0; i < sizeP; ++i) {
+            const __m512i op1_vec = _mm512_loadu_si512(&ptr[i * N + degree_idx]);
+            const __m512i op2_vec = _mm512_set1_epi64(hat_mod_end[out_idx * sizeP + i]);
+            const __m512i mul_lo = _mm512_mullo_epi64(op1_vec, op2_vec);
+            const __m512i mul_hi = fhe::avx_umul64hi(op1_vec, op2_vec);
+            fhe::avx512_add_u128(accum_lo, accum_hi, mul_lo, mul_hi, accum_lo, accum_hi);
+          }
+          const __m512i out_vec = fhe::barret_reduction_128_64_avx512(
+              accum_lo, accum_hi, prime_vec, ratio_vec, static_cast<unsigned>(k));
+          _mm512_storeu_si512(&to[degree_idx], out_vec);
+        }
+        for (; degree_idx < N; ++degree_idx) {
+          __uint128_t accum{0};
+          for (size_t i = 0; i < sizeP; ++i) {
+            const uint64_t op1 = ptr[i * N + degree_idx];
+            const uint64_t op2 = hat_mod_end[out_idx * sizeP + i];
+            accum += static_cast<__uint128_t>(op1) * op2;
+          }
+          to[degree_idx] = fhe::barret_reduction_128_64(
+              accum, prime, ratio, static_cast<unsigned>(k));
+        }
+#else
+        for (size_t degree_idx = 0; degree_idx < N; ++degree_idx) {
+          __uint128_t accum{0};
+          for (size_t i = 0; i < sizeP; ++i) {
+            const uint64_t op1 = ptr[i * N + degree_idx];
+            const uint64_t op2 = hat_mod_end[out_idx * sizeP + i];
+            accum += static_cast<__uint128_t>(op1) * op2;
+          }
+
+          to[degree_idx] =
+              fhe::barret_reduction_128_64(accum, prime, ratio, static_cast<unsigned>(k));
+        }
+#endif
+      }
+    }
+  }
 }
 
-static void moddown_cpu_template(
-    // aten::moddown
+void moddown_cpu_template(
     Tensor& res,
     const Tensor& from,
     int64_t curr_limbs,
-    int64_t level,
-    int64_t alpha,
-    int64_t param_degree,
-    int64_t param_log_degree,
+    int64_t L,
+    int64_t sizeP,
+    int64_t N,
+    int64_t log_degree,
     const Tensor& hat_inverse_vec_moddown,
     const Tensor& hat_inverse_vec_shoup_moddown,
     const Tensor& prod_q_i_mod_q_j_moddown,
     const Tensor& prod_inv_moddown,
     const Tensor& prod_inv_shoup_moddown,
-    const Tensor& param_primes,
-    const Tensor& param_barret_ratio,
-    const Tensor& param_barret_k,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     Tensor& workspace) {
-  const int start_length = alpha;
-  const int end_length = curr_limbs;
+  (void)log_degree;
+  const int64_t start_length = sizeP;
+  const int64_t end_length = curr_limbs;
 
-  auto hat_inverse_vec = hat_inverse_vec_moddown[0];
-  auto hat_inverse_vec_psinv = hat_inverse_vec_shoup_moddown[0];
-  auto workspace_ptr =
-      reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
-  auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
-  auto to_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  const auto num_cv = from.sizes()[0];
+  const auto batch = from.sizes()[1];
+  const auto L_IN = from.sizes()[2];
+  const auto L_OUT = res.sizes()[2];
+
+  auto* from_ptr = from.data_ptr<uint64_t>();
+  auto* workspace_ptr = workspace.data_ptr<uint64_t>();
+  auto* to_ptr = res.data_ptr<uint64_t>();
 
   iNTT_impl(
-      workspace_ptr,
-      from_ptr,
-      end_length,
+      workspace_ptr + curr_limbs * N,
+      from_ptr + curr_limbs * N,
       start_length,
-      curr_limbs,
-      level,
-      param_degree,
-      inverse_power_of_roots_div_two,
-      param_primes,
-      inverse_scaled_power_of_roots_div_two);
+      N,
+      L_IN,
+      L_IN,
+      num_cv,
+      batch,
+      primes.data_ptr<uint64_t>() + L,
+      inverse_power_of_roots_div_two.data_ptr<uint64_t>() + L * N,
+      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>() + L * N);
 
-  const_mult_batch_(
-      workspace_ptr,
-      hat_inverse_vec,
-      hat_inverse_vec_psinv,
-      level,
-      alpha,
-      curr_limbs,
-      0,
-      param_degree,
-      workspace_ptr,
-      param_primes);
+  const_mult_batch(
+      workspace_ptr + curr_limbs * N,
+      workspace_ptr + curr_limbs * N,
+      hat_inverse_vec_moddown.data_ptr<uint64_t>(),
+      hat_inverse_vec_shoup_moddown.data_ptr<uint64_t>(),
+      sizeP,
+      N,
+      L_IN,
+      L_IN,
+      num_cv,
+      batch,
+      primes.data_ptr<uint64_t>() + L);
 
   moddown_impl(
+      to_ptr,
       workspace_ptr,
-      param_degree,
-      param_log_degree,
-      alpha,
-      start_length,
+      N,
+      L_OUT,
+      L_IN,
+      num_cv,
+      batch,
+      sizeP,
       end_length,
-      param_primes,
+      primes,
       prod_q_i_mod_q_j_moddown,
-      param_barret_ratio,
-      param_barret_k,
-      to_ptr);
+      barret_ratio,
+      barret_k);
 
   NTT_impl(
       to_ptr,
-      0,
       end_length,
-      param_degree,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
+      N,
+      L_OUT,
+      num_cv,
+      batch,
+      primes.data_ptr<uint64_t>(),
+      power_of_roots_shoup.data_ptr<uint64_t>(),
+      power_of_roots.data_ptr<uint64_t>());
 
-  const auto& prod_inv = prod_inv_moddown[0];
-  const auto& prod_inv_psinv = prod_inv_shoup_moddown[0];
-
-  vsub_mod(
-      param_degree,
-      end_length,
-      to_ptr,
+  const_sub_mult_batch(
       to_ptr,
       from_ptr,
-      param_primes.data_ptr<uint64_t>());
-
-  vneg_mod(
-      param_degree,
+      prod_inv_moddown.data_ptr<uint64_t>(),
+      prod_inv_shoup_moddown.data_ptr<uint64_t>(),
       end_length,
-      to_ptr,
-      to_ptr,
-      nullptr,
-      param_primes.data_ptr<uint64_t>());
-
-  const_mult_batch_(
-      to_ptr,
-      prod_inv,
-      prod_inv_psinv,
-      0,
-      end_length,
-      0,
-      0,
-      param_degree,
-      to_ptr,
-      param_primes);
+      N,
+      L_OUT,
+      L_IN,
+      num_cv,
+      batch,
+      primes.data_ptr<uint64_t>());
 }
+
+} // namespace
+
+namespace at::native {
 
 Tensor moddown_cpu(
     const Tensor& in,
@@ -257,10 +272,17 @@ Tensor moddown_cpu(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  auto res = at::empty({curr_limbs * N}, in.options());
-  auto workspace = at::empty((curr_limbs + sizeP) * N, in.options());
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(in.sizes()[2] == (curr_limbs + sizeP));
+
+  const auto num_cv = in.sizes()[0];
+  const auto batch = in.sizes()[1];
+
+  auto out = at::empty({num_cv, batch, curr_limbs, N}, in.options());
+  auto workspace = at::empty({num_cv, batch, curr_limbs + sizeP, N}, in.options());
+
   moddown_cpu_template(
-      res,
+      out,
       in,
       curr_limbs,
       L,
@@ -280,6 +302,8 @@ Tensor moddown_cpu(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       workspace);
-  return res;
+
+  return out;
 }
+
 } // namespace at::native

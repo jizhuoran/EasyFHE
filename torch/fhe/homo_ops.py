@@ -775,7 +775,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
             cv_ = torch.cat([
                             plaintext.cv[0][:cipher.cur_limbs * cryptoContext.N],
                             plaintext.cv[0][plaintext.cur_limbs * cryptoContext.N:]])
-            tmp_pt = plaintext.cipher_like(cv_)
+            tmp_pt = plaintext.cipher_like([cv_.reshape(-1, cryptoContext.N)])
         else:
             tmp_pt = plaintext
         moduli = cryptoContext.QplusP_map[cipher.cur_limbs]

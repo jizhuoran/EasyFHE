@@ -2,6 +2,16 @@ import torch.fhe as fhe
 from utils import *
 
 
+def _pairwise_mac(ctxs, ptxs, cryptoContext):
+    if len(ctxs) != len(ptxs) or len(ctxs) == 0:
+        raise ValueError(f"ctxs and ptxs must have the same non-zero length, but got {len(ctxs)} and {len(ptxs)}")
+
+    partial_sum = fhe.homo_mul_pt(ctxs[0], ptxs[0], cryptoContext)
+    for ctx, ptx in zip(ctxs[1:], ptxs[1:]):
+        partial_sum = fhe.homo_add(partial_sum, fhe.homo_mul_pt(ctx, ptx, cryptoContext), cryptoContext)
+    return partial_sum
+
+
 def rot_input(input, img_width, padding, cryptoContext):
     digits = fhe.modup_to_ext(input.cipher_like([input.cv[1]]), cryptoContext)
     c_rotations = []
@@ -35,7 +45,7 @@ def conv_initial(input, img_width, padding, num_channel, scale, cryptoContext):
             encoded = read_values_from_file(f"conv1bn1-ch{j}-k{k + 1}", cryptoContext.L - input.cur_limbs, input.slots,
                                             cryptoContext, scale)
             k_rows.append(encoded)
-        partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+        partial_sum = _pairwise_mac(c_rotations, k_rows, cryptoContext)
         partial_sum = fhe.homo_rescale(partial_sum, 1, cryptoContext)  # RESCALE ADD BY ZRJI
         sum_rot = fhe.homo_rotate(partial_sum, 1024, cryptoContext)
         partial_sum = fhe.homo_add(partial_sum, sum_rot, cryptoContext)
@@ -64,7 +74,7 @@ def conv_initial_32K(input, img_width, padding, num_channel, num_cipher, scale, 
             encoded = read_values_from_file(f"conv1bn1-ch{j}-k{k + 1}", cryptoContext.L - input.cur_limbs, input.slots,
                                             cryptoContext, scale)
             k_rows.append(encoded)
-        partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+        partial_sum = _pairwise_mac(c_rotations, k_rows, cryptoContext)
         partial_sum = fhe.homo_rescale(partial_sum, 1, cryptoContext)  # RESCALE ADD BY ZRJI
 
         sum_rot = fhe.homo_rotate(partial_sum, 1024, cryptoContext)
@@ -96,7 +106,7 @@ def conv(input, img_width, padding, num_channel, rot_offset, layer, n, channel_o
             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",
                                             cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
             k_rows.append(encoded)
-        partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+        partial_sum = _pairwise_mac(c_rotations, k_rows, cryptoContext)
 
         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
@@ -118,14 +128,14 @@ def conv(input, img_width, padding, num_channel, rot_offset, layer, n, channel_o
 #             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset}-k{k + 1}",
 #                                             cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
 #             k_rows.append(encoded)
-#         partial_sum = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+#         partial_sum = _pairwise_mac(c_rotations, k_rows, cryptoContext)
 #
 #         k_rows = []
 #         for k in range(9):
 #             encoded = read_values_from_file(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset + intra_offset}-k{k + 1}",
 #                                             cryptoContext.L - input.cur_limbs, input.slots, cryptoContext, scale)
 #             k_rows.append(encoded)
-#         partial_sum1 = fhe.fused_pairwise_mac(c_rotations, k_rows, cryptoContext)
+#         partial_sum1 = _pairwise_mac(c_rotations, k_rows, cryptoContext)
 #
 #         finalsum = partial_sum.deep_copy() if j == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
 #         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
@@ -163,7 +173,7 @@ def conv_bsgs(input, img_width, padding, num_channel, rot_offset, layer, n, chan
                 encoded = read_values_from_file_bsgs(f"layer{layer}-conv{n}bn{n}-ch{j + channel_offset + i * g_step}-k{k + 1}",
                                                 cryptoContext.L - input.cur_limbs, input.slots, b_step, i, cryptoContext, scale)
                 k_rows.append(encoded)
-            tmp_partial_sum = fhe.fused_pairwise_mac(c_rotations_list[i], k_rows, cryptoContext)
+            tmp_partial_sum = _pairwise_mac(c_rotations_list[i], k_rows, cryptoContext)
 
             partial_sum = tmp_partial_sum.deep_copy() if i==0 else fhe.homo_add(partial_sum, tmp_partial_sum, cryptoContext)
 
@@ -200,8 +210,8 @@ def conv_32K(input, img_width, padding, num_channel, rot_offset, layer, n, chann
             k_rows[0].append(encoded[0])
             k_rows[1].append(encoded[1])
 
-        partial_sum0 = fhe.fused_pairwise_mac(c_rotations0, k_rows[0], cryptoContext)
-        partial_sum1 = fhe.fused_pairwise_mac(c_rotations1, k_rows[1], cryptoContext)
+        partial_sum0 = _pairwise_mac(c_rotations0, k_rows[0], cryptoContext)
+        partial_sum1 = _pairwise_mac(c_rotations1, k_rows[1], cryptoContext)
 
 
         finalsum0 = partial_sum0.deep_copy() if j == 0 else fhe.homo_add(finalsum0, partial_sum0, cryptoContext)

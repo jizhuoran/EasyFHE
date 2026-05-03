@@ -14,25 +14,9 @@
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-#define WORK_PER_THREAD (1)
-#define WARP_SIZE (32)
-#define NUM_WARPS (8)
-#define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
-#define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
-
-#define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
-
 namespace fhe {
-__global__ void mulByMonomialKernel_step1(
-    uint64_t* out,
-    const uint64_t* in,
-    const uint64_t* qVec,
-    const int64_t N) {
-  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  out[blockIdx.y * N + tid_x] = qVec[blockIdx.y] - in[blockIdx.y * N + tid_x];
-}
 
-__global__ void mulByMonomialKernel_step2(
+  __global__ void mulByMonomialKernel_step2(
     uint64_t* out,
     const uint64_t* in,
     const uint64_t* qVec,
@@ -102,31 +86,51 @@ static void mul_by_monomial_inplace_template(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
+  auto num_cv = res.sizes()[0];
+  auto num_cipher = res.sizes()[1];
+  auto L = res.sizes()[2];
+  auto LN = res.sizes()[2] * N;
+  auto BLN = LN * num_cipher;
 
-  auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  auto res_ptr_ = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+
   iNTT_impl(
-      res_ptr,
-      res_ptr,
-      0,
+      res_ptr_,
+      res_ptr_,
       l,
-      l,
-      level,
       N,
-      param_primes,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two);
+      L,
+      L,
+      num_cv,
+      num_cipher,
+      param_primes.data_ptr<uint64_t>(),
+      inverse_power_of_roots_div_two.data_ptr<uint64_t>(),
+      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
 
-  Tensor temp = at::empty_like(res);
-  auto temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
-  auto param_primes_ptr = reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
-  mul_by_monomial_impl(temp_ptr, res_ptr, param_primes_ptr, l, N, M, monomialDeg);
-  cudaMemcpy(res_ptr, temp_ptr, l * N * sizeof(uint64_t), cudaMemcpyDeviceToDevice);
+  for (size_t cv_id = 0; cv_id < num_cv; ++cv_id) {
+    for (size_t batch = 0; batch < num_cipher; ++batch) {
+      auto res_ptr = res_ptr_ + cv_id * BLN + batch * LN;
+      Tensor temp = at::empty({num_cv, L, N}, res.options());
+      auto temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
+      auto param_primes_ptr =
+          reinterpret_cast<uint64_t*>(param_primes.data_ptr<uint64_t>());
+      mul_by_monomial_impl(
+          temp_ptr, res_ptr, param_primes_ptr, l, N, M, monomialDeg);
+      cudaMemcpy(
+          res_ptr,
+          temp_ptr,
+          l * N * sizeof(uint64_t),
+          cudaMemcpyDeviceToDevice);
+    }
+  }
 
   NTT_impl(
-      res_ptr,
-      res_ptr,
+      res_ptr_,
       l,
       N,
+      L,
+      num_cv,
+      num_cipher,
       param_primes.data_ptr<uint64_t>(),
       param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_power_of_roots.data_ptr<uint64_t>());
@@ -161,6 +165,10 @@ Tensor& mul_by_monomial_cuda_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
+  TORCH_INTERNAL_ASSERT(res.dim() == 4);
+  TORCH_INTERNAL_ASSERT(res.sizes()[0] == 2);
+
+
   mul_by_monomial_inplace_template(
       res,
       l,
@@ -173,24 +181,25 @@ Tensor& mul_by_monomial_cuda_(
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
       param_power_of_roots);
+
   return res;
 }
 
-Tensor& mul_by_monomial_cuda_out(
-    const Tensor& res,
-    int64_t l,
-    int64_t N,
-    int64_t M,
-    int64_t monomialDeg,
-    int64_t level,
-    const Tensor& param_primes,
-    const Tensor& inverse_power_of_roots_div_two,
-    const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    Tensor& out) {
-  TORCH_INTERNAL_ASSERT(false, "Not implemented");
-  return out;
-}
+  Tensor& mul_by_monomial_cuda_out(
+      const Tensor& res,
+      int64_t l,
+      int64_t N,
+      int64_t M,
+      int64_t monomialDeg,
+      int64_t level,
+      const Tensor& param_primes,
+      const Tensor& inverse_power_of_roots_div_two,
+      const Tensor& inverse_scaled_power_of_roots_div_two,
+      const Tensor& param_power_of_roots_shoup,
+      const Tensor& param_power_of_roots,
+      Tensor& out) {
+    TORCH_INTERNAL_ASSERT(false, "Not implemented");
+    return out;
+  }
 
 } // namespace at::native

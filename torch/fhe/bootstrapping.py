@@ -296,19 +296,16 @@ def eval_linear_transform(ct, scheme):
 def mod_raise(cipher, L0, cryptoContext):
     cv = [
         torch.mod_raise(
-            cryptoContext.mod_raise_out,
-            cv,
+            cv.reshape(1, 1, cv.shape[0], cv.shape[1]),
             N=cryptoContext.N,
             L0=L0,
-            logN=cryptoContext.logN,
-            L=cryptoContext.L,
+            old_prime=cryptoContext.primes_list[0],
             primes=cryptoContext.primes,
+            switch_modulus_map=cryptoContext.switch_modulus_map,
             inverse_power_of_roots_div_two=cryptoContext.inverse_power_of_roots_div_two,
             inverse_scaled_power_of_roots_div_two=cryptoContext.inverse_scaled_power_of_roots_div_two,
             power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
             power_of_roots=cryptoContext.power_of_roots,
-            barret_ratio=cryptoContext.barret_ratio,
-            barret_k=cryptoContext.barret_k,
         ).reshape(-1, cryptoContext.N)
         for cv in cipher.cv
     ]

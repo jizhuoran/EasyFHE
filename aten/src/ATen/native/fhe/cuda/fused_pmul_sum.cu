@@ -14,338 +14,299 @@
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-#define WORK_PER_THREAD (1)
-#define WARP_SIZE (32)
-#define NUM_WARPS (8)
-#define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
-#define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
-
-#define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
-
 namespace fhe {
 
-#define GEN_MUL(IDX)                               \
-  auto ptx_val##IDX = ptx##IDX[tid_y * N + tid_x]; \
-  auto tmp_bx##IDX = mul_mod(                      \
-      bx##IDX[tid_y * N + tid_x],                  \
-      ptx_val##IDX,                                \
-      mod_val,                                     \
-      barret_mu_val0,                              \
-      barret_mu_val1);                             \
-  auto tmp_ax##IDX = mul_mod(                      \
-      ax##IDX[tid_y * N + tid_x],                  \
-      ptx_val##IDX,                                \
-      mod_val,                                     \
-      barret_mu_val0,                              \
-      barret_mu_val1);
-
-#define GEN_SUM(IDX)                              \
-  sum_bx = add_mod(sum_bx, tmp_bx##IDX, mod_val); \
-  sum_ax = add_mod(sum_ax, tmp_ax##IDX, mod_val)
-
-#define GEN_PARAM(IDX)                                                        \
-  const uint64_t* __restrict__ bx##IDX, const uint64_t* __restrict__ ax##IDX, \
-      const uint64_t* __restrict__ ptx##IDX
-
-__global__ void fusedPairwiseMACKernel9(
-    GEN_PARAM(0),
-    GEN_PARAM(1),
-    GEN_PARAM(2),
-    GEN_PARAM(3),
-    GEN_PARAM(4),
-    GEN_PARAM(5),
-    GEN_PARAM(6),
-    GEN_PARAM(7),
-    GEN_PARAM(8),
-    uint64_t* __restrict__ out_bx,
-    uint64_t* __restrict__ out_ax,
-    const uint64_t* __restrict__ mod,
-    const uint64_t* __restrict__ barret_mu,
+__global__ void fusedPairwiseMACKernel(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mods,
+    const uint64_t* __restrict__ barret_ratio,
+    const uint64_t* __restrict__ barret_k,
     const int64_t num_ciphers,
-    const int64_t l,
-    const int64_t N) {
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t BL_CTN,
+    const int64_t L_PTN) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  auto tid_y = blockIdx.y;
+  auto bid_y = blockIdx.y;
 
-  uint64_t sum_bx = 0, sum_ax = 0;
+  uint128_t sum_bx = {0, 0};
+  uint128_t sum_ax = {0, 0};
 
-  auto mod_val = mod[tid_y];
-  auto barret_mu_val0 = barret_mu[tid_y * 2];
-  auto barret_mu_val1 = barret_mu[tid_y * 2 + 1];
+  for (size_t i = 0; i < num_ciphers; ++i) {
+    auto plain_val = plain_ptr[i * L_PTN + bid_y * N + tid_x];
+    auto cipher_off = i * L_CTN + bid_y * N + tid_x;
+    auto cipher_val_bx = cipher_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
+    inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
+  }
 
-  GEN_MUL(0);
-  GEN_MUL(1);
-  GEN_MUL(2);
-  GEN_MUL(3);
-  GEN_MUL(4);
-  GEN_MUL(5);
-  GEN_MUL(6);
-  GEN_MUL(7);
-  GEN_MUL(8);
-
-  GEN_SUM(0);
-  GEN_SUM(1);
-  GEN_SUM(2);
-  GEN_SUM(3);
-  GEN_SUM(4);
-  GEN_SUM(5);
-  GEN_SUM(6);
-  GEN_SUM(7);
-  GEN_SUM(8);
-
-  out_bx[tid_y * N + tid_x] = sum_bx;
-  out_ax[tid_y * N + tid_x] = sum_ax;
+  auto mod = mods[bid_y];
+  res_ptr[bid_y * N + tid_x] = barret_reduction_128_64(
+      sum_bx, mod, barret_ratio[bid_y], barret_k[bid_y]);
+  res_ptr[cur_limbs * N + bid_y * N + tid_x] = barret_reduction_128_64(
+      sum_ax, mod, barret_ratio[bid_y], barret_k[bid_y]);
 }
 
-#undef GEN_MUL
-#undef GEN_SUM
-#undef GEN_PARAM
-
-#define GEN_MUL(IDX)                                                          \
-  auto ptx_val##IDX = ptx##IDX[tid_y * N + tid_x];                            \
-  auto tmp_bx##IDX =                                                          \
-      mul_mod(bx_val, ptx_val##IDX, mod_val, barret_mu_val0, barret_mu_val1); \
-  auto tmp_ax##IDX =                                                          \
-      mul_mod(ax_val, ptx_val##IDX, mod_val, barret_mu_val0, barret_mu_val1);
-
-#define GEN_SUM(IDX)                              \
-  sum_bx = add_mod(sum_bx, tmp_bx##IDX, mod_val); \
-  sum_ax = add_mod(sum_ax, tmp_ax##IDX, mod_val)
-
-__global__ void fusedBroadcastMACKernel16(
-    const uint64_t* __restrict__ ptx0,
-    const uint64_t* __restrict__ ptx1,
-    const uint64_t* __restrict__ ptx2,
-    const uint64_t* __restrict__ ptx3,
-    const uint64_t* __restrict__ ptx4,
-    const uint64_t* __restrict__ ptx5,
-    const uint64_t* __restrict__ ptx6,
-    const uint64_t* __restrict__ ptx7,
-    const uint64_t* __restrict__ ptx8,
-    const uint64_t* __restrict__ ptx9,
-    const uint64_t* __restrict__ ptx10,
-    const uint64_t* __restrict__ ptx11,
-    const uint64_t* __restrict__ ptx12,
-    const uint64_t* __restrict__ ptx13,
-    const uint64_t* __restrict__ ptx14,
-    const uint64_t* __restrict__ ptx15,
-    const uint64_t* __restrict__ bx,
-    const uint64_t* __restrict__ ax,
-    uint64_t* __restrict__ out_bx,
-    uint64_t* __restrict__ out_ax,
-    const uint64_t* __restrict__ mod,
-    const uint64_t* __restrict__ barret_mu,
+__global__ void fusedPairwiseMACKernel_batch(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mod_ptr,
+    const uint64_t* __restrict__ barret_ratio_ptr,
+    const uint64_t* __restrict__ barret_k_ptr,
+    const int64_t num_batches,
     const int64_t num_ciphers,
-    const int64_t l,
-    const int64_t N) {
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t BL_CTN,
+    const int64_t L_PTN) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  auto tid_y = blockIdx.y;
+  auto bid_y = blockIdx.y;
 
-  uint64_t sum_bx = 0, sum_ax = 0;
+  extern __shared__ uint64_t cipher_shared[];
 
-  auto mod_val = mod[tid_y];
-  auto barret_mu_val0 = barret_mu[tid_y * 2];
-  auto barret_mu_val1 = barret_mu[tid_y * 2 + 1];
+  auto mod = mod_ptr[bid_y];
+  auto barret_ratio = barret_ratio_ptr[bid_y];
+  auto barret_k = barret_k_ptr[bid_y];
 
-  auto bx_val = bx[tid_y * N + tid_x];
-  auto ax_val = ax[tid_y * N + tid_x];
+  uint128_t sum_bx = {0, 0};
+  uint128_t sum_ax = {0, 0};
+  for (size_t i = 0; i < num_ciphers; ++i) {
+    auto plain_val = plain_ptr[i * L_PTN + bid_y * N + tid_x];
+    auto cipher_off = i * L_CTN + bid_y * N + tid_x;
+    auto cipher_val_bx = cipher_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
+    inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
+    cipher_shared[BLOCK_SIZE * i + threadIdx.x] = cipher_val_bx;
+    cipher_shared[BLOCK_SIZE * (num_ciphers + i) + threadIdx.x] = cipher_val_ax;
+  }
+  res_ptr[bid_y * N + tid_x] =
+      barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+  res_ptr[num_batches * cur_limbs * N + bid_y * N + tid_x] =
+      barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
 
-  GEN_MUL(0);
-  GEN_MUL(1);
-  GEN_MUL(2);
-  GEN_MUL(3);
-  GEN_MUL(4);
-  GEN_MUL(5);
-  GEN_MUL(6);
-  GEN_MUL(7);
-  GEN_MUL(8);
-  GEN_MUL(9);
-  GEN_MUL(10);
-  GEN_MUL(11);
-  GEN_MUL(12);
-  GEN_MUL(13);
-  GEN_MUL(14);
-  GEN_MUL(15);
+  __syncthreads();
+  for (int batch_id = 1; batch_id < num_batches; ++batch_id) {
+    uint128_t sum_bx = {0, 0};
+    uint128_t sum_ax = {0, 0};
+    for (size_t i = 0; i < num_ciphers; ++i) {
+      auto plain_val =
+          plain_ptr[(batch_id * num_ciphers + i) * L_PTN + bid_y * N + tid_x];
+      auto cipher_off = i * BLOCK_SIZE + threadIdx.x;
+      auto cipher_val_bx = cipher_shared[cipher_off];
+      auto cipher_val_ax = cipher_shared[cipher_off + num_ciphers * BLOCK_SIZE];
+      inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
+      inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
+    }
+    res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
+        barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+    res_ptr
+        [num_batches * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N +
+         tid_x] = barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+  }
+}
 
-  GEN_SUM(0);
-  GEN_SUM(1);
-  GEN_SUM(2);
-  GEN_SUM(3);
-  GEN_SUM(4);
-  GEN_SUM(5);
-  GEN_SUM(6);
-  GEN_SUM(7);
-  GEN_SUM(8);
-  GEN_SUM(9);
-  GEN_SUM(10);
-  GEN_SUM(11);
-  GEN_SUM(12);
-  GEN_SUM(13);
-  GEN_SUM(14);
-  GEN_SUM(15);
+__global__ void cpmulBroadcastPTKernel(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mod_ptr,
+    const uint64_t* __restrict__ barret_mu_ptr,
+    const int64_t num_ciphers,
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t BL_CTN) {
 
-  out_bx[tid_y * N + tid_x] += sum_bx;
-  out_ax[tid_y * N + tid_x] += sum_ax;
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  auto bid_y = blockIdx.y;
+
+  auto mod = mod_ptr[bid_y];
+  auto barret_mu0 = barret_mu_ptr[bid_y * 2];
+  auto barret_mu1 = barret_mu_ptr[bid_y * 2 + 1];
+  auto ptx_val = plain_ptr[bid_y * N + tid_x];
+
+
+  for (int batch_id = 0; batch_id < num_ciphers; ++batch_id) {
+    auto cipher_off = batch_id * L_CTN + bid_y * N + tid_x;
+    auto cipher_val_bx = cipher_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+
+    res_ptr[cipher_off] = mul_mod(cipher_val_bx, ptx_val, mod, barret_mu0, barret_mu1);
+    res_ptr[cipher_off + BL_CTN] =
+        mul_mod(cipher_val_ax, ptx_val, mod, barret_mu0, barret_mu1);
+  }
+}
+
+__global__ void cpmulBroadcastCipherKernel(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mod_ptr,
+    const uint64_t* __restrict__ barret_mu_ptr,
+    const int64_t num_ciphers,
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t L_PTN) {
+
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  auto bid_y = blockIdx.y;
+
+  auto mod = mod_ptr[bid_y];
+  auto barret_mu0 = barret_mu_ptr[bid_y * 2];
+  auto barret_mu1 = barret_mu_ptr[bid_y * 2 + 1];
+  auto cipher_val_bx = cipher_ptr[bid_y * N + tid_x];
+  auto cipher_val_ax = cipher_ptr[bid_y * N + tid_x + L_CTN];
+
+
+  for (int batch_id = 0; batch_id < num_ciphers; ++batch_id) {
+    auto ptx_val = plain_ptr[batch_id * L_PTN + bid_y * N + tid_x];
+
+    auto res_off = batch_id * L_PTN + bid_y * N + tid_x;
+    res_ptr[res_off] = mul_mod(cipher_val_bx, ptx_val, mod, barret_mu0, barret_mu1);
+    res_ptr[res_off + num_ciphers*cur_limbs*N] =
+        mul_mod(cipher_val_ax, ptx_val, mod, barret_mu0, barret_mu1);
+  }
 }
 
 } // namespace fhe
 
 namespace at::native {
 
-#define GEN_ARGS(IDX)                                           \
-  bxs[IDX].data_ptr<uint64_t>(), axs[IDX].data_ptr<uint64_t>(), \
-      ptxs[IDX].data_ptr<uint64_t>()
-
-static void fused_pairwise_mac_template(
-    Tensor& out_bx,
-    Tensor& out_ax,
-    TensorList bxs,
-    TensorList axs,
-    TensorList ptxs,
+Tensor batched_pairwise_mac_cuda(
+    const Tensor& cipher,
+    const Tensor& plaintext,
     const Tensor& param_primes,
-    const Tensor& barret_mu,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    int64_t number_batches,
     int64_t num_cipher,
-    int64_t curr_limbs,
+    int64_t cur_limbs,
     int64_t N) {
-  auto barret_mu_ptr = barret_mu.data_ptr<uint64_t>();
-  auto param_primes_ptr = param_primes.data_ptr<uint64_t>();
+  auto res = at::empty({2, number_batches, cur_limbs, N}, cipher.options());
 
   dim3 block(BLOCK_SIZE);
-  dim3 grid(N / BLOCK_SIZE, curr_limbs);
+  dim3 grid(N / BLOCK_SIZE, cur_limbs);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  fhe::fusedPairwiseMACKernel9<<<grid, block, 0, stream>>>(
-      GEN_ARGS(0),
-      GEN_ARGS(1),
-      GEN_ARGS(2),
-      GEN_ARGS(3),
-      GEN_ARGS(4),
-      GEN_ARGS(5),
-      GEN_ARGS(6),
-      GEN_ARGS(7),
-      GEN_ARGS(8),
-      out_bx.data_ptr<uint64_t>(),
-      out_ax.data_ptr<uint64_t>(),
-      param_primes_ptr,
-      barret_mu_ptr,
-      num_cipher,
-      curr_limbs,
-      N);
-  cudaDeviceSynchronize();
-
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-std::vector<Tensor> fused_pairwise_mac_cuda(
-    TensorList bxs,
-    TensorList axs,
-    TensorList ptxs,
-    const Tensor& param_primes,
-    const Tensor& barret_mu,
-    int64_t num_cipher,
-    int64_t curr_limbs,
-    int64_t N) {
-  TORCH_CHECK(
-      bxs.size() == 9,
-      "fused_pairwise_mac only support 9, but got ",
-      bxs.size());
-  auto out_bx = at::empty(curr_limbs * N, bxs[0].options());
-  auto out_ax = at::empty(curr_limbs * N, axs[0].options());
-
-  fused_pairwise_mac_template(
-      out_bx,
-      out_ax,
-      bxs,
-      axs,
-      ptxs,
-      param_primes,
-      barret_mu,
-      num_cipher,
-      curr_limbs,
-      N);
-  return {out_bx, out_ax};
-}
-
-static void fused_broadcast_mac_template(
-    Tensor& out_bx,
-    Tensor& out_ax,
-    const Tensor& bx,
-    const Tensor& ax,
-    TensorList ptxs,
-    const Tensor& param_primes,
-    const Tensor& barret_mu,
-    int64_t num_cipher,
-    int64_t curr_limbs,
-    int64_t N) {
-  auto barret_mu_ptr = barret_mu.data_ptr<uint64_t>();
-  auto param_primes_ptr = param_primes.data_ptr<uint64_t>();
-
-  dim3 block(BLOCK_SIZE);
-  dim3 grid(N / BLOCK_SIZE, curr_limbs);
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  for (int i = 0; i < num_cipher; i += 16) {
-    fhe::fusedBroadcastMACKernel16<<<grid, block, 0, stream>>>(
-        ptxs[i + 0].data_ptr<uint64_t>(),
-        ptxs[i + 1].data_ptr<uint64_t>(),
-        ptxs[i + 2].data_ptr<uint64_t>(),
-        ptxs[i + 3].data_ptr<uint64_t>(),
-        ptxs[i + 4].data_ptr<uint64_t>(),
-        ptxs[i + 5].data_ptr<uint64_t>(),
-        ptxs[i + 6].data_ptr<uint64_t>(),
-        ptxs[i + 7].data_ptr<uint64_t>(),
-        ptxs[i + 8].data_ptr<uint64_t>(),
-        ptxs[i + 9].data_ptr<uint64_t>(),
-        ptxs[i + 10].data_ptr<uint64_t>(),
-        ptxs[i + 11].data_ptr<uint64_t>(),
-        ptxs[i + 12].data_ptr<uint64_t>(),
-        ptxs[i + 13].data_ptr<uint64_t>(),
-        ptxs[i + 14].data_ptr<uint64_t>(),
-        ptxs[i + 15].data_ptr<uint64_t>(),
-        bx.data_ptr<uint64_t>(),
-        ax.data_ptr<uint64_t>(),
-        out_bx.data_ptr<uint64_t>(),
-        out_ax.data_ptr<uint64_t>(),
-        param_primes_ptr,
-        barret_mu_ptr,
+  auto L_CTN = cipher.size(2) * N;
+  auto BL_CTN = cipher.size(1) * L_CTN;
+  auto L_PTN = plaintext.size(2) * N;
+  if (number_batches == 1) {
+    fhe::fusedPairwiseMACKernel<<<grid, block, 0, stream>>>(
+        res.data_ptr<uint64_t>(),
+        cipher.data_ptr<uint64_t>(),
+        plaintext.data_ptr<uint64_t>(),
+        param_primes.data_ptr<uint64_t>(),
+        barret_ratio.data_ptr<uint64_t>(),
+        barret_k.data_ptr<uint64_t>(),
         num_cipher,
-        curr_limbs,
-        N);
+        cur_limbs,
+        N,
+        L_CTN,
+        BL_CTN,
+        L_PTN);
+  } else {
+    fhe::fusedPairwiseMACKernel_batch<<<
+        grid,
+        block,
+        num_cipher * BLOCK_SIZE * sizeof(uint64_t) * 2,
+        stream>>>(
+        res.data_ptr<uint64_t>(),
+        cipher.data_ptr<uint64_t>(),
+        plaintext.data_ptr<uint64_t>(),
+        param_primes.data_ptr<uint64_t>(),
+        barret_ratio.data_ptr<uint64_t>(),
+        barret_k.data_ptr<uint64_t>(),
+        number_batches,
+        num_cipher,
+        cur_limbs,
+        N,
+        L_CTN,
+        BL_CTN,
+        L_PTN);
   }
-  cudaDeviceSynchronize();
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return res;
 }
 
-std::vector<Tensor> fused_broadcast_mac_cuda(
-    const Tensor& bx,
-    const Tensor& ax,
-    TensorList ptxs,
+
+Tensor cpmul_broadcast_pt_cuda(
+    const Tensor& cipher,
+    const Tensor& plaintext,
     const Tensor& param_primes,
     const Tensor& barret_mu,
     int64_t num_cipher,
-    int64_t curr_limbs,
+    int64_t cur_limbs,
     int64_t N) {
-  TORCH_CHECK(
-      ptxs.size() == 16 || ptxs.size() == 32 || ptxs.size() == 64,
-      "fused_broadcast_mac only support 16/32/64, but got ",
-      ptxs.size());
 
-  auto out_bx = at::zeros(curr_limbs * N, bx[0].options());
-  auto out_ax = at::zeros(curr_limbs * N, ax[0].options());
+  auto res = at::empty({2, num_cipher, cur_limbs, N}, cipher.options());
 
-  fused_broadcast_mac_template(
-      out_bx,
-      out_ax,
-      bx,
-      ax,
-      ptxs,
-      param_primes,
-      barret_mu,
-      num_cipher,
-      curr_limbs,
-      N);
-  return {out_bx, out_ax};
+  dim3 block(BLOCK_SIZE);
+  dim3 grid(N / BLOCK_SIZE, cur_limbs);
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+  auto L_CTN = cipher.size(2) * N;
+  auto BL_CTN = cipher.size(1) * L_CTN;
+
+  fhe::cpmulBroadcastPTKernel<<<grid, block, 0, stream>>>(
+    res.data_ptr<uint64_t>(),
+    cipher.data_ptr<uint64_t>(),
+    plaintext.data_ptr<uint64_t>(),
+    param_primes.data_ptr<uint64_t>(),
+    barret_mu.data_ptr<uint64_t>(),
+    num_cipher,
+    cur_limbs,
+    N,
+    L_CTN,
+    BL_CTN);
+
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return res;
+
+}
+
+Tensor cpmul_broadcast_cipher_cuda(
+    const Tensor& cipher,
+    const Tensor& plaintext,
+    const Tensor& param_primes,
+    const Tensor& barret_mu,
+    int64_t num_cipher,
+    int64_t cur_limbs,
+    int64_t N) {
+
+  auto res = at::empty({2, num_cipher, cur_limbs, N}, cipher.options());
+
+  dim3 block(BLOCK_SIZE);
+  dim3 grid(N / BLOCK_SIZE, cur_limbs);
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+  auto L_CTN = cipher.size(2) * N;
+  auto L_PTN = plaintext.size(2) * N;
+
+  fhe::cpmulBroadcastCipherKernel<<<grid, block, 0, stream>>>(
+    res.data_ptr<uint64_t>(),
+    cipher.data_ptr<uint64_t>(),
+    plaintext.data_ptr<uint64_t>(),
+    param_primes.data_ptr<uint64_t>(),
+    barret_mu.data_ptr<uint64_t>(),
+    num_cipher,
+    cur_limbs,
+    N,
+    L_CTN,
+    L_PTN);
+
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return res;
+
 }
 
 } // namespace at::native

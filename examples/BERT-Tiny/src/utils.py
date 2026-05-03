@@ -5,11 +5,14 @@ import torch.fhe as fhe
 import examples.utils.approx as approx
 import os, csv
 import warnings
+from pathlib import Path
 
 
 
 
 DATA_DIR = os.environ["DATA_DIR"]
+SCRIPT_DIR = Path(__file__).resolve().parent
+WEIGHTS_DIR = SCRIPT_DIR.parent / "weights-sst2"
 
 DIRECT_LOAD = False
 
@@ -190,7 +193,7 @@ else:
     def read_plain_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0):
         values = []
         val_name = filename
-        filename = "../weights-sst2/" + val_name + ".txt"
+        filename = WEIGHTS_DIR / f"{val_name}.txt"
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
@@ -215,7 +218,7 @@ else:
     def read_plain_repeated_input(cryptoContext, filename, level, scale_deg, slots, scale):
         values = []
         val_name = filename
-        filename = "../weights-sst2/" + val_name + ".txt"
+        filename = WEIGHTS_DIR / f"{val_name}.txt"
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values
@@ -242,7 +245,7 @@ else:
     def read_plain_expanded_input(cryptoContext, filename, level, scale_deg, slots, scale=1.0,num_inputs=None):
         values = []
         val_name = filename
-        filename = "../weights-sst2/" + val_name + ".txt"
+        filename = WEIGHTS_DIR / f"{val_name}.txt"
         if not os.path.isfile(filename):
             print(f"Failed to open file: {filename}")
             return values

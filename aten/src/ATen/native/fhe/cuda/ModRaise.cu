@@ -18,73 +18,93 @@ namespace at::native {
 static void mod_raise_template(
     Tensor& res,
     const Tensor& in,
-    int64_t N,
     int64_t L0,
-    int64_t logN,
-    int64_t level,
+    uint64_t old_primes,
     const Tensor& moduliQ,
+    const Tensor& switch_modulus_map,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k) {
-  auto op_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+    const Tensor& param_power_of_roots) {
+  auto num_cv = in.sizes()[0];
+  auto num_cipher = in.sizes()[1];
+  auto L_IN = in.sizes()[2];
+  auto N = in.sizes()[3];
+
+  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+
+  auto LN = L_IN * N;
+  auto BLN = num_cipher * LN;
+  auto L0N = L0 * N;
+  auto BL0N = num_cipher * L0N;
+
   iNTT_impl(
       res_ptr,
-      op_ptr,
-      0,
+      in_ptr,
       1,
-      1,
-      level,
       N,
-      moduliQ,
-      inverse_power_of_roots_div_two,
-      inverse_scaled_power_of_roots_div_two);
+      L0,
+      L_IN,
+      num_cv,
+      num_cipher,
+      moduliQ.data_ptr<uint64_t>(),
+      inverse_power_of_roots_div_two.data_ptr<uint64_t>(),
+      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
 
-  switch_modulus(res_ptr, res_ptr, 0, L0, N, moduliQ, barret_ratio, barret_k);
+      switch_modulus(
+          res_ptr,
+          res_ptr,
+          0,
+          L0,
+          N,
+          L0,
+          L0,
+          num_cv,
+          num_cipher,
+          old_primes >> 1,
+          moduliQ,
+          switch_modulus_map);
 
-  NTT_impl(
-      res_ptr,
+          NTT_impl(
       res_ptr,
       L0,
       N,
+      L0,
+      num_cv,
+      num_cipher,
       moduliQ.data_ptr<uint64_t>(),
       param_power_of_roots_shoup.data_ptr<uint64_t>(),
       param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mod_raise_cuda(
-    const Tensor& res,
     const Tensor& in,
     int64_t N,
     int64_t L0,
-    int64_t logN,
-    int64_t level,
+    int64_t old_primes,
     const Tensor& moduliQ,
+    const Tensor& switch_modulus_map,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
-    const Tensor& param_power_of_roots,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k) {
-  Tensor out = at::empty_like(res).resize_({L0 * N});
-  //   out.resize_({2, (curr_limbs + alpha) * param_degree});
+    const Tensor& param_power_of_roots) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+
+  auto out = at::empty({in.sizes()[0], in.sizes()[1], L0, N}, in.options());
+
   mod_raise_template(
       out,
       in,
-      N,
       L0,
-      logN,
-      level,
+      old_primes,
       moduliQ,
+      switch_modulus_map,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       param_power_of_roots_shoup,
-      param_power_of_roots,
-      barret_ratio,
-      barret_k);
+      param_power_of_roots);
+
   return out;
 }
 

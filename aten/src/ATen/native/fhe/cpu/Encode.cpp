@@ -6,8 +6,6 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
-#include <immintrin.h>
-#include <omp.h>
 #include <iostream>
 #include <limits>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
@@ -32,95 +30,11 @@ void new_fit_to_native_vector_host(
     bool is_ext,
     int64_t sizeP) {
   int total_limbs = cur_limbs + (is_ext ? sizeP : 0);
-  const int max_threads = omp_get_max_threads();
-  omp_set_num_threads(max_threads);
-#pragma omp parallel for schedule(static) num_threads(max_threads)
   for (int64_t l = 0; l < total_limbs; ++l) {
     uint64_t modulus = native_modulus[l];
     uint64_t diff = max_int_diffs_ptr[l];
     uint64_t ratio = barret_ratio_ptr[l];
     uint64_t k = barret_k_ptr[l];
-#ifdef USE_AVX512
-    const __m512i modulus_vec = _mm512_set1_epi64((long long)modulus);
-    const __m512i ratio_vec = _mm512_set1_epi64((long long)ratio);
-    unsigned shift_bits = static_cast<unsigned>(k);
-    int64_t i = 0;
-    for (; i + 7 < slots; i += 8) {
-      int64_t re_int[8];
-      int64_t im_int[8];
-      uint64_t re_tmp[8];
-      uint64_t im_tmp[8];
-      // gather / convert scalars into small temp arrays
-      for (int t = 0; t < 8; ++t) {
-        int64_t re = static_cast<int64_t>(
-            std::llround(inverse[2 * (i + t)] * scaling_factor));
-        int64_t im = static_cast<int64_t>(
-            std::llround(inverse[2 * (i + t) + 1] * scaling_factor));
-        if (re < 0)
-          re = MAX_64BIT_VALUE + re;
-        if (im < 0)
-          im = MAX_64BIT_VALUE + im;
-        re_int[t] = re;
-        im_int[t] = im;
-        re_tmp[t] = static_cast<uint64_t>(re);
-        im_tmp[t] = static_cast<uint64_t>(im);
-      }
-
-      // load into vectors and perform AVX512 Barrett reduction
-      __m512i re_vec = _mm512_loadu_si512((const __m512i*)re_tmp);
-      __m512i im_vec = _mm512_loadu_si512((const __m512i*)im_tmp);
-      __m512i re_red = barret_reduction_64_64_avx512(
-          re_vec, modulus_vec, ratio_vec, shift_bits);
-      __m512i im_red = barret_reduction_64_64_avx512(
-          im_vec, modulus_vec, ratio_vec, shift_bits);
-
-      const __m512i bv_vec = _mm512_set1_epi64((long long)bigValueHf);
-      __mmask8 re_mask = _mm512_cmpgt_epu64_mask(re_vec, bv_vec);
-      __mmask8 im_mask = _mm512_cmpgt_epu64_mask(im_vec, bv_vec);
-
-      // 只有被标记的 lane 需要做减 diff 的修正
-      const __m512i diff_vec = _mm512_set1_epi64((long long)diff);
-      __m512i re_corrected = sub_mod_avx512(re_red, diff_vec, modulus_vec);
-      __m512i im_corrected = sub_mod_avx512(im_red, diff_vec, modulus_vec);
-
-      __m512i re_final = _mm512_mask_blend_epi64(re_mask, re_red, re_corrected);
-      __m512i im_final = _mm512_mask_blend_epi64(im_mask, im_red, im_corrected);
-
-      uint64_t re_out[8];
-      uint64_t im_out[8];
-      _mm512_storeu_si512((__m512i*)re_out, re_final);
-      _mm512_storeu_si512((__m512i*)im_out, im_final);
-
-      for (int t = 0; t < 8; ++t) {
-        int64_t s = i + t;
-        native_vec[l * N + gap * s] = re_out[t];
-        native_vec[l * N + gap * (s + slots)] = im_out[t];
-      }
-    }
-    // tail scalar for remaining slots
-    for (; i < slots; ++i) {
-      int64_t re =
-          static_cast<int64_t>(std::llround(inverse[2 * i] * scaling_factor));
-      int64_t im = static_cast<int64_t>(
-          std::llround(inverse[2 * i + 1] * scaling_factor));
-      if (re < 0)
-        re = MAX_64BIT_VALUE + re;
-      if (im < 0)
-        im = MAX_64BIT_VALUE + im;
-      uint64_t re_u = static_cast<uint64_t>(re);
-      uint64_t im_u = static_cast<uint64_t>(im);
-      re_u = barret_reduction_64_64(re_u, modulus, ratio, k);
-      im_u = barret_reduction_64_64(im_u, modulus, ratio, k);
-      if (re > bigValueHf) {
-        re_u = sub_mod(re_u, diff, modulus);
-      }
-      if (im > bigValueHf) {
-        im_u = sub_mod(im_u, diff, modulus);
-      }
-      native_vec[l * N + gap * i] = re_u;
-      native_vec[l * N + gap * (i + slots)] = im_u;
-    }
-#else
     for (int64_t i = 0; i < slots; ++i) {
       int64_t re =
           static_cast<int64_t>(std::llround(inverse[2 * i] * scaling_factor));
@@ -144,7 +58,6 @@ void new_fit_to_native_vector_host(
       native_vec[l * N + gap * i] = re_u;
       native_vec[l * N + gap * (i + slots)] = im_u;
     }
-#endif
   }
 }
 
@@ -234,23 +147,54 @@ Tensor encode_cpu(
     const Tensor& barret_k,
     const Tensor& power_of_roots_shoup,
     const Tensor& power_of_roots) {
-  Tensor out =
-      at::zeros({cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
-  encode_template_cpu(
-      out,
-      inverse_internal,
-      max_int_diffs,
-      N,
-      cur_limbs,
-      slots,
-      scaling_factor,
-      is_ext,
-      sizeP,
-      primes,
-      barret_ratio,
-      barret_k,
-      power_of_roots_shoup,
-      power_of_roots);
+  TORCH_INTERNAL_ASSERT(
+      inverse_internal.dim() == 1 || inverse_internal.dim() == 2,
+      "encode_cpu expects 1D or 2D input, got dim=",
+      inverse_internal.dim());
+
+  if (inverse_internal.dim() == 1) {
+    Tensor out =
+        at::zeros({cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
+    encode_template_cpu(
+        out,
+        inverse_internal,
+        max_int_diffs,
+        N,
+        cur_limbs,
+        slots,
+        scaling_factor,
+        is_ext,
+        sizeP,
+        primes,
+        barret_ratio,
+        barret_k,
+        power_of_roots_shoup,
+        power_of_roots);
+    return out;
+  }
+
+  const auto num_plaintext = inverse_internal.size(0);
+  Tensor out = at::zeros(
+      {num_plaintext, cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
+  for (int64_t i = 0; i < num_plaintext; ++i) {
+    auto input_view = inverse_internal[i].contiguous();
+    auto out_view = out[i];
+    encode_template_cpu(
+        out_view,
+        input_view,
+        max_int_diffs,
+        N,
+        cur_limbs,
+        slots,
+        scaling_factor,
+        is_ext,
+        sizeP,
+        primes,
+        barret_ratio,
+        barret_k,
+        power_of_roots_shoup,
+        power_of_roots);
+  }
   return out;
 }
 } // namespace at::native

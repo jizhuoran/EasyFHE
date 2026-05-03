@@ -339,6 +339,21 @@ class Context:
         self.primes = primes.clone().to(device)
         self.barret_k = barret_k.clone().to(device)
         self.barret_ratio = barret_ratio.clone().to(device)
+        self.primes_list = [int(p) for p in primes.tolist()]
+
+        # Precompute switch_modulus_map for mod_raise and drop_last_element_and_scale
+        num_primes = len(self.primes_list)
+        switch_map = []
+        for old_idx in range(num_primes):
+            old_mod = self.primes_list[old_idx]
+            for new_idx in range(num_primes):
+                new_mod = self.primes_list[new_idx]
+                if old_mod > new_mod:
+                    diff = new_mod - (old_mod % new_mod)
+                else:
+                    diff = new_mod - old_mod
+                switch_map.append(diff)
+        self.switch_modulus_map = torch.tensor(switch_map, dtype=torch.uint64, device=device)
         self.q_mu = q_mu.clone().to(device)
         self.moduliP_scalar = moduliP_scalar # for computation on cpu
         self.moduliQ_scalar = moduliQ_scalar # for computation on cpu

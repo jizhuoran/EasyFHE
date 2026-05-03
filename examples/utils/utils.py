@@ -6,7 +6,7 @@ import os
 
 
 def read_image(index):
-    filePath = "../cifar10/test_batch.bin"
+    filePath = "/home/zrji/EasyFHE/examples/resnet/cifar10/test_batch.bin"
     IMAGE_SIZE = 3072
     LABEL_SIZE = 1
     RECORD_SIZE = LABEL_SIZE + IMAGE_SIZE

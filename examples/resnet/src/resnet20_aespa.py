@@ -29,7 +29,7 @@ SAVE_END = False
 SAVE_MIDDLE = False
 DIRECT_LOAD = True
 pre_encode_type = "middle"
-pkl_path = "/data/yhh/data/encode_20250721_205409.pkl"
+pkl_path = "/data/zrji/data/encode_20260410_110218.pkl"
 
 # # config3
 # total=1

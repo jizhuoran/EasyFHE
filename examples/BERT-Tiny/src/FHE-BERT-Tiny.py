@@ -9,6 +9,9 @@ from triton.profiler.flags import command_line
 import math
 
 DATA_DIR = os.environ["DATA_DIR"]
+SCRIPT_DIR = Path(__file__).resolve().parent
+DEFAULT_INPUT_FOLDER = SCRIPT_DIR / "tmp_embeddings" / "0"
+input_folder = DEFAULT_INPUT_FOLDER
 global_num_slots = 1<<14
 # origin_input_folder = "../src/tmp_embeddings/"
 # input_folder="src/tmp_embeddings/"
@@ -233,7 +236,16 @@ def encoder1(cryptoContext,openfhe_context):
 
     inputs=[]
     for i in range(inputs_count):
-        inputs.append(read_expanded_input(cryptoContext, openfhe_context, f"{input_folder}input_{i}.txt",0,1,global_num_slots))
+        inputs.append(
+            read_expanded_input(
+                cryptoContext,
+                openfhe_context,
+                str(p1 / f"input_{i}.txt"),
+                0,
+                1,
+                global_num_slots,
+            )
+        )
 
     query_w=read_plain_input(cryptoContext,"layer0_attself_query_weight",0,1,global_num_slots)
     query_b= read_plain_repeated_input(cryptoContext, "layer0_attself_query_bias", 0, 1, global_num_slots, 1.0)
@@ -673,5 +685,5 @@ def read_plain_expanded_input_tensor(filename):
 
 
 if __name__ == "__main__":
-    input_folder = "./tmp_embeddings/0/" # "this is a bad movie"
+    input_folder = DEFAULT_INPUT_FOLDER  # "this is a bad movie"
     BERT_Tiny()

@@ -6,118 +6,59 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <omp.h>
+
+#include <cstring>
 
 #include "ATen/native/fhe/cpu/CommonOperation.h"
 #include "ATen/native/fhe/cpu/Utils.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
-#define WORK_PER_THREAD (1)
-#define WARP_SIZE (32)
-#define NUM_WARPS (8)
-#define BLOCK_SIZE (WARP_SIZE * NUM_WARPS)
-#define WORK_PER_BLOCK (WORK_PER_THREAD * BLOCK_SIZE)
-
-#define num_blocks(n) ((n + WORK_PER_BLOCK - 1) / WORK_PER_BLOCK)
-
 namespace fhe {
-inline void mulByMonomial_step1(
-    uint64_t* out,
-    const uint64_t* in,
-    const uint64_t* qVec,
-    int64_t l,
-    int64_t N) {
-  // Equivalent to the first kernel over a 2D grid (y = blockIdx.y, x = tid_x)
-  for (int64_t row = 0; row < l; ++row) {
-    const uint64_t q = qVec[row];
-    const uint64_t* in_row = in + row * N;
-    uint64_t* out_row = out + row * N;
-    for (int64_t x = 0; x < N; ++x) {
-      out_row[x] = q - in_row[x];
-    }
-  }
-}
 
-inline void mulByMonomial_step2(
+void mul_by_monomial_impl(
     uint64_t* out,
     const uint64_t* in,
-    const uint64_t* qVec,
+    const uint64_t* q_vec,
     int64_t l,
     int64_t N,
-    int64_t shift) {
-  // Equivalent to the second kernel
-  shift = shift % N;
-  for (int64_t row = 0; row < l; ++row) {
-    const uint64_t q = qVec[row];
-    const uint64_t* in_row = in + row * N;
-    uint64_t* out_row = out + row * N;
-    for (int64_t x = 0; x < N; ++x) {
-      if (x < shift) {
-        out_row[x] = q - in_row[x + (N - shift)];
-      } else {
-        out_row[x] = in_row[x - shift];
+    int64_t M,
+    int64_t monomial_deg) {
+  int64_t shift = monomial_deg % M;
+
+  const int max_threads = omp_get_max_threads();
+  if (shift < N) {
+#pragma omp parallel for collapse(2) schedule(static) num_threads(max_threads)
+    for (int64_t row = 0; row < l; ++row) {
+      for (int64_t x = 0; x < N; ++x) {
+        if (x < shift) {
+          out[row * N + x] = q_vec[row] - in[row * N + x + (N - shift)];
+        } else {
+          out[row * N + x] = in[row * N + x - shift];
+        }
+      }
+    }
+  } else {
+    shift %= N;
+#pragma omp parallel for collapse(2) schedule(static) num_threads(max_threads)
+    for (int64_t row = 0; row < l; ++row) {
+      for (int64_t x = 0; x < N; ++x) {
+        if (x < shift) {
+          out[row * N + x] = in[row * N + x + (N - shift)];
+        } else {
+          out[row * N + x] = q_vec[row] - in[row * N + x - shift];
+        }
       }
     }
   }
 }
 
-inline void mulByMonomial_step1_step2(
-    uint64_t* out,
-    const uint64_t* in,
-    const uint64_t* qVec,
-    int64_t l,
-    int64_t N,
-    int64_t shift) {
-  // Equivalent to the combined kernel
-  shift = shift % N;
-  for (int64_t row = 0; row < l; ++row) {
-    const uint64_t q = qVec[row];
-    const uint64_t* in_row = in + row * N;
-    uint64_t* out_row = out + row * N;
-    for (int64_t x = 0; x < N; ++x) {
-      if (x < shift) {
-        out_row[x] = in_row[x + (N - shift)];
-      } else {
-        out_row[x] = q - in_row[x - shift];
-      }
-    }
-  }
-}
 } // namespace fhe
 
 namespace at::native {
 
-static void mul_by_monomial_impl_cpu(
-    uint64_t* out_ptr,
-    const uint64_t* in_ptr,
-    const uint64_t* primes_ptr,
-    int64_t l,
-    int64_t N,
-    int64_t M,
-    int64_t monomialDeg) {
-  int64_t shift = monomialDeg % M;
-
-  if (shift < N) {
-    fhe::mulByMonomial_step2(
-        out_ptr,
-        in_ptr,
-        primes_ptr,
-        /*l=*/l,
-        /*N=*/N,
-        /*shift=*/shift);
-  } else {
-    shift = shift % N;
-    fhe::mulByMonomial_step1_step2(
-        out_ptr,
-        in_ptr,
-        primes_ptr,
-        /*l=*/l,
-        /*N=*/N,
-        /*shift=*/shift);
-  }
-}
-
-static void mul_by_monomial_template_cpu(
+static void mul_by_monomial_inplace_template(
     Tensor& res,
     int64_t l,
     int64_t N,
@@ -129,40 +70,57 @@ static void mul_by_monomial_template_cpu(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  // 1) inverse NTT (in-place on res)
-  uint64_t* res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
+  (void)level;
+  const auto num_cv = res.sizes()[0];
+  const auto num_cipher = res.sizes()[1];
+  const auto L = res.sizes()[2];
+  const auto LN = L * N;
+  const auto BLN = LN * num_cipher;
+
+  auto* res_ptr_ = res.data_ptr<uint64_t>();
+
   iNTT_impl(
-      res_ptr,
-      res_ptr,
-      0,
+      res_ptr_,
+      res_ptr_,
       l,
-      l,
-      level,
       N,
-      inverse_power_of_roots_div_two,
-      param_primes,
-      inverse_scaled_power_of_roots_div_two);
+      L,
+      L,
+      num_cv,
+      num_cipher,
+      param_primes.data_ptr<uint64_t>(),
+      inverse_power_of_roots_div_two.data_ptr<uint64_t>(),
+      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
 
-  Tensor tmp = at::empty_like(res);
-  uint64_t* tmp_ptr = reinterpret_cast<uint64_t*>(tmp.data_ptr<uint64_t>());
-  const uint64_t* primes_ptr =
-      reinterpret_cast<const uint64_t*>(param_primes.data_ptr<uint64_t>());
+  for (int64_t cv_id = 0; cv_id < num_cv; ++cv_id) {
+    for (int64_t batch = 0; batch < num_cipher; ++batch) {
+      auto* res_ptr = res_ptr_ + cv_id * BLN + batch * LN;
+      Tensor temp = at::empty({l, N}, res.options());
+      auto* temp_ptr = temp.data_ptr<uint64_t>();
 
-  // perform the CPU impl
-  mul_by_monomial_impl_cpu(tmp_ptr, res_ptr, primes_ptr, l, N, M, monomialDeg);
+      fhe::mul_by_monomial_impl(
+          temp_ptr,
+          res_ptr,
+          param_primes.data_ptr<uint64_t>(),
+          l,
+          N,
+          M,
+          monomialDeg);
 
-  // copy back into res
-  std::memcpy(res_ptr, tmp_ptr, size_t(l) * size_t(N) * sizeof(uint64_t));
+      std::memcpy(res_ptr, temp_ptr, static_cast<size_t>(l * N) * sizeof(uint64_t));
+    }
+  }
 
-  // 3) forward NTT (in-place on res)
   NTT_impl(
-      res_ptr,
-      0,
+      res_ptr_,
       l,
       N,
-      param_power_of_roots_shoup,
-      param_primes,
-      param_power_of_roots);
+      L,
+      num_cv,
+      num_cipher,
+      param_primes.data_ptr<uint64_t>(),
+      param_power_of_roots_shoup.data_ptr<uint64_t>(),
+      param_power_of_roots.data_ptr<uint64_t>());
 }
 
 Tensor mul_by_monomial_cpu(
@@ -177,13 +135,22 @@ Tensor mul_by_monomial_cpu(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  TORCH_INTERNAL_ASSERT(false, "mul_by_monomial_cuda only supports inplace operation");
+  (void)l;
+  (void)N;
+  (void)M;
+  (void)monomialDeg;
+  (void)level;
+  (void)param_primes;
+  (void)inverse_power_of_roots_div_two;
+  (void)inverse_scaled_power_of_roots_div_two;
+  (void)param_power_of_roots_shoup;
+  (void)param_power_of_roots;
+  TORCH_INTERNAL_ASSERT(false, "mul_by_monomial_cpu only supports inplace operation");
   return res;
 }
 
 Tensor& mul_by_monomial_cpu_(
     Tensor& res,
-
     int64_t l,
     int64_t N,
     int64_t M,
@@ -194,7 +161,10 @@ Tensor& mul_by_monomial_cpu_(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  mul_by_monomial_template_cpu(
+  TORCH_INTERNAL_ASSERT(res.dim() == 4);
+  TORCH_INTERNAL_ASSERT(res.sizes()[0] == 2);
+
+  mul_by_monomial_inplace_template(
       res,
       l,
       N,
@@ -222,8 +192,18 @@ Tensor& mul_by_monomial_cpu_out(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots,
     Tensor& out) {
-      TORCH_INTERNAL_ASSERT(false, "Not implemented");
-
+  (void)res;
+  (void)l;
+  (void)N;
+  (void)M;
+  (void)monomialDeg;
+  (void)level;
+  (void)param_primes;
+  (void)inverse_power_of_roots_div_two;
+  (void)inverse_scaled_power_of_roots_div_two;
+  (void)param_power_of_roots_shoup;
+  (void)param_power_of_roots;
+  TORCH_INTERNAL_ASSERT(false, "Not implemented");
   return out;
 }
 

@@ -16393,6 +16393,26 @@
     CPU: mul_scalar_mod_out_cpu
     CUDA: mul_scalar_mod_out_cuda
 
+- func: mul_pt_broadcast(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: mul_pt_broadcast_cpu
+
+- func: mul_pt_pairwise(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: mul_pt_pairwise_cpu
+
+- func: add_pt_broadcast(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: add_pt_broadcast_cpu
+
+- func: add_pt_pairwise(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: add_pt_pairwise_cpu
+
 - func: modup(Tensor input, *, int curr_limbs, int L, int beta, int degree, int alpha, Tensor hat_inverse_vec, Tensor hat_inverse_vec_shoup, Tensor prod_q_i_mod_q_j, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
   device_check: NoCheck
   dispatch:
@@ -16405,29 +16425,22 @@
     CPU: moddown_cpu
     CUDA: moddown_cuda
 
-- func: innerproduct(Tensor self, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+- func: innerproduct(Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
   dispatch:
     CPU: innerproduct_cpu
     CUDA: innerproduct_cuda
 
-- func: drop_last_element_and_scale(Tensor self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
+- func: innerproduct_broadcast_cipher(Tensor in_modup, *, Tensor[] swk, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: innerproduct_broadcast_cipher_cpu
+
+- func: drop_last_element_and_scale(Tensor input, *, int curr_limbs, int l, int L, int N, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
   device_check: NoCheck
   dispatch:
     CPU: drop_last_element_scale_cpu
     CUDA: drop_last_element_scale_cuda
-
-- func: drop_last_element_and_scale_(Tensor(a!) self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: drop_last_element_scale_cpu_
-    CUDA: drop_last_element_scale_cuda_
-
-- func: drop_last_element_and_scale.out(Tensor self, Tensor input, *, int curr_limbs, int l, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: drop_last_element_scale_cpu_out
-    CUDA: drop_last_element_scale_cuda_out
 
 - func: automorphism_transform(Tensor self, *, int l, int N, Tensor precomp_vec) -> Tensor
   device_check: NoCheck
@@ -16435,11 +16448,16 @@
     CPU: automorphism_transform_cpu
     CUDA: automorphism_transform_cuda
 
-- func: mod_raise(Tensor self, Tensor input, *, int N, int L0, int logN, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
+- func: mod_raise(Tensor input, *, int N, int L0, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:
     CPU: mod_raise_cpu
     CUDA: mod_raise_cuda
+
+- func: extend_ciphertext(Tensor self, Tensor input, *, int N, int L0, int L, int composite_degree, int qjProduct, Tensor qj, Tensor qhat_inv_modqj, Tensor qjProductD, Tensor qjProduct_mod, Tensor qjProduct_psinv, Tensor qj_psinv, Tensor qhat_inv_modqj_mod, Tensor qhat_inv_modqj_psinv, Tensor qjProductD_psinv, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor barret_ratio, Tensor barret_k) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: extend_ciphertext_cpu
 
 - func: mul_by_monomial(Tensor self, *, int l, int N, int M, int monomialDeg, int L, Tensor primes, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
@@ -16474,13 +16492,12 @@
   dispatch:
     CPU: pre_encode_cpu
 
-
-- func: fused_pairwise_mac(Tensor[] bxs, Tensor[] axs, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
+- func: batched_pairwise_mac(Tensor cipher, Tensor plaintext, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_batches, int num_cipher, int curr_limbs, int N) -> Tensor
   device_check: NoCheck
   dispatch:
-    CUDA: fused_pairwise_mac_cuda
+    CPU: batched_pairwise_mac_cpu
 
-# - func: fused_broadcast_mac(Tensor bx, Tensor ax, Tensor[] ptxs, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor[]
-#   device_check: NoCheck
-#   dispatch:
-#     CUDA: fused_broadcast_mac_cuda
+- func: cpmul_broadcast_pt(Tensor cipher, Tensor plaintext, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: cpmul_broadcast_pt_cpu
