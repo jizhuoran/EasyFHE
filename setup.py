@@ -1636,6 +1636,8 @@ def main() -> None:
         # no extensions in BUILD_LIBTORCH_WHL mode
         ext_modules = []
 
+    version_range_max = max(sys.version_info[1], 13) + 1
+
     setup(
         name=TORCH_PACKAGE_NAME,
         version=TORCH_VERSION,
