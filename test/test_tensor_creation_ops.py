@@ -33,13 +33,13 @@ from torch.testing._internal.common_utils import (
     IS_S390X,
     IS_ARM64,
     parametrize,
-    skipIfTorchDynamo,
+    TEST_WITH_TORCHDYNAMO,
     xfailIfTorchDynamo,
 )
 from torch.testing._internal.common_device_type import (
     expectedFailureMeta, instantiate_device_type_tests, deviceCountAtLeast, onlyNativeDeviceTypes,
     onlyCPU, largeTensorTest, precisionOverride, dtypes,
-    onlyCUDA, skipCPUIf, dtypesIfCUDA, dtypesIfCPU, skipMeta)
+    onlyCUDA, skipCPUIf, dtypesIfCUDA, dtypesIfCPU, skipMeta, onlyAccelerator)
 from torch.testing._internal.common_dtype import (
     all_types_and_complex, all_types_and_complex_and, all_types_and, floating_and_complex_types, complex_types,
     floating_types, floating_and_complex_types_and, integral_types, integral_types_and, get_all_dtypes,
@@ -82,7 +82,7 @@ def _generate_input(shape, dtype, device, with_extremal):
 # TODO: replace with make_tensor
 def _rand_shape(dim, min_size, max_size):
     shape = []
-    for i in range(dim):
+    for _ in range(dim):
         shape.append(random.randint(min_size, max_size))
     return tuple(shape)
 
@@ -196,7 +196,6 @@ class TestTensorCreation(TestCase):
                     self.assertEqual(x, torch.tensor([n] * numel, dtype=dt, device=device))
                     self.assertEqual(dt, x.dtype)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     def test_roll(self, device):
         numbers = torch.arange(1, 9, device=device)
 
@@ -384,6 +383,7 @@ class TestTensorCreation(TestCase):
             ):
                 torch.block_diag(torch.ones(2, 2).cpu(), torch.ones(2, 2, device=device))
 
+    @skipCPUIf(TEST_WITH_TORCHDYNAMO, "test doesn't currently work with dynamo on CPU")
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
     def test_block_diag_scipy(self, device):
         import scipy.linalg
@@ -468,8 +468,8 @@ class TestTensorCreation(TestCase):
             b = torch.tensor([3, 4], device=device, dtype=dtype)
             error = r"Expected both inputs to be Half, Float or Double tensors but " \
                     r"got [A-Za-z]+ and [A-Za-z]+"
-        with self.assertRaisesRegex(RuntimeError, error):
-            op(a, b)
+            with self.assertRaisesRegex(RuntimeError, error):
+                op(a, b)
 
     @onlyNativeDeviceTypes
     @dtypes(torch.float32, torch.float64)
@@ -534,6 +534,14 @@ class TestTensorCreation(TestCase):
 
         res1 = torch.cat([empty, empty], dim=1)
         self.assertEqual(res1, empty)
+
+    def test_concat_empty_list_error(self, device):
+        # Regression test for https://github.com/pytorch/pytorch/issues/155306
+        msg = "expected a non-empty list of Tensors"
+        with self.assertRaisesRegex(ValueError, msg):
+            torch.concat([], dim='N')
+        with self.assertRaisesRegex(ValueError, msg):
+            torch.concatenate([], dim='N')
 
     def test_cat_out(self, device):
         x = torch.zeros((0), device=device)
@@ -683,6 +691,21 @@ class TestTensorCreation(TestCase):
         self.assertTrue(res1.is_contiguous(memory_format=torch.channels_last))
 
     @onlyCUDA
+    def test_cat_channels_last_large_inputs(self, device):
+        num_tensors = 130
+        inputs_cuda = [
+            torch.randn((2, 3, 4, 4), device=device).contiguous(memory_format=torch.channels_last)
+            for _ in range(num_tensors)
+        ]
+        inputs_cpu = [t.cpu() for t in inputs_cuda]
+
+        result = torch.cat(inputs_cuda, dim=1)
+        expected = torch.cat(inputs_cpu, dim=1)
+
+        self.assertEqual(result.cpu(), expected)
+        self.assertTrue(result.is_contiguous(memory_format=torch.channels_last))
+
+    @onlyCUDA
     def test_cat_out_memory_format(self, device):
         inp_size = (4, 4, 4, 4)
         expected_size = (8, 4, 4, 4)
@@ -775,7 +798,6 @@ class TestTensorCreation(TestCase):
 
     # Note: This test failed on XLA since its test cases are created by empty_strided which
     #       doesn't support overlapping sizes/strides in XLA impl
-    @skipIfTorchDynamo("TorchDynamo fails on this test for unknown reasons")
     @onlyNativeDeviceTypes
     def test_like_fn_stride_proparation_vs_tensoriterator_unary_op(self, device):
         # Test like functions against tensoriterator based unary operator (exp) to
@@ -922,7 +944,7 @@ class TestTensorCreation(TestCase):
                 num_tensors = random.randint(1, 5)
                 torch_input = []
                 # Create tensors with shape being different along one axis only
-                for param in range(num_tensors):
+                for _ in range(num_tensors):
                     shape[i] = random.randint(1, 5)
                     torch_input.append(_generate_input(tuple(shape), dtype, device, with_extremal=False))
 
@@ -977,7 +999,7 @@ class TestTensorCreation(TestCase):
         ops = ((torch.vstack, np.vstack), (torch.row_stack, np.vstack))
         for torch_op, np_op in ops:
             self._test_special_stacks(0, 2, torch_op, np_op, device, dtype)
-            for i in range(5):
+            for _ in range(5):
                 # Test dimension change for 1D tensor of size (N) and 2D tensor of size (1, N)
                 n = random.randint(1, 10)
                 input_a = _generate_input((n,), dtype, device, with_extremal=False)
@@ -992,7 +1014,7 @@ class TestTensorCreation(TestCase):
     @dtypes(*all_types_and_complex_and(torch.half))
     def test_dstack(self, device, dtype):
         self._test_special_stacks(2, 3, torch.dstack, np.dstack, device, dtype)
-        for i in range(5):
+        for _ in range(5):
             # Test dimension change for 1D tensor of size (N), 2D tensor of size (1, N), and 3D tensor of size (1, N, 1)
             n = random.randint(1, 10)
             input_a = _generate_input((n,), dtype, device, with_extremal=False)
@@ -1015,7 +1037,6 @@ class TestTensorCreation(TestCase):
             expected = np.dstack(np_input)
             self.assertEqual(actual, expected)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @dtypes(torch.int32, torch.int64)
     def test_large_linspace(self, device, dtype):
         start = torch.iinfo(dtype).min
@@ -1146,6 +1167,57 @@ class TestTensorCreation(TestCase):
         y = torch.randint(low=-100, high=100, size=(1, SIZE, SIZE), device=device).to(dtype)
         z = torch.cat([x, y])
         self.assertEqual(z.size(), (21, SIZE, SIZE))
+
+    @dtypes(torch.float)
+    def test_cat_size1(self, device, dtype):
+        # create a tensor that has aligned stride along dim - 1 dimension
+        # but catted slice size is not aligned
+        x1 = torch.randn(16, 16, device=device, dtype=dtype)[:1, :1]
+        xref = x1.clone().view(-1).view(x1.shape)
+        # make sure output size is aligned, need at least 4 elements for this
+        res = torch.cat([x1, x1, x1, x1], dim=-1)
+        ref = torch.cat([xref, xref, xref, xref], dim=-1)
+        self.assertEqual(res, ref)
+
+    @dtypes(torch.float)
+    def test_cat_trailing_dim(self, device, dtype):
+        x1 = torch.randn(16, 16, 23, device=device, dtype=dtype)
+        x2 = torch.rand_like(x1)
+        res = torch.cat([x1, x2], dim=1)
+        ref = torch.cat([x1.cpu(), x2.cpu()], dim=1)
+        self.assertEqual(res, ref)
+
+    @dtypes(torch.float)
+    def test_cat_misaligned(self, device, dtype):
+        x1 = torch.randn(14, device=device, dtype=dtype)[2:]
+        x2 = torch.rand_like(x1)
+        res = torch.cat([x1, x2], dim=-1)
+        ref = torch.cat([x1.cpu(), x2.cpu()], dim=-1)
+        self.assertEqual(res, ref)
+
+    @dtypes(torch.float)
+    def test_cat_multi_batch(self, device, dtype):
+        xs = [torch.randn(16, 16, device=device, dtype=dtype) for _ in range(130)]
+        xs_cpu = [x.cpu() for x in xs]
+        res = torch.cat(xs, dim=-1)
+        ref = torch.cat(xs_cpu, dim=-1)
+        self.assertEqual(res, ref)
+        xs = [torch.randn(16, 15, 15, device=device, dtype=dtype) for _ in range(130)]
+        xs[128] = torch.randn(15, 15, 15, device=device, dtype=dtype)
+        xs[129] = torch.randn(17, 15, 15, device=device, dtype=dtype)
+        xs_cpu = [x.cpu() for x in xs]
+        res = torch.cat(xs, dim=0)
+        ref = torch.cat(xs_cpu, dim=0)
+        self.assertEqual(res, ref)
+
+    @dtypes(torch.float)
+    @largeTensorTest("16GB")
+    def test_cat_large_tensor(self, device, dtype):
+        N = 2 ** 32 // dtype.itemsize
+        inps = [torch.randn(N, device=device, dtype=dtype), torch.randn(N // 128, device=device, dtype=dtype)]
+        res = torch.cat(inps, dim=0)
+        ref = torch.cat([x.cpu() for x in inps])
+        self.assertEqual(res, ref)
 
     # FIXME: Create an OpInfo-based tensor creation method test that verifies this for all tensor
     #   creation methods and verify all dtypes and layouts
@@ -1284,7 +1356,6 @@ class TestTensorCreation(TestCase):
             torch.tensor(bad_mock_seq, device=device)
         self.assertEqual(torch.tensor([1.0, 2.0, 3.0], device=device), torch.tensor(good_mock_seq, device=device))
 
-    @skipIfTorchDynamo("Not a TorchDynamo suitable test")
     def test_simple_scalar_cast(self, device):
         ok = [torch.tensor([1.5], device=device), torch.zeros(1, 1, 1, 1, device=device)]
         ok_values = [1.5, 0]
@@ -1528,7 +1599,7 @@ class TestTensorCreation(TestCase):
         expected = torch.empty(0, 5, dtype=a.dtype, device=device)
         self.assertEqual(c, expected)
 
-        # test empty imput
+        # test empty input
         a = torch.empty(0, device=device)
         c1 = torch.combinations(a)
         c2 = torch.combinations(a, with_replacement=True)
@@ -1536,7 +1607,6 @@ class TestTensorCreation(TestCase):
         self.assertEqual(c1, expected)
         self.assertEqual(c2, expected)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @skipMeta
     def test_linlogspace_mem_overlap(self, device):
         x = torch.rand(1, device=device).expand(10)
@@ -1612,8 +1682,6 @@ class TestTensorCreation(TestCase):
         self.assertEqual(t.max(), True)
         self.assertTrue(0.4 < (t.eq(True)).to(torch.int).sum().item() / size < 0.6)
 
-    # https://github.com/pytorch/pytorch/issues/126834
-    @xfailIfTorchDynamo
     def test_random_from_to_bool(self, device):
         size = 2000
 
@@ -1693,8 +1761,6 @@ class TestTensorCreation(TestCase):
 
     # NB: uint64 is broken because its max value is not representable in
     # int64_t, but this is what random expects
-    # https://github.com/pytorch/pytorch/issues/126834
-    @xfailIfTorchDynamo
     @dtypes(*all_types_and(torch.bfloat16, torch.half, torch .uint16, torch.uint32))
     def test_random_from_to(self, device, dtype):
         size = 2000
@@ -1784,8 +1850,6 @@ class TestTensorCreation(TestCase):
                         lambda: t.random_(from_, to_)
                     )
 
-    # https://github.com/pytorch/pytorch/issues/126834
-    @xfailIfTorchDynamo
     @dtypes(*all_types_and(torch.bfloat16, torch.half, torch.uint16, torch.uint32))
     def test_random_to(self, device, dtype):
         size = 2000
@@ -1968,6 +2032,11 @@ class TestTensorCreation(TestCase):
         complexHalfTensor = torch.zeros(2, 2, device=device, dtype=torch.complex32)
         expected = torch.tensor([[0., 0.], [0., 0.]], device=device, dtype=torch.complex32)
         self.assertEqual(complexHalfTensor, expected)
+
+    def test_zeros_bounds_checking(self, device):
+        # Test negative large integer
+        with self.assertRaisesRegex(RuntimeError, r"zeros: Dimension size must be non-negative."):
+            torch.zeros(-6744789213055875072, device=device)
 
     # TODO: this test should be updated
     def test_zeros_out(self, device):
@@ -2333,7 +2402,6 @@ class TestTensorCreation(TestCase):
             self.assertNotEqual(torch.tensor(n, device='cuda'), n_astensor)
 
     # TODO: this test should be updated
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @suppress_warnings
     @dtypesIfCPU(torch.float, torch.bfloat16, torch.float16)
     @dtypes(torch.float)
@@ -2364,7 +2432,6 @@ class TestTensorCreation(TestCase):
         self.assertEqual(res1, res2, atol=0, rtol=0)
 
     # TODO: this test should be updated
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     def test_range_warning(self, device):
         with warnings.catch_warnings(record=True) as w:
             torch.range(0, 10, device=device)
@@ -2684,13 +2751,11 @@ class TestTensorCreation(TestCase):
         for steps in [1, 2, 3, 5, 11, 256, 257, 2**22]:
             test_fn(torch.linspace, np.linspace, steps)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @dtypes(torch.complex64)
     def test_linspace_vs_numpy_complex(self, device, dtype):
         self._test_linspace_logspace_complex_helper(torch.linspace, np.linspace,
                                                     device, dtype)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @dtypes(torch.complex64)
     def test_logspace_vs_numpy_complex(self, device, dtype):
         self._test_linspace_logspace_complex_helper(torch.logspace, np.logspace,
@@ -2768,7 +2833,8 @@ class TestTensorCreation(TestCase):
         tensor = torch.tensor((1, 2, 3), device=device)
 
         # need more than one device_type to test this
-        assert self.device_type == 'cuda'
+        if self.device_type != 'cuda':
+            raise AssertionError(f"device_type should be 'cuda', got {self.device_type!r}")
         for left, right in product([tensor, tensor.cpu()], [tensor, tensor.cpu()]):
             for device_arg in [torch_device, cpu_device, None]:
                 if device_arg is None:
@@ -2784,7 +2850,7 @@ class TestTensorCreation(TestCase):
             with self.assertRaisesRegex(RuntimeError, r'floating point'):
                 torch_method(3, dtype=dtype)
             return
-        for size in [0, 1, 2, 5, 10, 50, 100, 1024, 2048]:
+        for size in [1, 2, 5, 10, 50, 100, 1024, 2048]:
             for periodic in [True, False]:
                 res = torch_method(
                     size,
@@ -2811,7 +2877,6 @@ class TestTensorCreation(TestCase):
     @precisionOverride({torch.bfloat16: 5e-2, torch.half: 1e-3})
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
     @dtypesIfCUDA(torch.float, torch.double, torch.bfloat16, torch.half, torch.long)
-    @skipIfTorchDynamo("Not a TorchDynamo suitable test")
     @dtypes(torch.float, torch.double, torch.long)
     @parametrize("window", ['hann', 'hamming', 'bartlett', 'blackman'])
     def test_signal_window_functions(self, device, dtype, window):
@@ -2820,11 +2885,10 @@ class TestTensorCreation(TestCase):
     @onlyNativeDeviceTypes
     @precisionOverride({torch.bfloat16: 5e-2, torch.half: 1e-3})
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @dtypesIfCUDA(torch.float, torch.double, torch.bfloat16, torch.half, torch.long)
     @dtypes(torch.float, torch.double, torch.long, torch.bfloat16, torch.float16)
     def test_kaiser_window(self, device, dtype):
-        for num_test in range(50):
+        for _ in range(50):
             self._test_signal_window_functions('kaiser', dtype, device, beta=random.random() * 30)
 
     def _test_signal_windows_functions(self, name, dtype, device, **kwargs):
@@ -2835,7 +2899,7 @@ class TestTensorCreation(TestCase):
             with self.assertRaisesRegex(RuntimeError, r'floating point'):
                 torch_method(3, dtype=dtype)
             return
-        for size in [0, 1, 2, 5, 10, 50, 100, 1024, 2048]:
+        for size in [1, 2, 5, 10, 50, 100, 1024, 2048]:
             for periodic in [True, False]:
                 res = torch_method(size, sym=not periodic, **kwargs, device=device, dtype=dtype)
                 # NB: scipy always returns a float64 result
@@ -2847,7 +2911,6 @@ class TestTensorCreation(TestCase):
     # torch.signal.windows functions (except any with extra parameters)
     @onlyNativeDeviceTypes
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
-    @skipIfTorchDynamo("Not a TorchDynamo suitable test")
     @dtypes(torch.float, torch.double)
     @parametrize("window", ['bartlett', 'blackman', 'cosine', 'hamming', 'hann', 'nuttall'])
     def test_signal_windows_functions(self, device, dtype, window):
@@ -2856,10 +2919,9 @@ class TestTensorCreation(TestCase):
     # torch.signal.windows.kaiser
     @onlyNativeDeviceTypes
     @unittest.skipIf(not TEST_SCIPY, "Scipy not found")
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     @dtypes(torch.float, torch.double)
     def test_kaiser(self, device, dtype):
-        for num_test in range(50):
+        for _ in range(50):
             self._test_signal_windows_functions('kaiser', dtype, device, beta=random.random() * 30)
 
     def test_tensor_factories_empty(self, device):
@@ -3040,12 +3102,10 @@ class TestTensorCreation(TestCase):
 
             self.assertEqual(fn(start, end, steps=100, device=device).dtype, dtype)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     def test_linspace_deduction(self, device):
         # Test deduction from input parameters.
         self._test_linspace_logspace_deduction_helper(torch.linspace, device)
 
-    @skipIfTorchDynamo("TorchDynamo fails with unknown reason")
     def test_logspace_deduction(self, device):
         # Test deduction from input parameters.
         self._test_linspace_logspace_deduction_helper(torch.logspace, device)
@@ -3227,7 +3287,7 @@ class TestTensorCreation(TestCase):
             self.assertTrue(t_mapped.untyped_storage().filename == expected_filename)
             self.assertEqual(torch.flatten(t), t_mapped)
 
-            s = torch.UntypedStorage.from_file(f.name, shared, t.numel() * dtype.itemsize)
+            s = torch.UntypedStorage.from_file(f.name, shared, nbytes=t.numel() * dtype.itemsize)
             self.assertTrue(s.filename == expected_filename)
 
     @onlyCPU
@@ -3448,7 +3508,7 @@ class TestRandomTensorCreation(TestCase):
                 else:
                     t.uniform_(from_, to_)
                     range_ = to_ - from_
-                    if not (dtype == torch.bfloat16) and not (
+                    if dtype != torch.bfloat16 and not (
                             dtype == torch.half and device == 'cpu') and not torch.isnan(t).all():
                         delta = alpha * range_
                         double_t = t.to(torch.double)
@@ -3751,6 +3811,137 @@ class TestLikeTensorCreation(TestCase):
         self.assertEqual(torch.full_like(like, 1., dtype=torch.complex64).dtype,
                          torch.complex64)
 
+    def test_rand_like(self, device):
+        like_tensor = torch.zeros(100, 100, device=device)
+
+        def seed(generator):
+            if generator is None:
+                torch.manual_seed(123456)
+            else:
+                generator.manual_seed(123456)
+            return generator
+
+        for generator in (None, torch.Generator(device)):
+            generator = seed(generator)
+            res1 = torch.rand_like(like_tensor, generator=generator)
+
+            generator = seed(generator)
+            res2 = torch.empty_like(like_tensor)
+            res2 = torch.rand_like(like_tensor, generator=generator)
+
+            self.assertEqual(res1, res2)
+            self.assertTrue((res1 >= 0).all().item())
+            self.assertTrue((res1 < 1).all().item())
+            self.assertEqual(res1.shape, like_tensor.shape)
+
+        gen0 = torch.Generator(device)
+        gen1 = torch.Generator(device)
+        gen2 = torch.Generator(device)
+        gen0.manual_seed(42)
+        gen1.manual_seed(42)
+        gen2.manual_seed(123456)
+
+        tensor0 = torch.rand_like(like_tensor, generator=gen0)
+        tensor1 = torch.rand_like(like_tensor, generator=gen1)
+        tensor2 = torch.rand_like(like_tensor, generator=gen2)
+        self.assertEqual(tensor0, tensor1)
+        self.assertNotEqual(tensor2, tensor0)
+        self.assertNotEqual(tensor2, tensor1)
+
+        tensor0 = torch.rand_like(like_tensor, generator=gen0)
+        self.assertNotEqual(tensor0, tensor1)
+
+    def test_randn_like(self, device):
+        like_tensor = torch.zeros(100, 100, device=device)
+
+        def seed(generator):
+            if generator is None:
+                torch.manual_seed(123456)
+            else:
+                generator.manual_seed(123456)
+            return generator
+
+        for generator in (None, torch.Generator(device)):
+            generator = seed(generator)
+            res1 = torch.randn_like(like_tensor, generator=generator)
+
+            generator = seed(generator)
+            res2 = torch.empty_like(like_tensor)
+            res2 = torch.randn_like(like_tensor, generator=generator)
+
+            self.assertEqual(res1, res2)
+            self.assertEqual(res1.shape, like_tensor.shape)
+
+        gen0 = torch.Generator(device)
+        gen1 = torch.Generator(device)
+        gen2 = torch.Generator(device)
+        gen0.manual_seed(42)
+        gen1.manual_seed(42)
+        gen2.manual_seed(123456)
+
+        tensor0 = torch.randn_like(like_tensor, generator=gen0)
+        tensor1 = torch.randn_like(like_tensor, generator=gen1)
+        tensor2 = torch.randn_like(like_tensor, generator=gen2)
+        self.assertEqual(tensor0, tensor1)
+        self.assertNotEqual(tensor2, tensor0)
+        self.assertNotEqual(tensor2, tensor1)
+
+        tensor0 = torch.randn_like(like_tensor, generator=gen0)
+        self.assertNotEqual(tensor0, tensor1)
+
+
+    def test_randint_like(self, device):
+        like_tensor = torch.zeros(100, 100, device=device, dtype=torch.long)
+
+        def seed(generator):
+            if generator is None:
+                torch.manual_seed(123456)
+            else:
+                generator.manual_seed(123456)
+            return generator
+
+        for generator in (None, torch.Generator(device)):
+            generator = seed(generator)
+            res1 = torch.randint_like(like_tensor, 0, 10, generator=generator)
+
+            generator = seed(generator)
+            res2 = torch.empty_like(like_tensor)
+            res2 = torch.randint_like(like_tensor, 0, 10, generator=generator)
+
+            generator = seed(generator)
+            res3 = torch.randint_like(like_tensor, 10, generator=generator)
+
+            generator = seed(generator)
+            res4 = torch.empty_like(like_tensor)
+            res4 = torch.randint_like(like_tensor, 10, generator=generator)
+
+            self.assertEqual(res1, res2)
+            self.assertEqual(res3, res4)
+            self.assertTrue((res1 >= 0).all().item())
+            self.assertTrue((res1 < 10).all().item())
+            self.assertTrue((res3 >= 0).all().item())
+            self.assertTrue((res3 < 10).all().item())
+            self.assertEqual(res1.shape, like_tensor.shape)
+            self.assertEqual(res3.shape, like_tensor.shape)
+
+        gen0 = torch.Generator(device)
+        gen1 = torch.Generator(device)
+        gen2 = torch.Generator(device)
+        gen0.manual_seed(42)
+        gen1.manual_seed(42)
+        gen2.manual_seed(123456)
+
+        tensor0 = torch.randint_like(like_tensor, 0, 10, generator=gen0)
+        tensor1 = torch.randint_like(like_tensor, 0, 10, generator=gen1)
+        tensor2 = torch.randint_like(like_tensor, 0, 10, generator=gen2)
+        self.assertEqual(tensor0, tensor1)
+        self.assertNotEqual(tensor2, tensor0)
+        self.assertNotEqual(tensor2, tensor1)
+
+        tensor0 = torch.randint_like(like_tensor, 0, 10, generator=gen0)
+        self.assertNotEqual(tensor0, tensor1)
+
+
 # Tests for the `frombuffer` function (only work on CPU):
 #   Constructs tensors from Python objects that implement the buffer protocol,
 #   without copying data.
@@ -3928,7 +4119,14 @@ class TestBufferProtocol(TestCase):
 #   The implementation itself is based on the Python Array API:
 #   https://data-apis.org/array-api/latest/API_specification/creation_functions.html
 def get_another_device(device):
-    return "cuda" if torch.device(device).type == "cpu" else "cpu"
+    device = torch.device(device)
+
+    if device.type != "cpu":
+        return "cpu"
+
+    acc = torch.accelerator.current_accelerator(True)
+
+    return acc.type if acc is not None else None
 
 def identity(tensor):
     return tensor
@@ -3947,7 +4145,8 @@ class TestAsArray(TestCase):
             3. Whether the result lives in the expected device
             4. Whether the result has its 'requires_grad' set or not
         """
-        result = torch.asarray(cvt(original), **kwargs)
+        converted_original = cvt(original)
+        result = torch.asarray(converted_original, **kwargs)
         self.assertTrue(isinstance(result, torch.Tensor))
 
         # 1. The storage pointers should be equal only if 'is_alias' is set
@@ -3978,8 +4177,10 @@ class TestAsArray(TestCase):
         if device.index is not None:
             self.assertEqual(device.index, result.device.index)
 
-        # 4. By default, 'requires_grad' is unset
-        self.assertEqual(result.requires_grad, kwargs.get("requires_grad", False))
+        # 4. By default, 'requires_grad' mirrors the original tensor's requires_grad, if
+        # present.
+        original_requires_grad = converted_original.requires_grad if isinstance(converted_original, torch.Tensor) else False
+        self.assertEqual(result.requires_grad, kwargs.get("requires_grad", original_requires_grad))
 
     def _test_alias_with_cvt(self, cvt, device, dtype, shape=(5, 5), only_with_dtype=False):
         original = make_tensor(shape, dtype=dtype, device=device)
@@ -4039,8 +4240,16 @@ class TestAsArray(TestCase):
         check(device=device, dtype=dtype, copy=True)
 
         # Copy is forced because of different device
-        if torch.cuda.is_available():
-            other = get_another_device(device)
+        other = get_another_device(device)
+        if other is not None:
+            try:
+                caps = torch.accelerator.get_device_capability(other)
+            except Exception:
+                pass
+            else:
+                if dtype not in caps["supported_dtypes"]:
+                    self.skipTest(f"{other} doesn't support {dtype}")
+
             check(same_device=False, device=other, dtype=dtype)
             check(same_device=False, device=other, dtype=dtype, copy=True)
 
@@ -4112,8 +4321,8 @@ class TestAsArray(TestCase):
     def test_unsupported_alias(self, device, dtype):
         original = make_tensor((5, 5), dtype=dtype, device=device)
 
-        if torch.cuda.is_available():
-            other_device = get_another_device(device)
+        other_device = get_another_device(device)
+        if other_device is not None:
             with self.assertRaisesRegex(ValueError,
                                         f"from device '{device}' to '{other_device}'"):
                 torch.asarray(original, device=other_device, copy=False)
@@ -4144,7 +4353,7 @@ class TestAsArray(TestCase):
 
         def check(**kwargs):
             a = torch.asarray(cloned, **kwargs)
-            requires_grad = kwargs.get("requires_grad", False)
+            requires_grad = kwargs.get("requires_grad", cloned.requires_grad)
             self.assertEqual(a.requires_grad, requires_grad)
             # Autograd history shouldn't be retained when requires_grad is False
             self.assertEqual(a.grad_fn is None, not requires_grad)
@@ -4185,7 +4394,8 @@ class TestAsArray(TestCase):
             t = torch.asarray(e)
             self.assertEqual(t, original)
 
-    @skipIfTorchDynamo()
+    # Dynamo changes numpy scalar to array, thus skips the asserted error.
+    @xfailIfTorchDynamo
     @onlyCPU
     def test_numpy_scalars(self, device):
         scalar = np.float64(0.5)
@@ -4225,15 +4435,15 @@ class TestAsArray(TestCase):
                 else:
                     self.assertEqual(data, tensor)
 
-    @onlyCUDA
+    @onlyAccelerator
     def test_device_without_index(self, device):
-        original = torch.arange(5, device="cuda")
+        original = torch.arange(5, device=device)
 
-        tensor = torch.asarray(original, device="cuda")
+        tensor = torch.asarray(original, device=device)
         # The storage pointers should be equal
         self.assertEqual(original.data_ptr(), tensor.data_ptr())
 
-        tensor = torch.asarray(original, copy=True, device="cuda")
+        tensor = torch.asarray(original, copy=True, device=device)
         # The storage pointers should not be equal
         self.assertNotEqual(original.data_ptr(), tensor.data_ptr())
 

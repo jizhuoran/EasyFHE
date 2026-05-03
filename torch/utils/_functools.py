@@ -1,6 +1,7 @@
 import functools
-from typing import Callable, TypeVar
-from typing_extensions import Concatenate, ParamSpec
+from collections.abc import Callable
+from typing import Concatenate, TypeVar
+from typing_extensions import ParamSpec
 
 
 _P = ParamSpec("_P")
@@ -12,7 +13,7 @@ _cache_sentinel = object()
 
 
 def cache_method(
-    f: Callable[Concatenate[_C, _P], _T]
+    f: Callable[Concatenate[_C, _P], _T],
 ) -> Callable[Concatenate[_C, _P], _T]:
     """
     Like `@functools.cache` but for methods.
@@ -30,7 +31,8 @@ def cache_method(
 
     @functools.wraps(f)
     def wrap(self: _C, *args: _P.args, **kwargs: _P.kwargs) -> _T:
-        assert not kwargs
+        if kwargs:
+            raise AssertionError("cache_method does not accept keyword arguments")
         if not (cache := getattr(self, cache_name, None)):
             cache = {}
             setattr(self, cache_name, cache)

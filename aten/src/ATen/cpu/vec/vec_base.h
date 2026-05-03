@@ -68,7 +68,7 @@ Windows llvm will not have this definition.
 #define VECTOR_WIDTH 64
 #define int_vector __m512i
 #elif defined(__aarch64__) && \
-    !defined(CPU_CAPABILITY_SVE) // CPU_CAPABILITY_AVX512
+    !defined(CPU_CAPABILITY_SVE256) // CPU_CAPABILITY_AVX512
 // SVE code expects 256-vectors; leave that set for SVE?
 #if defined(__GNUC__)
 #define __at_align__ __attribute__((aligned(16)))
@@ -103,6 +103,9 @@ struct is_floating_point
 
 template <typename T>
 constexpr bool is_floating_point_v = is_floating_point<T>::value;
+
+template <typename T>
+constexpr bool is_integer_v = std::is_integral_v<T>;
 
 template <typename T>
 struct is_reduced_floating_point
@@ -143,7 +146,29 @@ DEFINE_INT_OF_SIZE(int8_t);
 template <typename T>
 using int_same_size_t = typename int_of_size<sizeof(T)>::type;
 
-// NOTE: If you specialize on a type, you must define all operations!
+/**
+ * Detect at compile time whether Vectorized has an explicit
+ * specialization for T. (You are required to specialize this type
+ * whenever you specialize Vectorized). Useful for generic algorithms
+ * to decide whether to rely on a specialization being fast. For
+ * example, they might choose to handle reduced-precision floating
+ * point types directly if they're supported, or convert through float
+ * if not.
+ */
+#if defined(__s390x__)
+template <class T, class TEMP = void>
+#else
+template <typename T>
+#endif
+struct is_vec_specialized_for : std::bool_constant<false> {
+};
+
+template <typename T>
+constexpr bool is_vec_specialized_for_v = is_vec_specialized_for<T>::value;
+
+// NOTE: If you specialize Vectorized on a type, you must define all
+// operations!  You must also specialize is_vec_specialized_for for
+// that type.
 
 // emulates Vectorized types
 #if defined(__s390x__)
@@ -216,9 +241,6 @@ struct Vectorized {
     Vectorized vector;
     int_same_size_t<T> buffer[size()];
     mask.store(buffer);
-#if defined(__clang__) && __ARM_FEATURE_SVE
-#pragma clang loop vectorize(disable)
-#endif
     for (const auto i : c10::irange(size())) {
       if (buffer[i] & 0x01) {
         vector[i] = b[i];
@@ -260,7 +282,8 @@ struct Vectorized {
   }
   static Vectorized<T> loadu(const void* ptr, int64_t count) {
     Vectorized vector;
-    std::memcpy(vector.values, ptr, count * sizeof(T));
+    std::memcpy(
+        vector.values, ptr, std::min<int64_t>(count, size()) * sizeof(T));
     return vector;
   }
   static Vectorized<T> loadu_one_fourth(const void* ptr) {
@@ -271,7 +294,7 @@ struct Vectorized {
   }
 
   void store(void* ptr, int count = size()) const {
-    std::memcpy(ptr, values, count * sizeof(T));
+    std::memcpy(ptr, values, std::min<int64_t>(count, size()) * sizeof(T));
   }
   int zero_mask() const {
     // returns an integer mask where all zero elements are translated to 1-bit
@@ -525,6 +548,9 @@ struct Vectorized {
   Vectorized<T> exp_u20() const {
     return map(std::exp);
   }
+  Vectorized<T> fexp_u20() const {
+    return map(std::exp);
+  }
   Vectorized<T> frac() const {
     return *this - this->trunc();
   }
@@ -612,7 +638,7 @@ struct Vectorized {
   }
   Vectorized<T> neg() const {
     // NB: the trailing return type is needed because we need to coerce the
-    // return value back to T in the case of unary operator- incuring a
+    // return value back to T in the case of unary operator- incurring a
     // promotion
     return map([](T x) -> T { return -x; });
   }
@@ -650,7 +676,7 @@ struct Vectorized {
     return map(std::sqrt);
   }
   Vectorized<T> reciprocal() const {
-    return map([](T x) { return (T)(1) / x; });
+    return map([](T x) { return (T)1 / x; });
   }
   Vectorized<T> rsqrt() const {
     return map([](T x) { return (T)1 / std::sqrt(x); });
@@ -1226,6 +1252,16 @@ inline Vectorized<T> fmadd(
 VECTORIZED_SUPPORT_SCALARS_FOR_TERNARY_FUNC(fmadd)
 
 template <typename T>
+inline Vectorized<T> fnmadd(
+    const Vectorized<T>& a,
+    const Vectorized<T>& b,
+    const Vectorized<T>& c) {
+  return -(a * b) + c;
+}
+
+VECTORIZED_SUPPORT_SCALARS_FOR_TERNARY_FUNC(fnmadd)
+
+template <typename T>
 inline Vectorized<T> fmsub(
     const Vectorized<T>& a,
     const Vectorized<T>& b,
@@ -1234,6 +1270,16 @@ inline Vectorized<T> fmsub(
 }
 
 VECTORIZED_SUPPORT_SCALARS_FOR_TERNARY_FUNC(fmsub)
+
+template <typename T>
+inline Vectorized<T> fnmsub(
+    const Vectorized<T>& a,
+    const Vectorized<T>& b,
+    const Vectorized<T>& c) {
+  return -(a * b) - c;
+}
+
+VECTORIZED_SUPPORT_SCALARS_FOR_TERNARY_FUNC(fnmsub)
 
 template <typename T>
 Vectorized<T> inline operator&&(
@@ -1323,7 +1369,7 @@ inline Vectorized<IntType> convert_to_int_of_same_size(
   static_assert(sizeof(T) == sizeof(IntType));
   static constexpr int size = Vectorized<T>::size();
 
-  std::array<T, size> src_arr;
+  std::array<T, size> src_arr = {};
   src.store(static_cast<void*>(src_arr.data()));
   std::array<IntType, size> buffer;
   std::transform(

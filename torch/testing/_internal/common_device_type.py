@@ -3,22 +3,25 @@
 import copy
 import gc
 import inspect
+import logging
 import os
 import runpy
 import sys
 import threading
 import unittest
 from collections import namedtuple
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from enum import Enum
 from functools import partial, wraps
-from typing import Any, Callable, ClassVar, Optional, TypeVar, Union
+from typing import Any, ClassVar, TypeVar
 from typing_extensions import ParamSpec
 
 import torch
 from torch._inductor.utils import GPU_TYPES
+from torch._utils import _is_privateuse1_backend_available
 from torch.testing._internal.common_cuda import (
     _get_torch_cuda_version,
+    _get_torch_hipblaslt_version,
     _get_torch_rocm_version,
     TEST_CUSPARSE_GENERIC,
     TEST_HIPSPARSE_GENERIC,
@@ -31,8 +34,9 @@ from torch.testing._internal.common_utils import (
     dtype_name,
     get_tracked_input,
     IS_FBCODE,
-    is_privateuse1_backend_available,
+    IS_MACOS,
     IS_REMOTE_GPU,
+    IS_S390X,
     IS_SANDCASTLE,
     IS_WINDOWS,
     NATIVE_DEVICES,
@@ -44,6 +48,7 @@ from torch.testing._internal.common_utils import (
     TEST_MPS,
     TEST_WITH_ASAN,
     TEST_WITH_MIOPEN_SUGGEST_NHWC,
+    TEST_WITH_MTIA,
     TEST_WITH_ROCM,
     TEST_WITH_TORCHINDUCTOR,
     TEST_WITH_TSAN,
@@ -63,6 +68,8 @@ try:
 except ModuleNotFoundError:
     HAS_PSUTIL = False
     psutil = None
+
+log = logging.getLogger(__name__)
 
 # Note [Writing Test Templates]
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -280,35 +287,6 @@ except ModuleNotFoundError:
 # they are run. This makes it useful for initializing devices and dependencies.
 
 
-# Note [Overriding methods in generic tests]
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#
-# Device generic tests look a lot like normal test classes, but they differ
-# from ordinary classes in some important ways.  In particular, overriding
-# methods in generic tests doesn't work quite the way you expect.
-#
-#     class TestFooDeviceType(TestCase):
-#         # Intention is to override
-#         def assertEqual(self, x, y):
-#             # This DOESN'T WORK!
-#             super().assertEqual(x, y)
-#
-# If you try to run this code, you'll get an error saying that TestFooDeviceType
-# is not in scope.  This is because after instantiating our classes, we delete
-# it from the parent scope.  Instead, you need to hardcode a direct invocation
-# of the desired subclass call, e.g.,
-#
-#     class TestFooDeviceType(TestCase):
-#         # Intention is to override
-#         def assertEqual(self, x, y):
-#             TestCase.assertEqual(x, y)
-#
-# However, a less error-prone way of customizing the behavior of TestCase
-# is to either (1) add your functionality to TestCase and make it toggled
-# by a class attribute, or (2) create your own subclass of TestCase, and
-# then inherit from it for your generic test.
-
-
 def _dtype_test_suffix(dtypes):
     """Returns the test suffix for a dtype, sequence of dtypes, or None."""
     if isinstance(dtypes, (list, tuple)):
@@ -343,6 +321,43 @@ def _update_param_kwargs(param_kwargs, name, value):
 class DeviceTypeTestBase(TestCase):
     device_type: str = "generic_device_type"
 
+    # When True, @onlyOn-based decorators (@onlyCUDA, @onlyMPS, etc.) will not
+    # skip tests for this device type. This is a pragmatic short-term solution to
+    # allow PrivateUse1 backends to run tests that are currently gated behind
+    # device-specific decorators. It is intended to be used together with the
+    # skip mechanism (see https://github.com/pytorch/pytorch/issues/177253).
+    # In the longer term, we are incrementally migrating accelerator tests to be
+    # device-generic and removing @onlyCUDA on tests that should be device-generic.
+    bypass_device_restrictions: bool = False
+
+    # Decorators and skips to apply to tests that are parametrized by ops.
+    # Keys are OpInfo.full_name (e.g. "op" or "linalg.norm"), NOT OpInfo.name.
+    # Note that OpInfo.full_name and OpInfo.name have difference: OpInfo.full_name
+    # includes the variant suffix (e.g., "div.floor_rounding") if it has, otherwise,
+    # OpInfo.full_name identical to OpInfo.name.
+    # These are intentionally placed on DeviceTypeTestBase (rather than solely on
+    # PrivateUse1TestBase) so that in-tree backends can adopt the same mechanism
+    # in the future.
+    op_overrides = None  # type: Optional[dict[str, list[DecorateInfo]]]
+
+    # An optional mechanism to limit which ops generate test variants.
+    # When set, only ops whose full_name is in this collection will generate tests.
+    # This is useful for less mature backends that only implement a few operators.
+    # Keys are OpInfo.full_name (e.g. "add", "mul", "linalg.norm").
+    # If None (default), all ops in the @ops decorator's op_list generate variants.
+    op_allowlist = None  # type: Optional[Collection[str]]
+
+    # An optional skip mechanism built upon instantiate_device_type_tests(),
+    # designed to facilitate skipping either an entire class or specific test cases
+    # within a class.
+    #
+    # Format:
+    #   test_exclusions = {
+    #       "TestClassA": ["test_a", "test_b"],   # Selective: Skips specific
+    #       "TestClassB": "*",                    # Global: Skips the entire class
+    #   }
+    test_exclusions: ClassVar[dict[str, Collection[str]]]
+
     # Flag to disable test suite early due to unrecoverable error such as CUDA error.
     _stop_test_suite = False
 
@@ -367,11 +382,56 @@ class DeviceTypeTestBase(TestCase):
     def rel_tol(self, prec):
         self._tls.rel_tol = prec
 
+    @classmethod
+    def _apply_op_overrides(cls, ops):
+        if cls.op_overrides is None:
+            return
+
+        op_dict = {op.full_name: op for op in copy.deepcopy(ops.op_list)}
+
+        if cls.op_overrides is not None:
+            for op_name, decorators in cls.op_overrides.items():
+                for decorator in decorators:
+                    if cls.device_type == "privateuse1":
+                        decorator.device_type = torch._C._get_privateuse1_backend_name()
+                    else:
+                        decorator.device_type = cls.device_type
+                    # op_name may not be in op_dict if @ops() has restricted the
+                    # OpInfo list to a smaller set than op_overrides covers.
+                    if op_name in op_dict:
+                        op_dict[op_name].decorators += (decorator,)
+
+        ops.op_list = list(op_dict.values())
+
     # Returns a string representing the device that single device tests should use.
     # Note: single device tests use this device exclusively.
     @classmethod
     def get_primary_device(cls):
         return cls.device_type
+
+    @classmethod
+    def _get_test_exclusions(cls, test_class_name):
+        test_exclusions = getattr(cls, "test_exclusions", None)
+        if test_exclusions is not None and test_class_name in test_exclusions:
+            return test_exclusions[test_class_name]
+        return []
+
+    @classmethod
+    def _apply_op_allowlist(cls, ops):
+        """Filters ops.op_list to only include ops declared in op_allowlist.
+
+        If op_allowlist is None (default), no filtering is applied.
+        If op_allowlist is set, only ops whose full_name is in the collection
+        will generate test variants.
+
+        Args:
+            ops: The ops decorator instance whose op_list will be filtered.
+        """
+        if cls.op_allowlist is None:
+            return
+
+        supported_set = set(cls.op_allowlist)
+        ops.op_list = [op for op in ops.op_list if op.full_name in supported_set]
 
     @classmethod
     def _init_and_get_primary_device(cls):
@@ -402,7 +462,8 @@ class DeviceTypeTestBase(TestCase):
 
         default_dtypes = test.dtypes.get("all")
         msg = f"@dtypes is mandatory when using @dtypesIf however '{test.__name__}' didn't specify it"
-        assert default_dtypes is not None, msg
+        if default_dtypes is None:
+            raise AssertionError(msg)
 
         return test.dtypes.get(cls.device_type, default_dtypes)
 
@@ -417,8 +478,8 @@ class DeviceTypeTestBase(TestCase):
         return test.tolerance_overrides.get(dtype, tol(self.precision, self.rel_tol))
 
     def _apply_precision_override_for_test(self, test, param_kwargs):
-        dtype = param_kwargs["dtype"] if "dtype" in param_kwargs else None
-        dtype = param_kwargs["dtypes"] if "dtypes" in param_kwargs else dtype
+        dtype = param_kwargs.get("dtype")
+        dtype = param_kwargs.get("dtypes", dtype)
         if dtype:
             self.precision = self._get_precision_override(test, dtype)
             self.precision, self.rel_tol = self._get_tolerance_override(test, dtype)
@@ -478,7 +539,8 @@ class DeviceTypeTestBase(TestCase):
 
                 return result
 
-            assert not hasattr(cls, name), f"Redefinition of test {name}"
+            if hasattr(cls, name):
+                raise AssertionError(f"Redefinition of test {name}")
             setattr(cls, name, instantiated_test)
 
         def default_parametrize_fn(test, generic_cls, device_cls):
@@ -656,8 +718,17 @@ class XPUTestBase(DeviceTypeTestBase):
     @classmethod
     def get_all_devices(cls):
         # currently only one device is supported on MPS backend
+        primary_device_idx = int(cls.get_primary_device().split(":")[1])
+        num_devices = torch.xpu.device_count()
+
         prim_device = cls.get_primary_device()
-        return [prim_device]
+        xpu_str = "xpu:{0}"
+        non_primary_devices = [
+            xpu_str.format(idx)
+            for idx in range(num_devices)
+            if idx != primary_device_idx
+        ]
+        return [prim_device] + non_primary_devices
 
     @classmethod
     def setUpClass(cls):
@@ -684,6 +755,7 @@ class PrivateUse1TestBase(DeviceTypeTestBase):
     primary_device: ClassVar[str]
     device_mod = None
     device_type = "privateuse1"
+    bypass_device_restrictions = False
 
     @classmethod
     def get_primary_device(cls):
@@ -706,10 +778,11 @@ class PrivateUse1TestBase(DeviceTypeTestBase):
     def setUpClass(cls):
         cls.device_type = torch._C._get_privateuse1_backend_name()
         cls.device_mod = getattr(torch, cls.device_type, None)
-        assert (
-            cls.device_mod is not None
-        ), f"""torch has no module of `{cls.device_type}`, you should register
-                                            a module by `torch._register_device_module`."""
+        if cls.device_mod is None:
+            raise AssertionError(
+                f"torch has no module of `{cls.device_type}`, you should register "
+                "a module by `torch._register_device_module`."
+            )
         cls.primary_device = f"{cls.device_type}:{cls.device_mod.current_device()}"
 
 
@@ -721,8 +794,13 @@ def get_device_type_test_bases():
 
     if IS_SANDCASTLE or IS_FBCODE:
         if IS_REMOTE_GPU:
-            # Skip if sanitizer is enabled
-            if not TEST_WITH_ASAN and not TEST_WITH_TSAN and not TEST_WITH_UBSAN:
+            # Skip if sanitizer is enabled or we're on MTIA machines
+            if (
+                not TEST_WITH_ASAN
+                and not TEST_WITH_TSAN
+                and not TEST_WITH_UBSAN
+                and not TEST_WITH_MTIA
+            ):
                 test_bases.append(CUDATestBase)
         else:
             test_bases.append(CPUTestBase)
@@ -731,7 +809,7 @@ def get_device_type_test_bases():
         if torch.cuda.is_available():
             test_bases.append(CUDATestBase)
 
-        if is_privateuse1_backend_available():
+        if _is_privateuse1_backend_available():
             test_bases.append(PrivateUse1TestBase)
         # Disable MPS testing in generic device testing temporarily while we're
         # ramping up support.
@@ -749,31 +827,45 @@ def filter_desired_device_types(device_type_test_bases, except_for=None, only_fo
     intersect = set(except_for if except_for else []) & set(
         only_for if only_for else []
     )
-    assert (
-        not intersect
-    ), f"device ({intersect}) appeared in both except_for and only_for"
+    if intersect:
+        raise AssertionError(
+            f"device ({intersect}) appeared in both except_for and only_for"
+        )
 
     # Replace your privateuse1 backend name with 'privateuse1'
-    if is_privateuse1_backend_available():
+    # This handles the case where PrivateUse1TestBase.device_type has been
+    # changed from "privateuse1" to the actual backend name (e.g., "openreg")
+    # by setUpClass being called during previous instantiate_device_type_tests calls
+    if _is_privateuse1_backend_available():
         privateuse1_backend_name = torch._C._get_privateuse1_backend_name()
+
+        def func_replace(x: str) -> str:
+            return x.replace(privateuse1_backend_name, "privateuse1")
+
         except_for = (
-            ["privateuse1" if x == privateuse1_backend_name else x for x in except_for]
-            if except_for is not None
-            else None
+            ([func_replace(x) for x in except_for] if except_for is not None else None)
+            if not isinstance(except_for, str)
+            else func_replace(except_for)
         )
         only_for = (
-            ["privateuse1" if x == privateuse1_backend_name else x for x in only_for]
-            if only_for is not None
-            else None
+            ([func_replace(x) for x in only_for] if only_for is not None else None)
+            if not isinstance(only_for, str)
+            else func_replace(only_for)
         )
+    else:
+
+        def func_replace(x: str) -> str:
+            return x
 
     if except_for:
         device_type_test_bases = filter(
-            lambda x: x.device_type not in except_for, device_type_test_bases
+            lambda x: func_replace(x.device_type) not in except_for,
+            device_type_test_bases,
         )
     if only_for:
         device_type_test_bases = filter(
-            lambda x: x.device_type in only_for, device_type_test_bases
+            lambda x: func_replace(x.device_type) in only_for,
+            device_type_test_bases,
         )
 
     return list(device_type_test_bases)
@@ -892,34 +984,52 @@ def instantiate_device_type_tests(
     # are not discoverable.
     del scope[generic_test_class.__name__]
 
-    # Creates an 'empty' version of the generic_test_class
-    # Note: we don't inherit from the generic_test_class directly because
-    #   that would add its tests to our test classes and they would be
-    #   discovered (despite not being runnable). Inherited methods also
-    #   can't be removed later, and we can't rely on load_tests because
-    #   pytest doesn't support it (as of this writing).
-    empty_name = generic_test_class.__name__ + "_base"
-    empty_class = type(empty_name, generic_test_class.__bases__, {})
-
-    # Acquires members names
-    # See Note [Overriding methods in generic tests]
-    generic_members = set(generic_test_class.__dict__.keys()) - set(
-        empty_class.__dict__.keys()
-    )
+    generic_members = set(generic_test_class.__dict__.keys())
     generic_tests = [x for x in generic_members if x.startswith("test")]
 
     # Creates device-specific test cases
     for base in get_desired_device_type_test_bases(
         except_for, only_for, include_lazy, allow_mps, allow_xpu
     ):
+        skipped = base._get_test_exclusions(generic_test_class.__name__)
+        # Skip the entire class
+        if "*" in skipped:
+            continue
+
         class_name = generic_test_class.__name__ + base.device_type.upper()
 
-        # type set to Any and suppressed due to unsupport runtime class:
+        # type set to Any and suppressed due to unsupported runtime class:
         # https://github.com/python/mypy/wiki/Unsupported-Python-Features
-        device_type_test_class: Any = type(class_name, (base, empty_class), {})
+        device_type_test_class: Any = type(class_name, (base, generic_test_class), {})
+
+        # Arrange for setUpClass and tearDownClass methods defined both in the test template
+        # class and in the generic base to be called. This allows device-parameterized test
+        # classes to support setup and teardown.
+        # NB: This should be done before instantiate_test() is called as that invokes setup.
+        @classmethod
+        def _setUpClass(cls):
+            # This should always be called, whether or not the test class invokes
+            # super().setUpClass(), to set the primary device.
+            base.setUpClass()
+            # We want to call the @classmethod defined in the generic base, but pass
+            # it the device-specific class object (cls), hence the __func__ call.
+            generic_test_class.setUpClass.__func__(cls)
+
+        @classmethod
+        def _tearDownClass(cls):
+            # We want to call the @classmethod defined in the generic base, but pass
+            # it the device-specific class object (cls), hence the __func__ call.
+            generic_test_class.tearDownClass.__func__(cls)
+            base.tearDownClass()
+
+        device_type_test_class.setUpClass = _setUpClass
+        device_type_test_class.tearDownClass = _tearDownClass
 
         for name in generic_members:
             if name in generic_tests:  # Instantiates test member
+                # Skip the specified methods.
+                if name in skipped:
+                    continue
                 test = getattr(generic_test_class, name)
                 # XLA-compat shim (XLA's instantiate_test takes doesn't take generic_cls)
                 sig = inspect.signature(device_type_test_class.instantiate_test)
@@ -930,29 +1040,10 @@ def instantiate_device_type_tests(
                     )
                 else:
                     device_type_test_class.instantiate_test(name, copy.deepcopy(test))
-            else:  # Ports non-test member
-                assert (
-                    name not in device_type_test_class.__dict__
-                ), f"Redefinition of directly defined member {name}"
+            # Ports non-test member. Setup / teardown have already been handled above
+            elif name not in device_type_test_class.__dict__:
                 nontest = getattr(generic_test_class, name)
                 setattr(device_type_test_class, name, nontest)
-
-        # The dynamically-created test class derives from the test template class
-        # and the empty class. Arrange for both setUpClass and tearDownClass methods
-        # to be called. This allows the parameterized test classes to support setup
-        # and teardown.
-        @classmethod
-        def _setUpClass(cls):
-            base.setUpClass()
-            empty_class.setUpClass()
-
-        @classmethod
-        def _tearDownClass(cls):
-            empty_class.tearDownClass()
-            base.tearDownClass()
-
-        device_type_test_class.setUpClass = _setUpClass
-        device_type_test_class.tearDownClass = _tearDownClass
 
         # Mimics defining the instantiated class in the caller's file
         # by setting its module to the given class's and adding
@@ -960,6 +1051,13 @@ def instantiate_device_type_tests(
         # This lets the instantiated class be discovered by unittest.
         device_type_test_class.__module__ = generic_test_class.__module__
         scope[class_name] = device_type_test_class
+
+    # Delete the generic form of the test functions (e.g. TestFoo.test_bar()) so they're
+    # not discoverable. This mutates the original class (TestFoo), which was removed from
+    # scope above. At this point, device-specific tests (e.g. TestFooCUDA.test_bar_cuda)
+    # have already been created and the generic forms are no longer needed.
+    for name in generic_tests:
+        delattr(generic_test_class, name)
 
 
 # Category of dtypes to run an OpInfo-based test for
@@ -1060,8 +1158,8 @@ class ops(_TestParametrizer):
         self,
         op_list,
         *,
-        dtypes: Union[OpDTypes, Sequence[torch.dtype]] = OpDTypes.supported,
-        allowed_dtypes: Optional[Sequence[torch.dtype]] = None,
+        dtypes: OpDTypes | Sequence[torch.dtype] = OpDTypes.supported,
+        allowed_dtypes: Sequence[torch.dtype] | None = None,
         skip_if_dynamo=True,
     ):
         self.op_list = list(op_list)
@@ -1080,10 +1178,14 @@ class ops(_TestParametrizer):
                 "instantiate_parametrized_tests()"
             )
 
+        # Order matters: op_allowlist filters first, then op_overrides adds decorators
+        # This ensures op_overrides only applies to ops that passed the op_allowlist filter
+        device_cls._apply_op_allowlist(self)
+        device_cls._apply_op_overrides(self)
         op = check_exhausted_iterator = object()
         for op in self.op_list:
             # Determine the set of dtypes to use.
-            dtypes: Union[set[torch.dtype], set[None]]
+            dtypes: set[torch.dtype] | set[None]
             if isinstance(self.opinfo_dtypes, Sequence):
                 dtypes = set(self.opinfo_dtypes)
             elif self.opinfo_dtypes == OpDTypes.unsupported_backward:
@@ -1100,7 +1202,7 @@ class ops(_TestParametrizer):
                 dtypes = set(op.supported_dtypes(device_cls.device_type))
             elif self.opinfo_dtypes == OpDTypes.any_one:
                 # Tries to pick a dtype that supports both forward or backward
-                supported = op.supported_dtypes(device_cls.device_type)
+                supported = set(op.supported_dtypes(device_cls.device_type))
                 supported_backward = op.supported_backward_dtypes(
                     device_cls.device_type
                 )
@@ -1164,8 +1266,8 @@ class ops(_TestParametrizer):
                         except Exception as e:
                             tracked_input = get_tracked_input()
                             if PRINT_REPRO_ON_FAILURE and tracked_input is not None:
-                                e_tracked = Exception(  # noqa: TRY002
-                                    f"Caused by {tracked_input.type_desc} "
+                                e_tracked = Exception(
+                                    f"{str(e)}\n\nCaused by {tracked_input.type_desc} "
                                     f"at index {tracked_input.index}: "
                                     f"{_serialize_sample(tracked_input.val)}"
                                 )
@@ -1199,9 +1301,13 @@ class ops(_TestParametrizer):
                     yield (test_wrapper, test_name, param_kwargs, decorator_fn)
                 except Exception as ex:
                     # Provides an error message for debugging before rethrowing the exception
-                    print(f"Failed to instantiate {test_name} for op {op.name}!")
+                    log.info("Failed to instantiate %s for op %s", test_name, op.name)
                     raise ex
         if op is check_exhausted_iterator:
+            # When OPINFO_RESTRICT_TO_DSL narrows op_db to a DSL subset, many
+            # per-test op lists legitimately become empty -don't fail collection.
+            if os.environ.get("OPINFO_RESTRICT_TO_DSL"):
+                return
             raise ValueError(
                 "An empty op_list was passed to @ops. "
                 "Note that this may result from reuse of a generator."
@@ -1303,26 +1409,39 @@ class skipPRIVATEUSE1If(skipIf):
 
 
 def _has_sufficient_memory(device, size):
-    if torch.device(device).type == "cuda":
-        if not torch.cuda.is_available():
+    device_ = torch.device(device)
+    device_type = device_.type
+    if device_type in ["cuda", "xpu"]:
+        acc = torch.accelerator.current_accelerator()
+        # Case 1: no accelerator found
+        if not acc:
             return False
+        # Case 2: accelerator found but not matching device type
+        if acc.type != device_type:
+            return True
+        # Case 3: accelerator found and matching device type but not available
+        if not torch.accelerator.is_available():
+            return False
+        # Case 4: accelerator found and matching device type and available
         gc.collect()
-        torch.cuda.empty_cache()
-        # torch.cuda.mem_get_info, aka cudaMemGetInfo, returns a tuple of (free memory, total memory) of a GPU
-        if device == "cuda":
-            device = "cuda:0"
-        return (
-            torch.cuda.memory.mem_get_info(device)[0]
-            * torch.cuda.memory.get_per_process_memory_fraction(device)
-        ) >= size
+        torch.accelerator.empty_cache()
 
-    if device == "xla":
+        if device_.index is None:
+            device_ = torch.device(device_type, 0)
+
+        if device_type == "cuda":
+            return (
+                torch.cuda.memory.mem_get_info(device_)[0]
+                * torch.cuda.memory.get_per_process_memory_fraction(device_)
+            ) >= size
+
+        if device_type == "xpu":
+            return torch.xpu.memory.mem_get_info(device_)[0] >= size
+
+    if device_type == "xla":
         raise unittest.SkipTest("TODO: Memory availability checks for XLA?")
 
-    if device == "xpu":
-        raise unittest.SkipTest("TODO: Memory availability checks for Intel GPU?")
-
-    if device != "cpu":
+    if device_type != "cpu":
         raise unittest.SkipTest("Unknown device type")
 
     # CPU
@@ -1335,6 +1454,10 @@ def _has_sufficient_memory(device, size):
     else:
         effective_size = size
 
+    # don't try using all RAM on s390x, leave some for service processes
+    if IS_S390X:
+        effective_size = effective_size * 2
+
     if psutil.virtual_memory().available < effective_size:
         gc.collect()
     return psutil.virtual_memory().available >= effective_size
@@ -1346,11 +1469,12 @@ def largeTensorTest(size, device=None, inductor=TEST_WITH_TORCHINDUCTOR):
     size may be a number of bytes, a string of the form "N GB", or a callable
 
     If the test is a device generic test, available memory on the primary device will be checked.
-    It can also be overriden by the optional `device=` argument.
+    It can also be overridden by the optional `device=` argument.
     In other tests, the `device=` argument needs to be specified.
     """
     if isinstance(size, str):
-        assert size.endswith(("GB", "gb")), "only bytes or GB supported"
+        if not size.endswith(("GB", "gb")):
+            raise AssertionError(f"only bytes or GB supported, got {size!r}")
         size = 1024**3 * int(size[:-2])
 
     def inner(fn):
@@ -1368,7 +1492,6 @@ def largeTensorTest(size, device=None, inductor=TEST_WITH_TORCHINDUCTOR):
             # an additional array of the same size as the input.
             if inductor and torch._inductor.config.cpp_wrapper and _device != "cpu":
                 size_bytes *= 2
-
             if not _has_sufficient_memory(_device, size_bytes):
                 raise unittest.SkipTest(f"Insufficient {_device} memory")
 
@@ -1380,8 +1503,9 @@ def largeTensorTest(size, device=None, inductor=TEST_WITH_TORCHINDUCTOR):
 
 
 class expectedFailure:
-    def __init__(self, device_type):
+    def __init__(self, device_type, dtype=None):
         self.device_type = device_type
+        self.dtype = dtype
 
     def __call__(self, fn):
         @wraps(fn)
@@ -1395,7 +1519,13 @@ class expectedFailure:
             else:
                 target_device_type = slf.device_type
 
-            if self.device_type is None or self.device_type == target_device_type:
+            target_dtype = kwargs.get("dtype", getattr(slf, "dtype", None))
+            device_matches = (
+                self.device_type is None or self.device_type == target_device_type
+            )
+            dtype_matches = self.dtype is None or self.dtype == target_dtype
+
+            if device_matches and dtype_matches:
                 try:
                     fn(slf, *args, **kwargs)
                 except Exception:
@@ -1409,14 +1539,22 @@ class expectedFailure:
 
 
 class onlyOn:
-    def __init__(self, device_type):
+    def __init__(self, device_type: str | list):
         self.device_type = device_type
 
     def __call__(self, fn):
         @wraps(fn)
         def only_fn(slf, *args, **kwargs):
-            if self.device_type != slf.device_type:
+            if slf.device_type not in self.device_type:
+                if getattr(slf, "bypass_device_restrictions", False):
+                    return fn(slf, *args, **kwargs)
                 reason = f"Only runs on {self.device_type}"
+                if IS_SANDCASTLE or IS_FBCODE:
+                    print(
+                        f"Skipping {fn.__name__} on sandcastle for following reason: {reason}",
+                        file=sys.stderr,
+                    )
+                    return
                 raise unittest.SkipTest(reason)
 
             return fn(slf, *args, **kwargs)
@@ -1433,15 +1571,20 @@ class deviceCountAtLeast:
         self.num_required_devices = num_required_devices
 
     def __call__(self, fn):
-        assert not hasattr(
-            fn, "num_required_devices"
-        ), f"deviceCountAtLeast redefinition for {fn.__name__}"
+        if hasattr(fn, "num_required_devices"):
+            raise AssertionError(f"deviceCountAtLeast redefinition for {fn.__name__}")
         fn.num_required_devices = self.num_required_devices
 
         @wraps(fn)
         def multi_fn(slf, devices, *args, **kwargs):
             if len(devices) < self.num_required_devices:
                 reason = f"fewer than {self.num_required_devices} devices detected"
+                if IS_SANDCASTLE or IS_FBCODE:
+                    print(
+                        f"Skipping {fn.__name__} on sandcastle for following reason: {reason}",
+                        file=sys.stderr,
+                    )
+                    return
                 raise unittest.SkipTest(reason)
 
             return fn(slf, devices, *args, **kwargs)
@@ -1500,13 +1643,13 @@ def onlyNativeDeviceTypesAnd(devices=None):
 # self.precision *2, max(1, self.precision)).
 class precisionOverride:
     def __init__(self, d):
-        assert isinstance(
-            d, dict
-        ), "precisionOverride not given a dtype : precision dict!"
-        for dtype in d.keys():
-            assert isinstance(
-                dtype, torch.dtype
-            ), f"precisionOverride given unknown dtype {dtype}"
+        if not isinstance(d, dict):
+            raise AssertionError(
+                "precisionOverride not given a dtype : precision dict!"
+            )
+        for dtype in d:
+            if not isinstance(dtype, torch.dtype):
+                raise AssertionError(f"precisionOverride given unknown dtype {dtype}")
 
         self.d = d
 
@@ -1537,14 +1680,13 @@ tol = namedtuple("tol", ["atol", "rtol"])
 
 class toleranceOverride:
     def __init__(self, d):
-        assert isinstance(d, dict), "toleranceOverride not given a dtype : tol dict!"
+        if not isinstance(d, dict):
+            raise AssertionError("toleranceOverride not given a dtype : tol dict!")
         for dtype, prec in d.items():
-            assert isinstance(
-                dtype, torch.dtype
-            ), f"toleranceOverride given unknown dtype {dtype}"
-            assert isinstance(
-                prec, tol
-            ), "toleranceOverride not given a dtype : tol dict!"
+            if not isinstance(dtype, torch.dtype):
+                raise AssertionError(f"toleranceOverride given unknown dtype {dtype}")
+            if not isinstance(prec, tol):
+                raise AssertionError("toleranceOverride not given a dtype : tol dict!")
 
         self.d = d
 
@@ -1567,25 +1709,25 @@ class dtypes:
     def __init__(self, *args, device_type="all"):
         if len(args) > 0 and isinstance(args[0], (list, tuple)):
             for arg in args:
-                assert isinstance(arg, (list, tuple)), (
-                    "When one dtype variant is a tuple or list, "
-                    "all dtype variants must be. "
-                    f"Received non-list non-tuple dtype {str(arg)}"
-                )
-                assert all(
-                    isinstance(dtype, torch.dtype) for dtype in arg
-                ), f"Unknown dtype in {str(arg)}"
+                if not isinstance(arg, (list, tuple)):
+                    raise AssertionError(
+                        "When one dtype variant is a tuple or list, "
+                        "all dtype variants must be. "
+                        f"Received non-list non-tuple dtype {str(arg)}"
+                    )
+                if not all(isinstance(dtype, torch.dtype) for dtype in arg):
+                    raise AssertionError(f"Unknown dtype in {str(arg)}")
         else:
-            assert all(
-                isinstance(arg, torch.dtype) for arg in args
-            ), f"Unknown dtype in {str(args)}"
+            if not all(isinstance(arg, torch.dtype) for arg in args):
+                raise AssertionError(f"Unknown dtype in {str(args)}")
 
         self.args = args
         self.device_type = device_type
 
     def __call__(self, fn):
         d = getattr(fn, "dtypes", {})
-        assert self.device_type not in d, f"dtypes redefinition for {self.device_type}"
+        if self.device_type in d:
+            raise AssertionError(f"dtypes redefinition for {self.device_type}")
         d[self.device_type] = self.args
         fn.dtypes = d
         return fn
@@ -1601,6 +1743,12 @@ class dtypesIfCPU(dtypes):
 class dtypesIfCUDA(dtypes):
     def __init__(self, *args):
         super().__init__(*args, device_type="cuda")
+
+
+# Overrides specified dtypes on Intel GPU.
+class dtypesIfXPU(dtypes):
+    def __init__(self, *args):
+        super().__init__(*args, device_type="xpu")
 
 
 class dtypesIfMPS(dtypes):
@@ -1645,6 +1793,19 @@ def onlyPRIVATEUSE1(fn):
         reason = f"Skip as torch has no module of {device_type}"
         return unittest.skip(reason)(fn)
     return onlyOn(device_type)(fn)
+
+
+def onlyAccelerator(fn):
+    """Skip test if not running on an accelerator device (i.e., skip on CPU and meta)."""
+
+    @wraps(fn)
+    def only_fn(self, *args, **kwargs):
+        if self.device_type in ("cpu", "meta"):
+            reason = "onlyAccelerator: doesn't run on CPU or meta devices"
+            raise unittest.SkipTest(reason)
+        return fn(self, *args, **kwargs)
+
+    return only_fn
 
 
 def onlyCUDAAndPRIVATEUSE1(fn):
@@ -1707,6 +1868,10 @@ def expectedFailureHPU(fn):
 
 def expectedFailureMPS(fn):
     return expectedFailure("mps")(fn)
+
+
+def expectedFailureMPSComplex(fn):
+    return expectedFailure("mps", torch.complex64)(fn)
 
 
 def expectedFailureMPSPre15(fn):
@@ -1780,6 +1945,15 @@ def has_hipsolver():
     return rocm_version >= (5, 3)
 
 
+# Skips a test on CUDA if cuSOLVER is not available,
+# and on ROCm if MAGMA is not available.
+def skipCUDAIfNoCusolverROCMIfNoMagma(fn):
+    if TEST_WITH_ROCM:
+        return skipCUDAIfNoMagma(fn)
+    else:
+        return skipCUDAIfNoCusolver(fn)
+
+
 # Skips a test on CUDA/ROCM if cuSOLVER/hipSOLVER is not available
 def skipCUDAIfNoCusolver(fn):
     return skipCUDAIf(
@@ -1850,6 +2024,31 @@ def skipCUDAIfRocmVersionLessThan(version=None):
     return dec_fn
 
 
+# Skips a test on CUDA if ROCm hipBLASLt is unavailable or its version is lower than requested.
+def skipCUDAIfRocmHipBlasltVersionLessThan(version=None):
+    def dec_fn(fn):
+        @wraps(fn)
+        def wrap_fn(self, *args, **kwargs):
+            if self.device_type == "cuda":
+                if not TEST_WITH_ROCM:
+                    reason = "ROCm not available"
+                    raise unittest.SkipTest(reason)
+                hipblaslt_version_tuple = _get_torch_hipblaslt_version()
+                if (
+                    hipblaslt_version_tuple is None
+                    or version is None
+                    or hipblaslt_version_tuple < tuple(version)
+                ):
+                    reason = f"hipBLASLt {hipblaslt_version_tuple} is available but {version} required"
+                    raise unittest.SkipTest(reason)
+
+            return fn(self, *args, **kwargs)
+
+        return wrap_fn
+
+    return dec_fn
+
+
 # Skips a test on CUDA when using ROCm.
 def skipCUDAIfNotMiopenSuggestNHWC(fn):
     return skipCUDAIf(
@@ -1859,7 +2058,7 @@ def skipCUDAIfNotMiopenSuggestNHWC(fn):
 
 
 # Skips a test for specified CUDA versions, given in the form of a list of [major, minor]s.
-def skipCUDAVersionIn(versions: Optional[list[tuple[int, int]]] = None):
+def skipCUDAVersionIn(versions: list[tuple[int, int]] | None = None):
     def dec_fn(fn):
         @wraps(fn)
         def wrap_fn(self, *args, **kwargs):
@@ -1877,7 +2076,7 @@ def skipCUDAVersionIn(versions: Optional[list[tuple[int, int]]] = None):
 
 
 # Skips a test for CUDA versions less than specified, given in the form of [major, minor].
-def skipCUDAIfVersionLessThan(versions: Optional[tuple[int, int]] = None):
+def skipCUDAIfVersionLessThan(versions: tuple[int, int] | None = None):
     def dec_fn(fn):
         @wraps(fn)
         def wrap_fn(self, *args, **kwargs):
@@ -1968,6 +2167,10 @@ def skipHPU(fn):
     return skipHPUIf(True, "test doesn't work on HPU backend")(fn)
 
 
+def skipXPU(fn):
+    return skipXPUIf(True, "test doesn't work on XPU backend")(fn)
+
+
 def skipPRIVATEUSE1(fn):
     return skipPRIVATEUSE1If(True, "test doesn't work on privateuse1 backend")(fn)
 
@@ -1978,13 +2181,35 @@ def get_all_device_types() -> list[str]:
     return ["cpu"] if not torch.cuda.is_available() else ["cpu", "cuda"]
 
 
-flex_attention_supported_platform = unittest.skipUnless(
+# skip since currently flex attention requires at least `avx2` support on CPU.
+IS_FLEX_ATTENTION_CPU_PLATFORM_SUPPORTED = (
+    not IS_MACOS
+    and torch.cpu._is_avx2_supported()
+    and os.getenv("ATEN_CPU_CAPABILITY") != "default"
+)
+IS_FLEX_ATTENTION_XPU_PLATFORM_SUPPORTED = (
+    torch.xpu.is_available() and torch.utils._triton.has_triton()
+)
+IS_FLEX_ATTENTION_CUDA_PLATFORM_SUPPORTED = (
     torch.cuda.is_available()
     and torch.utils._triton.has_triton()
-    and torch.cuda.get_device_capability() >= (8, 0),
-    "Requires CUDA and Triton",
+    and torch.cuda.get_device_capability() >= (8, 0)
 )
-if torch.version.hip and "gfx94" in torch.cuda.get_device_properties(0).gcnArchName:
+flex_attention_supported_platform = unittest.skipUnless(
+    IS_FLEX_ATTENTION_XPU_PLATFORM_SUPPORTED
+    or (
+        IS_FLEX_ATTENTION_CPU_PLATFORM_SUPPORTED
+        and not torch.xpu.is_available()
+        and not torch.cuda.is_available()
+    )
+    or IS_FLEX_ATTENTION_CUDA_PLATFORM_SUPPORTED,
+    "Requires CUDA and Triton, Intel GPU and triton, or CPU with avx2 and later",
+)
+if (
+    torch.version.hip
+    and torch.cuda.device_count() > 0
+    and "gfx94" in torch.cuda.get_device_properties(0).gcnArchName
+):
     e4m3_type = torch.float8_e4m3fnuz
     e5m2_type = torch.float8_e5m2fnuz
     E4M3_MAX_POS = torch.finfo(torch.float8_e4m3fnuz).max

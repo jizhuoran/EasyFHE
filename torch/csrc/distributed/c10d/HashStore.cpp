@@ -1,6 +1,5 @@
 #include <torch/csrc/distributed/c10d/HashStore.hpp>
 
-#include <unistd.h>
 #include <cstdint>
 
 #include <chrono>
@@ -192,12 +191,16 @@ void HashStore::queuePush(
   cv_.notify_one();
 }
 
-std::vector<uint8_t> HashStore::queuePop(const std::string& key) {
+std::vector<uint8_t> HashStore::queuePop(const std::string& key, bool block) {
   std::unique_lock<std::mutex> lock(m_);
 
-  waitLocked(lock, {key}, timeout_);
+  if (block) {
+    waitLocked(lock, {key}, timeout_);
+  }
 
   auto& queue = queues_[key];
+  TORCH_CHECK_WITH(DistQueueEmptyError, !queue.empty(), "queue is empty");
+
   auto val = queue.front();
   queue.pop_front();
   return val;
@@ -211,6 +214,16 @@ int64_t HashStore::queueLen(const std::string& key) {
     return 0;
   }
   return static_cast<int64_t>(it->second.size());
+}
+
+std::vector<std::string> HashStore::listKeys() {
+  std::unique_lock<std::mutex> lock(m_);
+  std::vector<std::string> keys;
+  keys.reserve(map_.size());
+  for (const auto& kv : map_) {
+    keys.push_back(kv.first);
+  }
+  return keys;
 }
 
 } // namespace c10d

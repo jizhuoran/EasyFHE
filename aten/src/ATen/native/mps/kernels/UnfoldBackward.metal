@@ -42,7 +42,7 @@ kernel void unfold_backward(
   // Shift grad_in to start of unfold windows
   pos[dim] = 0;
   grad_in += offset_from_coord(pos, input_strides, ndim);
-  float rc = 0;
+  opmath_t<T> rc = 0;
   const auto in_dim_stride = input_strides[dim];
   const auto in_last_dim_stride = input_strides[ndim];
   for (auto in_dim_idx = left_fold_idx; in_dim_idx <= right_fold_idx;
@@ -70,6 +70,5 @@ kernel void unfold_backward(
 
 INSTANTIATE_UNFOLD_BACKWARD(float);
 INSTANTIATE_UNFOLD_BACKWARD(half);
-#if __METAL_VERSION__ >= 310
 INSTANTIATE_UNFOLD_BACKWARD(bfloat);
-#endif
+INSTANTIATE_UNFOLD_BACKWARD(float2);

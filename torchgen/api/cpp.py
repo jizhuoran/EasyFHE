@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing_extensions import assert_never
 
 from torchgen import local
 from torchgen.api.types import (
@@ -48,7 +49,6 @@ from torchgen.model import (
     TensorOptionsArguments,
     Type,
 )
-from torchgen.utils import assert_never
 
 
 if TYPE_CHECKING:
@@ -118,7 +118,8 @@ def valuetype_type(
         return NamedCType(binds, OptionalCType(elem.type))
     elif isinstance(t, ListType):
         if str(t.elem) == "bool":
-            assert t.size is not None
+            if t.size is None:
+                raise AssertionError("bool ListType must have a size")
             return NamedCType(binds, ArrayCType(BaseCType(boolT), t.size))
         else:
             return None
@@ -127,7 +128,7 @@ def valuetype_type(
 
 
 # Translation of types occurring in JIT arguments to a C++ argument type.
-# If remove_non_owning_ref_types is set, we'll guarantee that the outputed CType is not a non-owning reference type.
+# If remove_non_owning_ref_types is set, we'll guarantee that the output CType is not a non-owning reference type.
 # For example, we'll return std::vector<int> instead of IntArrayRef.
 # See Note [translation from C++ reference to value types]
 def argumenttype_type(
@@ -250,11 +251,14 @@ def returntype_type(t: Type, *, mutable: bool, symint: bool = False) -> CType:
         elif t.name == BaseTy.Scalar:
             return BaseCType(scalarT)
     elif isinstance(t, ListType):
-        assert not mutable, (
-            "Native functions should never return a mutable tensor list. They should return void."
-        )
+        if mutable:
+            raise AssertionError(
+                "Native functions should never return a mutable tensor list. "
+                "They should return void."
+            )
         elem = returntype_type(t.elem, mutable=False)
-        assert t.size is None, f"fixed size list returns not supported: {t}"
+        if t.size is not None:
+            raise AssertionError(f"fixed size list returns not supported: {t}")
         return VectorCType(elem)
     elif isinstance(t, OptionalType):
         elem = returntype_type(t.elem, mutable=mutable)
@@ -286,7 +290,8 @@ def return_names(f: NativeFunction, *, fallback_name: str = "result") -> Sequenc
         # implicitly named self.
         # TODO: Consider incorporating this into the data model
         if f.func.name.name.inplace:
-            assert i == 0, "illegal inplace function with multiple returns"
+            if i != 0:
+                raise AssertionError("illegal inplace function with multiple returns")
             name = "self"
         # If we are out function, the name is the name of the
         # corresponding output function (r.name will get recorded
@@ -417,7 +422,8 @@ def argument(
         else:
             default = None
             # Enforced by NativeFunction.__post_init__
-            assert "options" not in cpp_no_default_args
+            if "options" in cpp_no_default_args:
+                raise AssertionError("'options' should not be in cpp_no_default_args")
             if all(x.default == "None" for x in a.all()):
                 default = "{}"
             elif a.dtype.default == "long":

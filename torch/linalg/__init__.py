@@ -1,7 +1,7 @@
-from torch._C import (  # type: ignore[attr-defined]
+from torch._C import (
     _add_docstr,
-    _linalg,
-    _LinAlgError as LinAlgError,
+    _linalg,  # pyrefly: ignore [missing-module-attribute]
+    _LinAlgError as LinAlgError,  # pyrefly: ignore  # missing-module-attribute
 )
 
 
@@ -329,7 +329,7 @@ Examples::
     tensor(0, dtype=torch.int32)
 
 .. _LAPACK's getrf:
-    https://www.netlib.org/lapack/explore-html/dd/d9a/group__double_g_ecomputational_ga0019443faea08275ca60a734d0593e60.html
+    https://www.netlib.org/lapack/explore-html-3.6.1/dd/d9a/group__double_g_ecomputational_ga0019443faea08275ca60a734d0593e60.html
 """,
 )
 
@@ -921,7 +921,7 @@ Computes a compact representation of the LDL factorization of a Hermitian or sym
 When :attr:`A` is complex valued it can be Hermitian (:attr:`hermitian`\ `= True`)
 or symmetric (:attr:`hermitian`\ `= False`).
 
-The factorization is of the form the form :math:`A = L D L^T`.
+The factorization is of the form :math:`A = L D L^T`.
 If :attr:`hermitian` is `True` then transpose operation is the conjugate transpose.
 
 :math:`L` (or :math:`U`) and :math:`D` are stored in compact form in ``LD``.
@@ -967,7 +967,7 @@ Examples::
     tensor([1, 2, 3], dtype=torch.int32)
 
 .. _LAPACK's sytrf:
-    https://www.netlib.org/lapack/explore-html/d3/db6/group__double_s_ycomputational_gad91bde1212277b3e909eb6af7f64858a.html
+    https://www.netlib.org/lapack/explore-html-3.6.1/d3/db6/group__double_s_ycomputational_gad91bde1212277b3e909eb6af7f64858a.html
 """,
 )
 
@@ -1025,7 +1025,7 @@ Examples::
     tensor(0, dtype=torch.int32)
 
 .. _LAPACK's sytrf:
-    https://www.netlib.org/lapack/explore-html/d3/db6/group__double_s_ycomputational_gad91bde1212277b3e909eb6af7f64858a.html
+    https://www.netlib.org/lapack/explore-html-3.6.1/d3/db6/group__double_s_ycomputational_gad91bde1212277b3e909eb6af7f64858a.html
 """,
 )
 
@@ -1369,21 +1369,21 @@ Whether this function computes a vector or matrix norm is determined as follows:
 
 :attr:`ord` defines the norm that is computed. The following norms are supported:
 
-======================     =========================  ========================================================
-:attr:`ord`                norm for matrices          norm for vectors
-======================     =========================  ========================================================
-`None` (default)           Frobenius norm             `2`-norm (see below)
-`'fro'`                    Frobenius norm             -- not supported --
-`'nuc'`                    nuclear norm               -- not supported --
-`inf`                      `max(sum(abs(x), dim=1))`  `max(abs(x))`
-`-inf`                     `min(sum(abs(x), dim=1))`  `min(abs(x))`
-`0`                        -- not supported --        `sum(x != 0)`
-`1`                        `max(sum(abs(x), dim=0))`  as below
-`-1`                       `min(sum(abs(x), dim=0))`  as below
-`2`                        largest singular value     as below
-`-2`                       smallest singular value    as below
-other `int` or `float`     -- not supported --        `sum(abs(x)^{ord})^{(1 / ord)}`
-======================     =========================  ========================================================
+======================     ==========================   ======================================================
+:attr:`ord`                norm for matrices            norm for vectors
+======================     ==========================   ======================================================
+`None` (default)           Frobenius norm               `2`-norm (see below)
+`'fro'`                    Frobenius norm               -- not supported --
+`'nuc'`                    nuclear norm                 -- not supported --
+`inf`                      `max(sum(abs(x), dim=1))`    `max(abs(x))`
+`-inf`                     `min(sum(abs(x), dim=1))`    `min(abs(x))`
+`0`                        -- not supported --          `sum(x != 0)`
+`1`                        `max(sum(abs(x), dim=0))`    as below
+`-1`                       `min(sum(abs(x), dim=0))`    as below
+`2`                        largest `singular value`_    as below
+`-2`                       smallest `singular value`_   as below
+other `int` or `float`     -- not supported --          `sum(abs(x)^{ord})^{(1 / ord)}`
+======================     ==========================   ======================================================
 
 where `inf` refers to `float('inf')`, NumPy's `inf` object, or any equivalent object.
 
@@ -1483,6 +1483,9 @@ Using the :attr:`dim` argument to compute matrix norms::
     tensor([ 3.7417, 11.2250])
     >>> LA.norm(A[0, :, :]), LA.norm(A[1, :, :])
     (tensor(3.7417), tensor(11.2250))
+
+.. _singular value:
+    https://en.wikipedia.org/wiki/Singular_value_decomposition#Singular_values,_singular_vectors,_and_their_relation_to_the_SVD
 """,
 )
 
@@ -2513,7 +2516,7 @@ Returns:
     A named tuple `(LU, pivots, info)`.
 
 .. _LAPACK's getrf:
-    https://www.netlib.org/lapack/explore-html/dd/d9a/group__double_g_ecomputational_ga0019443faea08275ca60a734d0593e60.html
+    https://www.netlib.org/lapack/explore-html-3.6.1/dd/d9a/group__double_g_ecomputational_ga0019443faea08275ca60a734d0593e60.html
 """,
 )
 
@@ -3009,5 +3012,47 @@ Examples::
     tensor([ 0.3223,  0.2815, -0.1944])
     >>> torch.vdot(v1[0], v2[0])
     tensor(0.3223)
+""",
+)
+
+_powsum = _add_docstr(
+    _linalg.linalg__powsum,
+    r"""
+linalg._powsum(x, ord, dim=None, keepdim=False, *, dtype=None, out=None) -> Tensor
+
+Computes the sum of the absolute values raised to the power ``ord``.
+
+This function computes ``sum(abs(x)**ord)`` without applying the final root,
+which is useful for distributed computing where the root should only be applied
+once after reducing across all ranks.
+
+Supports input of float, double, cfloat and cdouble dtypes.
+
+Args:
+    x (Tensor): tensor, flattened by default, or optionally over dimension(s)
+                specified by :attr:`dim`.
+    ord (int, float): the exponent value. Can be any real number.
+
+Keyword args:
+    dim (int, Tuple[int], optional): dimension(s) to reduce over.
+                                     Default: ``None`` (all dimensions).
+    keepdim (bool, optional): whether the output has :attr:`dim` retained. Default: ``False``.
+    dtype (:class:`torch.dtype`, optional): the desired data type of returned tensor.
+          If specified, the input tensor is cast to :attr:`dtype` before the operation
+          is performed. Default: ``None``.
+    out (Tensor, optional): output tensor. Ignored if ``None``. Default: ``None``.
+
+Returns:
+    A real-valued tensor, even when :attr:`x` is complex.
+
+Example::
+
+    >>> x = torch.tensor([1., 2., 3.])
+    >>> torch.linalg._powsum(x, 2)
+    tensor(14.)
+    >>> torch.linalg.vector_norm(x, 2)
+    tensor(3.7417)
+    >>> torch.linalg._powsum(x, 2) ** 0.5  # equivalent to vector_norm
+    tensor(3.7417)
 """,
 )

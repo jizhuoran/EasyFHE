@@ -4,7 +4,7 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.10 FATAL_ERROR)
 
 include(GNUInstallDirs)
 
@@ -331,6 +331,9 @@ if(NOT TARGET clog)
     "${CONFU_DEPENDENCIES_BINARY_DIR}/clog")
   # We build static version of clog but a dynamic library may indirectly depend on it
   set_property(TARGET clog PROPERTY POSITION_INDEPENDENT_CODE ON)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(clog PRIVATE "-Wno-unused-result")
+  endif()
 endif()
 target_link_libraries(pytorch_qnnpack PUBLIC clog)
 

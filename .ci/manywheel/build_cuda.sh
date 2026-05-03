@@ -4,17 +4,26 @@ set -ex
 
 SCRIPTPATH="$( cd "$(dirname "$0")" ; pwd -P ))"
 
+if [[ -z "$PYTORCH_EXTRA_INSTALL_REQUIREMENTS" ]]; then
+    echo "ERROR: PYTORCH_EXTRA_INSTALL_REQUIREMENTS is not set."
+    echo "CUDA wheels rely on nvidia pypi packages; this variable must define the runtime dependencies."
+    exit 1
+fi
+
 export TORCH_NVCC_FLAGS="-Xfatbin -compress-all"
 export NCCL_ROOT_DIR=/usr/local/cuda
 export TH_BINARY_BUILD=1
-export USE_STATIC_CUDNN=1
-export USE_STATIC_NCCL=1
-export ATEN_STATIC_CUDA=1
-export USE_CUDA_STATIC_LINK=1
+export USE_STATIC_CUDNN=0
+export USE_STATIC_NCCL=0
+export ATEN_STATIC_CUDA=0
+export USE_CUDA_STATIC_LINK=0
 export INSTALL_TEST=0 # dont install test binaries into site-packages
-export USE_CUPTI_SO=0
+export USE_CUPTI_SO=1
 export USE_CUSPARSELT=${USE_CUSPARSELT:-1} # Enable if not disabled by libtorch build
 export USE_CUFILE=${USE_CUFILE:-1}
+export USE_SYSTEM_NCCL=1
+export NCCL_INCLUDE_DIR="/usr/local/cuda/include/"
+export NCCL_LIB_DIR="/usr/local/cuda/lib64/"
 
 # Keep an array of cmake variables to add to
 if [[ -z "$CMAKE_ARGS" ]]; then
@@ -24,6 +33,35 @@ fi
 if [[ -z "$EXTRA_CAFFE2_CMAKE_FLAGS" ]]; then
     # These are passed to tools/build_pytorch_libs.sh::build_caffe2()
     EXTRA_CAFFE2_CMAKE_FLAGS=()
+fi
+
+# Detect architecture
+ARCH=$(uname -m)
+echo "Building for architecture: $ARCH"
+
+# Detect and configure NVPL for BLAS/LAPACK and ARM Compute Library for CUDA aarch64
+if [[ "$ARCH" == "aarch64" ]]; then
+    # Use NVPL (NVIDIA Performance Libraries) for ARM
+    # NVPL provides optimized BLAS and LAPACK for better cpu performance on NVIDIA platforms
+    if [[ ! -f "/usr/local/lib/libnvpl_blas_lp64_gomp.so.0" ]]; then
+        echo "ERROR: NVPL not found at /usr/local/lib/"
+        echo "NVPL (BLAS/LAPACK) is required for CUDA aarch64 builds"
+        exit 1
+    fi
+    echo "Using NVPL BLAS/LAPACK for CUDA aarch64"
+    export BLAS=NVPL
+
+    # ACL is required for aarch64 builds
+    if [[ ! -d "/acl" ]]; then
+        echo "ERROR: ARM Compute Library not found at /acl"
+        echo "ACL is required for aarch64 builds. Check Docker image setup."
+        exit 1
+    fi
+
+    export USE_MKLDNN=1
+    export USE_MKLDNN_ACL=1
+    export ACL_ROOT_DIR=/acl
+    echo "ARM Compute Library enabled for MKLDNN: ACL_ROOT_DIR=/acl"
 fi
 
 # Determine CUDA version and architectures to build for
@@ -36,10 +74,8 @@ if [[ -n "$DESIRED_CUDA" ]]; then
     if [[ ${DESIRED_CUDA} =~ ^[0-9]+\.[0-9]+$ ]]; then
         CUDA_VERSION=${DESIRED_CUDA}
     else
-        # cu90, cu92, cu100, cu101
-        if [[ ${#DESIRED_CUDA} -eq 4 ]]; then
-            CUDA_VERSION="${DESIRED_CUDA:2:1}.${DESIRED_CUDA:3:1}"
-        elif [[ ${#DESIRED_CUDA} -eq 5 ]]; then
+        # cu126, cu130 etc...
+        if [[ ${#DESIRED_CUDA} -eq 5 ]]; then
             CUDA_VERSION="${DESIRED_CUDA:2:2}.${DESIRED_CUDA:4:1}"
         fi
     fi
@@ -50,33 +86,53 @@ else
 fi
 
 cuda_version_nodot=$(echo $CUDA_VERSION | tr -d '.')
+EXTRA_CAFFE2_CMAKE_FLAGS+=("-DATEN_NO_TEST=ON")
 
-TORCH_CUDA_ARCH_LIST="5.0;6.0;7.0;7.5;8.0;8.6"
+# Function to remove architectures from a list
+remove_archs() {
+    local result="$1"
+    shift
+    for arch in "$@"; do
+        result="${result//${arch};/}"
+    done
+    echo "$result"
+}
+
+# Function to filter CUDA architectures for aarch64
+# aarch64 ARM GPUs only support certain compute capabilities
+# Keep: 8.0 (A100), 9.0+ (Hopper, Grace Hopper, newer)
+# Remove: < 8.0 (no ARM GPUs), 8.6 (x86_64 RTX 3090/A6000 only)
+filter_aarch64_archs() {
+    local arch_list="$1"
+    # Explicitly remove architectures not needed on aarch64
+    arch_list=$(remove_archs "$arch_list" "5.0" "6.0" "7.0" "7.5" "8.6")
+    echo "$arch_list"
+}
+
+# Base: Common architectures across all modern CUDA versions
+TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;9.0;10.0"
+
 case ${CUDA_VERSION} in
-    12.8)
-        TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;9.0;10.0;12.0+PTX" #removing sm_50-sm_70 as these architectures are deprecated in CUDA 12.8 and will be removed in future releases
-        EXTRA_CAFFE2_CMAKE_FLAGS+=("-DATEN_NO_TEST=ON")
+    12.6) TORCH_CUDA_ARCH_LIST="5.0;6.0;7.0;${TORCH_CUDA_ARCH_LIST//10.0/}" ;;  # Only 12.6 includes legacy Maxwell/Pascal/Volta, -Hopper support
+    13.0|13.2)
+        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};$([[ "$ARCH" == "aarch64" ]] && echo "11.0;" || echo "")12.0+PTX"
+        export TORCH_NVCC_FLAGS="-compress-mode=size"
         ;;
-    12.6)
-        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};9.0"
-        EXTRA_CAFFE2_CMAKE_FLAGS+=("-DATEN_NO_TEST=ON")
-        ;;
-    12.4)
-        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};9.0"
-        EXTRA_CAFFE2_CMAKE_FLAGS+=("-DATEN_NO_TEST=ON")
-        ;;
-    11.8)
-        TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST};3.7;9.0"
-        EXTRA_CAFFE2_CMAKE_FLAGS+=("-DATEN_NO_TEST=ON")
-        ;;
-    *)
-        echo "unknown cuda version $CUDA_VERSION"
-        exit 1
-        ;;
+    *) echo "unknown cuda version $CUDA_VERSION"; exit 1 ;;
 esac
 
+# Filter for aarch64: Remove < 8.0 and 8.6
+[[ "$ARCH" == "aarch64" ]] && TORCH_CUDA_ARCH_LIST=$(filter_aarch64_archs "$TORCH_CUDA_ARCH_LIST")
+
+echo "TORCH_CUDA_ARCH_LIST set to: $TORCH_CUDA_ARCH_LIST"
 export TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST}
 echo "${TORCH_CUDA_ARCH_LIST}"
+
+# Disable MAGMA for aarch64 as pre-built libraries are x86-64 only
+if [[ "$ARCH" == "aarch64" ]]; then
+    echo "Disabling MAGMA for aarch64 architecture"
+    export USE_MAGMA=0
+fi
 
 # Package directories
 WHEELHOUSE_DIR="wheelhouse$cuda_version_nodot"
@@ -91,14 +147,15 @@ fi
 mkdir -p "$PYTORCH_FINAL_PACKAGE_DIR" || true
 
 OS_NAME=$(awk -F= '/^NAME/{print $2}' /etc/os-release)
-if [[ "$OS_NAME" == *"CentOS Linux"* ]]; then
-    LIBGOMP_PATH="/usr/lib64/libgomp.so.1"
-elif [[ "$OS_NAME" == *"AlmaLinux"* ]]; then
+if [[ "$OS_NAME" == *"AlmaLinux"* ]]; then
     LIBGOMP_PATH="/usr/lib64/libgomp.so.1"
 elif [[ "$OS_NAME" == *"Red Hat Enterprise Linux"* ]]; then
     LIBGOMP_PATH="/usr/lib64/libgomp.so.1"
 elif [[ "$OS_NAME" == *"Ubuntu"* ]]; then
     LIBGOMP_PATH="/usr/lib/x86_64-linux-gnu/libgomp.so.1"
+else
+    echo "Unknown OS: '$OS_NAME'"
+    exit 1
 fi
 
 DEPS_LIST=(
@@ -108,181 +165,92 @@ DEPS_SONAME=(
     "libgomp.so.1"
 )
 
-# CUDA 11.8 have to ship the libcusparseLt.so.0 with the binary
-# since nvidia-cusparselt-cu11 is not available in PYPI
-if [[ $USE_CUSPARSELT == "1" && $CUDA_VERSION == "11.8" ]]; then
-        DEPS_SONAME+=(
-            "libcusparseLt.so.0"
-        )
-        DEPS_LIST+=(
-            "/usr/local/cuda/lib64/libcusparseLt.so.0"
-        )
-fi
 
-
-# Turn USE_CUFILE off for CUDA 11.8, 12.4 since nvidia-cufile-cu11 and 1.9.0.20 are
-# not available in PYPI
-if [[ $CUDA_VERSION == "11.8" || $CUDA_VERSION == "12.4" ]]; then
-    export USE_CUFILE=0
-fi
-
-
-# CUDA_VERSION 12.4, 12.6, 12.8
-if [[ $CUDA_VERSION == 12* ]]; then
-    export USE_STATIC_CUDNN=0
+# CUDA_VERSION 12.*, 13.*
+if [[ $CUDA_VERSION == 12* || $CUDA_VERSION == 13* ]]; then
     # Try parallelizing nvcc as well
-    export TORCH_NVCC_FLAGS="-Xfatbin -compress-all --threads 2"
-
-    if [[ -z "$PYTORCH_EXTRA_INSTALL_REQUIREMENTS" ]]; then
-        echo "Bundling with cudnn and cublas."
-        DEPS_LIST+=(
-            "/usr/local/cuda/lib64/libcudnn_adv.so.9"
-            "/usr/local/cuda/lib64/libcudnn_cnn.so.9"
-            "/usr/local/cuda/lib64/libcudnn_graph.so.9"
-            "/usr/local/cuda/lib64/libcudnn_ops.so.9"
-            "/usr/local/cuda/lib64/libcudnn_engines_runtime_compiled.so.9"
-            "/usr/local/cuda/lib64/libcudnn_engines_precompiled.so.9"
-            "/usr/local/cuda/lib64/libcudnn_heuristic.so.9"
-            "/usr/local/cuda/lib64/libcudnn.so.9"
-            "/usr/local/cuda/lib64/libcublas.so.12"
-            "/usr/local/cuda/lib64/libcublasLt.so.12"
-            "/usr/local/cuda/lib64/libcusparseLt.so.0"
-            "/usr/local/cuda/lib64/libcudart.so.12"
-            "/usr/local/cuda/lib64/libnvToolsExt.so.1"
-            "/usr/local/cuda/lib64/libnvrtc.so.12"
-            "/usr/local/cuda/lib64/libnvrtc-builtins.so"
-        )
-        DEPS_SONAME+=(
-            "libcudnn_adv.so.9"
-            "libcudnn_cnn.so.9"
-            "libcudnn_graph.so.9"
-            "libcudnn_ops.so.9"
-            "libcudnn_engines_runtime_compiled.so.9"
-            "libcudnn_engines_precompiled.so.9"
-            "libcudnn_heuristic.so.9"
-            "libcudnn.so.9"
-            "libcublas.so.12"
-            "libcublasLt.so.12"
-            "libcusparseLt.so.0"
-            "libcudart.so.12"
-            "libnvToolsExt.so.1"
-            "libnvrtc.so.12"
-            "libnvrtc-builtins.so"
-        )
-        if [[ $USE_CUFILE == 1 ]]; then
-            DEPS_LIST+=(
-                "/usr/local/cuda/lib64/libcufile.so.0"
-                "/usr/local/cuda/lib64/libcufile_rdma.so.1"
-            )
-            DEPS_SONAME+=(
-                "libcufile.so.0"
-                "libcufile_rdma.so.1"
-            )
-        fi
+    TORCH_NVCC_FLAGS="-Xfatbin -compress-all --threads 2"
+    # Compress the fatbin with -compress-mode=size for CUDA 13
+    if [[ $CUDA_VERSION == 13* ]]; then
+        export TORCH_NVCC_FLAGS="$TORCH_NVCC_FLAGS -compress-mode=size"
+    fi
+    echo "Using nvidia libs from pypi."
+    CUDA_RPATHS=(
+        '$ORIGIN/../../nvidia/cudnn/lib'
+        '$ORIGIN/../../nvidia/nvshmem/lib'
+        '$ORIGIN/../../nvidia/nccl/lib'
+        '$ORIGIN/../../nvidia/cusparselt/lib'
+    )
+    if [[ $CUDA_VERSION == 13* ]]; then
+        CUDA_RPATHS+=('$ORIGIN/../../nvidia/cu13/lib')
     else
-        echo "Using nvidia libs from pypi."
-        CUDA_RPATHS=(
+        CUDA_RPATHS+=(
             '$ORIGIN/../../nvidia/cublas/lib'
             '$ORIGIN/../../nvidia/cuda_cupti/lib'
             '$ORIGIN/../../nvidia/cuda_nvrtc/lib'
             '$ORIGIN/../../nvidia/cuda_runtime/lib'
-            '$ORIGIN/../../nvidia/cudnn/lib'
             '$ORIGIN/../../nvidia/cufft/lib'
             '$ORIGIN/../../nvidia/curand/lib'
             '$ORIGIN/../../nvidia/cusolver/lib'
             '$ORIGIN/../../nvidia/cusparse/lib'
             '$ORIGIN/../../cusparselt/lib'
-            '$ORIGIN/../../nvidia/nccl/lib'
             '$ORIGIN/../../nvidia/nvtx/lib'
+            '$ORIGIN/../../nvidia/cufile/lib'
         )
-        if [[ $USE_CUFILE == 1 ]]; then
-            CUDA_RPATHS+=(
-                '$ORIGIN/../../nvidia/cufile/lib'
-            )
-        fi
-        CUDA_RPATHS=$(IFS=: ; echo "${CUDA_RPATHS[*]}")
-        export C_SO_RPATH=$CUDA_RPATHS':$ORIGIN:$ORIGIN/lib'
-        export LIB_SO_RPATH=$CUDA_RPATHS':$ORIGIN'
-        export FORCE_RPATH="--force-rpath"
-        export USE_STATIC_NCCL=0
-        export USE_SYSTEM_NCCL=1
-        export ATEN_STATIC_CUDA=0
-        export USE_CUDA_STATIC_LINK=0
-        export USE_CUPTI_SO=1
-        export NCCL_INCLUDE_DIR="/usr/local/cuda/include/"
-        export NCCL_LIB_DIR="/usr/local/cuda/lib64/"
     fi
-elif [[ $CUDA_VERSION == "11.8" ]]; then
-    export USE_STATIC_CUDNN=0
-    # Try parallelizing nvcc as well
-    export TORCH_NVCC_FLAGS="-Xfatbin -compress-all --threads 2"
-    # Bundle ptxas into the wheel, see https://github.com/pytorch/pytorch/pull/119750
-    export BUILD_BUNDLE_PTXAS=1
 
-    if [[ -z "$PYTORCH_EXTRA_INSTALL_REQUIREMENTS" ]]; then
-        echo "Bundling with cudnn and cublas."
-        DEPS_LIST+=(
-            "/usr/local/cuda/lib64/libcudnn_adv.so.9"
-            "/usr/local/cuda/lib64/libcudnn_cnn.so.9"
-            "/usr/local/cuda/lib64/libcudnn_graph.so.9"
-            "/usr/local/cuda/lib64/libcudnn_ops.so.9"
-            "/usr/local/cuda/lib64/libcudnn_engines_runtime_compiled.so.9"
-            "/usr/local/cuda/lib64/libcudnn_engines_precompiled.so.9"
-            "/usr/local/cuda/lib64/libcudnn_heuristic.so.9"
-            "/usr/local/cuda/lib64/libcudnn.so.9"
-            "/usr/local/cuda/lib64/libcublas.so.11"
-            "/usr/local/cuda/lib64/libcublasLt.so.11"
-            "/usr/local/cuda/lib64/libcudart.so.11.0"
-            "/usr/local/cuda/lib64/libnvToolsExt.so.1"
-            "/usr/local/cuda/lib64/libnvrtc.so.11.2"    # this is not a mistake, it links to more specific cuda version
-            "/usr/local/cuda/lib64/libnvrtc-builtins.so.11.8"
-        )
-        DEPS_SONAME+=(
-            "libcudnn_adv.so.9"
-            "libcudnn_cnn.so.9"
-            "libcudnn_graph.so.9"
-            "libcudnn_ops.so.9"
-            "libcudnn_engines_runtime_compiled.so.9"
-            "libcudnn_engines_precompiled.so.9"
-            "libcudnn_heuristic.so.9"
-            "libcudnn.so.9"
-            "libcublas.so.11"
-            "libcublasLt.so.11"
-            "libcudart.so.11.0"
-            "libnvToolsExt.so.1"
-            "libnvrtc.so.11.2"
-            "libnvrtc-builtins.so.11.8"
-        )
-    else
-        echo "Using nvidia libs from pypi."
-        CUDA_RPATHS=(
-            '$ORIGIN/../../nvidia/cublas/lib'
-            '$ORIGIN/../../nvidia/cuda_cupti/lib'
-            '$ORIGIN/../../nvidia/cuda_nvrtc/lib'
-            '$ORIGIN/../../nvidia/cuda_runtime/lib'
-            '$ORIGIN/../../nvidia/cudnn/lib'
-            '$ORIGIN/../../nvidia/cufft/lib'
-            '$ORIGIN/../../nvidia/curand/lib'
-            '$ORIGIN/../../nvidia/cusolver/lib'
-            '$ORIGIN/../../nvidia/cusparse/lib'
-            '$ORIGIN/../../nvidia/nccl/lib'
-            '$ORIGIN/../../nvidia/nvtx/lib'
-        )
-        CUDA_RPATHS=$(IFS=: ; echo "${CUDA_RPATHS[*]}")
-        export C_SO_RPATH=$CUDA_RPATHS':$ORIGIN:$ORIGIN/lib'
-        export LIB_SO_RPATH=$CUDA_RPATHS':$ORIGIN'
-        export FORCE_RPATH="--force-rpath"
-        export USE_STATIC_NCCL=0
-        export USE_SYSTEM_NCCL=1
-        export ATEN_STATIC_CUDA=0
-        export USE_CUDA_STATIC_LINK=0
-        export USE_CUPTI_SO=1
-        export NCCL_INCLUDE_DIR="/usr/local/cuda/include/"
-        export NCCL_LIB_DIR="/usr/local/cuda/lib64/"
-    fi
+    CUDA_RPATHS=$(IFS=: ; echo "${CUDA_RPATHS[*]}")
+    export C_SO_RPATH=$CUDA_RPATHS':$ORIGIN:$ORIGIN/lib'
+    export LIB_SO_RPATH=$CUDA_RPATHS':$ORIGIN'
+    export FORCE_RPATH="--force-rpath"
 else
     echo "Unknown cuda version $CUDA_VERSION"
     exit 1
+fi
+
+# Add ARM-specific library dependencies
+if [[ "$ARCH" == "aarch64" ]]; then
+    echo "Adding ARM-specific library dependencies"
+
+    # ARM Compute Library (if available)
+    if [[ -d "/acl/build" ]]; then
+        echo "Adding ARM Compute Library"
+        DEPS_LIST+=(
+            "/acl/build/libarm_compute.so"
+            "/acl/build/libarm_compute_graph.so"
+        )
+        DEPS_SONAME+=(
+            "libarm_compute.so"
+            "libarm_compute_graph.so"
+        )
+    fi
+
+    # ARM system libraries
+    DEPS_LIST+=(
+        "/lib64/libgomp.so.1"
+        "/usr/lib64/libgfortran.so.5"
+    )
+    DEPS_SONAME+=(
+        "libgomp.so.1"
+        "libgfortran.so.5"
+    )
+
+    # NVPL libraries (ARM optimized BLAS/LAPACK)
+    if [[ -d "/usr/local/lib" && -f "/usr/local/lib/libnvpl_blas_lp64_gomp.so.0" ]]; then
+        echo "Adding NVPL libraries for ARM"
+        DEPS_LIST+=(
+            "/usr/local/lib/libnvpl_lapack_lp64_gomp.so.0"
+            "/usr/local/lib/libnvpl_blas_lp64_gomp.so.0"
+            "/usr/local/lib/libnvpl_lapack_core.so.0"
+            "/usr/local/lib/libnvpl_blas_core.so.0"
+        )
+        DEPS_SONAME+=(
+            "libnvpl_lapack_lp64_gomp.so.0"
+            "libnvpl_blas_lp64_gomp.so.0"
+            "libnvpl_lapack_core.so.0"
+            "libnvpl_blas_core.so.0"
+        )
+    fi
 fi
 
 # run_tests.sh requires DESIRED_CUDA to know what tests to exclude
@@ -292,9 +260,11 @@ export DESIRED_CUDA="$cuda_version_nodot"
 rm -rf /usr/local/cuda || true
 ln -s "/usr/local/cuda-${CUDA_VERSION}" /usr/local/cuda
 
-# Switch `/usr/local/magma` to the desired CUDA version
-rm -rf /usr/local/magma || true
-ln -s /usr/local/cuda-${CUDA_VERSION}/magma /usr/local/magma
+# Switch `/usr/local/magma` to the desired CUDA version (skip for aarch64)
+if [[ "$ARCH" != "aarch64" ]]; then
+    rm -rf /usr/local/magma || true
+    ln -s /usr/local/cuda-${CUDA_VERSION}/magma /usr/local/magma
+fi
 
 export CUDA_VERSION=$(ls /usr/local/cuda/lib64/libcudart.so.*|sort|tac | head -1 | rev | cut -d"." -f -3 | rev) # 10.0.130
 export CUDA_VERSION_SHORT=$(ls /usr/local/cuda/lib64/libcudart.so.*|sort|tac | head -1 | rev | cut -d"." -f -3 | rev | cut -f1,2 -d".") # 10.0

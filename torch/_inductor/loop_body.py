@@ -6,13 +6,14 @@ import functools
 import itertools
 import re
 from enum import auto, Enum
-from typing import Any, Callable, NamedTuple, Optional, TYPE_CHECKING, TypeVar
+from typing import Any, NamedTuple, TYPE_CHECKING, TypeVar
 
 import sympy
 
 import torch.fx
 from torch._dynamo.utils import identity
 from torch.fx.proxy import Scope, TracerBase
+from torch.utils._sympy.functions import Mod
 from torch.utils._sympy.symbol import SymT
 
 from . import config, dependencies
@@ -22,13 +23,14 @@ from .utils import (
     cache_on_self,
     reduction_num_outputs,
     sympy_index_symbol_with_prefix,
+    sympy_product,
     sympy_subs,
 )
 from .virtualized import ops, V
 
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Callable, Sequence
 
 
 T = TypeVar("T")
@@ -36,7 +38,7 @@ T = TypeVar("T")
 
 class InterpreterShim(torch.fx.Interpreter):
     @staticmethod
-    @functools.lru_cache(None)
+    @functools.cache
     def _dummy_gm():
         return torch.fx.symbolic_trace(identity)
 
@@ -52,6 +54,7 @@ class InterpreterShim(torch.fx.Interpreter):
         self.current_node = None
 
     def run_node(self, n: torch.fx.Node) -> Any:
+        # pyrefly: ignore [bad-assignment]
         self.current_node = n
         return super().run_node(n)
 
@@ -72,8 +75,8 @@ class LightTracer(TracerBase):
 
 class MemoryEntry(NamedTuple):
     index_name: str  # LoopBody.indexing_exprs[index_name]
-    buffer_name: Optional[str]
-    mode: Optional[str]  # V.ops.store(..., mode=mode)
+    buffer_name: str | None
+    mode: str | None  # V.ops.store(..., mode=mode)
 
 
 class MemoryUsageType(Enum):
@@ -94,7 +97,6 @@ class LoopBody:
     """
 
     indexing_exprs: dict[str, sympy.Expr]
-    indexing_exprs_name: dict[sympy.Expr, str]
     submodules: dict[str, Any]
     subblocks: dict[str, LoopBodyBlock]
     indirect_vars: list[sympy.Symbol]
@@ -103,7 +105,18 @@ class LoopBody:
     memory_usage: dict[MemoryUsageType, list[MemoryEntry]]
     op_counts: collections.Counter[str]
 
-    def __init__(self, fn, args, var_ranges, iter_vars, reduce_vars):
+    # defined only temporarily
+    indexing_exprs_name: dict[sympy.Expr, str]
+
+    def __init__(
+        self,
+        fn,
+        args,
+        var_ranges,
+        iter_vars,
+        reduce_vars,
+        allow_same_symbol_in_index=False,
+    ):
         super().__init__()
 
         _flat_sizes = tuple(var_ranges.values())
@@ -117,11 +130,27 @@ class LoopBody:
         self.var_ranges = var_ranges
 
         if isinstance(fn, LoopBody):
-            self._init_with_copy(fn, args)
+            self._init_with_copy(fn, args, allow_same_symbol_in_index)
         else:
             self._init_with_tracing(fn, args)
 
         self.indexing = None
+
+    def get_original_num_rdims(self) -> int:
+        assert self.has_partial_accumulate
+        node = self.root_block.graph.find_nodes(
+            op="call_method", target="partial_accumulate"
+        )[0]
+        meta = node.args[-1]
+        return meta["num_reduction_dims"]
+
+    def extract_pw_from_reduction(self):
+        self.root_block = self.root_block.extract_pw_from_reduction()
+        self.has_partial_accumulate = True
+        self.iter_vars = self.iter_vars + self.reduce_vars
+        self.reduce_vars = []
+        self.sizes = (self.sizes[0] + self.sizes[1], tuple())
+        return self
 
     def _init_with_tracing(self, fn, args):
         """Do an FX trace of an arbitrary callable to construct self"""
@@ -134,15 +163,20 @@ class LoopBody:
         self.memory_usage = {t: [] for t in MemoryUsageType}
         self.op_counts = collections.Counter()
         self.root_block = LoopBodyBlock(self, fn, args)  # traces
+        self.has_partial_accumulate = bool(
+            self.root_block.graph.find_nodes(
+                op="call_method", target="partial_accumulate"
+            )
+        )
         del self.indexing_exprs_name  # not used after _init_with_tracing
 
-    def _init_with_copy(self, other: LoopBody, args):
+    def _init_with_copy(self, other: LoopBody, args, allow_same_symbol_in_index):
         """
         _init_with_tracing() is slow, so this is a fast path in the case
         where we are just reordering/merging/splitting the args of an
         existing LoopBody.
         """
-        indexing_exprs = other.indexing_from_args(args)
+        indexing_exprs = other.indexing_from_args(args, allow_same_symbol_in_index)
         self.indexing_exprs = {
             name: V.graph.sizevars.simplify_with_ranges(expr, self.var_ranges)
             for name, expr in indexing_exprs.items()
@@ -153,6 +187,7 @@ class LoopBody:
         self.memory_usage = other.memory_usage
         self.op_counts = other.op_counts
         self.root_block = other.root_block.clone(self)
+        self.has_partial_accumulate = other.has_partial_accumulate
 
         submodules = {**other.submodules}
         submodules.pop("get_index")
@@ -187,41 +222,125 @@ class LoopBody:
             index_prevent_reordering(index_exprs, old_reduce_vars, old_reduce_sizes),
         )
 
-        # if iter_sizes == old_iter_sizes:
-        #     # no dimensions get merged.
-        #     return old_sizes, old_body
+        if iter_sizes == old_iter_sizes and reduce_sizes == old_reduce_sizes:
+            return old_body
 
-        # Note: if no dimension get merges, the symbol prefix will
-        # remain 'y'. But if we merge dimensions, we change prefix to
-        # 'z'. If this is an issue, we can always retrace the LoopBody
-        # to change symbol prefix to 'z'.
-        #
-        # There is indeed an issue due to symbol name conflicting.
-        # y0 maybe reused for the y dimension later.
         (
             (
                 iter_vars,
                 reduce_vars,
             ),
             var_ranges,
-        ) = dependencies.index_vars_no_squeeze(iter_sizes, reduce_sizes, prefix="t")
+        ) = dependencies.index_vars_no_squeeze(iter_sizes, reduce_sizes, prefix="p")
         new_body = LoopBody(
             old_body,
             [iter_reindex(iter_vars), reduce_reindex(reduce_vars)],
             var_ranges,
             iter_vars,
             reduce_vars,
+            allow_same_symbol_in_index=True,
         )
 
-        # use the original symbol prefix
-        # Can try to optimize if this is a bottleneck for compilation time
+        return new_body
+
+    def expand_dimension_for_pointwise_node(
+        self, dimension: int, new_range: int
+    ) -> LoopBody:
+        """
+        Expand node on `dimension` to `new_range` and rely on index modular to avoid
+        out-of-boundary access.
+        """
+
+        old_body = self
+        old_sizes = self.sizes
+
+        iter_size, reduce_size = old_sizes
+        original_range = iter_size[dimension]
+        new_iter_size = list(iter_size)
+        new_iter_size[dimension] = new_range
+        new_sizes = (new_iter_size, reduce_size)
+
+        (iter_vars, reduce_vars), var_ranges = dependencies.index_vars_no_squeeze(
+            *new_sizes,
+            prefix="t",  # type: ignore[arg-type]
+        )
+
+        def new_body(*indices: Sequence[sympy.Expr]) -> Any:
+            index = [*itertools.chain.from_iterable(indices)]
+            assert len(index) == len(iter_size) + len(reduce_size)
+            iter_idx = index[: len(iter_size)]
+            reduce_idx = index[len(iter_size) :]
+
+            new_iter_idx = list(iter_idx)
+            new_iter_idx[dimension] = Mod(iter_idx[dimension], original_range)
+
+            return old_body(new_iter_idx, reduce_idx)
+
+        loop_body = LoopBody(
+            new_body, (iter_vars, reduce_vars), var_ranges, iter_vars, reduce_vars
+        )
+
+        # use the original symbol prefix so we can do multiple round of reordering
         (iter_vars2, reduce_vars2), var_ranges2 = dependencies.index_vars_no_squeeze(
-            iter_sizes, reduce_sizes, prefix="p"
+            *new_sizes,
+            prefix="p",  # type: ignore[arg-type]
         )
-        new_body2 = LoopBody(
-            new_body, (iter_vars2, reduce_vars2), var_ranges2, iter_vars2, reduce_vars2
+        new_body = LoopBody(
+            loop_body, (iter_vars2, reduce_vars2), var_ranges2, iter_vars2, reduce_vars2
         )
-        return new_body2
+        return new_body
+
+    def reindex_iter_loops(self, new_iter_sizes: Sequence[sympy.Expr]) -> LoopBody:
+        """
+        Reindex iteration loops into a different factorization of the same
+        total numel. For example, [1024, 8192] -> [65536, 128].
+
+        The old iteration vars are expressed as functions of the new vars via
+        FloorDiv and ModularIndexing on the flat index.
+        """
+        from torch.utils._sympy.functions import ModularIndexing
+
+        old_body = self
+        old_iter_sizes = self.sizes[0]
+        reduce_sizes = self.sizes[1]
+
+        new_sizes = (list(new_iter_sizes), list(reduce_sizes))
+
+        (iter_vars, reduce_vars), var_ranges = dependencies.index_vars_no_squeeze(
+            *new_sizes,
+            prefix="t",  # type: ignore[arg-type]
+        )
+
+        def new_body(*indices: Sequence[sympy.Expr]) -> Any:
+            index = [*itertools.chain.from_iterable(indices)]
+            new_iter_idx = index[: len(new_iter_sizes)]
+            reduce_idx = index[len(new_iter_sizes) :]
+            # Build flat index from new iter vars
+            flat = sympy.S.Zero
+            for v, s in zip(new_iter_idx, new_iter_sizes):
+                flat = flat * s + v
+            # Express old iter vars from flat index
+            old_iter_idx: list[sympy.Expr] = []
+            for i, old_size in enumerate(old_iter_sizes):
+                tail = sympy_product(old_iter_sizes[i + 1 :])
+                old_iter_idx.append(ModularIndexing(flat, tail, old_size))
+            return old_body(old_iter_idx, list(reduce_idx))
+
+        loop_body = LoopBody(
+            new_body, (iter_vars, reduce_vars), var_ranges, iter_vars, reduce_vars
+        )
+
+        (iter_vars2, reduce_vars2), var_ranges2 = dependencies.index_vars_no_squeeze(
+            *new_sizes,
+            prefix="p",  # type: ignore[arg-type]
+        )
+        return LoopBody(
+            loop_body,
+            (iter_vars2, reduce_vars2),
+            var_ranges2,
+            iter_vars2,
+            reduce_vars2,
+        )
 
     def reorder_iter_loops(self, new_order) -> LoopBody:
         """
@@ -241,7 +360,7 @@ class LoopBody:
 
         (iter_vars, reduce_vars), var_ranges = dependencies.index_vars_no_squeeze(
             *new_sizes,
-            prefix="t",  # type: ignore[arg-type]
+            prefix="p",  # type: ignore[arg-type]
         )
 
         inverse_order = {b: a for a, b in enumerate(new_order)}
@@ -253,21 +372,15 @@ class LoopBody:
             iter_idx = index[: len(iter_size)]
             reduce_idx = index[len(iter_size) :]
             iter_idx = [iter_idx[i] for i in inverse_order]
-            return old_body(iter_idx, reduce_idx)
+            return old_body(iter_idx, reduce_idx, allow_same_symbol_in_index=True)
 
-        loop_body = LoopBody(
-            new_body, (iter_vars, reduce_vars), var_ranges, iter_vars, reduce_vars
+        return LoopBody(
+            new_body,
+            (iter_vars, reduce_vars),
+            var_ranges,
+            iter_vars,
+            reduce_vars,
         )
-
-        # use the original symbol prefix so we can do multiple round of reordering
-        (iter_vars2, reduce_vars2), var_ranges2 = dependencies.index_vars_no_squeeze(
-            *new_sizes,
-            prefix="p",  # type: ignore[arg-type]
-        )
-        new_body = LoopBody(
-            loop_body, (iter_vars2, reduce_vars2), var_ranges2, iter_vars2, reduce_vars2
-        )
-        return new_body
 
     @property
     def vars(self):
@@ -312,6 +425,14 @@ class LoopBody:
             for entry in self.memory_usage[MemoryUsageType.LOAD]
         ]
 
+    def get_all_read_expr(self, buffer_name):
+        # reversed to match old behavior
+        out = []
+        for entry in reversed(self.memory_usage[MemoryUsageType.LOAD]):
+            if entry.buffer_name == buffer_name:
+                out.append(self.indexing_exprs[entry.index_name])
+        return out
+
     def get_write_exprs(self):
         return [
             self.indexing_exprs[entry.index_name]
@@ -320,6 +441,16 @@ class LoopBody:
                 self.memory_usage[MemoryUsageType.STORE_REDUCTION],
             )
         ]
+
+    def get_all_write_expr(self, buffer_name):
+        out = []
+        for entry in itertools.chain(
+            self.memory_usage[MemoryUsageType.STORE],
+            self.memory_usage[MemoryUsageType.STORE_REDUCTION],
+        ):
+            if entry.buffer_name == buffer_name:
+                out.append(self.indexing_exprs[entry.index_name])
+        return out
 
     def debug_str(self):
         lines = [f"var_ranges = {dict(self.var_ranges)}"]
@@ -352,8 +483,8 @@ class LoopBody:
         self,
         expr: sympy.Expr,
         mtype: MemoryUsageType,
-        buffer_name: Optional[str] = None,
-        mode: Optional[str] = None,
+        buffer_name: str | None = None,
+        mode: str | None = None,
     ):
         name = self.indexing_exprs_name.get(expr)
         if not name:
@@ -384,26 +515,28 @@ class LoopBody:
         if str(old) == str(new):
             return
         assert self.indexing is not None
+        # pyrefly: ignore [bad-assignment]
         self.indexing = {k: sympy_subs(v, {old: new}) for k, v in self.indexing.items()}
 
     def get_index(self, name):
         assert self.indexing is not None
         return self.indexing[name]
 
-    def indexing_from_args(self, indices):
+    def indexing_from_args(self, indices, allow_same_symbol_in_index=False):
         index = [*itertools.chain.from_iterable(indices)]
         assert len(index) == len(self.var_ranges), (index, self.var_ranges)
-        assert all(v not in self.var_ranges for v in index), (
-            f"{self.var_ranges=}, {indices=}"
-        )
+        assert allow_same_symbol_in_index or all(
+            v not in self.var_ranges for v in index
+        ), f"{self.var_ranges=}, {indices=}"
+
         replacements = dict(zip(self.var_ranges.keys(), index))
         return {
             name: sympy_subs(expr, replacements)
             for name, expr in self.indexing_exprs.items()
         }
 
-    def __call__(self, *indices):
-        self.indexing = self.indexing_from_args(indices)
+    def __call__(self, *indices, allow_same_symbol_in_index=False):
+        self.indexing = self.indexing_from_args(indices, allow_same_symbol_in_index)
         result = self.root_block()
         self.indexing = None
         return result
@@ -442,7 +575,7 @@ class LoopBodyBlock:
     """
     Captures the body of a Loops subclass into an FX graph.
     In normal cases there will be a 1:1 mapping between LoopBody and
-    LoopBodyBlock, hower in the case of ops.masked() the masked out
+    LoopBodyBlock, however in the case of ops.masked() the masked out
     operations will manifest as an extra LoopBodyBlock.
     """
 
@@ -455,7 +588,12 @@ class LoopBodyBlock:
         from .index_propagation import IndexPropagation
 
         handler: Any = CountOps(
-            CaptureIndexing(proxy_ops, body, tracer),
+            CaptureIndexing(
+                # pyrefly: ignore[bad-argument-type]
+                proxy_ops,
+                body,
+                tracer,
+            ),
             body.op_counts,
         )
         if config.constant_and_index_propagation:
@@ -468,6 +606,34 @@ class LoopBodyBlock:
             # unwrap the return value.
             ops.output(fn(*args))
         self.graph = tracer.graph
+
+    def extract_pw_from_reduction(self):
+        red = None
+        store = None
+        for node in self.graph.nodes:
+            if node.target == "reduction":
+                assert not red
+                red = node
+            if node.target == "store_reduction":
+                assert not store
+                store = node
+        assert red
+        assert store
+        reduction_type = red.args[-2]
+        red_arg = red.args[-1]
+        buf = store.args[1]
+        ops = store.args[0]
+
+        extra_meta = {
+            "num_reduction_dims": len(self.body.reduce_vars),
+        }
+        with self.graph.inserting_after(store):
+            self.graph.call_method(
+                "partial_accumulate", (ops, buf, reduction_type, red_arg, extra_meta)
+            )
+        self.graph.erase_node(store)
+        self.graph.erase_node(red)
+        return self
 
     def __call__(self):
         graph = self.graph
@@ -584,8 +750,8 @@ class CaptureIndexing(WrapperHandler):
         boundary_indices: T,
         indexing_dtype: torch.dtype,
         right: bool,
-        sorter: Optional[tuple[str, sympy.Expr]] = None,
-        sorter_indices: Optional[T] = None,
+        sorter: tuple[str, sympy.Expr] | None = None,
+        sorter_indices: T | None = None,
     ) -> T:
         """
         See [Note: Inductor bucketize op]

@@ -31,7 +31,7 @@ DEFINE_DISPATCH(qavg_pool2d_nhwc_stub);
 namespace {
 
 template <typename scalar_t>
-static void avg_pool2d_out_frame(
+void avg_pool2d_out_frame(
     const Tensor& input,
     Tensor& output,
     int64_t nInputPlane,
@@ -48,7 +48,7 @@ static void avg_pool2d_out_frame(
     bool count_include_pad,
     std::optional<int64_t> divisor_override) {
   Tensor input_contig = input.contiguous();
-  auto input_data = input_contig.data_ptr<scalar_t>();
+  auto input_data = input_contig.const_data_ptr<scalar_t>();
   auto output_data = output.data_ptr<scalar_t>();
   const auto scale_factor = input.q_scale() / output.q_scale();
   const auto input_zero_point = input.q_zero_point();
@@ -71,8 +71,8 @@ static void avg_pool2d_out_frame(
           int64_t hend = std::min(hstart + kH, inputHeight + padH);
           int64_t wend = std::min(wstart + kW, inputWidth + padW);
           int64_t pool_size = (hend - hstart) * (wend - wstart);
-          hstart = std::max(hstart, (int64_t)0);
-          wstart = std::max(wstart, (int64_t)0);
+          hstart = std::max(hstart, static_cast<int64_t>(0));
+          wstart = std::max(wstart, static_cast<int64_t>(0));
           hend = std::min(hend, inputHeight);
           wend = std::min(wend, inputWidth);
 
@@ -329,7 +329,7 @@ Tensor qnnpack_avg_pool2d(
           batch_size,
           inH,
           inW,
-          (uint8_t*)input_contig.data_ptr<c10::quint8>() /* input data */,
+          reinterpret_cast<const uint8_t*>(input_contig.const_data_ptr<c10::quint8>()) /* input data */,
           inC,
           (uint8_t*)output.data_ptr<c10::quint8>() /* output data */,
           outC,

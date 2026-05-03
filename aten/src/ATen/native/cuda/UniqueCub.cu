@@ -54,7 +54,7 @@ struct LoadBoolOp {
 auto wrap_input_iterator(const bool *data) {
   // See NOTE [Loading boolean values]
   LoadBoolOp op;
-  return NO_ROCM(at_cuda_detail)::cub::TransformInputIterator<bool, LoadBoolOp, const uint8_t*, int>(
+  return ATEN_CUB_TRANSFORM_ITERATOR(bool, LoadBoolOp, const uint8_t*, int)(
       reinterpret_cast<const uint8_t*>(data), op);
 }
 
@@ -85,7 +85,7 @@ std::tuple<Tensor, Tensor, Tensor> compute_unique(
         dim3(std::min(static_cast<int64_t>(cuda::getApplyBlock().x), num_inp));
     dim3 grid;
     c10::DeviceIndex curDevice = -1;
-    c10::cuda::GetDevice(&curDevice);
+    C10_CUDA_CHECK(c10::cuda::GetDevice(&curDevice));
     cuda::getApplyGrid(num_inp, grid, curDevice);
     adjacent_difference_kernel<<<grid, block, 0, stream>>>(
         num_inp, data, inv_loc_ptr);
@@ -259,10 +259,10 @@ struct UniqueCub<bool> {
 
     const bool* self_data = self.const_data_ptr<bool>();
     MapNumberOfTrueValues op;
-    NO_ROCM(at_cuda_detail)::cub::TransformInputIterator<int, MapNumberOfTrueValues, const uint8_t*, int>
+    ATEN_CUB_TRANSFORM_ITERATOR(int, MapNumberOfTrueValues, const uint8_t*, int)
         data_iter(reinterpret_cast<const uint8_t*>(self_data), op);
     at::cuda::cub::reduce(data_iter, tmp_num_true.get(), num_inp,
-                          NO_ROCM(at_cuda_detail)::cub::Sum{}, 0);
+                          NO_ROCM(::cuda)::std::plus<>{}, 0);
 
     auto options = self.options();
     output = at::empty({2}, self.options());

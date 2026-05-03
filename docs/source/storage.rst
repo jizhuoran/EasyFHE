@@ -31,7 +31,7 @@ can be faster than deserializing multiple independent tensors.
 
 A tensor storage can be accessed through the :meth:`~torch.Tensor.untyped_storage` method. This will return an object of
 type :class:`torch.UntypedStorage`.
-Fortunately, storages have a unique identifier called accessed through the :meth:`torch.UntypedStorage.data_ptr` method.
+Fortunately, storages have a unique identifier accessed through the :meth:`torch.UntypedStorage.data_ptr` method.
 In regular settings, two tensors with the same data storage will have the same storage ``data_ptr``.
 However, tensors themselves can point to two separate storages, one for its data attribute and another for its grad
 attribute. Each will require a ``data_ptr()`` of its own. In general, there is no guarantee that a
@@ -86,7 +86,7 @@ Other than ``data_ptr``, untyped storage also have other attributes such as :att
 (in case the storage points to a file on disk), :attr:`~torch.UntypedStorage.device` or
 :attr:`~torch.UntypedStorage.is_cuda` for device checks. A storage can also be manipulated in-place or
 out-of-place with methods like :attr:`~torch.UntypedStorage.copy_`, :attr:`~torch.UntypedStorage.fill_` or
-:attr:`~torch.UntypedStorage.pin_memory`. FOr more information, check the API
+:attr:`~torch.UntypedStorage.pin_memory`. For more information, check the API
 reference below. Keep in mind that modifying storages is a low-level API and comes with risks!
 Most of these APIs also exist on the tensor level: if present, they should be prioritized over their storage
 counterparts.

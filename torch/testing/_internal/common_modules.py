@@ -16,17 +16,16 @@ from torch.testing._internal.common_dtype import (
     floating_types, floating_and_complex_types_and, get_all_fp_dtypes)
 from torch.testing._internal.common_device_type import (
     _TestParametrizer, _update_param_kwargs, expectedFailureMPS, toleranceOverride, tol,
-    skipCUDAIfRocm, precisionOverride, skipMeta, skipMPS,
-    skipCUDAVersionIn)
+    precisionOverride, skipMeta, skipMPS)
 from torch.testing._internal.common_methods_invocations import DecorateInfo
 from torch.testing._internal.common_nn import (
     cosineembeddingloss_reference, cross_entropy_loss_reference, ctcloss_reference,
-    hingeembeddingloss_reference, huberloss_reference, kldivloss_reference,
+    hingeembeddingloss_reference, huberloss_reference, kldivloss_reference, linear_cross_entropy_loss_reference,
     marginrankingloss_reference, multimarginloss_reference, multilabelmarginloss_reference,
     nllloss_reference, nlllossNd_reference, smoothl1loss_reference, softmarginloss_reference, get_reduction)
 from torch.testing._internal.common_utils import (
-    freeze_rng_state, skipIfMPS, skipIfMPSOnMacOS13, GRADCHECK_NONDET_TOL, TEST_WITH_ROCM, IS_WINDOWS,
-    skipIfTorchDynamo)
+    freeze_rng_state, skipIfMPS, GRADCHECK_NONDET_TOL, TEST_WITH_ROCM, IS_WINDOWS,
+    skipIfTorchDynamo, skipIfXpu)
 from types import ModuleType
 import operator
 
@@ -433,15 +432,18 @@ def module_inputs_torch_nn_GaussianNLLLoss(module_info, device, dtype, requires_
         ('reduction_sum', {'reduction': 'sum'}),
         ('reduction_mean', {'reduction': 'mean'}),
         ('reduction_none', {'reduction': 'none'}),
+        ('homoscedastic', {'homoscedastic': True}),
     ]
 
     module_inputs = []
     for desc, constructor_kwargs in cases:
+        homoscedastic = constructor_kwargs.pop('homoscedastic', False)
+        var_input = make_input(1, 3).abs() if homoscedastic else make_input(4, 1).abs()
         module_inputs.append(
             ModuleInput(constructor_input=FunctionInput(**constructor_kwargs),
-                        forward_input=FunctionInput(make_input(3),
-                                                    make_target(3),
-                                                    make_input(1).abs()),
+                        forward_input=FunctionInput(make_input(4, 3),
+                                                    make_target(4, 3),
+                                                    var_input),
                         desc=desc,
                         reference_fn=no_batch_dim_reference_fn)
         )
@@ -565,7 +567,8 @@ def no_batch_dim_reference_fn(m, p, *args, **kwargs):
     is_criterion = get_and_pop('is_criterion', False)
 
     if kwargs_to_batchify is not None:
-        assert isinstance(kwargs_to_batchify, dict)
+        if not isinstance(kwargs_to_batchify, dict):
+            raise AssertionError(f"Expected kwargs_to_batchify to be a dict, got {type(kwargs_to_batchify)}")
         for k, v in kwargs.items():
             if k in kwargs_to_batchify and v is not None:
                 bdim = kwargs_to_batchify[k]
@@ -910,7 +913,10 @@ def module_inputs_torch_nn_BatchNorm1d(module_info, device, dtype, requires_grad
                     desc='3d_input_not_affine'),
         ModuleInput(constructor_input=FunctionInput(5, 1e-3, 0.3, False),
                     forward_input=FunctionInput(make_input((0, 5, 9))),
-                    desc='zero_batch')]
+                    desc='zero_batch'),
+        ModuleInput(constructor_input=FunctionInput(10, bias=False),
+                    forward_input=FunctionInput(make_input((4, 10))),
+                    desc='affine_not_bias'),]
 
 
 def module_inputs_torch_nn_BatchNorm2d(module_info, device, dtype, requires_grad, training, **kwargs):
@@ -933,7 +939,10 @@ def module_inputs_torch_nn_BatchNorm2d(module_info, device, dtype, requires_grad
                     desc='not_tracking_stats'),
         ModuleInput(constructor_input=FunctionInput(5, 1e-3, 0.3, False),
                     forward_input=FunctionInput(make_input((0, 5, 2, 2))),
-                    desc='zero_batch')]
+                    desc='zero_batch'),
+        ModuleInput(constructor_input=FunctionInput(3, bias=False),
+                    forward_input=FunctionInput(make_input((2, 3, 6, 6))),
+                    desc='affine_not_bias'),]
 
 
 def module_inputs_torch_nn_BatchNorm3d(module_info, device, dtype, requires_grad, training, **kwargs):
@@ -956,7 +965,42 @@ def module_inputs_torch_nn_BatchNorm3d(module_info, device, dtype, requires_grad
                     desc='not_tracking_stats'),
         ModuleInput(constructor_input=FunctionInput(5, 1e-3, 0.3, False),
                     forward_input=FunctionInput(make_input((0, 5, 2, 2, 2))),
-                    desc='zero_batch')]
+                    desc='zero_batch'),
+        ModuleInput(constructor_input=FunctionInput(3, bias=False),
+                    forward_input=FunctionInput(make_input((2, 3, 4, 4, 4))),
+                    desc='affine_not_bias'),]
+
+
+def module_error_inputs_torch_nn_BatchNorm1d_2d_3d(module_info, device, dtype, requires_grad, training, **kwargs):
+    make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
+
+    if module_info.module_cls == torch.nn.BatchNorm1d:
+        input_shape = (2, 10)
+    elif module_info.module_cls == torch.nn.BatchNorm2d:
+        input_shape = (2, 10, 5, 5)
+    else:
+        input_shape = (2, 10, 4, 4, 4)
+
+    return [
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(10, eps=-1.0),
+                forward_input=FunctionInput(make_input(input_shape)),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=ValueError,
+            error_regex="eps must be positive"
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(10, eps=0.0),
+                forward_input=FunctionInput(make_input(input_shape)),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=ValueError,
+            error_regex="eps must be positive"
+        ),
+    ]
 
 
 def module_inputs_torch_nn_ConvNd(module_info, device, dtype, requires_grad, training, **kwargs):
@@ -1411,7 +1455,7 @@ def module_inputs_torch_nn_L1Loss(module_info, device, dtype, requires_grad, tra
                     forward_input=FunctionInput(make_input((2, 3, 4)),
                                                 make_input((2, 3, 4))),
                     reference_fn=lambda m, p, i, t: 1. / i.numel() * sum((a - b).abs().sum()
-                                                                         for a, b in zip(i, t))),
+                                                                         for a, b in zip(i, t, strict=True))),
         ModuleInput(constructor_input=FunctionInput(),
                     forward_input=FunctionInput(make_input(()), make_input(())),
                     reference_fn=lambda m, p, i, t: 1. / i.numel() * (i - t).abs().sum(),
@@ -1631,6 +1675,298 @@ def module_inputs_torch_nn_CrossEntropyLoss(module_info, device, dtype, requires
     return module_inputs
 
 
+def module_error_inputs_torch_nn_CrossEntropyLoss(module_info, device, dtype, requires_grad, training, **kwargs):
+    make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
+    make_weight = partial(make_tensor, device=device, dtype=dtype, requires_grad=False)
+
+    return [
+        # Non-floating-point target with same shape as input (soft-target path)
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    torch.zeros((2, 3), device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="Expected floating point type for target with class probabilities",
+        ),
+        # Non-long target with different shape from input (class-index path)
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    make_input((2,)),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="expected target dtype to be Long or Byte",
+        ),
+        # Batch size mismatch
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    torch.tensor([0, 1, 2], device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=ValueError,
+            error_regex="Expected input batch_size .* to match target batch_size",
+        ),
+        # Weight wrong shape
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(weight=make_weight((2,))),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    torch.tensor([0, 1], device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="weight tensor should be defined either for all .* classes or no classes",
+        ),
+        # Prob target with ignore_index
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(ignore_index=1),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    make_input((2, 3)).softmax(dim=1).detach(),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="ignore_index is not supported for floating point target",
+        ),
+        # label_smoothing out of range
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(label_smoothing=1.5),
+                forward_input=FunctionInput(
+                    make_input((2, 3)),
+                    torch.tensor([0, 1], device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="label_smoothing must be between 0.0 and 1.0",
+        ),
+        # Target spatial size mismatch (3D input)
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(),
+                forward_input=FunctionInput(
+                    make_input((2, 3, 5)),
+                    torch.zeros((2, 4), device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="Expected target size",
+        ),
+    ]
+
+
+def module_inputs_torch_nn_LinearCrossEntropyLoss(module_info, device, dtype, requires_grad, training, **kwargs_):
+    # Return a list of module_inputs.
+    #
+    # Important: module_inputs size and the ordering of its items must
+    # be the same for all devices.  There exists tests that
+    # correctness depend on this requirement.
+
+    def make_input(batch_dims, in_features):
+        return torch.randn((*batch_dims, in_features), device=device, dtype=dtype, requires_grad=requires_grad)
+
+    def reference_fn(m, p, i, t):
+        # p[0] is linear.weight(bias=False)
+        linear_weight = p[0].reshape(m.num_classes, *m.out_features, i.shape[-1])
+        return linear_cross_entropy_loss_reference(
+            i, linear_weight, t,
+            weight=m.weight,
+            reduction=m.reduction, ignore_index=m.ignore_index, label_smoothing=m.label_smoothing)
+
+    def make_target(num_classes, shape, target_dtype):
+        if target_dtype.is_floating_point:
+            return make_tensor(shape, low=0, high=1, device=device, dtype=target_dtype, requires_grad=False)
+        else:
+            return torch.randint(
+                0,
+                num_classes,
+                shape,
+                device=device,
+                dtype=target_dtype,
+                requires_grad=False,
+            )
+
+    def sizes_and_options():
+        # TODO: the next PR in the ghstack adds the options feature.
+        for sizes in [(8, 5, 4), (None, 8, 4)]:
+            yield sizes, None
+
+    def samples():
+        for (num_batches, in_features, num_classes), options in sizes_and_options():
+            if num_batches is None:
+                batch_dims = ()
+            else:
+                batch_dims = (num_batches,)
+            weights = [None, torch.exp(torch.randn(num_classes, device=device, dtype=dtype, requires_grad=False))]
+
+            # generate samples for LinearCrossEntropyLoss and its forward:
+            for reduction, ii, ls, w, of in product(
+                    ["sum", "mean", "none"],
+                    [None, -100, (num_classes - 1) // 2, num_classes + 5],
+                    [0.0, 0.1],
+                    weights,
+                    [(), (3, 2, 4)]):
+                if num_batches is None and of:
+                    # K-dimensional loss requires batches dimension
+                    continue
+                if ii is not None and reduction == "sum":
+                    # skip some samples, just to reduce the size of samples set
+                    continue
+                module_args = (in_features, num_classes)
+                module_kwargs = dict(
+                    out_features=of,
+                    device=device,
+                    dtype=dtype,
+                    reduction=reduction,
+                    weight=w,
+                    ignore_index=ii,
+                    label_smoothing=ls,
+                )
+                for target_dtype in [torch.int64, dtype]:
+                    if target_dtype.is_floating_point:
+                        target_shape = (*batch_dims, num_classes, *of)
+                        if ii is not None:
+                            # ignore_index is not supported for floating point target
+                            continue
+                        if options is not None:
+                            # chunking is not supported for floating point target
+                            continue
+                    else:
+                        target_shape = (*batch_dims, *of)
+                    input = make_input(batch_dims, in_features)
+                    target = make_target(num_classes, target_shape, target_dtype)
+                    if (
+                            target.device.type != "meta"
+                            and not target_dtype.is_floating_point and reduction == "mean"
+                            and ii is not None and ii >= 0 and ii < num_classes and torch.all(target == ii)
+                    ):
+                        # ensures valid normalization:
+                        target[0 if target.shape else ()] = (ii + 1) % num_classes
+
+                    yield module_args, module_kwargs, (input, target)
+
+                    if (
+                            not target_dtype.is_floating_point
+                            and target_shape
+                            and num_batches > 1
+                            and ii is not None
+                    ):
+                        # target may contain out-of-range ii values
+                        input = make_input(batch_dims, in_features)
+                        target = make_target(num_classes, target_shape, target_dtype)
+                        target[num_batches // 2] = ii
+                        if ii < 0 or ii >= num_classes:
+                            # tests the correctness of out-of-range ii
+                            # mapping to 0 (see the batch chunking
+                            # logic in the next PR)
+                            target[0] = 0
+                        yield module_args, module_kwargs, (input, target)
+
+                    if (
+                            not target_dtype.is_floating_point and reduction != "mean" and ii is not None
+                    ):
+                        # target is completely filled with ii
+                        input = make_input(batch_dims, in_features)
+                        target = torch.full_like(target, ii)
+                        yield module_args, module_kwargs, (input, target)
+
+    module_inputs = []
+    for module_args, module_kwargs, (input, target) in samples():
+        module_inputs.append(
+            ModuleInput(
+                constructor_input=FunctionInput(*module_args, **module_kwargs),
+                forward_input=FunctionInput(input, target),
+                reference_fn=reference_fn)
+        )
+    return module_inputs
+
+
+def module_error_inputs_torch_nn_LinearCrossEntropyLoss(module_info, device, dtype, requires_grad, training, **kwargs):
+    make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
+    return [
+        # Non-floating-point target with same shape as input (soft-target path)
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 2, device=device, dtype=dtype),
+                forward_input=FunctionInput(
+                    make_input((4, 3)),
+                    torch.zeros((4, 2), device=device, dtype=torch.long),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="Expected floating point type for target with class probabilities",
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 2, device=device, dtype=dtype),
+                forward_input=FunctionInput(
+                    make_input((4, 3)),
+                    torch.zeros((5, 2), device=device, dtype=dtype),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=ValueError,
+            error_regex="Expected input batch_size [(]4[)] to match target batch_size [(]5[)]",
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 2, device=device, dtype=dtype),
+                forward_input=FunctionInput(
+                    make_input((4, 5)),
+                    torch.zeros((4, 2), device=device, dtype=dtype),
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex="expected equal input and linear_weight last dimensions [(]in_features[)], got 5 and 3, respectively",
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 2, weight=torch.ones(3, device=device, dtype=dtype),
+                                                device=device, dtype=dtype),
+                forward_input=FunctionInput(
+                    make_input((4, 3)),
+                    torch.zeros((4, 2), device=device, dtype=dtype),
+                ),
+            ),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=RuntimeError,
+            error_regex="expected weight shape to be [(]2,[)], got [(]3,[)]",
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 2, device=device, dtype=dtype, label_smoothing=2.0),
+                forward_input=FunctionInput(
+                    make_input((4, 3)),
+                    torch.zeros((4, 2), device=device, dtype=dtype),
+                ),
+            ),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=RuntimeError,
+            error_regex="expected label_smoothing to be in range [[]0, 1[]], got 2.0",
+        ),
+    ]
+
 
 def module_inputs_torch_nn_CTCLoss(module_info, device, dtype, requires_grad, training, **kwargs):
     make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
@@ -1705,6 +2041,10 @@ def module_inputs_torch_nn_GroupNorm(module_info, device, dtype, requires_grad, 
             forward_input=FunctionInput(make_input((4, 6, 5))),
             desc='1d_affine'),
         ModuleInput(
+            constructor_input=FunctionInput(3, 6, 1e-3, bias=False),
+            forward_input=FunctionInput(make_input((4, 6, 5))),
+            desc='1d_affine_not_bias'),
+        ModuleInput(
             constructor_input=FunctionInput(3, 12, 1e-3),
             forward_input=FunctionInput(make_input((4, 12))),
             desc='1d_affine_GN'),
@@ -1725,13 +2065,42 @@ def module_inputs_torch_nn_GroupNorm(module_info, device, dtype, requires_grad, 
             forward_input=FunctionInput(make_input((4, 6, 2, 3))),
             desc='2d_affine'),
         ModuleInput(
+            constructor_input=FunctionInput(3, 9, 1e-3, bias=False),
+            forward_input=FunctionInput(make_input((4, 9, 2, 3))),
+            desc='2d_affine_not_bias'),
+        ModuleInput(
             constructor_input=FunctionInput(3, 3, 1e-3, False),
             forward_input=FunctionInput(make_input((4, 3, 2, 3))),
             desc='2d_no_affine_IN'),
         ModuleInput(
             constructor_input=FunctionInput(1, 3, 1e-3, False),
             forward_input=FunctionInput(make_input((4, 3, 2, 3))),
-            desc='2d_no_affine_LN'),
+            desc='2d_no_affine_LN'),]
+
+
+def module_error_inputs_torch_nn_GroupNorm(module_info, device, dtype, requires_grad, training, **kwargs):
+    """
+    Error inputs for GroupNorm that test error messages include actual values.
+    """
+    return [
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 10),  # num_groups=3, num_channels=10
+                forward_input=FunctionInput(),  # Not needed for construction error
+            ),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=ValueError,
+            error_regex=r"num_channels \(10\) must be divisible by num_groups \(3\)"
+        ),
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(5, 13),  # num_groups=5, num_channels=13
+                forward_input=FunctionInput(),  # Not needed for construction error
+            ),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=ValueError,
+            error_regex=r"num_channels \(13\) must be divisible by num_groups \(5\)"
+        ),
     ]
 
 
@@ -1895,8 +2264,21 @@ def module_inputs_torch_nn_InstanceNormNd(module_info, device, dtype, requires_g
             ),
             forward_input=FunctionInput(make_input(input_no_batch_shape)),
             reference_fn=no_batch_dim_reference_fn,
-            desc='no_batch_dim')
-    ]
+            desc='no_batch_dim'),
+        ModuleInput(
+            constructor_input=(
+                FunctionInput(eps, momentum, affine=True) if lazy else
+                FunctionInput(num_features, eps, momentum, affine=True)
+            ),
+            forward_input=FunctionInput(make_input(input_batch_shape)),
+            desc='affine'),
+        ModuleInput(
+            constructor_input=(
+                FunctionInput(eps, momentum, affine=True, bias=False) if lazy else
+                FunctionInput(num_features, eps, momentum, affine=True, bias=False)
+            ),
+            forward_input=FunctionInput(make_input(input_batch_shape)),
+            desc='affine_not_bias'),]
 
 def module_inputs_torch_nn_LayerNorm(module_info, device, dtype, requires_grad, training, **kwargs):
     make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
@@ -2096,6 +2478,47 @@ def module_inputs_torch_nn_MaxPool2d(module_info, device, dtype, requires_grad, 
             forward_input=FunctionInput(make_input((1, 3, 7, 7))),
             desc='return_indices'),
     ]
+
+
+def module_error_inputs_torch_nn_MaxPool2d(module_info, device, dtype, requires_grad, training, **kwargs):
+    """
+    Error inputs for MaxPool2d that test error messages for invalid inputs.
+    """
+    make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
+
+    return [
+        # Wrong input dimensions: 2D input instead of 3D/4D
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(2),
+                forward_input=FunctionInput(make_input((3, 4))),  # 2D input
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"non-empty 3D or 4D \(batch mode\) tensor expected for input"
+        ),
+        # Wrong input dimensions: 5D input
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(2),
+                forward_input=FunctionInput(make_input((1, 2, 3, 4, 5))),  # 5D input
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"non-empty 3D or 4D \(batch mode\) tensor expected for input"
+        ),
+        # Invalid padding: padding > kernel_size / 2
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, padding=5),  # kernel=3, pad=5 > 3/2
+                forward_input=FunctionInput(make_input((1, 1, 10, 10))),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"pad should be at most half of effective kernel size"
+        ),
+    ]
+
 
 def module_inputs_torch_nn_MaxPool3d(module_info, device, dtype, requires_grad, training, **kwargs):
     make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
@@ -2337,6 +2760,31 @@ def module_inputs_torch_nn_MultiMarginLoss(module_info, device, dtype, requires_
     return module_inputs
 
 
+def module_error_inputs_torch_nn_MultiMarginLoss(module_info, device, dtype, requires_grad, training, **kwargs):
+    """
+    Error inputs for MultiMarginLoss that test the improved error message
+    for inconsistent target size.
+    Regression test for issue #106251.
+    """
+    make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
+
+    return [
+        # Test: target size doesn't match batch size (5 vs 3)
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(),
+                forward_input=FunctionInput(
+                    make_input((5, 10)),  # input: batch_size=5, num_classes=10
+                    torch.tensor([0, 1, 2], device=device, dtype=torch.long),  # target: wrong size (3)
+                ),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"target tensor should be 1-D with size equal to.*Expected target size \[5\].*but got \[3\]"
+        ),
+    ]
+
+
 def module_inputs_torch_nn_MultiLabelSoftMarginLoss(module_info, device, dtype, requires_grad, training, **kwargs):
     make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
     make_target = partial(make_tensor, device=device, dtype=torch.long, requires_grad=False)
@@ -2476,7 +2924,8 @@ def module_inputs_torch_nn_TransformerEncoderLayer(module_info, device, dtype, r
     # since the fast path requires no_grad mode, we run the fast path in .eval()
     # and no_grad() in the reference_fn and verify that against the results in train mode.
     def fast_path_reference_fn(module, parameters, *args, **kwargs):
-        assert module.training
+        if not module.training:
+            raise AssertionError("Expected module.training to be True")
         module.train(False)
         with torch.no_grad():
             output = module(*args, **kwargs)
@@ -2628,6 +3077,57 @@ def module_inputs_torch_nn_Embedding(module_info, device, dtype, requires_grad, 
             desc='discontiguous'
         ),
     ]
+
+
+def module_error_inputs_torch_nn_Embedding(module_info, device, dtype, requires_grad, training, **kwargs):
+    """
+    Error inputs for Embedding that test error messages for invalid inputs.
+    """
+    samples = []
+
+    # Out of range indices: index exceeds num_embeddings
+    # Only test on CPU - CUDA triggers kernel assertion instead of Python exception
+    if torch.device(device).type == 'cpu':
+        samples.append(
+            ErrorModuleInput(
+                ModuleInput(
+                    constructor_input=FunctionInput(num_embeddings=10, embedding_dim=3),
+                    forward_input=FunctionInput(torch.tensor([0, 5, 15], device=device, dtype=torch.long)),
+                ),
+                error_on=ModuleErrorEnum.FORWARD_ERROR,
+                error_type=IndexError,
+                error_regex=r"index out of range in self"
+            )
+        )
+
+    # Float indices: wrong dtype for indices (works on all devices)
+    samples.append(
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(num_embeddings=10, embedding_dim=3),
+                forward_input=FunctionInput(torch.tensor([1.5, 2.5], device=device, dtype=torch.float32)),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"Expected tensor for argument.*indices.*to have.*scalar type.*Long.*Int"
+        )
+    )
+
+    # Negative num_embeddings (construction error, device-independent)
+    samples.append(
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(num_embeddings=-1, embedding_dim=3),
+                forward_input=FunctionInput(),
+            ),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"Trying to create tensor with negative dimension"
+        )
+    )
+
+    return samples
+
 
 
 def module_inputs_torch_nn_MultiheadAttention(module_info, device, dtype, requires_grad, training, **kwargs):
@@ -3172,18 +3672,32 @@ rnn_gru_lstm_module_info_decorators = (
     DecorateInfo(
         unittest.expectedFailure, "TestModule", "test_non_contiguous_tensors",
         active_if=(TEST_CUDNN and TEST_WITH_ROCM), dtypes=(torch.float,), device_type='cuda'
-    ),
-    DecorateInfo(
-        skipCUDAVersionIn([(11, 7)]), "TestExpandedWeightModule", "test_module",
-        device_type='cuda'
-    ),
-    DecorateInfo(
-        skipCUDAVersionIn([(11, 7)]), "TestDecomp", "test_rnn_decomp_module",
-        device_type='cuda'
     )
 )
 
 # Start of module error inputs functions.
+
+def module_error_inputs_torch_nn_NLLLoss(module_info, device, dtype, requires_grad, training, **kwargs):
+    """
+    Error inputs for NLLLoss that test weight dtype must match input dtype.
+    Regression test for device parity between CPU and CUDA with empty tensors.
+    """
+    input_t = torch.tensor([], device=device, dtype=dtype).reshape((0, 0))
+    weight_dtype = torch.float32 if dtype == torch.float16 else torch.float16
+    weight_t = torch.tensor([], device=device, dtype=weight_dtype)
+    target_t = torch.tensor([], device=device, dtype=torch.long)
+
+    return [
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(weight=weight_t),
+                forward_input=FunctionInput(input_t, target_t),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=RuntimeError,
+            error_regex=r"expected scalar type \w+ but found \w+"
+        ),
+    ]
 
 def module_error_inputs_torch_nn_RNN_GRU_Cell(module_info, device, dtype, requires_grad, training, **kwargs):
     make_input = partial(make_tensor, device=device, dtype=dtype, requires_grad=requires_grad)
@@ -3289,6 +3803,16 @@ def module_error_inputs_torch_nn_LSTMCell(module_info, device, dtype, requires_g
 
 
 def module_error_inputs_torch_nn_RNN_GRU(module_info, device, dtype, requires_grad, training, **kwargs):
+    # use float64 for dtype mismatch test if current dtype is float32, otherwise use float32
+    # MPS doesn't support float64, so use float16 instead
+    # Extract device type from device string (e.g., 'mps:0' -> 'mps')
+    device_type = device.split(':')[0] if isinstance(device, str) else device.type
+    if dtype == torch.float32:
+        mismatched_dtype = torch.float16 if device_type == 'mps' else torch.float64
+    else:
+        mismatched_dtype = torch.float32
+    make_input = partial(make_tensor, device=device, dtype=mismatched_dtype, requires_grad=requires_grad)
+
     samples = [
         ErrorModuleInput(
             ModuleInput(constructor_input=FunctionInput(10, 0, 1)),
@@ -3301,6 +3825,88 @@ def module_error_inputs_torch_nn_RNN_GRU(module_info, device, dtype, requires_gr
             error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
             error_type=ValueError,
             error_regex="num_layers must be greater than zero"
+        ),
+        # Test dtype mismatch error message
+        ErrorModuleInput(
+            ModuleInput(
+                constructor_input=FunctionInput(3, 5, dtype=dtype, device=device),
+                forward_input=FunctionInput(make_input((2, 4, 3))),
+            ),
+            error_on=ModuleErrorEnum.FORWARD_ERROR,
+            error_type=ValueError,
+            error_regex=(r"RNN input dtype .* does not match weight dtype .* "
+                         r"Convert input: input\.to\(.*\), or convert model: model\.to\(.*\)")
+        ),
+        # Test bias parameter type validation
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, bias=0)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="bias should be of type bool, got: int"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, bias=1)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="bias should be of type bool, got: int"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, bias="True")),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="bias should be of type bool, got: str"
+        ),
+        # Test batch_first parameter type validation
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, batch_first=0)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="batch_first should be of type bool, got: int"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, batch_first=1)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="batch_first should be of type bool, got: int"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5, batch_first="False")),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="batch_first should be of type bool, got: str"
+        ),
+        # Test input_size parameter type validation
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3.0, 5)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="input_size should be of type int, got: float"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput("10", 5)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="input_size should be of type int, got: str"
+        ),
+        # Test input_size parameter value validation
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(0, 5)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=ValueError,
+            error_regex="input_size must be greater than zero"
+        ),
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(-1, 5)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=ValueError,
+            error_regex="input_size must be greater than zero"
+        ),
+        # Test hidden_size parameter type validation
+        ErrorModuleInput(
+            ModuleInput(constructor_input=FunctionInput(3, 5.0)),
+            error_on=ModuleErrorEnum.CONSTRUCTION_ERROR,
+            error_type=TypeError,
+            error_regex="hidden_size should be of type int, got: float"
         ),
     ]
     return samples
@@ -3422,23 +4028,21 @@ module_db: list[ModuleInfo] = [
                        'TestModule',
                        'test_memory_format',
                        active_if=operator.itemgetter('training'),
-                       device_type='cuda',
-                   ),
-                   # error: input types 'tensor<f32>' and 'tensor<15x10xf16>' are not broadcast compatible
-                   DecorateInfo(skipIfMPSOnMacOS13, 'TestModule', dtypes=[torch.float16], device_type='mps',),),
-               ),
+                       device_type='cuda',),
+               ),),
     ModuleInfo(torch.nn.AvgPool3d,
                module_inputs_func=module_inputs_torch_nn_AvgPool3d,
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                skips=(
                    # No channels_last support for AvgPool1d as it does not take 4D inputs
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format'),
-                   # not supported on MPS backend
-                   DecorateInfo(skipMPS),)
+                   # backward not supported on MPS backend
+                   DecorateInfo(skipMPS, 'TestModule', 'test_non_contiguous_tensors'),)
                ),
     ModuleInfo(torch.nn.BatchNorm1d,
                train_and_eval_differ=True,
                module_inputs_func=module_inputs_torch_nn_BatchNorm1d,
+               module_error_inputs_func=module_error_inputs_torch_nn_BatchNorm1d_2d_3d,
                skips=(
                    # tracking here rather than in the list in test_aotdispatch.py as eval mode passes
                    # RuntimeError: tried to get Double out of SymInt
@@ -3457,6 +4061,7 @@ module_db: list[ModuleInfo] = [
     ModuleInfo(torch.nn.BatchNorm2d,
                train_and_eval_differ=True,
                module_inputs_func=module_inputs_torch_nn_BatchNorm2d,
+               module_error_inputs_func=module_error_inputs_torch_nn_BatchNorm1d_2d_3d,
                skips=(
                    # See https://github.com/pytorch/pytorch/issues/134580
                    DecorateInfo(expectedFailureMPS, 'TestModule', 'test_memory_format', active_if=operator.itemgetter('training')),
@@ -3477,6 +4082,7 @@ module_db: list[ModuleInfo] = [
     ModuleInfo(torch.nn.BatchNorm3d,
                train_and_eval_differ=True,
                module_inputs_func=module_inputs_torch_nn_BatchNorm3d,
+               module_error_inputs_func=module_error_inputs_torch_nn_BatchNorm1d_2d_3d,
                skips=(
                    # not supported on MPS backend
                    DecorateInfo(skipMPS),
@@ -3505,16 +4111,6 @@ module_db: list[ModuleInfo] = [
                module_inputs_func=partial(module_inputs_torch_nn_ConvNd, N=1, lazy=False),
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
-               skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
-               ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
                )),
@@ -3523,21 +4119,10 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # This was wrongly being skipped before and needs investigation.
                    # See https://github.com/pytorch/pytorch/issues/80247
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
                                 device_type='cuda', dtypes=[torch.float64]),
-                   # Fails with channels last test on MPS backend
-                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float32, torch.float16]),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3547,8 +4132,6 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Conv3d is not supported on MPS backend
                    DecorateInfo(skipMPS, device_type="mps"),
                    # This was wrongly being skipped before and needs investigation.
@@ -3564,17 +4147,10 @@ module_db: list[ModuleInfo] = [
                module_memformat_affects_out=True,
                dtypes=floating_and_complex_types_and(torch.chalf),
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Not implemented for chalf on CPU
                    DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_cpu_gpu_parity',
                                 dtypes=(torch.chalf,), device_type='cuda'),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),),
+               ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
                    DecorateInfo(precisionOverride({torch.chalf: 5e-03}), 'TestModule', 'test_memory_format'),
@@ -3585,8 +4161,6 @@ module_db: list[ModuleInfo] = [
                module_memformat_affects_out=True,
                dtypes=floating_and_complex_types_and(torch.chalf),
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Fails on backward check because ViewAsRealBackward apply contiguous for grad
                    DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_memory_format',
                                 dtypes=(torch.complex32, torch.complex64, torch.complex128)),
@@ -3594,18 +4168,11 @@ module_db: list[ModuleInfo] = [
                    # See https://github.com/pytorch/pytorch/issues/80247
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format", device_type='cuda',
                                 dtypes=[torch.float64, torch.complex128]),
-                   # Fails with channels last test on MPS backend
-                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16, torch.float32]),
                    # Not implemented for chalf on CPU
                    DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_cpu_gpu_parity',
                                 dtypes=(torch.chalf,), device_type='cuda'),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
+                   DecorateInfo(skipIfXpu, 'TestModule', 'test_cpu_gpu_parity',
+                                dtypes=(torch.chalf,), device_type='xpu'),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3617,19 +4184,16 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # ConvTranspose3d is not supported on MPS backend
                    DecorateInfo(skipMPS),
                    # This was wrongly being skipped before and needs investigation.
                    # See https://github.com/pytorch/pytorch/issues/80247
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format"),
-                   # These fail only on ROCm
-                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format", device_type='cuda',
-                                dtypes=[torch.complex32, torch.complex64], active_if=TEST_WITH_ROCM),
                    # Not implemented for chalf on CPU
                    DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_cpu_gpu_parity',
                                 dtypes=(torch.chalf,), device_type='cuda'),
+                   DecorateInfo(skipIfXpu, 'TestModule', 'test_cpu_gpu_parity',
+                                dtypes=(torch.chalf,), device_type='xpu'),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3686,17 +4250,9 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3706,8 +4262,6 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
@@ -3715,15 +4269,6 @@ module_db: list[ModuleInfo] = [
                    # See https://github.com/pytorch/pytorch/issues/80247
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
                                 device_type='cuda', dtypes=[torch.float64]),
-                   # Fails with channels last test on MPS backend
-                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float32, torch.float16]),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3733,8 +4278,6 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
@@ -3752,17 +4295,9 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3772,8 +4307,6 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
@@ -3781,15 +4314,6 @@ module_db: list[ModuleInfo] = [
                    # See https://github.com/pytorch/pytorch/issues/80247
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format", device_type='cuda',
                                 dtypes=[torch.float64]),
-                   # Fails with channels last test on MPS backend
-                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float32, torch.float16]),
-                   # See #119108: MPSNDArrayConvolutionA14.mm:3976: failed assertion `destination datatype must be fp32'
-                   # xfail does not work due to Fatal Python error: Aborted
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_memory_format",
-                                device_type='mps', dtypes=[torch.float16]),
-                   DecorateInfo(skipIfMPSOnMacOS13, "TestModule", "test_non_contiguous_tensors",
-                                device_type='mps', dtypes=[torch.float16]),
                ),
                decorators=(
                    DecorateInfo(precisionOverride({torch.float32: 1e-04}), 'TestModule', 'test_memory_format'),
@@ -3799,8 +4323,6 @@ module_db: list[ModuleInfo] = [
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                module_memformat_affects_out=True,
                skips=(
-                   # Failure on ROCM for float32 issue #70125
-                   DecorateInfo(skipCUDAIfRocm, 'TestModule', 'test_memory_format', dtypes=[torch.float32]),
                    # Lazy modules don't currently play well with ModuleInfo tests on the meta device.
                    # See https://github.com/pytorch/pytorch/issues/70505 for more info.
                    DecorateInfo(skipMeta),
@@ -3852,7 +4374,7 @@ module_db: list[ModuleInfo] = [
                        unittest.expectedFailure,
                        'TestModule',
                        'test_memory_format',
-                       active_if=operator.itemgetter('training'),
+                       active_if=operator.itemgetter('training') and not _macos15_or_newer,
                        device_type='mps',
                    ),)
                ),
@@ -3869,13 +4391,11 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.MaxPool2d,
                module_inputs_func=module_inputs_torch_nn_MaxPool2d,
+               module_error_inputs_func=module_error_inputs_torch_nn_MaxPool2d,
                ),
     ModuleInfo(torch.nn.MaxPool3d,
                module_inputs_func=module_inputs_torch_nn_MaxPool3d,
                gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
-               skips=(
-                   # not supported on MPS backend
-                   DecorateInfo(skipIfMPS, device_type='mps'),)
                ),
     ModuleInfo(torch.nn.KLDivLoss,
                module_inputs_func=module_inputs_torch_nn_KLDivLoss,
@@ -3892,9 +4412,6 @@ module_db: list[ModuleInfo] = [
                skips=(
                    # No channels_last support for loss functions.
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format'),
-                   # See #119108: input types 'tensor<f32>' and 'tensor<15x10xf16>' are not broadcast compatible
-                   DecorateInfo(skipIfMPSOnMacOS13, 'TestModule', 'test_non_contiguous_tensors',
-                                device_type='mps', dtypes=[torch.float16],),
                    # See #119108: tolerance issue
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_forward",
                                 device_type='mps', dtypes=[torch.float16]),)
@@ -3917,6 +4434,7 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.MultiMarginLoss,
                module_inputs_func=module_inputs_torch_nn_MultiMarginLoss,
+               module_error_inputs_func=module_error_inputs_torch_nn_MultiMarginLoss,
                skips=(
                    # No channels_last support for loss functions.
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format'),
@@ -3942,6 +4460,7 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.NLLLoss,
                module_inputs_func=module_inputs_torch_nn_NLLLoss,
+               module_error_inputs_func=module_error_inputs_torch_nn_NLLLoss,
                skips=(
                    # No channels_last support for loss functions.
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format'),
@@ -3992,6 +4511,7 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.CrossEntropyLoss,
                module_inputs_func=module_inputs_torch_nn_CrossEntropyLoss,
+               module_error_inputs_func=module_error_inputs_torch_nn_CrossEntropyLoss,
                dtypes=get_all_fp_dtypes(include_half=True, include_bfloat16=False),
                decorators=(
                    # No channels_last support for loss functions.
@@ -3999,7 +4519,40 @@ module_db: list[ModuleInfo] = [
                    DecorateInfo(toleranceOverride({torch.float16: tol(atol=3e-2, rtol=1e-3)}), "TestModule",
                                 "test_forward", dtypes=[torch.float16], device_type='cpu'),
                    DecorateInfo(unittest.expectedFailure, "TestModule", "test_cpu_gpu_parity", dtypes=[torch.float16],
-                                device_type='cuda'),),
+                                device_type='cuda'),
+                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_cpu_gpu_parity", dtypes=[torch.float16],
+                                device_type='xpu'),),
+               ),
+    ModuleInfo(torch.nn.LinearCrossEntropyLoss,
+               module_inputs_func=module_inputs_torch_nn_LinearCrossEntropyLoss,
+               module_error_inputs_func=module_error_inputs_torch_nn_LinearCrossEntropyLoss,
+               dtypes=get_all_fp_dtypes(include_half=True, include_bfloat16=True),
+               gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
+               decorators=(
+                   # No channels_last support for loss functions,
+                   # requires at least a 3-dimensional loss to
+                   # reproduce the failure.
+                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_memory_format'),
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=2e-3, rtol=1e-2)}), "TestModule",
+                                "test_non_contiguous_tensors", dtypes=[torch.float16]),
+                   DecorateInfo(toleranceOverride({torch.bfloat16: tol(atol=1e-2, rtol=5e-2)}), "TestModule",
+                                "test_non_contiguous_tensors", dtypes=[torch.bfloat16]),
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=4e-2, rtol=3e-1)}), "TestModule",
+                                "test_cpu_gpu_parity", dtypes=[torch.float16]),
+                   # Insufficient accuracy, likely related to an issue with cross_entropy
+                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_cpu_gpu_parity",
+                                dtypes=[torch.bfloat16], device_type='cuda'),
+                   DecorateInfo(unittest.expectedFailure, "TestModule", "test_cpu_gpu_parity",
+                                dtypes=[torch.bfloat16], device_type='xpu'),
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=2e-1, rtol=2e-3)}), "TestModule",
+                                "test_save_load", device_type="cuda", dtypes=[torch.float16]),
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=2e-1, rtol=2e-3)}), "TestModule",
+                                "test_save_load", device_type="xpu", dtypes=[torch.float16]),
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=2e-3, rtol=2e-3)}), "TestModule",
+                                "test_forward", dtypes=[torch.float16]),
+                   DecorateInfo(toleranceOverride({torch.bfloat16: tol(atol=2e-1, rtol=5e-2)}), "TestModule",
+                                "test_save_load", device_type="cuda", dtypes=[torch.bfloat16]),
+               ),
                ),
     ModuleInfo(torch.nn.CTCLoss,
                module_inputs_func=module_inputs_torch_nn_CTCLoss,
@@ -4026,6 +4579,7 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.GroupNorm,
                module_inputs_func=module_inputs_torch_nn_GroupNorm,
+               module_error_inputs_func=module_error_inputs_torch_nn_GroupNorm,
                dtypes=get_all_fp_dtypes(include_bfloat16=True, include_half=True),
                skips=(
                    # Tracking at https://github.com/pytorch/pytorch/issues/98089
@@ -4035,31 +4589,15 @@ module_db: list[ModuleInfo] = [
                    # No channels_last support for GroupNorm currently.
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format', device_type='cuda'),
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format', device_type='mps'),
+                   DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format', device_type='xpu'),
                    DecorateInfo(unittest.skip("Skipped!"), "TestModule", "test_grad",
                                 active_if=TEST_WITH_ROCM, device_type='cuda'),)
                ),
     ModuleInfo(torch.nn.Hardshrink,
                module_inputs_func=module_inputs_torch_nn_Hardshrink,
-               skips=(
-                   # not supported on MPS backend
-                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_forward', device_type='mps'),
-                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_if_train_and_eval_modes_differ', device_type='mps'),
-                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_memory_format', device_type='mps'),
-                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_non_contiguous_tensors', device_type='mps'),
-                   DecorateInfo(unittest.expectedFailure, 'TestModule', 'test_save_load', device_type='mps'),),
                ),
     ModuleInfo(torch.nn.Hardswish,
                module_inputs_func=module_inputs_torch_nn_Hardswish,
-               skips=None if _macos15_or_newer else (
-                   # Fails on backward check on MPS
-                   # See https://github.com/pytorch/pytorch/issues/107214
-                   DecorateInfo(
-                       unittest.expectedFailure,
-                       'TestModule',
-                       'test_memory_format',
-                       active_if=operator.itemgetter('training'),
-                       device_type='mps',
-                   ),),
                supports_gradgrad=False),
     ModuleInfo(torch.nn.Hardtanh,
                module_inputs_func=module_inputs_torch_nn_Hardtanh,
@@ -4093,14 +4631,6 @@ module_db: list[ModuleInfo] = [
                ),
     ModuleInfo(torch.nn.LocalResponseNorm,
                module_inputs_func=module_inputs_torch_nn_LocalResponseNorm,
-               skips=(
-                   # uses avg_pool3d which is not supported on MPS backend
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_memory_format'),
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_non_contiguous_tensors'),
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_forward'),
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_if_train_and_eval_modes_differ'),
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_non_contiguous'),
-                   DecorateInfo(expectedFailureMPS, 'TestModule', 'test_save_load'),)
                ),
     ModuleInfo(torch.nn.LayerNorm,
                module_inputs_func=module_inputs_torch_nn_LayerNorm,
@@ -4173,12 +4703,18 @@ module_db: list[ModuleInfo] = [
     ModuleInfo(torch.nn.MultiheadAttention,
                train_and_eval_differ=True,
                module_inputs_func=module_inputs_torch_nn_MultiheadAttention,
+               decorators=[
+                   DecorateInfo(toleranceOverride({torch.float16: tol(atol=2e-1, rtol=1e-3)}),
+                                'TestModule', 'test_non_contiguous_tensors',
+                                device_type='mps')],
                skips=(
                    # No channels_last support for MultiheadAttention currently.
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format'),)
                ),
     ModuleInfo(torch.nn.Embedding,
                module_inputs_func=module_inputs_torch_nn_Embedding,
+               module_error_inputs_func=module_error_inputs_torch_nn_Embedding,
+               gradcheck_nondet_tol=GRADCHECK_NONDET_TOL,
                decorators=[
                    DecorateInfo(toleranceOverride({torch.float32: tol(atol=1e-4, rtol=1e-4)}),
                                 'TestModule', 'test_non_contiguous_tensors',
@@ -4359,7 +4895,9 @@ module_db: list[ModuleInfo] = [
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
                                 device_type='cuda'),
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
-                                device_type='mps'),)
+                                device_type='mps'),
+                   DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
+                                device_type='xpu'),)
                ),
     ModuleInfo(torch.nn.ReflectionPad3d,
                module_inputs_func=module_inputs_torch_nn_ReflectionPad3d,
@@ -4368,7 +4906,9 @@ module_db: list[ModuleInfo] = [
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
                                 device_type='cuda'),
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
-                                device_type='mps'),)
+                                device_type='mps'),
+                   DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
+                                device_type='xpu'),)
                ),
     ModuleInfo(torch.nn.ReplicationPad1d,
                module_inputs_func=module_inputs_torch_nn_ReplicationPad1d,
@@ -4380,7 +4920,9 @@ module_db: list[ModuleInfo] = [
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
                                 device_type='cuda'),
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
-                                device_type='mps'),)
+                                device_type='mps'),
+                   DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
+                                device_type='xpu'),)
                ),
     ModuleInfo(torch.nn.ReplicationPad3d,
                module_inputs_func=module_inputs_torch_nn_ReplicationPad3d,
@@ -4389,7 +4931,9 @@ module_db: list[ModuleInfo] = [
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
                                 device_type='cuda'),
                    DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
-                                device_type='mps'),)
+                                device_type='mps'),
+                   DecorateInfo(unittest.skip("Skipped!"), 'TestModule', 'test_memory_format',
+                                device_type='xpu'),)
                ),
     ModuleInfo(torch.nn.SELU,
                module_inputs_func=module_inputs_torch_nn_SELU,

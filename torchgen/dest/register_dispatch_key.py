@@ -4,6 +4,7 @@ import itertools
 import textwrap
 from dataclasses import dataclass
 from typing import Literal, TYPE_CHECKING
+from typing_extensions import assert_never
 
 import torchgen.api.cpp as cpp
 import torchgen.api.meta as meta
@@ -36,7 +37,7 @@ from torchgen.model import (
     SchemaKind,
     TensorOptionsArguments,
 )
-from torchgen.utils import assert_never, mapMaybe, Target
+from torchgen.utils import mapMaybe, Target
 
 
 if TYPE_CHECKING:
@@ -65,6 +66,8 @@ def gen_registration_headers(
     elif backend_index.dispatch_key == DispatchKey.XPU:
         # XPU specific, this header resides in third_party/torch-xpu-ops
         headers.append("#include <ATen/xpu/EmptyTensor.h>")
+    elif backend_index.dispatch_key == DispatchKey.MTIA:
+        headers.append("#include <ATen/native/mtia/EmptyTensor.h>")
     elif per_operator_headers:
         headers += [
             "#include <ATen/ops/empty.h>",
@@ -91,6 +94,7 @@ def gen_empty_impl_names(
         DispatchKey.CUDA,
         DispatchKey.MPS,
         DispatchKey.XPU,
+        DispatchKey.MTIA,
     ):
         dispatch = str(backend_index.dispatch_key).lower()
         empty_impl = f"at::detail::empty_{dispatch}"
@@ -338,7 +342,10 @@ class RegisterDispatchKey:
             updates = f"{copy_op}({func_res}, {ret_name});"
             returns = ret_name
         else:
-            assert len(f.func.arguments.out) == 1
+            if len(f.func.arguments.out) != 1:
+                raise AssertionError(
+                    f"Expected exactly 1 out argument, got {len(f.func.arguments.out)}"
+                )
             returns = ""
             out_arg = f.func.arguments.out[0]
             if out_arg.type.is_list_like():
@@ -363,18 +370,20 @@ class RegisterDispatchKey:
     def gen_structured(self, g: NativeFunctionsGroup) -> list[str]:
         metadata = self.backend_index.get_kernel(g)
         if self.backend_index.dispatch_key == DispatchKey.Meta:
-            assert not self.backend_index.has_kernel(g.out), (
-                "Do not explicitly specify Meta dispatch key on structured "
-                "functions, they will be automatically generated for you"
-            )
+            if self.backend_index.has_kernel(g.out):
+                raise AssertionError(
+                    "Do not explicitly specify Meta dispatch key on structured "
+                    "functions, they will be automatically generated for you"
+                )
         elif (
             self.backend_index.dispatch_key
             == DispatchKey.CompositeExplicitAutogradNonFunctional
         ):
-            assert not self.backend_index.has_kernel(g.out), (
-                "Do not explicitly specify CompositeExplicitAutograd dispatch key on structured "
-                "functions, they will be automatically generated for you"
-            )
+            if self.backend_index.has_kernel(g.out):
+                raise AssertionError(
+                    "Do not explicitly specify CompositeExplicitAutograd dispatch key on "
+                    "structured functions, they will be automatically generated for you"
+                )
         elif metadata is None or not metadata.structured:
             return list(mapMaybe(lambda f: self.gen_unstructured(f, g), g.functions()))
         structured_gen = StructuredRegisterDispatchKey(
@@ -460,7 +469,10 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
             elif self.target is Target.ANONYMOUS_DEFINITION:
                 # short circuit for inplace_meta
                 if inplace_meta:
-                    assert f.func.arguments.self_arg is not None
+                    if f.func.arguments.self_arg is None:
+                        raise AssertionError(
+                            "Expected self_arg to be non-None for inplace_meta"
+                        )
                     self_arg_name = f.func.arguments.self_arg.argument.name
                     # TODO: handle in place on tensor list
                     return f"""
@@ -638,14 +650,19 @@ if (C10_UNLIKELY(maybe_proxy.has_value())) {
             create_proxy = ""
 
         if k is SchemaKind.functional:
-            assert self.backend_index.dispatch_key in (
+            if self.backend_index.dispatch_key not in (
                 DispatchKey.Meta,
                 DispatchKey.CPU,
                 DispatchKey.CUDA,
                 DispatchKey.MPS,
                 DispatchKey.XPU,
+                DispatchKey.MTIA,
                 DispatchKey.CompositeExplicitAutogradNonFunctional,
-            )
+            ):
+                raise AssertionError(
+                    f"Unexpected dispatch key {self.backend_index.dispatch_key} "
+                    "for functional schema"
+                )
             return f"""{maybe_set_guard_line}
 outputs_[output_idx] = create_out(sizes, strides, options);"""
         elif k is SchemaKind.inplace:
@@ -709,10 +726,7 @@ resize_out(out, sizes, strides, options);
             raise RuntimeError(f"Unsupported SchemaKind {k}")
 
         if self.backend_index.dispatch_key == DispatchKey.CUDA:
-            if self.rocm:
-                guard_field = "c10::hip::OptionalHIPGuardMasqueradingAsCUDA guard_;"
-            else:
-                guard_field = "c10::cuda::OptionalCUDAGuard guard_;"
+            guard_field = "c10::cuda::OptionalCUDAGuard guard_;"
         elif (
             self.backend_index.dispatch_key
             == DispatchKey.CompositeExplicitAutogradNonFunctional
@@ -722,6 +736,8 @@ resize_out(out, sizes, strides, options);
             # TODO: Move to OptionalMPSGuard.
             guard_field = "c10::OptionalDeviceGuard guard_;"
         elif self.backend_index.dispatch_key == DispatchKey.XPU:
+            guard_field = "c10::OptionalDeviceGuard guard_;"
+        elif self.backend_index.dispatch_key == DispatchKey.MTIA:
             guard_field = "c10::OptionalDeviceGuard guard_;"
         else:
             guard_field = ""
@@ -745,7 +761,10 @@ resize_out(out, sizes, strides, options);
 
     @method_with_native_function
     def gen_one(self, f: NativeFunction) -> str | None:
-        assert not f.manual_kernel_registration
+        if f.manual_kernel_registration:
+            raise AssertionError(
+                f"Function {f.func.name} has manual_kernel_registration=True"
+            )
 
         if (
             self.target is Target.REGISTRATION
@@ -757,7 +776,7 @@ resize_out(out, sizes, strides, options);
         # we generate CompositeExplicitAutogradNonFunctional implementations of functional and inplace
         # based on the out implementation.  But in fact, out is definable by
         # functional too (just not very efficiently), and this is honestly the
-        # MORE likely situation for a backend implementor.  How do we pick?
+        # MORE likely situation for a backend implementer.  How do we pick?
         # Well, taking a page from Haskell type classes and default methods,
         # we could conceivably register a circular definition (out in terms
         # of functional, and functional in terms of out) and just require
@@ -770,7 +789,7 @@ resize_out(out, sizes, strides, options);
             and f.func.kind() is SchemaKind.out
         ):
             # Never generate a default implementation for out, that's what you
-            # have to define as a backend implementor
+            # have to define as a backend implementer
             return None
 
         # Note [Direct dispatch bindings]
@@ -834,7 +853,10 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
                 parent_class = f"at::meta::structured_{meta.name(self.g)}"
             else:
                 metadata = self.backend_index.get_kernel(self.g)
-                assert metadata is not None
+                if metadata is None:
+                    raise AssertionError(
+                        f"No kernel metadata found for {self.g.functional.func.name}"
+                    )
                 class_name = f"structured_{metadata.kernel}_{k.name}"
                 parent_class = f"{metadata.cpp_namespace}::structured_{metadata.kernel}"
 
@@ -897,7 +919,11 @@ return {sig.name()}({", ".join(e.expr for e in translate(cpp_sig.arguments(), si
             # add it to the context
             out_args = structured.out_arguments(self.g)
             for i, out_arg in enumerate(out_args):
-                assert ConstRefCType(BaseCType(tensorT)) == out_arg.nctype.type
+                if ConstRefCType(BaseCType(tensorT)) != out_arg.nctype.type:
+                    raise AssertionError(
+                        f"Expected out_arg type to be ConstRefCType(BaseCType(tensorT)), "
+                        f"got {out_arg.nctype.type}"
+                    )
 
                 if k is SchemaKind.out:
                     expr = f"op.maybe_get_output({i})"

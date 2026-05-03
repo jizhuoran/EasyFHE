@@ -6,6 +6,7 @@
 #include <ATen/mps/MPSHooks.h>
 #include <ATen/mps/MPSProfiler.h>
 #include <ATen/mps/MPSStream.h>
+#include <ATen/native/mps/OperationUtils.h>
 #include <c10/util/Logging.h>
 
 namespace at::mps {
@@ -21,6 +22,14 @@ bool MPSHooks::hasMPS() const {
 
 bool MPSHooks::isOnMacOSorNewer(unsigned major, unsigned minor) const {
   switch (major) {
+    case 26:
+      switch (minor) {
+        case 0:
+          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_26_0_PLUS);
+        default:
+          TORCH_WARN("Can't check whether running on 26.", minor, "+ returning one for 26.0+");
+          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_26_0_PLUS);
+      }
     case 15:
       switch (minor) {
         case 0:
@@ -34,7 +43,7 @@ bool MPSHooks::isOnMacOSorNewer(unsigned major, unsigned minor) const {
     case 14:
       switch (minor) {
         case 0:
-          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_14_0_PLUS);
+          return true;
         case 4:
           return is_macos_13_or_newer(MacOSVersion::MACOS_VER_14_4_PLUS);
         default:
@@ -42,19 +51,7 @@ bool MPSHooks::isOnMacOSorNewer(unsigned major, unsigned minor) const {
           return is_macos_13_or_newer(MacOSVersion::MACOS_VER_14_4_PLUS);
       }
     case 13:
-      switch (minor) {
-        case 0:
-          return true;
-        case 1:
-          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_13_1_PLUS);
-        case 2:
-          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_13_2_PLUS);
-        case 3:
-          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_13_3_PLUS);
-        default:
-          TORCH_WARN("Can't check whether running on 13.", minor, "+ returning one for 13.3+");
-          return is_macos_13_or_newer(MacOSVersion::MACOS_VER_13_3_PLUS);
-      }
+      return true;
     default:
       TORCH_WARN("Checking for unexpected MacOS ", major, ".", minor, " returning false");
       return false;
@@ -82,7 +79,10 @@ void MPSHooks::commitStream() const {
 }
 
 void* MPSHooks::getCommandBuffer() const {
-  return at::mps::getDefaultMPSStream()->commandBuffer();
+  auto stream = at::mps::getDefaultMPSStream();
+  // Release pending computeCommandEncoder, as extensions is likely to allocate new one
+  stream->endKernelCoalescing();
+  return stream->commandBuffer();
 }
 
 void* MPSHooks::getDispatchQueue() const {
@@ -91,6 +91,7 @@ void* MPSHooks::getDispatchQueue() const {
 
 void MPSHooks::emptyCache() const {
   at::mps::getIMPSAllocator()->emptyCache();
+  at::native::mps::MPSGraphCache::getInstance()->clear();
 }
 
 size_t MPSHooks::getCurrentAllocatedMemory() const {
@@ -129,6 +130,10 @@ void MPSHooks::recordEvent(uint32_t event_id) const {
   at::mps::getMPSEventPool()->recordEvent(event_id, /* syncEvent*/ true);
 }
 
+Device MPSHooks::getDeviceFromPtr(void* data) const {
+  return at::mps::getDeviceFromPtr(data);
+}
+
 void MPSHooks::waitForEvent(uint32_t event_id) const {
   at::mps::getMPSEventPool()->waitForEvent(event_id, /* syncEvent*/ true);
 }
@@ -150,7 +155,7 @@ bool MPSHooks::isPinnedPtr(const void* data) const {
 }
 
 Allocator* MPSHooks::getPinnedMemoryAllocator() const {
-  return at::mps::getIMPSAllocator(true);
+  return at::mps::getIMPSAllocator();
 }
 
 using at::MPSHooksRegistry;

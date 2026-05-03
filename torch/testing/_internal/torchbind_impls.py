@@ -1,14 +1,13 @@
 # mypy: allow-untyped-defs
 import contextlib
 from pathlib import Path
-from typing import Optional
 
 import torch
 
 
 _TORCHBIND_IMPLS_INITIALIZED = False
 
-_TENSOR_QUEUE_GLOBAL_TEST: Optional[torch.ScriptObject] = None
+_TENSOR_QUEUE_GLOBAL_TEST: torch.ScriptObject | None = None
 
 
 def init_torchbind_implementations():
@@ -45,6 +44,20 @@ def register_fake_operators():
     @torch.library.register_fake("_TorchScriptTesting::queue_push")
     def fake_queue_push(tq, x):
         return tq.push(x)
+
+    torch.library.register_autocast(
+        "_TorchScriptTesting::queue_push", "cpu", torch.float32
+    )
+    torch.library.register_autocast(
+        "_TorchScriptTesting::queue_push", "cuda", torch.float32
+    )
+
+    torch.library.register_autocast(
+        "_TorchScriptTesting::queue_pop", "cpu", torch.float32
+    )
+    torch.library.register_autocast(
+        "_TorchScriptTesting::queue_pop", "cuda", torch.float32
+    )
 
     @torch.library.register_fake("_TorchScriptTesting::queue_size")
     def fake_queue_size(tq):
@@ -83,7 +96,6 @@ def register_fake_operators():
 
 
 def register_fake_classes():
-    # noqa: F841
     @torch._library.register_fake_class("_TorchScriptTesting::_Foo")
     class FakeFoo:
         def __init__(self, x: int, y: int):

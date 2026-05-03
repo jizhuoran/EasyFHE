@@ -17,7 +17,11 @@ from torch.testing._internal.common_methods_invocations import (
     sample_inputs_conv2d,
     SampleInput,
 )
-from torch.testing._internal.common_utils import first_sample, set_default_dtype
+from torch.testing._internal.common_utils import (
+    first_sample,
+    raise_on_run_directly,
+    set_default_dtype,
+)
 from torch.testing._internal.jit_metaprogramming_utils import create_traced_fn
 from torch.testing._internal.jit_utils import JitTestCase
 
@@ -25,14 +29,6 @@ from torch.testing._internal.jit_utils import JitTestCase
 """
 Dtype Analysis relies on symbolic shape analysis, which is still in beta
 """
-
-
-if __name__ == "__main__":
-    raise RuntimeError(
-        "This test file is not meant to be run directly, use:\n\n"
-        "\tpython test/test_jit.py TESTNAME\n\n"
-        "instead."
-    )
 
 
 custom_rules_works_list = {
@@ -113,7 +109,8 @@ class TestDtypeBase(JitTestCase):
     @staticmethod
     def node_output_dtype_single(graph):
         dtypes = TestDtypeBase.node_output_dtypes(graph)
-        assert len(dtypes) == 1
+        if len(dtypes) != 1:
+            raise AssertionError(f"Expected 1 output dtype, got {len(dtypes)}")
         return dtypes[0]
 
     def prop_dtype_on_graph(self, graph, example_inputs):
@@ -386,3 +383,6 @@ class TestDtypeCustomRules(TestDtypeBase):
 TestDtypeCustomRulesCPU = None
 # This creates TestDtypeCustomRulesCPU
 instantiate_device_type_tests(TestDtypeCustomRules, globals(), only_for=("cpu",))
+
+if __name__ == "__main__":
+    raise_on_run_directly("test/test_jit.py")

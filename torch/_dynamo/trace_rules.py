@@ -1,7 +1,27 @@
-# mypy: allow-untyped-defs
+"""
+Tracing rules and policies for TorchDynamo compilation decisions.
+
+This module defines the rules that govern what code TorchDynamo should trace and compile
+versus what should be executed eagerly. It contains functions and classes that determine:
+
+- Which modules, functions, and objects should be skipped during tracing
+- Which parts of the code should cause graph breaks
+- How to handle different Python libraries and third-party packages
+- Rules for determining when to inline functions vs calling them eagerly
+
+Key components:
+- Skip rules: Functions that return True if an object should be skipped during tracing
+- Inlining rules: Policies for when to inline function calls during compilation
+- Library-specific handling: Special cases for popular Python packages
+- Performance heuristics: Rules that balance compilation overhead vs runtime benefits
+
+These rules are critical for TorchDynamo's ability to automatically determine
+compilation boundaries and optimize PyTorch programs effectively.
+"""
+
 import abc
 import builtins
-import collections
+import contextlib
 import copy
 import dataclasses
 import functools
@@ -13,46 +33,60 @@ import os
 import random
 import re
 import sys
-import traceback
 import types
 import typing
 import unittest
 from collections import defaultdict
+from collections.abc import Callable, Iterator
 from pathlib import Path
-from typing import Any, Callable, cast, Optional, Union
+from typing import Any
 
 import torch
 import torch._inductor.test_operators
 import torch.distributed
 import torch.utils._content_store
+from torch._environment import is_fbcode
 from torch.utils import _config_module
 
+from . import config
 from .resume_execution import TORCH_DYNAMO_RESUME_IN_PREFIX
-from .utils import getfile, hashable, NP_SUPPORTED_MODULES, unwrap_if_wrapper
+from .utils import (
+    getfile,
+    hashable,
+    is_lru_cache_wrapped_function,
+    NP_SUPPORTED_MODULES,
+    unwrap_if_wrapper,
+)
 from .variables import (
     BuiltinVariable,
+    DictBuiltinVariable,
     FunctionalCallVariable,
     FunctorchHigherOrderVariable,
+    GetAttrBuiltinVariable,
+    InspectSignatureVariable,
+    IterBuiltinVariable,
+    ListBuiltinVariable,
     LocalGeneratorFunctionVariable,
     LocalGeneratorObjectVariable,
     NestedUserFunctionVariable,
     PolyfilledFunctionVariable,
+    PyTreeGetNodeTypeFunctionVariable,
+    PyTreeTreeIsLeafFunctionVariable,
+    ReparametrizeModuleCallVariable,
     SkipFunctionVariable,
+    SparseTensorCreationSkipVariable,
     TorchInGraphFunctionVariable,
     UserFunctionVariable,
     UserMethodVariable,
 )
+from .variables.base import VariableTracker
 
 
-np: Optional[types.ModuleType] = None
+np: types.ModuleType | None = None
 try:
     import numpy as np
 except ModuleNotFoundError:
     pass
-
-
-if typing.TYPE_CHECKING:
-    from .variables.base import VariableTracker
 
 
 """
@@ -122,7 +156,12 @@ If you are removing an existing torch level API:
 
 
 """
-manual_torch_name_rule_map: dict[str, Any] = {
+manual_torch_name_rule_map: dict[
+    str,
+    type[TorchInGraphFunctionVariable]
+    | type[SkipFunctionVariable]
+    | type[UserFunctionVariable],
+] = {
     "torch.onnx.is_in_onnx_export": TorchInGraphFunctionVariable,
     "torch.onnx.operators.shape_as_tensor": TorchInGraphFunctionVariable,
     "torch.overrides.is_tensor_like": TorchInGraphFunctionVariable,
@@ -134,31 +173,43 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch.distributed.get_rank": TorchInGraphFunctionVariable,
     "torch.distributed.get_world_size": TorchInGraphFunctionVariable,
     "torch.distributed.tensor._api.DTensor#from_local": TorchInGraphFunctionVariable,
+    "torch.distributed.device_mesh.DeviceMesh#__init__": SkipFunctionVariable,
     "torch.distributed.distributed_c10d._get_group_size_by_name": TorchInGraphFunctionVariable,
     "torch.distributed.distributed_c10d._resolve_group_name_by_ranks_and_tag": TorchInGraphFunctionVariable,
     "torch.distributed.distributed_c10d._get_group_tag": TorchInGraphFunctionVariable,
     "torch.distributed.distributed_c10d.get_process_group_ranks": TorchInGraphFunctionVariable,
+    "torch.distributed.destroy_process_group": SkipFunctionVariable,
     "torch._utils.is_compiling": TorchInGraphFunctionVariable,
+    "torch._utils._chunk_or_narrow_cat": UserFunctionVariable,
     "torch.fx._symbolic_trace.is_fx_tracing": TorchInGraphFunctionVariable,
+    "torch.fx._symbolic_trace.is_fx_symbolic_tracing": TorchInGraphFunctionVariable,
     "torch._dynamo.external_utils.is_compiling": TorchInGraphFunctionVariable,
+    "torch._dynamo.utils._disable_side_effect_safety_checks_for_current_subtracer": UserFunctionVariable,
     "torch.compiler.is_compiling": TorchInGraphFunctionVariable,
     "torch.compiler.is_dynamo_compiling": TorchInGraphFunctionVariable,
     "torch.compiler.is_exporting": TorchInGraphFunctionVariable,
-    "torch.autograd._profiler_enabled": SkipFunctionVariable,
+    "torch._dynamo.eval_frame._is_in_optimized_module": TorchInGraphFunctionVariable,
     "torch._C._to_dlpack": SkipFunctionVariable,
+    "torch._C._group_tensors_by_device_and_dtype": TorchInGraphFunctionVariable,
     "torch.to_dlpack": SkipFunctionVariable,
+    "torch._check": TorchInGraphFunctionVariable,
+    "torch._check_with": TorchInGraphFunctionVariable,
+    "torch._check_index": TorchInGraphFunctionVariable,
+    "torch._check_value": TorchInGraphFunctionVariable,
+    "torch._check_type": TorchInGraphFunctionVariable,
+    "torch._check_not_implemented": TorchInGraphFunctionVariable,
+    "torch._check_tensor_all_with": TorchInGraphFunctionVariable,
+    "torch._check_tensor_all": TorchInGraphFunctionVariable,
+    "torch._dynamo.decorators.override_optimization_hint": TorchInGraphFunctionVariable,
     # We graph break on RNG state setters or getters like
-    # `torch.get_rng_state` or `torch.set_rng_state`. These functions
-    # are not aten operations and therefore they are completely ignored
-    # by the AOT dispatcher. As a result, the AOT graph does not have
-    # these setter or getter functions, producing an incorrect graph
-    # when it comes to rng states.
-    "torch.default_generator#get_state": SkipFunctionVariable,
-    "torch._C.Generator#get_state": SkipFunctionVariable,
+    # `torch.get_rng_state`, `torch.set_rng_state`, and
+    # `torch.Generator.manual_seed`. These functions are not aten
+    # operations and therefore they are completely ignored by the AOT
+    # dispatcher. As a result, the AOT graph does not have these setter
+    # or getter functions, producing an incorrect graph when it comes
+    # to rng states.
     "torch.get_rng_state": SkipFunctionVariable,
     "torch.cuda.get_rng_state": SkipFunctionVariable,
-    "torch.default_generator#set_state": SkipFunctionVariable,
-    "torch._C.Generator#set_state": SkipFunctionVariable,
     "torch.set_rng_state": SkipFunctionVariable,
     "torch.cuda.set_rng_state": SkipFunctionVariable,
     # https://github.com/pytorch/pytorch/issues/107187
@@ -175,6 +226,10 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch.fx.node.map_aggregate": UserFunctionVariable,
     "torch.fx.node.map_arg": UserFunctionVariable,
     "torch.fx.immutable_collections._no_mutation": UserFunctionVariable,
+    "torch.fx.immutable_collections._immutable_list_flatten": UserFunctionVariable,
+    "torch.fx.immutable_collections._immutable_list_unflatten": UserFunctionVariable,
+    "torch.fx.immutable_collections._immutable_dict_flatten": UserFunctionVariable,
+    "torch.fx.immutable_collections._immutable_dict_unflatten": UserFunctionVariable,
     # symbol operators implemented in Python
     "torch.sym_not": TorchInGraphFunctionVariable,
     "torch.sym_float": TorchInGraphFunctionVariable,
@@ -190,24 +245,21 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch.Tensor#split": TorchInGraphFunctionVariable,
     "torch.cuda.set_device": SkipFunctionVariable,
     "torch.cuda.current_device": TorchInGraphFunctionVariable,
-    "torch._C.autocast_decrement_nesting": SkipFunctionVariable,
-    "torch._C.autocast_increment_nesting": SkipFunctionVariable,
-    "torch.autograd.grad": SkipFunctionVariable,
+    "torch.autograd.grad": TorchInGraphFunctionVariable,
     "torch.autograd.backward": SkipFunctionVariable,
-    "torch._C.clear_autocast_cache": SkipFunctionVariable,
     "torch.distributions.constraints.is_dependent": SkipFunctionVariable,
     "torch.jit.isinstance": SkipFunctionVariable,
     "torch._C.set_anomaly_enabled": SkipFunctionVariable,
-    "torch._C.set_autocast_cache_enabled": SkipFunctionVariable,
     "torch._C.set_autocast_cpu_dtype": SkipFunctionVariable,
     "torch._C.set_autocast_cpu_enabled": SkipFunctionVariable,
-    "torch._C.set_autocast_enabled": SkipFunctionVariable,
     "torch._C.set_autocast_gpu_dtype": SkipFunctionVariable,
     "torch._C.set_autocast_ipu_dtype": SkipFunctionVariable,
     "torch._C.set_autocast_ipu_enabled": SkipFunctionVariable,
     "torch._C.set_autocast_xla_dtype": SkipFunctionVariable,
     "torch._C.set_autocast_xla_enabled": SkipFunctionVariable,
     "torch.resize_as_": SkipFunctionVariable,
+    "torch._functorch.predispatch._add_batch_dim": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._remove_batch_dim": TorchInGraphFunctionVariable,
     "torch.resize_as_sparse_": SkipFunctionVariable,
     "torch.get_default_device": TorchInGraphFunctionVariable,
     # functorch/vmap
@@ -278,6 +330,7 @@ manual_torch_name_rule_map: dict[str, Any] = {
     # functional_call
     "torch._functorch.functional_call.functional_call": FunctionalCallVariable,
     "torch.nn.utils.stateless._groupby_tensor": TorchInGraphFunctionVariable,
+    "torch.nn.utils.stateless._reparametrize_module": ReparametrizeModuleCallVariable,
     # functorch/deprecated
     "torch._functorch.deprecated.jvp": UserFunctionVariable,
     "torch._functorch.deprecated.hessian": UserFunctionVariable,
@@ -287,8 +340,6 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch._functorch.deprecated.grad_and_value": UserFunctionVariable,
     "torch._functorch.deprecated.vjp": UserFunctionVariable,
     # functorch/C++ bindings
-    "torch._C._functorch._add_batch_dim": TorchInGraphFunctionVariable,
-    "torch._C._functorch._remove_batch_dim": TorchInGraphFunctionVariable,
     "torch._C._functorch._wrap_for_grad": TorchInGraphFunctionVariable,
     "torch._C._functorch._unwrap_for_grad": TorchInGraphFunctionVariable,
     "torch._C._functorch._unwrap_batched": TorchInGraphFunctionVariable,
@@ -297,6 +348,15 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch._C._functorch.is_batchedtensor": TorchInGraphFunctionVariable,
     "torch._C._functorch.peek_interpreter_stack": TorchInGraphFunctionVariable,
     "torch._C._functorch.unwrap_if_dead": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._vmap_increment_nesting": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._vmap_decrement_nesting": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._jvp_increment_nesting": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._jvp_decrement_nesting": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._unwrap_for_grad": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._make_dual": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._unpack_dual": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._enter_dual_level": TorchInGraphFunctionVariable,
+    "torch._functorch.predispatch._exit_dual_level": TorchInGraphFunctionVariable,
     # everything else
     "torch._functorch.pyfunctorch.coerce_cinterpreter": TorchInGraphFunctionVariable,
     "torch._higher_order_ops.triton_kernel_wrap.do_prune_configs": UserFunctionVariable,
@@ -305,20 +365,38 @@ manual_torch_name_rule_map: dict[str, Any] = {
     "torch._tensor._convert": UserFunctionVariable,
     "torch.jit._unwrap_optional": UserFunctionVariable,
     "torch.backends.mha.get_fastpath_enabled": UserFunctionVariable,
+    "torch._dynamo.dont_skip_tracing": UserFunctionVariable,
     "torch._dynamo.mark_static": UserFunctionVariable,
     "torch._dynamo.nonstrict_trace": UserFunctionVariable,
+    "torch._dynamo.bytecode_debugger.breakpoint": UserFunctionVariable,
+    "torch._dynamo.patch_dynamo_config": UserFunctionVariable,
+    "torch._dynamo.error_on_graph_break": UserFunctionVariable,
+    "torch._dynamo.override_cudagraphs": UserFunctionVariable,
     "torch.fx.experimental.symbolic_shapes.guard_size_oblivious": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.is_nested_int": UserFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.guarding_hint_or_throw": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.optimization_hint": TorchInGraphFunctionVariable,
     "torch.fx.experimental.symbolic_shapes.guard_or_true": TorchInGraphFunctionVariable,
     "torch.fx.experimental.symbolic_shapes.guard_or_false": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.statically_known_true": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.statically_known_false": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.sym_and": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.sym_or": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.guard_scalar": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.has_static_value": TorchInGraphFunctionVariable,
+    "torch.fx.experimental.symbolic_shapes.has_free_unbacked_symbols": TorchInGraphFunctionVariable,
     "torch.cuda._get_device_properties": TorchInGraphFunctionVariable,
     "torch.utils.hooks.BackwardHook": TorchInGraphFunctionVariable,
     "torch.set_default_device": UserFunctionVariable,
-    "torch.sparse_bsc_tensor": SkipFunctionVariable,
-    "torch.sparse_bsr_tensor": SkipFunctionVariable,
-    "torch.sparse_csc_tensor": SkipFunctionVariable,
-    "torch.sparse_csr_tensor": SkipFunctionVariable,
-    "torch.sparse_compressed_tensor": SkipFunctionVariable,
+    "torch.sparse_bsc_tensor": SparseTensorCreationSkipVariable,
+    "torch.sparse_bsr_tensor": SparseTensorCreationSkipVariable,
+    "torch.sparse_csc_tensor": SparseTensorCreationSkipVariable,
+    "torch.sparse_csr_tensor": SparseTensorCreationSkipVariable,
+    "torch.sparse_compressed_tensor": SparseTensorCreationSkipVariable,
     "torch._C._autograd._unsafe_set_version_counter": TorchInGraphFunctionVariable,
+    "torch.xpu.get_rng_state": SkipFunctionVariable,
+    "torch.xpu.set_rng_state": SkipFunctionVariable,
+    "torch.library.wrap_triton": TorchInGraphFunctionVariable,
     # avoid skipping user defined modules in distributed unit tests
     "torch/testing/_internal/common_fsdp.py#forward": UserFunctionVariable,
     f"torch/testing/_internal/common_fsdp.py#{TORCH_DYNAMO_RESUME_IN_PREFIX}": UserFunctionVariable,
@@ -326,7 +404,32 @@ manual_torch_name_rule_map: dict[str, Any] = {
     f"torch/testing/_internal/distributed/_tensor/common_dtensor.py#{TORCH_DYNAMO_RESUME_IN_PREFIX}": UserFunctionVariable,
     "torch/testing/_internal/common_distributed.py#forward": UserFunctionVariable,
     f"torch/testing/_internal/common_distributed.py#{TORCH_DYNAMO_RESUME_IN_PREFIX}": UserFunctionVariable,
+    "torch.utils._pytree._get_node_type": PyTreeGetNodeTypeFunctionVariable,
+    "torch.utils._pytree.tree_is_leaf": PyTreeTreeIsLeafFunctionVariable,
+    "torch._utils_internal.justknobs_check": UserFunctionVariable,
+    "inspect.signature": InspectSignatureVariable,
 }
+
+# Keep this in sync with the stateful generator methods exposed from
+# torch/csrc/Generator.cpp.
+_GENERATOR_METHODS_THAT_GRAPH_BREAK = (
+    "clone_state",
+    "get_offset",
+    "get_state",
+    "graphsafe_get_state",
+    "graphsafe_set_state",
+    "initial_seed",
+    "manual_seed",
+    "seed",
+    "set_offset",
+    "set_state",
+)
+
+for generator_prefix in ("torch.default_generator", "torch._C.Generator"):
+    for method_name in _GENERATOR_METHODS_THAT_GRAPH_BREAK:
+        manual_torch_name_rule_map[f"{generator_prefix}#{method_name}"] = (
+            SkipFunctionVariable
+        )
 
 
 # In graph functions (including constant folding) that are C bindings
@@ -396,11 +499,20 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._assert_async",
         "torch._assert_tensor_metadata",
         "torch._batch_norm_impl_index",
+        "torch._C._accelerator_getAccelerator",
+        "torch._C._accelerator_getDeviceIndex",
+        "torch._C._accelerator_getStream",
+        "torch._C._accelerator_getAllocatorSettings",
+        "torch._C._accelerator_setAllocatorSettings",
+        "torch._C._accelerator_setStream",
+        "torch._C._accelerator_synchronizeDevice",
         "torch._C._activate_gpu_trace",
         "torch._C._add_cached_tensor",
         "torch._C._add_docstr",
         "torch._C._are_functorch_transforms_active",
         "torch._C._autograd_init",
+        "torch._C._autograd._saved_tensors_hooks_disable",
+        "torch._C._autograd._saved_tensors_hooks_enable",
         "torch._C._awaitable_nowait",
         "torch._C._awaitable_wait",
         "torch._C._awaitable",
@@ -424,13 +536,8 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._construct_CUDA_Tensor_From_Storage_And_Metadata",
         "torch._C._construct_storage_from_data_pointer",
         "torch._C._conv_determine_backend_memory_format",
-        "torch._C._cpu._is_avx2_supported",
-        "torch._C._cpu._is_avx512_supported",
-        "torch._C._cpu._is_avx512_vnni_supported",
-        "torch._C._cpu._is_avx512_bf16_supported",
-        "torch._C._cpu._is_amx_tile_supported",
-        "torch._C._cpu._is_amx_fp16_supported",
         "torch._C._cpu._init_amx",
+        "torch._C._cpu._get_cpu_capability",
         "torch._C._crash_if_aten_asan",
         "torch._C._crash_if_csrc_asan",
         "torch._C._crash_if_csrc_ubsan",
@@ -450,11 +557,10 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._cuda_clearCublasWorkspaces",
         "torch._C._cuda_cudaCachingAllocator_raw_alloc",
         "torch._C._cuda_cudaCachingAllocator_raw_delete",
-        "torch._C._cuda_cudaCachingAllocator_set_allocator_settings",
         "torch._C._cuda_cudaHostAllocator",
         "torch._C._cuda_customAllocator",
         "torch._C._cuda_emptyCache",
-        "torch._C._cuda_endAllocateCurrentStreamToPool",
+        "torch._C._cuda_endAllocateToPool",
         "torch._C._cuda_exchangeDevice",
         "torch._C._cuda_get_conv_benchmark_empty_cache",
         "torch._C._cuda_get_cudnn_benchmark_limit",
@@ -478,7 +584,6 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._cuda_isHistoryEnabled",
         "torch._C._cuda_isInBadFork",
         "torch._C._cuda_jiterator_compile_and_launch_kernel",
-        "torch._C._cuda_lock_mutex",
         "torch._C._cuda_maybeExchangeDevice",
         "torch._C._cuda_memorySnapshot",
         "torch._C._cuda_memoryStats",
@@ -497,7 +602,6 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._cuda_setStream",
         "torch._C._cuda_sleep",
         "torch._C._cuda_synchronize",
-        "torch._C._cuda_unlock_mutex",
         "torch._C._cudnn_set_conv_benchmark_empty_cache",
         "torch._C._cudnn.getCompileVersion",
         "torch._C._cudnn.getRuntimeVersion",
@@ -530,7 +634,6 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._dispatch_has_kernel",
         "torch._C._dispatch_is_alias_key",
         "torch._C._dispatch_is_included_in_alias",
-        "torch._C._dispatch_is_main_interpreter",
         "torch._C._dispatch_isTensorSubclassLike",
         "torch._C._dispatch_key_for_device",
         "torch._C._dispatch_key_name",
@@ -588,6 +691,9 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._from_dlpack",
         "torch._C._functionality_to_backend_keys",
         "torch._C._functionalization_reapply_views_tls",
+        "torch._C._functorch._grad_decrement_nesting",
+        "torch._C._functorch._grad_increment_nesting",
+        "torch._C._functorch.set_inplace_requires_grad_allowed",
         "torch._C._fuse_to_static_module",
         "torch._C._gather_out",
         "torch._C._gather",
@@ -606,6 +712,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._get_cublas_allow_tf32",
         "torch._C._get_cudnn_allow_tf32",
         "torch._C._get_cudnn_benchmark",
+        "torch._C._get_miopen_immediate",
         "torch._C._get_cudnn_deterministic",
         "torch._C._get_cudnn_enabled",
         "torch._C._get_custom_class_python_wrapper",
@@ -628,6 +735,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._get_mem_efficient_sdp_enabled",
         "torch._C._get_mkldnn_enabled",
         "torch._C._get_cudnn_sdp_enabled",
+        "torch._C._get_overrideable_sdp_enabled",
         "torch._C._set_sdp_use_cudnn",
         "torch._C._get_mobile_model_contained_types_from_buffer",
         "torch._C._get_mobile_model_contained_types",
@@ -656,7 +764,6 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._get_version_calculator_flag",
         "torch._C._get_warnAlways",
         "torch._C._graph_pool_handle",
-        "torch._C._group_tensors_by_device_and_dtype",
         "torch._C._hack_do_not_use_clone_module_with_class",
         "torch._C._has_distributed",
         "torch._C._has_Standard_Deleter",
@@ -673,6 +780,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._initExtension",
         "torch._C._is_alias_of",
         "torch._C._is_any_autocast_enabled",
+        "torch._C._is_autocast_available",
         "torch._C._is_cached_tensor",
         "torch._C._is_flash_attention_available",
         "torch._C._is_fwd_grad_enabled",
@@ -1002,7 +1110,6 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._nn._conv_depthwise2d",
         "torch._C._nn._pad_circular",
         "torch._C._nn._pad_enum",
-        "torch._C._nn._parse_to",
         "torch._C._nn._test_ambiguous_defaults",
         "torch._C._nn._test_optional_filled_intlist",
         "torch._C._nn._test_optional_floatlist",
@@ -1011,6 +1118,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._nn._test_warn_in_autograd",
         "torch._C._nn._upsample_bicubic2d_aa",
         "torch._C._nn._upsample_bilinear2d_aa",
+        "torch._C._nn._upsample_lanczos2d_aa",
         "torch._C._nn._upsample_nearest_exact1d",
         "torch._C._nn._upsample_nearest_exact2d",
         "torch._C._nn._upsample_nearest_exact3d",
@@ -1164,6 +1272,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._set_sdp_use_math",
         "torch._C._set_math_sdp_allow_fp16_bf16_reduction",
         "torch._C._set_sdp_use_mem_efficient",
+        "torch._C._set_sdp_use_overrideable",
         "torch._C._set_should_use_format_with_string_table",
         "torch._C._set_sm_carveout_experimental",
         "torch._C._set_storage_access_error_msg",
@@ -1312,6 +1421,24 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C._warn",
         "torch._C._will_engine_execute_node",
         "torch._C._wrap_tensor_impl",
+        "torch._C._xpu_emptyCache",
+        "torch._C._xpu_getArchFlags",
+        "torch._C._xpu_getCurrentStream",
+        "torch._C._xpu_getCurrentRawStream",
+        "torch._C._xpu_getDeviceCount",
+        "torch._C._xpu_getDevice",
+        "torch._C._xpu_getMemoryInfo",
+        "torch._C._xpu_getStreamFromExternal",
+        "torch._C._xpu_isInBadFork",
+        "torch._C._xpu_init",
+        "torch._C._xpu_memoryStats",
+        "torch._C._xpu_resetAccumulatedMemoryStats",
+        "torch._C._xpu_resetPeakMemoryStats",
+        "torch._C._xpu_setStream",
+        "torch._C._xpu_synchronize",
+        "torch._C.autocast_decrement_nesting",
+        "torch._C.autocast_increment_nesting",
+        "torch._C.clear_autocast_cache",
         "torch._C.fork",
         "torch._C.get_autocast_cpu_dtype",
         "torch._C.get_autocast_dtype",
@@ -1337,10 +1464,9 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._C.parse_ir",
         "torch._C.parse_schema",
         "torch._C.parse_type_comment",
-        "torch._C.read_vitals",
-        "torch._C.set_vital",
+        "torch._C.set_autocast_cache_enabled",
+        "torch._C.set_autocast_enabled",
         "torch._C.unify_type_list",
-        "torch._C.vitals_enabled",
         "torch._C.wait",
         "torch._cast_Byte",
         "torch._cast_Char",
@@ -1419,6 +1545,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._foreach_clamp_max",
         "torch._foreach_clamp_min_",
         "torch._foreach_clamp_min",
+        "torch._foreach_clone",
         "torch._foreach_copy_",
         "torch._foreach_cos_",
         "torch._foreach_cos",
@@ -1501,6 +1628,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._functionalize_replace",
         "torch._functionalize_sync",
         "torch._functionalize_was_storage_changed",
+        "torch._fused_adagrad_",
         "torch._fused_adam_",
         "torch._fused_adamw_",
         "torch._fused_dropout",
@@ -1508,7 +1636,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch._fused_sdp_choice",
         "torch._fw_primal_copy",
         "torch._grid_sampler_2d_cpu_fallback",
-        "torch._has_compatible_shallow_copy_type",
+        "torch._grouped_mm",
         "torch._histogramdd_bin_edges",
         "torch._histogramdd_from_bin_cts",
         "torch._histogramdd_from_bin_tensors",
@@ -1875,6 +2003,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch.geqrf",
         "torch.ger",
         "torch.get_device",
+        "torch.get_device_module",
         "torch.gradient",
         "torch.greater_equal",
         "torch.greater",
@@ -1888,6 +2017,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch.hamming_window",
         "torch.hann_window",
         "torch.hardshrink",
+        "torch.hash_tensor",
         "torch.heaviside",
         "torch.hinge_embedding_loss",
         "torch.histc",
@@ -2134,6 +2264,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch.select",
         "torch.selu_",
         "torch.selu",
+        "torch.set_autocast_dtype",
         "torch.sgn",
         "torch.sigmoid_",
         "torch.sigmoid",
@@ -2233,6 +2364,7 @@ torch_c_binding_in_graph_functions = dict.fromkeys(
         "torch.slice_inverse",
         "torch._assert_scalar",
         "torch._functional_assert_scalar",
+        "torch.xpu._get_device_properties",
     ],
     TorchInGraphFunctionVariable,
 )
@@ -2242,6 +2374,8 @@ if sys.version_info >= (3, 11):
     torch_c_binding_in_graph_functions["math.exp2"] = TorchInGraphFunctionVariable
     torch_c_binding_in_graph_functions["math.cbrt"] = TorchInGraphFunctionVariable
 
+if sys.version_info >= (3, 13):
+    torch_c_binding_in_graph_functions["math.fma"] = TorchInGraphFunctionVariable
 
 # In graph functions (including constant folding) that are not C bindings
 # NOTE: [Cacheability of in-graph torch functions]
@@ -2258,15 +2392,7 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.__future__.set_overwrite_module_params_on_conversion",
         "torch.__getattr__",
         "torch._assert",
-        "torch._check_index",
         "torch._check_is_size",
-        "torch._check_not_implemented",
-        "torch._check_tensor_all_with",
-        "torch._check_tensor_all",
-        "torch._check_type",
-        "torch._check_value",
-        "torch._check_with",
-        "torch._check",
         "torch._compile._disable_dynamo",
         "torch._functorch.apis.chunk_vmap",
         "torch._functorch.batch_norm_replacement.batch_norm_without_running_stats",
@@ -2293,7 +2419,18 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch._functorch.utils.enable_single_level_autograd_function",
         "torch._functorch.utils.exposed_in",
         "torch._functorch.utils.unwrap_dead_wrappers",
-        "torch._functorch.vmap.lazy_load_decompositions",
+        "torch._functorch.predispatch.lazy_load_decompositions",
+        "torch._functorch.predispatch._vmap_increment_nesting",
+        "torch._functorch.predispatch._vmap_decrement_nesting",
+        "torch._functorch.predispatch._add_batch_dim",
+        "torch._functorch.predispatch._remove_batch_dim",
+        "torch._functorch.predispatch._jvp_increment_nesting",
+        "torch._functorch.predispatch._jvp_decrement_nesting",
+        "torch._functorch.predispatch._unwrap_for_grad",
+        "torch._functorch.predispatch._make_dual",
+        "torch._functorch.predispatch._unpack_dual",
+        "torch._functorch.predispatch._enter_dual_level",
+        "torch._functorch.predispatch._exit_dual_level",
         "torch._guards.compile_context",
         "torch._guards.detect_fake_mode",
         "torch._guards.tracing",
@@ -2338,15 +2475,19 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch._lowrank.svd_lowrank",
         "torch._preload_cuda_deps",
         "torch._register_device_module",
-        "torch._running_with_deploy",
         "torch._utils._dummy_type",
         "torch._utils._flatten_dense_tensors",
         "torch._utils._unflatten_dense_tensors",
         "torch._weights_only_unpickler._get_allowed_globals",
         "torch._weights_only_unpickler.load",
+        "torch.accelerator.current_accelerator",
+        "torch.accelerator.current_device_index",
+        "torch.accelerator.current_stream",
+        "torch.accelerator.device_count",
+        "torch.accelerator.is_available",
+        "torch.accelerator.set_stream",
+        "torch.accelerator.synchronize",
         "torch.align_tensors",
-        "torch.amp.autocast_mode._enter_autocast",
-        "torch.amp.autocast_mode._exit_autocast",
         "torch.amp.autocast_mode.autocast_decorator",
         "torch.amp.autocast_mode.custom_bwd",
         "torch.amp.autocast_mode.custom_fwd",
@@ -2356,6 +2497,7 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.atleast_3d",
         "torch.autograd._calculate_shape",
         "torch.autograd._is_checkpoint_valid",
+        "torch.autograd._profiler_enabled",
         "torch.autograd._make_grads",
         "torch.autograd._register_py_tensor_class_for_device",
         "torch.autograd._tensor_or_tensors_to_tuple",
@@ -2444,13 +2586,8 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.chain_matmul",
         "torch.compile",
         "torch.compiled_with_cxx11_abi",
-        "torch._C._cpu._is_avx2_supported",
-        "torch._C._cpu._is_avx512_supported",
-        "torch._C._cpu._is_avx512_vnni_supported",
-        "torch._C._cpu._is_avx512_bf16_supported",
-        "torch._C._cpu._is_amx_tile_supported",
-        "torch._C._cpu._is_amx_fp16_supported",
         "torch.cpu._init_amx",
+        "torch.cpu.get_capabilities",
         "torch.cpu.current_device",
         "torch.cpu.current_stream",
         "torch.cpu.device_count",
@@ -2524,6 +2661,7 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.cuda.get_device_properties",
         "torch.cuda.get_gencode_flags",
         "torch.cuda.get_sync_debug_mode",
+        "torch.cuda.synchronize",
         "torch.cuda.graphs.graph_pool_handle",
         "torch.cuda.graphs.is_current_stream_capturing",
         "torch.cuda.graphs.make_graphed_callables",
@@ -2536,7 +2674,6 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.cuda.jiterator._create_multi_output_jit_fn",
         "torch.cuda.memory_usage",
         "torch.cuda.memory._dump_snapshot",
-        "torch.cuda.memory._free_mutex",
         "torch.cuda.memory._get_current_allocator",
         "torch.cuda.memory._host_allocator",
         "torch.cuda.memory._record_memory_history_impl",
@@ -2605,7 +2742,6 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.cuda.set_stream",
         "torch.cuda.set_sync_debug_mode",
         "torch.cuda.stream",
-        "torch.cuda.synchronize",
         "torch.cuda.temperature",
         "torch.cuda.utilization",
         "torch.einsum",
@@ -2848,6 +2984,44 @@ torch_non_c_binding_in_graph_functions = dict.fromkeys(
         "torch.tensordot",
         "torch.unique_consecutive",
         "torch.use_deterministic_algorithms",
+        "torch.xpu._get_device",
+        "torch.xpu._get_generator",
+        "torch.xpu._get_rng_state_offset",
+        "torch.xpu._is_compiled",
+        "torch.xpu._lazy_call",
+        "torch.xpu._lazy_init",
+        "torch.xpu._set_rng_state_offset",
+        "torch.xpu._set_stream_by_id",
+        "torch.xpu._utils._get_device_index",
+        "torch.xpu.current_device",
+        "torch.xpu.current_stream",
+        "torch.xpu.device_count",
+        "torch.xpu.get_arch_list",
+        "torch.xpu.get_device_capability",
+        "torch.xpu.get_device_name",
+        "torch.xpu.get_device_properties",
+        "torch.xpu.get_gencode_flags",
+        "torch.xpu.get_stream_from_external",
+        "torch.xpu.init",
+        "torch.xpu.is_available",
+        "torch.xpu.is_bf16_supported",
+        "torch.xpu.is_initialized",
+        "torch.xpu.memory.empty_cache",
+        "torch.xpu.memory.max_memory_allocated",
+        "torch.xpu.memory.max_memory_reserved",
+        "torch.xpu.memory.mem_get_info",
+        "torch.xpu.memory.memory_allocated",
+        "torch.xpu.memory.memory_reserved",
+        "torch.xpu.memory.memory_stats_as_nested_dict",
+        "torch.xpu.memory.memory_stats",
+        "torch.xpu.memory.reset_accumulated_memory_stats",
+        "torch.xpu.memory.reset_peak_memory_stats",
+        "torch.xpu.random.initial_seed",
+        "torch.xpu.random.seed_all",
+        "torch.xpu.random.seed",
+        "torch.xpu.set_stream",
+        "torch.xpu.stream",
+        "torch.xpu.synchronize",
     ],
     TorchInGraphFunctionVariable,
 )
@@ -2865,7 +3039,7 @@ Generate the torch object - Dynamo tracing rule (the wrapping variable) map.
 """
 
 
-@functools.lru_cache(None)
+@functools.cache
 def get_torch_obj_rule_map() -> dict[Any, type["VariableTracker"]]:
     d: dict[Any, type[VariableTracker]] = {}
     for m in torch_name_rule_map:
@@ -2873,8 +3047,13 @@ def get_torch_obj_rule_map() -> dict[Any, type["VariableTracker"]]:
             if ".py#" not in k:
                 obj = load_object(k)
             else:
-                obj = _module_dir(torch) + k[len("torch/") :]
+                torch_dir = _module_dir(torch)
+                if torch_dir is None:
+                    continue
+                obj = torch_dir + k[len("torch/") :]
             if obj is not None:
+                if is_lru_cache_wrapped_function(obj):
+                    obj = obj.__wrapped__
                 if obj in d and d[obj] != v:
                     raise AssertionError(
                         f"Duplicate torch object {obj} with different rules: {v}, {d[obj]}"
@@ -2884,7 +3063,7 @@ def get_torch_obj_rule_map() -> dict[Any, type["VariableTracker"]]:
     return d
 
 
-def _load_obj_from_str(fully_qualified_name):
+def _load_obj_from_str(fully_qualified_name: str) -> Any:
     module, obj_name = fully_qualified_name.rsplit(".", maxsplit=1)
     return getattr(importlib.import_module(module), obj_name)
 
@@ -2894,7 +3073,7 @@ Load string represented torch objects.
 """
 
 
-def load_object(name):
+def load_object(name: str) -> Any:
     try:
         x = name.split("#")
         if len(x) == 2:
@@ -2914,8 +3093,8 @@ Get all torch.Tensor methods which are allowed to be in graph functions.
 """
 
 
-@functools.lru_cache(None)
-def get_tensor_method():
+@functools.cache
+def get_tensor_method() -> frozenset[Any]:
     disallowed_tensor_methods = {"__new__", "_make_wrapper_subclass", "_make_subclass"}
     s = set()
     for name in dir(torch.Tensor):
@@ -2944,7 +3123,7 @@ Return if a torch object is ATen op or torch.Tensor method.
 """
 
 
-def is_aten_op_or_tensor_method(obj):
+def is_aten_op_or_tensor_method(obj: Any) -> bool:
     return obj in get_tensor_method() or isinstance(
         obj,
         (torch._ops.OpOverloadPacket, torch._ops.OpOverload),
@@ -2961,11 +3140,11 @@ class FunctionIdSet:
     added to the graph and what will cause a graph break.
     """
 
-    function_ids: Optional[set[int]] = None
-    function_names: Optional[dict[int, str]] = None
+    function_ids: set[int] | None = None
+    function_names: dict[int, str] | None = None
 
     def __init__(
-        self, lazy_initializer: Callable[[], Union[dict[int, str], set[int]]]
+        self, lazy_initializer: Callable[[], dict[int, str] | set[int]]
     ) -> None:
         self.lazy_initializer = lazy_initializer
 
@@ -2980,16 +3159,16 @@ class FunctionIdSet:
                 self.function_ids = value
         return self.function_ids
 
-    def get_name(self, idx: int, default: str):
+    def get_name(self, idx: int, default: str) -> str:
         self()  # lazy init
         assert self.function_names is not None
         return self.function_names.get(idx, default)
 
-    def add(self, idx: int):
+    def add(self, idx: int) -> None:
         function_ids = self()  # lazy init
         function_ids.add(idx)
 
-    def remove(self, idx: int):
+    def remove(self, idx: int) -> None:
         function_ids = self()
         if idx in function_ids:
             function_ids.remove(idx)
@@ -3000,6 +3179,12 @@ class FunctionIdSet:
 
 @FunctionIdSet
 def _allowed_callable_ids() -> dict[int, str]:
+    rv: dict[int, str] = {}
+    return rv
+
+
+@FunctionIdSet
+def _leaf_function_ids() -> dict[int, str]:
     rv: dict[int, str] = {}
     return rv
 
@@ -3031,12 +3216,6 @@ def _builtin_function_ids() -> dict[int, str]:
             if not k.startswith("_") and callable(v)
         }
     )
-    rv.update(
-        {
-            id(cast): "typing.cast",
-            id(copy.deepcopy): "copy.deepcopy",
-        }
-    )
     return rv
 
 
@@ -3057,7 +3236,7 @@ def _numpy_function_ids() -> dict[int, str]:
         "sample",
     }
 
-    def is_supported(k, v, mod):
+    def is_supported(k: str, v: Any, mod: Any) -> bool:
         if not callable(v):
             return False
         if not getattr(v, "__module__", None):
@@ -3116,53 +3295,58 @@ def _maybe_init_lazy_module(obj: object) -> None:
             fn()
 
 
-def is_callable_allowed(obj) -> bool:
+def is_callable_allowed(obj: Any) -> bool:
     _maybe_init_lazy_module(obj)
     return id(obj) in _allowed_callable_ids
 
 
-def is_nonstrict_trace_callable(obj) -> bool:
+def is_nonstrict_trace_callable(obj: Any) -> bool:
     _maybe_init_lazy_module(obj)
     return id(obj) in _nonstrict_trace_callable_ids
 
 
-def is_callable_disallowed(obj) -> bool:
+def is_leaf_function(obj: Any) -> bool:
+    _maybe_init_lazy_module(obj)
+    return id(obj) in _leaf_function_ids
+
+
+def is_callable_disallowed(obj: Any) -> bool:
     _maybe_init_lazy_module(obj)
     return id(obj) in _disallowed_callable_ids
 
 
-def is_forbidden(obj) -> bool:
+def is_forbidden(obj: Any) -> bool:
     _maybe_init_lazy_module(obj)
     return inspect.getattr_static(obj, "_dynamo_forbidden", False)
 
 
-def is_builtin_callable(obj) -> bool:
+def is_builtin_callable(obj: Any) -> bool:
     # See also torch/_dynamo/polyfills/loader.py, which removes items in _builtin_function_ids
     return id(obj) in _builtin_function_ids
 
 
-def is_builtin_constant(obj) -> bool:
+def is_builtin_constant(obj: Any) -> bool:
     return id(obj) in _builtin_constant_ids
 
 
-def is_polyfilled_callable(obj) -> bool:
+def is_polyfilled_callable(obj: Any) -> bool:
     # See also @torch._dynamo.decorators.substitute_in_graph(...), which adds items in _polyfilled_function_ids
     return id(obj) in _polyfilled_function_ids
 
 
-def is_numpy(obj) -> bool:
+def is_numpy(obj: Any) -> bool:
     if np is None:
         return False
     return isinstance(obj, (np.ndarray, np.generic)) or id(obj) in _numpy_function_ids
 
 
-def is_numpy_dtype(obj) -> bool:
+def is_numpy_dtype(obj: Any) -> bool:
     if np is None:
         return False
     return isinstance(obj, np.dtype)
 
 
-def is_numpy_type_info(obj) -> bool:
+def is_numpy_type_info(obj: Any) -> bool:
     if np is None:
         return False
     return isinstance(obj, (np.finfo, np.iinfo))
@@ -3170,12 +3354,18 @@ def is_numpy_type_info(obj) -> bool:
 
 BUILTIN_SKIPLIST = (
     abc,
-    collections,
     copy,
+    importlib,
     random,
-    traceback,
     linecache,
 )
+
+# Builtin modules that should be skipped at the top-level (PEP 523 frame
+# evaluation) but inlined when called from code dynamo is already tracing.
+# For example, copy.deepcopy should be inlined when the user calls it inside
+# a compiled function, but copy module frames should be skipped when they
+# appear as top-level frames (e.g. called internally by autograd).
+BUILTIN_INLINE_WHEN_CALLED: set[str] = set()
 
 # third party libraries skiplist is defined by str, because users may not use these libraries.
 # we should use lazy import & skip in the future.
@@ -3200,7 +3390,7 @@ THIRDPARTY_SKIPLIST = (
 )
 
 
-def _as_posix_path(path):
+def _as_posix_path(path: str) -> str:
     posix_path = Path(os.path.normpath(path)).as_posix()
     # os.path.normpath and pathlib.Path remove trailing slash, so we need to add it back
     if path.endswith((os.path.sep, "/")):
@@ -3208,13 +3398,13 @@ def _as_posix_path(path):
     return posix_path
 
 
-def _strip_init_py(s):
+def _strip_init_py(s: str) -> str:
     suffix = "__init__.py"
     s = s.removesuffix(suffix)
     return _as_posix_path(s)
 
 
-def _module_dir(m: types.ModuleType):
+def _module_dir(m: types.ModuleType) -> str | None:
     # Protect against a module not exporting __file__ - this can happen for
     # frozen modules, for example.
     file = getattr(m, "__file__", None)
@@ -3238,7 +3428,10 @@ LEGACY_MOD_INLINELIST = {
     "torch._export.wrappers",
     "torch._functorch.apis",
     "torch._functorch.deprecated",
+    "torch._library.fake_class_registry",
+    "torch.utils._typing_utils",
     "torch.nn.attention.flex_attention",
+    "torch.ao.quantization.stubs",
     "torch.ao.quantization.pt2e.export_utils",
     "torch.ao.quantization.pt2e.qat_utils",
     "torch.ao.quantization.pt2e.representation.rewrite",
@@ -3260,8 +3453,6 @@ if torch.distributed.is_available():
         # the forward_hook won't be ignored.
         "torch.distributed._composable.replicate",
     }
-    if not torch._dynamo.config.skip_fsdp_hooks:
-        LEGACY_MOD_INLINELIST.add("torch.distributed.fsdp._fully_shard")
 
 # Force inline functions under these modules, even they are in *_SKIPLIST.
 # We are using python module name instead of file or directory object to avoid circular dependency.
@@ -3277,6 +3468,8 @@ MOD_INLINELIST = [
     "torch._dynamo.compiled_autograd",
     "torch._dynamo.comptime",
     "torch._dynamo.polyfills",
+    "torch._dynamo.test_case",
+    "torch._export.non_strict_utils",
     "torch._functorch._aot_autograd.subclass_parametrization",
     "torch._functorch.autograd_function",
     "torch._functorch.eager_transforms",
@@ -3296,11 +3489,15 @@ MOD_INLINELIST = [
     "torch.backends.cuda",
     "torch.cuda.amp.autocast_mode",
     "torch.distributions",
+    "torch.export._patches",
     "torch.export._tree_utils",
+    "torch.export._unlift",
+    "torch.export._wrapper_utils",
     "torch.fx._pytree",
     "torch.fx._symbolic_trace",
     "torch.fx.experimental.proxy_tensor",
     "torch.fx.passes.shape_prop",
+    "torch.fx.traceback",
     "torch.nn",
     "torch.overrides",
     "torch.random",
@@ -3312,6 +3509,7 @@ MOD_INLINELIST = [
     "torch.utils._cxx_pytree",
     "torch.utils._device",
     "torch.utils._foreach_utils",
+    "torch.utils._ordered_set",
     "torch.utils._python_dispatch",
     "torch.utils._pytree",
     "torch.utils.hooks",
@@ -3322,8 +3520,6 @@ MOD_INLINELIST = set(MOD_INLINELIST)
 
 if torch.distributed.is_available():
     MOD_INLINELIST.add("torch.distributed")
-    if not torch._dynamo.config.skip_fsdp_hooks:
-        MOD_INLINELIST.add("torch.distributed.fsdp._fully_shard")
 
 
 # By default, all functions under these modules are skipped.
@@ -3350,7 +3546,6 @@ MOD_SKIPLIST = [
     "torch._custom_op",
     "torch._custom_ops",
     "torch._decomp",
-    "torch._deploy",
     "torch._dispatch",
     "torch._dynamo",
     "torch._export",
@@ -3434,28 +3629,37 @@ assert sorted(set(MOD_SKIPLIST)) == MOD_SKIPLIST
 MOD_SKIPLIST = set(MOD_SKIPLIST)
 
 
-@functools.lru_cache(None)
-def get_legacy_mod_inlinelist():
+@functools.cache
+def get_legacy_mod_inlinelist() -> set[str]:
+    torch_dir = _module_dir(torch)
+    if torch_dir is None:
+        return set()
     inlinelist = {
-        _as_posix_path(_module_dir(torch) + m[len("torch.") :].replace(".", "/"))
+        _as_posix_path(torch_dir + m[len("torch.") :].replace(".", "/"))
         for m in LEGACY_MOD_INLINELIST
     }
     return inlinelist
 
 
-@functools.lru_cache(None)
-def get_mod_inlinelist():
+@functools.cache
+def get_mod_inlinelist() -> set[str]:
+    torch_dir = _module_dir(torch)
+    if torch_dir is None:
+        return set()
     inlinelist = {
-        _as_posix_path(_module_dir(torch) + m[len("torch.") :].replace(".", "/"))
+        _as_posix_path(torch_dir + m[len("torch.") :].replace(".", "/"))
         for m in MOD_INLINELIST
     }
     return inlinelist
 
 
-@functools.lru_cache(None)
-def get_mod_skiplist():
+@functools.cache
+def get_mod_skiplist() -> set[str]:
+    torch_dir = _module_dir(torch)
+    if torch_dir is None:
+        return set()
     skiplist = {
-        _as_posix_path(_module_dir(torch) + m[len("torch.") :].replace(".", "/"))
+        _as_posix_path(torch_dir + m[len("torch.") :].replace(".", "/"))
         for m in MOD_SKIPLIST
     }
     return skiplist
@@ -3471,9 +3675,10 @@ SKIP_DIRS = [
 ]
 SKIP_DIRS.extend(map(_as_posix_path, filter(None, map(_module_dir, BUILTIN_SKIPLIST))))
 
+BUILTIN_INLINE_WHEN_CALLED.update(filter(None, (_module_dir(copy),)))
+
 SKIP_DIRS_RE = re.compile(r"match nothing^")
 
-is_fbcode = importlib.import_module("torch._inductor.config").is_fbcode()
 # Skip fbcode paths(including torch.package paths) containing
 # one of the following strings.
 FBCODE_SKIP_DIRS: set[str] = set()
@@ -3513,14 +3718,14 @@ FBCODE_INLINE_FILES_IN_SKIPPED_DIRS_RE = re.compile(
 FORCE_SKIP_FILES = {f"{_module_dir(torch)}optim/lr_scheduler.py"}
 
 
-def _recompile_re():
+def _recompile_re() -> None:
     global SKIP_DIRS_RE
     SKIP_DIRS_RE = re.compile(
         rf"^[^\s<]*({'|'.join(re.escape(_as_posix_path(d)) for d in SKIP_DIRS)})"
     )
 
 
-def add(import_name: str):
+def add(import_name: str) -> None:
     if isinstance(import_name, types.ModuleType):
         return add(import_name.__name__)
     assert isinstance(import_name, str)
@@ -3539,67 +3744,71 @@ def add(import_name: str):
 @dataclasses.dataclass
 class SkipResult:
     skipped: bool
-    reason: Optional[str]
+    reason: str | None
 
 
-def check_file(filename, is_inlined_call=False):
+def check_file(filename: str | None, is_inlined_call: bool = False) -> SkipResult:
     """Should skip this file?"""
     if filename is None:
-        return SkipResult(True, "filename is None")
+        return SkipResult(
+            True, "cannot determine source file (likely a C extension or builtin)"
+        )
     filename = _as_posix_path(filename)
     if filename in FORCE_SKIP_FILES:
-        return SkipResult(True, "FORCE_SKIP_FILES")
+        return SkipResult(True, f"file is force-skipped ({filename})")
 
-    if any(filename.startswith(d) for d in get_legacy_mod_inlinelist()):
-        return SkipResult(
-            False,
-            "LEGACY_MOD_INLINELIST",
-        )
+    for d in get_legacy_mod_inlinelist():
+        if filename.startswith(d):
+            return SkipResult(False, f"file matches LEGACY_MOD_INLINELIST ({d})")
     if is_inlined_call and is_torch_inline_allowed(filename):
+        return SkipResult(False, f"file matches MOD_INLINELIST ({filename})")
+    if is_inlined_call and any(
+        filename.startswith(d) for d in BUILTIN_INLINE_WHEN_CALLED
+    ):
         return SkipResult(
-            False,
-            "MOD_INLINELIST",
+            False, f"file matches BUILTIN_INLINE_WHEN_CALLED ({filename})"
         )
     if (
-        is_fbcode
+        is_fbcode()
         and FBCODE_SKIP_DIRS
         and bool(FBCODE_SKIP_DIRS_RE.match(filename))
         and not bool(FBCODE_INLINE_FILES_IN_SKIPPED_DIRS_RE.match(filename))
     ):
-        return SkipResult(
-            True,
-            "FBCODE_SKIP_DIRS",
-        )
+        return SkipResult(True, "file matches FBCODE_SKIP_DIRS")
 
     if (
-        is_fbcode
-        and torch._dynamo.config.skip_torchrec
+        is_fbcode()
+        and config.skip_torchrec
         and FBCODE_SKIP_TORCHREC_DIRS
         and bool(FBCODE_SKIP_TORCHREC_DIRS_RE.match(filename))
         and not bool(FBCODE_INLINE_FILES_IN_SKIPPED_DIRS_RE.match(filename))
     ):
-        return SkipResult(True, "FBCODE_SKIP_TORCHREC_DIRS")
+        return SkipResult(True, "file matches FBCODE_SKIP_TORCHREC_DIRS")
 
+    unittest_dir = _module_dir(unittest)
     if (
-        filename.startswith(_module_dir(unittest))
+        unittest_dir is not None
+        and filename.startswith(unittest_dir)
         and not torch._dynamo.config.enable_trace_unittest
     ):
-        return SkipResult(True, "unittest")
+        return SkipResult(True, "file is in unittest directory")
 
     if bool(SKIP_DIRS_RE.match(filename)):
-        return SkipResult(True, "SKIP_DIRS")
+        matched_dir = next((d for d in SKIP_DIRS if filename.startswith(d)), filename)
+        return SkipResult(True, f"file is under skip directory ({matched_dir})")
 
-    if any(filename.startswith(d) for d in get_mod_skiplist()):
-        return SkipResult(True, "MOD_SKIPLIST")
+    for d in get_mod_skiplist():
+        if filename.startswith(d):
+            return SkipResult(True, f"file matches MOD_SKIPLIST ({d})")
     return SkipResult(False, "inlined by default")
 
 
 @dataclasses.dataclass
 class FunctionInfo:
-    py_obj: Optional[object]
-    name: Optional[str]
+    py_obj: object | None
+    name: str | None
     filename: str
-    code: Optional[types.CodeType]
+    code: types.CodeType | None
 
 
 """
@@ -3620,9 +3829,9 @@ Let's illustrate the logic with an example:
         ......
 
 There are mainly three call sites of check/check_verbose:
-* The compile region entrance (like function f1), the correspoinding code is located at eval_frame.py.
+* The compile region entrance (like function f1), the corresponding code is located at eval_frame.py.
 * When tracing the recursively called functions (like function f2 and f3).
-    * Dynamo decides inline/skip everytime it encounters a new recursively function call, and the call site
+    * Dynamo decides inline/skip every time it encounters a new recursively function call, and the call site
       is in InliningInstructionTranslator.check_inlineable of symbolic_convert.py.
     * If f2 is skipped by Dynamo, when evaluating the frame of f3, Dynamo need the inline/skip check again
       and the call site is in catch_errors_wrapper.catch_errors of convert_frame.py.
@@ -3635,8 +3844,65 @@ The reason to have this flag is that if the upper level function call (e.g, f2) 
 we don't want to inline the lower level function call (e.g, f3) by default.
 """
 
+_force_inline_flag = False
 
-def check_verbose(obj, is_inlined_call=False):
+
+# pyrefly: ignore [deprecated]
+@contextlib.contextmanager
+def _force_inline() -> Iterator[None]:
+    """
+    A context manager used within the dynamo codebase that forces a function
+    and nested function calls to be inlined during dynamo tracing.
+
+    When active, check_verbose() will skip all inline/skip decision logic and
+    always return SkipResult(False, ...), meaning functions will be inlined.
+
+    See _make_inlined() in utils.py which uses this to ensure that
+    a python function is fully traced to produce the needed variable trackers.
+    """
+    global _force_inline_flag
+    old_val = _force_inline_flag
+    try:
+        _force_inline_flag = True
+        yield
+    finally:
+        _force_inline_flag = old_val
+
+
+def check_verbose(
+    obj: Any, is_inlined_call: bool = False, frame: Any | None = None
+) -> SkipResult:
+    if _force_inline_flag:
+        return SkipResult(
+            False,
+            "don't skip because we're inside _force_inline() context",
+        )
+
+    # For eval frame callback (not inlined calls), allow tracing inbuilt
+    # nn.Module.forward methods when the module has hooks. Any hook can cause
+    # a graph break (via @torch._dynamo.disable, print, unsupported ops, etc.),
+    # which skips the entire _call_impl frame. By allowing forward to be traced,
+    # Dynamo can capture the module's operations in a new graph after the break.
+    if (
+        not is_inlined_call
+        and frame is not None
+        and isinstance(obj, types.CodeType)
+        and obj.co_name == "forward"
+    ):
+        from .utils import nnmodule_has_hooks
+
+        module = frame.f_locals.get("self")
+        if (
+            module is not None
+            and isinstance(module, torch.nn.Module)
+            and module.__class__.__module__.startswith(("torch.nn.", "torch.ao."))
+            and nnmodule_has_hooks(module, check_forward_hooks=True)
+        ):
+            return SkipResult(
+                False,
+                "inbuilt nn.Module.forward allowed - module has hooks",
+            )
+
     if isinstance(
         obj,
         (
@@ -3655,18 +3921,29 @@ def check_verbose(obj, is_inlined_call=False):
     elif isinstance(obj, types.CodeType):
         fi = FunctionInfo(None, obj.co_name, obj.co_filename, obj)
     elif isinstance(obj, (types.FunctionType, types.MethodType)):
+        filename = getfile(obj)
+        assert filename is not None
         fi = FunctionInfo(
             obj,
             obj.__name__,
-            getfile(obj),
+            filename,
             obj.__code__,  # type: ignore[union-attr] # FIXME Add MethodType.__code__ to typeshed
         )
     else:
-        fi = FunctionInfo(obj, None, getfile(obj), None)
+        filename = getfile(obj)
+        assert filename is not None
+        fi = FunctionInfo(obj, None, filename, None)
+
+    # typing.cast is a polyfilled no-op, but unlike C builtins it has a code
+    # object that PEP 523 can intercept as a standalone frame after a graph
+    # break. Skip it at the top level to avoid installing unnecessary guards.
+    if fi.code is not None and fi.code is typing.cast.__code__:
+        return SkipResult(True, "typing.cast is a no-op, skip at top level")
 
     # Consulte the central trace rules defined in torch._dynamo.trace_rules.
     reasons: set[str] = set()
     rule = lookup_inner(fi.py_obj, fi.name, fi.filename, is_inlined_call, reasons)
+    assert rule is not None
     if issubclass(
         rule,
         (
@@ -3675,25 +3952,33 @@ def check_verbose(obj, is_inlined_call=False):
             PolyfilledFunctionVariable,
         ),
     ):
-        return SkipResult(
-            False,
-            f"inlined according trace_rules.lookup {reasons.pop()}",
-        )
+        return SkipResult(False, reasons.pop())
     elif issubclass(rule, TorchInGraphFunctionVariable):
-        return SkipResult(
-            False,
-            f"registered in torch_obj_rule {reasons.pop()}",
-        )
+        return SkipResult(False, reasons.pop())
     else:
         assert rule == SkipFunctionVariable, rule
-        return SkipResult(
-            True,
-            f"skipped according trace_rules.lookup {reasons.pop()}",
-        )
+        return SkipResult(True, reasons.pop())
 
 
-def check(obj, is_inlined_call=False):
-    return check_verbose(obj, is_inlined_call).skipped
+def check(obj: Any, is_inlined_call: bool = False, frame: Any | None = None) -> bool:
+    return check_verbose(obj, is_inlined_call, frame).skipped
+
+
+def get_skip_reason(obj: Any) -> str:
+    """Compute a descriptive skip reason for a callable. Only called on graph break."""
+    if is_callable_disallowed(obj):
+        return _disallowed_callable_ids.get_name(id(obj), repr(obj))
+
+    filename = getfile(obj)
+    if filename is not None:
+        skip_result = check_file(filename)
+        if skip_result.reason is not None:
+            return skip_result.reason
+
+    module = getattr(obj, "__module__", None) or ""
+    return (
+        f"cannot determine source file for {module} (likely a C extension or builtin)"
+    )
 
 
 # skip common third party libs
@@ -3703,29 +3988,38 @@ for _name in THIRDPARTY_SKIPLIST:
 _recompile_re()
 
 
-def is_torch_inline_allowed(filename):
+def is_torch_inline_allowed(filename: str) -> bool:
     return any(filename.startswith(d) for d in get_mod_inlinelist())
 
 
-@functools.lru_cache(None)
-def dynamo_dir():
+@functools.cache
+def dynamo_dir() -> str | None:
     import torch._dynamo
 
     return _module_dir(torch._dynamo)
 
 
-def is_torch(filename):
-    if filename.startswith(dynamo_dir()):
+def is_torch(filename: str) -> bool:
+    dynamo_path = dynamo_dir()
+    if dynamo_path is not None and filename.startswith(dynamo_path):
         return False
-    return filename.startswith(_module_dir(torch))
+    torch_path = _module_dir(torch)
+    return torch_path is not None and filename.startswith(torch_path)
 
 
 """
 Main entry point for looking up the trace rule (the Dynamo variable) for a given callable object.
 """
 
+BUILTIN_CALLABLES = {
+    dict: DictBuiltinVariable,
+    getattr: GetAttrBuiltinVariable,
+    iter: IterBuiltinVariable,
+    list: ListBuiltinVariable,
+}
 
-def lookup_callable(obj):
+
+def lookup_callable(obj: Callable[..., Any]) -> type[VariableTracker] | None:
     if not hashable(obj):
         return None
     # Custom allow/disallow in graph takes precedence over the general lookup.
@@ -3735,6 +4029,8 @@ def lookup_callable(obj):
         return TorchInGraphFunctionVariable
     if is_polyfilled_callable(obj):
         return PolyfilledFunctionVariable
+    if obj in BUILTIN_CALLABLES:
+        return BUILTIN_CALLABLES[obj]
     if is_builtin_callable(obj):
         return BuiltinVariable
     return None
@@ -3746,17 +4042,56 @@ E.g, the lookup result of `torch.sin` is `TorchInGraphFunctionVariable`.
 """
 
 
-def lookup(obj):
+def lookup(obj: Any) -> type[VariableTracker] | None:
     return lookup_inner(obj)
 
 
+# also takes config.dont_skip_tracing into account
 def lookup_inner(
-    obj,
-    name=None,
-    filename=None,
-    is_direct_call=True,
-    reasons: Union[None, set[str]] = None,
-):
+    obj: Any,
+    name: str | None = None,
+    filename: str | None = None,
+    is_direct_call: bool = True,
+    reasons: None | set[str] = None,
+) -> type[VariableTracker] | None:
+    result = _lookup_inner(
+        obj,
+        name=name,
+        filename=filename,
+        is_direct_call=is_direct_call,
+        reasons=reasons,
+    )
+    # There are still some modules we should absolutely NOT trace into - e.g. most of torch._dynamo,
+    # as this can result in really weird tracing behaviors.
+    # Note that if a torch._dynamo function is already not skipped (e.g. functions in external_utils.py),
+    # then this branch does not apply.
+    if config.dont_skip_tracing and result is SkipFunctionVariable:
+        if filename is None:
+            filename = getfile(obj)
+        assert filename is not None
+        filename = _as_posix_path(filename)
+        torch_dir = _module_dir(torch)
+        if torch_dir is not None:
+            dynamo_path = _as_posix_path(torch_dir) + "_dynamo"
+            if filename.startswith(dynamo_path) and not filename.endswith(
+                "test_dont_skip_tracing_functions.py"
+            ):
+                return SkipFunctionVariable
+        if reasons is not None:
+            reasons.add(
+                "Attempted skip but we are ignoring skips due to torch._dynamo.config.dont_skip_tracing"
+            )
+        return UserFunctionVariable
+    return result
+
+
+def _lookup_inner(
+    obj: Any,
+    name: str | None = None,
+    filename: str | None = None,
+    is_direct_call: bool = True,
+    reasons: set[str] | None = None,
+) -> type[VariableTracker] | None:
     # Step 1: lookup obj's tracing rule in `torch_name_rule_map`.
     # The rules defined in `torch_name_rule_map` mainly includes two parts:
     # - Manually defined rules for any functions.
@@ -3830,7 +4165,7 @@ def lookup_inner(
         filename = getfile(obj)
 
     skip_result = check_file(filename, is_direct_call)
-    if reasons is not None:
+    if reasons is not None and skip_result.reason is not None:
         reasons.add(skip_result.reason)
     if skip_result.skipped:
         return SkipFunctionVariable
@@ -3838,7 +4173,7 @@ def lookup_inner(
         return UserFunctionVariable
 
 
-def clear_lru_cache():
+def clear_lru_cache() -> None:
     torch._dynamo.trace_rules.get_torch_obj_rule_map.cache_clear()
     torch._dynamo.trace_rules.get_tensor_method.cache_clear()
     torch._dynamo.trace_rules.get_legacy_mod_inlinelist.cache_clear()

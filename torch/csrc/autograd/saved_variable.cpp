@@ -39,8 +39,11 @@ SavedVariable::SavedVariable(
     // follow.
     TORCH_CHECK(
         !variable.is_inference(),
-        "Inference tensors cannot be saved for backward. To work around "
-        "you can make a clone to get a normal tensor and use it in autograd.")
+        "Inference tensors cannot be saved for backward. Please do not use "
+        "Tensors created in inference mode in computation tracked by autograd. "
+        "To work around this, you can make a clone to get a normal tensor and "
+        "use it in autograd, or use `torch.no_grad()` instead of "
+        "`torch.inference_mode()`.");
 
     was_default_constructed_ = false;
     saved_version_ = variable._version();
@@ -52,8 +55,9 @@ SavedVariable::SavedVariable(
       TORCH_INTERNAL_ASSERT(!is_leaf_ && is_output);
       weak_grad_fn_ = variable.grad_fn();
     }
-
-    auto maybe_hooks = get_default_hooks();
+    std::unique_ptr<SavedVariableHooks> maybe_hooks =
+        at::SavedTensorDefaultHooks::is_enabled() ? get_default_hooks()
+                                                  : nullptr;
 
     // Avoid wrapped numbers from being leaked to the user
     if (maybe_hooks && !variable.unsafeGetTensorImpl()->is_wrapped_number()) {
@@ -123,7 +127,7 @@ SavedVariable::SavedVariable(
           is_output,
           is_inplace_on_view) {}
 
-Variable SavedVariable::unpack(std::shared_ptr<Node> saved_for) const {
+Variable SavedVariable::unpack(c10::intrusive_ptr<Node> saved_for) const {
   if (was_default_constructed_) {
     return Variable();
   }
@@ -135,7 +139,7 @@ Variable SavedVariable::unpack(std::shared_ptr<Node> saved_for) const {
   // We want grad_fn here to provide the most helpful debug message to the user
   // if versions don't match
 
-  std::shared_ptr<Node> grad_fn;
+  c10::intrusive_ptr<Node> grad_fn;
   if (is_inplace_on_view_) {
     grad_fn = weak_grad_fn_.lock();
   } else if (!hooks_) {
@@ -168,22 +172,22 @@ Variable SavedVariable::unpack(std::shared_ptr<Node> saved_for) const {
       message
           << "one of the variables needed for gradient computation has been "
              "modified by an inplace operation: ["
-          << data_.toString() << " ";
+          << data_.toString() << ' ';
       if (data_.is_nested()) {
-        message << data_._nested_tensor_size() << "]";
+        message << data_._nested_tensor_size() << ']';
       } else {
-        message << data_.sizes() << "]";
+        message << data_.sizes() << ']';
       }
       if (grad_fn) {
         message << ", which is output " << output_nr_ << " of "
-                << grad_fn->name() << ",";
+                << grad_fn->forward_op_name() << ',';
       }
       message << " is at version " << current_version << "; expected version "
               << saved_version_ << " instead.";
       if (!AnomalyMode::is_enabled()) {
         message << " Hint: enable anomaly detection to find the operation "
                    "that failed to compute its gradient, with torch.autograd."
-                   "set_detect_anomaly(True).";
+                   "set_detect_anomaly(True, check_nan=False).";
       } else {
         message
             << " Hint: the backtrace further above shows the operation "
@@ -221,7 +225,8 @@ Variable SavedVariable::unpack(std::shared_ptr<Node> saved_for) const {
     var = make_variable(data, requires_grad_);
   }
 
-  impl::set_grad_accumulator(var, grad_accumulator_);
+  impl::set_grad_accumulator(
+      var, c10::weak_intrusive_ptr<Node>(grad_accumulator_));
   impl::set_version_counter(var, impl::version_counter(data));
 
   // NB: var here is never a view so there is no need to make anything special

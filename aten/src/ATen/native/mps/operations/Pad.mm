@@ -31,7 +31,7 @@ static Tensor& pad_out_template(Tensor& output,
                                 const std::optional<Tensor>& grad_output_opt,
                                 MPSGraphPaddingMode mode,
                                 double constantValue,
-                                const string op_name) {
+                                const std::string& op_name) {
   using CachedGraph = MPSUnaryGradCachedGraph;
   const int padding_size = (int)padding.size();
   int padding_dim = padding_size / 2; // either 1D, 2D, or 3D
@@ -244,7 +244,7 @@ static Tensor& pad_out_template(Tensor& output,
   }
 
   @autoreleasepool {
-    string key = op_name + getTensorsStringKey({input, grad_output, output}) + ":[" + getArrayRefString(padding) +
+    std::string key = op_name + getTensorsStringKey({input, grad_output, output}) + ":[" + getArrayRefString(padding) +
         "]:" + std::to_string(constantValue);
 
     auto cachedGraph = LookUpOrCreateCachedGraph<CachedGraph>(key, [&](auto mpsGraph, auto newCachedGraph) {
@@ -283,6 +283,14 @@ static Tensor& pad_out_template(Tensor& output,
                                                        name:nil];
         // workaround for negative padding issue with padGradientWithIncomingGradientTensor()
         if (needsSlice) {
+          for (auto i : c10::irange(ndims)) {
+            auto start = [startsVec[i] intValue];
+            auto input_size = input.size(i);
+            // TODO: It should be possible to make this case work. Currently
+            // MPSGraph can crash if start >= input_size, so we raise an error
+            // to prevent the crash.
+            TORCH_INTERNAL_ASSERT(start == 0 || start < input_size);
+          }
           newCachedGraph->gradInputTensor_ =
               [mpsGraph sliceGradientTensor:padGradTensor
                            fwdInShapeTensor:[mpsGraph shapeOfTensor:newCachedGraph->inputTensor_ name:nil]
@@ -460,6 +468,9 @@ Tensor replication_pad3d_backward_mps(const Tensor& grad_output, const Tensor& i
 
 // backward pass is explicitly handled in autograd by negating the "pad" argument
 Tensor constant_pad_nd_mps(const Tensor& self, IntArrayRef pad, const Scalar& value) {
+  if (pad.empty()) {
+    return self.clone();
+  }
   if (pad.size() > 6) {
     TORCH_WARN_ONCE("MPS: The constant padding of more than 3 dimensions is not currently supported natively. ",
                     "It uses View Ops default implementation to run. This may have performance implications.");

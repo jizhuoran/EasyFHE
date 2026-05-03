@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from typing import Optional
-
-from ..common import DeviceOpOverrides, register_device_op_overrides
+from ..common import (
+    DeviceOpOverrides,
+    register_device_op_overrides,
+    TritonScratchWorkspace,
+)
 
 
 class XPUDeviceOpOverrides(DeviceOpOverrides):
@@ -54,8 +56,10 @@ class XPUDeviceOpOverrides(DeviceOpOverrides):
     def cpp_device_ptr(self) -> str:
         return "void *"
 
-    def cpp_global_scratch(self, idx: int) -> Optional[tuple[str, str]]:
-        return None
+    def cpp_scratch(
+        self, idx: int, workspace: TritonScratchWorkspace, prefix: str | None = None
+    ) -> tuple[list[str], str] | None:
+        return [f"void *global_scratch_{idx} = 0;"], f"global_scratch_{idx}"
 
 
 register_device_op_overrides("xpu", XPUDeviceOpOverrides())

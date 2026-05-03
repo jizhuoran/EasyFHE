@@ -55,7 +55,7 @@ class TORCH_API PrefixStore : public Store {
   void queuePush(const std::string& key, const std::vector<uint8_t>& value)
       override;
 
-  std::vector<uint8_t> queuePop(const std::string& key) override;
+  std::vector<uint8_t> queuePop(const std::string& key, bool block) override;
 
   int64_t queueLen(const std::string& key) override;
 
@@ -63,6 +63,8 @@ class TORCH_API PrefixStore : public Store {
 
   // Recursively to fetch the store before layers of wrapping with PrefixStore.
   c10::intrusive_ptr<Store> getUnderlyingNonPrefixStore();
+
+  std::vector<std::string> listKeys() override;
 
  protected:
   std::string prefix_;

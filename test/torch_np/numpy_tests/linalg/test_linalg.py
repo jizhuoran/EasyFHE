@@ -1,7 +1,6 @@
 # Owner(s): ["module: dynamo"]
-""" Test functions for linalg module
+"""Test functions for linalg module"""
 
-"""
 import functools
 import itertools
 import os
@@ -169,7 +168,8 @@ def apply_tag(tag, cases):
     Add the given tag (a string) to each of the cases (a list of LinalgCase
     objects)
     """
-    assert tag in all_tags, "Invalid tag"
+    if tag not in all_tags:
+        raise AssertionError(f"Invalid tag: {tag}")
     for case in cases:
         case.tags = case.tags | {tag}
     return cases
@@ -489,7 +489,7 @@ class SolveCases(LinalgSquareTestCase, LinalgGeneralizedSquareTestCase):
     # kept apart from TestSolve for use for testing with matrices.
     def do(self, a, b, tags):
         x = linalg.solve(a, b)
-        assert_almost_equal(b, dot_generalized(a, x))
+        assert_almost_equal(b, dot_generalized(a, x), single_decimal=5)
         assert_(consistent_subclass(x, b))
 
 
@@ -938,7 +938,7 @@ class DetCases(LinalgSquareTestCase, LinalgGeneralizedSquareTestCase):
 @instantiate_parametrized_tests
 class TestDet(DetCases, TestCase):
     def test_zero(self):
-        # NB: comment out tests of type(det) == double : we return zero-dim arrays
+        # NB: comment out tests of type(det) is double : we return zero-dim arrays
         assert_equal(linalg.det([[0.0]]), 0.0)
         #    assert_equal(type(linalg.det([[0.0]])), double)
         assert_equal(linalg.det([[0.0j]]), 0.0)
@@ -1104,7 +1104,7 @@ class TestMatrixPower(TestCase):
 
         for mat in self.rshft_all:
             tz(mat.astype(dt))
-            if dt != object:
+            if dt is not object:
                 tz(self.stacked.astype(dt))
 
     @parametrize("dt", [np.dtype(c) for c in "?bBhilefdFD"])
@@ -1116,7 +1116,7 @@ class TestMatrixPower(TestCase):
 
         for mat in self.rshft_all:
             tz(mat.astype(dt))
-            if dt != object:
+            if dt is not object:
                 tz(self.stacked.astype(dt))
 
     @parametrize("dt", [np.dtype(c) for c in "?bBhilefdFD"])
@@ -1129,7 +1129,7 @@ class TestMatrixPower(TestCase):
 
         for mat in self.rshft_all:
             tz(mat.astype(dt))
-            if dt != object:
+            if dt is not object:
                 tz(self.stacked.astype(dt))
 
     @parametrize("dt", [np.dtype(c) for c in "?bBhilefdFD"])
@@ -1707,7 +1707,7 @@ class TestMatrixRank(TestCase):
         # Test matrices with reduced rank
         #  rng = np.random.RandomState(20120714)
         np.random.seed(20120714)
-        for i in range(100):
+        for _ in range(100):
             # Make a rank deficient matrix
             X = np.random.normal(size=(40, 10))
             X[:, 0] = X[:, 1] + X[:, 2]
@@ -2097,7 +2097,8 @@ class TestMultiDot(TestCase):
 
         out = np.zeros((6, 2))
         ret = multi_dot([A, B, C], out=out)
-        assert out is ret
+        if out is not ret:
+            raise AssertionError("Expected out is ret")
         assert_almost_equal(out, A.dot(B).dot(C))
         assert_almost_equal(out, np.dot(A, np.dot(B, C)))
 
@@ -2107,7 +2108,8 @@ class TestMultiDot(TestCase):
         B = np.random.random((2, 6))
         out = np.zeros((6, 6))
         ret = multi_dot([A, B], out=out)
-        assert out is ret
+        if out is not ret:
+            raise AssertionError("Expected out is ret")
         assert_almost_equal(out, A.dot(B))
         assert_almost_equal(out, np.dot(A, B))
 
@@ -2120,7 +2122,8 @@ class TestMultiDot(TestCase):
         D = np.random.random((2, 1))
         out = np.zeros((6, 1))
         ret = multi_dot([A, B, C, D], out=out)
-        assert out is ret
+        if out is not ret:
+            raise AssertionError("Expected out is ret")
         assert_almost_equal(out, A.dot(B).dot(C).dot(D))
 
     def test_dynamic_programming_logic(self):

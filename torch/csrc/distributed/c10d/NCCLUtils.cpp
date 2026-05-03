@@ -1,9 +1,9 @@
 #include <torch/csrc/distributed/c10d/NCCLUtils.hpp>
 
-#include <c10/util/env.h>
-
 #ifdef USE_C10D_NCCL
+#include <fmt/format.h>
 #include <mutex>
+#include <thread>
 #include <vector>
 
 namespace c10d {
@@ -39,8 +39,24 @@ NCCLComm::NCCLComm(NCCLComm&& other) {
   std::swap(deviceIndex_, other.deviceIndex_);
 }
 
-ncclUniqueId NCCLComm::getNcclId() {
-  return ncclId_;
+void NCCLComm::setUniqueHash(ncclUniqueId ncclId) {
+  const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&ncclId);
+
+  fmt::memory_buffer buf;
+  buf.reserve(NCCL_UNIQUE_ID_BYTES * 2); // 2 hex chars per byte
+  for (int i = 0; i < NCCL_UNIQUE_ID_BYTES; ++i) {
+    fmt::format_to(
+        std::back_inserter(buf), "{:02x}", static_cast<int>(bytes[i]));
+  }
+  this->uniqueHash_ = fmt::to_string(buf);
+}
+
+void NCCLComm::setUniqueHash(std::string hash) {
+  this->uniqueHash_ = std::move(hash);
+}
+
+std::string NCCLComm::getUniqueHash() {
+  return uniqueHash_;
 }
 
 std::shared_ptr<NCCLComm> NCCLComm::create(
@@ -53,7 +69,7 @@ std::shared_ptr<NCCLComm> NCCLComm::create(
   C10D_NCCL_CHECK(
       ncclCommInitRank(&(comm->ncclComm_), numRanks, commId, rank),
       std::nullopt);
-  comm->ncclId_ = commId;
+  comm->setUniqueHash(commId);
   comm->rank_ = rank;
   comm->deviceIndex_ = deviceIndex;
   comm->initialized_ = true;
@@ -78,7 +94,7 @@ std::shared_ptr<NCCLComm> NCCLComm::create(
       ncclCommInitRankConfig(
           &(comm->ncclComm_), numRanks, commId, rank, &config),
       std::nullopt);
-  comm->ncclId_ = commId;
+  comm->setUniqueHash(commId);
   comm->rank_ = rank;
   comm->deviceIndex_ = deviceIndex;
   // Under blocking mode, comm is initialized immediately after NCCL init
@@ -112,7 +128,7 @@ std::shared_ptr<NCCLComm> NCCLComm::create_scalable(
   // Only the first ncclUniqueId will be used to create the
   // communicator hash id, which is used to identify the communicator
   // in the log file and in the replay tool.
-  comm->ncclId_ = commIds[0];
+  comm->setUniqueHash(commIds[0]);
   comm->rank_ = rank;
   comm->deviceIndex_ = deviceIndex;
   comm->initialized_ = !comm->nonBlocking_;
@@ -166,10 +182,34 @@ void NCCLComm::waitReady(bool longInterval) {
   if (aborted_)
     return;
   // If timeout is reached, throw an exception.
-  if (longInterval) {
-    C10D_NCCL_CHECK_TIMEOUT_SLEEP(ncclInProgress, ncclComm_, std::nullopt);
-  } else {
-    C10D_NCCL_CHECK_TIMEOUT(ncclInProgress, ncclComm_, std::nullopt);
+  // (RohitRathore1) Note: We already hold the mutex_ lock here, so the direct
+  // call to ncclCommGetAsyncError is safe from concurrent access.
+  ncclResult_t result = ncclInProgress;
+  auto startTimepoint = std::chrono::steady_clock::now();
+  auto timeout = nccl_nonblocking_timeout();
+  while (result == ncclInProgress) {
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                           currentTime - startTimepoint)
+                           .count();
+    if (timeElapsed > timeout) {
+      std::string err = "NCCL timeout in: " + std::string(__FILE__) + ":" +
+          std::to_string(__LINE__);
+      TORCH_CHECK_WITH(DistBackendError, false, err);
+    }
+    if (longInterval) {
+      std::this_thread::sleep_for(
+          std::chrono::milliseconds(kCommInitBusyWaitMillis));
+    } else {
+      sched_yield();
+    }
+    ncclCommGetAsyncError(ncclComm_, &result);
+  }
+  if (result != ncclSuccess) {
+    std::string err = "NCCL error in: " + std::string(__FILE__) + ":" +
+        std::to_string(__LINE__) + ", " + ncclGetErrorWithVersion(result) +
+        "\n" + getNcclErrorDetailStr(result, std::nullopt);
+    TORCH_CHECK_WITH(DistBackendError, false, err);
   }
 }
 
@@ -178,16 +218,12 @@ std::optional<std::string> NCCLComm::getNcclCommFailureReason() const {
   return commFailureReason_;
 }
 
-// TODO: why do we have `!defined(FBCODE_CAFFE2)` here?
-#if defined(NCCL_HAS_COMM_SPLIT) && !defined(FBCODE_CAFFE2)
-// last argument to split() API is not used to support
-// multiple implementations
+#if defined(NCCL_HAS_COMM_SPLIT)
 std::shared_ptr<NCCLComm> NCCLComm::split(
     NCCLComm* source,
     int color_id,
     int rank,
-    ncclConfig_t& config,
-    std::vector<uint64_t>& ranks_ull) {
+    ncclConfig_t& config) {
   TORCH_CHECK(
       color_id >= NCCL_SPLIT_NOCOLOR,
       "Color must be a non-negative value or NCCL_SPLIT_NOCOLOR (-1)"
@@ -216,7 +252,7 @@ std::shared_ptr<NCCLComm> NCCLComm::split(
   //   https://github.com/NVIDIA/nccl/issues/1472
   C10D_NCCL_CHECK_TIMEOUT_SLEEP(
       ncclCommSplit(sourceComm, color_id, rank, &(comm->ncclComm_), &config),
-      sourceComm, // wait on parent comm
+      source, // wait on parent comm
       std::nullopt);
   if (color_id >= 0) {
     // Waiting for parent comm above still does not seem to guarantee the child
@@ -237,8 +273,70 @@ std::shared_ptr<NCCLComm> NCCLComm::split(
   // Child comm should be on the same device as parent comm
   comm->deviceIndex_ = source->deviceIndex_;
   comm->nonBlocking_ = config.blocking == 0;
+  comm->setUniqueHash(
+      source->getUniqueHash() + ":" +
+      std::to_string(source->ncclCommSplitCounter_));
   LOG(INFO) << "Rank " << source->rank_ << ": created child comm "
             << comm->repr() << " with color_id " << color_id;
+  return comm;
+}
+#endif
+
+#ifdef NCCL_HAS_COMM_SHRINK
+std::shared_ptr<NCCLComm> NCCLComm::shrink(
+    NCCLComm* source,
+    std::vector<int>& ranks_to_exclude,
+    ncclConfig_t* config,
+    int shrinkFlags) {
+  // Preconditions are validated in ProcessGroupNCCL::shrink
+
+  LOG(INFO) << "Rank " << source->rank_ << ": shrinking comm " << source->repr()
+            << " excluding " << ranks_to_exclude.size() << " ranks";
+
+  at::cuda::OptionalCUDAGuard gpuGuard(source->deviceIndex_);
+  auto comm = std::make_shared<NCCLComm>();
+
+  // This call will block until the source communicator is initialized
+  auto sourceComm = source->getNcclComm();
+
+  C10D_NCCL_CHECK_NONBLOCKING(
+      ncclCommShrink(
+          sourceComm,
+          ranks_to_exclude.data(),
+          ranks_to_exclude.size(),
+          reinterpret_cast<ncclComm_t*>(&(comm->ncclComm_)),
+          config,
+          shrinkFlags),
+      source->getNcclCommFailureReason());
+
+  // Wait for the child communicator to be ready
+  source->waitReady(true);
+  comm->initialized_ = true;
+
+  // NCCL automatically assigns rank during shrink - query it efficiently
+  int assigned_rank;
+  try {
+    C10D_NCCL_CHECK(
+        ncclCommUserRank(comm->ncclComm_, &assigned_rank), std::nullopt);
+    comm->rank_ = assigned_rank;
+  } catch (const std::exception& e) {
+    // Fallback: if ncclCommUserRank fails, we can't determine the rank
+    LOG(ERROR) << "Failed to query NCCL-assigned rank: " << e.what();
+    throw;
+  }
+
+  // Child comm should be on the same device as parent comm
+  comm->deviceIndex_ = source->deviceIndex_;
+  if (config != nullptr) {
+    comm->nonBlocking_ = config->blocking == 0;
+  } else {
+    // Inherit parent behavior if no config provided
+    comm->nonBlocking_ = source->nonBlocking_;
+  }
+
+  LOG(INFO) << "Rank " << source->rank_ << ": created shrunken comm "
+            << comm->repr() << " with NCCL-assigned rank " << assigned_rank;
+
   return comm;
 }
 #endif
@@ -281,14 +379,27 @@ void NCCLComm::abort(std::optional<std::string> commFailureReason) {
 #ifdef NCCL_HAS_COMM_REGISTER
   // Deregister all registered segments before aborting.
   for (auto& it : registeredSegmentHandles_) {
-    void* handle = it.second;
-    C10D_NCCL_CHECK(
-        ::ncclCommDeregister(ncclComm_, handle),
-        c10::str(
-            "Failed to deregister segment handle ",
-            handle,
-            " on ncclComm_ ",
-            ncclComm_));
+    void* handle = it.second.first;
+    bool is_window = it.second.second;
+    if (is_window) {
+#ifdef NCCL_HAS_COMM_WINDOW_REGISTER
+      C10D_NCCL_CHECK(
+          ::ncclCommWindowDeregister(ncclComm_, (ncclWindow_t)handle),
+          c10::str(
+              "Failed to window deregister segment handle ",
+              handle,
+              " on ncclComm_ ",
+              ncclComm_));
+#endif
+    } else {
+      C10D_NCCL_CHECK(
+          ::ncclCommDeregister(ncclComm_, handle),
+          c10::str(
+              "Failed to deregister segment handle ",
+              handle,
+              " on ncclComm_ ",
+              ncclComm_));
+    }
   }
   registeredSegmentHandles_.clear();
 #endif
@@ -302,8 +413,30 @@ void NCCLComm::abort(std::optional<std::string> commFailureReason) {
 #ifndef NCCL_HAS_COMM_NONBLOCKING
   C10D_NCCL_CHECK(::ncclCommAbort(ncclComm_), commFailureReason_);
 #else
-  C10D_NCCL_CHECK_TIMEOUT(
-      ::ncclCommAbort(ncclComm_), ncclComm_, commFailureReason_);
+  // Note: We already hold the mutex_ lock here, so the direct call to
+  // ncclCommGetAsyncError is safe from concurrent access.
+  ncclResult_t result = ::ncclCommAbort(ncclComm_);
+  auto startTimepoint = std::chrono::steady_clock::now();
+  auto timeout = nccl_nonblocking_timeout();
+  while (result == ncclInProgress) {
+    auto currentTime = std::chrono::steady_clock::now();
+    auto timeElapsed = std::chrono::duration_cast<std::chrono::seconds>(
+                           currentTime - startTimepoint)
+                           .count();
+    if (timeElapsed > timeout) {
+      std::string err = "NCCL timeout in: " + std::string(__FILE__) + ":" +
+          std::to_string(__LINE__);
+      TORCH_CHECK_WITH(DistBackendError, false, err);
+    }
+    sched_yield();
+    ncclCommGetAsyncError(ncclComm_, &result);
+  }
+  if (result != ncclSuccess) {
+    std::string err = "NCCL error in: " + std::string(__FILE__) + ":" +
+        std::to_string(__LINE__) + ", " + ncclGetErrorWithVersion(result) +
+        "\n" + getNcclErrorDetailStr(result, commFailureReason_);
+    TORCH_CHECK_WITH(DistBackendError, false, err);
+  }
 #endif
   aborted_ = true;
   ncclComm_ = nullptr;
@@ -347,10 +480,16 @@ ncclResult_t NCCLComm::checkForNcclError() {
 #endif
 }
 
+ncclResult_t NCCLComm::getAsyncError(ncclResult_t* asyncError) {
+  LockType lock(mutex_);
+  return ncclCommGetAsyncError(ncclComm_, asyncError);
+}
+
 ncclResult_t NCCLComm::registerSegment(
     void* ptr,
     size_t size,
-    bool errorOnRereg /*=true*/) {
+    bool errorOnRereg, /*=true*/
+    bool window /*=false*/) {
   LockType lock(mutex_);
 #ifdef NCCL_HAS_COMM_REGISTER
   // We register only segments from cache allocator
@@ -371,6 +510,30 @@ ncclResult_t NCCLComm::registerSegment(
   void* handle = nullptr;
   // Use getNcclComm to make sure comm is ready before calling nccl APIs
   auto comm = getNcclComm();
+#ifdef NCCL_HAS_COMM_WINDOW_REGISTER
+  if (window) {
+    C10D_NCCL_CHECK(
+        ncclCommWindowRegister(
+            comm, ptr, size, (ncclWindow_t*)&handle, NCCL_WIN_COLL_SYMMETRIC),
+        c10::str(
+            "Failed to window register segment with ptr ",
+            ptr,
+            ", size ",
+            size,
+            " on ncclComm_ ",
+            comm));
+  } else {
+    C10D_NCCL_CHECK(
+        ncclCommRegister(comm, ptr, size, &handle),
+        c10::str(
+            "Failed to register segment with ptr ",
+            ptr,
+            ", size ",
+            size,
+            " on ncclComm_ ",
+            comm));
+  }
+#else
   C10D_NCCL_CHECK(
       ncclCommRegister(comm, ptr, size, &handle),
       c10::str(
@@ -380,14 +543,15 @@ ncclResult_t NCCLComm::registerSegment(
           size,
           " on ncclComm_ ",
           comm));
-  registeredSegmentHandles_[ptr] = handle;
+#endif
+  registeredSegmentHandles_[ptr] = {handle, window};
   return ncclSuccess;
 #else
   return ncclInvalidUsage;
 #endif
 }
 
-ncclResult_t NCCLComm::deregisterSegment(void* ptr) {
+ncclResult_t NCCLComm::deregisterSegment(void* ptr, bool window /*false*/) {
   LockType lock(mutex_);
 #ifdef NCCL_HAS_COMM_REGISTER
   TORCH_CHECK(
@@ -397,9 +561,32 @@ ncclResult_t NCCLComm::deregisterSegment(void* ptr) {
       " is not registered on ncclComm_ ",
       ncclComm_);
 
-  void* handle = registeredSegmentHandles_[ptr];
+  void* handle = registeredSegmentHandles_[ptr].first;
   // Use getNcclComm to make sure comm is ready before calling nccl APIs
   auto comm = getNcclComm();
+#ifdef NCCL_HAS_COMM_WINDOW_REGISTER
+  if (window) {
+    C10D_NCCL_CHECK(
+        ncclCommWindowDeregister(comm, (ncclWindow_t)handle),
+        c10::str(
+            "Failed to window deregister segment handle ",
+            handle,
+            ", with ptr ",
+            ptr,
+            " on ncclComm_ ",
+            comm));
+  } else {
+    C10D_NCCL_CHECK(
+        ncclCommDeregister(comm, handle),
+        c10::str(
+            "Failed to deregister segment handle ",
+            handle,
+            ", with ptr ",
+            ptr,
+            " on ncclComm_ ",
+            comm));
+  }
+#else
   C10D_NCCL_CHECK(
       ncclCommDeregister(comm, handle),
       c10::str(
@@ -409,6 +596,7 @@ ncclResult_t NCCLComm::deregisterSegment(void* ptr) {
           ptr,
           " on ncclComm_ ",
           comm));
+#endif
   registeredSegmentHandles_.erase(ptr);
   return ncclSuccess;
 #else
@@ -418,6 +606,54 @@ ncclResult_t NCCLComm::deregisterSegment(void* ptr) {
 
 std::string NCCLComm::repr() const {
   return c10::str((void*)ncclComm_);
+}
+
+void NCCLComm::suspend() {
+#ifdef NCCL_HAS_COMM_OFFLOAD
+  LockType lock(mutex_);
+  at::cuda::OptionalCUDAGuard gpuGuard(deviceIndex_);
+  auto comm = getNcclComm();
+  C10D_NCCL_CHECK(ncclCommSuspend(comm, NCCL_SUSPEND_MEM), std::nullopt);
+#else
+  TORCH_CHECK(false, "suspend() requires NCCL 2.29.7 or later");
+#endif
+}
+
+void NCCLComm::resume() {
+#ifdef NCCL_HAS_COMM_OFFLOAD
+  LockType lock(mutex_);
+  at::cuda::OptionalCUDAGuard gpuGuard(deviceIndex_);
+  auto comm = getNcclComm();
+  C10D_NCCL_CHECK(ncclCommResume(comm), std::nullopt);
+#else
+  TORCH_CHECK(false, "resume() requires NCCL 2.29.7 or later");
+#endif
+}
+
+std::unordered_map<std::string, uint64_t> NCCLComm::getMemoryStats() {
+#ifdef NCCL_HAS_COMM_OFFLOAD
+  LockType lock(mutex_);
+  at::cuda::OptionalCUDAGuard gpuGuard(deviceIndex_);
+  auto comm = getNcclComm();
+  uint64_t suspend, suspended, persist, total;
+  C10D_NCCL_CHECK(
+      ncclCommMemStats(comm, ncclStatGpuMemSuspend, &suspend), std::nullopt);
+  C10D_NCCL_CHECK(
+      ncclCommMemStats(comm, ncclStatGpuMemSuspended, &suspended),
+      std::nullopt);
+  C10D_NCCL_CHECK(
+      ncclCommMemStats(comm, ncclStatGpuMemPersist, &persist), std::nullopt);
+  C10D_NCCL_CHECK(
+      ncclCommMemStats(comm, ncclStatGpuMemTotal, &total), std::nullopt);
+  return {
+      {"suspend", suspend},
+      {"suspended", suspended},
+      {"persist", persist},
+      {"total", total},
+  };
+#else
+  TORCH_CHECK(false, "getMemoryStats() requires NCCL 2.29.7 or later");
+#endif
 }
 
 #if (defined(IS_NCCLX) || defined(USE_ROCM)) && defined(NCCL_COMM_DUMP)
@@ -434,21 +670,11 @@ std::unordered_map<std::string, std::string> NCCLComm::ncclCommDump() {
 
 std::string getNcclVersion() {
   static std::string versionString = []() {
-    int version = 0;
+    auto [ncclMajor, ncclMinor, ncclPatch] = getNcclVersionTuple();
     std::string versionString;
-    ncclResult_t status = ncclGetVersion(&version);
-    // can't compute the version if call did not return successfully or version
-    // code < 100 (corresponding to 0.1.0)
-    if (status != ncclSuccess || version < 100) {
+    if (ncclMajor == 0 && ncclMinor == 0 && ncclPatch == 0) {
       versionString = "Unknown NCCL version";
     } else {
-      // NCCL changed version coding starting 2.9
-      const int majorBase = version < 2900 ? 1000 : 10000;
-      const int minorBase = 100;
-      auto ncclMajor = version / majorBase;
-      auto ncclMinor = (version % majorBase) / minorBase;
-      auto ncclPatch =
-          version % (ncclMajor * majorBase + ncclMinor * minorBase);
       versionString = std::to_string(ncclMajor) + "." +
           std::to_string(ncclMinor) + "." + std::to_string(ncclPatch);
 #ifdef NCCL_SUFFIX
@@ -462,6 +688,25 @@ std::string getNcclVersion() {
   }();
 
   return versionString;
+}
+
+std::tuple<int, int, int> getNcclVersionTuple() {
+  static std::tuple<int, int, int> versionTuple = []() {
+    int version = getNcclVersionNumber();
+    // can't compute the version if call did not return successfully or version
+    // code < 100 (corresponding to 0.1.0)
+    if (version < 100) {
+      return std::make_tuple(0, 0, 0);
+    }
+    // NCCL changed version coding starting 2.9
+    const int majorBase = version < 2900 ? 1000 : 10000;
+    const int minorBase = 100;
+    auto ncclMajor = version / majorBase;
+    auto ncclMinor = (version % majorBase) / minorBase;
+    auto ncclPatch = version % minorBase;
+    return std::make_tuple(ncclMajor, ncclMinor, ncclPatch);
+  }();
+  return versionTuple;
 }
 
 int getNcclVersionNumber() {
@@ -572,6 +817,17 @@ std::string getNcclErrorDetailStr(
       interpret = "Unknown NCCL error!";
   }
   return interpret + err;
+}
+
+// Helper function that gets the data type and issues error if not supported
+ncclDataType_t getNcclDataType(at::ScalarType type) {
+  auto it = ncclDataType.find(type);
+  TORCH_CHECK_WITH(
+      TypeError,
+      it != ncclDataType.end(),
+      "Input tensor data type is not supported for NCCL process group: ",
+      type);
+  return it->second;
 }
 
 // Dump proxyTrace log to stdout

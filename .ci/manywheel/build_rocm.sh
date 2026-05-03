@@ -95,16 +95,14 @@ ROCM_SO_FILES=(
     "libroctracer64.so"
     "libroctx64.so"
     "libhipblaslt.so"
+    "libhipsparselt.so"
     "libhiprtc.so"
+    "librocprofiler-sdk.so"
+    "librocprofiler-register.so"
+    "libhsa-amd-aqlprofile64.so"
+    "librocm-core.so"
+    "librocroller.so"
 )
-
-if [[ $ROCM_INT -ge 60100 ]]; then
-    ROCM_SO_FILES+=("librocprofiler-register.so")
-fi
-
-if [[ $ROCM_INT -ge 60200 ]]; then
-    ROCM_SO_FILES+=("librocm-core.so")
-fi
 
 OS_NAME=`awk -F= '/^NAME/{print $2}' /etc/os-release`
 if [[ "$OS_NAME" == *"CentOS Linux"* || "$OS_NAME" == *"AlmaLinux"* ]]; then
@@ -116,61 +114,23 @@ if [[ "$OS_NAME" == *"CentOS Linux"* || "$OS_NAME" == *"AlmaLinux"* ]]; then
     else
         LIBTINFO_PATH="/usr/lib64/libtinfo.so.6"
     fi
+    LIBDW_PATH="/usr/lib64/libdw.so.1"
     LIBDRM_PATH="/opt/amdgpu/lib64/libdrm.so.2"
     LIBDRM_AMDGPU_PATH="/opt/amdgpu/lib64/libdrm_amdgpu.so.1"
-    if [[ $ROCM_INT -ge 60100 && $ROCM_INT -lt 60300 ]]; then
-        # Below libs are direct dependencies of libhipsolver
-        LIBSUITESPARSE_CONFIG_PATH="/lib64/libsuitesparseconfig.so.4"
-        if [[ "$OS_NAME" == *"CentOS Linux"* ]]; then
-            LIBCHOLMOD_PATH="/lib64/libcholmod.so.2"
-            # Below libs are direct dependencies of libsatlas
-            LIBGFORTRAN_PATH="/lib64/libgfortran.so.3"
-        else
-            LIBCHOLMOD_PATH="/lib64/libcholmod.so.3"
-            # Below libs are direct dependencies of libsatlas
-            LIBGFORTRAN_PATH="/lib64/libgfortran.so.5"
-        fi
-        # Below libs are direct dependencies of libcholmod
-        LIBAMD_PATH="/lib64/libamd.so.2"
-        LIBCAMD_PATH="/lib64/libcamd.so.2"
-        LIBCCOLAMD_PATH="/lib64/libccolamd.so.2"
-        LIBCOLAMD_PATH="/lib64/libcolamd.so.2"
-        LIBSATLAS_PATH="/lib64/atlas/libsatlas.so.3"
-        # Below libs are direct dependencies of libsatlas
-        LIBQUADMATH_PATH="/lib64/libquadmath.so.0"
-    fi
     MAYBE_LIB64=lib64
 elif [[ "$OS_NAME" == *"Ubuntu"* ]]; then
     LIBGOMP_PATH="/usr/lib/x86_64-linux-gnu/libgomp.so.1"
     LIBNUMA_PATH="/usr/lib/x86_64-linux-gnu/libnuma.so.1"
     LIBELF_PATH="/usr/lib/x86_64-linux-gnu/libelf.so.1"
-    if [[ $ROCM_INT -ge 50300 ]]; then
-        LIBTINFO_PATH="/lib/x86_64-linux-gnu/libtinfo.so.6"
-    else
-        LIBTINFO_PATH="/lib/x86_64-linux-gnu/libtinfo.so.5"
-    fi
+    LIBTINFO_PATH="/lib/x86_64-linux-gnu/libtinfo.so.6"
+    LIBDW_PATH="/usr/lib/x86_64-linux-gnu/libdw.so.1"
     LIBDRM_PATH="/usr/lib/x86_64-linux-gnu/libdrm.so.2"
     LIBDRM_AMDGPU_PATH="/usr/lib/x86_64-linux-gnu/libdrm_amdgpu.so.1"
-    if [[ $ROCM_INT -ge 60100 && $ROCM_INT -lt 60300 ]]; then
-        # Below libs are direct dependencies of libhipsolver
-        LIBCHOLMOD_PATH="/lib/x86_64-linux-gnu/libcholmod.so.3"
-        # Below libs are direct dependencies of libcholmod
-        LIBSUITESPARSE_CONFIG_PATH="/lib/x86_64-linux-gnu/libsuitesparseconfig.so.5"
-        LIBAMD_PATH="/lib/x86_64-linux-gnu/libamd.so.2"
-        LIBCAMD_PATH="/lib/x86_64-linux-gnu/libcamd.so.2"
-        LIBCCOLAMD_PATH="/lib/x86_64-linux-gnu/libccolamd.so.2"
-        LIBCOLAMD_PATH="/lib/x86_64-linux-gnu/libcolamd.so.2"
-        LIBMETIS_PATH="/lib/x86_64-linux-gnu/libmetis.so.5"
-        LIBLAPACK_PATH="/lib/x86_64-linux-gnu/liblapack.so.3"
-        LIBBLAS_PATH="/lib/x86_64-linux-gnu/libblas.so.3"
-        # Below libs are direct dependencies of libblas
-        LIBGFORTRAN_PATH="/lib/x86_64-linux-gnu/libgfortran.so.5"
-        LIBQUADMATH_PATH="/lib/x86_64-linux-gnu/libquadmath.so.0"
-    fi
     MAYBE_LIB64=lib
 fi
 OS_SO_PATHS=($LIBGOMP_PATH $LIBNUMA_PATH\
              $LIBELF_PATH $LIBTINFO_PATH\
+             $LIBDW_PATH\
              $LIBDRM_PATH $LIBDRM_AMDGPU_PATH\
              $LIBSUITESPARSE_CONFIG_PATH\
              $LIBCHOLMOD_PATH $LIBAMD_PATH\
@@ -186,20 +146,28 @@ do
     OS_SO_FILES[${#OS_SO_FILES[@]}]=$file_name # Append lib to array
 done
 
+ARCH=$(echo $PYTORCH_ROCM_ARCH | sed 's/;/|/g') # Replace ; separated arch list to bar for grep
+
 # rocBLAS library files
 ROCBLAS_LIB_SRC=$ROCM_HOME/lib/rocblas/library
 ROCBLAS_LIB_DST=lib/rocblas/library
-ARCH=$(echo $PYTORCH_ROCM_ARCH | sed 's/;/|/g') # Replace ; seperated arch list to bar for grep
-ARCH_SPECIFIC_FILES=$(ls $ROCBLAS_LIB_SRC | grep -E $ARCH)
-OTHER_FILES=$(ls $ROCBLAS_LIB_SRC | grep -v gfx)
-ROCBLAS_LIB_FILES=($ARCH_SPECIFIC_FILES $OTHER_FILES)
+ROCBLAS_ARCH_SPECIFIC_FILES=$(ls $ROCBLAS_LIB_SRC | grep -E $ARCH)
+ROCBLAS_OTHER_FILES=$(ls $ROCBLAS_LIB_SRC | grep -v gfx)
+ROCBLAS_LIB_FILES=($ROCBLAS_ARCH_SPECIFIC_FILES $ROCBLAS_OTHER_FILES)
 
 # hipblaslt library files
 HIPBLASLT_LIB_SRC=$ROCM_HOME/lib/hipblaslt/library
 HIPBLASLT_LIB_DST=lib/hipblaslt/library
-ARCH_SPECIFIC_FILES=$(ls $HIPBLASLT_LIB_SRC | grep -E $ARCH)
-OTHER_FILES=$(ls $HIPBLASLT_LIB_SRC | grep -v gfx)
-HIPBLASLT_LIB_FILES=($ARCH_SPECIFIC_FILES $OTHER_FILES)
+HIPBLASLT_ARCH_SPECIFIC_FILES=$(ls $HIPBLASLT_LIB_SRC | grep -E $ARCH)
+HIPBLASLT_OTHER_FILES=$(ls $HIPBLASLT_LIB_SRC | grep -v gfx)
+HIPBLASLT_LIB_FILES=($HIPBLASLT_ARCH_SPECIFIC_FILES $HIPBLASLT_OTHER_FILES)
+
+# hipsparselt library files
+HIPSPARSELT_LIB_SRC=$ROCM_HOME/lib/hipsparselt/library
+HIPSPARSELT_LIB_DST=lib/hipsparselt/library
+HIPSPARSELT_ARCH_SPECIFIC_FILES=$(ls $HIPSPARSELT_LIB_SRC | grep -E $ARCH)
+#HIPSPARSELT_OTHER_FILES=$(ls $HIPSPARSELT_LIB_SRC | grep -v gfx)
+HIPSPARSELT_LIB_FILES=($HIPSPARSELT_ARCH_SPECIFIC_FILES $HIPSPARSELT_OTHER_FILES)
 
 # ROCm library files
 ROCM_SO_PATHS=()
@@ -234,12 +202,14 @@ DEPS_SONAME=(
 DEPS_AUX_SRCLIST=(
     "${ROCBLAS_LIB_FILES[@]/#/$ROCBLAS_LIB_SRC/}"
     "${HIPBLASLT_LIB_FILES[@]/#/$HIPBLASLT_LIB_SRC/}"
+    "${HIPSPARSELT_LIB_FILES[@]/#/$HIPSPARSELT_LIB_SRC/}"
     "/opt/amdgpu/share/libdrm/amdgpu.ids"
 )
 
 DEPS_AUX_DSTLIST=(
     "${ROCBLAS_LIB_FILES[@]/#/$ROCBLAS_LIB_DST/}"
     "${HIPBLASLT_LIB_FILES[@]/#/$HIPBLASLT_LIB_DST/}"
+    "${HIPSPARSELT_LIB_FILES[@]/#/$HIPSPARSELT_LIB_DST/}"
     "share/libdrm/amdgpu.ids"
 )
 

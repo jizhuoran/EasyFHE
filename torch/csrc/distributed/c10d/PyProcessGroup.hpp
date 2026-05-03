@@ -55,7 +55,7 @@ class PyProcessGroup : public ProcessGroup {
     return cname::name(__VA_ARGS__);                                    \
   } while (false)
 
-  // This class is used to wrap a PyWork trampoline with it's corresponding
+  // This class is used to wrap a PyWork trampoline with its corresponding
   // Python object to prevent the Python object from being garbage collected.
   class PyWorkHolder : public Work {
    public:
@@ -149,6 +149,38 @@ class PyProcessGroup : public ProcessGroup {
         ProcessGroup, /* Parent class */
         setGroupDesc, /* Name of function in C++ */
         group_desc);
+  }
+
+  c10::intrusive_ptr<ProcessGroup> splitGroup(
+      const std::vector<int>& ranks,
+      const std::optional<std::chrono::milliseconds>& timeout,
+      const std::optional<c10::intrusive_ptr<Backend::Options>>& opts,
+      const std::optional<std::string>& group_name,
+      const std::optional<std::string>& group_desc,
+      const std::optional<std::vector<c10::Device>>& devices) override {
+    PYBIND11_OVERRIDE(
+        c10::intrusive_ptr<ProcessGroup>, /* Return type */
+        ProcessGroup, /* Parent class */
+        splitGroup, /* Name of function in C++ */
+        ranks,
+        timeout,
+        opts,
+        group_name,
+        group_desc,
+        devices);
+  }
+
+  c10::intrusive_ptr<ProcessGroup> mergeRemoteGroup(
+      const c10::intrusive_ptr<c10d::Store>& store,
+      const MergeOptions& opts,
+      const int& size) override {
+    PYBIND11_OVERRIDE(
+        c10::intrusive_ptr<ProcessGroup>, /* Return type */
+        ProcessGroup, /* Parent class */
+        mergeRemoteGroup, /* Name of function in C++ */
+        store,
+        opts,
+        size);
   }
 
   c10::intrusive_ptr<Work> allgather(
@@ -309,7 +341,7 @@ class TORCH_PYTHON_API PythonOnCompletionHook {
         eptr = std::make_exception_ptr(std::runtime_error(e.what()));
         e.restore();
         PyErr_Clear();
-      } catch (std::exception& e) {
+      } catch (std::exception&) {
         eptr = std::current_exception();
       }
     }

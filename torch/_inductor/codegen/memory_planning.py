@@ -5,11 +5,12 @@ import collections
 import dataclasses
 import itertools
 import pprint
-from typing import Any, Optional, Protocol, TYPE_CHECKING
+from typing import Any, Protocol, TYPE_CHECKING
 
 import sympy
 
 import torch
+from torch.fx.experimental.symbolic_shapes import free_unbacked_symbols
 from torch.utils._ordered_set import OrderedSet
 
 from .. import config
@@ -140,8 +141,19 @@ class Allocation(AllocationTreeNode):
     size_hint: int
     symbolic_size: sympy.Expr
     allocated: bool = False
-    pool: Optional[AllocationPool] = None
-    offset: Optional[sympy.Expr] = None
+    pool: AllocationPool | None = None
+    offset: sympy.Expr | None = None
+    earliest_available: float | None = None
+
+    def __post_init__(self) -> None:
+        has_unbacked_sym = False
+        for s in self.node.get_layout().size:
+            if free_unbacked_symbols(s):
+                has_unbacked_sym = True
+                break
+
+        if has_unbacked_sym:
+            self.earliest_available = self.get_live_ranges().begin
 
     @property
     def device(self):
@@ -185,6 +197,9 @@ class Allocation(AllocationTreeNode):
             f"pool={self.pool.name if self.pool else None}, "
             f"offset={self.offset})"
         )
+
+    def get_earliest_available(self):
+        return self.earliest_available
 
 
 @dataclasses.dataclass
@@ -372,19 +387,31 @@ class AllocationPool:
     device: torch.device
     root: TemporalSplit
     can_expand: bool = True
-    restrict_live_range: Optional[LiveRange] = None
-    name: Optional[str] = None
+    restrict_live_range: LiveRange | None = None
+    name: str | None = None
     names_to_del: list[str] = dataclasses.field(default_factory=list)
     creation_cache: dict[str, str] = dataclasses.field(default_factory=dict)
 
+    def __post_init__(self) -> None:
+        for block in self.root.allocations:
+            if isinstance(block, Allocation):
+                self.update_restrict_live_range(block)
+
     def allocate(self, block: Allocation, is_last: bool):
-        if self.restrict_live_range and not self.restrict_live_range.contains(
-            block.live_range
+        if (
+            self.restrict_live_range is not None
+            and not self.restrict_live_range.contains(block.live_range)
         ):
+            return False
+
+        block_earliest_available = block.get_earliest_available()
+        pool_begin = self.root.get_live_ranges().begin
+        if block_earliest_available and block_earliest_available > pool_begin:
             return False
 
         is_last = self.can_expand and is_last
         if self.root.allocate(block, is_last):
+            self.update_restrict_live_range(block)
             return True
 
         if is_last:
@@ -392,9 +419,22 @@ class AllocationPool:
 
         return False
 
+    def update_restrict_live_range(self, block: Allocation):
+        if block_earliest_available := block.get_earliest_available():
+            if self.restrict_live_range is None:
+                self.restrict_live_range = LiveRange(
+                    block_earliest_available, float("inf")
+                )
+            else:
+                self.restrict_live_range = LiveRange(
+                    min(self.restrict_live_range.begin, block_earliest_available),
+                    self.restrict_live_range.end,
+                )
+
     def allocate_at_end(self, block):
         block.mark_allocated()
         self.root = TemporalSplit([SpatialSplit(self.root, TemporalSplit([block]))])
+        self.update_restrict_live_range(block)
         return True
 
     def finalize(self, name):
@@ -408,7 +448,6 @@ class AllocationPool:
         nbytes = self.root.get_symbolic_size()
         for block in self.root.allocations:
             if isinstance(block, Allocation) and nbytes == block.get_symbolic_size():
-                # optimization: fuse first allocation and pool creation
                 node = block.node
                 code.writeline(
                     wrapper.make_allocation(
@@ -419,7 +458,6 @@ class AllocationPool:
                         stride=tuple(node.get_stride()),
                     )
                 )
-                self.creation_cache[block.codegen_alloc_from_pool(wrapper)] = self.name
                 return
         else:
             code.writeline(
@@ -515,7 +553,7 @@ class BufferGroup:
         self.node = node
         self.names = [node.get_name()]
         self.is_output = False
-        self.allocation: Optional[Allocation] = None
+        self.allocation: Allocation | None = None
         self.live_range = LiveRange(float("inf"), -float("inf"))
 
     def update_usage(self, timestep: int):
@@ -534,7 +572,7 @@ class BufferGroup:
         nbytes = self.sym_nbytes()
         # For now, fallback value will be used if we encounter an unbacked SymInt. The longer-term plan is to have
         # size_hint() use better heuristics for unbackeds, at which point the fallback value will be ignored.
-        size_hint = V.graph.sizevars.size_hint(nbytes, fallback=64)
+        size_hint = V.graph.sizevars.optimization_hint(nbytes, fallback=64)
         self.allocation = Allocation(
             self.node,
             self.live_range,
@@ -554,7 +592,7 @@ class PoolMemoryPlanningLine(MemoryPlanningLine):
     """Abstract base class for {Alloc,Dealloc}FromPoolLine"""
 
     group: BufferGroup
-    timestep: Optional[int] = None
+    timestep: int | None = None
 
     @property
     def node(self):
@@ -577,7 +615,10 @@ class AllocFromPoolLine(PoolMemoryPlanningLine):
             pool.codegen_create(self.wrapper, code)
 
         pool.names_to_del.extend(self.group.names)
-        alloc_from_pool = allocation.codegen_alloc_from_pool(self.wrapper)
+        alloc_from_pool, allocation_lines_to_write = allocation.codegen_alloc_from_pool(
+            self.wrapper
+        )
+        code.writelines(allocation_lines_to_write)
         if alloc_from_pool in pool.creation_cache:
             code.writeline(
                 self.wrapper.make_tensor_alias(
@@ -612,7 +653,7 @@ class MemoryPlanner:
 
     wrapper: Any
     pools: AllocationPools = dataclasses.field(default_factory=AllocationPools)
-    buffer_groups: Optional[list[BufferGroup]] = None
+    buffer_groups: list[BufferGroup] | None = None
 
     def plan(self, lines: list[Any]) -> list[Any]:
         """Call all the memory planning passes in sequence"""

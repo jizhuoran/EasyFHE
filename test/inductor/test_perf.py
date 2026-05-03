@@ -1,6 +1,7 @@
 # Owner(s): ["module: inductor"]
 import contextlib
 import re
+import unittest
 from unittest.mock import patch
 
 import functorch
@@ -28,10 +29,15 @@ from torch._inductor.utils import run_and_get_code
 # performance for that setting.
 #
 # Defines all the kernels for tests
-from torch.testing._internal.triton_utils import HAS_CUDA, requires_cuda
+from torch.testing._internal.common_utils import skipIfXpu, TEST_WITH_ROCM
+from torch.testing._internal.inductor_utils import GPU_TYPE, HAS_GPU_AND_TRITON
+from torch.testing._internal.triton_utils import requires_gpu_and_triton
 
 
-if HAS_CUDA:
+# set so that metrics appear
+torch._logging.set_logs(inductor_metrics=True)
+
+if HAS_GPU_AND_TRITON:
     import triton  # @manual
     import triton.language as tl  # @manual
 
@@ -74,7 +80,7 @@ def count_numel_train(f, *args):
     return str(metrics.num_bytes_accessed // 4)
 
 
-DEVICE = "cuda"
+DEVICE = GPU_TYPE
 
 
 def T(*size, dtype=torch.float32, device=DEVICE, grad=False):
@@ -333,6 +339,35 @@ class NumBytesMetricTests(TestCase):
         inp = (T(10), TI(10, mx=10))
         self.assertExpectedInline(count_numel(f, *inp), """30""")
 
+    @requires_gpu_and_triton
+    def test_delay_realize_cheap_outputs_shared_mask(self):
+        # Shared tril mask across multiple users gets eagerly materialized
+        # as an output buffer, inflating downstream read counts. With
+        # delay_realize_cheap_outputs, the mask stays inlined as index
+        # arithmetic, reducing memory traffic.
+        def f(x1, x2, x3):
+            mask = torch.tril(torch.ones(32, 32, device=x1.device))
+            return x1 + mask, x2 + mask, x3 + mask
+
+        inp = (
+            T(32, 32, grad=True),
+            T(32, 32, grad=True),
+            T(32, 32, grad=True),
+        )
+
+        # Without deferred realization: mask gets materialized as output buffer
+        with patch.object(config, "delay_realize_cheap_outputs", False):
+            metrics.reset()
+            torch.compile(f, backend=compile_but_use_eager)(*inp)
+            eager_bytes = metrics.num_bytes_accessed
+
+        # Default (deferred realization on): mask stays inlined
+        metrics.reset()
+        torch.compile(f, backend=compile_but_use_eager)(*inp)
+        deferred_bytes = metrics.num_bytes_accessed
+
+        self.assertLessEqual(deferred_bytes, eager_bytes)
+
 
 class FusionTests(TestCase):
     """
@@ -480,9 +515,29 @@ class FusionTests(TestCase):
         inp = (T(10, 10), T(10, 10), T(10, 10))
         self.assertExpectedInline(count_numel(f, *inp), """500""")
 
+    @skipIfXpu(msg="copy_(cat()) fusion not supported on XPU")
+    @unittest.skipIf(TEST_WITH_ROCM, "copy_(cat()) fusion not supported on ROCm")
+    # TODO(ivankobzarev): enable copy_(cat()) fusion for CUDA 13+
+    @unittest.skipIf(
+        torch.version.cuda
+        and tuple(int(x) for x in torch.version.cuda.split(".")) >= (13, 0),
+        "copy_(cat()) fusion not supported on CUDA 13+",
+    )
+    def test_copy_cat_fusion(self):
+        """copy_(cat(...)) should fuse: no intermediate allocation for cat."""
+
+        def f(dst, a, b):
+            dst.copy_(torch.cat([a, b]))
+
+        dst = T(20)
+        inp = (dst, T(10), T(10))
+        # 10 (read a) + 10 (read b) + 20 (write dst) = 40
+        # Without fusion cat would allocate intermediate: 80
+        self.assertExpectedInline(count_numel(f, *inp), """40""")
+
     def test_reduction_pointwise_multi_level_reduction(self):
         hidden_size = 4096
-        layer_norm = torch.nn.LayerNorm(hidden_size).cuda().float()
+        layer_norm = torch.nn.LayerNorm(hidden_size).to(GPU_TYPE).float()
 
         @torch.inference_mode()
         def f(x, scale, amax_keep_dim):
@@ -501,7 +556,10 @@ class FusionTests(TestCase):
         expected_numel = (
             1 + hidden_size * 2 + 4 * 2048 * hidden_size * 2 + 4 * 2048 * 2 + 1
         )
-        if config.triton.cooperative_reductions:
+        if (
+            config.triton.cooperative_reductions
+            or config.triton.force_cooperative_reductions
+        ):
             expected_numel = 134225922
 
         self.assertExpectedInline(count_numel(f, *inp, True), str(expected_numel))
@@ -643,7 +701,7 @@ class SchedulerFusionTests(TestCase):
 
     @patch.object(config, "pattern_matcher", False)
     def test_fusion_choice4_cpu(self):
-        # Fuse nodes with same number of elements and compatible orginal var ranges
+        # Fuse nodes with same number of elements and compatible original var ranges
         # [buf0: {d0: 60, d1: 11}, buf1: {d0: 660}] -> buf0_buf1
         def f(x, w):
             o1 = x * w
@@ -835,7 +893,7 @@ class NoopTests(TestCase):
 
     def test_noop_device_conversion(self):
         def f(a):
-            b = torch.ops.prims.device_put(a, "cuda")
+            b = torch.ops.prims.device_put(a, DEVICE)
             c = unfusible(b)
             return c
 
@@ -917,7 +975,7 @@ class InplacingTests(TestCase):
         inp = (T(10, 10), TI(2, mx=5))
         self.assertExpectedInline(count_numel(f, *inp), """42""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_training(self):
         @triton.jit
         def sin_kernel(
@@ -959,9 +1017,9 @@ class InplacingTests(TestCase):
             return MySin.apply(x)
 
         x = T(3, grad=True)
-        self.assertExpectedInline(count_numel_train(f, x), """9""")
+        self.assertExpectedInline(count_numel_train(f, x), """18""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_triton_kernel_not_fusable_with_users(self):
         @triton.jit
         def _sin_kernel(
@@ -1014,7 +1072,7 @@ class InplacingTests(TestCase):
         # (it will cost an extra kernel)
         self.assertExpectedInline(count_numel_train(f, x), """27""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_custom_op_training_two_mutated_inputs(self):
         @torch.library.custom_op(
             "_reinplacing::sin_cos", mutates_args={"out_sin", "out_cos"}
@@ -1034,7 +1092,7 @@ class InplacingTests(TestCase):
         x = T(3, grad=True)
         self.assertExpectedInline(count_numel(f, x), """21""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_custom_op_training(self):
         @torch.library.custom_op("_reinplacing::sin", mutates_args={"result"})
         def sin(x: torch.Tensor, result: torch.Tensor) -> None:
@@ -1061,9 +1119,9 @@ class InplacingTests(TestCase):
             return MySin.apply(x)
 
         x = T(3, grad=True)
-        self.assertExpectedInline(count_numel_train(f, x), """9""")
+        self.assertExpectedInline(count_numel_train(f, x), """18""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_custom_op(self):
         with torch.library._scoped_library("mylib", "FRAGMENT") as m:
             m.define("foo(Tensor x, Tensor(a!) out) -> ()")
@@ -1093,7 +1151,7 @@ class InplacingTests(TestCase):
 
             self.assertExpectedInline(count_numel(f, x, out), """21""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_custom_op_intermediate(self):
         with torch.library._scoped_library("mylib", "FRAGMENT") as m:
             m.define("foo(Tensor x, Tensor(a!) out) -> ()")
@@ -1124,7 +1182,7 @@ class InplacingTests(TestCase):
 
             self.assertExpectedInline(count_numel(f, x, out), """21""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_custom_op_two_mutated_inputs(self):
         with torch.library._scoped_library("mylib", "FRAGMENT") as m:
             m.define("foo(Tensor q, Tensor(a!) k_cache, Tensor(b!) v_cache) -> Tensor")
@@ -1150,13 +1208,15 @@ class InplacingTests(TestCase):
                 torch.compile(f, fullgraph=True),
             )
 
-            # Check that we are allocating the minimum number of intermediate buffers
+            # Check that we are not allocate intermediate buffers
+            # which can be reused.
             matches = re.findall(r"empty_strided_\w+\(", code)
-            self.assertEqual(len(matches), 1)
+            self.assertEqual(len(matches), 0)
+            self.assertEqual("in_out" in code, True)
 
-            self.assertExpectedInline(count_numel(f), """39""")
+            self.assertExpectedInline(count_numel(f), """45""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v1(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             output = torch.zeros_like(x)
@@ -1168,7 +1228,7 @@ class InplacingTests(TestCase):
         inp = (T(10), T(10))
         self.assertExpectedInline(count_numel(f, *inp), """50""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v2(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             output = torch.zeros_like(x)
@@ -1181,7 +1241,7 @@ class InplacingTests(TestCase):
         inp = (T(10), T(10))
         self.assertExpectedInline(count_numel(f, *inp), """70""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v3(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             output = torch.zeros_like(x)
@@ -1194,7 +1254,7 @@ class InplacingTests(TestCase):
         inp = (T(10), T(10))
         self.assertExpectedInline(count_numel(f, *inp), """80""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v4(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             x_view = x.view(-1)
@@ -1208,7 +1268,7 @@ class InplacingTests(TestCase):
         inp = (T(10), T(10))
         self.assertExpectedInline(count_numel(f, *inp), """70""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v5(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             x_view = x.view(-1)
@@ -1222,7 +1282,7 @@ class InplacingTests(TestCase):
         inp = (T(10), T(10))
         self.assertExpectedInline(count_numel(f, *inp), """80""")
 
-    @requires_cuda
+    @requires_gpu_and_triton
     def test_inplace_triton_kernel_v6(self):
         def f(x: torch.Tensor, y: torch.Tensor):
             output = torch.zeros_like(x)
@@ -1243,6 +1303,59 @@ class InplacingTests(TestCase):
 
         inp = (T(10, 10), T(5, 10), T(10))
         self.assertExpectedInline(count_numel(scaled_index_add, *inp), """250""")
+
+
+class RealizeOnReuseTests(TestCase):
+    """
+    The cost model compares memory traffic for inlining vs materializing:
+      Inline:      total_read_bytes * users
+      Materialize: total_read_bytes + output_bytes * (1 + users)
+    """
+
+    @requires_gpu_and_triton
+    def test_broadcast_reads_not_materialized(self):
+        # y = x * w1 * w2 + b has 4 reads: x is [100, 100] (large), w1/w2/b
+        # are [100] (small broadcast). total_read_bytes ≈ output_bytes, so
+        # materializing y would add a costly write for negligible savings.
+        # The size-aware model correctly avoids materializing y.
+        def f(x, w1, w2, b):
+            y = x * w1 * w2 + b
+            return y.sum(dim=0), y.sum(dim=1)
+
+        inp = (T(100, 100), T(100), T(100), T(100))
+        # If y were materialized: reads x,w1,w2,b + writes y, then each
+        # reduction reads y. Much more traffic than inlining the cheap
+        # broadcast ops into each reduction kernel.
+        # Inline: 2*read(x,w1,w2,b) + 2*write(y.sum(...)) = 2 * (100 * 100 + 100 + 100 + 100) + 2 * 100 = 20800.
+        # Materialize: read(x,w1,w2,b) + write(y) + 2*read(y) + 2*write(y.sum()) =
+        #              = (100 * 100 + 100 + 100 + 100) + 100 * 100 + 2 * 100 * 100 + 2 * 100 = 40500.
+        # so we should inline.
+        self.assertExpectedInline(count_numel(f, *inp), """20800""")
+
+    @requires_gpu_and_triton
+    def test_full_size_reads_materialized(self):
+        # x = a + b has 2 full-size reads and 3 users. total_read_bytes =
+        # 2 * output_bytes, so the cost model favors materializing:
+        #   2S * (3-1) = 4S >= S * (1+3) = 4S
+        def f(a, b, c, d):
+            x = a + b
+            return x + c, x + d, x.sum(dim=-1)
+
+        inp = (T(100, 100), T(100, 100), T(100, 100), T(100, 100))
+        self.assertExpectedInline(count_numel(f, *inp), """60100""")
+
+    @requires_gpu_and_triton
+    def test_dtype_promotion_not_materialized(self):
+        # x_f32 = x_bf16.float() has 1 bf16 read but fp32 output.
+        # total_read_bytes = S*2 (bf16), output_bytes = S*4 (fp32).
+        # S*2 * (users-1) < S*4 * (1+users), so materializing a large
+        # fp32 intermediate is avoided.
+        def f(x_bf16, bias_bf16):
+            logits = (x_bf16 + bias_bf16).float()
+            return logits.sum(dim=-1), logits.amax(dim=-1)
+
+        inp = (T(100, 100, dtype=torch.bfloat16), T(100, dtype=torch.bfloat16))
+        self.assertExpectedInline(count_numel(f, *inp), """5250""")
 
 
 # Test cases where we don't do the right thing yet.
@@ -1289,5 +1402,5 @@ class WouldBeNiceIfItWorked:
 if __name__ == "__main__":
     from torch._inductor.test_case import run_tests
 
-    if HAS_CUDA:
+    if HAS_GPU_AND_TRITON:
         run_tests(needs="filelock")

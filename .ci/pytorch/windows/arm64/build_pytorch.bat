@@ -5,6 +5,7 @@ set CMAKE_BUILD_TYPE=%BUILD_TYPE%
 set CMAKE_C_COMPILER_LAUNCHER=sccache
 set CMAKE_CXX_COMPILER_LAUNCHER=sccache
 set libuv_ROOT=%DEPENDENCIES_DIR%\libuv\install
+set INSTALL_TEST=0
 set MSSdk=1
 if defined PYTORCH_BUILD_VERSION (
   set PYTORCH_BUILD_VERSION=%PYTORCH_BUILD_VERSION%
@@ -21,14 +22,14 @@ if %ENABLE_APL% == 1 (
 )
 
 :: activate visual studio
-call "%DEPENDENCIES_DIR%\VSBuildTools\VC\Auxiliary\Build\vcvarsall.bat" arm64
+call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" arm64
 where cl.exe
 
 :: change to source directory
 cd %PYTORCH_ROOT%
 
-:: copy libuv.dll
-copy %libuv_ROOT%\lib\Release\uv.dll torch\lib\uv.dll
+:: copy libuv.dll (cmake installs the dll to bin/, not lib/Release/)
+copy %libuv_ROOT%\bin\uv.dll torch\lib\uv.dll
 
 :: create virtual environment
 python -m venv .venv
@@ -48,7 +49,7 @@ sccache --zero-stats
 sccache --show-stats
 
 :: Call PyTorch build script
-python setup.py bdist_wheel -d "%PYTORCH_FINAL_PACKAGE_DIR%"
+python -m build --wheel --no-isolation --outdir "%PYTORCH_FINAL_PACKAGE_DIR%"
 
 :: show sccache stats
 sccache --show-stats

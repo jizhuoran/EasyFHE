@@ -5,7 +5,7 @@ r"""This file is allowed to initialize CUDA context when imported."""
 import functools
 import torch
 import torch.cuda
-from torch.testing._internal.common_utils import LazyVal, TEST_NUMBA, TEST_WITH_ROCM, TEST_CUDA, IS_WINDOWS
+from torch.testing._internal.common_utils import LazyVal, TEST_NUMBA, TEST_WITH_ROCM, TEST_CUDA, IS_WINDOWS, IS_MACOS, TEST_XPU
 import inspect
 import contextlib
 import os
@@ -24,6 +24,7 @@ else:
     TEST_CUDNN = LazyVal(lambda: TEST_CUDA and torch.backends.cudnn.is_acceptable(torch.tensor(1., device=CUDA_DEVICE)))
 
 TEST_CUDNN_VERSION = LazyVal(lambda: torch.backends.cudnn.version() if TEST_CUDNN else 0)
+ROCM_VERSION = LazyVal(lambda : tuple(int(v) for v in torch.version.hip.split('.')[:2]) if torch.version.hip else (0, 0))
 
 SM53OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (5, 3))
 SM60OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (6, 0))
@@ -33,11 +34,25 @@ SM80OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_devic
 SM89OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (8, 9))
 SM90OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (9, 0))
 SM100OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (10, 0))
+SM120OrLater = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() >= (12, 0))
 
-IS_THOR = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability()[0] == 10
-                  and torch.cuda.get_device_capability()[1] > 0)
+IS_THOR = LazyVal(lambda: torch.cuda.is_available() and torch.version.cuda is not None and
+                  ((torch.cuda.get_device_capability() == (11, 0) and int(torch.version.cuda[:2]) >= 13) or
+                   (torch.cuda.get_device_capability() == (10, 1) and int(torch.version.cuda[:2]) < 13)))
 IS_JETSON = LazyVal(lambda: torch.cuda.is_available() and (torch.cuda.get_device_capability() in [(7, 2), (8, 7)] or IS_THOR))
 IS_SM89 = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() == (8, 9))
+IS_SM90 = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() == (9, 0))
+IS_SM100 = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability() == (10, 0))
+IS_SM12X = LazyVal(lambda: torch.cuda.is_available() and torch.cuda.get_device_capability()[0] == 12)
+
+@contextlib.contextmanager
+def blas_library_context(backend):
+    prev_backend = torch.backends.cuda.preferred_blas_library()
+    torch.backends.cuda.preferred_blas_library(backend)
+    try:
+        yield
+    finally:
+        torch.backends.cuda.preferred_blas_library(prev_backend)
 
 def evaluate_gfx_arch_within(arch_list):
     if not torch.cuda.is_available():
@@ -48,31 +63,54 @@ def evaluate_gfx_arch_within(arch_list):
     # Hence the matching should be done reversely
     return any(arch in effective_arch for arch in arch_list)
 
+def CDNA3OrLater():
+    return evaluate_gfx_arch_within(["gfx942", "gfx950"])
+
 def CDNA2OrLater():
     return evaluate_gfx_arch_within(["gfx90a", "gfx942"])
 
 def evaluate_platform_supports_flash_attention():
     if TEST_WITH_ROCM:
-        arch_list = ["gfx90a", "gfx942", "gfx1100"]
+        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950"]
         if os.environ.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "0") != "0":
-            arch_list += ["gfx1201", "gfx950"]
+            arch_list += ["gfx1101", "gfx1102", "gfx1150", "gfx1151", "gfx1200"]
         return evaluate_gfx_arch_within(arch_list)
     if TEST_CUDA:
         return not IS_WINDOWS and SM80OrLater
+    if TEST_XPU:
+        return True
     return False
+
+def evaluate_platform_supports_ck_sdpa():
+    if TEST_WITH_ROCM:
+        return torch.backends.cuda.is_ck_sdpa_available()
+    else:
+        return False
 
 def evaluate_platform_supports_efficient_attention():
     if TEST_WITH_ROCM:
-        arch_list = ["gfx90a", "gfx942", "gfx1100"]
+        arch_list = ["gfx90a", "gfx942", "gfx1100", "gfx1201", "gfx950"]
         if os.environ.get("TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL", "0") != "0":
-            arch_list += ["gfx1201", "gfx950"]
+            arch_list += ["gfx1101", "gfx1102", "gfx1150", "gfx1151", "gfx1200"]
         return evaluate_gfx_arch_within(arch_list)
     if TEST_CUDA:
+        return True
+    if TEST_XPU:
         return True
     return False
 
 def evaluate_platform_supports_cudnn_attention():
     return (not TEST_WITH_ROCM) and SM80OrLater and (TEST_CUDNN_VERSION >= 90000)
+
+def evaluate_platform_supports_green_context():
+    if IS_WINDOWS:
+        return False
+    if not _get_torch_cuda_version() >= (12, 8):
+        return False
+    driver_version = torch.utils.collect_env.get_nvidia_driver_version(torch.utils.collect_env.run)
+    if driver_version is None:
+        return False
+    return int(driver_version.split('.')[0]) >= 570
 
 PLATFORM_SUPPORTS_FLASH_ATTENTION: bool = LazyVal(lambda: evaluate_platform_supports_flash_attention())
 PLATFORM_SUPPORTS_MEM_EFF_ATTENTION: bool = LazyVal(lambda: evaluate_platform_supports_efficient_attention())
@@ -84,12 +122,54 @@ PLATFORM_SUPPORTS_FUSED_ATTENTION: bool = LazyVal(lambda: PLATFORM_SUPPORTS_FLAS
 
 PLATFORM_SUPPORTS_FUSED_SDPA: bool = TEST_CUDA and not TEST_WITH_ROCM
 
-PLATFORM_SUPPORTS_BF16: bool = LazyVal(lambda: TEST_CUDA and SM80OrLater)
+PLATFORM_SUPPORTS_CK_SDPA: bool = LazyVal(lambda: evaluate_platform_supports_ck_sdpa())
+
+
+def evaluate_platform_supports_bf16():
+    if torch.version.cuda:
+        return SM80OrLater
+    elif torch.version.hip:
+        return True
+    elif TEST_XPU:
+        return True
+    return False
+
+
+def evaluate_platform_supports_bf16_atomics():
+    if torch.version.cuda:
+        return SM80OrLater
+    elif torch.version.hip:
+        return ROCM_VERSION >= (8, 0)
+    return False
+
+
+def evaluate_platform_supports_half_atomics():
+    if torch.version.hip:
+        return ROCM_VERSION >= (8, 0)
+    return True
+
+
+PLATFORM_SUPPORTS_BF16: bool = LazyVal(lambda: evaluate_platform_supports_bf16())
+PLATFORM_SUPPORTS_BF16_ATOMICS: bool = LazyVal(lambda: evaluate_platform_supports_bf16_atomics())
+PLATFORM_SUPPORTS_HALF_ATOMICS: bool = LazyVal(lambda: evaluate_platform_supports_half_atomics())
+
+PLATFORM_SUPPORTS_GREEN_CONTEXT: bool = LazyVal(lambda: evaluate_platform_supports_green_context())
+
+def evaluate_platform_supports_workqueue_config():
+    if IS_WINDOWS:
+        return False
+    if not _get_torch_cuda_version() >= (13, 1):
+        return False
+    driver_version = torch.utils.collect_env.get_nvidia_driver_version(torch.utils.collect_env.run)
+    if driver_version is None:
+        return False
+    return int(driver_version.split('.')[0]) >= 590
+
+PLATFORM_SUPPORTS_WORKQUEUE_CONFIG: bool = LazyVal(lambda: evaluate_platform_supports_workqueue_config())
 
 def evaluate_platform_supports_fp8():
     if torch.cuda.is_available():
         if torch.version.hip:
-            ROCM_VERSION = tuple(int(v) for v in torch.version.hip.split('.')[:2])
             archs = ['gfx94']
             if ROCM_VERSION >= (6, 3):
                 archs.extend(['gfx120'])
@@ -98,19 +178,65 @@ def evaluate_platform_supports_fp8():
             for arch in archs:
                 if arch in torch.cuda.get_device_properties(0).gcnArchName:
                     return True
+            return False
         else:
             return SM90OrLater or torch.cuda.get_device_capability() == (8, 9)
+    if torch.xpu.is_available():
+        return True
+    # As CPU supports FP8 and is always available, return True.
+    return True
+
+def evaluate_platform_supports_fp8_grouped_gemm():
+    if torch.cuda.is_available():
+        if torch.version.hip:
+            if "USE_MSLK" not in torch.__config__.show():
+                return False
+            archs = ['gfx942', 'gfx950']
+            for arch in archs:
+                if arch in torch.cuda.get_device_properties(0).gcnArchName:
+                    return True
+        else:
+            return SM90OrLater and not SM100OrLater
     return False
 
-PLATFORM_SUPPORTS_FP8: bool = LazyVal(lambda: evaluate_platform_supports_fp8())
+def evaluate_platform_supports_mx_gemm():
+    if torch.cuda.is_available():
+        if torch.version.hip:
+            if ROCM_VERSION >= (7, 0):
+                return 'gfx950' in torch.cuda.get_device_properties(0).gcnArchName
+        else:
+            return SM100OrLater
+    return False
 
-PLATFORM_SUPPORTS_MX_GEMM: bool = LazyVal(lambda: TEST_CUDA and SM100OrLater)
+def evaluate_platform_supports_mxfp8_grouped_gemm():
+    if torch.cuda.is_available() and not torch.version.hip:
+        built_with_mslk = "USE_MSLK" in torch.__config__.show()
+        return built_with_mslk and IS_SM100
+    return False
+
+def evaluate_platform_supports_fp8_sparse():
+    if torch.cuda.is_available():
+        if torch.version.hip:
+            return 'gfx950' in torch.cuda.get_device_properties(0).gcnArchName
+        else:
+            return (
+                (SM90OrLater or torch.cuda.get_device_capability() == (8, 9))
+                and torch.backends.cusparselt.is_available()
+                and torch.backends.cusparselt.version() >= 602
+            )
+    return False
+
+PLATFORM_SUPPORTS_MX_GEMM: bool = LazyVal(lambda: evaluate_platform_supports_mx_gemm())
+PLATFORM_SUPPORTS_FP8: bool = LazyVal(lambda: evaluate_platform_supports_fp8())
+PLATFORM_SUPPORTS_FP8_SPARSE: bool = LazyVal(lambda: evaluate_platform_supports_fp8_sparse())
+PLATFORM_SUPPORTS_FP8_GROUPED_GEMM: bool = LazyVal(lambda: evaluate_platform_supports_fp8_grouped_gemm())
+PLATFORM_SUPPORTS_MXFP8_GROUPED_GEMM: bool = LazyVal(lambda: evaluate_platform_supports_mxfp8_grouped_gemm())
 
 if TEST_NUMBA:
     try:
         import numba.cuda
         TEST_NUMBA_CUDA = numba.cuda.is_available()
-    except Exception:
+    except (ImportError, RuntimeError, OSError):
         TEST_NUMBA_CUDA = False
         TEST_NUMBA = False
 else:
@@ -124,7 +250,8 @@ __cuda_ctx_rng_initialized = False
 # after this call, CUDA context and RNG must have been initialized on each GPU
 def initialize_cuda_context_rng():
     global __cuda_ctx_rng_initialized
-    assert TEST_CUDA, 'CUDA must be available when calling initialize_cuda_context_rng'
+    if not TEST_CUDA:
+        raise AssertionError('CUDA must be available when calling initialize_cuda_context_rng')
     if not __cuda_ctx_rng_initialized:
         # initialize cuda context and rng for memory tests
         for i in range(torch.cuda.device_count()):
@@ -202,7 +329,7 @@ def tf32_enabled():
 # if device is specified, it will check if device is cuda
 # if dtype is specified, it will check if dtype is float32 or complex64
 # tf32 and fp32 are different only when all the three checks pass
-def tf32_on_and_off(tf32_precision=1e-5):
+def tf32_on_and_off(tf32_precision=1e-5, *, only_if=True):
     def with_tf32_disabled(self, function_call):
         with tf32_off():
             function_call()
@@ -217,8 +344,8 @@ def tf32_on_and_off(tf32_precision=1e-5):
 
         @functools.wraps(f)
         def wrapped(*args, **kwargs):
-            kwargs.update(zip(arg_names, args))
-            cond = torch.cuda.is_tf32_supported()
+            kwargs.update(zip(arg_names, args, strict=False))
+            cond = torch.cuda.is_tf32_supported() and only_if
             if 'device' in kwargs:
                 cond = cond and (torch.device(kwargs['device']).type == 'cuda')
             if 'dtype' in kwargs:
@@ -231,7 +358,6 @@ def tf32_on_and_off(tf32_precision=1e-5):
 
         return wrapped
     return wrapper
-
 
 # This is a wrapper that wraps a test to run it with TF32 turned off.
 # This wrapper is designed to be used when a test uses matmul or convolutions
@@ -260,11 +386,27 @@ def _get_torch_cuda_version():
     return tuple(int(x) for x in cuda_version.split("."))
 
 def _get_torch_rocm_version():
-    if not TEST_WITH_ROCM:
+    if not TEST_WITH_ROCM or torch.version.hip is None:
         return (0, 0)
     rocm_version = str(torch.version.hip)
-    rocm_version = rocm_version.split("-")[0]    # ignore git sha
+    rocm_version = rocm_version.split("-", maxsplit=1)[0]    # ignore git sha
     return tuple(int(x) for x in rocm_version.split("."))
+
+def _get_torch_hipblaslt_version():
+    if not TEST_WITH_ROCM:
+        return None
+    try:
+        # Access through direct C binding
+        # versionHipBLASLt returns: MAJOR * 10000 + MINOR * 100 + PATCH
+        version_int = torch._C._cuda_getHipblasltVersion()
+        if version_int is None or version_int == 0:
+            return None
+        major = version_int // 10000
+        minor = (version_int % 10000) // 100
+        patch = version_int % 100
+        return (major, minor, patch)
+    except (AttributeError, RuntimeError):
+        return None
 
 def _check_cusparse_generic_available():
     return not TEST_WITH_ROCM
@@ -276,7 +418,7 @@ def _check_hipsparse_generic_available():
         return False
 
     rocm_version = str(torch.version.hip)
-    rocm_version = rocm_version.split("-")[0]    # ignore git sha
+    rocm_version = rocm_version.split("-", maxsplit=1)[0]    # ignore git sha
     rocm_version_tuple = tuple(int(x) for x in rocm_version.split("."))
     return not (rocm_version_tuple is None or rocm_version_tuple < (5, 1))
 
@@ -291,7 +433,7 @@ def _create_scaling_models_optimizers(device="cuda", optimizer_ctor=torch.optim.
     mod_control = torch.nn.Sequential(torch.nn.Linear(8, 8), torch.nn.Linear(8, 8)).to(device=device)
     mod_scaling = torch.nn.Sequential(torch.nn.Linear(8, 8), torch.nn.Linear(8, 8)).to(device=device)
     with torch.no_grad():
-        for c, s in zip(mod_control.parameters(), mod_scaling.parameters()):
+        for c, s in zip(mod_control.parameters(), mod_scaling.parameters(), strict=True):
             s.copy_(c)
 
     kwargs = {"lr": 1.0}
@@ -321,10 +463,66 @@ def _create_scaling_case(device="cuda", dtype=torch.float, optimizer_ctor=torch.
 def xfailIfSM89(func):
     return func if not IS_SM89 else unittest.expectedFailure(func)
 
+def xfailIfSM90(func):
+    return func if not IS_SM90 else unittest.expectedFailure(func)
+
+def xfailIfSM89PreCUDA13(func):
+    """xfail on SM89 only for CUDA < 13. On CUDA 13+, test should pass on all architectures."""
+    if IS_SM89 and _get_torch_cuda_version() < (13, 0):
+        return unittest.expectedFailure(func)
+    return func
+
 def xfailIfSM100OrLater(func):
     return func if not SM100OrLater else unittest.expectedFailure(func)
 
+def xfailIfSM120OrLater(func):
+    return func if not SM120OrLater else unittest.expectedFailure(func)
+
+def xfailIfSM12X(func):
+    return func if not IS_SM12X else unittest.expectedFailure(func)
+
+def xfailIfDistributedNotSupported(func):
+    return func if not (IS_MACOS or IS_JETSON) else unittest.expectedFailure(func)
+
+def _xfail_cuda_on_windows_wrapper(test_fn):
+    """Wraps a test to xfail when running on a CUDA device.
+
+    Works for both device-parameterized tests (device_type == "cuda") and plain
+    TestCase CUDA tests (device_type is None). Only passes through for tests
+    explicitly running on a non-CUDA device type (e.g. "cpu", "xpu").
+    """
+    @functools.wraps(test_fn)
+    def wrapper(slf, *args, **kwargs):
+        import pytest
+        device_type = getattr(slf, "device_type", None)
+        if device_type is not None and device_type != "cuda":
+            return test_fn(slf, *args, **kwargs)
+        try:
+            test_fn(slf, *args, **kwargs)
+        except Exception as e:
+            pytest.xfail(f"Expected failure for {test_fn.__name__}: {e}")
+
+        raise AssertionError(f"Test {test_fn.__name__} was expected to fail but succeeded.")
+    return wrapper
+
+
+def xfailCUDAIfSM89OrLaterOnWindows(test_fn):
+    """Mark a CUDA test as expected failure on Windows with SM >= 8.9.
+
+    Works for both device-parameterized tests and plain TestCase CUDA tests.
+    CPU/XPU variants of device-parameterized tests are unaffected.
+    """
+    return _xfail_cuda_on_windows_wrapper(test_fn) if IS_WINDOWS and SM89OrLater else test_fn
+
+
+# When using nvcc from the CUDA toolkit its versuib must be at least the one from ptxas bundled with Triton
+TRITON_PTXAS_VERSION = (12, 8)
+requires_triton_ptxas_compat = unittest.skipIf(not torch.version.xpu
+                                               and torch.version.hip is None
+                                               and _get_torch_cuda_version() < TRITON_PTXAS_VERSION,
+                                               "Requires CUDA {}.{} to match Tritons ptxas version".format(*TRITON_PTXAS_VERSION))
 
 # Importing this module should NOT eagerly initialize CUDA
 if not CUDA_ALREADY_INITIALIZED_ON_IMPORT:
-    assert not torch.cuda.is_initialized()
+    if torch.cuda.is_initialized():
+        raise AssertionError("CUDA should not be initialized on import")

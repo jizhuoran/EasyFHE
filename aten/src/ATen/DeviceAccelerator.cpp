@@ -1,4 +1,5 @@
 #include <ATen/Context.h>
+#include <ATen/core/CachingHostAllocator.h>
 #include <ATen/DeviceAccelerator.h>
 #include <c10/core/impl/VirtualGuardImpl.h>
 
@@ -76,7 +77,7 @@ c10::DeviceIndex deviceCount() {
     return static_cast<c10::DeviceIndex>(0);
   }
   c10::impl::VirtualGuardImpl impl(device_type.value());
-  return static_cast<c10::DeviceIndex>(impl.deviceCount());
+  return impl.deviceCount();
 }
 
 void setDeviceIndex(c10::DeviceIndex device_index) {
@@ -88,7 +89,7 @@ void setDeviceIndex(c10::DeviceIndex device_index) {
 c10::DeviceIndex getDeviceIndex() {
   const auto device_type = getAccelerator(true).value();
   c10::impl::VirtualGuardImpl impl(device_type);
-  return static_cast<c10::DeviceIndex>(impl.getDevice().index());
+  return impl.getDevice().index();
 }
 
 void setCurrentStream(c10::Stream stream) {
@@ -114,6 +115,32 @@ void synchronizeDevice(c10::DeviceIndex device_index) {
   c10::impl::VirtualGuardImpl impl(device_type);
   // impl.synchronizeDevice should can be safely called from any device
   impl.synchronizeDevice(device_index);
+}
+
+c10::DeviceIndex exchangeDevice(c10::DeviceIndex device_index) {
+  const auto device_type = getAccelerator(true).value();
+  c10::impl::VirtualGuardImpl impl(device_type);
+  return impl.exchangeDevice({device_type, device_index}).index();
+}
+
+c10::DeviceIndex maybeExchangeDevice(c10::DeviceIndex device_index) {
+  const auto device_type = getAccelerator(true).value();
+  c10::impl::VirtualGuardImpl impl(device_type);
+  // Avoid creating a new context if the context for the given device_index
+  // is not initialized.
+  impl.uncheckedSetDevice({device_type, device_index});
+  return impl.getDevice().index();
+}
+
+c10::DeviceCapability getDeviceCapability(c10::DeviceIndex device_index) {
+  const auto device_type = getAccelerator(true).value();
+  c10::impl::VirtualGuardImpl impl(device_type);
+  return impl.getDeviceCapability({device_type, device_index});
+}
+
+void emptyHostCache() {
+  const auto device_type = getAccelerator(true).value();
+  at::getHostAllocator(device_type)->empty_cache();
 }
 // NOLINTEND(bugprone-unchecked-optional-access)
 

@@ -297,7 +297,7 @@ static PyObject* THPStorage_fromBuffer(
     size_bytes = count * element_size;
   }
 
-  if (offset + (count * (Py_ssize_t)element_size) > buffer.len) {
+  if (offset + (count * static_cast<Py_ssize_t>(element_size)) > buffer.len) {
     PyErr_SetString(
         PyExc_ValueError,
         fmt::format(
@@ -309,7 +309,7 @@ static PyObject* THPStorage_fromBuffer(
     return nullptr;
   }
 
-  uint8_t* src = (uint8_t*)buffer.buf;
+  uint8_t* src = static_cast<uint8_t*>(buffer.buf);
   auto fake_mode_active =
       c10::impl::TorchDispatchModeTLS::get_mode(
           c10::impl::TorchDispatchModeKey::FAKE) != std::nullopt;
@@ -390,10 +390,7 @@ static PyObject* THPStorage_fromFile(
     storage->set_nbytes(actual_nbytes);
   }
 
-  return THPStorage_NewWithStorage(
-      THPStorageClass,
-      std::move(storage),
-      c10::impl::PyInterpreterStatus::TAGGED_BY_US);
+  return THPStorage_NewWithStorage(THPStorageClass, std::move(storage));
   END_HANDLE_TH_ERRORS
 }
 
@@ -408,12 +405,13 @@ static PyObject* THPStorage_writeFile(PyObject* self, PyObject* args) {
   TORCH_CHECK(
       !invalid, "Attempted to call _write_file() on an invalid python storage.")
   PyObject* file = PyTuple_GetItem(args, 0);
-  bool is_real_file = PyTuple_GetItem(args, 1) == Py_True;
-  bool save_size = PyTuple_GetItem(args, 2) == Py_True;
+  bool is_real_file = Py_IsTrue(PyTuple_GetItem(args, 1));
+  bool save_size = Py_IsTrue(PyTuple_GetItem(args, 2));
   PyObject* element_size_obj = PyTuple_GET_ITEM(args, 3);
 
   TORCH_CHECK(
-      element_size_obj != Py_None, "_write_file: need to specify element size");
+      !Py_IsNone(element_size_obj),
+      "_write_file: need to specify element size");
   uint64_t element_size = THPUtils_unpackUInt64(element_size_obj);
 
   if (!is_real_file) {
@@ -444,7 +442,7 @@ static PyObject* THPStorage_newWithFile(PyObject* _unused, PyObject* args) {
       "descriptor from given object");
   PyObject* element_size_obj = PyTuple_GET_ITEM(args, 1);
   TORCH_CHECK(
-      element_size_obj != Py_None,
+      !Py_IsNone(element_size_obj),
       "_new_with_file: need to specify element size");
   uint64_t element_size = THPUtils_unpackUInt64(element_size_obj);
 
@@ -461,12 +459,12 @@ static PyObject* THPStorage_setFromFile(PyObject* self, PyObject* args) {
   const auto& storage = THPStorage_Unpack(self);
   PyObject* file = PyTuple_GET_ITEM(args, 0);
   PyObject* offset = PyTuple_GET_ITEM(args, 1);
-  bool is_real_file = PyTuple_GET_ITEM(args, 2) == Py_True;
+  bool is_real_file = Py_IsTrue(PyTuple_GET_ITEM(args, 2));
 
   PyObject* element_size_obj = PyTuple_GET_ITEM(args, 3);
 
   TORCH_CHECK(
-      element_size_obj != Py_None,
+      !Py_IsNone(element_size_obj),
       "_set_from_file: need to specify element size");
   uint64_t element_size = THPUtils_unpackUInt64(element_size_obj);
 
@@ -474,7 +472,7 @@ static PyObject* THPStorage_setFromFile(PyObject* self, PyObject* args) {
     // offset can be implemented with a call to the Python object's seek()
     // but it is currently unnecessary to support this.
     TORCH_CHECK(
-        offset == Py_None,
+        Py_IsNone(offset),
         "_set_from_file: offset is NYI for filelike objects");
 
     auto self_storage_impl = c10::intrusive_ptr<c10::StorageImpl>::reclaim_copy(
@@ -485,13 +483,13 @@ static PyObject* THPStorage_setFromFile(PyObject* self, PyObject* args) {
       return nullptr;
     }
     Py_INCREF(self);
-    return (PyObject*)self;
+    return self;
   }
 
   // file is backed by a fd
   const int fd = PyObject_AsFileDescriptor(file);
   const auto fd_original_pos = LSEEK(fd, 0, SEEK_CUR);
-  if (offset != Py_None) {
+  if (!Py_IsNone(offset)) {
     LSEEK(fd, THPUtils_unpackLong(offset), SEEK_SET);
   }
   TORCH_CHECK(
@@ -511,8 +509,8 @@ static PyObject* THPStorage_setFromFile(PyObject* self, PyObject* args) {
   // advanced position
   const auto fd_current_pos = LSEEK(fd, 0, SEEK_CUR);
   LSEEK(fd, fd_original_pos, SEEK_SET);
-  const auto seek_return =
-      PyObject_CallMethod(file, "seek", "Li", (long long)fd_current_pos, 0);
+  const auto seek_return = PyObject_CallMethod(
+      file, "seek", "Li", static_cast<long long>(fd_current_pos), 0);
   if (seek_return == nullptr) {
     return nullptr;
   }
@@ -522,20 +520,49 @@ static PyObject* THPStorage_setFromFile(PyObject* self, PyObject* args) {
   END_HANDLE_TH_ERRORS
 }
 
+static PyObject* THPStorage_swapDataPtr(PyObject* self, PyObject* other) {
+  HANDLE_TH_ERRORS
+  THPStorage_assertNotNull(self);
+  TORCH_CHECK(
+      THPStorage_Check(other),
+      "_swap_data_ptr_ expects an UntypedStorage, but got ",
+      THPUtils_typename(other));
+  THPStorage_assertNotNull(other);
+  auto& self_storage = THPStorage_Unpack(self);
+  auto& other_storage = THPStorage_Unpack(other);
+  TORCH_CHECK(
+      self_storage.device() == other_storage.device(),
+      "_swap_data_ptr_: storages must be on the same device, got ",
+      self_storage.device(),
+      " and ",
+      other_storage.device());
+  size_t self_nbytes = self_storage.nbytes();
+  size_t other_nbytes = other_storage.nbytes();
+  TORCH_CHECK(
+      self_nbytes == other_nbytes || self_nbytes == 0 || other_nbytes == 0,
+      "_swap_data_ptr_: storages must have the same nbytes or one must have 0, got ",
+      self_nbytes,
+      " and ",
+      other_nbytes);
+  self_storage.swap_data_ptr(const_cast<c10::Storage&>(other_storage));
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
 static PyObject* THPStorage__setCdata(PyObject* _self, PyObject* new_cdata) {
   HANDLE_TH_ERRORS
-  auto self = (THPStorage*)_self;
+  auto self = reinterpret_cast<THPStorage*>(_self);
   TORCH_CHECK(
       THPUtils_checkLong(new_cdata),
       "given an invalid argument to "
       "_set_cdata - expected an int or long, but got ",
       THPUtils_typename(new_cdata));
-  c10::StorageImpl* ptr = (c10::StorageImpl*)PyLong_AsVoidPtr(new_cdata);
-  self->cdata.~MaybeOwned<c10::Storage>();
-  self->cdata = c10::MaybeOwned<c10::Storage>::owned(
-      c10::Storage(c10::intrusive_ptr<c10::StorageImpl>::reclaim_copy(ptr)));
+  c10::StorageImpl* ptr =
+      static_cast<c10::StorageImpl*>(PyLong_AsVoidPtr(new_cdata));
+  self->cdata =
+      c10::Storage(c10::intrusive_ptr<c10::StorageImpl>::reclaim_copy(ptr));
   Py_INCREF(self);
-  return (PyObject*)self;
+  return reinterpret_cast<PyObject*>(self);
   END_HANDLE_TH_ERRORS
 }
 
@@ -633,6 +660,7 @@ static PyMethodDef THPStorage_methods[] = {
      castPyCFunctionWithKeywords(THPStorage_fromFile),
      METH_VARARGS | METH_KEYWORDS | METH_STATIC,
      nullptr},
+    {"_swap_data_ptr_", THPStorage_swapDataPtr, METH_O, nullptr},
     {"_set_cdata", THPStorage__setCdata, METH_O, nullptr},
     {"_byteswap", THPStorage_byteswap, METH_VARARGS, nullptr},
     {"_fix_weakref", THPStorage_fix_weakref, METH_NOARGS, nullptr},

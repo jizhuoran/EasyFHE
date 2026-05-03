@@ -6,23 +6,14 @@ import inspect
 import io
 import os
 import pickle
-import sys
 import tokenize
 import unittest
+from collections.abc import Callable
+from contextvars import ContextVar
 from dataclasses import dataclass
 from types import FunctionType, ModuleType
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    NoReturn,
-    Optional,
-    TYPE_CHECKING,
-    TypeVar,
-    Union,
-)
+from typing import Any, Generic, NoReturn, Optional, TYPE_CHECKING, TypeVar
 from typing_extensions import deprecated
-from unittest import mock
 
 from torch._utils_internal import justknobs_check
 
@@ -30,15 +21,19 @@ from torch._utils_internal import justknobs_check
 # Types saved/loaded in configs
 CONFIG_TYPES = (int, float, bool, type(None), str, list, set, tuple, dict)
 
+# Immutable scalar types that don't need deepcopy when returned from configs.
+# Everything else is defensively copied to prevent accidental mutation.
+_IMMUTABLE_CONFIG_TYPES = (int, float, bool, type(None), str, tuple)
+
 
 # Duplicated, because mypy needs these types statically
-T = TypeVar("T", bound=Union[int, float, bool, None, str, list, set, tuple, dict])
+T = TypeVar("T", bound=int | float | bool | str | list | set | tuple | dict | None)
 
 
 _UNSET_SENTINEL = object()
 
 
-@dataclass
+@dataclass(kw_only=True)
 class _Config(Generic[T]):
     """Represents a config with richer behaviour than just a default value.
     ::
@@ -52,17 +47,17 @@ class _Config(Generic[T]):
         alias: If set, the directly use the value of the alias.
         env_name_force: If set, this environment variable has precedence over
             everything after this.
-            If multiple env variables are given, the precendence order is from
+            If multiple env variables are given, the precedence order is from
             left to right.
         user_override: If a user sets a value (i.e. foo.bar=True), that
-            has precedence over everything after this.
+            has precedence over everything after this.  User overrides are thread-local.
         env_name_default: If set, this environment variable will override everything
             after this.
-            If multiple env variables are given, the precendence order is from
+            If multiple env variables are given, the precedence order is from
             left to right.
         justknob: If this pytorch installation supports justknobs, that will
-            override defaults, but will not override the user_override precendence.
-        default: This value is the lowest precendance, and will be used if nothing is
+            override defaults, but will not override the user_override precedence.
+        default: This value is the lowest precedence, and will be used if nothing is
             set.
 
     Environment Variables:
@@ -78,47 +73,46 @@ class _Config(Generic[T]):
             default behaviour. I.e. user overrides take preference.
     """
 
-    default: Union[T, object]
-    justknob: Optional[str] = None
-    env_name_default: Optional[list[str]] = None
-    env_name_force: Optional[list[str]] = None
-    alias: Optional[str] = None
+    default: T | object
+    justknob: str | None = None
+    env_name_default: list[str] | None = None
+    env_name_force: list[str] | None = None
+    value_type: type | None = None
+    alias: str | None = None
+    # Deprecation support
+    deprecated: bool = False
+    deprecation_message: str | None = None
 
-    def __init__(
-        self,
-        default: Union[T, object] = _UNSET_SENTINEL,
-        justknob: Optional[str] = None,
-        env_name_default: Optional[Union[str, list[str]]] = None,
-        env_name_force: Optional[Union[str, list[str]]] = None,
-        value_type: Optional[type] = None,
-        alias: Optional[str] = None,
-    ):
-        # python 3.9 does not support kw_only on the dataclass :(.
-        self.default = default
-        self.justknob = justknob
+    def __post_init__(self) -> None:
         self.env_name_default = _Config.string_or_list_of_string_to_list(
-            env_name_default
+            self.env_name_default
         )
-        self.env_name_force = _Config.string_or_list_of_string_to_list(env_name_force)
-        self.value_type = value_type
-        self.alias = alias
+        self.env_name_force = _Config.string_or_list_of_string_to_list(
+            self.env_name_force
+        )
+
         if self.alias is not None:
-            assert (
-                default is _UNSET_SENTINEL
-                and justknob is None
-                and env_name_default is None
-                and env_name_force is None
-            ), "if alias is set, none of {default, justknob and env var} can be set"
+            if (
+                self.default is not _UNSET_SENTINEL
+                or self.justknob is not None
+                or self.env_name_default is not None
+                or self.env_name_force is not None
+            ):
+                raise AssertionError(
+                    "if alias is set, none of {default, justknob, \
+                        env_name_default and env_name_force} can be set"
+                )
 
     @staticmethod
     def string_or_list_of_string_to_list(
-        val: Optional[Union[str, list[str]]]
-    ) -> Optional[list[str]]:
+        val: str | list[str] | None,
+    ) -> list[str] | None:
         if val is None:
             return None
         if isinstance(val, str):
             return [val]
-        assert isinstance(val, list)
+        if not isinstance(val, list):
+            raise AssertionError(f"val is not a list, got {type(val)}")
         return val
 
 
@@ -129,31 +123,44 @@ class _Config(Generic[T]):
 if TYPE_CHECKING:
 
     def Config(
-        default: Union[T, object] = _UNSET_SENTINEL,
-        justknob: Optional[str] = None,
-        env_name_default: Optional[Union[str, list[str]]] = None,
-        env_name_force: Optional[Union[str, list[str]]] = None,
-        value_type: Optional[type] = None,
-        alias: Optional[str] = None,
-    ) -> T:
-        ...
+        default: T | object = _UNSET_SENTINEL,
+        justknob: str | None = None,
+        env_name_default: str | list[str] | None = None,
+        env_name_force: str | list[str] | None = None,
+        value_type: type | None = None,
+        alias: str | None = None,
+        # Deprecation support
+        deprecated: bool = False,
+        deprecation_message: str | None = None,
+    ) -> T: ...
 
 else:
 
     def Config(
-        default: Union[T, object] = _UNSET_SENTINEL,
-        justknob: Optional[str] = None,
-        env_name_default: Optional[Union[str, list[str]]] = None,
-        env_name_force: Optional[Union[str, list[str]]] = None,
-        value_type: Optional[type] = None,
-        alias: Optional[str] = None,
+        default: T | object = _UNSET_SENTINEL,
+        justknob: str | None = None,
+        env_name_default: str | list[str] | None = None,
+        env_name_force: str | list[str] | None = None,
+        value_type: type | None = None,
+        alias: str | None = None,
+        # Deprecation support
+        deprecated: bool = False,
+        deprecation_message: str | None = None,
     ) -> _Config[T]:
         return _Config(
-            default, justknob, env_name_default, env_name_force, value_type, alias
+            default=default,
+            justknob=justknob,
+            env_name_default=env_name_default,
+            env_name_force=env_name_force,
+            value_type=value_type,
+            alias=alias,
+            # Deprecation support
+            deprecated=deprecated,
+            deprecation_message=deprecation_message,
         )
 
 
-def _read_env_variable(name: str) -> Optional[Union[bool, str]]:
+def _read_env_variable(name: str) -> bool | str | None:
     value = os.environ.get(name)
     if value == "1":
         return True
@@ -174,20 +181,23 @@ def install_config_module(module: ModuleType) -> None:
         _bypass_keys = set({"_is_dirty", "_hash_digest", "__annotations__"})
 
     def visit(
-        source: Union[ModuleType, type],
-        dest: Union[ModuleType, SubConfigProxy],
+        source: ModuleType | type,
+        dest: ModuleType | SubConfigProxy,
         prefix: str,
     ) -> None:
         """Walk the module structure and move everything to module._config"""
-        if sys.version_info[:2] < (3, 10):
-            type_hints = getattr(source, "__annotations__", {})
-        else:
-            type_hints = inspect.get_annotations(source)
+        type_hints = inspect.get_annotations(source)
         for key, value in list(source.__dict__.items()):
             if (
                 key.startswith("__")
                 or isinstance(value, (ModuleType, FunctionType))
-                or (hasattr(value, "__module__") and value.__module__ == "typing")
+                or (
+                    hasattr(value, "__module__")
+                    and (
+                        value.__module__ == "typing"
+                        or value.__module__.startswith("collections.abc")
+                    )
+                )
                 # Handle from torch.utils._config_module import Config
                 or (isinstance(value, type) and issubclass(value, _Config))
             ):
@@ -197,7 +207,7 @@ def install_config_module(module: ModuleType) -> None:
             annotated_type = type_hints.get(key, None)
             if isinstance(value, CONFIG_TYPES):
                 config[name] = _ConfigEntry(
-                    _Config(default=value, value_type=annotated_type)
+                    _Config(default=value, value_type=annotated_type), name
                 )
                 if dest is module:
                     delattr(module, key)
@@ -205,12 +215,15 @@ def install_config_module(module: ModuleType) -> None:
                 if annotated_type is not None and value.value_type is None:
                     value.value_type = annotated_type
 
-                config[name] = _ConfigEntry(value)
+                config[name] = _ConfigEntry(value, name)
 
                 if dest is module:
                     delattr(module, key)
             elif isinstance(value, type):
-                assert value.__module__ == module.__name__
+                if value.__module__ != module.__name__:
+                    raise AssertionError(
+                        f"subconfig class {value} must be defined in module {module.__name__}"
+                    )
                 # a subconfig with `class Blah:` syntax
                 proxy = SubConfigProxy(module, f"{name}.")
                 visit(value, proxy, f"{name}.")
@@ -251,10 +264,8 @@ def get_assignments_with_compile_ignored_comments(module: ModuleType) -> set[str
             prev_name = ""
             maybe_current = token.string.strip()
             if COMPILE_IGNORED_MARKER in maybe_current:
-                assert current_comment == (
-                    "",
-                    -1,
-                ), f"unconsumed {COMPILE_IGNORED_MARKER}"
+                if current_comment != ("", -1):
+                    raise AssertionError(f"unconsumed {COMPILE_IGNORED_MARKER}")
                 current_comment = maybe_current, token.start[0]
         elif token.type == tokenize.NAME:
             # Only accept the first name token, to handle if you have
@@ -271,7 +282,8 @@ def get_assignments_with_compile_ignored_comments(module: ModuleType) -> set[str
                 assignments.add(prev_name)
                 current_comment = "", -1  # reset
             prev_name = ""
-    assert current_comment == ("", -1), f"unconsumed {COMPILE_IGNORED_MARKER}"
+    if current_comment != ("", -1):
+        raise AssertionError(f"unconsumed {COMPILE_IGNORED_MARKER}")
     return assignments
 
 
@@ -283,9 +295,9 @@ class _ConfigEntry:
     value_type: type
     # The value specified by the user when they overrode the configuration
     # _UNSET_SENTINEL indicates the value is not set.
-    user_override: Any = _UNSET_SENTINEL
+    user_override: ContextVar[object]
     # The justknob to check for this config
-    justknob: Optional[str] = None
+    justknob: str | None = None
     # environment variables are read at install time
     env_value_force: Any = _UNSET_SENTINEL
     env_value_default: Any = _UNSET_SENTINEL
@@ -301,15 +313,25 @@ class _ConfigEntry:
     # call so the final state is correct. It's just very unintuitive.
     # upstream bug - python/cpython#126886
     hide: bool = False
-    alias: Optional[str] = None
+    alias: str | None = None
+    # Deprecation support
+    deprecated: bool = False
+    deprecation_message: str | None = None
+    _deprecation_warned: bool = False
 
-    def __init__(self, config: _Config):
+    def __init__(self, config: _Config, name: str) -> None:
         self.default = config.default
         self.value_type = (
             config.value_type if config.value_type is not None else type(self.default)
         )
         self.justknob = config.justknob
         self.alias = config.alias
+        # Deprecation fields
+        self.deprecated = config.deprecated
+        self.deprecation_message = config.deprecation_message
+        self._deprecation_warned = False
+
+        self.user_override = ContextVar(name, default=_UNSET_SENTINEL)
         if config.env_name_default is not None:
             for val in config.env_name_default:
                 if (env_value := _read_env_variable(val)) is not None:
@@ -323,18 +345,22 @@ class _ConfigEntry:
 
         # Ensure justknobs and envvars are allowlisted types
         if self.justknob is not None and self.default is not None:
-            assert isinstance(
-                self.default, bool
-            ), f"justknobs only support booleans, {self.default} is not a boolean"
+            if not isinstance(self.default, bool):
+                raise AssertionError(
+                    f"justknobs only support booleans, {self.default} is not a boolean"
+                )
         if self.value_type is not None and (
             config.env_name_default is not None or config.env_name_force is not None
         ):
-            assert self.value_type in (
+            if self.value_type not in (
                 bool,
                 str,
-                Optional[bool],
-                Optional[str],
-            ), f"envvar configs only support (optional) booleans or strings, {self.value_type} is neither"
+                Optional[bool],  # noqa: UP045
+                Optional[str],  # noqa: UP045
+            ):
+                raise AssertionError(
+                    f"envvar configs only support (optional) booleans or strings, {self.value_type} is neither"
+                )
 
 
 class ConfigModule(ModuleType):
@@ -347,24 +373,41 @@ class ConfigModule(ModuleType):
     _bypass_keys: set[str]
     _compile_ignored_keys: set[str]
     _is_dirty: bool
-    _hash_digest: Optional[bytes]
+    _hash_digest: bytes | None
 
     def __init__(self) -> None:
         raise NotImplementedError(
             f"use {__name__}.install_config_module(sys.modules[__name__])"
         )
 
+    def _warn_if_deprecated(self, name: str, config: _ConfigEntry) -> None:
+        """Issue deprecation warning for config if not already warned."""
+        if config.deprecated and not config._deprecation_warned:
+            import warnings
+
+            msg = f"{self.__name__}.{name} is deprecated"
+            if config.deprecation_message:
+                msg += f" and {config.deprecation_message}"
+            msg += ". It will be removed in a future version of PyTorch."
+            warnings.warn(msg, FutureWarning, stacklevel=3)
+            config._deprecation_warned = True
+
     def __setattr__(self, name: str, value: object) -> None:
         if name in self._bypass_keys:
             super().__setattr__(name, value)
         elif name not in self._config:
             raise AttributeError(f"{self.__name__}.{name} does not exist")
-        elif self._config[name].alias is not None:
-            self._set_alias_val(self._config[name], value)
         else:
-            self._config[name].user_override = value
-            self._is_dirty = True
-            self._config[name].hide = False
+            # Issue deprecation warning on write (once per config)
+            config = self._config[name]
+            self._warn_if_deprecated(name, config)
+
+            if config.alias is not None:
+                self._set_alias_val(config, value)
+            else:
+                config.user_override.set(value)
+                self._is_dirty = True
+                config.hide = False
 
     def __getattr__(self, name: str) -> Any:
         try:
@@ -373,6 +416,9 @@ class ConfigModule(ModuleType):
             if config.hide:
                 raise AttributeError(f"{self.__name__}.{name} does not exist")
 
+            # Issue deprecation warning on read (once per config)
+            self._warn_if_deprecated(name, config)
+
             alias_val = self._get_alias_val(config)
             if alias_val is not _UNSET_SENTINEL:
                 return alias_val
@@ -380,8 +426,9 @@ class ConfigModule(ModuleType):
             if config.env_value_force is not _UNSET_SENTINEL:
                 return config.env_value_force
 
-            if config.user_override is not _UNSET_SENTINEL:
-                return config.user_override
+            user_override = config.user_override.get()
+            if user_override is not _UNSET_SENTINEL:
+                return user_override
 
             if config.env_value_default is not _UNSET_SENTINEL:
                 return config.env_value_default
@@ -390,12 +437,11 @@ class ConfigModule(ModuleType):
                 # JK only supports bools and ints
                 return justknobs_check(name=config.justknob, default=config.default)
 
-            # Note that reference types can still be modified, so we
-            # copy them to user_overrides in case the user overrides
-            # them
-            if isinstance(config.default, (list, set, dict)):
-                config.user_override = copy.deepcopy(config.default)
-                return config.user_override
+            # Reference types can still be modified, so copy them to
+            # user_overrides to prevent accidental mutation of defaults.
+            if not isinstance(config.default, _IMMUTABLE_CONFIG_TYPES):
+                config.user_override.set(copy.deepcopy(config.default))
+                return config.user_override.get()
             return config.default
 
         except KeyError as e:
@@ -406,12 +452,12 @@ class ConfigModule(ModuleType):
         self._is_dirty = True
         # must support delete because unittest.mock.patch deletes
         # then recreate things
-        self._config[name].user_override = _UNSET_SENTINEL
+        self._config[name].user_override.set(_UNSET_SENTINEL)
         self._config[name].hide = True
 
     def _get_alias_module_and_name(
         self, entry: _ConfigEntry
-    ) -> Optional[tuple[ModuleType, str]]:
+    ) -> tuple[ModuleType, str] | None:
         alias = entry.alias
         if alias is None:
             return None
@@ -419,7 +465,7 @@ class ConfigModule(ModuleType):
         try:
             module = importlib.import_module(module_name)
         except ImportError as e:
-            raise AttributeError("config alias {alias} does not exist") from e
+            raise AttributeError(f"config alias {alias} does not exist") from e
         return module, constant_name
 
     def _get_alias_val(self, entry: _ConfigEntry) -> Any:
@@ -432,14 +478,17 @@ class ConfigModule(ModuleType):
 
     def _set_alias_val(self, entry: _ConfigEntry, val: Any) -> None:
         data = self._get_alias_module_and_name(entry)
-        assert data is not None
+        if data is None:
+            raise AssertionError(
+                "alias data should not be None when setting alias value"
+            )
         module, constant_name = data
         setattr(module, constant_name, val)
 
     def _is_default(self, name: str) -> bool:
         """
         Returns true if the config is at its default value.
-        configs overriden by the env are not considered default.
+        configs overridden by the env are not considered default.
         """
         config_val = self._config[name]
         # The config is not overridden by the user, and the env_value_default
@@ -454,16 +503,16 @@ class ConfigModule(ModuleType):
             or config_val.env_value_force == config_val.default
         )
 
-        unset = config_val.user_override is _UNSET_SENTINEL
+        unset = config_val.user_override.get() is _UNSET_SENTINEL
         # Handle reference types specially to avoid spammy warnings
-        if isinstance(config_val.default, (list, set, dict)):
-            unset = unset or config_val.user_override == config_val.default
+        if not isinstance(config_val.default, _IMMUTABLE_CONFIG_TYPES):
+            unset = unset or config_val.user_override.get() == config_val.default
         return unset and not_set_env_default and not_set_env_force
 
     def _get_dict(
         self,
-        ignored_keys: Optional[list[str]] = None,
-        ignored_prefixes: Optional[list[str]] = None,
+        ignored_keys: list[str] | None = None,
+        ignored_prefixes: list[str] | None = None,
         skip_default: bool = False,
     ) -> dict[str, Any]:
         """Export a dictionary of current configuration keys and values.
@@ -483,7 +532,9 @@ class ConfigModule(ModuleType):
                 it skips it.
         """
         config: dict[str, Any] = {}
-        for key in self._config:
+        for key, entry in self._config.items():
+            if entry.alias is not None:
+                continue
             if ignored_keys and key in ignored_keys:
                 continue
             if ignored_prefixes:
@@ -491,9 +542,23 @@ class ConfigModule(ModuleType):
                     continue
             if skip_default and self._is_default(key):
                 continue
-            if self._config[key].alias is not None:
-                continue
-            config[key] = copy.deepcopy(getattr(self, key))
+
+            # Read value directly, bypassing __getattr__ overhead
+            # (deprecation warnings, alias resolution).
+            user_override = entry.user_override.get()
+            if entry.env_value_force is not _UNSET_SENTINEL:
+                val = entry.env_value_force
+            elif user_override is not _UNSET_SENTINEL:
+                val = user_override
+            elif entry.env_value_default is not _UNSET_SENTINEL:
+                val = entry.env_value_default
+            elif entry.justknob is not None:
+                val = justknobs_check(name=entry.justknob, default=entry.default)
+            else:
+                val = entry.default
+            if not isinstance(val, _IMMUTABLE_CONFIG_TYPES):
+                val = copy.deepcopy(val)
+            config[key] = val
 
         return config
 
@@ -508,11 +573,27 @@ class ConfigModule(ModuleType):
             protocol=2,
         )
 
-    def save_config_portable(self) -> dict[str, Any]:
+    def save_config_portable(
+        self, *, ignore_private_configs: bool = True
+    ) -> dict[str, Any]:
         """Convert config to portable format"""
-        prefixes = ["_"]
+        prefixes = []
+        if ignore_private_configs:
+            prefixes.append("_")
         prefixes.extend(getattr(self, "_cache_config_ignore_prefix", []))
-        return self._get_dict(ignored_prefixes=prefixes)
+        config = self._get_dict(ignored_prefixes=prefixes)
+        for key in getattr(self, "_cache_config_factory_keys", []):
+            if key in config and config[key] is not None:
+                instance = config[key]()
+                if hasattr(instance, "uuid"):
+                    config[key] = instance.uuid()
+                else:
+                    raise RuntimeError(
+                        f"Config '{key}' is set to {config[key]} which does not "
+                        f"implement uuid(). Implement uuid() for cache key "
+                        f"participation."
+                    )
+        return config
 
     def codegen_config(self) -> str:
         """Convert config to Python statements that replicate current config.
@@ -535,7 +616,7 @@ class ConfigModule(ModuleType):
             if module_name:
                 imports.add(module_name)
 
-        def list_of_callables_to_string(v: Union[list, set]) -> list[str]:
+        def list_of_callables_to_string(v: list | set) -> list[str]:
             return [f"{get_module_name(item, True)}{item.__name__}" for item in v]
 
         def importable_callable(v: Any) -> bool:
@@ -608,7 +689,7 @@ class ConfigModule(ModuleType):
     def shallow_copy_dict(self) -> dict[str, Any]:
         return self.get_config_copy()
 
-    def load_config(self, maybe_pickled_config: Union[bytes, dict[str, Any]]) -> None:
+    def load_config(self, maybe_pickled_config: bytes | dict[str, Any]) -> None:
         """Restore from a prior call to save_config() or shallow_copy_dict()"""
         if not isinstance(maybe_pickled_config, dict):
             config = pickle.loads(maybe_pickled_config)
@@ -625,14 +706,17 @@ class ConfigModule(ModuleType):
     def get_config_copy(self) -> dict[str, Any]:
         return self._get_dict()
 
+    def get_serializable_config_copy(self) -> dict[str, Any]:
+        return self._get_dict(ignored_keys=getattr(self, "_save_config_ignore", []))
+
     def patch(
         self,
-        arg1: Optional[Union[str, dict[str, Any]]] = None,
+        arg1: str | dict[str, Any] | None = None,
         arg2: Any = None,
         **kwargs: dict[str, Any],
     ) -> "ContextDecorator":
         """
-        Decorator and/or context manager to make temporary changes to a config.
+        Decorator and/or context manager to make temporary changes to a config.  Note that patched settings are thread-local.
 
         As a decorator:
 
@@ -650,35 +734,66 @@ class ConfigModule(ModuleType):
         changes: dict[str, Any]
         if arg1 is not None:
             if arg2 is not None:
-                assert isinstance(arg1, str)
+                if not isinstance(arg1, str):
+                    raise AssertionError(
+                        "first argument must be a string when passing 2 positional args to patch"
+                    )
                 # patch("key", True) syntax
                 changes = {arg1: arg2}
             else:
-                assert isinstance(arg1, dict)
+                if not isinstance(arg1, dict):
+                    raise AssertionError(
+                        "first argument must be a dict when passing a single positional arg to patch"
+                    )
                 # patch({"key": True}) syntax
                 changes = arg1
-            assert not kwargs
+            if kwargs:
+                raise AssertionError(
+                    "cannot pass both positional and keyword arguments to patch"
+                )
         else:
             # patch(key=True) syntax
             changes = kwargs
-            assert arg2 is None
-        assert isinstance(changes, dict), f"expected `dict` got {type(changes)}"
-        prior: dict[str, Any] = {}
+            if arg2 is not None:
+                raise AssertionError(
+                    "second positional argument is only valid when first argument is a key string"
+                )
+        if not isinstance(changes, dict):
+            raise AssertionError(f"expected `dict` got {type(changes)}")
         config = self
 
         class ConfigPatch(ContextDecorator):
+            def __init__(self) -> None:
+                self.changes = changes
+                self._prior: ContextVar[tuple[dict[str, Any], ...]] = ContextVar(
+                    f"{config.__name__}.ConfigPatch[{id(self)}]",
+                    default=(),
+                )
+
             def __enter__(self) -> None:
-                assert not prior
-                for key in changes.keys():
+                prior: dict[str, Any] = {}
+                for key in self.changes:
                     # KeyError on invalid entry
                     prior[key] = config.__getattr__(key)
-                for k, v in changes.items():
-                    config.__setattr__(k, v)
+                prior_stack = self._prior.get()
+                self._prior.set((*prior_stack, prior))
+                try:
+                    for k, v in self.changes.items():
+                        config.__setattr__(k, v)
+                except Exception:
+                    self._prior.set(prior_stack)
+                    raise
 
             def __exit__(self, exc_type, exc_val, exc_tb):  # type: ignore[no-untyped-def]
+                prior_stack = self._prior.get()
+                if not prior_stack:
+                    raise AssertionError(
+                        "prior should not be empty when exiting ConfigPatch"
+                    )
+                prior = prior_stack[-1]
+                self._prior.set(prior_stack[:-1])
                 for k, v in prior.items():
                     config.__setattr__(k, v)
-                prior.clear()
 
         return ConfigPatch()
 
@@ -703,13 +818,13 @@ class ConfigModule(ModuleType):
         config = self._config
 
         def change() -> Callable[[], None]:
-            prior = {k: config[k].user_override for k in changes}
+            prior = {k: config[k].user_override.get() for k in changes}
             for k, v in changes.items():
-                self._config[k].user_override = v
+                self._config[k].user_override.set(v)
 
             def revert() -> None:
                 for k, v in prior.items():
-                    self._config[k].user_override = v
+                    self._config[k].user_override.set(v)
 
             return revert
 
@@ -763,7 +878,7 @@ class SubConfigProxy:
     `config.triton.cudagraphs` maps to _config["triton.cudagraphs"]
     """
 
-    def __init__(self, config: object, prefix: str):
+    def __init__(self, config: object, prefix: str) -> None:
         # `super().__setattr__` to bypass custom `__setattr__`
         super().__setattr__("_config", config)
         super().__setattr__("_prefix", prefix)
@@ -778,19 +893,21 @@ class SubConfigProxy:
         return self._config.__delattr__(self._prefix + name)
 
 
-def patch_object(obj: object, name: str, value: object) -> object:
-    """
-    Workaround `mock.patch.object` issue with ConfigModule
-    """
-    if isinstance(obj, ConfigModule):
-        return obj.patch(name, value)
-    return mock.patch.object(obj, name, value)
-
-
-def get_tristate_env(name: str, default: Any = None) -> Optional[bool]:
+def get_tristate_env(name: str, default: Any = None) -> bool | None:
     value = os.environ.get(name)
     if value == "1":
         return True
     if value == "0":
         return False
     return default
+
+
+def inherit_fields_from(parent_cls):
+    def wrapper(child_cls):
+        for k, v in parent_cls.__dict__.items():
+            # copy fields that are not private and not overridden
+            if not k.startswith("_") and k not in child_cls.__dict__:
+                setattr(child_cls, k, v)
+        return child_cls
+
+    return wrapper

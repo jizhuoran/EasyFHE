@@ -116,8 +116,8 @@ void PrefixStore::queuePush(
   store_->queuePush(joinKey(key), value);
 }
 
-std::vector<uint8_t> PrefixStore::queuePop(const std::string& key) {
-  return store_->queuePop(joinKey(key));
+std::vector<uint8_t> PrefixStore::queuePop(const std::string& key, bool block) {
+  return store_->queuePop(joinKey(key), block);
 }
 
 int64_t PrefixStore::queueLen(const std::string& key) {
@@ -144,6 +144,20 @@ c10::intrusive_ptr<Store> PrefixStore::getUnderlyingNonPrefixStore() {
   TORCH_CHECK(
       store != nullptr, "Underlying Non-PrefixStore shouldn't be null.");
   return store;
+}
+
+std::vector<std::string> PrefixStore::listKeys() {
+  auto keys = store_->listKeys();
+  std::vector<std::string> filteredKeys;
+  filteredKeys.reserve(keys.size());
+
+  for (auto& key : keys) {
+    if (key.find(prefix_) == 0) {
+      key = key.substr(prefix_.size() + 1);
+      filteredKeys.push_back(std::move(key));
+    }
+  }
+  return filteredKeys;
 }
 
 } // namespace c10d

@@ -422,11 +422,12 @@ static __global__ void chunk_cat_cuda_kernel(
 }
 
 bool all_contiguous(TensorList tensors) {
-  bool contiguous = true;
   for (const auto& t : tensors) {
-    contiguous &= t.is_non_overlapping_and_dense();
+    if (!t.is_contiguous()) {
+      return false;
+    }
   }
-  return contiguous;
+  return true;
 }
 
 // Get leading dimensions before `dim`-th dimension.
@@ -704,15 +705,12 @@ void split_with_sizes_copy_out_cuda(
     IntArrayRef split_sizes,
     int64_t dim,
     TensorList out) {
-  const bool is_capturing = at::cuda::currentStreamCaptureStatusMayInitCtx() !=
-      at::cuda::CaptureStatus::None;
   bool contiguous_no_cast = self.is_non_overlapping_and_dense();
   for (const auto& t : out) {
     contiguous_no_cast &= t.is_non_overlapping_and_dense();
     contiguous_no_cast &= (t.dtype() == self.dtype());
   }
-  // TODO(yifu): make the fast path work for CUDA graph
-  if (!is_capturing && contiguous_no_cast) {
+  if (contiguous_no_cast) {
     // Perform equivalent checks performed by the composite impl
     if (dim < 0) {
       dim = at::maybe_wrap_dim(dim, self.dim());

@@ -5,6 +5,7 @@
 #include <ATen/mps/MPSAllocator.h>
 #include <c10/core/Allocator.h>
 #include <c10/core/Storage.h>
+#include <c10/util/env.h>
 
 #include <iostream>
 
@@ -21,33 +22,27 @@ void MPSHeapAllocatorImpl::init_allocator() {
   init_buffer_pools();
 
   // debug verbosity flags (see DebugVerbosity enum)
-  static const char* verbosity_str = getenv("PYTORCH_DEBUG_MPS_ALLOCATOR");
-  m_debug_verbosity = verbosity_str ? strtol(verbosity_str, nullptr, 0) : DebugVerbosity::SILENT;
+  static const auto verbosity_str = c10::utils::get_env("PYTORCH_DEBUG_MPS_ALLOCATOR");
+  m_debug_verbosity = verbosity_str ? strtol(verbosity_str->c_str(), nullptr, 0) : DebugVerbosity::SILENT;
 
-  static const char* high_watermark_ratio_str = getenv("PYTORCH_MPS_HIGH_WATERMARK_RATIO");
+  static const auto high_watermark_ratio_str = c10::utils::get_env("PYTORCH_MPS_HIGH_WATERMARK_RATIO");
   const double high_watermark_ratio =
-      high_watermark_ratio_str ? strtod(high_watermark_ratio_str, nullptr) : default_high_watermark_ratio;
+      high_watermark_ratio_str ? strtod(high_watermark_ratio_str->c_str(), nullptr) : default_high_watermark_ratio;
   setHighWatermarkRatio(high_watermark_ratio);
 
   const double default_low_watermark_ratio =
       m_device.hasUnifiedMemory ? default_low_watermark_ratio_unified : default_low_watermark_ratio_discrete;
-  static const char* low_watermark_ratio_str = getenv("PYTORCH_MPS_LOW_WATERMARK_RATIO");
+  static const auto low_watermark_ratio_str = c10::utils::get_env("PYTORCH_MPS_LOW_WATERMARK_RATIO");
   const double low_watermark_ratio =
-      low_watermark_ratio_str ? strtod(low_watermark_ratio_str, nullptr) : default_low_watermark_ratio;
+      low_watermark_ratio_str ? strtod(low_watermark_ratio_str->c_str(), nullptr) : default_low_watermark_ratio;
   setLowWatermarkRatio(low_watermark_ratio);
 }
 
 void MPSHeapAllocatorImpl::init_buffer_pools() {
   // using a container for pools to simplify iterating over them
-  // Pool of large buffers with private storage mode
-  m_pools.emplace(BufferPool::Kind::PRIVATE_LARGE,
-                  std::make_unique<BufferPool>(m_device, UsageFlags::PRIVATE | UsageFlags::HAZARD));
   // Pool of large buffers with shared storage mode
   m_pools.emplace(BufferPool::Kind::SHARED_LARGE,
                   std::make_unique<BufferPool>(m_device, UsageFlags::SHARED | UsageFlags::HAZARD));
-  // Pool of small buffers with private storage mode
-  m_pools.emplace(BufferPool::Kind::PRIVATE_SMALL,
-                  std::make_unique<BufferPool>(m_device, UsageFlags::SMALL | UsageFlags::PRIVATE | UsageFlags::HAZARD));
   // Pool of small buffers with shared storage mode
   m_pools.emplace(BufferPool::Kind::SHARED_SMALL,
                   std::make_unique<BufferPool>(m_device, UsageFlags::SMALL | UsageFlags::SHARED | UsageFlags::HAZARD));
@@ -63,12 +58,10 @@ BufferPool& MPSHeapAllocatorImpl::get_pool(size_t requested_size, size_t aligned
 
   if (usage & UsageFlags::SCALAR) {
     poolKind = BufferPool::Kind::SCALAR;
-  } else if (requested_size <= kMaxScalarAlloc && m_device.hasUnifiedMemory) {
-    poolKind = BufferPool::Kind::SHARED_SMALL;
   } else if (aligned_size <= kMaxSmallAlloc) {
-    poolKind = (usage & UsageFlags::SHARED) ? BufferPool::Kind::SHARED_SMALL : BufferPool::Kind::PRIVATE_SMALL;
+    poolKind = BufferPool::Kind::SHARED_SMALL;
   } else {
-    poolKind = (usage & UsageFlags::SHARED) ? BufferPool::Kind::SHARED_LARGE : BufferPool::Kind::PRIVATE_LARGE;
+    poolKind = BufferPool::Kind::SHARED_LARGE;
   }
   return *m_pools[poolKind];
 }
@@ -439,7 +432,7 @@ bool MPSHeapAllocatorImpl::release_cached_buffers() {
   // we need to release the lock temporarily as synchronizing may cause deadlock with completion handlers.
   m_mutex.unlock();
   auto stream = getDefaultMPSStream();
-  dispatch_sync(stream->queue(), ^() {
+  dispatch_sync_with_rethrow(stream->queue(), ^() {
     stream->synchronize(SyncType::COMMIT_AND_WAIT);
   });
   m_mutex.lock();
@@ -551,6 +544,43 @@ std::pair<const void*, uint32_t> MPSHeapAllocatorImpl::getSharedBufferPtr(const 
   return {buffer_block->cpu_ptr, buffer_block->retainCount()};
 }
 
+namespace {
+// Deleter for the CPU-device DataPtr produced by getHostAliasStorage.
+// The context is a heap-allocated c10::Storage holding a refcount on the
+// source MPS storage; destroying it releases that refcount, which in turn
+// lets the MPSAllocator recycle the underlying MTLBuffer.
+void hostAliasDeleter(void* ctx) {
+  delete static_cast<c10::Storage*>(ctx);
+}
+} // namespace
+
+c10::Storage MPSHeapAllocatorImpl::getHostAliasStorage(const c10::Storage& mps_storage) {
+  TORCH_CHECK_VALUE(mps_storage.device().type() == c10::DeviceType::MPS,
+                    "getHostAliasStorage: expected an MPS storage, got device=",
+                    mps_storage.device());
+
+  std::lock_guard<std::recursive_mutex> lock(m_mutex);
+  BufferBlock* buffer_block = get_allocated_buffer_block(mps_storage.data());
+  TORCH_CHECK(buffer_block, "getHostAliasStorage: storage was not allocated by the MPSAllocator");
+  TORCH_CHECK(buffer_block->heap->pool->usage & UsageFlags::SHARED,
+              "getHostAliasStorage: storage is not backed by a shared (unified) MTLBuffer");
+
+  if (!buffer_block->cpu_ptr) {
+    buffer_block->cpu_ptr = [buffer_block->buffer contents];
+  }
+
+  // Retain the source MPS storage through the DataPtr's context so the
+  // MTLBuffer cannot be recycled while the host alias is in use.
+  auto* ctx = new c10::Storage(mps_storage);
+  c10::DataPtr data_ptr(buffer_block->cpu_ptr, ctx, &hostAliasDeleter, c10::Device(c10::DeviceType::CPU));
+
+  return c10::Storage(c10::Storage::use_byte_size_t(),
+                      mps_storage.nbytes(),
+                      std::move(data_ptr),
+                      /*allocator=*/nullptr,
+                      /*resizable=*/false);
+}
+
 bool MPSHeapAllocatorImpl::recordEvents(c10::ArrayRef<const void*> buffers) {
   bool recordedEvent = false;
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -638,7 +668,7 @@ IntArrayRef MPSHeapAllocatorImpl::getBufferShape(const void* ptr) {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
 
   BufferBlock* buffer_block = get_allocated_buffer_block(ptr);
-  if (buffer_block && buffer_block->shape.size() > 0) {
+  if (buffer_block && !buffer_block->shape.empty()) {
     return IntArrayRef{buffer_block->shape};
   }
   return IntArrayRef();
@@ -747,6 +777,9 @@ struct TORCH_API MPSAllocator final : public IMPSAllocator {
   std::pair<const void*, uint32_t> getSharedBufferPtr(const void* ptr) const override {
     return _getAllocImpl().getSharedBufferPtr(ptr);
   }
+  c10::Storage getHostAliasStorage(const c10::Storage& mps_storage) const override {
+    return _getAllocImpl().getHostAliasStorage(mps_storage);
+  }
   bool isSharedBuffer(const void* ptr) const override {
     return _getAllocImpl().isSharedBuffer(ptr);
   }
@@ -829,16 +862,9 @@ MPSAllocator& _getSharedAllocator() {
   return s_mps_shared_alloc;
 }
 
-MPSAllocator& _getPrivateAllocator() {
-  static MPSAllocator s_mps_private_alloc(HeapAllocator::UsageFlags::PRIVATE);
-  return s_mps_private_alloc;
-}
 } // anonymous namespace
 
-IMPSAllocator* getIMPSAllocator(bool sharedAllocator) {
-  if (!sharedAllocator) {
-    return &_getPrivateAllocator();
-  }
+IMPSAllocator* getIMPSAllocator() {
   auto& sa = _getSharedAllocator();
   if (sa.isSharedStorageSupported()) {
     return &sa;

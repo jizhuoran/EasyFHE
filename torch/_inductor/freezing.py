@@ -4,7 +4,7 @@ from __future__ import annotations
 import itertools
 import logging
 import weakref
-from typing import Any, Optional
+from typing import Any
 
 import torch
 import torch.utils._pytree as pytree
@@ -52,14 +52,21 @@ def replace_params_with_constants(
         in (MutationType.MUTATED_IN_GRAPH, MutationType.MUTATED_OUT_GRAPH)
     ]
 
+    static_indices_new = []
+    static_indices_offset = 0
     for i, (real_input, node) in enumerate(zip(flat_params, fake_inp_nodes)):
         if i in mutated_inps or i in aliased_input_args:
             preserved_arg_indices.append(i)
-            continue
-        replace_node_with_constant(gm, node, real_input)
+            if i in fw_metadata.static_input_indices:
+                new_static_index = i - static_indices_offset
+                static_indices_new.append(new_static_index)
+        else:
+            replace_node_with_constant(gm, node, real_input)
+            static_indices_offset += 1
     # add on non param inputs
     preserved_arg_indices.extend(range(len(flat_params), len(params)))
     # is this necessary ?
+    fw_metadata.static_input_indices = static_indices_new
     gm.recompile()
     return preserved_arg_indices
 
@@ -138,14 +145,15 @@ class ErasedTensor(torch.Tensor):
     def __new__(cls, elem, name, owning_mod):
         return super().__new__(cls, elem.to(device="meta"))
 
-    def __init__(self, elem, name: Optional[str], mod) -> None:
+    def __init__(self, elem, name: str | None, mod) -> None:
         self.erased_name = name
         self.owning_mod_ref = weakref.ref(mod)
 
     @classmethod
-    def __torch_dispatch__(cls, func, types, args=(), kwargs=None):
+    def __torch_dispatch__(cls, func, types, args=(), kwargs=None):  # type: ignore[override]
         erased_tensors = [
             e
+            # pyrefly: ignore [bad-unpacking]
             for e in pytree.arg_tree_leaves(*args, **kwargs)
             if isinstance(e, ErasedTensor)
         ]
@@ -170,6 +178,7 @@ def invalidate_eager_modules():
             for attr_name, tensor in list(
                 itertools.chain(
                     mod.named_parameters(recurse=False),
+                    # pyrefly: ignore [bad-argument-type]
                     mod.named_buffers(recurse=False),
                 )
             ):
@@ -185,7 +194,9 @@ def discard_traced_gm_params(mod: torch.fx.GraphModule):
     with torch.utils._python_dispatch._disable_current_modes():
         for attr_name, tensor in list(
             itertools.chain(
-                mod.named_parameters(recurse=False), mod.named_buffers(recurse=False)
+                mod.named_parameters(recurse=False),
+                # pyrefly: ignore [bad-argument-type]
+                mod.named_buffers(recurse=False),
             )
         ):
             with torch._dispatch.python.no_python_dispatcher():
@@ -209,7 +220,9 @@ def enforce_output_layout(gm: torch.fx.GraphModule):
         for n in out_list:
             if not isinstance(
                 n.meta["val"], torch.Tensor
-            ) or not torch._prims_common.is_non_overlapping_and_dense(n.meta["val"]):
+            ) or not torch._prims_common.is_non_overlapping_and_dense_or_false(
+                n.meta["val"]
+            ):
                 continue
 
             # add a node to enforce eager layout
@@ -260,7 +273,7 @@ def convert_conv_weights_to_channels_last(gm: torch.fx.GraphModule):
     folded by freezing.
     """
     with dynamo_timed("convert_conv_weights_to_channels_last"):
-        convs = [n for n in gm.graph.nodes if n.target == aten.convolution.default]
+        convs = [n for n in gm.graph.nodes if n.target is aten.convolution.default]
         for conv in convs:
             weight_node = conv.args[1]
             if len(weight_node.meta["val"].size()) != 4 or weight_node.meta[

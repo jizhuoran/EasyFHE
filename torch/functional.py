@@ -2,7 +2,7 @@
 import itertools
 import operator
 from collections.abc import Sequence
-from typing import Any, Optional, TYPE_CHECKING, Union
+from typing import Any, TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
@@ -105,58 +105,9 @@ def broadcast_shapes(*shapes):
     # This wrapper exists to support variadic args.
     # TODO Move this to C++ once the jit has better support for torch.Size.
     if not torch.jit.is_tracing():
-        max_len = 0
-        for shape in shapes:
-            if isinstance(shape, (int, torch.SymInt)):
-                if max_len < 1:
-                    max_len = 1
-            elif isinstance(shape, (tuple, list)):
-                s = len(shape)
-                if max_len < s:
-                    max_len = s
-        result = [1] * max_len
-
-        from torch.fx.experimental.symbolic_shapes import (
-            guard_size_oblivious,
-            is_nested_int,
-        )
-
-        for shape in shapes:
-            if isinstance(shape, (int, torch.SymInt)):
-                shape = (shape,)
-            if isinstance(shape, (tuple, list)):
-                for i in range(-1, -1 - len(shape), -1):
-                    if shape[i] < 0:
-                        raise RuntimeError(
-                            f"Trying to create tensor with negative dimension ({shape[i]}): ({shape[i]})"
-                        )
-
-                    # NB: handle nested ints specially to avoid invalid guarding on Ne(j0, 1).
-                    if is_nested_int(shape[i]):
-                        # Broadcasting is allowed for (j0, 1) or (j0, j0);
-                        # not (j0, j1), (j0, 5), etc.
-                        if is_nested_int(result[i]) and guard_size_oblivious(
-                            shape[i] == result[i]
-                        ):
-                            continue
-                    else:
-                        # NB: result is initialized to 1 so this is effectively an
-                        # equals one test
-                        if guard_size_oblivious(shape[i] == 1) or guard_size_oblivious(
-                            shape[i] == result[i]
-                        ):
-                            continue
-
-                    if result[i] != 1:
-                        raise RuntimeError(
-                            "Shape mismatch: objects cannot be broadcast to a single shape"
-                        )
-                    result[i] = shape[i]
-            else:
-                raise RuntimeError(
-                    "Input shapes should be of type ints, a tuple of ints, or a list of ints, got ",
-                    shape,
-                )
+        result = torch._refs._broadcast_shapes(*shapes)
+        if result is None:
+            return torch.Size([])
         return torch.Size(result)
     else:
         # with implementation above, torch.jit.trace hardcodes the sizes which makes subsequent replays fail
@@ -169,7 +120,7 @@ def broadcast_shapes(*shapes):
 
 def split(
     tensor: Tensor,
-    split_size_or_sections: Union[int, list[int]],
+    split_size_or_sections: int | list[int],
     dim: int = 0,
 ) -> tuple[Tensor, ...]:
     r"""Splits the tensor into chunks. Each chunk is a view of the original tensor.
@@ -412,7 +363,7 @@ def einsum(*args: Any) -> Tensor:
     if len(operands) == 1 and isinstance(operands[0], (list, tuple)):
         # the old interface of passing the operands as one list argument
         _operands = operands[0]
-        # recurse incase operands contains value that has torch function
+        # recurse in case operands contains value that has torch function
         # in the original implementation this line is omitted
         return einsum(equation, *_operands)
 
@@ -436,13 +387,13 @@ def einsum(*args: Any) -> Tensor:
 if TYPE_CHECKING:
     # The JIT doesn't understand Union, so only add type annotation for mypy
     def meshgrid(
-        *tensors: Union[Tensor, list[Tensor]], indexing: Optional[str] = None
+        *tensors: Tensor | list[Tensor], indexing: str | None = None
     ) -> tuple[Tensor, ...]:
         return _meshgrid(*tensors, indexing=indexing)
 
 else:
 
-    def meshgrid(*tensors, indexing: Optional[str] = None) -> tuple[Tensor, ...]:
+    def meshgrid(*tensors, indexing: str | None = None) -> tuple[Tensor, ...]:
         r"""Creates grids of coordinates specified by the 1D inputs in `attr`:tensors.
 
         This is helpful when you want to visualize data over some
@@ -539,7 +490,7 @@ else:
         return _meshgrid(*tensors, indexing=indexing)
 
 
-def _meshgrid(*tensors, indexing: Optional[str]):
+def _meshgrid(*tensors, indexing: str | None):
     if has_torch_function(tensors):
         return handle_torch_function(meshgrid, tensors, *tensors, indexing=indexing)
     if len(tensors) == 1 and isinstance(tensors[0], (list, tuple)):
@@ -557,15 +508,15 @@ def _meshgrid(*tensors, indexing: Optional[str]):
 def stft(
     input: Tensor,
     n_fft: int,
-    hop_length: Optional[int] = None,
-    win_length: Optional[int] = None,
-    window: Optional[Tensor] = None,
+    hop_length: int | None = None,
+    win_length: int | None = None,
+    window: Tensor | None = None,
     center: bool = True,
     pad_mode: str = "reflect",
     normalized: bool = False,
-    onesided: Optional[bool] = None,
-    return_complex: Optional[bool] = None,
-    align_to_window: Optional[bool] = None,
+    onesided: bool | None = None,
+    return_complex: bool | None = None,
+    align_to_window: bool | None = None,
 ) -> Tensor:
     r"""Short-time Fourier transform (STFT).
 
@@ -837,7 +788,7 @@ def _unique_impl(
     sorted: bool = True,
     return_inverse: bool = False,
     return_counts: bool = False,
-    dim: Optional[int] = None,
+    dim: int | None = None,
 ) -> _unique_impl_out:
     r"""unique(input, sorted=True, return_inverse=False, return_counts=False, dim=None) -> tuple[Tensor, Tensor, Tensor]
 
@@ -862,13 +813,18 @@ def _unique_impl(
         dim (int, optional): the dimension to operate upon. If ``None``, the
             unique of the flattened input is returned. Otherwise, each of the
             tensors indexed by the given dimension is treated as one of the
-            elements to apply the unique operation upon. See examples for more
-            details. Default: ``None``
+            elements to apply the unique operation upon. **Important:** when ``dim``
+            is specified, the operation finds unique sub-tensors (e.g., unique rows
+            or columns), not unique scalar values. This means individual values may
+            appear multiple times in the output if they exist in different sub-tensors.
+            See examples for more details. Default: ``None``
 
     Returns:
         (Tensor, Tensor (optional), Tensor (optional)): A tensor or a tuple of tensors containing
 
-            - **output** (*Tensor*): the output list of unique scalar elements.
+            - **output** (*Tensor*): the output list of unique scalar elements if :attr:`dim`
+              is ``None``; otherwise, the unique sub-tensors along the specified dimension.
+              Note that when :attr:`dim` is specified, scalar values may repeat in the output.
             - **inverse_indices** (*Tensor*): (optional) if
               :attr:`return_inverse` is True, there will be an additional
               returned tensor (same shape as input) representing the indices
@@ -900,6 +856,22 @@ def _unique_impl(
         >>> inverse_indices
         tensor([[0, 2],
                 [1, 2]])
+
+        >>> # When using dim, the operation finds unique sub-tensors, not unique values.
+        >>> # Notice how values can repeat in the output:
+        >>> x = torch.tensor([[1, 3, 2, 3], [1, 2, 1, 2]], dtype=torch.long)
+        >>> torch.unique(x, dim=0)  # unique rows
+        tensor([[1, 2, 1, 2],
+                [1, 3, 2, 3]])
+        >>> # Both rows are kept because they're different from each other,
+        >>> # even though values 1, 2, 3 appear multiple times in the output.
+        >>> torch.unique(x, dim=1)  # unique columns
+        tensor([[1, 2, 3],
+                [1, 1, 2]])
+        >>> # The value 1 appears twice because we're comparing columns, not values.
+        >>> # Compare with flattened (no dim):
+        >>> torch.unique(x)
+        tensor([1, 2, 3])
 
         >>> a = torch.tensor([
         ...     [
@@ -1005,7 +977,7 @@ def _unique_consecutive_impl(
     input: Tensor,
     return_inverse: bool = False,
     return_counts: bool = False,
-    dim: Optional[int] = None,
+    dim: int | None = None,
 ) -> _unique_impl_out:
     r"""Eliminates all but the first element from every consecutive group of equivalent elements.
 
@@ -1250,7 +1222,7 @@ else:
         a,
         b,
         dims: int = 2,
-        out: Optional[torch.Tensor] = None,
+        out: torch.Tensor | None = None,
     ):
         pass
 
@@ -1259,7 +1231,7 @@ else:
         a,
         b,
         dims: tuple[list[int], list[int]],
-        out: Optional[torch.Tensor] = None,
+        out: torch.Tensor | None = None,
     ):
         pass
 
@@ -1268,7 +1240,7 @@ else:
         a,
         b,
         dims: list[list[int]],
-        out: Optional[torch.Tensor] = None,
+        out: torch.Tensor | None = None,
     ):
         pass
 
@@ -1277,16 +1249,16 @@ else:
         a,
         b,
         dims: torch.Tensor,
-        out: Optional[torch.Tensor] = None,
+        out: torch.Tensor | None = None,
     ):
         pass
 
 
-def tensordot(  # noqa: F811
+def tensordot(
     a,
     b,
     dims=2,
-    out: Optional[torch.Tensor] = None,
+    out: torch.Tensor | None = None,
 ):
     r"""Returns a contraction of a and b over multiple dimensions.
 
@@ -1301,11 +1273,12 @@ def tensordot(  # noqa: F811
 
     When called with a non-negative integer argument :attr:`dims` = :math:`d`, and
     the number of dimensions of :attr:`a` and :attr:`b` is :math:`m` and :math:`n`,
-    respectively, :func:`~torch.tensordot` computes
+    respectively, :func:`~torch.tensordot` computes the tensor :math:`r` of shape
+    ``a.shape[:-dims] + b.shape[dims:]`` given by:
 
     .. math::
-        r_{i_0,...,i_{m-d}, i_d,...,i_n}
-          = \sum_{k_0,...,k_{d-1}} a_{i_0,...,i_{m-d},k_0,...,k_{d-1}} \times b_{k_0,...,k_{d-1}, i_d,...,i_n}.
+        r_{i_1,...,i_{m-d}, j_1,...,j_{n-d}}
+          = \sum_{k_1,...,k_d} a_{i_1,...,i_{m-d},k_1,...,k_d} \times b_{k_1,...,k_d, j_1,...,j_{n-d}}.
 
     When called with :attr:`dims` of the list form, the given dimensions will be contracted
     in place of the last :math:`d` of :attr:`a` and the first :math:`d` of :math:`b`. The sizes
@@ -1358,7 +1331,10 @@ def tensordot(  # noqa: F811
     if isinstance(dims, torch.Tensor):
         num_elements = dims.numel()
         if num_elements > 1:
-            assert dims.size()[0] == 2
+            if dims.size()[0] != 2:
+                raise AssertionError(
+                    f"dims tensor must have size 2 in first dimension, got {dims.size()[0]}"
+                )
             dims_a = torch.jit.annotate(list[int], dims[0].tolist())
             dims_b = torch.jit.annotate(list[int], dims[1].tolist())
         else:
@@ -1460,8 +1436,13 @@ def cdist(x1, x2, p=2.0, compute_mode="use_mm_for_euclid_dist_if_necessary"):
     r"""Computes batched the p-norm distance between each pair of the two collections of row vectors.
 
     Args:
-        x1 (Tensor): input tensor of shape :math:`B \times P \times M`.
-        x2 (Tensor): input tensor of shape :math:`B \times R \times M`.
+        x1 (Tensor): input tensor where the last two dimensions represent the points and the feature dimension respectively.
+            The shape can be :math:`D_1 \times D_2 \times \cdots \times D_n \times P \times M`,
+            where :math:`P` is the number of points and :math:`M` is the feature dimension.
+        x2 (Tensor): input tensor where the last two dimensions also represent the points and the feature dimension respectively.
+            The shape can be :math:`D_1' \times D_2' \times \cdots \times D_m' \times R \times M`,
+            where :math:`R` is the number of points and :math:`M` is the feature dimension,
+            which should match the feature dimension of `x1`.
         p: p value for the p-norm distance to calculate between each vector pair
             :math:`\in [0, \infty]`.
         compute_mode:
@@ -1517,7 +1498,7 @@ def atleast_1d(*tensors):
     Input tensors with one or more dimensions are returned as-is.
 
     Args:
-        input (Tensor or list of Tensors)
+        input (Tensor or sequence of Tensors): tensor(s) to be converted to at least 1-dimensional.
 
     Returns:
         output (Tensor or tuple of Tensors)
@@ -1538,6 +1519,8 @@ def atleast_1d(*tensors):
         >>> y = torch.tensor(1.)
         >>> torch.atleast_1d((x, y))
         (tensor([0.5000]), tensor([1.]))
+        >>> torch.atleast_1d()
+        ()
     """
     # This wrapper exists to support variadic args.
     if has_torch_function(tensors):
@@ -1553,7 +1536,7 @@ def atleast_2d(*tensors):
     Input tensors with two or more dimensions are returned as-is.
 
     Args:
-        input (Tensor or list of Tensors)
+        input (Tensor or sequence of Tensors): tensor(s) to be converted to at least 2-dimensional.
 
     Returns:
         output (Tensor or tuple of Tensors)
@@ -1576,6 +1559,8 @@ def atleast_2d(*tensors):
         >>> y = torch.tensor(1.)
         >>> torch.atleast_2d((x, y))
         (tensor([[0.5000]]), tensor([[1.]]))
+        >>> torch.atleast_2d()
+        ()
     """
     # This wrapper exists to support variadic args.
     if has_torch_function(tensors):
@@ -1591,7 +1576,7 @@ def atleast_3d(*tensors):
     Input tensors with three or more dimensions are returned as-is.
 
     Args:
-        input (Tensor or list of Tensors)
+        input (Tensor or sequence of Tensors): tensor(s) to be converted to at least 3-dimensional.
 
     Returns:
         output (Tensor or tuple of Tensors)
@@ -1622,6 +1607,8 @@ def atleast_3d(*tensors):
         >>> y = torch.tensor(1.0)
         >>> torch.atleast_3d((x, y))
         (tensor([[[0.5000]]]), tensor([[[1.]]]))
+        >>> torch.atleast_3d()
+        ()
     """
     # This wrapper exists to support variadic args.
     if has_torch_function(tensors):
@@ -1695,9 +1682,9 @@ else:
         pass
 
 
-def norm(  # noqa: F811
+def norm(
     input,
-    p: Optional[Union[float, str]] = "fro",
+    p: float | str | None = "fro",
     dim=None,
     keepdim=False,
     out=None,
@@ -1822,7 +1809,9 @@ def norm(  # noqa: F811
 
         if isinstance(p, str):
             if p == "fro" and (
-                dim is None or isinstance(dim, (int, torch.SymInt)) or len(dim) <= 2
+                dim is None
+                or isinstance(dim, (int, torch.SymInt))
+                or len(dim) <= 2  # pyrefly: ignore  # bad-argument-type
             ):
                 if out is None:
                     return torch.linalg.vector_norm(
@@ -1865,7 +1854,7 @@ def norm(  # noqa: F811
             return _VF.norm(input, p, dim=_dim, keepdim=keepdim)  # type: ignore[attr-defined]
 
     # TODO: when https://github.com/pytorch/pytorch/issues/33782 is fixed
-    # remove the overloads where dim is an int and replace with BraodcastingList1
+    # remove the overloads where dim is an int and replace with BroadcastingList1
     # and remove next four lines, replace _dim with dim
     if dim is not None:
         if isinstance(dim, (int, torch.SymInt)):
@@ -1918,7 +1907,7 @@ def norm(  # noqa: F811
 
 def unravel_index(
     indices: Tensor,
-    shape: Union[int, Sequence[int], torch.Size],
+    shape: int | Sequence[int] | torch.Size,
 ) -> tuple[Tensor, ...]:
     r"""Converts a tensor of flat indices into a tuple of coordinate tensors that
     index into an arbitrary tensor of the specified shape.
@@ -1974,11 +1963,11 @@ def unravel_index(
     return res_tensor.unbind(-1)
 
 
-def _unravel_index(indices: Tensor, shape: Union[int, Sequence[int]]) -> Tensor:
+def _unravel_index(indices: Tensor, shape: int | Sequence[int]) -> Tensor:
     torch._check_type(
         not indices.is_complex()
         and not indices.is_floating_point()
-        and not indices.dtype == torch.bool,
+        and indices.dtype != torch.bool,
         lambda: f"expected 'indices' to be integer dtype, but got {indices.dtype}",
     )
 
@@ -1988,7 +1977,7 @@ def _unravel_index(indices: Tensor, shape: Union[int, Sequence[int]]) -> Tensor:
     )
 
     if isinstance(shape, (int, torch.SymInt)):
-        shape = torch.Size([shape])
+        shape = torch.Size([shape])  # pyrefly: ignore [bad-argument-type]
     else:
         for dim in shape:
             torch._check_type(
@@ -2113,7 +2102,8 @@ def _lu_impl(A, pivot=True, get_infos=False, out=None):
 
     Args:
         A (Tensor): the tensor to factor of size :math:`(*, m, n)`
-        pivot (bool, optional): controls whether pivoting is done. Default: ``True``
+        pivot (bool, optional): Whether to compute the LU decomposition with partial pivoting, or the regular LU
+                                decomposition. :attr:`pivot`\ `= False` not supported on CPU. Default: `True`.
         get_infos (bool, optional): if set to ``True``, returns an info IntTensor.
                                     Default: ``False``
         out (tuple, optional): optional output tuple. If :attr:`get_infos` is ``True``,

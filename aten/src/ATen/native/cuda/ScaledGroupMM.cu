@@ -7,15 +7,15 @@
 #include <c10/macros/Macros.h>
 #include <c10/util/irange.h>
 
-// Two warninngs in Cutlass included header files
+// Two warnings in Cutlass included header files
 C10_DIAGNOSTIC_PUSH_AND_IGNORED_IF_DEFINED("-Wset-but-not-used")
 C10_DIAGNOSTIC_PUSH_AND_IGNORED_IF_DEFINED("-Wunused-but-set-parameter")
+C10_DIAGNOSTIC_PUSH_AND_IGNORED_IF_DEFINED("-Wunused-but-set-variable")
 
 // Determine if the architecture supports rowwise scaled mm
 // Currently failing on windows with:
 // https://github.com/NVIDIA/cutlass/issues/1571
-#if !defined(USE_ROCM) && !defined(_WIN32) && defined(CUDA_VERSION) && \
-    CUDA_VERSION >= 12000
+#if !defined(USE_ROCM) && !defined(_WIN32) && defined(CUDA_VERSION)
 
 #define BUILD_ROWWISE_FP8_KERNEL
 #endif
@@ -23,7 +23,6 @@ C10_DIAGNOSTIC_PUSH_AND_IGNORED_IF_DEFINED("-Wunused-but-set-parameter")
 #if defined(BUILD_ROWWISE_FP8_KERNEL)
 
 #include <ATen/native/cuda/GroupMMCommon.cuh>
-#include <ATen/native/cuda/cutlass_utils.cuh>
 
 #include <cute/tensor.hpp>
 #include <cutlass/core_io.h>
@@ -45,6 +44,7 @@ C10_DIAGNOSTIC_PUSH_AND_IGNORED_IF_DEFINED("-Wunused-but-set-parameter")
 #include <cutlass/gemm/kernel/gemm_universal.hpp>
 #include <cutlass/util/packed_stride.hpp>
 
+C10_DIAGNOSTIC_POP()
 C10_DIAGNOSTIC_POP()
 C10_DIAGNOSTIC_POP()
 
@@ -160,20 +160,17 @@ void f8f8bf16_grouped_gemm_impl_sm90(
   using EpilogueSchedule =
       typename Schedule<FastAccum::value, Pong::value, TB_M, TB_N, TB_K>::
           EpilogueSchedule;
-  // TODO remove *BroadcastPtrArrays and replace with just Broadcast
-  // when  https://github.com/NVIDIA/cutlass/pull/2120/ is in the tagged cutlass
-  // version Implement rowwise scaling epilogue.
-  using ScaleA = cutlass::epilogue::fusion::Sm90ColBroadcastPtrArray<
+  using ScaleA = cutlass::epilogue::fusion::Sm90ColBroadcast<
       0,
       TileShape,
-      DtypeScale,
+      DtypeScale*,
       DtypeScale,
       cute::Stride<cute::Int<1>, cute::Int<0>, cute::Int<0>>>;
 
-  using ScaleB = cutlass::epilogue::fusion::Sm90RowBroadcastPtrArray<
+  using ScaleB = cutlass::epilogue::fusion::Sm90RowBroadcast<
       0,
       TileShape,
-      DtypeScale,
+      DtypeScale*,
       DtypeScale,
       cute::Stride<cute::Int<0>, cute::Int<1>, cute::Int<0>>>;
 
@@ -195,7 +192,7 @@ void f8f8bf16_grouped_gemm_impl_sm90(
           cutlass::epilogue::collective::EpilogueTileAuto,
           DtypeAccum,
           DtypeAccum,
-          DtypeOutput,
+          void, // Indicate there is no beta scaling to save register
           LayoutOutput*,
           AlignmentOutput,
           DtypeOutput,
@@ -300,6 +297,9 @@ void f8f8bf16_grouped_gemm_impl_sm90(
   Strides tensor_StrideA = make_strides(mat_a.strides());
   Strides tensor_StrideB = make_strides(mat_b.strides());
   Strides tensor_StrideOutput = make_strides(out.strides());
+  Strides tensor_ShapeA = make_strides(mat_a.sizes());
+  Strides tensor_ShapeB = make_strides(mat_b.sizes());
+
   // scale stride will be used inside the kernel only if needed,
   // so for 1d scales the "1" assigned here won't be used
   int64_t a_scale_stride = scale_a.stride(0);
@@ -327,6 +327,8 @@ void f8f8bf16_grouped_gemm_impl_sm90(
       tensor_StrideA,
       tensor_StrideB,
       tensor_StrideOutput,
+      tensor_ShapeA,
+      tensor_ShapeB,
       a_scale_stride,
       b_scale_stride);
 
@@ -361,9 +363,9 @@ void f8f8bf16_grouped_gemm_impl_sm90(
   //       reinterpret_cast<ProblemShape::UnderlyingProblemShape*>(
   //           stride_output_h + group_count);
 
-  //   std::cout << "PTRS " << mat_a.data_ptr() << " " << mat_b.data_ptr() << "
+  //   std::cout << "PTRS " << mat_a.data_ptr() << ' ' << mat_b.data_ptr() << "
   //   "
-  //             << out.data_ptr() << " " << scale_a.data_ptr() << " "
+  //             << out.data_ptr() << ' ' << scale_a.data_ptr() << ' '
   //             << scale_b.data_ptr() << "\n";
   //   for (int i = 0; i < group_count; i++) {
   //     std::cout << "A " << (void*)inputA_ptrs_h[i] << "\n";
@@ -388,7 +390,7 @@ void f8f8bf16_grouped_gemm_impl_sm90(
        (const DtypeB**)inputB_ptrs,
        stride_B},
       {{{{inputB_scale_ptrs}, {{inputA_scale_ptrs}, {}, {}}, {}}, {}},
-       (const DtypeOutput**)output_ptrs,
+       nullptr,
        stride_output,
        output_ptrs,
        stride_output}};

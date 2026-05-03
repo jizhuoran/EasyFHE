@@ -7,7 +7,7 @@ import logging
 import os
 import pkgutil
 import unittest
-from typing import Callable
+from collections.abc import Callable
 
 import torch
 from torch._utils_internal import get_file_path_2  # @manual
@@ -59,6 +59,7 @@ class TestPublicBindings(TestCase):
         #
         #   {elem for elem in dir(torch._C) if not elem.startswith("_")}
         torch_C_allowlist_superset = {
+            "AcceleratorError",
             "AggregationType",
             "AliasDb",
             "AnyType",
@@ -122,6 +123,7 @@ class TestPublicBindings(TestCase):
             "FutureType",
             "Generator",
             "GeneratorType",
+            "GreenContext",
             "get_autocast_cpu_dtype",
             "get_autocast_dtype",
             "get_autocast_ipu_dtype",
@@ -182,7 +184,6 @@ class TestPublicBindings(TestCase):
             "PyTorchFileReader",
             "PyTorchFileWriter",
             "qscheme",
-            "read_vitals",
             "RRefType",
             "ScriptClass",
             "ScriptClassFunction",
@@ -209,7 +210,6 @@ class TestPublicBindings(TestCase):
             "set_flush_denormal",
             "set_num_interop_threads",
             "set_num_threads",
-            "set_vital",
             "Size",
             "StaticModule",
             "Stream",
@@ -230,7 +230,6 @@ class TestPublicBindings(TestCase):
             "Value",
             "set_autocast_gpu_dtype",
             "get_autocast_gpu_dtype",
-            "vitals_enabled",
             "wait",
             "Tag",
             "set_autocast_xla_enabled",
@@ -290,7 +289,7 @@ class TestPublicBindings(TestCase):
         # do not get imported by public code.
         # DO NOT add public modules here.
         private_allowlist = {
-            "torch._inductor.codegen.cuda.cuda_kernel",
+            "torch._inductor.codegen.cutlass.cuda_kernel",
             # TODO(#133647): Remove the onnx._internal entries after
             # onnx and onnxscript are installed in CI.
             "torch.onnx._internal.exporter",
@@ -355,12 +354,18 @@ class TestPublicBindings(TestCase):
             "torch.testing._internal.distributed.rpc.rpc_test",
             "torch.testing._internal.distributed.rpc.tensorpipe_rpc_agent_test_fixture",
             "torch.testing._internal.distributed.rpc_utils",
-            "torch._inductor.codegen.cuda.cuda_template",
+            "torch.testing._internal.py312_intrinsics",
+            "torch._inductor.codegen.cutlass.cuda_template",
+            "torch._inductor.codegen.cutedsl._cutedsl_utils",
             "torch._inductor.codegen.cuda.gemm_template",
             "torch._inductor.codegen.cpp_template",
             "torch._inductor.codegen.cpp_gemm_template",
             "torch._inductor.codegen.cpp_micro_gemm",
             "torch._inductor.codegen.cpp_template_kernel",
+            "torch._inductor.kernel.vendored_templates.cutedsl.kernels.cutedsl_grouped_gemm",  # depends on cutlass
+            "torch._inductor.kernel.vendored_templates.cutedsl.dense_blockscaled_gemm_persistent",  # depends on cutlass
+            "torch._inductor.kernel.vendored_templates.cutedsl.wrappers",  # depends on cutlass_api
+            "torch._inductor.kernel.vendored_templates.cutedsl.wrappers.dense_blockscaled_gemm_kernel",  # depends on cutlass_api
             "torch._inductor.runtime.triton_helpers",
             "torch.ao.pruning._experimental.data_sparsifier.lightning.callbacks.data_sparsity",
             "torch.backends._coreml.preprocess",
@@ -407,9 +412,13 @@ class TestPublicBindings(TestCase):
 
         errors = []
         for mod, exc in failures:
-            if mod in private_allowlist:
-                # make sure mod is actually private
-                assert any(t.startswith("_") for t in mod.split("."))
+            if mod in private_allowlist or (
+                mod.startswith("torch._native.ops.") and "triton" in mod
+            ):
+                if self._is_mod_public(mod):
+                    raise AssertionError(
+                        f"Expected private module name to include '_' segments: {mod}"
+                    )
                 continue
             errors.append(
                 f"{mod} failed to import with error {type(exc).__qualname__}: {str(exc)}"
@@ -511,17 +520,20 @@ class TestPublicBindings(TestCase):
                             "does not have `__all__` defined"
                         )
                         fix_is_public = (
-                            f"remove it from the modules's (`{modname}`) `__all__`"
+                            f"remove it from the modules' (`{modname}`) `__all__`"
                             if is_all
                             else f"either define a `__all__` for `{modname}` or add a `_` at the beginning of the name"
                         )
                     else:
-                        assert is_all
+                        if not is_all:
+                            raise AssertionError(
+                                f"Expected {modname}.{elem} to be checked via __all__"
+                            )
                         why_is_public = (
                             f"it is not inside the module's (`{modname}`) `__all__`"
                         )
                         fix_is_public = (
-                            f"add it from the modules's (`{modname}`) `__all__`"
+                            f"add it from the modules' (`{modname}`) `__all__`"
                         )
                     if looks_public:
                         why_looks_public = (

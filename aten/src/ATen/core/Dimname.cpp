@@ -4,13 +4,16 @@
 
 namespace at {
 
-static Symbol kWildcard = Symbol::dimname("*");
+static Symbol kWildcard() {
+  static Symbol singleton = Symbol::dimname("*");
+  return singleton;
+}
 
 std::ostream& operator<<(std::ostream& out, const Dimname& dimname) {
   if (dimname.type() == NameType::WILDCARD) {
     out << "None";
   } else {
-    out << "'" << dimname.symbol().toUnqualString() << "'";
+    out << '\'' << dimname.symbol().toUnqualString() << '\'';
   }
   return out;
 }
@@ -25,9 +28,10 @@ bool Dimname::isValidName(const std::string& name) {
   }
   for (auto it = name.begin(); it != name.end(); ++it) {
     // NOLINTNEXTLINE(bugprone-branch-clone)
-    if (std::isalpha(*it) || *it == '_') {
+    const unsigned char ch = static_cast<unsigned char>(*it);
+    if (std::isalpha(ch) || ch == '_') {
       continue;
-    } else if (it != name.begin() && std::isdigit(*it)) {
+    } else if (it != name.begin() && std::isdigit(ch)) {
       continue;
     }
     return false;
@@ -45,7 +49,7 @@ static void check_valid_identifier(const std::string& name) {
 
 Dimname Dimname::fromSymbol(Symbol name) {
   TORCH_INTERNAL_ASSERT(name.is_dimname());
-  if (name == kWildcard) {
+  if (name == kWildcard()) {
     return Dimname::wildcard();
   }
   check_valid_identifier(name.toUnqualString());
@@ -53,7 +57,7 @@ Dimname Dimname::fromSymbol(Symbol name) {
 }
 
 Dimname Dimname::wildcard() {
-  static Dimname result(kWildcard, NameType::WILDCARD);
+  static Dimname result(kWildcard(), NameType::WILDCARD);
   return result;
 }
 
