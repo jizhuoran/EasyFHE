@@ -124,20 +124,23 @@ _like_tensor_constructors = ordered_set(
 
 _device_not_kwarg_ops = ordered_set(
     aten._resize_output_.default,
-    aten._nested_tensor_from_tensor_list.default,
-    aten._nested_tensor_from_tensor_list.out,
+    aten._resize_output.default,
+    aten._resize_output.out,
     aten.pin_memory.default,
     aten.to.device,
     aten.to.prim_Device,
     aten.is_pinned.default,
     aten._pin_memory.default,
     aten._pin_memory.out,
-    aten._resize_output.default,
-    aten._resize_output.out,
+    getattr(aten, '_nested_tensor_from_tensor_list', None),
+    getattr(aten, '_nested_tensor_from_tensor_list_out', None),
 )
 
+# Filter out None entries from _device_not_kwarg_ops
+_device_not_kwarg_ops = ordered_set(*[x for x in _device_not_kwarg_ops if x is not None])
+
 # this op is never actually used
-_non_kwarg_device_constructors = (aten._list_to_tensor,)
+_non_kwarg_device_constructors = (aten._list_to_tensor,) if hasattr(aten, '_list_to_tensor') else ()
 
 
 def contains_tensor_types(type_: Any) -> bool:
@@ -167,6 +170,8 @@ def register_op_impl(
     | tuple[OpOverload, ...],
 ) -> Callable[[Callable[_P, _R]], Callable[_P, _R]]:
     def impl_decorator(op_impl: Callable[_P, _R]) -> Callable[_P, _R]:
+        if run_impl_check is None:
+            return op_impl
         if isinstance(run_impl_check, OpOverload):
             if run_impl_check in op_implementations_dict:
                 raise AssertionError(f"duplicate registration: {run_impl_check}")
@@ -356,7 +361,7 @@ def resize_as_(
         return func(*args, **kwargs)
 
 
-@register_op_impl(aten._sparse_coo_tensor_with_dims_and_tensors.default)
+@register_op_impl(getattr(aten, '_sparse_coo_tensor_with_dims_and_tensors', None))
 def _sparse_coo_tensor_with_dims_and_tensors(
     fake_mode: FakeTensorMode, func: OpOverload, *args: Any, **kwargs: Any
 ) -> FakeTensor:
@@ -913,7 +918,9 @@ def nonzero(fake_mode: FakeTensorMode, func: OpOverload, arg: FakeTensor) -> Fak
     return arg.new_empty_strided((nnz, arg.dim()), (1, nnz), dtype=torch.int64)  # type: ignore[return]
 
 
-@register_op_impl(torch.ops.aten._padded_dense_to_jagged_forward.default)
+@register_op_impl(
+    getattr(torch.ops.aten, '_padded_dense_to_jagged_forward', None)
+)
 def _padded_dense_to_jagged_forward(
     fake_mode: FakeTensorMode,
     func: OpOverload,
@@ -1247,7 +1254,7 @@ def index_tensor(
 
 # Can take mixed meta/non-meta arguments; the meta registration
 # will roughly do the right thing even when given real devices
-@register_op_impl(aten._embedding_bag.default)
+@register_op_impl(getattr(aten, '_embedding_bag', None))
 def embedding_bag(
     fake_mode: FakeTensorMode, func: OpOverload, *args: Any, **kwargs: Any
 ) -> tuple[FakeTensor, FakeTensor, FakeTensor, FakeTensor]:
@@ -1307,14 +1314,19 @@ def index_put_impl(
         return out
 
 
-@register_op_impl(aten._nested_tensor_from_tensor_list.default)
-@register_op_impl(aten._nested_tensor_from_tensor_list.out)
-@register_op_impl(aten._nested_view_from_buffer.default)
-@register_op_impl(aten._nested_view_from_buffer_copy.default)
 def nested_tensors_unsupported(
     fake_mode: FakeTensorMode, func: OpOverload, *args: Any, **kwargs: Any
 ) -> None:
     raise UnsupportedOperatorException(func)
+
+
+if hasattr(aten, '_nested_tensor_from_tensor_list'):
+    register_op_impl(aten._nested_tensor_from_tensor_list.default)(nested_tensors_unsupported)
+    register_op_impl(aten._nested_tensor_from_tensor_list.out)(nested_tensors_unsupported)
+if hasattr(aten, '_nested_view_from_buffer'):
+    register_op_impl(aten._nested_view_from_buffer.default)(nested_tensors_unsupported)
+if hasattr(aten, '_nested_view_from_buffer_copy'):
+    register_op_impl(aten._nested_view_from_buffer_copy.default)(nested_tensors_unsupported)
 
 
 @register_op_impl(
@@ -1327,8 +1339,6 @@ def nested_tensors_unsupported(
             aten.is_pinned.default,
             aten.to.device,
             aten.to.prim_Device,
-            aten._nested_tensor_from_tensor_list.default,
-            aten._nested_tensor_from_tensor_list.out,
         )
     ]
 )
@@ -1337,7 +1347,7 @@ def nyi(fake_mode: FakeTensorMode, func: OpOverload, *args: Any, **kwargs: Any) 
         raise AssertionError(f"NYI: {func}")
 
 
-@register_op_impl([aten.convolution.default, aten.convolution_backward.default])
+@register_op_impl([x for x in [getattr(aten, 'convolution', None), getattr(aten, 'convolution_backward', None)] if x is not None])
 def conv(
     fake_mode: FakeTensorMode, func: OpOverload, *args: Any, **kwargs: Any
 ) -> FakeTensor | tuple[FakeTensor | None, FakeTensor | None, FakeTensor | None]:
@@ -1418,7 +1428,7 @@ def conv(
             )
 
 
-@register_op_impl(torch.ops.aten.bincount.default)
+@register_op_impl(getattr(torch.ops.aten, 'bincount', None))
 def bincount(
     fake_mode: FakeTensorMode,
     func: OpOverload,
@@ -1442,7 +1452,7 @@ def bincount(
     return inputs.new_empty(new_size)  # type: ignore[return]
 
 
-@register_op_impl(torch.ops.aten._pack_padded_sequence.default)
+@register_op_impl(getattr(torch.ops.aten, '_pack_padded_sequence', None))
 def _pack_padded_sequence(
     fake_mode: FakeTensorMode,
     func: OpOverload,

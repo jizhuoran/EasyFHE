@@ -58,9 +58,13 @@ class cuFFTPlanCacheAttrContextProp:
         self.setter = setter
 
     def __get__(self, obj, objtype):
+        if self.getter is None:
+            return 0
         return self.getter(obj.device_index)
 
     def __set__(self, obj, val):
+        if self.setter is None:
+            return
         if isinstance(self.setter, str):
             raise RuntimeError(self.setter)
         self.setter(obj.device_index, val)
@@ -78,17 +82,20 @@ class cuFFTPlanCache:
         self.device_index = device_index
 
     size = cuFFTPlanCacheAttrContextProp(
-        torch._cufft_get_plan_cache_size,
+        getattr(torch, '_cufft_get_plan_cache_size', None),
         ".size is a read-only property showing the number of plans currently in the "
         "cache. To change the cache capacity, set cufft_plan_cache.max_size.",
     )
 
     max_size = cuFFTPlanCacheAttrContextProp(
-        torch._cufft_get_plan_cache_max_size, torch._cufft_set_plan_cache_max_size
+        getattr(torch, '_cufft_get_plan_cache_max_size', None),
+        getattr(torch, '_cufft_set_plan_cache_max_size', None),
     )
 
     def clear(self):
-        return torch._cufft_clear_plan_cache(self.device_index)
+        fn = getattr(torch, '_cufft_clear_plan_cache', None)
+        if fn is not None:
+            return fn(self.device_index)
 
 
 class cuFFTPlanCacheManager:

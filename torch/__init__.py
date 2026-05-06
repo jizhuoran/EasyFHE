@@ -2288,6 +2288,10 @@ from torch.autograd import (  # usort: skip
     set_grad_enabled as set_grad_enabled,
 )
 
+# EasyFHE: pre-import jit+fx to avoid circular imports during lazy loading
+import torch.jit as jit  # noqa: F811
+import torch.fx as fx  # noqa: F811
+
 from torch import (
     __config__ as __config__,
     __future__ as __future__,
@@ -2297,41 +2301,13 @@ from torch import (
     backends as backends,
     cpu as cpu,
     cuda as cuda,
-    distributed as distributed,
-    distributions as distributions,
-    fft as fft,
-    futures as futures,
     hub as hub,
-    jit as jit,
-    linalg as linalg,
-    mps as mps,
-    mtia as mtia,
-    multiprocessing as multiprocessing,
-    nested as nested,
-    nn as nn,
-    optim as optim,
     overrides as overrides,
-    profiler as profiler,
-    sparse as sparse,
-    special as special,
-    testing as testing,
     types as types,
     utils as utils,
     version as version,
     xpu as xpu,
 )
-from torch.signal import windows as windows
-
-
-# Quantized, sparse, AO, etc. should be last to get imported, as nothing
-# is expected to depend on them.
-from torch import ao as ao  # usort: skip
-
-# nn.quant* depends on ao -- so should be after those.
-import torch.nn.intrinsic
-import torch.nn.qat
-import torch.nn.quantizable
-import torch.nn.quantized
 
 
 _C._init_names(list(_storage_classes))
@@ -2358,13 +2334,6 @@ from torch._classes import classes as classes  # usort: skip
 sys.modules.setdefault(f"{__name__}.ops", ops)
 sys.modules.setdefault(f"{__name__}.classes", classes)
 
-# quantization depends on torch.fx and torch.ops
-# Import quantization
-from torch import quantization as quantization  # usort: skip
-
-# Import the quasi random sampler
-from torch import quasirandom as quasirandom  # usort: skip
-
 # If you are seeing this, it means that this call site was not checked if
 # the memory format could be preserved, and it was switched to old default
 # behaviour of contiguous
@@ -2379,28 +2348,9 @@ del register_after_fork
 
 # Import tools that require fully imported torch (for applying
 # torch.jit.script as a decorator, for instance):
-from torch._lobpcg import lobpcg as lobpcg
 
 
-# These were previously defined in native_functions.yaml and appeared on the
-# `torch` namespace, but we moved them to c10 dispatch to facilitate custom
-# class usage. We add these lines here to preserve backward compatibility.
-quantized_lstm = ops.aten.quantized_lstm
-quantized_gru = ops.aten.quantized_gru
 
-# Import experimental masked operations support. See
-# [RFC-0016](https://github.com/pytorch/rfcs/pull/27) for more
-# information.
-from torch import masked as masked
-
-# Import removed ops with error message about removal
-from torch._linalg_utils import (  # type: ignore[misc]
-    _symeig as symeig,
-    eig,
-    lstsq,
-    matrix_rank,
-    solve,
-)
 from torch.utils.dlpack import from_dlpack, to_dlpack
 
 
@@ -2847,23 +2797,9 @@ def _register_device_module(device_type, module):
 
 
 from torch import (
-    export as export,
-    func as func,
-    library as library,
     return_types as return_types,
 )
-from torch._higher_order_ops import cond as cond, while_loop as while_loop
-from torch.func import vmap as vmap
 
-
-if not TYPE_CHECKING:
-    # register python metas for distributed ops
-    # Only import if distributed is available (USE_DISTRIBUTED=1)
-    if hasattr(torch._C, "_c10d_init"):
-        import torch.distributed._meta_registrations as coll_meta_registrations
-
-        del coll_meta_registrations
-    from torch import _meta_registrations
 
 # Enable CUDA Sanitizer
 if "TORCH_CUDA_SANITIZER" in os.environ:
@@ -2871,29 +2807,17 @@ if "TORCH_CUDA_SANITIZER" in os.environ:
 
     csan.enable_cuda_sanitizer()
 
-# Populate magic methods on SymInt and SymFloat
-import torch.fx.experimental.sym_node
-from torch import fx as fx
-
-
 # Register MPS specific decomps
 torch.backends.mps._init()
 
-from torch import compiler as compiler
-
 
 class _TritonLibrary:
-    lib = torch.library.Library("triton", "DEF")
-    ops_table: dict[tuple[str, str], _Callable] = {}
+    ops_table: dict = {}
 
     @classmethod
     def registerOp(cls, op_key, full_schema, op_impl, dispatch_key):
-        if (op_key, dispatch_key) not in cls.ops_table:
-            cls.lib.define(full_schema)
-            cls.lib.impl("triton::" + op_key, op_impl, dispatch_key)
-            cls.ops_table[(op_key, dispatch_key)] = op_impl
-
-        return cls.ops_table[(op_key, dispatch_key)]
+        cls.ops_table[(op_key, dispatch_key)] = op_impl
+        return op_impl
 
 
 # Deprecated attributes
@@ -2922,6 +2846,26 @@ else:
         "_export",
         # ONNX must be imported after _dynamo, _ops, _subclasses, fx, func and jit
         "onnx",
+        # EasyFHE: modules not in bulk import but needed lazily
+        "distributed",
+        "distributions",
+        "fft",
+        "func",
+        "fx",
+        "jit",
+        "library",
+        "linalg",
+        "masked",
+        "mps",
+        "mtia",
+        "multiprocessing",
+        "nested",
+        "nn",
+        "optim",
+        "profiler",
+        "special",
+        "sparse",
+        "testing",
     }
 
     def __getattr__(name):

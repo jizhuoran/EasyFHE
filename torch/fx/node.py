@@ -110,7 +110,7 @@ _side_effectful_functions: set[Callable[..., Any]] = {
     _ops.profiler._record_function_enter_new.default,
     _ops.profiler._record_function_exit,
     _ops.profiler._record_function_exit._RecordFunction,
-    _ops.inductor.accumulate_grad_.default,
+    getattr(_ops.inductor, 'accumulate_grad_', None),
     operator.setitem,
     *_side_effectful_need_to_be_preserved_pre_dispatch,
 }

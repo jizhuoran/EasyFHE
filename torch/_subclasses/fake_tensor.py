@@ -986,7 +986,7 @@ class FakeTensor(Tensor):
         # list of ops which can have args(tensor/tensorList) in mixed device
         mixed_device_fns = ordered_set(
             aten._foreach_copy.default,
-        )
+        ) if hasattr(aten, '_foreach_copy') else ordered_set()
 
         # These in-place ops keep the destination tensor's device even if the
         # rhs was explicitly constructed on meta.
@@ -3138,7 +3138,9 @@ class FakeTensorMode(TorchDispatchMode):
         aten.view_as_real.default,
         aten.view_as_complex.default,
         aten.set_.source_Storage_storage_offset,
-        aten._sparse_coo_tensor_with_dims_and_tensors.default,
+        aten._sparse_coo_tensor_with_dims_and_tensors.default
+        if hasattr(aten, '_sparse_coo_tensor_with_dims_and_tensors')
+        else aten.detach.default,
     )
 
     _unbacked_special_fake_handling_ops = ordered_set(

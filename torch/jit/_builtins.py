@@ -114,15 +114,15 @@ _builtin_ops = [
     (torch._C._get_tracing_state, "aten::_get_tracing_state"),
     (torch._C._get_cpu_capability, "aten::_get_cpu_capability"),
     (warnings.warn, "aten::warn"),
-    (torch._VF.stft, "aten::stft"),  # type: ignore[attr-defined]
-    (torch._VF.istft, "aten::istft"),  # type: ignore[attr-defined]
-    (torch._VF.cdist, "aten::cdist"),  # type: ignore[attr-defined]
+    (getattr(torch._VF, 'stft', None), "aten::stft"),
+    (getattr(torch._VF, 'istft', None), "aten::istft"),
+    (getattr(torch._VF, 'cdist', None), "aten::cdist"),
     (torch._VF.norm, "aten::norm"),  # type: ignore[attr-defined]
     (torch._VF.unique_dim, "aten::unique_dim"),
     (torch._VF.unique_consecutive, "aten::unique_consecutive"),  # type: ignore[attr-defined]
-    (torch._VF.nuclear_norm, "aten::nuclear_norm"),
-    (torch._VF.frobenius_norm, "aten::frobenius_norm"),
-    (torch._VF.tensordot, "aten::tensordot"),  # type: ignore[attr-defined]
+    (getattr(torch._VF, 'nuclear_norm', None), "aten::nuclear_norm"),
+    (getattr(torch._VF, 'frobenius_norm', None), "aten::frobenius_norm"),
+    (getattr(torch._VF, 'tensordot', None), "aten::tensordot"),
 ]
 
 # ops in torch.functional are bound to torch

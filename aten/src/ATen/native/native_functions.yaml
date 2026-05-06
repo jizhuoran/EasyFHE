@@ -7288,6 +7288,17 @@
     CPU: moddown_cpu
     CUDA: moddown_cuda
 
+- func: innerproduct(Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: innerproduct_cpu
+    CUDA: innerproduct_cuda
+
+- func: innerproduct_broadcast_cipher(Tensor in_modup, *, Tensor[] swk, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: innerproduct_broadcast_cipher_cpu
+
 - func: drop_last_element_and_scale(Tensor input, *, int curr_limbs, int l, int L, int N, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
   device_check: NoCheck
   dispatch:

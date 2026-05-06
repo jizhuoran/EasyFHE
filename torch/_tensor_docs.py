@@ -2,12 +2,21 @@
 """Adds docstrings to Tensor functions"""
 
 import torch._C
-from torch._C import _add_docstr as add_docstr
+from torch._C import _add_docstr as _orig_add_docstr
 from torch._torch_docs import parse_kwargs, reproducibility_notes
 
 
+def add_docstr(obj, docstr):
+    if obj is None:
+        return
+    try:
+        _orig_add_docstr(obj, docstr)
+    except (AttributeError, TypeError):
+        pass
+
+
 def add_docstr_all(method: str, docstr: str) -> None:
-    add_docstr(getattr(torch._C.TensorBase, method), docstr)
+    add_docstr(getattr(torch._C.TensorBase, method, None), docstr)
 
 
 common_args = parse_kwargs(

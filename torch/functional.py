@@ -7,7 +7,13 @@ from typing import Any, TYPE_CHECKING
 import torch
 import torch.nn.functional as F
 from torch import _VF, Tensor
-from torch._C import _add_docstr
+from torch._C import _add_docstr as _orig_add_docstr
+
+
+def _add_docstr(obj, docstr):
+    if obj is None:
+        return
+    _orig_add_docstr(obj, docstr)
 from torch._jit_internal import _overload as overload, boolean_dispatch
 from torch._lowrank import pca_lowrank, svd_lowrank
 from torch.overrides import (
@@ -692,7 +698,7 @@ def stft(
 
 
 istft = _add_docstr(
-    torch.istft,
+    getattr(torch, 'istft', None),
     "istft(input, n_fft, hop_length=None, win_length=None, window=None, center=True, "
     "normalized=False, onesided=None, length=None, return_complex=False) -> Tensor:\n"
     r"""
