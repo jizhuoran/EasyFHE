@@ -130,13 +130,3 @@ Tensor _test_parallel_materialize(const Tensor& self, int64_t num_parallel, bool
 
 } // namespace at::native
 
-namespace at::functionalization {
-
-// view ops must have a functional inverse registered
-Tensor FunctionalInverses::_test_autograd_multiple_dispatch_view_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false,
-    "Attempted to call _test_autograd_multiple_dispatch_view_inverse() during the functionalization pass. ",
-    "This function is for testing only and should never be called.");
-}
-
-} // namespace at::functionalization

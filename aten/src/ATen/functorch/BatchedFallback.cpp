@@ -500,7 +500,7 @@ void batchedNestedTensorForLoopFallback(const c10::OperatorHandle& op, torch::ji
   for (const auto return_idx : c10::irange(0, num_returns)) {
     auto shards = output_shards_chunks[return_idx];
     c10::impl::ExcludeDispatchKeyGuard guard(DispatchKey::BatchedNestedTensor);
-    auto out_nt = at::_nested_tensor_from_tensor_list(shards);
+    auto out_nt = at::stack(shards);
     // NB: NTs only support batching over dim 0
     torch::jit::push(stack, makeBatched(out_nt, 0, maybeCurrentDynamicLayer()->layerId()));
   }

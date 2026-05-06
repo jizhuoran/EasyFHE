@@ -9,7 +9,6 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_nested_tensor_size_native.h>
 #include <ATen/ops/contiguous_native.h>
 #include <ATen/ops/cudnn_is_acceptable_native.h>
 #include <ATen/ops/detach_native.h>
@@ -39,17 +38,8 @@ bool is_same_size(const Tensor& self, const Tensor& other) {
 }
 
 bool nested_is_same_size(const Tensor& self, const Tensor& other) {
-  TORCH_CHECK(
-      self.is_nested() && other.is_nested(),
-      "Expected both self and other to be nested tensors. ",
-      "Self ",
-      self.is_nested() ? "is " : "is not ",
-      "nested. While Other ",
-      other.is_nested() ? "is " : "is not ",
-      "nested.")
-  const auto self_nt_size = _nested_tensor_size(self);
-  const auto other_nt_size = _nested_tensor_size(other);
-  return at::equal(self_nt_size, other_nt_size);
+  TORCH_CHECK(false, "Nested tensors not supported in EasyFHE");
+  return false;
 }
 int64_t size(const Tensor& self, int64_t dim) {
   return self.size(dim);

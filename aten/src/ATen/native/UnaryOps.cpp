@@ -57,16 +57,10 @@
 #include <ATen/ops/cosh_native.h>
 #include <ATen/ops/deg2rad.h>
 #include <ATen/ops/deg2rad_native.h>
-#include <ATen/ops/digamma.h>
-#include <ATen/ops/digamma_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/erf.h>
 #include <ATen/ops/erf_native.h>
-#include <ATen/ops/erfc.h>
-#include <ATen/ops/erfc_native.h>
-#include <ATen/ops/erfinv.h>
-#include <ATen/ops/erfinv_native.h>
 #include <ATen/ops/exp2.h>
 #include <ATen/ops/exp2_native.h>
 #include <ATen/ops/exp_native.h>
@@ -77,11 +71,7 @@
 #include <ATen/ops/frac_native.h>
 #include <ATen/ops/frexp.h>
 #include <ATen/ops/frexp_native.h>
-#include <ATen/ops/i0.h>
-#include <ATen/ops/i0_native.h>
 #include <ATen/ops/imag_native.h>
-#include <ATen/ops/lgamma.h>
-#include <ATen/ops/lgamma_native.h>
 #include <ATen/ops/log10_native.h>
 #include <ATen/ops/log1p.h>
 #include <ATen/ops/log1p_native.h>
@@ -92,15 +82,11 @@
 #include <ATen/ops/logit.h>
 #include <ATen/ops/logit_native.h>
 #include <ATen/ops/mul.h>
-#include <ATen/ops/mvlgamma.h>
-#include <ATen/ops/mvlgamma_native.h>
 #include <ATen/ops/nan_to_num.h>
 #include <ATen/ops/nan_to_num_native.h>
 #include <ATen/ops/neg.h>
 #include <ATen/ops/neg_native.h>
 #include <ATen/ops/negative_native.h>
-#include <ATen/ops/polygamma.h>
-#include <ATen/ops/polygamma_native.h>
 #include <ATen/ops/positive_native.h>
 #include <ATen/ops/pow.h>
 #include <ATen/ops/rad2deg.h>
@@ -123,42 +109,6 @@
 #include <ATen/ops/sinc.h>
 #include <ATen/ops/sinc_native.h>
 #include <ATen/ops/sinh_native.h>
-#include <ATen/ops/special_airy_ai_native.h>
-#include <ATen/ops/special_bessel_j0_native.h>
-#include <ATen/ops/special_bessel_j1_native.h>
-#include <ATen/ops/special_bessel_y0_native.h>
-#include <ATen/ops/special_bessel_y1_native.h>
-#include <ATen/ops/special_digamma_native.h>
-#include <ATen/ops/special_entr_native.h>
-#include <ATen/ops/special_erf_native.h>
-#include <ATen/ops/special_erfc_native.h>
-#include <ATen/ops/special_erfcx_native.h>
-#include <ATen/ops/special_erfinv_native.h>
-#include <ATen/ops/special_exp2_native.h>
-#include <ATen/ops/special_expit_native.h>
-#include <ATen/ops/special_expm1_native.h>
-#include <ATen/ops/special_gammaln_native.h>
-#include <ATen/ops/special_i0_native.h>
-#include <ATen/ops/special_i0e_native.h>
-#include <ATen/ops/special_i1_native.h>
-#include <ATen/ops/special_i1e_native.h>
-#include <ATen/ops/special_log1p_native.h>
-#include <ATen/ops/special_log_ndtr_native.h>
-#include <ATen/ops/special_logit_native.h>
-#include <ATen/ops/special_modified_bessel_i0_native.h>
-#include <ATen/ops/special_modified_bessel_i1_native.h>
-#include <ATen/ops/special_modified_bessel_k0_native.h>
-#include <ATen/ops/special_modified_bessel_k1_native.h>
-#include <ATen/ops/special_multigammaln_native.h>
-#include <ATen/ops/special_ndtr_native.h>
-#include <ATen/ops/special_ndtri_native.h>
-#include <ATen/ops/special_polygamma_native.h>
-#include <ATen/ops/special_psi_native.h>
-#include <ATen/ops/special_round_native.h>
-#include <ATen/ops/special_scaled_modified_bessel_k0_native.h>
-#include <ATen/ops/special_scaled_modified_bessel_k1_native.h>
-#include <ATen/ops/special_sinc_native.h>
-#include <ATen/ops/special_spherical_bessel_j0_native.h>
 #include <ATen/ops/sqrt_native.h>
 #include <ATen/ops/square_native.h>
 #include <ATen/ops/tan_native.h>
@@ -188,15 +138,10 @@ CREATE_UNARY_FLOAT_META_FUNC(atan)
 CREATE_UNARY_FLOAT_META_FUNC(atanh)
 CREATE_UNARY_FLOAT_META_FUNC(cos)
 CREATE_UNARY_FLOAT_META_FUNC(cosh)
-CREATE_UNARY_FLOAT_META_FUNC(digamma)
 CREATE_UNARY_FLOAT_META_FUNC(erf)
-CREATE_UNARY_FLOAT_META_FUNC(erfc)
-CREATE_UNARY_FLOAT_META_FUNC(erfinv)
 CREATE_UNARY_FLOAT_META_FUNC(exp)
 CREATE_UNARY_FLOAT_META_FUNC(exp2)
 CREATE_UNARY_FLOAT_META_FUNC(expm1)
-CREATE_UNARY_FLOAT_META_FUNC(i0)
-CREATE_UNARY_FLOAT_META_FUNC(lgamma)
 CREATE_UNARY_FLOAT_META_FUNC(log)
 CREATE_UNARY_FLOAT_META_FUNC(log10)
 CREATE_UNARY_FLOAT_META_FUNC(log1p)
@@ -207,33 +152,10 @@ CREATE_UNARY_FLOAT_META_FUNC(sigmoid)
 CREATE_UNARY_FLOAT_META_FUNC(sin)
 CREATE_UNARY_FLOAT_META_FUNC(sinc)
 CREATE_UNARY_FLOAT_META_FUNC(sinh)
-CREATE_UNARY_FLOAT_META_FUNC(special_entr)
-CREATE_UNARY_FLOAT_META_FUNC(special_erfcx)
-CREATE_UNARY_FLOAT_META_FUNC(special_i0e)
-CREATE_UNARY_FLOAT_META_FUNC(special_i1)
-CREATE_UNARY_FLOAT_META_FUNC(special_i1e)
-CREATE_UNARY_FLOAT_META_FUNC(special_ndtri)
-CREATE_UNARY_FLOAT_META_FUNC(special_log_ndtr)
 CREATE_UNARY_FLOAT_META_FUNC(sqrt)
 CREATE_UNARY_FLOAT_META_FUNC(tan)
 CREATE_UNARY_FLOAT_META_FUNC(tanh)
-CREATE_UNARY_FLOAT_META_FUNC(special_airy_ai)
-CREATE_UNARY_FLOAT_META_FUNC(special_bessel_j0)
-CREATE_UNARY_FLOAT_META_FUNC(special_bessel_j1)
-CREATE_UNARY_FLOAT_META_FUNC(special_bessel_y0)
-CREATE_UNARY_FLOAT_META_FUNC(special_bessel_y1)
-CREATE_UNARY_FLOAT_META_FUNC(special_modified_bessel_i0)
-CREATE_UNARY_FLOAT_META_FUNC(special_modified_bessel_i1)
-CREATE_UNARY_FLOAT_META_FUNC(special_modified_bessel_k0)
-CREATE_UNARY_FLOAT_META_FUNC(special_modified_bessel_k1)
-CREATE_UNARY_FLOAT_META_FUNC(special_scaled_modified_bessel_k0)
-CREATE_UNARY_FLOAT_META_FUNC(special_scaled_modified_bessel_k1)
-CREATE_UNARY_FLOAT_META_FUNC(special_spherical_bessel_j0)
 
-TORCH_META_FUNC(polygamma)(int64_t n, const Tensor& self) {
-  TORCH_CHECK(n >= 0, "polygamma(n, x) does not support negative n.");
-  build_borrowing_unary_float_op(maybe_get_output(), self);
-}
 
 // These are normal unary ops that preserve dtype
 #define CREATE_UNARY_META_FUNC(func)                  \
@@ -327,16 +249,11 @@ CREATE_UNARY_TORCH_IMPL_FUNC(atanh_out, atanh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(bitwise_not_out, bitwise_not_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(cos_out, cos_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(cosh_out, cosh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(digamma_out, digamma_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(erf_out, erf_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(erfc_out, erfc_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(erfinv_out, erfinv_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(exp_out, exp_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(exp2_out, exp2_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(expm1_out, expm1_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(frac_out, frac_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(i0_out, i0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(lgamma_out, lgamma_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log_out, log_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log10_out, log10_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log1p_out, log1p_stub)
@@ -349,28 +266,9 @@ CREATE_UNARY_TORCH_IMPL_FUNC(sign_out, sign_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sin_out, sin_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sinc_out, sinc_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sinh_out, sinh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_entr_out, special_entr_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_erfcx_out, special_erfcx_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_i0e_out, special_i0e_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_i1e_out, special_i1e_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_i1_out, special_i1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_ndtri_out, special_ndtri_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_log_ndtr_out, special_log_ndtr_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sqrt_out, sqrt_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(tan_out, tan_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(tanh_out, tanh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_airy_ai_out, special_airy_ai_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_bessel_j0_out, special_bessel_j0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_bessel_j1_out, special_bessel_j1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_bessel_y0_out, special_bessel_y0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_bessel_y1_out, special_bessel_y1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_modified_bessel_i0_out, special_modified_bessel_i0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_modified_bessel_i1_out, special_modified_bessel_i1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_modified_bessel_k0_out, special_modified_bessel_k0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_modified_bessel_k1_out, special_modified_bessel_k1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_scaled_modified_bessel_k0_out, special_scaled_modified_bessel_k0_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_scaled_modified_bessel_k1_out, special_scaled_modified_bessel_k1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(special_spherical_bessel_j0_out, special_spherical_bessel_j0_stub)
 
 TORCH_IMPL_FUNC(round_decimals_out)
 (const Tensor& self, int64_t decimals, const Tensor& result) {
@@ -381,24 +279,12 @@ TORCH_IMPL_FUNC(round_decimals_out)
   }
 }
 
-TORCH_IMPL_FUNC(polygamma_out)
-(int64_t n, const Tensor& self, const Tensor& result) {
-  polygamma_stub(device_type(), *this, n);
-}
-
 TORCH_IMPL_FUNC(signbit_out) (const Tensor& self, const Tensor& result) {
   if (self.dtype() == at::kBool) {
     result.fill_(false);
   } else {
     signbit_stub(device_type(), *this);
   }
-}
-
-// since polygamma_ has different signature from its
-// out and functional variant, we explicitly
-// define it (instead of using structured kernel).
-Tensor& polygamma_(Tensor& self, int64_t n) {
-  return at::polygamma_out(self, n, self);
 }
 
 template <typename Stub>
@@ -663,86 +549,6 @@ Tensor conj(const Tensor& self) {
   return self.conj();
 }
 
-// special_exp2, alias for exp2
-Tensor& special_exp2_out(const Tensor& self, Tensor& result) { return at::exp2_out(result, self); }
-Tensor special_exp2(const Tensor& self) { return self.exp2(); }
-
-// special_expm1, alias for expm1
-Tensor& special_expm1_out(const Tensor& self, Tensor& result) { return at::expm1_out(result, self); }
-Tensor special_expm1(const Tensor& self) { return self.expm1(); }
-
-// special_erf, alias for erf
-Tensor& special_erf_out(const Tensor& self, Tensor& result) { return at::erf_out(result, self); }
-Tensor special_erf(const Tensor& self) { return self.erf(); }
-
-// special_erfc, alias for erfc
-Tensor& special_erfc_out(const Tensor& self, Tensor& result) { return at::erfc_out(result, self); }
-Tensor special_erfc(const Tensor& self) { return self.erfc(); }
-
-// special_erfinv, alias for erfinv
-Tensor& special_erfinv_out(const Tensor& self, Tensor& result) { return at::erfinv_out(result, self); }
-Tensor special_erfinv(const Tensor& self) { return self.erfinv(); }
-
-// special_polygamma, alias for polygamma
-Tensor& special_polygamma_out(int64_t n, const Tensor& self, Tensor& result) { return at::polygamma_out(result, n, self); }
-Tensor special_polygamma(int64_t n, const Tensor& self) { return self.polygamma(n); }
-
-// special_psi, alias for digamma
-Tensor& special_psi_out(const Tensor& self, Tensor& result) { return at::digamma_out(result, self); }
-Tensor special_psi(const Tensor& self) { return self.digamma(); }
-// special_digamma, alias for digamma
-Tensor& special_digamma_out(const Tensor& self, Tensor& result) { return at::digamma_out(result, self); }
-Tensor special_digamma(const Tensor& self) { return self.digamma(); }
-
-// special_i0, alias for i0
-Tensor& special_i0_out(const Tensor& self, Tensor& result) { return at::i0_out(result, self); }
-Tensor special_i0(const Tensor& self) { return self.i0(); }
-
-// special_log1p, alias for log1p
-Tensor& special_log1p_out(const Tensor& self, Tensor& result) { return at::log1p_out(result, self); }
-Tensor special_log1p(const Tensor& self) { return self.log1p(); }
-
-// special_round, alias for round
-Tensor& special_round_out(const Tensor& self, int64_t decimals, Tensor& result) { return at::round_out(result, self, decimals); }
-Tensor special_round(const Tensor& self, int64_t decimals) { return self.round(decimals); }
-
-// special_sinc, alias for sinc
-Tensor& special_sinc_out(const Tensor& self, Tensor& result) { return at::sinc_out(result, self); }
-Tensor special_sinc(const Tensor& self) { return self.sinc(); }
-
-namespace {
-
-inline Tensor calc_ndtr(const Tensor& self) {
-  auto x_sqrt_2 = self * M_SQRT1_2;
-  return (1 + at::erf(x_sqrt_2)) * 0.5;
-}
-
-} // namespace
-
-// special_ndtr
-Tensor& special_ndtr_out(const Tensor& self, Tensor& result) {
-  TORCH_CHECK(
-      self.device() == result.device(),
-      "Expected all tensors to be on the same device, but found at least two devices, ",
-      self.device(),
-      " and ",
-      result.device(),
-      "!");
-
-  auto ndtr = calc_ndtr(self);
-  TORCH_CHECK(
-      at::can_cast(ndtr.scalar_type(), result.scalar_type()),
-      "result type ",
-      ndtr.scalar_type(),
-      " can't be cast to the desired output type ",
-      result.scalar_type());
-
-  at::native::resize_output(result, ndtr.sizes());
-  return result.copy_(ndtr);
-}
-Tensor special_ndtr(const Tensor& self) {
-  return calc_ndtr(self);
-}
 
 // FIXME: remove const_cast once unary_op_impl_out is updated
 TORCH_IMPL_FUNC(sgn_out) (const Tensor& self, const Tensor& result) {
@@ -786,20 +592,6 @@ Tensor& logit_(Tensor& self, std::optional<double> eps) {
   return at::logit_out(self, self, eps);
 }
 
-Tensor& special_logit_out(const Tensor& self, std::optional<double> eps, Tensor& result) {
-  return at::logit_out(result, self, eps);
-}
-Tensor special_logit(const Tensor& self, std::optional<double> eps) {
-  return self.logit(eps);
-}
-
-// special_expit, alias for sigmoid
-Tensor& special_expit_out(const Tensor& self, Tensor& result) {
-  return at::sigmoid_out(result, self);
-}
-Tensor special_expit(const Tensor& self) {
-  return self.sigmoid();
-}
 
 Tensor& nan_to_num_out(const Tensor& self,
     std::optional<double> nan,
@@ -874,67 +666,6 @@ Tensor& logical_not_out(const Tensor& self, Tensor& result) {
   return result;
 }
 
-namespace {
-constexpr double HALF = 0.5;
-constexpr double QUARTER = 0.25;
-}
-
-static inline void mvlgamma_check(const Tensor& self, int64_t p) {
-  TORCH_CHECK(self.scalar_type() != kBool, "The input tensor may not be a boolean tensor.");
-  TORCH_CHECK(p >= 1, "p has to be greater than or equal to 1");
-}
-
-Tensor mvlgamma(const Tensor& self, int64_t p) {
-  mvlgamma_check(self, p);
-  auto dtype = c10::scalarTypeToTypeMeta(self.scalar_type());
-  if (at::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    // int -> float promotion
-    dtype = c10::get_default_dtype();
-  }
-  Tensor args = native::arange(
-      -p * HALF + HALF,
-      HALF,
-      HALF,
-      optTypeMetaToScalarType(dtype),
-      self.options().layout_opt(),
-      self.options().device_opt(),
-      self.options().pinned_memory_opt());
-  args = args.add(self.unsqueeze(-1));
-  const auto p2_sub_p = static_cast<double>(p * (p - 1));
-  return args.lgamma_().sum(-1).add_(p2_sub_p * std::log(c10::pi<double>) * QUARTER);
-}
-
-// since mvlgamma_ has different signature from its
-// out and functional variant, we explicitly
-// define it (instead of using structured kernel).
-Tensor& mvlgamma_(Tensor& self, int64_t p) {
-  return at::mvlgamma_out(self, self, p);
-}
-
-Tensor& mvlgamma_out(const Tensor& self, int64_t p, Tensor& result) {
-  TORCH_CHECK(
-    self.device() == result.device(),
-    "Expected tensors to be on the same device, but found ", self.device(), " and ", result.device()
-  );
-  auto out = self.mvlgamma(p);
-  TORCH_CHECK(
-      at::can_cast(out.scalar_type(), result.scalar_type()),
-      "mvlgamma: result type ",
-      self.scalar_type(),
-      " can't be cast to the desired output type ",
-      out.scalar_type());
-  at::native::resize_output(result, out.sizes());
-  return result.copy_(out);
-}
-
-Tensor special_multigammaln(const Tensor& self, int64_t p) {
-  return self.mvlgamma(p);
-}
-
-Tensor& special_multigammaln_out(const Tensor& self, int64_t p, Tensor& result) {
-  return at::mvlgamma_out(result, self, p);
-}
-
 std::tuple<Tensor, Tensor> frexp(const Tensor& self) {
   Tensor mantissa = at::empty_like(self);
   Tensor exponent = at::empty_like(self, self.options().dtype(at::kInt));
@@ -969,10 +700,6 @@ std::tuple<Tensor&, Tensor&> frexp_out(const Tensor& self,
   return std::tuple<Tensor&, Tensor&>(mantissa, exponent);
 }
 
-// alias for lgamma, implements special.gammaln equivalent to
-// scipy.special.gammaln
-Tensor special_gammaln(const Tensor& self) { return self.lgamma(); }
-Tensor& special_gammaln_out(const Tensor& self, Tensor& result) { return at::lgamma_out(result, self); }
 
 DEFINE_DISPATCH(abs_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(angle_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -987,32 +714,20 @@ DEFINE_DISPATCH(bitwise_not_stub); // NOLINT(cppcoreguidelines-avoid-non-const-g
 DEFINE_DISPATCH(ceil_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(cos_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(cosh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(digamma_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_entr_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_erfcx_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(erf_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(erfc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(erfinv_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(exp_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(exp2_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(expm1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(floor_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(frac_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(frexp_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(i0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_i0e_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_i1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_i1e_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(log_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(log10_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(log1p_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(log2_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(logical_not_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_ndtri_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_log_ndtr_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(neg_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(nan_to_num_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(polygamma_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(reciprocal_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(round_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(round_decimals_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -1028,20 +743,6 @@ DEFINE_DISPATCH(sinh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 DEFINE_DISPATCH(sqrt_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(tan_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(tanh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(trigamma_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(trunc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(lgamma_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_airy_ai_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_bessel_j0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_bessel_j1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_bessel_y0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_bessel_y1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_modified_bessel_i0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_modified_bessel_i1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_modified_bessel_k0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_modified_bessel_k1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_scaled_modified_bessel_k0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_scaled_modified_bessel_k1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(special_spherical_bessel_j0_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 } // namespace at::native

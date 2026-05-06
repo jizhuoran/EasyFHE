@@ -495,92 +495,9 @@ at::Tensor interpolate(
     }
   }
 
-  const auto dim1d = 3;
-  const auto dim2d = 4;
-  const auto dim3d = 5;
-
-  auto input_dim = input.dim();
-  if (input_dim == dim1d && mode == "nearest")
-    return at::upsample_nearest1d(
-        input,
-        _output_size(input, 1, size, scale_factors),
-        std::make_optional(scale_factors_1));
-  if (input_dim == dim2d && mode == "nearest")
-    return at::upsample_nearest2d(
-        input,
-        _output_size(input, 2, size, scale_factors),
-        scale_factors_1,
-        scale_factors_2);
-  if (input_dim == dim3d && mode == "nearest")
-    return at::upsample_nearest3d(
-        input,
-        _output_size(input, 3, size, scale_factors),
-        scale_factors_1,
-        scale_factors_2,
-        scale_factors_3);
-  if (input_dim == dim1d && mode == "area")
-    return at::adaptive_avg_pool1d(
-        input, _output_size(input, 1, size, scale_factors));
-  if (input_dim == dim2d && mode == "area")
-    return at::adaptive_avg_pool2d(
-        input, _output_size(input, 2, size, scale_factors));
-  if (input_dim == dim3d && mode == "area")
-    return at::adaptive_avg_pool3d(
-        input, _output_size(input, 3, size, scale_factors));
-  if (input_dim == dim1d && mode == "linear")
-    return at::upsample_linear1d(
-        input,
-        _output_size(input, 1, size, scale_factors),
-        *align_corners,
-        std::make_optional(scale_factors_1));
-  if (input_dim == dim1d && mode == "bilinear")
-    throw std::runtime_error("Got 3D input, but bilinear mode needs 4D input");
-  if (input_dim == dim1d && mode == "bicubic")
-    throw std::runtime_error("Got 3D input, but bicubic mode needs 4D input");
-  if (input_dim == dim1d && mode == "trilinear")
-    throw std::runtime_error("Got 3D input, but trilinear mode needs 5D input");
-  if (input_dim == dim2d && mode == "linear")
-    throw std::runtime_error("Got 4D input, but linear mode needs 3D input");
-  if (input_dim == dim2d && mode == "bilinear")
-    return at::upsample_bilinear2d(
-        input,
-        _output_size(input, 2, size, scale_factors),
-        *align_corners,
-        scale_factors_1,
-        scale_factors_2);
-  if (input_dim == dim2d && mode == "bicubic")
-    return at::upsample_bicubic2d(
-        input,
-        _output_size(input, 2, size, scale_factors),
-        *align_corners,
-        scale_factors_1,
-        scale_factors_2);
-  if (input_dim == dim2d && mode == "trilinear")
-    throw std::runtime_error("Got 4D input, but trilinear mode needs 5D input");
-  if (input_dim == dim3d && mode == "linear")
-    throw std::runtime_error("Got 5D input, but linear mode needs 3D input");
-  if (input_dim == dim3d && mode == "bilinear")
-    throw std::runtime_error("Got 5D input, but bilinear mode needs 4D input");
-  if (input_dim == dim3d && mode == "bicubic")
-    throw std::runtime_error("Got 5D input, but bicubic mode needs 4D input");
-  if (input_dim == dim3d && mode == "trilinear")
-    return at::upsample_trilinear3d(
-        input,
-        _output_size(input, 3, size, scale_factors),
-        *align_corners,
-        scale_factors_1,
-        scale_factors_2,
-        scale_factors_3);
-
   TORCH_CHECK(
       false,
-      "Input Error: Only 3D, 4D and 5D input Tensors supported",
-      " (got ",
-      input_dim,
-      "D) for the modes: nearest | linear | bilinear | trilinear",
-      " (got ",
-      mode,
-      ") ");
+      "interpolate/upsample not supported in EasyFHE");
 }
 
 void interpolate_op(Stack& stack) {
@@ -731,7 +648,7 @@ RegisterOperators reg3({
 });
 
 at::Tensor leaky_relu(const at::Tensor& tensor, double scalar) {
-  return at::leaky_relu(tensor, scalar);
+  return at::where(tensor > 0, tensor, tensor * scalar);
 }
 at::Tensor cat(const c10::List<at::Tensor>& tensors) {
   return at::cat(tensors.vec());

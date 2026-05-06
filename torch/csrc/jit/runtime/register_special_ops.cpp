@@ -347,9 +347,8 @@ RegisterOperators reg({
           // TODO: remove when script supports setting grad mode
           torch::NoGradGuard no_grad;
 
-          at::Tensor result =
-              at::embedding_renorm_(weight, input, max_norm, norm_type);
-          push(stack, std::move(result));
+          TORCH_CHECK(false, "embedding_renorm_ not supported in EasyFHE");
+          push(stack, weight);
         },
         aliasAnalysisFromSchema()),
     OperatorGenerator(

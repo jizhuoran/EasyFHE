@@ -88,7 +88,6 @@
 #include <ATen/ops/nansum.h>
 #include <ATen/ops/nansum_native.h>
 #include <ATen/ops/narrow.h>
-#include <ATen/ops/native_norm.h>
 #include <ATen/ops/ne.h>
 #include <ATen/ops/norm.h>
 #include <ATen/ops/norm_meta.h>
@@ -709,7 +708,7 @@ Tensor cumprod_backward(const Tensor& grad, const Tensor& input, int64_t dim, co
     // Using at::where instead of masked_scatter_ for composite compliance
     auto grad_at_first_zero = input_conj.masked_fill(~mask, 1.).cumprod(dim);
     const auto grad_masked = grad.masked_fill(cumsum != 1, 0.);
-    const auto output_before_zero = at::gather(output_conj, dim, (first_zero_index - 1).relu_())
+    const auto output_before_zero = at::gather(output_conj, dim, (first_zero_index - 1).clamp_min_(0))
                                       .masked_fill_(first_zero_index == 0, 1.);
     if (!are_inputs_tensors_sublcass) {
       grad_at_first_zero = grad_at_first_zero.mul_(grad_masked)
@@ -1611,7 +1610,7 @@ Tensor sparse_norm(
     const std::optional<Scalar>& p,
     IntArrayRef dim,
     bool keepdim) {
-  return at::native_norm(self, p, dim, keepdim, std::nullopt);
+  TORCH_CHECK(false, "sparse_norm not supported in EasyFHE");
 }
 
 Tensor sparse_dtype_norm(
@@ -1620,7 +1619,7 @@ Tensor sparse_dtype_norm(
     IntArrayRef dim,
     bool keepdim,
     ScalarType dtype) {
-  return at::native_norm(self, p, dim, keepdim, dtype);
+  TORCH_CHECK(false, "sparse_dtype_norm not supported in EasyFHE");
 }
 
 Tensor norm(const Tensor& self, const std::optional<Scalar>& p, ScalarType dtype) {

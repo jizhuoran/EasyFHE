@@ -459,28 +459,7 @@ void Pickler::pushLiteralTensor(const IValue& ivalue) {
   push<PickleOpCode>(PickleOpCode::TUPLE);
 
   if (quantized) {
-    push<PickleOpCode>(PickleOpCode::MARK);
-    pushGlobal("torch", toString(tensor.qscheme()));
-    // tuple of (qscheme, scale, zp) or (qscheme, scales, zps, axis)
-    switch (tensor.qscheme()) {
-      case at::kPerTensorAffine:
-        pushDouble(tensor.q_scale());
-        pushInt(tensor.q_zero_point());
-        break;
-      case at::kPerChannelAffineFloatQParams:
-      case at::kPerChannelAffine: {
-        pushTensor(tensor.q_per_channel_scales());
-        pushTensor(tensor.q_per_channel_zero_points());
-        pushInt(tensor.q_per_channel_axis());
-      } break;
-      default:
-        TORCH_CHECK(
-            false,
-            "Unsupported tensor quantization type in serialization ",
-            toString(tensor.qscheme()));
-        break;
-    }
-    push<PickleOpCode>(PickleOpCode::TUPLE);
+    TORCH_CHECK(false, "Quantized tensor serialization not supported in EasyFHE");
   }
 
   // requires_grad

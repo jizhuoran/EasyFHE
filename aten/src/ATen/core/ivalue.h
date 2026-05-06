@@ -328,21 +328,6 @@ struct TORCH_API IValue final {
 
  private:
   static bool isAliasOf(const at::Tensor& a, const at::Tensor& b) {
-    if (a.is_sparse()) {
-      return isAliasOf(a._values(), b) || isAliasOf(a._indices(), b);
-    }
-    if (b.is_sparse()) {
-      return isAliasOf(a, b._values()) || isAliasOf(a, b._indices());
-    }
-    if (a.is_sparse_csr()) {
-      return isAliasOf(a.values(), b) || isAliasOf(a.crow_indices(), b) ||
-          isAliasOf(a.col_indices(), b);
-    }
-    if (b.is_sparse_csr()) {
-      return isAliasOf(a, b.values()) || isAliasOf(a, b.crow_indices()) ||
-          isAliasOf(a, b.col_indices());
-    }
-
     // Opaque tensors such as the ones constructed by the MKL-DNN backend
     // don't have storage so we just compare their TensorImpls.
     // TODO: Find way to expose alias info for opaque tensors.
@@ -1121,17 +1106,7 @@ struct TORCH_API IValue final {
   // Detect aliased tensors.
   struct HashAliasedIValue {
     size_t hashTensor(const at::Tensor& ten) const {
-      if (ten.is_sparse()) {
-        // COO sparse tensors have a "values" tensor and an "indices" tensor
-        // so this will detect overlap of sparse tensors that share a values
-        // tensor, but not sparse tensors that share an indices tensor.
-        return hashTensor(ten._values());
-      } else if (ten.is_sparse_csr()) {
-        // COO sparse tensors have a "values" tensor and an "indices" tensor
-        // so this will detect overlap of sparse tensors that share a values
-        // tensor, but not sparse tensors that share an indices tensor.
-        return hashTensor(ten.values());
-      } else if (!ten.has_storage()) {
+      if (!ten.has_storage()) {
         // Opaque tensors such as the ones constructed by the MKL-DNN backend
         // don't have storage so we just use their TensorImpls.
         // TODO: Find way to expose alias info for opaque tensors.

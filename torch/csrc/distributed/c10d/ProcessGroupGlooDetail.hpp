@@ -479,55 +479,8 @@ class AsyncSparseAllreduceWork : public ProcessGroupGloo::AsyncWork {
   // The nnz for sparse tensors may be different across processes, so first
   // we run allgather on the nnz, and then allgather with max(nnz).
   at::Tensor allreduce(std::vector<at::Tensor>& tensors) {
-    // TODO: This is a massive hack!  There is some confusion about
-    // Variable/Tensor inside the body of this function.  Turning off
-    // grad smooths over the confusion for now.  This fixes
-    // test/test_c10d_gloo.py ProcessGroupGlooTest.test_sparse_allreduce_basics
-    //
-    // The correct fix is to stop allocating tensors that are not variables,
-    // but to conveniently do this c10d must depend on torch not ATen
-    at::AutoDispatchBelowAutograd guard;
-    auto input = tensors[0];
-
-    // Perform local reduction if we have multiple inputs.
-    for (const auto i : c10::irange(1, tensors.size())) {
-      input += tensors[i];
-    }
-
-    // Need to coalesce before we can access indices and values.
-    input = input.coalesce();
-
-    // Gather metadata information from all ranks.
-    auto metadata = allgather_metadata(input);
-
-    // Sanity check dimensionality across ranks.
-    {
-      const auto expected = metadata[context_->rank].sizes();
-      for (const auto i : c10::irange(context_->size)) {
-        if (i == context_->rank) {
-          continue;
-        }
-        const auto actual = metadata[i].sizes();
-        TORCH_CHECK(actual == expected, "Sparse dimensions do not match");
-      }
-    }
-
-    // Gather all indices and all values.
-    auto indices = allgather_indices(input, metadata);
-    auto values = allgather_values(input, metadata);
-
-    // Perform global reduction.
-    AT_ASSERT(static_cast<int>(indices.size()) == context_->size);
-    AT_ASSERT(static_cast<int>(values.size()) == context_->size);
-    auto output = at::sparse_coo_tensor(
-        indices[0], values[0], input.sizes(), input.options());
-    for (const auto i : c10::irange(1, context_->size)) {
-      output += at::sparse_coo_tensor(
-          indices[i], values[i], input.sizes(), input.options());
-    }
-
-    // Coalesce for good measure.
-    return output.coalesce();
+    TORCH_CHECK(false, "Sparse allreduce not supported in EasyFHE");
+    return tensors[0];
   }
 
   void run() override {

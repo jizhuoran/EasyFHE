@@ -93,7 +93,6 @@
 #include <ATen/ops/count_nonzero.h>
 #include <ATen/ops/count_nonzero_native.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/empty_quantized.h>
 #include <ATen/ops/gather.h>
 #include <ATen/ops/gather_backward_native.h>
 #include <ATen/ops/gather_meta.h>
@@ -720,17 +719,8 @@ TORCH_IMPL_FUNC(index_out)
 Tensor quantized_index(
     const Tensor& self,
     const torch::List<std::optional<Tensor>>& indices) {
-  TORCH_INTERNAL_ASSERT(
-      self.qscheme() == c10::kPerTensorAffine ||
-          self.qscheme() == c10::kPerTensorSymmetric,
-      "Indexing is only supported for per-Tensor quantized Tensors.");
-
-  // For now, this is a naive implementation which does dq -> index -> q.
-  // TODO(future PR): improve performance by removing the copies.
-  const auto& self_dq = self.dequantize();
-  auto result = at::index(self_dq, indices);
-  return at::quantize_per_tensor(
-      result, self.q_scale(), self.q_zero_point(), self.scalar_type());
+  TORCH_CHECK(false, "Quantized indexing not supported in EasyFHE");
+  return self;
 }
 
 Tensor _unsafe_index(
@@ -1599,11 +1589,6 @@ Tensor& index_select_out_cpu_(
     int64_t dim,
     const Tensor& index,
     Tensor& result) {
-  if (self.is_quantized()) {
-    TORCH_CHECK(
-        self.qscheme() == kPerTensorAffine,
-        "Only per_tensor quantized quantized tensors are supported by index_select.")
-  }
   dim = maybe_wrap_dim(dim, self.dim());
   auto numel = index.numel();
   TORCH_CHECK_INDEX(
@@ -1861,17 +1846,6 @@ Tensor& index_select_out_cpu_(
 
 Tensor index_select_cpu_(const Tensor& self, int64_t dim, const Tensor& index) {
   Tensor result = at::empty({0}, self.options());
-  return at::native::index_select_out_cpu_(self, dim, index, result);
-}
-
-Tensor index_select_quantized_cpu_(
-    const Tensor& self,
-    int64_t dim,
-    const Tensor& index) {
-  TORCH_CHECK(
-      self.qscheme() == kPerTensorAffine,
-      "Only per_tensor quantized quantized tensors are supported by index_select.")
-  Tensor result = at::empty_quantized({0}, self);
   return at::native::index_select_out_cpu_(self, dim, index, result);
 }
 

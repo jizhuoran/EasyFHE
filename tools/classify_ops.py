@@ -244,38 +244,18 @@ def classify_op(func_line: str) -> tuple[str, str]:
     if not base_name:
         return "KEEP", "unparseable"
 
-    # Build all keep sets
-    all_keep = {
-        "reduction": KEEP_REDUCTION,
-        "indexing": KEEP_INDEXING,
-        "arithmetic": KEEP_ARITHMETIC,
-        "comparison": KEEP_COMPARISON,
-        "shape": KEEP_SHAPE,
-        "creation": KEEP_CREATION,
-        "random": KEEP_RANDOM,
-        "autograd": KEEP_AUTOGRAD,
-        "type_cast": KEEP_TYPE_CAST,
-        "copy_clone": KEEP_COPY_CLONE,
-        "infra": KEEP_INFRA,
-        "fhe": KEEP_FHE,
+    # Explicit KEEP overrides (false positives from substring matching)
+    force_keep = {
+        "detach": "autograd", "detach_": "autograd", "detach_copy": "autograd",
+        "unfold": "shape", "unfold_backward": "shape", "unfold_copy": "shape",
+        "slice_inverse": "shape",
+        "_indices": "infra", "_values": "infra",
+        "crow_indices": "infra", "col_indices": "infra",
     }
+    if base_name in force_keep:
+        return "KEEP", force_keep[base_name]
 
-    for category, patterns in all_keep.items():
-        for pattern in patterns:
-            if base_name == pattern or base_name.startswith(pattern + "_") or base_name.startswith(pattern + "."):
-                return "KEEP", category
-            # Handle in-place variants (e.g., add_ matches add)
-            if base_name == pattern + "_":
-                return "KEEP", category
-
-    # Check for _out suffix variants of keep ops
-    if base_name.endswith("_out"):
-        stem = base_name[:-4]
-        for category, patterns in all_keep.items():
-            if stem in patterns:
-                return "KEEP", category
-
-    # DELETE patterns (explicit)
+    # Check DELETE patterns FIRST (more specific, e.g. max_pool before max)
     delete_patterns = {
         "nn": ["conv", "pool", "batch_norm", "dropout", "relu", "gelu", "silu",
                "softmax", "log_softmax", "cross_entropy", "nll_loss", "layer_norm",
@@ -365,6 +345,36 @@ def classify_op(func_line: str) -> tuple[str, str]:
                     "logdet", "slogdet", "dist", "hspmm", "smm", "sspaddmm"}
     if base_name in linalg_exact:
         return "DELETE", "linalg"
+
+    # Now check KEEP patterns (after DELETE, so specific DELETE patterns win)
+    all_keep = {
+        "reduction": KEEP_REDUCTION,
+        "indexing": KEEP_INDEXING,
+        "arithmetic": KEEP_ARITHMETIC,
+        "comparison": KEEP_COMPARISON,
+        "shape": KEEP_SHAPE,
+        "creation": KEEP_CREATION,
+        "random": KEEP_RANDOM,
+        "autograd": KEEP_AUTOGRAD,
+        "type_cast": KEEP_TYPE_CAST,
+        "copy_clone": KEEP_COPY_CLONE,
+        "infra": KEEP_INFRA,
+        "fhe": KEEP_FHE,
+    }
+
+    for category, patterns in all_keep.items():
+        for pattern in patterns:
+            if base_name == pattern or base_name.startswith(pattern + "_") or base_name.startswith(pattern + "."):
+                return "KEEP", category
+            if base_name == pattern + "_":
+                return "KEEP", category
+
+    # Check for _out suffix variants of keep ops
+    if base_name.endswith("_out"):
+        stem = base_name[:-4]
+        for category, patterns in all_keep.items():
+            if stem in patterns:
+                return "KEEP", category
 
     # If not matched by any pattern, default to KEEP (conservative)
     return "KEEP", "unclassified"

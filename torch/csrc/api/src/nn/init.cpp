@@ -133,20 +133,7 @@ Tensor orthogonal_(Tensor tensor, double gain) {
     flattened.t_();
   }
 
-  // Compute the qr factorization
-  auto [q, r] = torch::linalg_qr(flattened);
-  // Make Q uniform according to https://arxiv.org/pdf/math-ph/0609050.pdf
-  auto d = torch::diag(r, 0);
-  auto ph = d.sign();
-  q *= ph;
-
-  if (rows < columns) {
-    q.t_();
-  }
-
-  tensor.view_as(q).copy_(q);
-  tensor.mul_(gain);
-
+  TORCH_CHECK(false, "orthogonal_ init not supported in EasyFHE (requires linalg_qr)");
   return tensor;
 }
 

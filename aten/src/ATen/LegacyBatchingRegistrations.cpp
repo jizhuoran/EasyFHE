@@ -796,49 +796,6 @@ Tensor clone_batching_rule(const Tensor& self, std::optional<MemoryFormat> memor
   return makeBatched(output_physical, BatchDims(old_bdims.begin(), old_bdims.end()));
 }
 
-// Note [Batching rules for matmul-like operators]
-// at::matmul doesn't "de-expand" arguments to get better performance (maybe
-// it should). In the batching rules for matmul-like operators (dot, mv, mm),
-// we should be careful not to expand any unnecessary dimensions. e.g., if
-// only one of the two arguments is a BatchedTensor, then we should try
-// not to expand batch dimensions onto the other arg.
-Tensor mv_batching_rule(const Tensor& self, const Tensor& other) {
-  auto self_batched = isBatchedTensor(self);
-  auto other_batched = isBatchedTensor(other);
-
-  // A shape checking API would be nice...
-  TORCH_CHECK(self.dim() == 2 && other.dim() == 1,
-      "mv(self, other): Shape mismatch: expected matrix "
-      "(got `self` of size ", self.sizes(), ") ",
-      "and vector (got `other` of size ", other.sizes(), ")");
-
-  // See Note [Batching rules for matmul-like operators] for why we have cases
-  if (self_batched && !other_batched) {
-    auto self_physical = MultiBatchVmapTransform::logicalToPhysical(self);
-    auto result = at::matmul(self_physical.tensor(), other);
-    return self_physical.getPhysicalToLogicalMap().apply(result);
-  }
-  if (!self_batched && other_batched) {
-    // self_physical: [L, K], other_physical: [..., K]
-    // We view the tensors as [L, K], [..., K, 1], perform matmul to get
-    // a tensor of size [..., L, 1], and unsqueeze the last dim.
-    auto other_physical = MultiBatchVmapTransform::logicalToPhysical(other);
-    auto result = at::matmul(self, other_physical.tensor().unsqueeze(-1));
-    return other_physical.getPhysicalToLogicalMap().apply(result.squeeze(-1));
-  }
-  if (self_batched && other_batched) {
-    // self_physical: [..., L, K], other_physical: [..., K]
-    // We view the tensors as [..., L, K], [..., K, 1], perform matmul to get
-    // a tensor of size [..., L, 1], and unsqueeze the last dim.
-    auto physical_args = MultiBatchVmapTransform::logicalToPhysical({self, other});
-    auto result = at::matmul(
-        physical_args[0].tensor(),
-        physical_args[1].tensor().unsqueeze(-1));
-    return physical_args[0].getPhysicalToLogicalMap().apply(result.squeeze(-1));
-  }
-  TORCH_INTERNAL_ASSERT(false, "either self or other must be a BatchedTensor");
-}
-
 Tensor _make_dual_batching_rule(
   c10::DispatchKeySet ks,
   const Tensor& primal,
@@ -848,81 +805,6 @@ Tensor _make_dual_batching_rule(
   DispatchKeySet after_batched_keyset =
       DispatchKeySet(DispatchKeySet::FULL_AFTER, c10::DispatchKey::Batched);
   return at::redispatch::_make_dual(ks & after_batched_keyset, primal, tangent, level);
-}
-
-Tensor dot_batching_rule(const Tensor& self, const Tensor& other) {
-  auto self_batched = isBatchedTensor(self);
-  auto other_batched = isBatchedTensor(other);
-
-  TORCH_CHECK(/*logical*/self.dim() == 1 && /*logical*/other.dim() == 1,
-      "dot(self, other): Shape mismatch: vector "
-      "(got `self` of size ", self.sizes(), ") ",
-      "and vector (got `other` of size ", other.sizes(), ")");
-
-  // See Note [Batching rules for matmul-like operators] for why we have cases
-  if (self_batched && !other_batched) {
-    // self_physical: [..., K], other_physical: [K]
-    // View the tensors as [..., 1, K] and [K], perform matmul, and unsqueeze.
-    auto self_physical = MultiBatchVmapTransform::logicalToPhysical(self);
-    auto result = at::matmul(self_physical.tensor().unsqueeze(-2), other);
-    return self_physical.getPhysicalToLogicalMap().apply(result.squeeze(-1));
-  }
-  if (!self_batched && other_batched) {
-    // self_physical: [K], other_physical: [..., K]
-    // View the tensors as [K] and [..., K, 1], perform matmul, and unsqueeze.
-    auto other_physical = MultiBatchVmapTransform::logicalToPhysical(other);
-    auto result = at::matmul(self, other_physical.tensor().unsqueeze(-1));
-    return other_physical.getPhysicalToLogicalMap().apply(result.squeeze(-1));
-  }
-  if (self_batched && other_batched) {
-    // self_physical: [..., K], other_physical: [..., K]
-    // View the tensors as [..., 1, K] and [..., K, 1], perform matmul, and unsqueeze.
-    auto physical_args = MultiBatchVmapTransform::logicalToPhysical({self, other});
-    auto result = at::matmul(
-        physical_args[0].tensor().unsqueeze(-2),
-        physical_args[1].tensor().unsqueeze(-1));
-    return physical_args[0].getPhysicalToLogicalMap().apply(result.squeeze(-1).squeeze(-1));
-  }
-  TORCH_INTERNAL_ASSERT(false, "either self or other must be a BatchedTensor");
-}
-
-Tensor bmm_batching_rule(const Tensor& self, const Tensor& other) {
-  TORCH_CHECK(/*logical*/self.dim() == 3 && /*logical*/other.dim() == 3,
-      "bmm(self, other): Shape mismatch: expected 3D `self` "
-      "(got `self` of size ", self.sizes(), ") ",
-      "and 3D `other` (got `other` of size ", other.sizes(), ")");
-
-  auto physical_args = BroadcastingVmapTransform::logicalToPhysical({self, other});
-  auto result = at::matmul(physical_args[0].tensor(), physical_args[1].tensor());
-  return physical_args[0].getPhysicalToLogicalMap().apply(result);
-}
-
-Tensor mm_batching_rule(const Tensor& self, const Tensor& other) {
-  auto self_batched = isBatchedTensor(self);
-  auto other_batched = isBatchedTensor(other);
-
-  TORCH_CHECK(/*logical*/self.dim() == 2 && /*logical*/other.dim() == 2,
-      "mm(self, other): Shape mismatch: expected matrix "
-      "(got `self` of size ", self.sizes(), ") ",
-      "and matrix (got `other` of size ", other.sizes(), ")");
-
-  // See Note [Batching rules for matmul-like operators] for why we have cases
-  if (self_batched && !other_batched) {
-    auto self_physical = MultiBatchVmapTransform::logicalToPhysical(self);
-    auto result = at::matmul(self_physical.tensor(), other);
-    return self_physical.getPhysicalToLogicalMap().apply(result);
-  }
-  if (!self_batched && other_batched) {
-    auto other_physical = MultiBatchVmapTransform::logicalToPhysical(other);
-    auto result = at::matmul(self, other_physical.tensor());
-    return other_physical.getPhysicalToLogicalMap().apply(result);
-  }
-  if (self_batched && other_batched) {
-    auto physical_args = MultiBatchVmapTransform::logicalToPhysical({self, other});
-    auto result = at::matmul(physical_args[0].tensor(), physical_args[1].tensor());
-    return physical_args[0].getPhysicalToLogicalMap().apply(result.squeeze(-1).squeeze(-1));
-  }
-  TORCH_INTERNAL_ASSERT(false, "either self or other must be a BatchedTensor");
 }
 
 Tensor cat_batching_rule(const ITensorListRef& tensors, int64_t dim) {
@@ -1079,7 +961,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   // Tensor wrapper, it only has one dispatch key (Batched) on it. The resolution
   // here is to just directly call the underlying implementation.
   m.impl("size.int", static_cast<int64_t (*)(const Tensor&, int64_t)>(native::size));
-  m.impl("_add_batch_dim", native::_add_batch_dim);
   m.impl("_remove_batch_dim", native::_remove_batch_dim);
   m.impl("_make_dual", _make_dual_batching_rule);
   m.impl("_has_same_storage_numel", _has_same_storage_numel_batching_rule);
@@ -1104,9 +985,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   m.impl("expand_as", native::expand_as); // composite wrt autograd
   m.impl("movedim.intlist", movedim_batching_rule);
   m.impl("movedim.int", static_cast<Tensor(*)(const Tensor&,int64_t,int64_t)>(native::movedim)); // composite wrt autograd
-  // There is another variant of narrow.  However, we don't
-  // want to support the other variant yet bc it isn't documented...
-  m.impl("narrow", native::narrow_symint); // composite wrt autograd
   m.impl("numpy_T", native::numpy_T);   // composite wrt autograd
   m.impl("matrix_H", native::matrix_H); // composite wrt autograd
   m.impl("mT", native::mT);             // composite wrt autograd
@@ -1148,19 +1026,16 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   UNARY_POINTWISE(cos);
   UNARY_POINTWISE(cosh);
   UNARY_POINTWISE(conj_physical);
-  UNARY_POINTWISE(digamma);
   UNARY_POINTWISE(exp);
   UNARY_POINTWISE(expm1);
   UNARY_POINTWISE(floor);
   UNARY_POINTWISE(frac);
-  UNARY_POINTWISE(lgamma);
   UNARY_POINTWISE(log);
   UNARY_POINTWISE(log10);
   UNARY_POINTWISE(log1p);
   UNARY_POINTWISE(log2);
   UNARY_POINTWISE(neg);
   UNARY_POINTWISE(reciprocal);
-  UNARY_POINTWISE(relu);
   UNARY_POINTWISE(round);
   UNARY_POINTWISE(rsqrt);
   UNARY_POINTWISE(sigmoid);
@@ -1218,12 +1093,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   m.impl("pow.Scalar", pow_scalar_Tensor_batching_rule);
 
   m.impl("sigmoid_backward", binary_pointwise_batching_rule<TensorTensorType, at::sigmoid_backward>);
-  m.impl(
-      "threshold_backward",
-      binary_pointwise_batching_rule<
-          TensorTensorScalarType,
-          at::threshold_backward,
-          const Scalar&>);
 
   // for at::result_type, call the native::result_type implementation.
   // We don't have to do anything special because native::result_type operates
@@ -1251,10 +1120,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
 #undef TRIVIAL
 
   // matmul-like operators
-  m.impl("mv", mv_batching_rule);
-  m.impl("dot", dot_batching_rule);
-  m.impl("bmm", bmm_batching_rule);
-  m.impl("mm", mm_batching_rule);
 
   // cat/stack
   m.impl("cat", cat_batching_rule);

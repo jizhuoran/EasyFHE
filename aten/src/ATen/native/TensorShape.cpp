@@ -1,14 +1,12 @@
 #include <ATen/core/ATen_fwd.h>
 #include <c10/core/ScalarType.h>
 #include <c10/core/SymInt.h>
-#define TORCH_ASSERT_ONLY_METHOD_OPERATORS
 #include <ATen/AccumulateType.h>
 #include <ATen/Dispatch.h>
 #include <ATen/ExpandUtils.h>
 #include <ATen/InferSize.h>
 #include <ATen/MemoryOverlap.h>
 #include <ATen/NamedTensorUtils.h>
-#include <ATen/SparseCsrTensorUtils.h>
 #include <ATen/TensorOperators.h>
 #include <ATen/TensorSubclassLikeUtils.h>
 #include <ATen/WrapDimUtils.h>
@@ -19,7 +17,6 @@
 #include <ATen/native/Copy.h>
 #include <ATen/native/NonSymbolicBC.h>
 #include <ATen/native/Resize.h>
-#include <ATen/native/SparseTensorUtils.h>
 #include <ATen/native/TensorIterator.h>
 #include <ATen/native/TensorShape.h>
 #include <ATen/native/TypeProperties.h>
@@ -35,183 +32,8 @@
 #include <c10/util/irange.h>
 #include <optional>
 
-#ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
-#else
-#include <ATen/ops/_chunk_cat_native.h>
-#include <ATen/ops/_conj_copy_native.h>
-#include <ATen/ops/_convert_indices_from_coo_to_csr.h>
-#include <ATen/ops/_convert_indices_from_csr_to_coo.h>
-#include <ATen/ops/_foreach_copy.h>
-#include <ATen/ops/_fw_primal_copy_native.h>
-#include <ATen/ops/_indices_copy_native.h>
-#include <ATen/ops/_make_dual.h>
-#include <ATen/ops/_make_dual_copy_native.h>
-#include <ATen/ops/_mkldnn_reshape.h>
-#include <ATen/ops/_mkldnn_transpose.h>
-#include <ATen/ops/_neg_view_copy_native.h>
-#include <ATen/ops/_reshape_alias_copy_native.h>
-#include <ATen/ops/_reshape_alias_native.h>
-#include <ATen/ops/_reshape_copy_native.h>
-#include <ATen/ops/_reshape_from_tensor_native.h>
-#include <ATen/ops/_shape_as_tensor_native.h>
-#include <ATen/ops/_sparse_broadcast_to.h>
-#include <ATen/ops/_sparse_broadcast_to_copy_native.h>
-#include <ATen/ops/_sparse_broadcast_to_native.h>
-#include <ATen/ops/_sparse_compressed_tensor_unsafe_native.h>
-#include <ATen/ops/_sparse_coo_tensor_with_dims_and_tensors.h>
-#include <ATen/ops/_sparse_csc_tensor_unsafe_native.h>
-#include <ATen/ops/_sparse_csr_tensor_unsafe.h>
-#include <ATen/ops/_sparse_csr_tensor_unsafe_native.h>
-#include <ATen/ops/_stack_native.h>
-#include <ATen/ops/_unsafe_view.h>
-#include <ATen/ops/_unsafe_view_native.h>
-#include <ATen/ops/_values_copy_native.h>
-#include <ATen/ops/adjoint_native.h>
-#include <ATen/ops/alias.h>
-#include <ATen/ops/alias_copy_native.h>
-#include <ATen/ops/alias_native.h>
-#include <ATen/ops/arange.h>
-#include <ATen/ops/arange_native.h>
-#include <ATen/ops/as_strided_copy_native.h>
-#include <ATen/ops/as_strided_native.h>
-#include <ATen/ops/as_strided_scatter_native.h>
-#include <ATen/ops/atleast_1d.h>
-#include <ATen/ops/atleast_2d.h>
-#include <ATen/ops/atleast_3d.h>
-#include <ATen/ops/block_diag_native.h>
-#include <ATen/ops/broadcast_tensors_native.h>
-#include <ATen/ops/broadcast_to_native.h>
-#include <ATen/ops/cat.h>
-#include <ATen/ops/cat_meta.h>
-#include <ATen/ops/cat_native.h>
-#include <ATen/ops/chunk_native.h>
-#include <ATen/ops/col_indices_copy_native.h>
-#include <ATen/ops/column_stack_native.h>
-#include <ATen/ops/concat_native.h>
-#include <ATen/ops/concatenate_native.h>
-#include <ATen/ops/crow_indices_copy_native.h>
-#include <ATen/ops/dense_dim_native.h>
-#include <ATen/ops/detach_copy_native.h>
-#include <ATen/ops/detach_native.h>
-#include <ATen/ops/diag.h>
-#include <ATen/ops/diag_embed.h>
-#include <ATen/ops/diag_embed_native.h>
-#include <ATen/ops/diag_native.h>
-#include <ATen/ops/diagflat_native.h>
-#include <ATen/ops/diagonal.h>
-#include <ATen/ops/diagonal_backward.h>
-#include <ATen/ops/diagonal_backward_native.h>
-#include <ATen/ops/diagonal_copy.h>
-#include <ATen/ops/diagonal_copy_native.h>
-#include <ATen/ops/diagonal_native.h>
-#include <ATen/ops/diagonal_scatter_native.h>
-#include <ATen/ops/dsplit_native.h>
-#include <ATen/ops/dstack_native.h>
-#include <ATen/ops/empty.h>
-#include <ATen/ops/empty_like.h>
-#include <ATen/ops/empty_quantized.h>
-#include <ATen/ops/expand_as_native.h>
-#include <ATen/ops/expand_copy_native.h>
-#include <ATen/ops/expand_native.h>
-#include <ATen/ops/flatten_dense_tensors_native.h>
-#include <ATen/ops/flatten_native.h>
-#include <ATen/ops/from_blob.h>
-#include <ATen/ops/hsplit_native.h>
-#include <ATen/ops/hstack.h>
-#include <ATen/ops/hstack_native.h>
-#include <ATen/ops/index_select_native.h>
-#include <ATen/ops/indices_copy_native.h>
-#include <ATen/ops/lift_fresh_native.h>
-#include <ATen/ops/lift_native.h>
-#include <ATen/ops/mH_native.h>
-#include <ATen/ops/mT_native.h>
-#include <ATen/ops/matrix_H_native.h>
-#include <ATen/ops/meshgrid_native.h>
-#include <ATen/ops/moveaxis_native.h>
-#include <ATen/ops/movedim.h>
-#include <ATen/ops/movedim_native.h>
-#include <ATen/ops/narrow.h>
-#include <ATen/ops/narrow_copy.h>
-#include <ATen/ops/narrow_copy_native.h>
-#include <ATen/ops/narrow_native.h>
-#include <ATen/ops/new_empty_native.h>
-#include <ATen/ops/new_ones_native.h>
-#include <ATen/ops/numpy_T_native.h>
-#include <ATen/ops/permute_copy_native.h>
-#include <ATen/ops/permute_native.h>
-#include <ATen/ops/ravel_native.h>
-#include <ATen/ops/repeat_native.h>
-#include <ATen/ops/reshape_as_native.h>
-#include <ATen/ops/reshape_native.h>
-#include <ATen/ops/resize_native.h>
-#include <ATen/ops/row_stack_native.h>
-#include <ATen/ops/select.h>
-#include <ATen/ops/select_backward_native.h>
-#include <ATen/ops/select_copy_native.h>
-#include <ATen/ops/select_native.h>
-#include <ATen/ops/select_scatter_native.h>
-#include <ATen/ops/set_native.h>
-#include <ATen/ops/slice.h>
-#include <ATen/ops/slice_backward_native.h>
-#include <ATen/ops/slice_copy_native.h>
-#include <ATen/ops/slice_inverse_native.h>
-#include <ATen/ops/slice_native.h>
-#include <ATen/ops/slice_scatter_native.h>
-#include <ATen/ops/sparse_coo_tensor.h>
-#include <ATen/ops/sparse_coo_tensor_native.h>
-#include <ATen/ops/sparse_dim_native.h>
-#include <ATen/ops/split_copy_native.h>
-#include <ATen/ops/split_native.h>
-#include <ATen/ops/split_with_sizes.h>
-#include <ATen/ops/split_with_sizes_copy_native.h>
-#include <ATen/ops/split_with_sizes_native.h>
-#include <ATen/ops/squeeze.h>
-#include <ATen/ops/squeeze_copy_native.h>
-#include <ATen/ops/squeeze_native.h>
-#include <ATen/ops/stack_native.h>
-#include <ATen/ops/sub.h>
-#include <ATen/ops/sum.h>
-#include <ATen/ops/sum_to_size_native.h>
-#include <ATen/ops/swapaxes_native.h>
-#include <ATen/ops/swapdims_native.h>
-#include <ATen/ops/t_copy_native.h>
-#include <ATen/ops/t_native.h>
-#include <ATen/ops/tensor.h>
-#include <ATen/ops/tensor_split.h>
-#include <ATen/ops/tensor_split_native.h>
-#include <ATen/ops/tile_native.h>
-#include <ATen/ops/transpose.h>
-#include <ATen/ops/transpose_copy_native.h>
-#include <ATen/ops/transpose_native.h>
-#include <ATen/ops/unbind.h>
-#include <ATen/ops/unbind_copy_native.h>
-#include <ATen/ops/unbind_native.h>
-#include <ATen/ops/unflatten_dense_tensors_native.h>
-#include <ATen/ops/unflatten_native.h>
-#include <ATen/ops/unfold_copy_native.h>
-#include <ATen/ops/unfold_native.h>
-#include <ATen/ops/unsafe_chunk_native.h>
-#include <ATen/ops/unsafe_split_native.h>
-#include <ATen/ops/unsafe_split_with_sizes_native.h>
-#include <ATen/ops/unsqueeze_copy_native.h>
-#include <ATen/ops/unsqueeze_native.h>
-#include <ATen/ops/values_copy_native.h>
-#include <ATen/ops/view_as_complex.h>
-#include <ATen/ops/view_as_complex_copy_native.h>
-#include <ATen/ops/view_as_native.h>
-#include <ATen/ops/view_as_real.h>
-#include <ATen/ops/view_as_real_copy_native.h>
-#include <ATen/ops/view_copy_native.h>
-#include <ATen/ops/view_native.h>
-#include <ATen/ops/vsplit_native.h>
-#include <ATen/ops/vstack.h>
-#include <ATen/ops/vstack_native.h>
-#include <ATen/ops/zeros.h>
-#include <ATen/ops/zeros_like.h>
-#include <ATen/ops/zeros_native.h>
-#endif
 
 #include <algorithm>
 #include <cstdint>
@@ -349,6 +171,33 @@ TORCH_PRECOMPUTE_META_FUNC(cat)(const ITensorListRef& tensors, int64_t dim) {
 } // namespace at::meta
 
 namespace at::native {
+namespace sparse_csr {
+static inline bool is_sparse_compressed(const Tensor&) { return false; }
+static inline bool is_sparse_compressed(Layout) { return false; }
+static inline Layout flip_compressed_layout(Layout l) { return l; }
+}
+namespace sparse {
+struct SparseTensorImpl;
+static inline SparseTensorImpl* get_sparse_impl(const Tensor&) {
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return nullptr;
+}
+}
+
+
+static inline Tensor _sparse_coo_tensor_with_dims_and_tensors(
+    int64_t, int64_t, c10::IntArrayRef, const Tensor& indices,
+    const Tensor& values, const TensorOptions&, std::optional<bool> = std::nullopt) {
+  TORCH_CHECK(false, "Sparse COO tensors not supported in EasyFHE");
+  return Tensor();
+}
+static inline Tensor _sparse_coo_tensor_with_dims_and_tensors(
+    int64_t, int64_t, c10::SymIntArrayRef, const Tensor& indices,
+    const Tensor& values, const TensorOptions&, std::optional<bool> = std::nullopt) {
+  TORCH_CHECK(false, "Sparse COO tensors not supported in EasyFHE");
+  return Tensor();
+}
+
 
 DEFINE_DISPATCH(cat_serial_stub);
 DEFINE_DISPATCH(stack_serial_stub);
@@ -520,133 +369,8 @@ Tensor& set_meta_(Tensor& result) {
 }
 
 Tensor sparse_broadcast_to(const Tensor& self, IntArrayRef size) {
-  TORCH_CHECK(self.is_sparse(), "input must be sparse tensor");
-
-  const auto self_size = self.sizes();
-  const int64_t new_sparse_dims = size.size() - self.dim();
-  TORCH_CHECK(
-      new_sparse_dims >= 0,
-      "the requested broadcast shape has fewer dimensions than the input");
-  const int64_t res_sparse_dim = new_sparse_dims + self.sparse_dim();
-
-  for (int64_t i = 0; i < self.dim(); ++i) {
-    TORCH_CHECK(
-        self_size[i] == 1 || self_size[i] == size[i + new_sparse_dims],
-        "The input's length ",
-        self_size[i],
-        " at dimension ",
-        i,
-        " does not broadcast over the requested shape of length ",
-        size[i + new_sparse_dims],
-        " at dimension ",
-        i + new_sparse_dims);
-  }
-
-  const int64_t self_nnz = self._nnz();
-  const auto self_indices = self._indices();
-  int64_t nnz_expand_factor = 1;
-  int64_t largest_sparse_dim_len = -1;
-  int64_t min_broadcast_dim = (new_sparse_dims > 0) ? 0 : -1;
-  int64_t max_unchanged_dim = -1;
-  for (int64_t i = 0; i < res_sparse_dim; ++i) {
-    if ((i < new_sparse_dims) || (self_size[i - new_sparse_dims] != size[i])) {
-      nnz_expand_factor *= size[i];
-      largest_sparse_dim_len = std::max(size[i], largest_sparse_dim_len);
-      if (i >= new_sparse_dims && min_broadcast_dim == -1) {
-        min_broadcast_dim = i;
-      }
-    } else {
-      if (i >= new_sparse_dims) {
-        max_unchanged_dim = i;
-      }
-    }
-  }
-
-  // to_broadcast conserves is_coalesced property iff only the last
-  // sparse dimensions are expanded. Possible expansion of dense
-  // dimensions can be discarded as it does not affect the is_coalesce
-  // property.
-  bool is_coalesced = !self.dim() ||
-      (self.is_coalesced() &&
-       (max_unchanged_dim < min_broadcast_dim || min_broadcast_dim == -1));
-
-  // Replace non-broadcastable dims with 1 in the `size` vector {
-  auto res_sparse_dim_broadcast_mask =
-      at::DimVector(size.begin(), size.begin() + res_sparse_dim);
-  for (int64_t i = new_sparse_dims; i < res_sparse_dim; ++i) {
-    res_sparse_dim_broadcast_mask[i] =
-        (size[i] == self_size[i - new_sparse_dims]) ? 1 : size[i];
-  }
-  // }
-
-  // Then define for each sparse dim the number of reps for each nnz index/value
-  // due to broadcasting. Repetitions do not take into account the current value
-  // of nnz - this will be taken care of later {
-  auto nnz_repeats = c10::DimVector(res_sparse_dim);
-  nnz_repeats.back() = res_sparse_dim_broadcast_mask.back();
-  for (int64_t i = res_sparse_dim - 2; i >= 0; --i) {
-    nnz_repeats[i] = res_sparse_dim_broadcast_mask[i] * nnz_repeats[i + 1];
-  }
-  // }
-
-  // Broadcast values. Each nnz value has to be repeated nnz_expand_factor times
-  // {
-  auto broadcast_values_shape = DimVector(size.size() - res_sparse_dim + 2);
-  std::copy(
-      size.begin() + res_sparse_dim,
-      size.end(),
-      broadcast_values_shape.begin() + 2);
-  broadcast_values_shape[0] = self_nnz;
-  broadcast_values_shape[1] = nnz_expand_factor;
-  auto broadcast_values =
-      self._values().unsqueeze(1).expand(broadcast_values_shape).flatten(0, 1);
-  // }
-
-  // We can return early if there are no broadcastable sparse dims
-  if (largest_sparse_dim_len < 0) {
-    return at::sparse_coo_tensor(
-        self._indices(),
-        broadcast_values,
-        size,
-        self.options(),
-        self.is_coalesced());
-  }
-
-  auto broadcast_indices =
-      self._indices().new_empty({res_sparse_dim, self_nnz * nnz_expand_factor});
-
-  // Repeat each individual index value in dimension dim nnz_repeats[dim] /
-  // size[dim] times, and then repeat the whole vector self_nnz *
-  // (nnz_expand_factor / nnz_repeats[dim]) times to get the final index vector
-  // - only for broadcast dims {
-  const auto dim_arange =
-      at::arange(largest_sparse_dim_len, self._indices().options());
-  for (int64_t i = 0; i < res_sparse_dim; ++i) {
-    Tensor curr_dim_idx;
-    if ((i < new_sparse_dims) || (self_size[i - new_sparse_dims] != size[i])) {
-      // If the dim is either a newly created sparse dim, or an already existing
-      // one which is broadcastable, do the reps over an arange vector
-      curr_dim_idx = dim_arange.narrow(0, 0, size[i])
-                         .unsqueeze_(0)
-                         .unsqueeze_(-1)
-                         .expand(
-                             {self_nnz * (nnz_expand_factor / nnz_repeats[i]),
-                              size[i],
-                              nnz_repeats[i] / size[i]});
-    } else {
-      // Otherwise over a slice of self._indices() of length self_nnz
-      curr_dim_idx = self_indices.select(0, i - new_sparse_dims)
-                         .unsqueeze_(1)
-                         .expand({self_nnz, nnz_expand_factor});
-    }
-    broadcast_indices.select(0, i)
-        .view(curr_dim_idx.sizes())
-        .copy_(curr_dim_idx);
-  }
-  // }
-
-  return at::sparse_coo_tensor(
-      broadcast_indices, broadcast_values, size, self.options(), is_coalesced);
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return self;
 }
 
 Tensor broadcast_to_symint(const Tensor& self, SymIntArrayRef size) {
@@ -826,172 +550,22 @@ static bool sizes_match_except(
 // Check to see if the shape of tensors is compatible
 // for being concatenated along a given dimension.
 static void check_cat_sparse_dims(
-    Tensor const& t,
-    int64_t pos /* used only for debug messages */,
-    IntArrayRef sizes,
-    int64_t wrapped,
-    int64_t sparse_dim,
-    int64_t dense_dim) {
-  TORCH_CHECK(
-      t.is_sparse(),
-      "Concatenating sparse tensors, but a dense tensor was found at position ",
-      pos,
-      ".");
-  TORCH_CHECK(
-      sizes_match_except(sizes, t.sizes(), wrapped),
-      "All tensors must have the same shape: ",
-      sizes,
-      " (except in the concatenating dimension),"
-      " but found shape: ",
-      t.sizes(),
-      " at position ",
-      pos,
-      ".");
-  TORCH_CHECK(
-      t.sparse_dim() == sparse_dim && t.dense_dim() == dense_dim,
-      "All tensors must have the same sparse_dim and dense_dim: ",
-      sparse_dim,
-      ", ",
-      dense_dim,
-      ", but tensor at position ",
-      pos,
-      " has ",
-      t.sparse_dim(),
-      ", ",
-      t.dense_dim(),
-      ".");
+    Tensor const& t, int64_t pos, IntArrayRef sizes,
+    int64_t wrapped, int64_t sparse_dim, int64_t dense_dim) {
+  TORCH_CHECK(false, "Sparse cat not supported in EasyFHE");
 }
 
 static Tensor cat_sparse_impl(
-    const MaterializedITensorListRef& tensors,
-    int64_t dim) {
-  std::vector<Tensor> indices;
-  std::vector<Tensor> values;
-  int64_t wrapped = maybe_wrap_dim(dim, tensors[0].get().dim());
-  int64_t sparse_dim = tensors[0].get().sparse_dim();
-  int64_t dense_dim = tensors[0].get().dense_dim();
-  IntArrayRef sizes = tensors[0].get().sizes();
-  if (wrapped < sparse_dim) {
-    for (const auto i : c10::irange(tensors.size())) {
-      const Tensor& t = tensors[i];
-      check_cat_sparse_dims(t, i, sizes, wrapped, sparse_dim, dense_dim);
-      indices.push_back(t._indices());
-      values.push_back(t._values());
-    }
-    Tensor idxs = at::cat(indices, 1);
-    Tensor vals = at::cat(values, 0);
-
-    // We now need to move the indices of each
-    // input tensor up along `dim` by an appropriate amount.
-    // E.g., if t1 has indices [[2,3,4],[5,6,7]],
-    // and sizes [10, 7]
-    // then torch.cat((t1,t1,t1),1) should have indices
-    // [[2,3,4,2,3,4,2,3,4],[5,6,7,12,13,14,19,20,21]],
-    // so we need to increase idxs[1][3:6] by 7
-    // and idxs[1][6:9] by 14.
-    int64_t col = 0;
-    int64_t cumulative_offset = 0;
-    for (const auto i : c10::irange(tensors.size())) {
-      const Tensor& t = tensors[i];
-      int64_t this_piece_size = t._nnz();
-      // cumulative_offset is zero for the first piece, so
-      // don't waste time doing this operation unless i > 0.
-      if (i > 0) {
-        idxs[wrapped].narrow(0, col, this_piece_size) += cumulative_offset;
-      }
-      cumulative_offset += t.size(wrapped);
-      col += this_piece_size;
-    }
-    auto sizes_copy = sizes.vec();
-    sizes_copy[wrapped] = cumulative_offset;
-    return native::sparse_coo_tensor(
-        idxs,
-        vals,
-        sizes_copy,
-        optTypeMetaToScalarType(tensors[0].get().options().dtype_opt()),
-        tensors[0].get().options().layout_opt(),
-        tensors[0].get().options().device_opt(),
-        tensors[0].get().options().pinned_memory_opt());
-  } else {
-    // Catting along a dense dimension requires us to create new values.
-    // For illustration, consider the sparse 3d tensors t1 and t2,
-    // given by t1 = [[[1,2],[3,4]], ... (zeros) ..., [[5,6],[7,8]]]
-    // and t2 = [... (zeros) ..., [[9, 10], [11,12]], ... (zeros) ...],
-    // Their concatenation along dimension 2 is:
-    // [[[1,2,0,0],[3,4,0,0]], ... (zeros) ..., [[0,0,9,10],[0,0,11,12]], ...
-    // (zeros) ..., [[5,6,0,0],[7,8,0,0]]]
-    //
-    // Their values tensors are, respectively,
-    // [[[1,2],[3,4]],[[5,6],[7,8]]] and [[[9,10],[11,12]]].
-    //
-    // and so the values tensor of their concatenation along dim 2 will be:
-    // [[[1,2,0,0],[3,4,0,0]],[[5,6,0,0],[7,8,0,0]],[[0,0,9,10],[0,0,11,12]]]
-    //
-    // which we can get by taking the values tensor of each tensor, catting it
-    // with zeros of the appropriate size on the left and right, and then
-    // catting all those results together.
-
-    // The dimension in each tensor's values object that corresponds to the
-    // overall dimension along which we're catting.
-    int64_t values_dim = wrapped - sparse_dim + 1;
-    // The final size along the catted dimension.
-    const int64_t total_size = std::accumulate(
-        tensors.begin(),
-        tensors.end(),
-        static_cast<int64_t>(0),
-        [values_dim](int64_t l, const Tensor& r) {
-          return l + r._values().size(values_dim);
-        });
-    auto zeros_sizes = tensors[0].get()._values().sizes().vec();
-    int64_t cumulative_size = 0;
-    std::vector<Tensor> vals_pieces;
-    std::vector<Tensor> idxs_pieces;
-    for (const auto i : c10::irange(tensors.size())) {
-      const Tensor& t = tensors[i];
-      check_cat_sparse_dims(t, i, sizes, wrapped, sparse_dim, dense_dim);
-      // dimension 0 of values corresponds to the number of values,
-      // rather than to any logical dimension of the sparse tensor.
-      zeros_sizes[0] = t._values().size(0);
-      zeros_sizes[values_dim] = cumulative_size;
-      cumulative_size += t._values().size(values_dim);
-      auto z1 = at::zeros(
-          zeros_sizes,
-          optTypeMetaToScalarType(t._values().options().dtype_opt()),
-          t._values().options().layout_opt(),
-          t._values().options().device_opt(),
-          t._values().options().pinned_memory_opt());
-      zeros_sizes[values_dim] = total_size - cumulative_size;
-      auto z2 = at::zeros(
-          zeros_sizes,
-          optTypeMetaToScalarType(t._values().options().dtype_opt()),
-          t._values().options().layout_opt(),
-          t._values().options().device_opt(),
-          t._values().options().pinned_memory_opt());
-      vals_pieces.push_back(at::cat({z1, t._values(), z2}, values_dim));
-      idxs_pieces.push_back(t._indices());
-    }
-    auto sizes_copy = sizes.vec();
-    sizes_copy[wrapped] = total_size;
-    // This can create an uncoalesced tensor
-    return native::sparse_coo_tensor(
-        at::cat(idxs_pieces, 1),
-        at::cat(vals_pieces),
-        sizes_copy,
-        optTypeMetaToScalarType(tensors[0].get().options().dtype_opt()),
-        tensors[0].get().options().layout_opt(),
-        tensors[0].get().options().device_opt(),
-        tensors[0].get().options().pinned_memory_opt());
-  }
+    const MaterializedITensorListRef& tensors, int64_t dim) {
+  TORCH_CHECK(false, "Sparse cat not supported in EasyFHE");
+  return tensors[0].get();
 }
 
 Tensor cat_sparse(const ITensorListRef& tensors, int64_t dim) {
-  auto materialized = tensors.materialize();
-  auto maybe_outnames = namedinference::compute_cat_outnames(materialized);
-  auto result =
-      cat_sparse_impl(materialized, at::legacy_cat_wrap_dim(dim, materialized));
-  namedinference::propagate_names_if_nonempty(result, maybe_outnames);
-  return result;
+  TORCH_CHECK(false, "Sparse cat not supported in EasyFHE");
+  return at::Tensor();
 }
+
 
 Tensor block_diag(TensorList tensors) {
   Tensor result;
@@ -1357,7 +931,7 @@ Tensor expand(const Tensor& self, c10::IntArrayRef size, bool /*unused*/) {
       self.dim(),
       ")");
   TORCH_CHECK(
-      !self.is_sparse() && !at::sparse_csr::is_sparse_compressed(self),
+      !self.is_sparse(),
       "expand is unsupported for ",
       self.layout(),
       " tensors");
@@ -1526,54 +1100,11 @@ Tensor narrow_copy_dense_cpu(
 }
 
 Tensor narrow_copy_sparse(
-    const Tensor& self,
-    int64_t dim,
-    int64_t start,
-    int64_t length) {
-  int64_t allDim = self.dim();
-  int64_t end = start + length;
-  TORCH_CHECK(allDim > 0, "narrow() cannot be applied to a 0-dim tensor.");
-  TORCH_CHECK(length >= 0, "narrow(): length must be non-negative.");
-  TORCH_CHECK(
-      dim >= 0 && dim < allDim,
-      "Dimension ",
-      dim,
-      " out of range. Expecting 0 <= dim < ",
-      allDim,
-      ".");
-  TORCH_CHECK(
-      start >= 0 && end <= self.size(dim),
-      "Invalid range to narrow. range(start, start+length) must be a subset of range(0, ",
-      self.size(dim),
-      ").")
-  Tensor indices = self._indices();
-  int64_t sparse_dim = self.sparse_dim();
-
-  std::vector<int64_t> new_sizes = self.sizes().vec();
-  new_sizes[dim] = length;
-
-  Tensor new_values;
-  Tensor new_indices;
-  if (dim < sparse_dim) {
-    Tensor mask = (indices[dim] >= start).__and__((indices[dim] < end));
-    new_indices = indices.masked_select(mask).view({sparse_dim, -1});
-    new_indices[dim].sub_(start);
-    Tensor nzIndices = mask.nonzero().view(-1);
-    new_values = self._values().index_select(0, nzIndices);
-  } else {
-    /* This means we are narrowing on a dense dim, which is in effect just a
-        regular narrow on _values() */
-    new_indices = indices;
-    int64_t dense_dim = dim - sparse_dim + 1;
-    new_values = self._values().narrow_copy(dense_dim, start, length);
-  }
-
-  return at::sparse_coo_tensor(
-      new_indices, new_values, new_sizes, self.options(), self.is_coalesced());
+    const Tensor& self, int64_t dim, int64_t start, int64_t length) {
+  TORCH_CHECK(false, "Sparse narrow_copy not supported in EasyFHE");
+  return self;
 }
 
-// Should just use narrow_copy_out, but this API is used internally at Meta:
-// https://github.com/pytorch/pytorch/pull/87045#issuecomment-1309353561
 Tensor& narrow_copy_dense_cpu_out(
     const Tensor& self,
     int64_t dim,
@@ -1833,77 +1364,8 @@ Tensor permute(const Tensor& self, IntArrayRef dims) {
 }
 
 Tensor permute_sparse_coo(const Tensor& self, IntArrayRef dims) {
-  auto [new_sizes, _, wrapped_dims] =
-      _permute_size_stride_estimation(self, dims);
-
-  const auto ndim = self.dim();
-  const auto sparse_ndim = self.sparse_dim();
-  const auto dense_ndim = self.dense_dim();
-
-  auto dims_id_perm = std::vector<int64_t>(ndim);
-  auto dims_sparse_dense_id_perm = std::vector<int64_t>(ndim);
-  for (const auto i : c10::irange(ndim)) {
-    dims_id_perm[i] = i;
-    dims_sparse_dense_id_perm[i] = wrapped_dims[i];
-  }
-  std::sort(
-      dims_sparse_dense_id_perm.begin(),
-      dims_sparse_dense_id_perm.begin() + sparse_ndim);
-  std::sort(
-      dims_sparse_dense_id_perm.begin() + sparse_ndim,
-      dims_sparse_dense_id_perm.end());
-  TORCH_CHECK(
-      dims_sparse_dense_id_perm == dims_id_perm,
-      "permute(sparse_coo): transpositions between sparse and dense dimensions are not allowed.",
-      "Only transpositions within sparse and dense dimensions are supported.");
-
-  const auto slice =
-      [](std::vector<int64_t> v, size_t begin, size_t len) -> decltype(v) {
-    return std::vector<int64_t>{v.begin() + begin, v.begin() + begin + len};
-  };
-
-  auto old_sparse_dims = slice(dims_id_perm, 0, sparse_ndim);
-  auto old_dense_dims =
-      slice(std::move(dims_id_perm), sparse_ndim, ndim - sparse_ndim);
-  auto new_sparse_dims = slice(wrapped_dims, 0, sparse_ndim);
-  auto new_dense_dims =
-      slice(std::move(wrapped_dims), sparse_ndim, ndim - sparse_ndim);
-
-  auto old_indices = self._indices();
-  auto old_values = self._values();
-
-  const auto new_indices = (new_sparse_dims == old_sparse_dims)
-      ? std::move(old_indices)
-      : [&]() -> Tensor {
-    auto sparse_perm_tensor = at::from_blob(
-        reinterpret_cast<void*>(new_sparse_dims.data()),
-        {sparse_ndim},
-        old_indices.options().device(at::kCPU));
-    // creates new indices. It is possible to avoid that if COO
-    // is allowed to store a permutation vector.
-    return old_indices.index_select(
-        0, sparse_perm_tensor.to(self.device().type()));
-  }();
-  const auto new_values = (new_dense_dims == old_dense_dims)
-      ? std::move(old_values)
-      : [&]() -> Tensor {
-    auto values_perm = std::vector<int64_t>(dense_ndim + 1);
-    for (const auto i : c10::irange(dense_ndim)) {
-      values_perm[i + 1] = new_dense_dims[i] - sparse_ndim + 1;
-    }
-    return old_values.permute(values_perm);
-  }();
-  const auto is_coalesced =
-      self.is_coalesced() && (dims.empty() || dims[0] == 0);
-  // TODO: apply `is_coalesced ||= new_values.size(0) < 2`.
-  return _sparse_coo_tensor_with_dims_and_tensors(
-      sparse_ndim,
-      dense_ndim,
-      new_sizes,
-      new_indices,
-      new_values,
-      self.options(),
-      is_coalesced);
+  TORCH_CHECK(false, "Sparse COO permute not supported in EasyFHE");
+  return self;
 }
 
 Tensor repeat(const Tensor& self, IntArrayRef repeats) {
@@ -1931,7 +1393,7 @@ Tensor repeat(const Tensor& self, IntArrayRef repeats) {
 
   Tensor urtensor;
   if (self.is_quantized()) {
-    urtensor = at::empty_quantized(target_size, self);
+    TORCH_CHECK(false, "Quantized ops removed in EasyFHE");
   } else {
     urtensor = at::empty(target_size, self.options());
   }
@@ -2068,7 +1530,7 @@ Tensor reshape_symint(const Tensor& self, c10::SymIntArrayRef proposed_shape) {
   c10::SymDimVector shape = infer_size_dv(proposed_shape, sym_numel);
 
   if (self.is_mkldnn()) {
-    return at::_mkldnn_reshape(self, C10_AS_INTARRAYREF_SLOW(shape));
+    TORCH_CHECK(false, "mkldnn reshape not supported in EasyFHE");
   }
   auto sym_sizes = self.sym_sizes();
   auto sym_strides = self.sym_strides();
@@ -2133,7 +1595,7 @@ Tensor reshape(const Tensor& self, IntArrayRef proposed_shape) {
   DimVector shape = infer_size_dv(proposed_shape, self.numel());
 
   if (self.is_mkldnn()) {
-    return at::_mkldnn_reshape(self, shape);
+    TORCH_CHECK(false, "mkldnn reshape not supported in EasyFHE");
   }
 
   // `computeStride` returns the proper strides to use if this
@@ -2182,56 +1644,8 @@ Tensor reshape_as(const Tensor& self, const Tensor& other) {
 }
 
 static Tensor select_sparse(const Tensor& self, int64_t dim, int64_t index) {
-  int64_t sparse_dim = self.sparse_dim();
-  int64_t dense_dim = self.dense_dim();
-  TORCH_INTERNAL_ASSERT(dim >= 0 && dim < sparse_dim + dense_dim);
-
-  auto indices = self._indices();
-  auto values = self._values();
-  auto new_sizes = self.sizes().vec();
-  new_sizes.erase(new_sizes.begin() + dim);
-
-  if (dim < sparse_dim) {
-    auto nzIndices = (indices[dim] == index).nonzero().view(-1);
-    auto new_values = values.index_select(0, nzIndices);
-    if (sparse_dim == 1) {
-      // return dense part:
-      if (new_values.size(0) == 1) {
-        return new_values[0];
-      } else {
-        // sum promotes integral type to int64 when dtype is not specified.
-        return at::sum(new_values, 0, false, new_values.scalar_type());
-      }
-    } else {
-      auto dimIndices = (arange(
-                             0,
-                             sparse_dim,
-                             std::nullopt /* dtype */,
-                             std::nullopt /* layout */,
-                             self.device(),
-                             std::nullopt /* pin_memory */) != dim)
-                            .nonzero()
-                            .view(-1);
-      auto new_indices =
-          indices.index_select(1, nzIndices).index_select(0, dimIndices);
-      return _sparse_coo_tensor_with_dims_and_tensors(
-          sparse_dim - 1,
-          dense_dim,
-          new_sizes,
-          new_indices,
-          new_values,
-          self.options());
-    }
-  } else {
-    auto new_values = values.select(dim - sparse_dim + 1, index);
-    return _sparse_coo_tensor_with_dims_and_tensors(
-        sparse_dim,
-        dense_dim - 1,
-        new_sizes,
-        indices,
-        new_values,
-        self.options());
-  }
+  TORCH_CHECK(false, "Sparse select not supported in EasyFHE");
+  return self;
 }
 
 // this is an auxiliary function, called by the select&slice methods, that
@@ -2371,723 +1785,8 @@ Tensor index_select_sparse_cpu(
     const Tensor& self,
     int64_t dim,
     const Tensor& index) {
-  /*
-    Algorithm:
-    index - a 1-D tensor of indices with shape (n,)
-    self - sparse tensor, its shape is sizes = sparse_shape + dense_shape
-      indices - 2-D tensor of indices, shape is (sparse_dims, nnz)
-      values - (1+len(dense_shape))-D tensor of values, shape is (nnz,) +
-    dense_shape index_select(dim, index) returns a sparse tensor with the
-    following data new_sizes = sizes[:dim] + (n,) + sizes[dim+1:] new_indices -
-    shape is (sparse_dims, new_nnz) new_values - shape is (new_nnz,) +
-    dense_shape
-
-      if dim < len(sparse_shape):
-          # Find new_indices[dim] of the output sparse tensor and
-          # indices at which to select values/indices.
-          # The CPP code uses (binary/in a count table) search to find matches
-    and may # swap the loop order for better algorithmic complexity.
-          new_dim_indices = []
-          selected_dim_indices = []
-          # This is a brute-force algorithms to convey the main idea.
-          # The CPP code below is more efficient but more complicated.
-          for i, i_idx in enumerate(indices[dim]):
-              for j, j_idx in enumerate(index):
-                  if i_idx == j_idx:
-                      new_dim_indices.append(j)
-                      selected_dim_indices.append(i)
-          new_indices = indices.index_select(1, selected_dim_indices)
-          new_values = values.index_select(0, selected_dim_indices)
-          new_indices[dim] = new_dim_indices
-      else:
-          new_indices = indices
-          new_values = values.index_select(dim - sparse_dim + 1, index);
-    */
-  const auto ndim = self.dim();
-  TORCH_CHECK_INDEX(
-      ndim, "index_select() cannot be applied to a 0-dim tensor.");
-  TORCH_CHECK_INDEX(
-      index.dim() == 1 && index.dtype() == at::kLong &&
-          index.options().layout() == at::kStrided,
-      "index_select() argument index must be 1-D strided (non-sparse) long-tensor.");
-  dim = maybe_wrap_dim(dim, ndim);
-  const auto size = self.size(dim);
-  const auto sparse_dim = self.sparse_dim();
-  const auto dense_dim = self.dense_dim();
-  const auto indices = self._indices();
-  const auto values = self._values();
-  const auto nnz = values.size(0);
-  const auto index_len = index.size(0);
-  auto res_sizes = self.sizes().vec();
-  res_sizes[dim] = index_len;
-
-  // Equivalent to t.index_select(dim, idx), but vanilla index_select is not
-  // parallel, so we use gather instead. We use this method to select relevant
-  // indices/values from the intersection between indices[dim] and the index.
-  const auto index_select =
-      [](const Tensor& t, int64_t dim, const Tensor& idx) -> Tensor {
-    const auto idx_len = idx.numel();
-    auto out_shape = t.sizes().vec();
-    out_shape[dim] = idx_len;
-    auto idx_shape = std::vector<int64_t>(t.dim(), 1);
-    idx_shape[dim] = idx_len;
-    return t.gather(dim, idx.view(idx_shape).expand(out_shape));
-  };
-
-  // If indexing into sparse dimensions
-  if (dim < sparse_dim) {
-    // short-circuit if index is empty
-    if (!index_len) {
-      auto res_indices = index_select(indices, 1, index);
-      res_indices[dim] = index;
-      const auto res_values = index_select(values, 0, index);
-
-      return _sparse_coo_tensor_with_dims_and_tensors(
-          sparse_dim,
-          dense_dim,
-          res_sizes,
-          res_indices,
-          res_values,
-          self.options());
-    }
-
-    const auto nneg_index = [&index, index_len, &self, size, dim]() -> Tensor {
-      const auto index_contiguous = index.contiguous();
-      auto nneg_index = at::empty_like(index_contiguous);
-      // nneg_index = (index < 0) * (index + size) + (index >= 0) * index
-      const auto* ptr_index = index_contiguous.const_data_ptr<int64_t>();
-      auto* ptr_nneg_index = nneg_index.data_ptr<int64_t>();
-      at::parallel_for(
-          0,
-          index_len,
-          at::internal::GRAIN_SIZE,
-          [&](int64_t start, int64_t end) {
-            const auto* src = ptr_index + start;
-            auto* dst = ptr_nneg_index + start;
-            for ([[maybe_unused]] const auto _ : c10::irange(start, end)) {
-              auto idx = *src++;
-              if (idx < -size || idx >= size) {
-                // Mark self and dim as used if code is compiled with
-                // STRIP_ERROR_MESSAGES
-                (void)dim;
-                (void)self;
-                TORCH_CHECK_INDEX(
-                    false,
-                    "index_select(): index contains ",
-                    idx,
-                    " that is out of range for tensor of size ",
-                    self.sizes(),
-                    " at dimension ",
-                    dim);
-              }
-              if (idx < 0) {
-                idx += size;
-              }
-              *dst++ = idx;
-            }
-          });
-
-      return nneg_index;
-    }();
-
-    const auto dim_indices = indices[dim].contiguous();
-
-    // If nnz is smaller than size, then either indices[dim] or index gets
-    // sorted, then this is followed by a binary search to find intersections.
-    const auto get_selected_indices_small_nnz_large_size =
-        [&]() -> std::tuple<Tensor, Tensor> {
-      const auto grain_size = at::internal::GRAIN_SIZE;
-      const auto n_threads_nnz = std::max<int64_t>(
-          1,
-          std::min<int64_t>(
-              (nnz + grain_size - 1) / grain_size, at::get_num_threads()));
-      const auto n_threads_index = std::max<int64_t>(
-          1,
-          std::min<int64_t>(
-              (index_len + grain_size - 1) / grain_size,
-              at::get_num_threads()));
-      const auto search_in_dim_indices
-          // if either dim_indices or index requires sorting, we compare
-          // the cost of sort + binary search, which is comparing
-          // (len(dim_indices) + len(index)) * log(len(index)) to
-          // (len(dim_indices) + len(index)) * log(len(dim_indices)).
-          // That simplifies to comparing len(dim_indices) to len(index).
-          // Additionally, we take into consideration potential parallel
-          // speedup.
-          = (nnz / n_threads_nnz <= index_len / n_threads_index)
-              // if self is coalesced and dim is 0, then we compare
-              // index_len * log(len(dim_indices)), which is binary search into
-              // dim_indices, to (len(index_len) + len(dim_indices)) *
-              // log(index_len). Additionally, we take into consideration
-              // potential parallel speedup.
-              || (self.is_coalesced() && dim == 0 &&
-                  (index_len * std::log2(nnz) / n_threads_index <=
-                   (nnz / n_threads_nnz + index_len) * std::log2(index_len)))
-          ? true
-          : false;
-
-      // src is a source of indices to binary search in sorted
-      Tensor sorted, sorted_idx, src;
-      std::tie(sorted, sorted_idx, src) =
-          [&dim_indices, &nneg_index, &self, search_in_dim_indices, dim, nnz]()
-          -> std::tuple<Tensor, Tensor, Tensor> {
-        // sort dim_indices to binary search into it
-        if (search_in_dim_indices) {
-          // dim_indices is already sorted if self is coalesced and dim == 0
-          if (self.is_coalesced() && dim == 0) {
-            return std::make_tuple(
-                dim_indices,
-                at::arange(nnz, dim_indices.options()),
-                nneg_index);
-          } else {
-            auto [sorted_dim_indices, sorted_dim_indices_idx] =
-                dim_indices.sort();
-            return std::make_tuple(
-                sorted_dim_indices, sorted_dim_indices_idx, nneg_index);
-          }
-        }
-        // sort nneg_index to binary search into it
-        else {
-          auto [sorted_nneg_index, sorted_nneg_index_idx] = nneg_index.sort();
-          return std::make_tuple(
-              sorted_nneg_index, sorted_nneg_index_idx, dim_indices);
-        }
-      }();
-
-      const auto src_grain_size = at::internal::GRAIN_SIZE;
-      const auto src_len = src.numel();
-      const auto n_threads_src = std::max<int64_t>(
-          // 1 <= n_threads_src <= std::min(ceil(src.numel() / src_grain_size),
-          // max_threads)
-          1,
-          std::min<int64_t>(
-              (src_len + src_grain_size - 1) / src_grain_size,
-              at::get_num_threads()));
-      const auto chunk_size_src = (src_len + n_threads_src - 1) / n_threads_src;
-
-      const std::vector<int64_t> src_n_threads_shape = {
-          n_threads_src, (src_len + n_threads_src - 1) / n_threads_src};
-
-      // src_int_idx and sorted_int_idx store "i" and "j" indices indicating
-      // intersections such that src_int_idx[i] == sorted_int_idx[j].
-      // These intersections are found with binary search and in parallel.
-      auto src_int_idx = at::empty(src_n_threads_shape, src.options());
-      auto sorted_int_idx = at::empty_like(src_int_idx);
-      // For each element "i" from src, int_counts define how many
-      // elements there are in sorted, i.e. "j" indices, corresponding
-      // to "i", i.e.:
-      // |{j : src_int_idx[i] == sorted_int_idx[j]}| for each i in src_int_idx.
-      auto int_counts = at::zeros_like(src_int_idx);
-
-      // fill in src_int_idx, sorted_int_idx, int_counts
-      {
-        const auto sorted_len = sorted.numel();
-        const auto* ptr_sorted = sorted.const_data_ptr<int64_t>();
-        const auto* ptr_sorted_start = ptr_sorted;
-        const auto* ptr_sorted_end = ptr_sorted + sorted_len;
-
-        at::parallel_for(
-            0, n_threads_src, 1, [&](int64_t tid, [[maybe_unused]] int64_t _) {
-              const auto start = tid * chunk_size_src;
-              const auto end = std::min(start + chunk_size_src, src_len);
-              auto* ptr_tid_src_int_idx =
-                  src_int_idx.select(0, tid).data_ptr<int64_t>();
-              auto* ptr_tid_sorted_int_idx =
-                  sorted_int_idx.select(0, tid).data_ptr<int64_t>();
-              auto* ptr_tid_int_counts =
-                  int_counts.select(0, tid).data_ptr<int64_t>();
-              const auto* ptr_src = src.const_data_ptr<int64_t>() + start;
-
-              for (const auto i : c10::irange(start, end)) {
-                const auto src_val = *ptr_src++;
-                const auto src_val_lb =
-                    std::lower_bound(ptr_sorted_start, ptr_sorted_end, src_val);
-                // We cannot just use *src_val_lb != src_val because when
-                // src_val_lb == ptr_sorted_end, dereferencing past-the-end
-                // value is not well-defined.
-                if (src_val_lb == ptr_sorted_end || *src_val_lb != src_val) {
-                  ++ptr_tid_src_int_idx;
-                  ++ptr_tid_sorted_int_idx;
-                  ++ptr_tid_int_counts;
-                  continue;
-                }
-                const auto src_val_ub =
-                    std::upper_bound(ptr_sorted_start, ptr_sorted_end, src_val);
-
-                const int64_t count = src_val_ub - src_val_lb;
-                const int64_t j = src_val_lb - ptr_sorted_start;
-
-                *ptr_tid_src_int_idx++ = i;
-                *ptr_tid_sorted_int_idx++ = j;
-                *ptr_tid_int_counts++ = count;
-              }
-            });
-      }
-
-      const auto compressed_int_counts = int_counts.sum(-1);
-      const auto res_len = compressed_int_counts.sum().item<int64_t>();
-
-      // Short-circuit if empty intersection
-      if (!res_len) {
-        auto empty_idx = at::empty({0}, src.options());
-        return std::make_tuple(empty_idx, empty_idx);
-      }
-
-      // Now that we know "i", "j" and the counts, we "unflatten"
-      // them into two arrays of intersection indices such that
-      // selected_src = repeat_interleave(src_int_idx, int_counts),
-      // and selected_sorted is obtained as follows:
-      // offsets = int_counts.cumsum(0).sub_(int_counts)
-      // for ii, (j, c) in enumerate(zip(sorted_int_idx, int_counts)):
-      //     out_slice = slice(offsets[ii], offsets[ii] + c)
-      //     src_slice = slice(j, j + c)
-      //     selected_sorted[out_slice] = sorted_int_idx[src_slice]
-      auto selected_sorted = at::empty({res_len}, sorted.options());
-      auto selected_src = at::empty({res_len}, src.options());
-
-      // fill in selected_sorted, selected_src
-      {
-        auto* ptr_selected_sorted = selected_sorted.data_ptr<int64_t>();
-        auto* ptr_selected_src = selected_src.data_ptr<int64_t>();
-
-        const auto thread_offsets =
-            compressed_int_counts.cumsum(0).sub_(compressed_int_counts);
-        const auto* ptr_sorted_idx = sorted_idx.const_data_ptr<int64_t>();
-        at::parallel_for(
-            0, n_threads_src, 1, [&](int64_t tid, [[maybe_unused]] int64_t _) {
-              const auto start = tid * chunk_size_src;
-              const auto end = std::min(start + chunk_size_src, src_len);
-              const auto tid_offset =
-                  thread_offsets.const_data_ptr<int64_t>()[tid];
-              const auto* ptr_tid_src_int_idx =
-                  src_int_idx.select(0, tid).const_data_ptr<int64_t>();
-              const auto* ptr_tid_sorted_int_idx =
-                  sorted_int_idx.select(0, tid).const_data_ptr<int64_t>();
-              const auto* ptr_tid_int_counts =
-                  int_counts.select(0, tid).const_data_ptr<int64_t>();
-              auto* ptr_tid_selected_sorted = ptr_selected_sorted + tid_offset;
-              auto* ptr_tid_selected_src = ptr_selected_src + tid_offset;
-
-              for ([[maybe_unused]] const auto _ : c10::irange(start, end)) {
-                const auto count = *ptr_tid_int_counts++;
-                const auto i = *ptr_tid_src_int_idx++;
-                const auto j = *ptr_tid_sorted_int_idx++;
-                if (!count)
-                  continue;
-
-                std::fill_n(ptr_tid_selected_src, count, i);
-                std::copy_n(ptr_sorted_idx + j, count, ptr_tid_selected_sorted);
-
-                ptr_tid_selected_sorted += count;
-                ptr_tid_selected_src += count;
-              }
-            });
-      }
-
-      return search_in_dim_indices
-          ? std::make_tuple(selected_sorted, selected_src)
-          : std::make_tuple(selected_src, selected_sorted);
-    };
-
-    // Converts a 1d sorted idx to a compressed 1d compressed idx,
-    // aka crow in the CSR format. Useful to get a count table in
-    // a parallelized and no-sync manner.
-    // TODO: this function is equivalent to _convert_indices_from_coo_to_csr.
-    // The mentioned function is not public yet.
-    const auto sorted_idx_to_cidx = [](const Tensor& idx,
-                                       int64_t len,
-                                       bool run_in_parallel = true) -> Tensor {
-      auto cidx = at::empty({len + 1}, idx.options());
-
-      const auto* ptr_idx = idx.const_data_ptr<int64_t>();
-      auto* ptr_cidx = cidx.data_ptr<int64_t>();
-
-      const auto idx_len = idx.numel();
-
-      std::fill_n(ptr_cidx, ptr_idx[0] + 1, 0);
-      std::fill_n(
-          ptr_cidx + ptr_idx[idx_len - 1] + 1,
-          len - ptr_idx[idx_len - 1],
-          idx_len);
-
-      const auto grain_size =
-          run_in_parallel ? at::internal::GRAIN_SIZE : idx_len;
-      at::parallel_for(0, idx_len, grain_size, [&](int64_t start, int64_t end) {
-        auto* ptr_curr_cidx = ptr_cidx + ptr_idx[start] + 1;
-        for (int64_t i = start; i < std::min(end, idx_len - 1); ++i) {
-          const auto diff = ptr_idx[i + 1] - ptr_idx[i];
-          std::fill_n(ptr_curr_cidx, diff, i + 1);
-          ptr_curr_cidx += diff;
-        }
-      });
-
-      return cidx;
-    };
-
-    // If nnz is (much) larger than size, then both indices[dim] and index get
-    // sorted with a count sort (faster, and no huge nnz-sized chunk memory
-    // allocations). The element-wise product between the count tables gives us
-    // all the intersections.
-    const auto get_selected_indices_large_nnz_small_size =
-        [&]() -> std::tuple<Tensor, Tensor> {
-      const auto get_counts =
-          [&sorted_idx_to_cidx](
-              // Writes into counts (must be preallocated and zero)
-              // and allows to use external buffers.
-              Tensor& counts,
-              const Tensor& t,
-              int64_t bins,
-              bool is_sorted = false,
-              bool run_in_parallel = true) -> void {
-        if (is_sorted) {
-          const auto cidx = sorted_idx_to_cidx(t, bins, run_in_parallel);
-          at::sub_out(
-              counts, cidx.slice(0, 1, bins + 1), cidx.slice(0, 0, bins));
-        } else {
-          auto* ptr_counts = counts.data_ptr<int64_t>();
-          const auto* ptr_vals = t.const_data_ptr<int64_t>();
-          for ([[maybe_unused]] const auto _ : c10::irange(t.numel())) {
-            ++ptr_counts[*ptr_vals++];
-          }
-        }
-      };
-
-      const auto counts_per_thread =
-          [&get_counts, size](
-              const Tensor& idx,
-              bool is_sorted = false,
-              int64_t grain_size = at::internal::GRAIN_SIZE) -> Tensor {
-        const auto idx_len = idx.numel();
-        // 1 <= n_threads <= min(ceil(len / grain_size), max_threads)
-        const auto n_threads = std::max<int64_t>(
-            1,
-            std::min<int64_t>(
-                (idx_len + grain_size - 1) / grain_size,
-                at::get_num_threads()));
-        const auto chunk_size = (idx_len + n_threads - 1) / n_threads;
-        const auto run_in_parallel = (n_threads == 1);
-
-        auto counts_per_thread = at::zeros({n_threads, size}, idx.options());
-        at::parallel_for(
-            0, n_threads, 1, [&](int64_t tid, [[maybe_unused]] int64_t _) {
-              const auto start = tid * chunk_size;
-              const auto end = std::min(start + chunk_size, idx_len);
-              const auto tid_idx = idx.slice(0, start, end);
-              auto tid_counts = counts_per_thread.select(0, tid);
-              get_counts(
-                  tid_counts,
-                  tid_idx,
-                  /*bins=*/size,
-                  /*is_sorted=*/is_sorted,
-                  /*run_in_parallel=*/run_in_parallel);
-            });
-
-        return counts_per_thread;
-      };
-
-      auto dim_indices_counts_per_thread = counts_per_thread(
-          dim_indices,
-          /*is_sorted=*/self.is_coalesced() && dim == 0
-          /*grain_size = at::internal::GRAIN_SIZE*/
-      );
-      auto dim_indices_offset_counts_per_thread =
-          dim_indices_counts_per_thread.cumsum(0);
-
-      auto index_counts_per_thread = counts_per_thread(
-          nneg_index,
-          /*is_sorted=*/false
-          /*grain_size = at::internal::GRAIN_SIZE*/
-      );
-      auto index_offset_counts_per_thread = index_counts_per_thread.cumsum(0);
-
-      const auto index_counts = index_offset_counts_per_thread.select(0, -1);
-      const auto dim_indices_counts =
-          dim_indices_offset_counts_per_thread.select(0, -1);
-      const auto intersection_counts = index_counts.mul(dim_indices_counts);
-      const auto res_len = intersection_counts.sum().item<int64_t>();
-      // Short-circuit if empty intersection
-      if (!res_len) {
-        auto empty_idx = at::empty({0}, index.options());
-        return std::make_tuple(empty_idx, empty_idx);
-      }
-      const auto intersection_offsets = intersection_counts.cumsum(0);
-
-      const auto search_in_dim_indices = [&]() -> bool {
-        const auto grain_size = at::internal::GRAIN_SIZE;
-        const auto n_threads_index = std::max<int64_t>(
-            1,
-            std::min<int64_t>(
-                (index_len + grain_size - 1) / grain_size,
-                at::get_num_threads()));
-        const auto n_threads_dim_indices = std::max<int64_t>(
-            1,
-            std::min<int64_t>(
-                (nnz + grain_size - 1) / grain_size, at::get_num_threads()));
-
-        const auto index_max_copy_work_per_thread =
-            index_counts_per_thread.mul(dim_indices_counts)
-                .sum(-1)
-                .max()
-                .item<int64_t>();
-        const auto dim_indices_max_copy_work_per_thread =
-            dim_indices_counts_per_thread.mul(index_counts)
-                .sum(-1)
-                .max()
-                .item<int64_t>();
-
-        const auto index_max_work_per_thread =
-            index_max_copy_work_per_thread * index_len / n_threads_index;
-        const auto dim_indices_max_work_per_thread =
-            dim_indices_max_copy_work_per_thread * nnz / n_threads_dim_indices;
-        return index_max_work_per_thread <= dim_indices_max_work_per_thread
-            ? true
-            : false;
-      }();
-
-      Tensor idx, idx_counts_per_thread, idx_offset_counts_per_thread;
-      Tensor src, src_counts_per_thread, src_offset_counts_per_thread;
-      std::tie(
-          idx,
-          idx_counts_per_thread,
-          idx_offset_counts_per_thread,
-          src,
-          src_counts_per_thread,
-          src_offset_counts_per_thread) = [&]() {
-        return search_in_dim_indices
-            ? std::make_tuple(
-                  nneg_index,
-                  index_counts_per_thread,
-                  index_offset_counts_per_thread,
-                  dim_indices,
-                  dim_indices_counts_per_thread,
-                  dim_indices_offset_counts_per_thread)
-            : std::make_tuple(
-                  dim_indices,
-                  dim_indices_counts_per_thread,
-                  dim_indices_counts_per_thread.cumsum(0),
-                  nneg_index,
-                  index_counts_per_thread,
-                  index_counts_per_thread.cumsum(0));
-      }();
-
-      const auto idx_counts = idx_offset_counts_per_thread.select(0, -1);
-      const auto src_counts = src_offset_counts_per_thread.select(0, -1);
-
-      Tensor src_idx, src_idx_offsets;
-      std::tie(src_idx, src_idx_offsets) =
-          [&](int64_t grain_size =
-                  at::internal::GRAIN_SIZE) -> std::tuple<Tensor, Tensor> {
-        const auto src_intersection_counts = src_counts.mul(idx_counts > 0);
-        const auto src_intersection_offsets = src_intersection_counts.cumsum(0);
-        const auto src_idx_len =
-            src_intersection_offsets.const_data_ptr<int64_t>()[size - 1];
-        auto src_idx = at::empty({src_idx_len}, src.options());
-
-        const auto* ptr_src = src.const_data_ptr<int64_t>();
-        const auto* ptr_intersection_counts =
-            intersection_counts.const_data_ptr<int64_t>();
-        const auto* ptr_src_intersection_counts =
-            src_intersection_counts.const_data_ptr<int64_t>();
-        const auto* ptr_src_intersection_offsets =
-            src_intersection_offsets.const_data_ptr<int64_t>();
-        auto* ptr_src_idx = src_idx.data_ptr<int64_t>();
-
-        const auto src_len = src.numel();
-        const auto n_threads_src = std::max<int64_t>(
-            1,
-            std::min<int64_t>(
-                (src_len + grain_size - 1) / grain_size,
-                at::get_num_threads()));
-        const auto chunk_size = (src_len + n_threads_src - 1) / n_threads_src;
-        at::parallel_for(
-            0, n_threads_src, 1, [&](int64_t tid, [[maybe_unused]] int64_t _) {
-              const auto start = tid * chunk_size;
-              const auto end = std::min(start + chunk_size, src_len);
-              auto* ptr_src_tid = ptr_src + start;
-              const auto* ptr_src_counts_per_thread =
-                  src_counts_per_thread.select(0, tid)
-                      .const_data_ptr<int64_t>();
-              const auto* ptr_src_offset_counts_per_thread =
-                  src_offset_counts_per_thread.select(0, tid)
-                      .const_data_ptr<int64_t>();
-              auto tid_counts = at::zeros({size}, src.options());
-              auto* ptr_tid_counts = tid_counts.data_ptr<int64_t>();
-
-              for (const auto i : c10::irange(start, end)) {
-                const auto idx_val = *ptr_src_tid++;
-                // skip idx value if not in the intersection
-                if (!ptr_intersection_counts[idx_val])
-                  continue;
-                const auto idx_val_offset =
-                    ptr_src_intersection_offsets[idx_val] -
-                    ptr_src_intersection_counts[idx_val];
-                const auto idx_val_tid_offset =
-                    ptr_src_offset_counts_per_thread[idx_val] -
-                    ptr_src_counts_per_thread[idx_val];
-                auto& idx_val_local_tid_count = ptr_tid_counts[idx_val];
-                ptr_src_idx
-                    [idx_val_offset + idx_val_tid_offset +
-                     idx_val_local_tid_count] = i;
-                ++idx_val_local_tid_count;
-              }
-            });
-
-        const auto src_idx_offsets =
-            src_intersection_offsets.sub_(src_intersection_counts);
-
-        return std::make_tuple(src_idx, src_idx_offsets);
-      }();
-
-      auto [idx_selected, src_selected] =
-          [&](int64_t grain_size =
-                  at::internal::GRAIN_SIZE) -> std::tuple<Tensor, Tensor> {
-        const auto thread_offset = [&]() {
-          // we do not need idx_counts_per_thread anymore,
-          // so it is safe to do in-place intersection.
-          auto counts_per_thread =
-              idx_counts_per_thread.mul_(src_counts).sum(-1);
-          return counts_per_thread.cumsum(0).sub_(counts_per_thread);
-        }();
-        const auto* ptr_thread_offset = thread_offset.const_data_ptr<int64_t>();
-
-        auto idx_selected = at::empty({res_len}, idx.options());
-        auto src_selected = at::empty({res_len}, src.options());
-
-        const auto* ptr_idx = idx.const_data_ptr<int64_t>();
-        const auto* ptr_src_counts = src_counts.const_data_ptr<int64_t>();
-        const auto* ptr_intersection_counts =
-            intersection_counts.const_data_ptr<int64_t>();
-        const auto* ptr_src_idx = src_idx.const_data_ptr<int64_t>();
-        const auto* ptr_src_idx_offsets =
-            src_idx_offsets.const_data_ptr<int64_t>();
-        auto* ptr_idx_selected = idx_selected.data_ptr<int64_t>();
-        auto* ptr_src_selected = src_selected.data_ptr<int64_t>();
-
-        const auto idx_len = idx.numel();
-        const auto n_threads_idx = std::max<int64_t>(
-            1,
-            std::min<int64_t>(
-                (idx_len + grain_size - 1) / grain_size,
-                at::get_num_threads()));
-        const auto chunk_size = (idx_len + n_threads_idx - 1) / n_threads_idx;
-        at::parallel_for(
-            0, n_threads_idx, 1, [&](int64_t tid, [[maybe_unused]] int64_t _) {
-              const auto start = tid * chunk_size;
-              const auto end = std::min(start + chunk_size, idx_len);
-              const auto tid_offset = ptr_thread_offset[tid];
-              const auto* ptr_idx_tid = ptr_idx + start;
-              auto* ptr_idx_selected_tid = ptr_idx_selected + tid_offset;
-              auto* ptr_src_selected_tid = ptr_src_selected + tid_offset;
-
-              for (const auto i : c10::irange(start, end)) {
-                const auto idx_val = *ptr_idx_tid++;
-                // skip if idx_val is not in the intersection
-                if (!ptr_intersection_counts[idx_val])
-                  continue;
-                const auto count = ptr_src_counts[idx_val];
-                const auto j = ptr_src_idx_offsets[idx_val];
-                std::fill_n(ptr_idx_selected_tid, count, i);
-                std::copy_n(ptr_src_idx + j, count, ptr_src_selected_tid);
-                ptr_idx_selected_tid += count;
-                ptr_src_selected_tid += count;
-              }
-            });
-
-        return std::make_tuple(idx_selected, src_selected);
-      }();
-
-      return search_in_dim_indices
-          ? std::make_tuple(src_selected, idx_selected)
-          : std::make_tuple(idx_selected, src_selected);
-    };
-
-    const auto make_output = [&](const Tensor& selected_dim_indices,
-                                 const Tensor& res_dim_indices) -> Tensor {
-      auto res_indices = index_select(indices, 1, selected_dim_indices);
-      res_indices[dim] = res_dim_indices;
-      const auto res_values = index_select(values, 0, selected_dim_indices);
-
-      return _sparse_coo_tensor_with_dims_and_tensors(
-          sparse_dim,
-          dense_dim,
-          res_sizes,
-          res_indices,
-          res_values,
-          self.options());
-    };
-
-    // Brute-force solution for small values of nnz and index_len
-    const auto get_result_small_nnz_small_index = [&]() -> Tensor {
-      const auto dim_indices_in_inner_loop = nnz >= index_len;
-      auto [outer, inner] = [&]() -> std::tuple<Tensor, Tensor> {
-        if (dim_indices_in_inner_loop) {
-          return std::make_tuple(nneg_index, dim_indices);
-        } else {
-          return std::make_tuple(dim_indices, nneg_index);
-        }
-      }();
-
-      const auto* ptr_outer = outer.const_data_ptr<int64_t>();
-      const auto* ptr_inner = inner.const_data_ptr<int64_t>();
-      // NOTE: if very critical, replace std::vector with
-      // a data structure that operates on stack up to some limit.
-      auto outer_selected_idx = std::vector<int64_t>();
-      auto inner_selected_idx = std::vector<int64_t>();
-      int64_t res_len = 0;
-      for (const auto i : c10::irange(outer.numel())) {
-        for (const auto j : c10::irange(inner.numel())) {
-          if (ptr_outer[i] == ptr_inner[j]) {
-            ++res_len;
-            outer_selected_idx.push_back(i);
-            inner_selected_idx.push_back(j);
-          }
-        }
-      }
-
-      const auto outer_selected_idx_tensor =
-          at::from_blob(outer_selected_idx.data(), {res_len}, at::kLong);
-      const auto inner_selected_idx_tensor =
-          at::from_blob(inner_selected_idx.data(), {res_len}, at::kLong);
-
-      return dim_indices_in_inner_loop
-          ? make_output(inner_selected_idx_tensor, outer_selected_idx_tensor)
-          : make_output(outer_selected_idx_tensor, inner_selected_idx_tensor);
-    };
-
-    constexpr int64_t BRUTE_FORCE_SIZE_LIMIT = 2 << 14; // 16384
-    // NOTE: such a condition to avoid overflows in (nnz * index_len)
-    if (nnz <= BRUTE_FORCE_SIZE_LIMIT && index_len <= BRUTE_FORCE_SIZE_LIMIT &&
-        (nnz * index_len) <= BRUTE_FORCE_SIZE_LIMIT) {
-      return get_result_small_nnz_small_index();
-    } else {
-      Tensor selected_dim_indices;
-      Tensor res_dim_indices;
-
-      // A more precise decision could be of the form:
-      // `nnz < C(nnz, size) * size`, but it requires heavy benchmarking.
-      // We choose `nnz < size`, which measures theoretical complexity
-      // and does not rely on runtime performance.
-      // TODO: perform this analysis and find better C(nnz, size).
-      if (nnz <= size) {
-        std::tie(selected_dim_indices, res_dim_indices) =
-            get_selected_indices_small_nnz_large_size();
-      } else {
-        std::tie(selected_dim_indices, res_dim_indices) =
-            get_selected_indices_large_nnz_small_size();
-      }
-
-      return make_output(selected_dim_indices, res_dim_indices);
-    }
-  }
-  // If indexing into dense dimensions
-  else {
-    // It is sufficient to just perform `index_select` on values
-    // if `dim` refers to dense dimensions.
-    const auto res_values = index_select(values, dim - sparse_dim + 1, index);
-
-    return _sparse_coo_tensor_with_dims_and_tensors(
-        sparse_dim, dense_dim, res_sizes, indices, res_values, self.options());
-  }
+  TORCH_CHECK(false, "Sparse index_select not supported in EasyFHE");
+  return self;
 }
 
 Tensor slice(
@@ -3553,45 +2252,8 @@ Tensor& dstack_out(TensorList tensors, Tensor& result) {
 }
 
 static inline Tensor& sparse_transpose_(
-    Tensor& self,
-    int64_t dim0,
-    int64_t dim1) {
-  int64_t nsparse_dim = self.sparse_dim();
-  TORCH_CHECK(
-      dim0 < nsparse_dim && dim1 < nsparse_dim,
-      "sparse transpose: transposed dimensions must be sparse ",
-      "Got sparse_dim: ",
-      nsparse_dim,
-      ", d0: ",
-      dim0,
-      ", d1: ",
-      dim1);
-
-  if (self._indices().numel() == 0 && self._values().numel() == 0) {
-    auto sizes = self.sizes().vec();
-    std::swap(sizes[dim0], sizes[dim1]);
-
-    at::sparse::get_sparse_impl(self)->raw_resize_(
-        self.sparse_dim(), self.dense_dim(), sizes);
-  } else {
-    auto indices = self._indices();
-    auto row0 = indices.select(0, dim0);
-    auto row1 = indices.select(0, dim1);
-
-    // swap row0 and row1
-    auto tmp = at::zeros_like(row0, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
-    tmp.copy_(row0);
-    row0.copy_(row1);
-    row1.copy_(tmp);
-
-    self._coalesced_(false);
-
-    auto sizes = self.sizes().vec();
-    std::swap(sizes[dim0], sizes[dim1]);
-
-    at::sparse::get_sparse_impl(self)->raw_resize_(
-        self._indices().size(0), self._values().dim() - 1, sizes);
-  }
+    Tensor& self, int64_t dim0, int64_t dim1) {
+  TORCH_CHECK(false, "Sparse transpose not supported in EasyFHE");
   return self;
 }
 
@@ -3675,9 +2337,7 @@ Tensor& transpose_(Tensor& self, int64_t dim0, int64_t dim1) {
     return sparse_transpose_(self, dim0, dim1);
   }
 
-  if (self.is_mkldnn()) {
-    return at::_mkldnn_transpose_(self, dim0, dim1);
-  }
+  TORCH_CHECK(!self.is_mkldnn(), "MKLDNN transpose not supported in EasyFHE");
 
   SymDimVector sizes(self.sym_sizes().begin(), self.sym_sizes().end());
   std::swap(sizes[dim0], sizes[dim1]);
@@ -3688,128 +2348,12 @@ Tensor& transpose_(Tensor& self, int64_t dim0, int64_t dim1) {
 }
 
 namespace {
-// Transpose implementation for sparse compressed layouts
-// NB: We assume that dim1,dim0 have already been wrapped
 inline Tensor sparse_compressed_transpose(
     const Tensor& self,
     int64_t dim0,
     int64_t dim1) {
-  auto compressed_inds = AT_DISPATCH_ROW_SPARSE_COMPRESSED_LAYOUTS(
-      self.layout(),
-      "compressed_inds",
-      [&self]() { return self.crow_indices(); },
-      [&self]() { return self.ccol_indices(); });
-
-  auto plain_inds = AT_DISPATCH_ROW_SPARSE_COMPRESSED_LAYOUTS(
-      self.layout(),
-      "plain_inds",
-      [&self]() { return self.col_indices(); },
-      [&self]() { return self.row_indices(); });
-
-  const auto n_batch_dim = compressed_inds.dim() - 1;
-  const auto dense_dim = self.dim() - n_batch_dim - 2;
-
-  // In theory it works, but missing to_dense coverage to test
-  TORCH_CHECK(
-      dense_dim == 0,
-      "transpose(): hybrid sparse compressed tensors with dense dimensions are not supported");
-
-  // Classify transpose "type"
-  enum class TransposeDim : uint8_t { Batch, Sparse, Dense };
-  auto classify_dim = [&n_batch_dim](const int64_t dim) {
-    if (dim < n_batch_dim) {
-      return TransposeDim::Batch;
-    } else if (dim > n_batch_dim + 1) {
-      return TransposeDim::Dense;
-    } else {
-      return TransposeDim::Sparse;
-    }
-  };
-
-  const auto transpose_type = classify_dim(dim0);
-  {
-#ifndef STRIP_ERROR_MESSAGES
-    auto dim_type_name = [](const TransposeDim dim) {
-      switch (dim) {
-        case TransposeDim::Batch:
-          return "Batch";
-        case TransposeDim::Dense:
-          return "Dense";
-        case TransposeDim::Sparse:
-          return "Sparse";
-        default:
-          TORCH_INTERNAL_ASSERT(
-              false,
-              "Impossible TransposeDim value: ",
-              static_cast<std::underlying_type_t<TransposeDim>>(dim));
-      }
-    };
-#endif
-    const auto dim1_type = classify_dim(dim1);
-    TORCH_CHECK(
-        dim1_type == transpose_type,
-        "transpose(): can only transpose dimensions of the same type (Batch, Sparse, Dense), got ",
-        dim0,
-        "(",
-        dim_type_name(transpose_type),
-        ")",
-        " and ",
-        dim1,
-        "(",
-        dim_type_name(dim1_type),
-        ")");
-  }
-
-  // We have validated everything, early exit for equal dims (no effect)
-  if (dim0 == dim1) {
-    return self.clone();
-  }
-
-  auto result_sizes = DimVector(self.sizes());
-  std::swap(result_sizes[dim0], result_sizes[dim1]);
-  Tensor result_vals;
-  auto result_layout = self.layout();
-
-  if (transpose_type == TransposeDim::Batch) {
-    compressed_inds = compressed_inds.transpose(dim0, dim1).contiguous();
-    plain_inds = plain_inds.transpose(dim0, dim1).contiguous();
-    result_vals = self.values().transpose(dim0, dim1).contiguous();
-
-  } else if (transpose_type == TransposeDim::Dense) {
-    // NB: This code should work, but is untestable due to lack of support for
-    // dense dimensions in to_dense. The Debug assert is present to emphasize
-    // the fact that the block should not be possible to hit this code block
-    TORCH_INTERNAL_ASSERT(
-        false, "transpose(): Shouldn't have reached this point");
-    result_vals = AT_DISPATCH_PLAIN_SPARSE_COMPRESSED_LAYOUTS(
-        self.layout(),
-        "sparse_transpose",
-        // un-blocked: 2 sparse dims map to single nnz dim, so dense dim0/1 are
-        // one position left
-        [&]() { return self.values().transpose(dim0 - 1, dim1 - 1); },
-        // blocked: 2 sparse dims map to 3 (nnz, ) + blocksize dims, so dense
-        // dim0/1 are one position right
-        [&]() { return self.values().transpose(dim0 + 1, dim1 + 1); });
-  } else /*if (transpose_type == TransposeDim::Sparse) */ {
-    // Flip the layout
-    result_layout = sparse_csr::flip_compressed_layout(self.layout());
-    result_vals = AT_DISPATCH_PLAIN_SPARSE_COMPRESSED_LAYOUTS(
-        self.layout(),
-        "sparse_transpose",
-        // un-blocked: no change to values, layout is flipped.
-        [&]() { return self.values(); },
-        // blocked: the blocks are nested under the sparse dims so they must be
-        // transposed as well.
-        [&]() {
-          return self.values().transpose(-2 - dense_dim, -1 - dense_dim);
-        });
-  }
-  return at::_sparse_compressed_tensor_unsafe(
-      compressed_inds,
-      plain_inds,
-      result_vals,
-      result_sizes,
-      self.options().layout(result_layout));
+  TORCH_CHECK(false, "Sparse compressed transpose not supported in EasyFHE");
+  return self;
 }
 } // namespace
 
@@ -3831,7 +2375,7 @@ Tensor transpose(const Tensor& self, int64_t dim0, int64_t dim1) {
   }
 
   if (self.is_mkldnn()) {
-    return at::_mkldnn_transpose(self, dim0, dim1);
+    TORCH_CHECK(false, "MKLDNN transpose not supported in EasyFHE");
   }
 
   // Transpose of a tensor is a view operation.
@@ -4113,38 +2657,8 @@ Tensor unsqueeze(const Tensor& self, int64_t dim) {
 }
 
 Tensor unsqueeze_sparse(Tensor const& self, int64_t dim) {
-  dim = maybe_wrap_dim(dim, self.dim() + 1);
-  int64_t sparse_dim = self.sparse_dim();
-  int64_t dense_dim = self.dense_dim();
-  auto indices = self._indices();
-  auto sizes = self.sizes().vec();
-  sizes.insert(sizes.begin() + dim, 1);
-  if (dim <= sparse_dim) {
-    auto new_indices = at::cat(
-        {indices.narrow(0, 0, dim),
-         at::zeros(
-             {1, indices.size(1)},
-             kLong,
-             indices.options().layout_opt(),
-             indices.options().device_opt(),
-             indices.options().pinned_memory_opt()),
-         indices.narrow(0, dim, indices.size(0) - dim)});
-    return _sparse_coo_tensor_with_dims_and_tensors(
-        sparse_dim + 1,
-        dense_dim,
-        sizes,
-        new_indices,
-        self._values(),
-        self.options());
-  } else {
-    return _sparse_coo_tensor_with_dims_and_tensors(
-        sparse_dim,
-        dense_dim + 1,
-        sizes,
-        indices,
-        self._values().unsqueeze(dim - sparse_dim + 1),
-        self.options());
-  }
+  TORCH_CHECK(false, "Sparse unsqueeze not supported in EasyFHE");
+  return self;
 }
 
 Tensor unsqueeze_quantized(const Tensor& self, int64_t dim) {
@@ -5040,6 +3554,30 @@ int64_t dense_dim_default(const Tensor& self) {
       "dense_dim expected sparse or strided tensor layout but got ",
       self.layout());
   return self.dim();
+}
+
+int64_t _nnz_default(const Tensor& self) {
+  TORCH_CHECK(false, "_nnz not supported for non-sparse tensors");
+  return 0;
+}
+
+bool is_coalesced_default(const Tensor& self) {
+  return false;
+}
+
+Tensor& _coalesced_default_(Tensor& self, bool coalesced) {
+  TORCH_CHECK(false, "_coalesced_ not supported for non-sparse tensors");
+  return self;
+}
+
+Tensor _indices_default(const Tensor& self) {
+  TORCH_CHECK(false, "_indices not supported for non-sparse tensors");
+  return self;
+}
+
+Tensor _values_default(const Tensor& self) {
+  TORCH_CHECK(false, "_values not supported for non-sparse tensors");
+  return self;
 }
 
 } // namespace at::native

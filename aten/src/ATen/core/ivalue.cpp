@@ -1106,10 +1106,6 @@ std::vector<c10::weak_intrusive_ptr<c10::StorageImpl>> ivalue::Future::extractSt
     weakStorageImpls.reserve(num_storages);
     for (const at::Tensor& tensor : tensors) {
       if (tensor.is_sparse()) {
-        // Sparse tensor is indices and values. Both are tensors
-        // and contain storage.
-        // TODO (rohan-varma): for tensors created with at::sparse_coo_tensor held
-        // in a python object, this might need a coalesce().
         weakStorageImpls.emplace_back(tensor.indices().storage().getWeakStorageImpl());
         weakStorageImpls.emplace_back(tensor.values().storage().getWeakStorageImpl());
       } else {
@@ -1125,14 +1121,7 @@ std::vector<c10::weak_intrusive_ptr<c10::StorageImpl>> ivalue::Future::extractSt
     for (const at::IValue& sub_value : sub_values) {
       if (sub_value.isTensor()) {
         auto const & tens = sub_value.toTensor();
-        if (tens.is_sparse()) {
-          // sparse tensors have 2 storages! One for indices one for values
-          auto coalesced = tens.coalesce();
-          weakStorageImpls.emplace_back(coalesced.indices().storage().getWeakStorageImpl());
-          weakStorageImpls.emplace_back(coalesced.values().storage().getWeakStorageImpl());
-        } else {
-          weakStorageImpls.emplace_back(tens.storage().getWeakStorageImpl());
-        }
+        weakStorageImpls.emplace_back(tens.storage().getWeakStorageImpl());
       }
     }
   }

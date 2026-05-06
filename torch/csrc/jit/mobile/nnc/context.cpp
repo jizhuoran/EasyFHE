@@ -79,18 +79,7 @@ c10::IValue OutputSpec::serialize() const {
 
 at::Tensor OutputSpec::allocate() const {
   if (isQIntType(dtype_)) {
-    TORCH_CHECK(
-        qscale_ && qzero_,
-        "Quantized output tensor must have qscale_ and qzero_");
-    return at::_empty_affine_quantized(
-        sizes_,
-        at::TensorOptions()
-            .dtype(dtype_)
-            .layout(at::kStrided)
-            .device(at::kCPU)
-            .requires_grad(false),
-        *qscale_,
-        *qzero_);
+    TORCH_CHECK(false, "Quantized tensors not supported in EasyFHE");
   }
   return at::empty(
       sizes_,

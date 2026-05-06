@@ -103,23 +103,8 @@ std::vector<at::Tensor> unflatten_sparse_tensors(
     const at::Tensor& flat_indices,
     const at::Tensor& flat_values,
     at::TensorList tensors) {
-  if (tensors.empty())
-    return {};
-
-  auto indices =
-      utils::unflatten_dense_tensors(flat_indices, fmap(tensors, &get_indices));
-  auto values =
-      utils::unflatten_dense_tensors(flat_values, fmap(tensors, &get_values));
-
-  std::vector<at::Tensor> outputs;
-  outputs.reserve(tensors.size());
-  for (size_t i = 0, num_tensors = tensors.size(); i < num_tensors; ++i) {
-    auto& ref_t = tensors[i];
-    auto t =
-        at::_sparse_coo_tensor_unsafe(indices[i], values[i], ref_t.sizes());
-    outputs.emplace_back(t._coalesced_(ref_t.is_coalesced()));
-  }
-  return outputs;
+  TORCH_CHECK(false, "Sparse tensor operations not supported in EasyFHE");
+  return {};
 }
 
 } // namespace torch::utils

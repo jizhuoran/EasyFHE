@@ -720,7 +720,7 @@ Tensor nested_cat_batching_rule(const ITensorListRef& tensors, int64_t dim) {
   }
 
   // NB: NTs only support batching over dim 0
-  auto out_nt = at::_nested_tensor_from_tensor_list(outputs);
+  auto out_nt = at::stack(outputs);
   return makeBatched(out_nt, 0, get_current_level());
 }
 

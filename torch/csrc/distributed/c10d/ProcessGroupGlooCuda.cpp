@@ -149,7 +149,7 @@ class AsyncSparseAllreduceCUDAWork : public AsyncSparseAllreduceWork {
     for (const auto i : c10::irange(inputs.size())) {
       guard.reset_stream(streams[i]);
       tmp.push_back(
-          inputs[i].coalesce().to(at::DeviceType::CPU, /*non_blocking=*/true));
+          inputs[i].to(at::DeviceType::CPU, /*non_blocking=*/true));
     }
   }
 

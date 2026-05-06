@@ -39,9 +39,6 @@
 #include <ATen/ops/_addmm_activation.h>
 #include <ATen/ops/_embedding_bag.h>
 #include <ATen/ops/_fft_c2c.h>
-#include <ATen/ops/_scaled_dot_product_efficient_attention.h>
-#include <ATen/ops/_scaled_dot_product_flash_attention.h>
-#include <ATen/ops/_scaled_mm.h>
 #include <ATen/ops/_wrapped_linear_prepack.h>
 #include <ATen/ops/_wrapped_quantized_linear_prepacked.h>
 #include <ATen/ops/addmm.h>
@@ -637,46 +634,19 @@ AOTITorchError aoti_torch__scaled_dot_product_flash_attention_v2(
     double dropout_p,
     int is_causal,
     int return_debug_mask,
-    double* scale, // optional argument
-    AtenTensorHandle* ret0, // returns new reference
-    AtenTensorHandle* ret1, // returns new reference
-    AtenTensorHandle* ret2, // returns new reference
-    AtenTensorHandle* ret3, // returns new reference
+    double* scale,
+    AtenTensorHandle* ret0,
+    AtenTensorHandle* ret1,
+    AtenTensorHandle* ret2,
+    AtenTensorHandle* ret3,
     int64_t* ret4,
     int64_t* ret5,
-    AtenTensorHandle* ret6, // returns new reference
-    AtenTensorHandle* ret7, // returns new reference
-    AtenTensorHandle* ret8 // returns new reference
+    AtenTensorHandle* ret6,
+    AtenTensorHandle* ret7,
+    AtenTensorHandle* ret8
 ) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* query_tensor = tensor_handle_to_tensor_pointer(query);
-    at::Tensor* key_tensor = tensor_handle_to_tensor_pointer(key);
-    at::Tensor* value_tensor = tensor_handle_to_tensor_pointer(value);
-    auto optional_scale = pointer_to_optional(scale);
-    auto [r0, r1, r2, r3, r4, r5, r6, r7, r8] =
-        at::_scaled_dot_product_flash_attention(
-            *query_tensor,
-            *key_tensor,
-            *value_tensor,
-            dropout_p,
-            is_causal,
-            return_debug_mask,
-            optional_scale);
-
-    *ret0 = new_tensor_handle(std::move(r0));
-    *ret1 = new_tensor_handle(std::move(r1));
-    // ret2 and ret3 may be null
-    if (ret2) {
-      *ret2 = new_tensor_handle(std::move(r2));
-    }
-    if (ret3) {
-      *ret3 = new_tensor_handle(std::move(r3));
-    }
-    *ret4 = r4.expect_int();
-    *ret5 = r5.expect_int();
-    *ret6 = new_tensor_handle(std::move(r6));
-    *ret7 = new_tensor_handle(std::move(r7));
-    *ret8 = new_tensor_handle(std::move(r8));
+    TORCH_CHECK(false, "Flash attention not supported in EasyFHE");
   });
 }
 
@@ -688,33 +658,19 @@ AOTITorchError aoti_torch__scaled_dot_product_flash_attention(
     bool is_causal,
     bool return_debug_mask,
     double scale,
-    AtenTensorHandle* ret0, // returns new reference
-    AtenTensorHandle* ret1, // returns new reference
-    AtenTensorHandle* ret2, // returns new reference
-    AtenTensorHandle* ret3, // returns new reference
+    AtenTensorHandle* ret0,
+    AtenTensorHandle* ret1,
+    AtenTensorHandle* ret2,
+    AtenTensorHandle* ret3,
     int64_t* ret4,
     int64_t* ret5,
-    AtenTensorHandle* ret6, // returns new reference
-    AtenTensorHandle* ret7, // returns new reference
-    AtenTensorHandle* ret8 // returns new reference
+    AtenTensorHandle* ret6,
+    AtenTensorHandle* ret7,
+    AtenTensorHandle* ret8
 ) {
-  return aoti_torch__scaled_dot_product_flash_attention_v2(
-      query,
-      key,
-      value,
-      dropout_p,
-      is_causal,
-      return_debug_mask,
-      &scale,
-      ret0,
-      ret1,
-      ret2,
-      ret3,
-      ret4,
-      ret5,
-      ret6,
-      ret7,
-      ret8);
+  AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
+    TORCH_CHECK(false, "Flash attention not supported in EasyFHE");
+  });
 }
 
 AOTITorchError aoti_torch__scaled_dot_product_efficient_attention(
@@ -732,25 +688,7 @@ AOTITorchError aoti_torch__scaled_dot_product_efficient_attention(
     AtenTensorHandle* ret3 // returns new reference
 ) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* query_tensor = tensor_handle_to_tensor_pointer(query);
-    at::Tensor* key_tensor = tensor_handle_to_tensor_pointer(key);
-    at::Tensor* value_tensor = tensor_handle_to_tensor_pointer(value);
-    auto optional_attn_bias =
-        pointer_to_optional(tensor_handle_to_tensor_pointer(attn_bias));
-    auto optional_scale = pointer_to_optional(scale);
-    auto [r0, r1, r2, r3] = at::_scaled_dot_product_efficient_attention(
-        *query_tensor,
-        *key_tensor,
-        *value_tensor,
-        optional_attn_bias,
-        compute_log_sumexp,
-        dropout_p,
-        is_causal,
-        optional_scale);
-    *ret0 = new_tensor_handle(std::move(r0));
-    *ret1 = new_tensor_handle(std::move(r1));
-    *ret2 = new_tensor_handle(std::move(r2));
-    *ret3 = new_tensor_handle(std::move(r3));
+    TORCH_CHECK(false, "_scaled_dot_product_efficient_attention not supported in EasyFHE");
   });
 }
 
@@ -780,16 +718,7 @@ AOTITorchError aoti_torch_convolution(
     c10::IntArrayRef dilation(dilation_ptr, dilation_size);
     c10::IntArrayRef output_padding(output_padding_ptr, output_padding_size);
 
-    *out = new_tensor_handle(at::convolution(
-        *input_tensor,
-        *weight_tensor,
-        optional_bias,
-        stride,
-        padding,
-        dilation,
-        static_cast<bool>(transposed),
-        output_padding,
-        groups));
+    TORCH_CHECK(false, "convolution not supported in EasyFHE");
   });
 }
 
@@ -812,23 +741,7 @@ AOTITorchError aoti_torch__scaled_mm(
     AtenTensorHandle* ret0,
     AtenTensorHandle* ret1) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* self_tensor = tensor_handle_to_tensor_pointer(self);
-    at::Tensor* mat2_tensor = tensor_handle_to_tensor_pointer(mat2);
-    at::Tensor* bias_tensor = tensor_handle_to_tensor_pointer(bias);
-    at::Tensor* scale_a_tensor = tensor_handle_to_tensor_pointer(scale_a);
-    at::Tensor* scale_b_tensor = tensor_handle_to_tensor_pointer(scale_b);
-    at::Tensor* scale_result_tensor =
-        tensor_handle_to_tensor_pointer(scale_result);
-    auto r0 = at::_scaled_mm(
-        *self_tensor,
-        *mat2_tensor,
-        *scale_a_tensor,
-        *scale_b_tensor,
-        pointer_to_optional(bias_tensor),
-        pointer_to_optional(scale_result_tensor),
-        pointer_to_optional<c10::ScalarType>(out_dtype),
-        use_fast_accum);
-    *ret0 = new_tensor_handle(std::move(r0));
+    TORCH_CHECK(false, "_scaled_mm not supported in EasyFHE");
   });
 }
 
@@ -843,23 +756,7 @@ AOTITorchError aoti_torch__scaled_mm_v2(
     int8_t use_fast_accum,
     AtenTensorHandle* ret0) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* self_tensor = tensor_handle_to_tensor_pointer(self);
-    at::Tensor* mat2_tensor = tensor_handle_to_tensor_pointer(mat2);
-    at::Tensor* bias_tensor = tensor_handle_to_tensor_pointer(bias);
-    at::Tensor* scale_a_tensor = tensor_handle_to_tensor_pointer(scale_a);
-    at::Tensor* scale_b_tensor = tensor_handle_to_tensor_pointer(scale_b);
-    at::Tensor* scale_result_tensor =
-        tensor_handle_to_tensor_pointer(scale_result);
-    auto r0 = at::_scaled_mm(
-        *self_tensor,
-        *mat2_tensor,
-        *scale_a_tensor,
-        *scale_b_tensor,
-        pointer_to_optional(bias_tensor),
-        pointer_to_optional(scale_result_tensor),
-        pointer_to_optional<c10::ScalarType>(out_dtype),
-        use_fast_accum);
-    *ret0 = new_tensor_handle(std::move(r0));
+    TORCH_CHECK(false, "_scaled_mm not supported in EasyFHE");
   });
 }
 
@@ -943,12 +840,7 @@ AOTITorchError aoti_torch_addmm_out(
     float beta,
     float alpha) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* out_tensor = tensor_handle_to_tensor_pointer(out);
-    at::Tensor* self_tensor = tensor_handle_to_tensor_pointer(self);
-    at::Tensor* mat1_tensor = tensor_handle_to_tensor_pointer(mat1);
-    at::Tensor* mat2_tensor = tensor_handle_to_tensor_pointer(mat2);
-    at::addmm_out(
-        *out_tensor, *self_tensor, *mat1_tensor, *mat2_tensor, beta, alpha);
+    TORCH_CHECK(false, "addmm_out not supported in EasyFHE");
   });
 }
 
@@ -958,10 +850,7 @@ AOTITorchError aoti_torch_bmm_out(
     AtenTensorHandle self,
     AtenTensorHandle mat2) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* out_tensor = tensor_handle_to_tensor_pointer(out);
-    at::Tensor* self_tensor = tensor_handle_to_tensor_pointer(self);
-    at::Tensor* mat2_tensor = tensor_handle_to_tensor_pointer(mat2);
-    at::bmm_out(*out_tensor, *self_tensor, *mat2_tensor);
+    TORCH_CHECK(false, "bmm_out not supported in EasyFHE");
   });
 }
 
@@ -981,10 +870,7 @@ AOTITorchError aoti_torch_mm_out(
     AtenTensorHandle self,
     AtenTensorHandle mat2) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* out_tensor = tensor_handle_to_tensor_pointer(out);
-    at::Tensor* self_tensor = tensor_handle_to_tensor_pointer(self);
-    at::Tensor* mat2_tensor = tensor_handle_to_tensor_pointer(mat2);
-    at::mm_out(*out_tensor, *self_tensor, *mat2_tensor);
+    TORCH_CHECK(false, "mm_out not supported in EasyFHE");
   });
 }
 

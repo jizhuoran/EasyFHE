@@ -534,9 +534,8 @@ std::optional<at::Tensor> runTorchBackendForOnnx(
     }
     return std::optional<at::Tensor>(IntToTensor(total_size));
   } else if (node->kind() == onnx::Softmax) {
-    int64_t axis = node->hasAttributeS("axis") ? node->i(attr::axis) : -1;
-    updated_val = at::softmax(inputTensorValues[0], axis);
-    return std::optional<at::Tensor>(updated_val);
+    TORCH_CHECK(false, "ONNX softmax constant folding not supported in EasyFHE");
+    return std::nullopt;
   } else {
     return std::nullopt;
   }

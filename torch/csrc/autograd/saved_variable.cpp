@@ -174,7 +174,7 @@ Variable SavedVariable::unpack(c10::intrusive_ptr<Node> saved_for) const {
              "modified by an inplace operation: ["
           << data_.toString() << ' ';
       if (data_.is_nested()) {
-        message << data_._nested_tensor_size() << ']';
+        message << "nested" << ']';
       } else {
         message << data_.sizes() << ']';
       }

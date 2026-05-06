@@ -288,18 +288,7 @@ struct cuda_scatter_gather_base_kernel {
     auto index_stride = is_scatter_like ? self_dim_stride : src_dim_stride;
 
     if (self.is_quantized()) {
-      TORCH_CHECK(
-          self.qscheme() == kPerTensorAffine,
-          "Only per_tensor quantized quantized tensors are supported by gather.")
-      AT_DISPATCH_QINT_TYPES(iter.dtype(), "gather_quant_cuda", [&] {
-        using dtype = typename std::conditional<cast_to_opaque,
-            OpaqueType<sizeof(scalar_t)>, scalar_t>::type;
-        AT_DISPATCH_INDEX_TYPES(index.scalar_type(), "cuda_scatter_gather_base_kernel_func", [&] () {
-          _cuda_scatter_gather_internal_kernel<is_scatter_like, dtype, index_t>()(
-            iter, index_size, index_stride, self.numel(), f
-          );
-        });
-      });
+      TORCH_CHECK(false, "Quantized scatter/gather not supported in EasyFHE");
     } else {
       AT_DISPATCH_V2(
           iter.dtype(),

@@ -90,7 +90,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   UNARY_POINTWISE(_conj);
   UNARY_POINTWISE_ALL(deg2rad);
   UNARY_POINTWISE(detach);
-  UNARY_POINTWISE_ALL(digamma);
   UNARY_POINTWISE_ALL(erf);
   UNARY_POINTWISE_ALL(exp);
   UNARY_POINTWISE_ALL(expm1);
@@ -100,15 +99,11 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   UNARY_POINTWISE(isinf);
   UNARY_POINTWISE(isposinf);
   UNARY_POINTWISE(isneginf);
-  UNARY_POINTWISE_ALL(lgamma);
   UNARY_POINTWISE_ALL(log);
   UNARY_POINTWISE_ALL(log10);
   UNARY_POINTWISE_ALL(log1p);
   UNARY_POINTWISE_ALL(log2);
   UNARY_POINTWISE_ALL(logical_not);
-  UNARY_POINTWISE_ALL(logit);
-  UNARY_POINTWISE_ALL(mish);
-  UNARY_POINTWISE_ALL(mvlgamma);
   UNARY_POINTWISE_ALL(nan_to_num);
   UNARY_POINTWISE_ALL(neg);
   UNARY_POINTWISE_ALL(rad2deg);
@@ -124,48 +119,11 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   UNARY_POINTWISE_ALL(sinh);
   UNARY_POINTWISE_ALL(sqrt);
   UNARY_POINTWISE_ALL(tan);
-  UNARY_POINTWISE_ALL(threshold);
   UNARY_POINTWISE_ALL(trunc);
 
-  // special-related
-  UNARY_POINTWISE_ALL(i0);
-  UNARY_POINTWISE_ALL(erfc);
-  UNARY_POINTWISE_ALL(erfinv);
   UNARY_POINTWISE_ALL(exp2);
 
-  // torch.special.* functions
-  UNARY_POINTWISE(special_entr);
-  UNARY_POINTWISE(special_erfcx);
-  UNARY_POINTWISE(special_i0e);
-  UNARY_POINTWISE(special_i1);
-  UNARY_POINTWISE(special_i1e);
-  UNARY_POINTWISE(special_ndtri);
-  POINTWISE_BOXED(special_bessel_j0);
-  POINTWISE_BOXED(special_spherical_bessel_j0);
-  POINTWISE_BOXED(special_bessel_j1);
-  POINTWISE_BOXED(special_modified_bessel_i0);
-  POINTWISE_BOXED(special_modified_bessel_i1);
-  POINTWISE_BOXED(special_scaled_modified_bessel_k0);
-  POINTWISE_BOXED(special_modified_bessel_k0);
-  POINTWISE_BOXED(special_scaled_modified_bessel_k1);
-  POINTWISE_BOXED(special_modified_bessel_k1);
-  POINTWISE_BOXED(special_bessel_y0);
-  POINTWISE_BOXED(special_bessel_y1);
-
-  // Activation functions (from https://pytorch.org/docs/stable/nn.html#non-linear-activations-weighted-sum-nonlinearity)
-  UNARY_POINTWISE_ALL(elu);
-  UNARY_POINTWISE(hardshrink);
-  UNARY_POINTWISE_ALL(hardsigmoid);
-  UNARY_POINTWISE_ALL(hardtanh);
-  UNARY_POINTWISE_ALL(hardswish);
-  UNARY_POINTWISE_ALL(leaky_relu);
-  UNARY_POINTWISE_ALL(relu);
-  UNARY_POINTWISE_ALL(celu);
-  UNARY_POINTWISE(gelu);
   UNARY_POINTWISE_ALL(sigmoid);
-  UNARY_POINTWISE_ALL(silu);
-  UNARY_POINTWISE(softplus);
-  UNARY_POINTWISE(softshrink);
   UNARY_POINTWISE_ALL(tanh);
 
   POINTWISE_BOXED(fill_.Scalar);

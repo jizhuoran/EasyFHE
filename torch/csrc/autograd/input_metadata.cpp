@@ -8,10 +8,7 @@ namespace torch::autograd {
 namespace {
 
 MetadataShape compute_variant_shape(const at::Tensor& input) {
-  if (input.is_nested() && !input.unsafeGetTensorImpl()->is_python_dispatch()) {
-    auto nested_size = input._nested_tensor_size();
-    return MetadataShape{std::in_place_type<at::Tensor>, nested_size};
-  }
+  TORCH_CHECK(!input.is_nested(), "Nested tensors not supported in EasyFHE");
   return MetadataShape{std::in_place_type<SymIntSmallVec>, input.sym_sizes()};
 }
 
@@ -122,7 +119,7 @@ bool InputMetadata::is_same_shape(const at::Tensor& grad) const {
     return false;
   }
   if (is_cpp_nested_tensor()) {
-    return grad._nested_tensor_size().is_same_size(shape_as_tensor());
+    TORCH_CHECK(false, "Nested tensors not supported in EasyFHE");
   }
   return grad.sym_sizes().equals(shape_as_dim_vector());
 }
@@ -145,11 +142,7 @@ std::stringstream InputMetadata::incompatible_shape_error_message(
     const at::Tensor& grad) const {
   std::stringstream ss{};
   ss << "invalid gradient at index " << index << " - got ";
-  if (::torch::autograd::is_cpp_nested_tensor(grad)) {
-    ss << grad._nested_tensor_size();
-  } else {
-    ss << grad.sym_sizes();
-  }
+  ss << grad.sym_sizes();
   ss << " but expected shape compatible with ";
   if (is_cpp_nested_tensor()) {
     ss << shape_as_tensor();

@@ -157,9 +157,6 @@ void SparseCsrTensorImpl::resize_as_sparse_compressed_tensor_(
   TORCH_CHECK(
       !has_symbolic_sizes_strides_,
       "resize_as_sparse_compressed_tensor_ called on tensor with symbolic shape");
-
-  // We cannot resize as other layout and preserve the invariants for self
-  // layout
   TORCH_CHECK(
       src.layout() == layout_,
       "resize_as_sparse_compressed_tensor_: self and src must have the same layout, but got: self (",
@@ -167,22 +164,18 @@ void SparseCsrTensorImpl::resize_as_sparse_compressed_tensor_(
       ") and source (",
       src.layout(),
       ")");
-
   auto [compressed_indices, plain_indices] =
       sparse_csr::getCompressedPlainIndices(src);
-  // reuse self indices storage
   if (crow_indices_.sizes() != compressed_indices.sizes()) {
     crow_indices_.resize_as_(compressed_indices);
   }
   if (col_indices_.sizes() != plain_indices.sizes()) {
     col_indices_.resize_as_(plain_indices);
   }
-  // Update indices data to ensure result is valid under invariants check
   if ((sizes() != src.sizes()) || (dense_dim() != src.dense_dim())) {
     crow_indices_.copy_(compressed_indices);
     col_indices_.copy_(plain_indices);
   }
-  // Reuse values storage
   if (values_.sizes() != src.values().sizes()) {
     values_.resize_as_(src.values());
   }

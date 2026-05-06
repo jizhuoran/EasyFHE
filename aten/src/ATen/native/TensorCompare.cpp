@@ -787,34 +787,13 @@ TORCH_IMPL_FUNC(min_out)
 }
 
 std::tuple<Tensor, Tensor> qmax(const Tensor& self, int64_t dim, bool keepdim) {
-  TORCH_CHECK(
-      self.qscheme() == at::kPerTensorAffine,
-      "Max operator for quantized tensors only works for per tensor quantized tensors. "
-      "Please open an issue on https://github.com/pytorch/pytorch/issues if you need per channel quantized tensor support.");
-  Tensor max_indices = at::empty({0}, self.options().dtype(kLong));
-  Tensor max =
-      at::empty({0}, self.options().dtype(toUnderlying(self.scalar_type())));
-  at::max_outf(self.int_repr(), dim, keepdim, max, max_indices);
-  // TODO: qscheme
-  return std::tuple<Tensor, Tensor>(
-      at::_make_per_tensor_quantized_tensor(
-          max, self.q_scale(), self.q_zero_point()),
-      max_indices);
+  TORCH_CHECK(false, "Quantized max not supported in EasyFHE");
+  return std::make_tuple(self, at::empty({0}, self.options().dtype(kLong)));
 }
 
 std::tuple<Tensor, Tensor> qmin(const Tensor& self, int64_t dim, bool keepdim) {
-  TORCH_CHECK(
-      self.qscheme() == at::kPerTensorAffine,
-      "Min operator for quantized tensors only works for per tensor quantized tensors. "
-      "Please open an issue on https://github.com/pytorch/pytorch/issues if you need per channel quantized tensor support.");
-  Tensor min_indices = at::empty({0}, self.options().dtype(kLong));
-  Tensor min =
-      at::empty({0}, self.options().dtype(toUnderlying(self.scalar_type())));
-  at::min_outf(self.int_repr(), dim, keepdim, min, min_indices);
-  return std::tuple<Tensor, Tensor>(
-      at::_make_per_tensor_quantized_tensor(
-          min, self.q_scale(), self.q_zero_point()),
-      min_indices);
+  TORCH_CHECK(false, "Quantized min not supported in EasyFHE");
+  return std::make_tuple(self, at::empty({0}, self.options().dtype(kLong)));
 }
 
 // DEPRECATED: Use at::aminmax instead

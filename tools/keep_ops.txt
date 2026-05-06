@@ -110,7 +110,6 @@ _unsafe_index_put
 _unsafe_masked_index
 _unsafe_masked_index_put_accumulate
 _unsafe_view
-_validate_compressed_sparse_indices
 _version
 abs
 abs_
@@ -232,7 +231,6 @@ conj_physical_
 contiguous
 copy
 copy_
-copy_sparse_to_sparse_
 copysign
 copysign_
 corrcoef
@@ -256,9 +254,6 @@ data
 deg2rad
 deg2rad_
 dense_dim
-detach
-detach_
-detach_copy
 diag
 diag_embed
 diagflat
@@ -278,7 +273,6 @@ dstack
 empty
 empty_like
 empty_permuted
-empty_quantized
 empty_strided
 encode
 encrypt
@@ -370,7 +364,6 @@ index_select
 index_select_backward
 indices
 indices_copy
-is_coalesced
 is_complex
 is_conj
 is_contiguous
@@ -420,10 +413,6 @@ log2
 log2_
 log_
 log_normal_
-log_sigmoid
-log_sigmoid_backward
-log_sigmoid_forward
-log_softmax
 logaddexp
 logaddexp2
 logcumsumexp
@@ -453,15 +442,6 @@ masked_select
 masked_select_backward
 matrix_H
 max
-max_pool1d
-max_pool1d_with_indices
-max_pool2d
-max_pool2d_backward
-max_pool2d_with_indices
-max_pool2d_with_indices_backward
-max_pool3d
-max_pool3d_with_indices
-max_pool3d_with_indices_backward
 max_unpool2d
 max_unpool3d
 maximum
@@ -498,8 +478,6 @@ nanquantile
 nansum
 narrow
 narrow_copy
-native_dropout
-native_dropout_backward
 native_norm
 ne
 ne_
@@ -535,7 +513,6 @@ permute
 permute_copy
 pin_memory
 poisson
-poisson_nll_loss
 polar
 positive
 pow
@@ -624,7 +601,6 @@ size
 slice
 slice_backward
 slice_copy
-slice_inverse
 slice_scatter
 sort
 split
@@ -679,14 +655,6 @@ tile
 to
 to_dense
 to_dense_backward
-to_mkldnn
-to_mkldnn_backward
-to_padded_tensor
-to_sparse
-to_sparse_bsc
-to_sparse_bsr
-to_sparse_csc
-to_sparse_csr
 topk
 trace
 trace_backward

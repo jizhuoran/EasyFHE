@@ -474,29 +474,7 @@ at::Tensor parseTensorFromMetadata(
   auto options = at::device(at::kCPU).dtype(type);
   at::Tensor tensor;
   if (tensor_md->quantized_schema() != nullptr) {
-    // is quantized
-    const auto* schema = tensor_md->quantized_schema();
-    auto qscheme_type = static_cast<at::QScheme>(schema->qscheme());
-    switch (qscheme_type) {
-      case at::kPerTensorAffine: {
-        tensor = at::_empty_affine_quantized(
-            {0}, options, schema->scale(), schema->zero_point());
-      } break;
-      case at::kPerChannelAffineFloatQParams:
-      case at::kPerChannelAffine: {
-        at::Tensor scales = parseTensorFromMetadata(loader, schema->scales());
-        at::Tensor zero_points =
-            parseTensorFromMetadata(loader, schema->zero_points());
-        tensor = at::_empty_per_channel_affine_quantized(
-            {0}, scales, zero_points, schema->axis(), options);
-      } break;
-      default:
-        TORCH_CHECK(
-            false,
-            "Unsupported tensor quantization type in serialization ",
-            toString(qscheme_type));
-        break;
-    }
+    TORCH_CHECK(false, "Quantized tensors not supported in EasyFHE");
   } else {
     tensor = at::empty({0}, options);
   }

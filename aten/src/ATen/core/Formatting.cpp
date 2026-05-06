@@ -295,9 +295,7 @@ std::ostream& print(
 
   Tensor tensor;
 
-  if (tensor_.is_quantized()) {
-    tensor = tensor_.dequantize().to(kCPU, kDouble).contiguous();
-  } else if (tensor_.is_mkldnn()) {
+  if (tensor_.is_mkldnn()) {
     fmt::print(stream, "MKLDNN Tensor: ");
     tensor = tensor_.to_dense().to(kCPU, kDouble).contiguous();
   } else if (tensor_.is_mps()) {
@@ -348,26 +346,6 @@ std::ostream& print(
       fmt::print(stream, ",{}", tensor.size(i));
     }
     fmt::print(stream, "}}");
-  }
-
-  // Add quantization info
-  if (tensor_.is_quantized()) {
-    fmt::print(stream, ", qscheme: {}", toString(tensor_.qscheme()));
-    if (tensor_.qscheme() == c10::kPerTensorAffine) {
-      fmt::print(
-          stream,
-          ", scale: {}, zero_point: {}",
-          tensor_.q_scale(),
-          tensor_.q_zero_point());
-    } else if (
-        tensor_.qscheme() == c10::kPerChannelAffine ||
-        tensor_.qscheme() == c10::kPerChannelAffineFloatQParams) {
-      fmt::print(stream, ", scales: ");
-      print(stream, tensor_.q_per_channel_scales(), linesize);
-      fmt::print(stream, ", zero_points: ");
-      print(stream, tensor_.q_per_channel_zero_points(), linesize);
-      fmt::print(stream, ", axis: {}", tensor_.q_per_channel_axis());
-    }
   }
 
   // Proxy check for if autograd was built

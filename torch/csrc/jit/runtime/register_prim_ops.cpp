@@ -848,17 +848,14 @@ static const std::vector<OperatorGeneratorArgs> opGenArgs{
         TORCH_SELECTIVE_SCHEMA(
             "aten::dequantize.tensor(Tensor qtensor) -> Tensor"),
         [](Stack& stack) {
-          at::Tensor qtensor;
-          pop(stack, qtensor);
-          push(stack, at::dequantize(qtensor));
+          TORCH_CHECK(false, "dequantize not supported in EasyFHE");
         },
         aliasAnalysisFromSchema()),
     OperatorGeneratorArgs(
         TORCH_SELECTIVE_SCHEMA(
             "aten::dequantize.list(Tensor[] qtensors) -> Tensor[]"),
         [](Stack& stack) {
-          auto qtensors = pop(stack).toTensorVector();
-          push(stack, at::dequantize(qtensors));
+          TORCH_CHECK(false, "dequantize not supported in EasyFHE");
         },
         aliasAnalysisFromSchema()),
     OperatorGeneratorArgs(

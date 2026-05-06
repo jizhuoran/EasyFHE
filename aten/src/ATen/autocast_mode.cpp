@@ -160,14 +160,6 @@ Tensor cached_cast(at::ScalarType to_type, const Tensor& arg, DeviceType device_
 Banned functions
 *******************************/
 
-static Tensor binary_cross_entropy_banned(const Tensor & /*unused*/, const Tensor & /*unused*/, const std::optional<Tensor>& /*unused*/, int64_t /*unused*/) {
-  TORCH_CHECK(false, "torch.nn.functional.binary_cross_entropy and torch.nn.BCELoss are unsafe to autocast.\n"
-           "Many models use a sigmoid layer right before the binary cross entropy layer.\n"
-           "In this case, combine the two layers using torch.nn.functional.binary_cross_entropy_with_logits\n"
-           "or torch.nn.BCEWithLogitsLoss.  binary_cross_entropy_with_logits and BCEWithLogits are\n"
-           "safe to autocast.");
-}
-
 namespace {
 
 /*****************************************
@@ -184,8 +176,6 @@ TORCH_LIBRARY_IMPL(aten, Autocast, m) {
   KERNEL_CUDA(__VA_ARGS__, lower_precision_fp)
 
   AT_FORALL_LOWER_PRECISION_FP(_KERNEL_CUDA_LOW_PRECISION_FP)
-  KERNEL_CUDA(cudnn_convolution, lower_precision_fp)
-  KERNEL_CUDA(cudnn_convolution_transpose, lower_precision_fp)
 
   // fp32
 #define _KERNEL_CUDA_FP32(...) KERNEL_CUDA(__VA_ARGS__, fp32)
@@ -213,9 +203,6 @@ TORCH_LIBRARY_IMPL(aten, Autocast, m) {
 #define _KERNEL_CUDA_PROMOTE(...) KERNEL_CUDA(__VA_ARGS__, promote)
 
   AT_FORALL_PROMOTE(_KERNEL_CUDA_PROMOTE)
-
-  m.impl(TORCH_SELECTIVE_NAME("aten::binary_cross_entropy"),
-         TORCH_FN((&at::autocast::binary_cross_entropy_banned)));
 }
 
 TORCH_LIBRARY_IMPL(_, AutocastMPS, m) {
@@ -223,40 +210,12 @@ TORCH_LIBRARY_IMPL(_, AutocastMPS, m) {
 }
 
 TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
-  // lower_precision_fp
-  KERNEL_MPS(_convolution, deprecated, lower_precision_fp)
-  KERNEL_MPS(_convolution, lower_precision_fp)
-  KERNEL_MPS(conv1d, lower_precision_fp)
-  KERNEL_MPS(conv2d, lower_precision_fp)
-  KERNEL_MPS(conv3d, lower_precision_fp)
-  KERNEL_MPS(conv_tbc, lower_precision_fp)
-  KERNEL_MPS(conv_transpose1d, lower_precision_fp)
-  KERNEL_MPS(conv_transpose2d, input, lower_precision_fp)
-  KERNEL_MPS(convolution, lower_precision_fp)
-  KERNEL_MPS(_mps_convolution, lower_precision_fp)
-  KERNEL_MPS(prelu, lower_precision_fp)
-  KERNEL_MPS(addmm, lower_precision_fp)
-  KERNEL_MPS(addmv, lower_precision_fp)
-  KERNEL_MPS(addr, lower_precision_fp)
-  KERNEL_MPS(matmul, lower_precision_fp)
-  KERNEL_MPS(einsum, lower_precision_fp)
-  KERNEL_MPS(mm, lower_precision_fp)
-  KERNEL_MPS(mv, lower_precision_fp)
-  KERNEL_MPS(linear, lower_precision_fp)
-  KERNEL_MPS(addbmm, lower_precision_fp)
-  KERNEL_MPS(baddbmm, lower_precision_fp)
-  KERNEL_MPS(bmm, lower_precision_fp)
-  KERNEL_MPS(chain_matmul, lower_precision_fp)
-  KERNEL_MPS(linalg_multi_dot, lower_precision_fp)
-  KERNEL_MPS(lstm_cell, lower_precision_fp)
-  KERNEL_MPS(scaled_dot_product_attention, lower_precision_fp)
+  // lower_precision_fp — all deleted (NN/linalg ops)
 
   // fp32
-  KERNEL_MPS(conv_transpose3d, input, fp32)
   KERNEL_MPS(acos, fp32)
   KERNEL_MPS(asin, fp32)
   KERNEL_MPS(cosh, fp32)
-  KERNEL_MPS(erfinv, fp32)
   KERNEL_MPS(exp, fp32)
   KERNEL_MPS(expm1, fp32)
   KERNEL_MPS(log, fp32)
@@ -270,66 +229,25 @@ TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
   KERNEL_MPS(pow, Tensor_Scalar, fp32)
   KERNEL_MPS(pow, Tensor_Tensor, fp32)
   KERNEL_MPS(pow, Scalar, fp32)
-  KERNEL_MPS(softplus, fp32)
-  KERNEL_MPS(layer_norm, fp32)
-  KERNEL_MPS(native_layer_norm, fp32)
-  KERNEL_MPS(group_norm, fp32)
-  KERNEL_MPS(frobenius_norm, dim, fp32)
-  KERNEL_MPS(nuclear_norm, fp32)
-  KERNEL_MPS(nuclear_norm, dim, fp32)
-  KERNEL_MPS(batch_norm, fp32)
-  KERNEL_MPS(cosine_similarity, fp32)
-  KERNEL_MPS(poisson_nll_loss, fp32)
-  KERNEL_MPS(cosine_embedding_loss, fp32)
-  KERNEL_MPS(nll_loss, fp32)
-  KERNEL_MPS(nll_loss2d, fp32)
-  KERNEL_MPS(hinge_embedding_loss, fp32)
-  KERNEL_MPS(kl_div, fp32)
-  KERNEL_MPS(l1_loss, fp32)
-  KERNEL_MPS(smooth_l1_loss, fp32)
-  KERNEL_MPS(huber_loss, fp32)
-  KERNEL_MPS(mse_loss, fp32)
-  KERNEL_MPS(margin_ranking_loss, fp32)
-  KERNEL_MPS(multilabel_margin_loss, fp32)
-  KERNEL_MPS(soft_margin_loss, fp32)
-  KERNEL_MPS(triplet_margin_loss, fp32)
-  KERNEL_MPS(multi_margin_loss, fp32)
-  KERNEL_MPS(binary_cross_entropy_with_logits, fp32)
-  KERNEL_MPS(dist, fp32)
-  KERNEL_MPS(pdist, fp32)
-  KERNEL_MPS(cdist, fp32)
-  KERNEL_MPS(renorm, fp32)
   KERNEL_MPS(logsumexp, fp32)
 
   // fp32_set_opt_dtype
   KERNEL_MPS(prod, fp32)
   KERNEL_MPS(prod, dim_int, fp32)
   KERNEL_MPS(prod, dim_Dimname, fp32)
-  KERNEL_MPS(softmax, int, fp32)
-  KERNEL_MPS(softmax, Dimname, fp32)
-  KERNEL_MPS(log_softmax, int, fp32)
-  KERNEL_MPS(log_softmax, Dimname, fp32)
   KERNEL_MPS(cumprod, fp32)
   KERNEL_MPS(cumprod, dimname, fp32)
   KERNEL_MPS(cumsum, fp32)
   KERNEL_MPS(cumsum, dimname, fp32)
-  KERNEL_MPS(linalg_vector_norm, fp32)
-  KERNEL_MPS(linalg_matrix_norm, fp32)
-  KERNEL_MPS(linalg_matrix_norm, str_ord, fp32)
   KERNEL_MPS(sum, fp32)
   KERNEL_MPS(sum, dim_IntList, fp32)
   KERNEL_MPS(sum, dim_DimnameList, fp32)
-  //
+
   // promote
   KERNEL_MPS(addcdiv, promote)
   KERNEL_MPS(addcmul, promote)
   KERNEL_MPS(atan2, promote)
-  KERNEL_MPS(bilinear, promote)
-  KERNEL_MPS(cross, promote)
-  KERNEL_MPS(dot, promote)
-  KERNEL_MPS(grid_sampler, promote)
   KERNEL_MPS(index_put, promote)
-  KERNEL_MPS(tensordot, promote)
   KERNEL_MPS(scatter_add, promote)
 }
 
@@ -339,36 +257,9 @@ TORCH_LIBRARY_IMPL(_, AutocastCPU, m) {
 
 
 TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
-  // lower_precision_fp cast policy
-  KERNEL_CPU(conv1d, lower_precision_fp)
-  KERNEL_CPU(conv1d, padding, lower_precision_fp)
-  KERNEL_CPU(conv2d, lower_precision_fp)
-  KERNEL_CPU(conv2d, padding, lower_precision_fp)
-  KERNEL_CPU(conv3d, lower_precision_fp)
-  KERNEL_CPU(conv3d, padding, lower_precision_fp)
-  KERNEL_CPU(bmm, lower_precision_fp)
-  KERNEL_CPU(mm, lower_precision_fp)
-  KERNEL_CPU(linalg_vecdot, lower_precision_fp)
-  KERNEL_CPU(baddbmm, lower_precision_fp)
-  KERNEL_CPU(addmm, lower_precision_fp)
-  KERNEL_CPU(_addmm_activation, lower_precision_fp)
-  KERNEL_CPU(addbmm, lower_precision_fp)
-  KERNEL_CPU(linear, lower_precision_fp)
-  KERNEL_CPU(_convolution, deprecated, lower_precision_fp)
-  KERNEL_CPU(matmul, lower_precision_fp)
-  KERNEL_CPU(conv_tbc, lower_precision_fp)
-  KERNEL_CPU(mkldnn_rnn_layer, lower_precision_fp)
-  KERNEL_CPU(conv_transpose1d, lower_precision_fp)
-  KERNEL_CPU(conv_transpose2d, input, lower_precision_fp)
-  KERNEL_CPU(conv_transpose3d, input, lower_precision_fp)
-  KERNEL_CPU(prelu, lower_precision_fp)
-  KERNEL_CPU(scaled_dot_product_attention, lower_precision_fp)
-  KERNEL_CPU(_native_multi_head_attention, lower_precision_fp)
+  // lower_precision_fp cast policy — all deleted (NN/linalg ops)
 
   // fp32 cast policy
-  KERNEL_CPU(avg_pool3d, fp32)
-  KERNEL_CPU(binary_cross_entropy, fp32)
-  KERNEL_CPU(grid_sampler, fp32)
   KERNEL_CPU(polar, fp32)
   KERNEL_CPU(prod, fp32)
   KERNEL_CPU(prod, dim_int, fp32)
@@ -377,96 +268,8 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   KERNEL_CPU(quantile, scalar, fp32)
   KERNEL_CPU(nanquantile, fp32)
   KERNEL_CPU(nanquantile, scalar, fp32)
-  KERNEL_CPU(stft, fp32)
-  KERNEL_CPU(stft, center, fp32)
-  KERNEL_CPU(cdist, fp32)
-  KERNEL_CPU(grid_sampler_2d, fp32)
-  KERNEL_CPU(_grid_sampler_2d_cpu_fallback, fp32)
-  KERNEL_CPU(grid_sampler_3d, fp32)
   KERNEL_CPU(trace, fp32)
   KERNEL_CPU(view_as_complex, fp32)
-  KERNEL_CPU(cholesky, fp32)
-  KERNEL_CPU(cholesky_inverse, fp32)
-  KERNEL_CPU(cholesky_solve, fp32)
-  KERNEL_CPU(inverse, fp32)
-  KERNEL_CPU(lu_solve, fp32)
-  KERNEL_CPU(orgqr, fp32)
-  KERNEL_CPU(ormqr, fp32)
-  KERNEL_CPU(pinverse, fp32)
-  KERNEL_CPU(max_pool3d, fp32)
-  KERNEL_CPU(max_unpool2d, fp32)
-  KERNEL_CPU(max_unpool3d, fp32)
-  KERNEL_CPU(adaptive_avg_pool3d, fp32)
-  KERNEL_CPU(reflection_pad1d, fp32)
-  KERNEL_CPU(reflection_pad2d, fp32)
-  KERNEL_CPU(replication_pad1d, fp32)
-  KERNEL_CPU(replication_pad2d, fp32)
-  KERNEL_CPU(replication_pad3d, fp32)
-  KERNEL_CPU(mse_loss, fp32)
-  KERNEL_CPU(cosine_embedding_loss, fp32)
-  KERNEL_CPU(nll_loss, fp32)
-  KERNEL_CPU(nll_loss2d, fp32)
-  KERNEL_CPU(hinge_embedding_loss, fp32)
-  KERNEL_CPU(poisson_nll_loss, fp32)
-  KERNEL_CPU(smooth_l1_loss, fp32)
-  KERNEL_CPU(cross_entropy_loss, fp32)
-  KERNEL_CPU(l1_loss, fp32)
-  KERNEL_CPU(huber_loss, fp32)
-  KERNEL_CPU(margin_ranking_loss, fp32)
-  KERNEL_CPU(soft_margin_loss, fp32)
-  KERNEL_CPU(triplet_margin_loss, fp32)
-  KERNEL_CPU(multi_margin_loss, fp32)
-  KERNEL_CPU(ctc_loss, IntList, fp32)
-  KERNEL_CPU(ctc_loss, Tensor, fp32)
-  KERNEL_CPU(kl_div, fp32)
-  KERNEL_CPU(multilabel_margin_loss, fp32)
-  KERNEL_CPU(binary_cross_entropy_with_logits, fp32)
-  KERNEL_CPU(fft_fft, fp32)
-  KERNEL_CPU(fft_ifft, fp32)
-  KERNEL_CPU(fft_fft2, fp32)
-  KERNEL_CPU(fft_ifft2, fp32)
-  KERNEL_CPU(fft_fftn, fp32)
-  KERNEL_CPU(fft_ifftn, fp32)
-  KERNEL_CPU(fft_rfft, fp32)
-  KERNEL_CPU(fft_irfft, fp32)
-  KERNEL_CPU(fft_rfft2, fp32)
-  KERNEL_CPU(fft_irfft2, fp32)
-  KERNEL_CPU(fft_rfftn, fp32)
-  KERNEL_CPU(fft_irfftn, fp32)
-  KERNEL_CPU(fft_hfft, fp32)
-  KERNEL_CPU(fft_ihfft, fp32)
-  KERNEL_CPU(linalg_cond, fp32)
-  KERNEL_CPU(linalg_cond, p_str, fp32)
-  KERNEL_CPU(linalg_matrix_rank, fp32)
-  KERNEL_CPU(linalg_matrix_rank, tol_tensor, fp32)
-  KERNEL_CPU(linalg_matrix_rank, atol_rtol_tensor, fp32)
-  KERNEL_CPU(linalg_matrix_rank, atol_rtol_float, fp32)
-  KERNEL_CPU(linalg_solve, fp32)
-  KERNEL_CPU(linalg_cholesky, fp32)
-  KERNEL_CPU(linalg_svdvals, fp32)
-  KERNEL_CPU(linalg_eigvals, fp32)
-  KERNEL_CPU(linalg_eigvalsh, fp32)
-  KERNEL_CPU(linalg_inv, fp32)
-  KERNEL_CPU(linalg_householder_product, fp32)
-  KERNEL_CPU(linalg_tensorinv, fp32)
-  KERNEL_CPU(linalg_tensorsolve, fp32)
-  KERNEL_CPU(fake_quantize_per_tensor_affine, fp32)
-  KERNEL_CPU(geqrf, fp32)
-  KERNEL_CPU(_lu_with_info, fp32)
-  KERNEL_CPU(qr, fp32)
-  KERNEL_CPU(svd, fp32)
-  KERNEL_CPU(triangular_solve, fp32)
-  KERNEL_CPU(fractional_max_pool2d, fp32)
-  KERNEL_CPU(fractional_max_pool3d, fp32)
-  KERNEL_CPU(adaptive_max_pool3d, fp32)
-  KERNEL_CPU(multilabel_margin_loss_forward, fp32)
-  KERNEL_CPU(linalg_qr, fp32)
-  KERNEL_CPU(linalg_cholesky_ex, fp32)
-  KERNEL_CPU(linalg_svd, fp32)
-  KERNEL_CPU(linalg_eig, fp32)
-  KERNEL_CPU(linalg_eigh, fp32)
-  KERNEL_CPU(linalg_lstsq, fp32)
-  KERNEL_CPU(linalg_inv_ex, fp32)
 
   // promote
   KERNEL_CPU(stack, promote)
@@ -509,9 +312,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastMTIA, m) {
 #define _KERNEL_MTIA_PROMOTE(...) KERNEL_MTIA(__VA_ARGS__, promote)
 
   AT_FORALL_PROMOTE(_KERNEL_MTIA_PROMOTE)
-
-  m.impl(TORCH_SELECTIVE_NAME("aten::binary_cross_entropy"),
-         TORCH_FN((&at::autocast::binary_cross_entropy_banned)));
 }
 
 // MAIA
@@ -547,9 +347,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastMAIA, m) {
 #define _KERNEL_MAIA_PROMOTE(...) KERNEL_MAIA(__VA_ARGS__, promote)
 
   AT_FORALL_PROMOTE(_KERNEL_MAIA_PROMOTE)
-
-  m.impl(TORCH_SELECTIVE_NAME("aten::binary_cross_entropy"),
-         TORCH_FN((&at::autocast::binary_cross_entropy_banned)));
 }
 
 // XPU
@@ -585,9 +382,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastXPU, m) {
 #define _KERNEL_XPU_PROMOTE(...) KERNEL_XPU(__VA_ARGS__, promote)
 
   AT_FORALL_PROMOTE(_KERNEL_XPU_PROMOTE)
-
-  m.impl(TORCH_SELECTIVE_NAME("aten::binary_cross_entropy"),
-         TORCH_FN((&at::autocast::binary_cross_entropy_banned)));
 }
 
 } // namespace

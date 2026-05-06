@@ -297,38 +297,6 @@ Tensor FunctionalInverses::transpose_int_inverse(const Tensor& base, const Tenso
     }
 }
 
-Tensor FunctionalInverses::_nested_view_from_buffer_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, const Tensor& nested_sizes, const Tensor& nested_strides, const Tensor& storage_offsets) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call _nested_view_from_buffer() during the functionalization pass. For now, nested tensors aren't supported during functionalization");
-}
-
-Tensor FunctionalInverses::_nested_view_from_jagged_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, const Tensor& offsets, const Tensor& dummy, const std::optional<Tensor>& lengths, int64_t ragged_idx, const std::optional<Tensor>& min_seqlen, const std::optional<Tensor>& max_seqlen) {
-  auto values = at::_nested_get_values(mutated_view);
-  if (inverse_return_mode != InverseReturnMode::NeverView) {
-    return values;
-  } else {
-    return values.clone(/*memory_format=*/at::MemoryFormat::Contiguous);
-  }
-}
-
-Tensor FunctionalInverses::_nested_get_values_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-  auto offsets = at::_nested_get_offsets(base);
-  auto lengths = at::_nested_get_lengths(base);
-  auto ragged_idx = at::_nested_get_ragged_idx(base);
-  auto dummy = at::_nested_get_jagged_dummy(base);
-  auto min_seqlen = at::_nested_get_min_seqlen(base);
-  auto max_seqlen = at::_nested_get_max_seqlen(base);
-  auto nt = at::_nested_view_from_jagged(
-      mutated_view, offsets, dummy, lengths, ragged_idx,
-      (min_seqlen.defined() ? std::optional<Tensor>(min_seqlen) : std::nullopt),
-      (max_seqlen.defined() ? std::optional<Tensor>(max_seqlen) : std::nullopt));
-
-  if (inverse_return_mode != InverseReturnMode::NeverView) {
-    return nt;
-  } else {
-    return nt.clone(/*memory_format=*/at::MemoryFormat::Contiguous);
-  }
-}
-
 Tensor FunctionalInverses::unsqueeze_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, int64_t dim) {
     if (inverse_return_mode != InverseReturnMode::NeverView) {
       return at::squeeze(mutated_view, dim);
@@ -338,39 +306,35 @@ Tensor FunctionalInverses::unsqueeze_inverse(const Tensor& base, const Tensor& m
 }
 
 Tensor FunctionalInverses::_indices_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call _indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::_values_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call _values() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::indices_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::values_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call values() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
-}
-
-Tensor FunctionalInverses::_sparse_broadcast_to_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, at::IntArrayRef size) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call _sparse_broadcast_to() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::crow_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call crow_indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::col_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call col_indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::ccol_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call ccol_indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::row_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Attempted to call row_indices() during the functionalization pass. For now, sparse tensors aren't supported during functionalization");
+    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
 }
 
 Tensor FunctionalInverses::unbind_int_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, int64_t mutated_view_idx, int64_t dim) {

@@ -615,39 +615,7 @@ flatbuffers::Offset<mobile::serialization::TensorMetadata> FlatbufferSerializer:
   flatbuffers::Offset<mobile::serialization::QuantizedSchema> qschema_offset =
       0;
   if (quantized) {
-    double scale = 0;
-    int64_t zero_point = 0;
-    flatbuffers::Offset<mobile::serialization::TensorMetadata> scales = 0;
-    flatbuffers::Offset<mobile::serialization::TensorMetadata> zero_points = 0;
-    int64_t axis = 0;
-
-    switch (tensor.qscheme()) {
-      case at::kPerTensorAffine:
-        scale = tensor.q_scale();
-        zero_point = tensor.q_zero_point();
-        break;
-      case at::kPerChannelAffineFloatQParams:
-      case at::kPerChannelAffine: {
-        scales = tensorToFB(fbb, tensor.q_per_channel_scales());
-        zero_points = tensorToFB(fbb, tensor.q_per_channel_zero_points());
-        axis = tensor.q_per_channel_axis();
-      } break;
-      default:
-        TORCH_CHECK(
-            false,
-            "Unsupported tensor quantization type in serialization ",
-            toString(tensor.qscheme()));
-        break;
-    }
-
-    qschema_offset = mobile::serialization::CreateQuantizedSchema(
-        fbb,
-        static_cast<int8_t>(tensor.qscheme()),
-        scale,
-        static_cast<int32_t>(zero_point),
-        scales,
-        zero_points,
-        static_cast<int32_t>(axis));
+    TORCH_CHECK(false, "Quantized tensor serialization not supported in EasyFHE");
   }
 
   void* addr = storage.unsafeGetStorageImpl();

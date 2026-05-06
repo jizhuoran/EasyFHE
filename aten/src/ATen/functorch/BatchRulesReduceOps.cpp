@@ -256,172 +256,6 @@ static std::tuple<Tensor, Tensor> expand_bdims(
       b_has_bdim ? b : b.expand_as(flagpole));
 }
 
-static std::tuple<Tensor, std::optional<int64_t>> _softmax_backward_batch_rule(
-    const Tensor& grad_output, std::optional<int64_t> grad_output_bdim,
-    const Tensor& output, std::optional<int64_t> output_bdim,
-    int64_t dim,
-    ScalarType input_dtype) {
-  // softmax_backward's decomposition is y * gy - y * (y * gy).sum(dim, keepdim=True)
-  // NB: the CUDA kernel handles strides so we can just expand
-  // all of the tensors and call it a day. The CPU kernel is not as good but
-  // idk if the perf on that really matters
-  auto grad_output_ = moveBatchDimToFront(grad_output, grad_output_bdim);
-  auto output_ = moveBatchDimToFront(output, output_bdim);
-
-  // Expand out that extra dimension for everyone
-  std::tie(grad_output_, output_) = expand_bdims(
-      grad_output_, grad_output_bdim.has_value(),
-      output_, output_bdim.has_value());
-
-  // Scalar tensor case. softmax turns into the identity when this happens.
-  // I don't know why the output is zeros, though, but that's what softmax tells me...
-  if (output_.dim() == 1 && (dim == 0 || dim == -1)) {
-    return std::make_tuple(at::zeros_like(grad_output_), 0);
-  }
-
-  dim = getPhysicalDim(output_, /*has_batch_dim*/true, dim);
-
-  // Not sure why output_ needs to be marked as .contiguous(). Something must
-  // have changed in PyTorch (and output of softmax is probably always contiguous)
-  return std::make_tuple(at::_softmax_backward_data(grad_output_, output_.contiguous(), dim, input_dtype), 0);
-}
-
-static std::tuple<Tensor, std::optional<int64_t>> _log_softmax_backward_batch_rule(
-    const Tensor& grad_output, std::optional<int64_t> grad_output_bdim,
-    const Tensor& output, std::optional<int64_t> output_bdim,
-    int64_t dim,
-    c10::ScalarType input_dtype) {
-  // NB: It turns out that expanding + calling log_softmax_backward is generally
-  // faster than the decomposition.
-  // Benchmark here: https://gist.github.com/zou3519/ae3b33b5730a84aae8a80a05c89e078a
-  // Decomposition is (grad_output - grad_output.sum(dim, keepdim=True) * result.exp())
-  // We can squeeze out a last mile of performance by writing custom kernels.
-  auto grad_output_ = moveBatchDimToFront(grad_output, grad_output_bdim);
-  auto output_ = moveBatchDimToFront(output, output_bdim);
-
-  // Expand out that extra dimension for everyone
-  std::tie(grad_output_, output_) = expand_bdims(
-      grad_output_, grad_output_bdim.has_value(),
-      output_, output_bdim.has_value());
-
-  // Scalar tensor case. log_softmax returns zeros when this happens
-  if (output_.dim() == 1 && (dim == 0 || dim == -1)) {
-    return std::make_tuple(at::zeros_like(grad_output_), 0);
-  }
-
-  dim = getPhysicalDim(output_, /*has_batch_dim*/true, dim);
-
-  return std::make_tuple(at::_log_softmax_backward_data(grad_output_, output_, dim, input_dtype), 0);
-}
-
-static std::tuple<Tensor, std::optional<int64_t>> searchsorted_batch_rule(
-    const Tensor& sorted_sequence,
-    std::optional<int64_t> sorted_sequence_bdim,
-    const Tensor& self,
-    std::optional<int64_t> self_bdim,
-    bool out_int32,
-    bool right,
-    std::optional<std::string_view> side,
-    const std::optional<Tensor>& sorter,
-    std::optional<int64_t> sorter_bdim) {
-  auto buckets_logical_rank = rankWithoutBatchDim(sorted_sequence, sorted_sequence_bdim);
-  auto self_logical_rank = rankWithoutBatchDim(self, self_bdim);
-
-  // Preprocess sorter and sorted_sequence.
-  // If they both exist, and only one has a bdim, then we need to make sure both do.
-  // After this step, we can forget about sorter for a bit.
-  auto buckets = moveBatchDimToFront(sorted_sequence, sorted_sequence_bdim);
-  std::optional<int64_t> buckets_bdim;
-  if (sorted_sequence_bdim.has_value()) {
-    buckets_bdim = 0;
-  }
-
-  std::optional<Tensor> sorter_;
-  if (sorter.has_value() && sorter->defined()) {
-    auto sorter__ = moveBatchDimToFront(*sorter, sorter_bdim);
-    if (sorted_sequence_bdim.has_value() != sorter_bdim.has_value()) {
-      auto bdim_size = get_bdim_size2(
-          sorted_sequence, sorted_sequence_bdim,
-          sorter.value(), sorter_bdim);
-      sorter__ = ensure_has_bdim(sorter__, sorter_bdim.has_value(), bdim_size);
-      buckets = ensure_has_bdim(buckets, sorted_sequence_bdim.has_value(), bdim_size);
-      buckets_bdim = 0;
-    }
-    sorter_ = sorter__;
-  }
-
-  // Two cases: buckets_logical_rank is 1, or it is greater than 1.
-  // searchsorted is basically two operators with different semantics jammed
-  // into one
-  if (buckets_logical_rank > 1) {
-    // B<...>D, B<...>V -> no change
-    if (buckets_bdim.has_value() && self_bdim.has_value()) {
-      auto self_ = moveBatchDimToFront(self, self_bdim);
-      auto result = at::searchsorted(buckets, self_, out_int32, right, side, sorter_);
-      return std::make_tuple(std::move(result), 0);
-    }
-    // B<...>D, <...>V -> B<...>D, B<...>V
-    if (buckets_bdim.has_value() && !self_bdim.has_value()) {
-      auto self_ = moveBatchDimToFront(self, self_bdim);
-      self_ = ensure_has_bdim(self_, self_bdim.has_value(), buckets.size(0));
-      auto result = at::searchsorted(buckets, self_, out_int32, right, side, sorter_);
-      return std::make_tuple(std::move(result), 0);
-    }
-    // <...>D, B<...>V -> <...>D, <...>(BV)
-    if (!buckets_bdim.has_value() && self_bdim.has_value()) {
-      auto bdim_size = self.size(*self_bdim);
-      auto self_ = reshape_dim_into(*self_bdim, -1, self);
-      auto result = at::searchsorted(buckets, self_, out_int32, right, side, sorter_);
-      result = reshape_dim_outof(-1, bdim_size, result);
-      return std::make_tuple(result, result.dim() - 2);
-    }
-    TORCH_INTERNAL_ASSERT(false);
-  }
-  // buckets_logical_rank == 1 case.
-  // BD, B* -> BD, B flat(*)
-  if (buckets_bdim.has_value() && self_bdim.has_value()) {
-    auto self_ = moveBatchDimToFront(self, self_bdim);
-    auto self_view_ = self_logical_rank == 0 ? self_.unsqueeze(-1) : self_.flatten(1);
-    auto result = at::searchsorted(buckets, self_view_, out_int32, right, side, sorter_);
-    result = self_logical_rank == 0 ? result.squeeze(-1) : result.view(self_.sizes());
-    return std::make_tuple(std::move(result), 0);
-  }
-  // BD, * -> BD, flat(*) -> BD, B flat(*)
-  if (buckets_bdim.has_value() && !self_bdim.has_value()) {
-    auto bdim_size = buckets.size(*buckets_bdim);
-    auto self_ = ensure_has_bdim(self, false, bdim_size);
-    auto self_view_ = self_logical_rank == 0 ? self_.unsqueeze(-1) : self_.flatten(1);
-    auto result = at::searchsorted(buckets, self_view_, out_int32, right, side, sorter_);
-    result = self_logical_rank == 0 ? result.squeeze(-1) : result.view(self_.sizes());
-    return std::make_tuple(std::move(result), 0);
-  }
-  // D, B* -> no change
-  if (!buckets_bdim.has_value() && self_bdim.has_value()) {
-    auto result = at::searchsorted(buckets, self, out_int32, right, side, sorter_);
-    return std::make_tuple(std::move(result), self_bdim);
-  }
-  TORCH_INTERNAL_ASSERT(false);
-}
-
-static Tensor bucketize_decomp_Tensor(
-    const Tensor& self,
-    const Tensor& boundaries,
-    bool out_int32,
-    bool right) {
-  // checking logical rank
-  TORCH_CHECK(boundaries.dim() == 1, "bucketize: boundaries tensor must be 1 dimension, but got dim(", boundaries.dim(), ")");
-  return at::searchsorted(boundaries, self, out_int32, right, std::nullopt, std::nullopt);
-}
-
-static Tensor bucketize_decomp_Scalar(
-    const Scalar& self,
-    const Tensor& boundaries,
-    bool out_int32,
-    bool right) {
-  // checking logical rank
-  TORCH_CHECK(boundaries.dim() == 1, "bucketize: boundaries tensor must be 1 dimension, but got dim(", boundaries.dim(), ")");
-  return at::searchsorted(boundaries, self, out_int32, right, std::nullopt, std::nullopt);
-}
 
 // Use when the other macros don't work out.
 // - dim_pos: index of the dim argument
@@ -447,7 +281,6 @@ static Tensor bucketize_decomp_Scalar(
   REDUCTION_BOXED_ARGS(op, 1, KEEPDIM_CASE_TRUE, -1)
 
 TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
-  VMAP_SUPPORT2(searchsorted, Tensor, searchsorted_batch_rule);
   REDUCTION_NO_KEEPDIM_ARG(_fft_r2c);
   REDUCTION_NO_KEEPDIM_ARG(_fft_c2r);
   REDUCTION_NO_KEEPDIM_ARG(_fft_c2c);
@@ -462,8 +295,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   REDUCTION_WITH_KEEPDIM_ARG(any.dims);
   REDUCTION_WITH_KEEPDIM_ARG(argmax);
   REDUCTION_WITH_KEEPDIM_ARG(argmin);
-  m.impl("bucketize.Tensor", bucketize_decomp_Tensor);
-  m.impl("bucketize.Scalar", bucketize_decomp_Scalar);
   REDUCTION_BOXED_ARGS(count_nonzero.dim_IntList, 1, KEEPDIM_CASE_FALSE, -1);
   REDUCTION_NO_KEEPDIM_ARG(cummax);
   REDUCTION_NO_KEEPDIM_ARG(cummin);
@@ -491,8 +322,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   m.impl("prod", prod_decomp);
   REDUCTION_WITH_KEEPDIM_ARG(prod.dim_int);
   REDUCTION_BOXED_ARGS(std.correction, 1, KEEPDIM_CASE_VARIABLE, 3);
-  REDUCTION_NO_KEEPDIM_ARG(_softmax);
-  REDUCTION_NO_KEEPDIM_ARG(_safe_softmax);
   REDUCTION_NO_KEEPDIM_ARG(sort);
   REDUCTION_BOXED_ARGS(sort.stable, 2, KEEPDIM_CASE_TRUE, -1);
   REDUCTION_BOXED_ARGS(std_mean.correction, 1, KEEPDIM_CASE_VARIABLE, 3);
@@ -501,10 +330,7 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   REDUCTION_BOXED_ARGS(topk, 2, KEEPDIM_CASE_TRUE, -1);
   REDUCTION_BOXED_ARGS(var.correction, 1, KEEPDIM_CASE_VARIABLE, 3);
   REDUCTION_BOXED_ARGS(var_mean.correction, 1, KEEPDIM_CASE_VARIABLE, 3);
-  REDUCTION_NO_KEEPDIM_ARG(_log_softmax);
   REDUCTION_BOXED_ARGS(rot90, 2, KEEPDIM_CASE_TRUE, -1);
-  VMAP_SUPPORT(_log_softmax_backward_data, _log_softmax_backward_batch_rule);
-  VMAP_SUPPORT(_softmax_backward_data, _softmax_backward_batch_rule);
   VMAP_SUPPORT(_is_all_true, _is_all_true_batch_rule);
   VMAP_SUPPORT(_is_any_true, _is_any_true_batch_rule);
 }

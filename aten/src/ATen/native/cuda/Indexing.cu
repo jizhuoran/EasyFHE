@@ -1749,12 +1749,7 @@ Tensor& index_select_out_cuda(
   TORCH_CHECK(self.dim() <= MAX_TENSORINFO_DIMS, DIM_WARNING);
   TORCH_CHECK(index.dim() <= MAX_TENSORINFO_DIMS, DIM_WARNING);
   if (self.is_quantized()) {
-    TORCH_CHECK(
-        self.qscheme() == kPerTensorAffine,
-        "Only per_tensor quantized quantized tensors are supported by index_select.")
-    AT_DISPATCH_QINT_TYPES(out.scalar_type(), "index_select_quant_cuda", [&] {
-      index_select_out_cuda_impl<scalar_t>(out, self, dim, index);
-    });
+    TORCH_CHECK(false, "Quantized index_select not supported in EasyFHE");
   } else {
     AT_DISPATCH_V2(
         out.scalar_type(),
@@ -1781,12 +1776,8 @@ Tensor index_select_cuda(const Tensor& self, int64_t dim, const Tensor& index) {
 }
 
 Tensor index_select_quantized_cuda(const Tensor& self, int64_t dim, const Tensor& index) {
-  TORCH_CHECK(
-    self.qscheme() == kPerTensorAffine,
-    "Only per_tensor quantized quantized tensors are supported by index_select.")
-  Tensor out = at::empty_quantized({0}, self);
-  at::native::index_select_out_cuda(self, dim, index, out);
-  return out;
+  TORCH_CHECK(false, "Quantized index_select not supported in EasyFHE");
+  return Tensor();
 }
 
 namespace {

@@ -460,45 +460,8 @@ void Reducer::mark_variable_ready_sparse(size_t variable_index) {
   auto& variable = bucket.variables[bucket_index.intra_bucket_index];
 
   runGradCallbackForVariable(variable, [&](auto& grad) {
-    REDUCER_CHECK(
-        grad.defined(), logger_, "Expected sparse gradient to be defined.");
-    REDUCER_CHECK(
-        grad.options().layout() == c10::kSparse,
-        logger_,
-        "Expected variable to have sparse gradient.");
-
-    // Copy the indices of sparse metadata
-    if (sparse_metadata_) {
-      grad = grad.coalesce();
-      REDUCER_CHECK(
-          !param_names_.empty(), logger_, "No parameter names were found");
-      std::string& param_name = param_names_[variable_index];
-      auto iter = sparse_metadata_->find(param_name);
-      REDUCER_CHECK(
-          iter != sparse_metadata_->end(),
-          logger_,
-          "param: " + param_name + " not found in sparse metadata");
-      bucket.sparse_tensor_indices =
-          iter->second.to(at::kLong).unsqueeze(0).to(grad.device());
-      auto indices = at::searchsorted(
-          bucket.sparse_tensor_indices.value(), grad.indices(), false, false);
-      // For indices we are using the ones set by sparse_metadata
-      grad = at::sparse_coo_tensor(indices, grad.values(), grad.sizes());
-    }
-
-    // Sparse tensors cannot be grouped together with other sparse tensors in a
-    // single reduction operation like we can for dense tensors. Therefore, the
-    // `offsets` and `lengths` vectors in the bucket struct are empty, and
-    // there is no pre-existing accumulation tensor.
-    // Directly assign the sparse tensor to the `gradients` field.
-    bucket.gradients = grad;
-    // If no DDP comm hook is registered, the allreduce only sums up the
-    // value, and a separate division is required.
-    if (comm_hook_ == nullptr) {
-      bucket.gradients.div_(div_factor_);
-    }
-    // The grad is modified in place and needs to be written back.
-    return true;
+    TORCH_CHECK(false, "Sparse gradients not supported in EasyFHE");
+    return false;
   });
 }
 
@@ -1756,22 +1719,7 @@ void Reducer::finalize_backward() {
         ? detail::parseCppCommHookResult(bucket.future_work->value())
         : comm_hook_->parseHookResult(bucket.future_work->value());
     if (bucket.expect_sparse_gradient) {
-      // sparse metadata is set so the bucket should have sparse_tensor_indices
-      if (sparse_metadata_) {
-        REDUCER_CHECK(
-            bucket.sparse_tensor_indices.has_value() &&
-                bucket.sparse_tensor_indices.value().numel() ==
-                    bucket.gradients.sizes()[0],
-            logger_,
-            "Sparse metadata and gradient size mismatch");
-        auto sparse_result = at::sparse_coo_tensor(
-            bucket.sparse_tensor_indices.value(),
-            future_result,
-            bucket.gradients.sizes());
-        bucket.gradients.copy_(sparse_result);
-      } else {
-        bucket.gradients.copy_(future_result);
-      }
+      TORCH_CHECK(false, "Sparse gradients not supported in EasyFHE");
     } else {
       // Reinitialize only `bucket_views_out` with the future_result by
       // following the same logic in `initialize_buckets`.
@@ -1861,7 +1809,9 @@ void Reducer::flush_deferred_copies(Bucket& bucket, size_t bucket_index) {
       dsts.push_back(bucket.bucket_views_in[idx]);
       srcs.push_back(grad);
     }
-    at::_foreach_copy_(dsts, srcs);
+    for (size_t i = 0; i < dsts.size(); i++) {
+      dsts[i].copy_(srcs[i]);
+    }
 
     // Re-alias grads to bucket views if gradient_as_bucket_view
     if (gradient_as_bucket_view_) {

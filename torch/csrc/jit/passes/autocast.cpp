@@ -359,45 +359,13 @@ void handleBlock(Block* block, AutocastContext initial_state) {
         break;
 
       // CastPolicy::fp16 (cast all inputs to float16)
-      case aten::_convolution:
-      case aten::conv1d:
-      case aten::conv2d:
-      case aten::conv3d:
-      case aten::conv_tbc:
-      case aten::conv_transpose1d:
-      case aten::convolution:
-      case aten::cudnn_convolution:
-      case aten::cudnn_convolution_transpose:
-      case aten::prelu:
-      case aten::addmm:
-      case aten::addmv:
-      case aten::addr:
-      case aten::matmul:
-      case aten::mm:
-      case aten::mv:
-      case aten::linear:
-      case aten::addbmm:
-      case aten::baddbmm:
-      case aten::bmm:
-      case aten::chain_matmul:
-      case aten::_thnn_fused_lstm_cell:
-      case aten::_thnn_fused_gru_cell:
-      case aten::lstm_cell:
-      case aten::gru_cell:
-      case aten::rnn_tanh_cell:
-      case aten::rnn_relu_cell:
-        if (!node->schema().is_mutable()) {
-          castTensorInputs(
-              node, aten::_autocast_to_reduced_precision, current_state());
-        }
+      // All NN/linalg ops removed for EasyFHE
         break;
 
       // CastPolicy::fp32 (cast all inputs to float32)
-      case aten::native_layer_norm:
       case aten::acos:
       case aten::asin:
       case aten::cosh:
-      case aten::erfinv:
       case aten::exp:
       case aten::expm1:
       case aten::log:
@@ -409,30 +377,6 @@ void handleBlock(Block* block, AutocastContext initial_state) {
       case aten::sinh:
       case aten::tan:
       case aten::pow:
-      case aten::softplus:
-      case aten::gelu:
-      case aten::layer_norm:
-      case aten::group_norm:
-      case aten::frobenius_norm:
-      case aten::nuclear_norm:
-      case aten::cosine_similarity:
-      case aten::cosine_embedding_loss:
-      case aten::nll_loss:
-      case aten::nll_loss2d:
-      case aten::hinge_embedding_loss:
-      case aten::kl_div:
-      case aten::l1_loss:
-      case aten::smooth_l1_loss:
-      case aten::mse_loss:
-      case aten::margin_ranking_loss:
-      case aten::multilabel_margin_loss:
-      case aten::soft_margin_loss:
-      case aten::triplet_margin_loss:
-      case aten::multi_margin_loss:
-      case aten::binary_cross_entropy_with_logits:
-      case aten::dist:
-      case aten::pdist:
-      case aten::cdist:
       case aten::renorm:
       case aten::logsumexp:
         if (!node->schema().is_mutable()) {
@@ -443,7 +387,6 @@ void handleBlock(Block* block, AutocastContext initial_state) {
 
       // CastPolicy::fp32_set_opt_dtype
       case aten::prod:
-      case aten::log_softmax:
       case aten::cumprod:
       case aten::cumsum:
       case aten::sum:
@@ -453,31 +396,14 @@ void handleBlock(Block* block, AutocastContext initial_state) {
         }
         break;
 
-      // cast softmax to fp32 only on GPU
-      case aten::softmax:
-        if (!node->schema().is_mutable() && !hasExplicitDtypeArgument(node)) {
-          auto context = current_state();
-          context.cpu_enabled = false;
-          castTensorInputs(node, aten::_autocast_to_full_precision, context);
-        }
-        break;
-
       // CastPolicy::promote (promote inputs to the widest type)
       case aten::addcdiv:
       case aten::addcmul:
       case aten::atan2:
-      case aten::bilinear:
       case aten::cat:
-      case aten::cross:
-      case aten::dot:
       case aten::equal:
       case aten::index_put:
       case aten::stack:
-      case aten::tensordot:
-      // add, sub, mul, div were added to autocast jit, because aten implicit
-      // type promotion is not visible to JIT and could cause dtype mismatch on
-      // backward
-      // see [Note: implicit type promotion in Autocast]
       case aten::add:
       case aten::sub:
       case aten::mul:
@@ -486,12 +412,6 @@ void handleBlock(Block* block, AutocastContext initial_state) {
           castInputsToWidestType(node, current_state());
         }
         break;
-
-      // Banned in autocast, see binary_cross_entropy_banned()
-      case aten::binary_cross_entropy:
-        if (current_state()) {
-          TORCH_CHECK(false, "Unsafe to autocast");
-        }
     }
 
     // process sub-blocks, if any

@@ -75,7 +75,7 @@ endif()
 EXCLUDE(ATen_CORE_SRCS "${ATen_CORE_SRCS}" ${ATen_CORE_TEST_SRCS})
 
 file(GLOB base_h CONFIGURE_DEPENDS "*.h" "detail/*.h" "cpu/*.h" "cpu/vec/vec512/*.h" "cpu/vec/vec128/*.h" "cpu/vec/vec256/*.h" "cpu/vec/vec256/vsx/*.h" "cpu/vec/vec256/zarch/*.h" "cpu/vec/sve/*.h" "cpu/vec/*.h" "quantized/*.h" "functorch/*.h" "accelerator/*.h")
-file(GLOB base_cpp CONFIGURE_DEPENDS "*.cpp" "detail/*.cpp" "cpu/*.cpp" "functorch/*.cpp" "accelerator/*.cpp")
+file(GLOB base_cpp CONFIGURE_DEPENDS "*.cpp" "detail/*.cpp" "cpu/*.cpp" "functorch/*.cpp" "accelerator/*.cpp" "quantized/*.cpp")
 file(GLOB cuda_h CONFIGURE_DEPENDS "cuda/*.h" "cuda/detail/*.h" "cuda/*.cuh" "cuda/detail/*.cuh" "cuda/tunable/*.cuh" "cuda/tunable/*.h")
 file(GLOB cuda_cpp CONFIGURE_DEPENDS "cuda/*.cpp" "cuda/detail/*.cpp" "cuda/tunable/*.cpp")
 file(GLOB cuda_nvrtc_stub_h CONFIGURE_DEPENDS "cuda/nvrtc_stub/*.h")
@@ -486,8 +486,7 @@ file(GLOB native_kleidiai_h CONFIGURE_DEPENDS "native/kleidiai/*.h")
 append_filelist("jit_core_headers" ATen_CORE_HEADERS)
 append_filelist("jit_core_sources" ATen_CORE_SRCS)
 
-add_subdirectory(quantized)
-add_subdirectory(nnapi)
+# Quantized and NNAPI removed for EasyFHE
 
 if(BUILD_LITE_INTERPRETER)
   set(all_cpu_cpp ${generated_sources} ${core_generated_sources} ${cpu_kernel_cpp})
@@ -497,11 +496,11 @@ if(BUILD_LITE_INTERPRETER)
 else()
   set(
     all_cpu_cpp ${base_cpp} ${ATen_CORE_SRCS} ${native_cpp}
-    ${native_ao_sparse_cpp} ${native_sparse_cpp} ${native_nested_cpp}
-    ${native_quantized_cpp} ${native_mkl_cpp} ${native_mkldnn_cpp}
-    ${native_transformers_cpp} ${native_fhe_cpp}
+    ${native_sparse_cpp}
+    ${native_mkl_cpp} ${native_mkldnn_cpp}
+    ${native_fhe_cpp}
     ${native_utils_cpp} ${native_xnnpack} ${generated_sources} ${core_generated_sources}
-    ${ATen_CPU_SRCS} ${ATen_QUANTIZED_SRCS} ${ATen_NNAPI_SRCS} ${cpu_kernel_cpp}
+    ${ATen_CPU_SRCS} ${ATen_NNAPI_SRCS} ${cpu_kernel_cpp}
   )
 endif()
 
@@ -566,9 +565,6 @@ if(USE_CUDA)
   list(APPEND ATen_CUDA_CU_SRCS
     ${cuda_cu}
     ${native_cuda_cu}
-    ${native_nested_cuda_cu}
-    ${native_sparse_cuda_cu}
-    ${native_quantized_cuda_cu}
     ${native_transformers_cuda_cu}
     ${cuda_generated_sources}
     ${native_fhe_cuda_cu}
@@ -578,10 +574,6 @@ if(USE_CUDA)
     ${native_cuda_cpp}
     ${native_cudnn_cpp}
     ${native_miopen_cpp}
-    ${native_nested_cuda_cpp}
-    ${native_quantized_cuda_cpp}
-    ${native_quantized_cudnn_cpp}
-    ${native_sparse_cuda_cpp}
     ${native_transformers_cuda_cpp}
     ${native_fhe_cuda_cpp}
   )

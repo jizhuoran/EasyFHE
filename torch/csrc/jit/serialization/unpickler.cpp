@@ -598,8 +598,7 @@ PickleOpCode Unpickler::readInstruction() {
 
       at::Tensor tensor;
       if (options.backend() == c10::Backend::QuantizedCPU) {
-        tensor = at::_empty_affine_quantized({}, options, 0, 0)
-                     .set_(storage, 0, {}, {});
+        TORCH_CHECK(false, "Quantized tensor deserialization not supported in EasyFHE");
       } else {
         tensor = at::empty({0}, options).set_(storage);
       }
@@ -904,9 +903,7 @@ void Unpickler::rebuildSparseTensor() {
         auto options = values_tensor.options()
                            .layout(c10::Layout::Sparse)
                            .requires_grad(requires_grad);
-        result = at::_sparse_coo_tensor_unsafe(
-            indices_tensor, values_tensor, size, options);
-        result = autograd::make_variable(result, options.requires_grad());
+        TORCH_CHECK(false, "Sparse COO tensor deserialization not supported in EasyFHE");
         break;
       }
       case static_cast<int>(c10::Layout::SparseCsr): {
@@ -918,10 +915,7 @@ void Unpickler::rebuildSparseTensor() {
         auto options = values_tensor.options()
                            .layout(c10::Layout::SparseCsr)
                            .requires_grad(requires_grad);
-        result = at::_sparse_csr_tensor_unsafe(
-            crow_indices, col_indices, values_tensor, size, options);
-        result =
-            autograd::make_variable(std::move(result), options.requires_grad());
+        TORCH_CHECK(false, "Sparse CSR tensor deserialization not supported in EasyFHE");
         break;
       }
       default:
@@ -949,28 +943,7 @@ void Unpickler::rebuildTensor(bool quantized) {
       auto qparams_tuple = elements.at(idx++).toTuple();
       const auto& qparams = qparams_tuple->elements();
       auto qscheme = static_cast<at::QScheme>(qparams.at(0).toInt());
-      switch (qscheme) {
-        case at::kPerTensorAffine: {
-          double q_scale = qparams.at(1).toDouble();
-          int64_t q_zero_point = qparams.at(2).toInt();
-          result = at::_empty_affine_quantized(
-              {0}, storage_tensor.options(), q_scale, q_zero_point);
-        } break;
-        case at::kPerChannelAffineFloatQParams:
-        case at::kPerChannelAffine: {
-          const auto& scales = qparams.at(1).toTensor();
-          const auto& zero_points = qparams.at(2).toTensor();
-          int64_t axis = qparams.at(3).toInt();
-          result = at::_empty_per_channel_affine_quantized(
-              {0}, scales, zero_points, axis, storage_tensor.options());
-        } break;
-        default:
-          TORCH_CHECK(
-              false,
-              "Unsupported tensor quantization type in serialization ",
-              toString(qscheme));
-          break;
-      }
+      TORCH_CHECK(false, "Quantized tensor deserialization not supported in EasyFHE");
     } else {
       result = at::empty({0}, storage_tensor.options());
     }

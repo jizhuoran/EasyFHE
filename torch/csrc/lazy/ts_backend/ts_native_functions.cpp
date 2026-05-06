@@ -324,55 +324,6 @@ at::Tensor& LazyNativeFunctions::fill_(
   return self;
 }
 
-at::Tensor LazyNativeFunctions::max_pool3d(
-    const at::Tensor& self,
-    at::IntArrayRef kernel_size,
-    at::IntArrayRef stride,
-    at::IntArrayRef padding,
-    at::IntArrayRef dilation,
-    bool ceil_mode) {
-  return torch::lazy::MaxPool3dAutogradFunctionTS::apply(
-      self, kernel_size, stride, padding, dilation, ceil_mode);
-}
-
-// We need to explicitly override max pooling operators and just call the
-// fallback for them because we've customized the autograd function for them
-// (backward needs saved indices from forward).
-std::tuple<at::Tensor, at::Tensor> LazyNativeFunctions::max_pool3d_with_indices(
-    const at::Tensor& self,
-    at::IntArrayRef kernel_size,
-    at::IntArrayRef stride,
-    at::IntArrayRef padding,
-    at::IntArrayRef dilation,
-    bool ceil_mode) {
-  return at::native::
-      call_fallback_fn<&ltc_eager_fallback, ATEN_OP(max_pool3d_with_indices)>::
-          call(self, kernel_size, stride, padding, dilation, ceil_mode);
-}
-
-at::Tensor LazyNativeFunctions::max_pool3d_with_indices_backward(
-    const at::Tensor& grad_output,
-    const at::Tensor& self,
-    at::IntArrayRef kernel_size,
-    at::IntArrayRef stride,
-    at::IntArrayRef padding,
-    at::IntArrayRef dilation,
-    bool ceil_mode,
-    const at::Tensor& indices) {
-  return at::native::call_fallback_fn<
-      &ltc_eager_fallback,
-      ATEN_OP(max_pool3d_with_indices_backward)>::
-      call(
-          grad_output,
-          self,
-          kernel_size,
-          stride,
-          padding,
-          dilation,
-          ceil_mode,
-          indices);
-}
-
 at::Tensor LazyNativeFunctions::_unsafe_view(
     const at::Tensor& self,
     at::IntArrayRef size) {
@@ -425,18 +376,6 @@ at::Tensor LazyNativeFunctions::narrow_copy_symint(
   return at::functionalization::functionalize_aten_op_symint<ATEN_OP(
       narrow_copy)>::call(self, dim, std::move(start), std::move(length));
 }
-at::Tensor LazyNativeFunctions::pixel_shuffle(
-    const at::Tensor& self,
-    int64_t upscale_factor) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(
-      pixel_shuffle)>::call(self, upscale_factor);
-}
-at::Tensor LazyNativeFunctions::pixel_unshuffle(
-    const at::Tensor& self,
-    int64_t downscale_factor) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(
-      pixel_unshuffle)>::call(self, downscale_factor);
-}
 at::Tensor LazyNativeFunctions::select_backward_symint(
     const at::Tensor& grad_output,
     c10::SymIntArrayRef input_sizes,
@@ -445,35 +384,6 @@ at::Tensor LazyNativeFunctions::select_backward_symint(
   return at::functionalization::functionalize_aten_op_symint<ATEN_OP(
       select_backward)>::call(grad_output, input_sizes, dim, std::move(index));
 }
-at::Tensor LazyNativeFunctions::_trilinear(
-    const at::Tensor& i1,
-    const at::Tensor& i2,
-    const at::Tensor& i3,
-    at::IntArrayRef expand1,
-    at::IntArrayRef expand2,
-    at::IntArrayRef expand3,
-    at::IntArrayRef sumdim,
-    int64_t unroll_dim) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(_trilinear)>::
-      call(i1, i2, i3, expand1, expand2, expand3, sumdim, unroll_dim);
-}
-at::Tensor LazyNativeFunctions::linalg_pinv(
-    const at::Tensor& self,
-    const std::optional<at::Tensor>& atol,
-    const std::optional<at::Tensor>& rtol,
-    bool hermitian) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP2(
-      linalg_pinv, atol_rtol_tensor)>::call(self, atol, rtol, hermitian);
-}
-
-std::tuple<at::Tensor, at::Tensor, at::Tensor> LazyNativeFunctions::svd(
-    const at::Tensor& self,
-    bool some,
-    bool compute_uv) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(svd)>::call(
-      self, some, compute_uv);
-}
-
 // functionalize_aten_op can't handle out= ops directly.
 // Instead, we can call the composite kernel from core, and copy and mutations
 // back to the inputs.
@@ -535,21 +445,6 @@ at::Tensor LazyNativeFunctions::slice_backward_symint(
           std::move(start),
           std::move(end),
           std::move(step));
-}
-
-// reuse the composite kernel from core, that way we don't need to provide a
-// backwards formula for native_group_norm
-std::tuple<Tensor, Tensor, Tensor> LazyNativeFunctions::native_group_norm(
-    const at::Tensor& input,
-    const std::optional<at::Tensor>& weight,
-    const std::optional<at::Tensor>& bias,
-    int64_t N,
-    int64_t C,
-    int64_t HxW,
-    int64_t group,
-    double eps) {
-  return at::native::math_group_norm(
-      input, weight, bias, N, C, HxW, group, eps);
 }
 
 } // namespace torch::lazy

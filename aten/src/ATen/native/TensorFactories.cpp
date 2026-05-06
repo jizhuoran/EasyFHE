@@ -400,11 +400,8 @@ Tensor& empty_out(
       !optional_memory_format.has_value(),
       "'memory_format' argument is incompatible with 'out' tensor argument");
   check_size_nonnegative(size);
-  if (result.is_sparse()) {
-    result.sparse_resize_and_clear_(size, size.size(), 0);
-  } else {
-    result.resize_(size);
-  }
+  TORCH_CHECK(!result.is_sparse(), "Sparse tensors not supported in EasyFHE");
+  result.resize_(size);
   // See Note [Enabling Deterministic Operations]
   if (C10_UNLIKELY(
           at::globalContext().deterministicAlgorithms() &&
@@ -557,28 +554,8 @@ Tensor empty_like_quantized(
       options.dtype(),
       " Input tensor's dtype: ",
       self.dtype());
-  auto qscheme = self.qscheme();
-  if (qscheme == kPerTensorAffine) {
-    return at::_empty_affine_quantized(
-        self.sizes(),
-        options.memory_format(memory_format),
-        self.q_scale(),
-        self.q_zero_point(),
-        // See Note [Explicit nullopt MemoryFormat argument]
-        std::nullopt);
-  } else if (qscheme == kPerChannelAffine) {
-    // Copy the tensors with channels to avoid accidental overrides
-    return at::_empty_per_channel_affine_quantized(
-        self.sizes(),
-        self.q_per_channel_scales().clone(at::MemoryFormat::Preserve),
-        self.q_per_channel_zero_points().clone(at::MemoryFormat::Preserve),
-        self.q_per_channel_axis(),
-        options.memory_format(memory_format),
-        // See Note [Explicit nullopt MemoryFormat argument]
-        std::nullopt);
-  } else {
-    TORCH_CHECK(false, "Unsupported qscheme: ", toString(qscheme));
-  }
+  auto qscheme = kPerTensorAffine;
+  TORCH_CHECK(false, "Quantized empty_like not supported in EasyFHE");
 }
 
 Tensor new_empty_symint(
@@ -1801,20 +1778,12 @@ Tensor _efficientzerotensor_meta_symint(
 }
 
 Tensor& zeros_sparse_out(IntArrayRef size, Tensor& result) {
-  result.sparse_resize_and_clear_(size, size.size(), 0.);
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
   return result;
 }
 
 Tensor& zeros_out(IntArrayRef size, Tensor& result) {
-  if (result.is_sparse()) {
-    // TODO: I think this branch should be dead, but we don't have an easy
-    // way to cover all sparse kernels with zeros_sparse_out, so retain this
-    // for now
-    result.sparse_resize_and_clear_(size, size.size(), 0.);
-    return result;
-  } else {
-    result.resize_(size);
-  }
+  result.resize_(size);
   return result.zero_();
 }
 
@@ -1833,49 +1802,10 @@ Tensor zeros_like(
   auto options = self.options().merge_in(other_options);
 
   if (options.layout() == kSparse) {
-    TORCH_CHECK(
-        !(optional_memory_format.has_value()),
-        "memory format option is only supported by strided tensors");
-    auto res =
-        at::empty({0}, self.options().merge_in(options)); // to be resized
-
-    if (self.is_sparse()) {
-      res.sparse_resize_and_clear_(
-          self.sizes(), self.sparse_dim(), self.dense_dim());
-    } else if (at::sparse_csr::is_sparse_compressed(self)) {
-      res.sparse_resize_and_clear_(
-          self.sizes(),
-          self.sizes().size() - self.dense_dim(),
-          self.dense_dim());
-    } else {
-      res.sparse_resize_and_clear_(self.sizes(), self.sizes().size(), 0);
-    }
-    res._coalesced_(true);
-
-    return res;
-  } else if (at::sparse_csr::is_sparse_compressed(options.layout())) {
-    int64_t nnz = 0;
-    int64_t dense_dim =
-        (self.layout() == kStrided ? self.dim() - 2 : self.dense_dim());
-    DimVector blocksize{};
-    if (self.layout() == kSparseBsr || self.layout() == kSparseBsc) {
-      blocksize.append(at::sparse_csr::getBlockSize(self));
-    }
-    ScalarType index_dtype = at::sparse_csr::getIndexDtype(self);
-    auto res = at::native::sparse_compressed_tensor_with_dims(
-        nnz,
-        dense_dim,
-        self.sizes(),
-        blocksize,
-        index_dtype,
-        typeMetaToScalarType(options.dtype()),
-        options.layout(),
-        options.device(),
-        options.pinned_memory());
-    auto [compressed_indices, plain_indices] =
-        at::sparse_csr::getCompressedPlainIndices(res);
-    compressed_indices.zero_();
-    return res;
+    TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  } else if (options.layout() == kSparseCsr || options.layout() == kSparseCsc ||
+             options.layout() == kSparseBsr || options.layout() == kSparseBsc) {
+    TORCH_CHECK(false, "Sparse compressed tensors not supported in EasyFHE");
   }
   auto result = at::empty_like(self, options, optional_memory_format);
   return result.zero_();

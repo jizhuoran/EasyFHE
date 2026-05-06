@@ -141,81 +141,7 @@ void format(Stack& stack, size_t num_inputs) {
 }
 
 void einsum(Stack& stack, size_t num_inputs) {
-  TORCH_CHECK(
-      num_inputs >= 2,
-      "einsum(): must specify the equation string and at least one operand, ",
-      "or at least one operand and its subscripts list");
-
-  const auto args = last(stack, num_inputs);
-
-  // Convert the subscript list format which is an interleaving of operand and
-  // its subscripts list with an optional output subscripts list at the end
-  // (see documentation for more details on this) to the equation string
-  // format by creating the equation string from the subscripts list and
-  // grouping the input operands into a tensorlist (List[Tensor]).
-  std::stringstream ss;
-
-  auto parse_sublist = [&ss](const c10::List<int64_t>& l, size_t arg_num) {
-    for (const auto i : c10::irange(l.size())) {
-      TORCH_CHECK(
-          l[i] >= 0 && l[i] < 52,
-          "einsum(): expected subscript ",
-          i,
-          " in argument ",
-          arg_num,
-          " to be within the range [0, 52), but got ",
-          l[i]);
-      if (l[i] < 26) {
-        ss << static_cast<char>(l[i] + 'A');
-      } else {
-        ss << static_cast<char>(l[i] - 26 + 'a');
-      }
-    }
-  };
-
-  // Parse subscripts for input operands
-  for (auto i = decltype(num_inputs){1}; i < num_inputs; i += 2) {
-    TORCH_CHECK(
-        args[i].isIntList(),
-        "einsum(): expected List[int] in argument ",
-        i,
-        ", but got ",
-        args[i].type()->repr_str());
-    parse_sublist(args[i].toIntList(), i);
-    if (i + 2 < num_inputs) {
-      ss << ',';
-    }
-  }
-
-  // Parse optional output subscripts (provided if #args is odd)
-  if (num_inputs % 2 == 1) {
-    TORCH_CHECK(
-        args.back().isIntList(),
-        "einsum(): expected List[int] in argument ",
-        num_inputs - 1,
-        ", but got ",
-        args.back().type()->repr_str());
-    ss << "->";
-    parse_sublist(args.back().toIntList(), num_inputs - 1);
-  }
-
-  const auto equation = ss.str();
-  std::vector<at::Tensor> operands;
-
-  // Parse input operands
-  const auto end = num_inputs % 2 == 1 ? num_inputs - 1 : num_inputs;
-  for (auto i = decltype(num_inputs){0}; i < end; i += 2) {
-    TORCH_CHECK(
-        args[i].isTensor(),
-        "einsum(): expected Tensor in argument ",
-        i,
-        ", but got ",
-        args[i].type()->repr_str());
-    operands.emplace_back(args[i].toTensor());
-  }
-
-  drop(stack, num_inputs);
-  push(stack, at::einsum(equation, operands));
+  TORCH_CHECK(false, "einsum not supported in EasyFHE");
 }
 
 void percentFormat(Stack& stack, size_t num_inputs) {
@@ -401,34 +327,7 @@ void tupleSlice(Stack& stack, size_t begin, size_t end) {
 }
 
 void dequantize(Stack& stack) {
-  auto iv = pop(stack);
-  if (iv.isTuple()) {
-    auto tuple = iv.toTuple();
-    const auto& elems = tuple->elements();
-    std::vector<IValue> output_elems;
-    output_elems.reserve(elems.size());
-    for (const auto& elem : elems) {
-      if (elem.isTensor()) {
-        output_elems.emplace_back(at::dequantize(elem.toTensor()));
-      } else {
-        output_elems.emplace_back(elem);
-      }
-    }
-    push(stack, c10::ivalue::Tuple::create(std::move(output_elems)));
-  } else if (iv.isTensorList()) {
-    auto elems = iv.toTensorList();
-    auto output_list = c10::impl::GenericList(elems.elementType());
-    for (auto&& elem : elems) {
-      output_list.emplace_back(at::dequantize(elem));
-    }
-    push(stack, std::move(output_list));
-  } else {
-    TORCH_CHECK(
-        false,
-        "Unsupported type in dequantize, only List[Tensor] and \
- Tuple[Tensor or other types] are supported, got type:",
-        toString(iv.type()));
-  }
+  TORCH_CHECK(false, "dequantize not supported in EasyFHE");
 }
 
 } // namespace torch::jit
