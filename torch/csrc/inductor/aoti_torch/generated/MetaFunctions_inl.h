@@ -602,5 +602,18 @@ TORCH_API at::Tensor & add_scalar_mod_(at::Tensor & self, const at::Tensor & in_
 TORCH_API at::Tensor & sub_scalar_mod_(at::Tensor & self, const at::Tensor & in_b, const at::Tensor & mod, int64_t cur_limbs);
 TORCH_API at::Tensor & mul_scalar_mod_(at::Tensor & self, const at::Tensor & in_b, const at::Tensor & mod, const at::Tensor & barret_mu, int64_t cur_limbs);
 TORCH_API at::Tensor & mul_by_monomial_(at::Tensor & self, int64_t l, int64_t N, int64_t M, int64_t monomialDeg, int64_t L, const at::Tensor & primes, const at::Tensor & inverse_power_of_roots_div_two, const at::Tensor & inverse_scaled_power_of_roots_div_two, const at::Tensor & power_of_roots_shoup, const at::Tensor & power_of_roots);
+TORCH_API at::Tensor & hardtanh_(at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1);
+TORCH_API at::Tensor leaky_relu(const at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor & leaky_relu_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor & leaky_relu_outf(const at::Tensor & self, const at::Scalar & negative_slope, at::Tensor & out);
+TORCH_API at::Tensor & leaky_relu_(at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor elu(const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor & elu_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor & elu_outf(const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, at::Tensor & out);
+TORCH_API at::Tensor & elu_(at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API const at::Tensor & resize_as_sparse_(const at::Tensor & self, const at::Tensor & the_template);
+TORCH_API at::Tensor linalg_vector_norm(const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt);
+TORCH_API at::Tensor & linalg_vector_norm_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt);
+TORCH_API at::Tensor & linalg_vector_norm_outf(const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype, at::Tensor & out);
 } // namespace meta
 } // namespace at

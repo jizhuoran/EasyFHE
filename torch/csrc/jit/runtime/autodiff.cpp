@@ -223,64 +223,6 @@ class GradientHelper {
     } else if (
         node->kind() == prim::Constant || node->kind() == prim::AutogradZero) {
       return {};
-    } else if (
-        node->matches(
-            "aten::_slow_conv2d_forward(Tensor self, Tensor weight, int[] kernel_size, Tensor? bias, int[] stride, int[] padding) -> Tensor")) {
-      auto graph = node->owningGraph();
-      auto backward_value = graph->insert(
-          aten::_slow_conv2d_backward,
-          {grad_values.at(0),
-           inputs.at(0),
-           inputs.at(1),
-           node->namedInput(attr::kernel_size),
-           node->namedInput(attr::stride),
-           node->namedInput(attr::padding),
-           graph->insertConstant(c10::List<bool>({true, true, true}))});
-      // graph->insert returns a tuple automatically if multiple outputs are
-      // returned. So unpack them again.
-      Node* tuple_unpack_node =
-          graph->insertNode(graph->createTupleUnpack(backward_value));
-      auto tuple_outputs = tuple_unpack_node->outputs();
-      AT_ASSERT(tuple_outputs.size() == size_t(3));
-      return {
-          tuple_outputs[0],
-          tuple_outputs[1],
-          nullptr,
-          tuple_outputs[2],
-          nullptr,
-          nullptr};
-
-    } else if (
-        node->matches(
-            "aten::native_batch_norm(Tensor input, Tensor? weight, Tensor? bias, Tensor? running_mean, Tensor? running_var, bool training, float momentum, float eps) -> (Tensor, Tensor, Tensor)")) {
-      auto graph = node->owningGraph();
-      auto backward_value = graph->insert(
-          aten::native_batch_norm_backward,
-          {grad_values.at(0),
-           inputs.at(0),
-           inputs.at(1),
-           inputs.at(3),
-           inputs.at(4),
-           outputs.at(1),
-           outputs.at(2),
-           inputs.at(5),
-           inputs.at(7),
-           graph->insertConstant(c10::List<bool>({true, true, true}))});
-      // graph->insert returns a tuple automatically if multiple outputs are
-      // returned. So unpack them again.
-      Node* tuple_unpack_node =
-          graph->insertNode(graph->createTupleUnpack(backward_value));
-      auto tuple_outputs = tuple_unpack_node->outputs();
-      AT_ASSERT(tuple_outputs.size() == size_t(3));
-      return {
-          tuple_outputs[0],
-          tuple_outputs[1],
-          tuple_outputs[2],
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr,
-          nullptr};
     }
 
     throw std::runtime_error(

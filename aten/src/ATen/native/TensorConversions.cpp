@@ -318,17 +318,6 @@ std::vector<Tensor> _to_cpu(TensorList tensors) {
   return cpu_tensors;
 }
 
-Tensor to_dense_backward(
-    const Tensor& grad,
-    const Tensor& input_,
-    std::optional<bool> masked_grad_) {
-  const auto input_layout = input_.layout();
-  TORCH_CHECK(
-      input_layout == kStrided,
-      "to_dense_backward: Unsupported input layout: ", input_layout);
-  return grad.to_dense(input_.scalar_type(), masked_grad_);
-}
-
 Tensor to_dense(
     const Tensor& tensor,
     std::optional<c10::ScalarType> dtype,

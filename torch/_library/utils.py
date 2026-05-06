@@ -609,9 +609,7 @@ _RANDOM_FUNCTIONS = {
     torch.randn_like,
     torch.randint_like,
     torch.normal,
-    torch.poisson,
     torch.bernoulli,
-    torch.multinomial,
 }
 
 

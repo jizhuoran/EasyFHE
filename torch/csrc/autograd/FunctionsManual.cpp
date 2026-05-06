@@ -1434,7 +1434,7 @@ Tensor sparse_mask_backward(
   // accumulate as well.
   const auto self_grad =
       sparse_mask_like_grad(mask, grad, /*accumulate_matches=*/true);
-  return self_layout == at::kStrided ? self_grad.to_dense() : self_grad;
+  return self_layout == at::kStrided ? self_grad : self_grad;
 }
 
 Tensor sparse_sparse_matmul_backward(
@@ -1982,30 +1982,7 @@ Tensor binary_cross_entropy_target_backward(
     const Tensor& target,
     const std::optional<Tensor>& weight,
     int64_t reduction) {
-  auto grad_target = at::logit(self).neg_();
-
-  if (!areAnyTensorSubclassLike({grad})) {
-    grad_target.mul_(grad);
-  } else {
-    grad_target = grad_target * grad;
-  }
-
-  if (isDefined(weight)) {
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    if (!isTensorSubclassLike(weight.value())) {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_target.mul_(weight.value());
-    } else {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_target = grad_target * weight.value();
-    }
-  }
-
-  if (reduction == at::Reduction::Mean) {
-    grad_target.div_(target.sym_numel());
-  }
-
-  return grad_target;
+  TORCH_CHECK(false, "binary_cross_entropy removed in EasyFHE");
 }
 
 Tensor binary_cross_entropy_double_backward_target(
@@ -2108,44 +2085,7 @@ Tensor binary_cross_entropy_with_logits_target_backward(
     const std::optional<Tensor>& weight,
     const std::optional<Tensor>& pos_weight,
     int64_t reduction) {
-  if (grad_output._is_zerotensor()) {
-    return at::_efficientzerotensor(target.sizes(), target.options());
-  }
-
-  Tensor grad_target;
-  if (isDefined(pos_weight)) {
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    if (areAnyTensorSubclassLike({*pos_weight, grad_output})) {
-      grad_target = at::log_sigmoid(-self)
-                        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                        .sub(at::log_sigmoid(self).mul(*pos_weight))
-                        .mul(grad_output);
-    } else {
-      grad_target = at::log_sigmoid(-self)
-                        // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-                        .sub_(at::log_sigmoid(self).mul_(*pos_weight))
-                        .mul_(grad_output);
-    }
-  } else {
-    grad_target = -self * grad_output;
-  }
-
-  if (isDefined(weight)) {
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    if (at::isTensorSubclassLike(*weight)) {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_target = grad_target.mul(*weight);
-    } else {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_target.mul_(*weight);
-    }
-  }
-
-  if (reduction == at::Reduction::Mean) {
-    grad_target.div_(target.sym_numel());
-  }
-
-  return grad_target;
+  TORCH_CHECK(false, "binary_cross_entropy_with_logits removed in EasyFHE");
 }
 
 Tensor log_sigmoid_double_backward(const Tensor& grad, const Tensor& input) {
@@ -3024,7 +2964,7 @@ Tensor log1p_backward(const Tensor& grad, const Tensor& self) {
     // happens memory wise
     TORCH_WARN(
         "log1p_backward: received self with sparse layout, but backward requires materialization of a dense tensor with this shape");
-    self_p1_conj = (self.to_dense() + 1).conj();
+    TORCH_CHECK(false, "sparse to_dense not supported in EasyFHE");
   } else {
     // Although calling self.to_dense() would just return self when it has
     // strided layout, that would breaks functorch tests.

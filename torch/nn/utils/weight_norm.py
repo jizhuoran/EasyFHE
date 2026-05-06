@@ -4,7 +4,13 @@ r"""Weight Normalization from https://arxiv.org/abs/1602.07868."""
 from typing import Any, TypeVar
 from typing_extensions import deprecated
 
-from torch import _weight_norm, norm_except_dim
+try:
+    from torch import _weight_norm, norm_except_dim
+except ImportError:
+    def _weight_norm(*args, **kwargs):
+        raise RuntimeError("_weight_norm is not available in this build")
+    def norm_except_dim(*args, **kwargs):
+        raise RuntimeError("norm_except_dim is not available in this build")
 from torch.nn.modules import Module
 from torch.nn.parameter import Parameter, UninitializedParameter
 

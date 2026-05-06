@@ -1243,6 +1243,7 @@ class TORCH_API Tensor: public TensorBase {
   void record_stream(at::Stream s) const;
   at::Tensor isposinf() const;
   at::Tensor isneginf() const;
+  const at::Tensor & resize_as_sparse_(const at::Tensor & the_template) const;
 
   // Special C++ only overloads for std()-like functions (See gh-40287)
   // These are needed because int -> bool conversion takes precedence over int -> IntArrayRef
@@ -4972,6 +4973,11 @@ inline at::Tensor Tensor::isposinf() const {
 // aten::isneginf(Tensor self) -> Tensor
 inline at::Tensor Tensor::isneginf() const {
     return at::_ops::isneginf::call(const_cast<Tensor&>(*this));
+}
+
+// aten::resize_as_sparse_(Tensor(a!) self, Tensor the_template) -> Tensor(a!)
+inline const at::Tensor & Tensor::resize_as_sparse_(const at::Tensor & the_template) const {
+    return at::_ops::resize_as_sparse_::call(const_cast<Tensor&>(*this), the_template);
 }
 } // namespace at
 

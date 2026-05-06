@@ -14,9 +14,7 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_add_relu_native.h>
 #include <ATen/ops/_efficientzerotensor.h>
-#include <ATen/ops/_test_serialization_subcmul_native.h>
 #include <ATen/ops/_to_copy.h>
 #include <ATen/ops/add.h>
 #include <ATen/ops/add_native.h>
@@ -59,10 +57,6 @@
 #include <ATen/ops/gt_native.h>
 #include <ATen/ops/heaviside_native.h>
 #include <ATen/ops/hypot_native.h>
-#include <ATen/ops/igamma.h>
-#include <ATen/ops/igamma_native.h>
-#include <ATen/ops/igammac.h>
-#include <ATen/ops/igammac_native.h>
 #include <ATen/ops/lcm_native.h>
 #include <ATen/ops/ldexp.h>
 #include <ATen/ops/ldexp_native.h>
@@ -70,8 +64,6 @@
 #include <ATen/ops/le_native.h>
 #include <ATen/ops/less_equal_native.h>
 #include <ATen/ops/less_native.h>
-#include <ATen/ops/linalg_cross_native.h>
-#include <ATen/ops/linalg_cross_ops.h>
 #include <ATen/ops/logaddexp2_native.h>
 #include <ATen/ops/logaddexp_native.h>
 #include <ATen/ops/logical_and.h>
@@ -80,7 +72,6 @@
 #include <ATen/ops/logical_or_native.h>
 #include <ATen/ops/logical_xor.h>
 #include <ATen/ops/logical_xor_native.h>
-#include <ATen/ops/logit_backward_native.h>
 #include <ATen/ops/lshift_native.h>
 #include <ATen/ops/lt.h>
 #include <ATen/ops/lt_native.h>
@@ -105,44 +96,11 @@
 #include <ATen/ops/rshift_native.h>
 #include <ATen/ops/rsub_native.h>
 #include <ATen/ops/sigmoid_backward_native.h>
-#include <ATen/ops/special_chebyshev_polynomial_t.h>
-#include <ATen/ops/special_chebyshev_polynomial_t_native.h>
-#include <ATen/ops/special_chebyshev_polynomial_u.h>
-#include <ATen/ops/special_chebyshev_polynomial_u_native.h>
-#include <ATen/ops/special_chebyshev_polynomial_v.h>
-#include <ATen/ops/special_chebyshev_polynomial_v_native.h>
-#include <ATen/ops/special_chebyshev_polynomial_w.h>
-#include <ATen/ops/special_chebyshev_polynomial_w_native.h>
-#include <ATen/ops/special_gammainc_native.h>
-#include <ATen/ops/special_gammaincc_native.h>
-#include <ATen/ops/special_hermite_polynomial_h.h>
-#include <ATen/ops/special_hermite_polynomial_h_native.h>
-#include <ATen/ops/special_hermite_polynomial_he.h>
-#include <ATen/ops/special_hermite_polynomial_he_native.h>
-#include <ATen/ops/special_laguerre_polynomial_l.h>
-#include <ATen/ops/special_laguerre_polynomial_l_native.h>
-#include <ATen/ops/special_legendre_polynomial_p.h>
-#include <ATen/ops/special_legendre_polynomial_p_native.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_t.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_t_native.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_u.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_u_native.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_v.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_v_native.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_w.h>
-#include <ATen/ops/special_shifted_chebyshev_polynomial_w_native.h>
-#include <ATen/ops/special_xlog1py.h>
-#include <ATen/ops/special_xlog1py_native.h>
-#include <ATen/ops/special_xlogy_native.h>
-#include <ATen/ops/special_zeta.h>
-#include <ATen/ops/special_zeta_native.h>
 #include <ATen/ops/sub.h>
 #include <ATen/ops/sub_native.h>
 #include <ATen/ops/subtract_native.h>
 #include <ATen/ops/tanh_backward_native.h>
 #include <ATen/ops/true_divide_native.h>
-#include <ATen/ops/xlogy.h>
-#include <ATen/ops/xlogy_native.h>
 #include <ATen/ops/xor_native.h>
 #endif
 
@@ -186,62 +144,6 @@ TORCH_META_FUNC2(div, Tensor_mode) (const Tensor& self, const Tensor& other, std
         "div expected rounding_mode to be one of None, 'trunc', or 'floor' "
         "but found '", *rounding_mode, "'");
   }
-}
-
-TORCH_META_FUNC(special_xlog1py) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(special_zeta) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(special_chebyshev_polynomial_t) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_chebyshev_polynomial_u) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_chebyshev_polynomial_v) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_chebyshev_polynomial_w) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_hermite_polynomial_h) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_hermite_polynomial_he) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_laguerre_polynomial_l) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_legendre_polynomial_p) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_shifted_chebyshev_polynomial_t) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_shifted_chebyshev_polynomial_u) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_shifted_chebyshev_polynomial_v) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
-}
-
-TORCH_META_FUNC(special_shifted_chebyshev_polynomial_w) (const Tensor& self, const Tensor& n) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, n);
 }
 
 TORCH_META_FUNC2(copysign, Tensor) (
@@ -299,14 +201,6 @@ TORCH_META_FUNC2(fmod, Tensor) (const Tensor& self, const Tensor& other) {
   build_borrowing_binary_op(maybe_get_output(), self, other);
 }
 
-TORCH_META_FUNC2(xlogy, Tensor) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(logit_backward) (const Tensor& grad_output, const Tensor& input, std::optional<double> eps) {
-  build_borrowing_binary_op(maybe_get_output(), grad_output, input);
-}
-
 TORCH_META_FUNC(sigmoid_backward) (const Tensor& grad_output, const Tensor& output) {
   build_borrowing_binary_op(maybe_get_output(), grad_output, output);
 }
@@ -326,8 +220,6 @@ CREATE_BINARY_META_FUNC(logaddexp2)
 CREATE_BINARY_META_FUNC(gcd)
 CREATE_BINARY_META_FUNC(lcm)
 CREATE_BINARY_META_FUNC(hypot)
-CREATE_BINARY_META_FUNC(igamma)
-CREATE_BINARY_META_FUNC(igammac)
 CREATE_BINARY_META_FUNC(nextafter)
 
 TORCH_META_FUNC(maximum) (const Tensor& self, const Tensor& other) {
@@ -371,7 +263,6 @@ CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(ge)
 
 } // namespace at::meta
 
-
 namespace at::native {
 
 DEFINE_DISPATCH(add_clamp_stub);
@@ -397,7 +288,6 @@ DEFINE_DISPATCH(ge_stub);
 DEFINE_DISPATCH(eq_stub);
 DEFINE_DISPATCH(ne_stub);
 DEFINE_DISPATCH(sigmoid_backward_stub);
-DEFINE_DISPATCH(logit_backward_stub);
 DEFINE_DISPATCH(tanh_backward_stub);
 DEFINE_DISPATCH(maximum_stub);
 DEFINE_DISPATCH(minimum_stub);
@@ -409,13 +299,9 @@ DEFINE_DISPATCH(logaddexp2_stub);
 DEFINE_DISPATCH(gcd_stub);
 DEFINE_DISPATCH(lcm_stub);
 DEFINE_DISPATCH(hypot_stub);
-DEFINE_DISPATCH(igamma_stub);
-DEFINE_DISPATCH(igammac_stub);
 DEFINE_DISPATCH(nextafter_stub);
 DEFINE_DISPATCH(heaviside_stub);
 DEFINE_DISPATCH(copysign_stub);
-DEFINE_DISPATCH(xlogy_stub);
-DEFINE_DISPATCH(xlog1py_stub);
 DEFINE_DISPATCH(zeta_stub);
 DEFINE_DISPATCH(chebyshev_polynomial_t_stub);
 DEFINE_DISPATCH(chebyshev_polynomial_u_stub);
@@ -430,6 +316,16 @@ DEFINE_DISPATCH(shifted_chebyshev_polynomial_u_stub);
 DEFINE_DISPATCH(shifted_chebyshev_polynomial_v_stub);
 DEFINE_DISPATCH(shifted_chebyshev_polynomial_w_stub);
 DEFINE_DISPATCH(ldexp_stub);
+DEFINE_DISPATCH(huber_stub);
+DEFINE_DISPATCH(igamma_stub);
+DEFINE_DISPATCH(igammac_stub);
+DEFINE_DISPATCH(logit_backward_stub);
+DEFINE_DISPATCH(max_elementwise_stub);
+DEFINE_DISPATCH(min_elementwise_stub);
+DEFINE_DISPATCH(mse_stub);
+DEFINE_DISPATCH(smooth_l1_stub);
+DEFINE_DISPATCH(xlog1py_stub);
+DEFINE_DISPATCH(xlogy_stub);
 
 TORCH_IMPL_FUNC(sub_out) (
   const Tensor& self, const Tensor& other, const Scalar& alpha, const Tensor& result
@@ -460,68 +356,8 @@ TORCH_IMPL_FUNC(div_out_mode) (
   }
 }
 
-TORCH_IMPL_FUNC(logit_backward_out) (const Tensor& grad_output, const Tensor& input, std::optional<double> eps, const Tensor& result) {
-  logit_backward_stub(device_type(), *this, Scalar(eps ? eps.value() : -1.0));
-}
-
 TORCH_IMPL_FUNC(sigmoid_backward_out) (const Tensor& grad_output, const Tensor& output, const Tensor& result) {
   sigmoid_backward_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_xlog1py_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
-  xlog1py_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_zeta_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
-  zeta_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_chebyshev_polynomial_t_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  chebyshev_polynomial_t_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_chebyshev_polynomial_u_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  chebyshev_polynomial_u_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_chebyshev_polynomial_v_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  chebyshev_polynomial_v_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_chebyshev_polynomial_w_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  chebyshev_polynomial_w_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_hermite_polynomial_h_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  hermite_polynomial_h_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_hermite_polynomial_he_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  hermite_polynomial_he_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_laguerre_polynomial_l_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  laguerre_polynomial_l_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_legendre_polynomial_p_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  legendre_polynomial_p_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_shifted_chebyshev_polynomial_t_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  shifted_chebyshev_polynomial_t_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_shifted_chebyshev_polynomial_u_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  shifted_chebyshev_polynomial_u_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_shifted_chebyshev_polynomial_v_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  shifted_chebyshev_polynomial_v_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(special_shifted_chebyshev_polynomial_w_out) (const Tensor& self, const Tensor& n, const Tensor& result) {
-  shifted_chebyshev_polynomial_w_stub(device_type(), *this);
 }
 
 TORCH_IMPL_FUNC(tanh_backward_out) (const Tensor& grad_output, const Tensor& output, const Tensor& result) {
@@ -546,251 +382,8 @@ CREATE_BINARY_TORCH_IMPL_FUNC(logaddexp2_out, logaddexp2_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(gcd_out, gcd_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(lcm_out, lcm_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(hypot_out, hypot_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(igamma_out, igamma_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(igammac_out, igammac_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(nextafter_out, nextafter_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(remainder_out, remainder_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(xlogy_out, xlogy_stub)
-
-Tensor special_xlog1py(const Scalar& x, const Tensor& y) {
-  return at::special_xlog1py(wrapped_scalar_tensor(x), y);
-}
-
-Tensor special_xlog1py(const Tensor& x, const Scalar& y) {
-  return at::special_xlog1py(x, wrapped_scalar_tensor(y));
-}
-
-Tensor& special_xlog1py_out(const Scalar& self, const Tensor& other, Tensor& result) {
-  return at::special_xlog1py_out(result, wrapped_scalar_tensor(self), other);
-}
-
-Tensor& special_xlog1py_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::special_xlog1py_out(result, self, wrapped_scalar_tensor(other));
-}
-
-Tensor special_zeta(const Scalar& x, const Tensor& y) {
-  return at::special_zeta(wrapped_scalar_tensor(x), y);
-}
-
-Tensor special_zeta(const Tensor& x, const Scalar& y) {
-  return at::special_zeta(x, wrapped_scalar_tensor(y));
-}
-
-Tensor& special_zeta_out(const Scalar& self, const Tensor& other, Tensor& result) {
-  return at::special_zeta_out(result, wrapped_scalar_tensor(self), other);
-}
-
-Tensor& special_zeta_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::special_zeta_out(result, self, wrapped_scalar_tensor(other));
-}
-
-Tensor special_chebyshev_polynomial_t(const Scalar& x, const Tensor& n) {
-  return at::special_chebyshev_polynomial_t(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_chebyshev_polynomial_t(const Tensor& x, const Scalar& n) {
-  return at::special_chebyshev_polynomial_t(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_chebyshev_polynomial_t_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_t_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_chebyshev_polynomial_t_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_t_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_chebyshev_polynomial_u(const Scalar& x, const Tensor& n) {
-  return at::special_chebyshev_polynomial_u(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_chebyshev_polynomial_u(const Tensor& x, const Scalar& n) {
-  return at::special_chebyshev_polynomial_u(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_chebyshev_polynomial_u_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_u_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_chebyshev_polynomial_u_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_u_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_chebyshev_polynomial_v(const Scalar& x, const Tensor& n) {
-  return at::special_chebyshev_polynomial_v(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_chebyshev_polynomial_v(const Tensor& x, const Scalar& n) {
-  return at::special_chebyshev_polynomial_v(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_chebyshev_polynomial_v_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_v_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_chebyshev_polynomial_v_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_v_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_chebyshev_polynomial_w(const Scalar& x, const Tensor& n) {
-  return at::special_chebyshev_polynomial_w(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_chebyshev_polynomial_w(const Tensor& x, const Scalar& n) {
-  return at::special_chebyshev_polynomial_w(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_chebyshev_polynomial_w_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_w_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_chebyshev_polynomial_w_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_chebyshev_polynomial_w_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_hermite_polynomial_h(const Scalar& x, const Tensor& n) {
-  return at::special_hermite_polynomial_h(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_hermite_polynomial_h(const Tensor& x, const Scalar& n) {
-  return at::special_hermite_polynomial_h(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_hermite_polynomial_h_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_hermite_polynomial_h_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_hermite_polynomial_h_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_hermite_polynomial_h_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_hermite_polynomial_he(const Scalar& x, const Tensor& n) {
-  return at::special_hermite_polynomial_he(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_hermite_polynomial_he(const Tensor& x, const Scalar& n) {
-  return at::special_hermite_polynomial_he(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_hermite_polynomial_he_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_hermite_polynomial_he_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_hermite_polynomial_he_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_hermite_polynomial_he_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_laguerre_polynomial_l(const Scalar& x, const Tensor& n) {
-  return at::special_laguerre_polynomial_l(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_laguerre_polynomial_l(const Tensor& x, const Scalar& n) {
-  return at::special_laguerre_polynomial_l(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_laguerre_polynomial_l_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_laguerre_polynomial_l_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_laguerre_polynomial_l_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_laguerre_polynomial_l_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_legendre_polynomial_p(const Scalar& x, const Tensor& n) {
-  return at::special_legendre_polynomial_p(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_legendre_polynomial_p(const Tensor& x, const Scalar& n) {
-  return at::special_legendre_polynomial_p(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_legendre_polynomial_p_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_legendre_polynomial_p_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_legendre_polynomial_p_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_legendre_polynomial_p_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_shifted_chebyshev_polynomial_t(const Scalar& x, const Tensor& n) {
-  return at::special_shifted_chebyshev_polynomial_t(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_shifted_chebyshev_polynomial_t(const Tensor& x, const Scalar& n) {
-  return at::special_shifted_chebyshev_polynomial_t(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_shifted_chebyshev_polynomial_t_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_t_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_shifted_chebyshev_polynomial_t_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_t_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_shifted_chebyshev_polynomial_u(const Scalar& x, const Tensor& n) {
-  return at::special_shifted_chebyshev_polynomial_u(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_shifted_chebyshev_polynomial_u(const Tensor& x, const Scalar& n) {
-  return at::special_shifted_chebyshev_polynomial_u(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_shifted_chebyshev_polynomial_u_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_u_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_shifted_chebyshev_polynomial_u_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_u_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_shifted_chebyshev_polynomial_v(const Scalar& x, const Tensor& n) {
-  return at::special_shifted_chebyshev_polynomial_v(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_shifted_chebyshev_polynomial_v(const Tensor& x, const Scalar& n) {
-  return at::special_shifted_chebyshev_polynomial_v(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_shifted_chebyshev_polynomial_v_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_v_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_shifted_chebyshev_polynomial_v_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_v_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor special_shifted_chebyshev_polynomial_w(const Scalar& x, const Tensor& n) {
-  return at::special_shifted_chebyshev_polynomial_w(wrapped_scalar_tensor(x), n);
-}
-
-Tensor special_shifted_chebyshev_polynomial_w(const Tensor& x, const Scalar& n) {
-  return at::special_shifted_chebyshev_polynomial_w(x, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_shifted_chebyshev_polynomial_w_out(const Scalar& self, const Tensor& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_w_out(result, wrapped_scalar_tensor(self), n);
-}
-
-Tensor& special_shifted_chebyshev_polynomial_w_out(const Tensor& self, const Scalar& n, Tensor& result) {
-  return at::special_shifted_chebyshev_polynomial_w_out(result, self, wrapped_scalar_tensor(n));
-}
-
-Tensor& special_gammainc_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::igamma_out(result, self, other);
-}
-
-Tensor special_gammainc(const Tensor& self, const Tensor& other) {
-  return at::igamma(self, other);
-}
-
-Tensor& special_gammaincc_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::igammac_out(result, self, other);
-}
-
-Tensor special_gammaincc(const Tensor& self, const Tensor& other) {
-  return at::igammac(self, other);
-}
 
 TORCH_IMPL_FUNC(atan2_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
   atan2_stub(device_type(), *this);
@@ -806,60 +399,6 @@ Tensor& arctan2_(Tensor& self, const Tensor& other) {
 
 Tensor& arctan2_out(const Tensor& self, const Tensor& other, Tensor& result) {
   return at::atan2_out(result, self, other);
-}
-
-static Tensor& add_relu_impl(
-    Tensor& result, const Tensor& self, const Tensor& other, const Scalar& alpha) {
-  auto iter = TensorIterator::binary_op(result, self, other);
-  Scalar min_val;
-  Scalar max_val;
-  if (self.dtype() == at::kInt) {
-    min_val = 0;
-    max_val = std::numeric_limits<int32_t>::max();
-  } else if (self.dtype() == at::kLong) {
-    min_val = 0;
-    max_val = std::numeric_limits<int64_t>::max();
-  } else if (self.dtype() == at::kShort) {
-    min_val = 0;
-    max_val = std::numeric_limits<int16_t>::max();
-  } else if (self.dtype() == at::kChar) {
-    min_val = 0;
-    max_val = std::numeric_limits<int8_t>::max();
-  } else if (self.dtype() == at::kFloat) {
-    min_val = 0.0;
-    max_val = std::numeric_limits<float>::max();
-  } else if (self.dtype() == at::kDouble) {
-    min_val = 0.0;
-    max_val = std::numeric_limits<double>::max();
-  } else {
-    TORCH_INTERNAL_ASSERT(
-        false, "Unsupported datatype for add_relu:", self.dtype().name());
-  }
-
-  result = iter.output();
-  add_clamp_stub(iter.device_type(), iter, alpha, min_val, max_val);
-  return result;
-}
-
-Tensor& add_relu_out(const Tensor& self, const Tensor& other, const Scalar& alpha, Tensor& result) {
-  return add_relu_impl(result, self, other, alpha);
-}
-
-Tensor add_relu(const Tensor& self, const Tensor& other, const Scalar& alpha) {
-  Tensor result;
-  return add_relu_impl(result, self, other, alpha);
-}
-
-Tensor add_relu(const Tensor& self, const Scalar& other, const Scalar& alpha) {
-  return add_relu(self, wrapped_scalar_tensor(other), alpha);
-}
-
-Tensor& add_relu_(Tensor& self, const Tensor& other, const Scalar& alpha) {
-  return add_relu_impl(self, self, other, alpha);
-}
-
-Tensor& add_relu_(Tensor& self, const Scalar& other, const Scalar& alpha) {
-  return add_relu_(self, wrapped_scalar_tensor(other), alpha);
 }
 
 TORCH_IMPL_FUNC(copysign_out) (
@@ -1094,26 +633,6 @@ Tensor add_zerotensor(const Tensor& self, const Tensor& other, const Scalar& alp
 
 Tensor sub_zerotensor(const Tensor& self, const Tensor& other, const Scalar& alpha) {
   return maybe_add_maybe_sub(self, other, -alpha);
-}
-
-Tensor linalg_cross_zerotensor(
-  const Tensor& input,
-  const Tensor& other,
-  const int64_t dim)
-{
-  auto out_device = correct_out_device(input, other);
-  // hack to use the TensorIterator to get the correct broadcasting and type
-  // promotion logic (see add_zerotensor)
-  auto device = Device(DeviceType::Meta);
-  auto meta_out = at::_ops::linalg_cross::redispatch(
-    c10::DispatchKeySet(at::DispatchKey::Meta),
-    input.to(device),
-    other.to(device),
-    dim);
-
-  return at::_efficientzerotensor(
-    meta_out.sizes(),
-    meta_out.options().device(out_device));
 }
 
 // multiply, alias for mul
@@ -1549,9 +1068,6 @@ Tensor& fmod_(Tensor& self, const Scalar& other) {
 
 // Note: this function is only for testing.
 // It is undocumented and should not be used outside of tests.
-Tensor _test_serialization_subcmul(const Tensor& self, const Tensor& other, const Scalar& alpha) {
-  return self - (other * alpha);
-}
 
 TORCH_IMPL_FUNC(heaviside_out) (
   const Tensor& self, const Tensor& other, const Tensor& result
@@ -1607,50 +1123,6 @@ Tensor ldexp(const Tensor& self, const Tensor& other) {
 
 Tensor& ldexp_(Tensor& self, const Tensor& other) {
   return at::ldexp_out(self, self, other);
-}
-
-Tensor& xlogy_out(const Scalar& self, const Tensor& other, Tensor& result) {
-  return at::xlogy_out(result, wrapped_scalar_tensor(self), other);
-}
-
-Tensor& xlogy_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::xlogy_out(result, self, wrapped_scalar_tensor(other));
-}
-
-Tensor xlogy(const Scalar& x, const Tensor& y) {
-  return at::xlogy(wrapped_scalar_tensor(x), y);
-}
-
-Tensor xlogy(const Tensor& x, const Scalar& y) {
-  return at::xlogy(x, wrapped_scalar_tensor(y));
-}
-
-Tensor& xlogy_(Tensor& x, const Scalar& y) {
-  return at::xlogy_(x, wrapped_scalar_tensor(y));
-}
-
-Tensor& special_xlogy_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::xlogy_out(result, self, other);
-}
-
-Tensor& special_xlogy_out(const Scalar& self, const Tensor& other, Tensor& result) {
-  return at::xlogy_out(result, self, other);
-}
-
-Tensor& special_xlogy_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::xlogy_out(result, self, other);
-}
-
-Tensor special_xlogy(const Tensor& x, const Tensor& y) {
-  return at::xlogy(x, y);
-}
-
-Tensor special_xlogy(const Scalar& x, const Tensor& y) {
-  return at::xlogy(x, y);
-}
-
-Tensor special_xlogy(const Tensor& x, const Scalar& y) {
-  return at::xlogy(x, y);
 }
 
 } // namespace at::native

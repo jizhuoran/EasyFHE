@@ -20,10 +20,10 @@
 #include <ATen/ops/ones_native.h>
 #include <ATen/ops/prod.h>
 #include <ATen/ops/stack_native.h>
-#include <ATen/ops/tensor.h>
 #endif
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <tuple>
 #include <utility>
@@ -433,8 +433,10 @@ inline Tensor wrap_tensor_node(
     sizes.reserve(tensor_node.degree());
     for (const auto i : c10::irange(tensor_node.degree())) {
       flat_tensors.push_back(tensor_node.children(i).reshape(-1).contiguous());
-      sizes.push_back(
-          tensor(c10::IntArrayRef(tensor_node.children(i).sizes())));
+      auto child_sizes = tensor_node.children(i).sizes();
+      auto sizes_tensor = at::empty({static_cast<int64_t>(child_sizes.size())}, at::kLong);
+      std::memcpy(sizes_tensor.data_ptr<int64_t>(), child_sizes.data(), child_sizes.size() * sizeof(int64_t));
+      sizes.push_back(sizes_tensor);
     }
     options = flat_tensors[0].options().merge_in(options_);
     nt_buffer = at::cat(flat_tensors);

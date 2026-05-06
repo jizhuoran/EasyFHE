@@ -12,7 +12,6 @@
 #include <ATen/NativeFunctions.h>
 #else
 #include <ATen/ops/arange.h>
-#include <ATen/ops/tensor.h>
 #endif
 
 #ifdef GPUCC

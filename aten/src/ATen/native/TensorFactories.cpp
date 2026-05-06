@@ -34,13 +34,8 @@
 #include <ATen/ops/_cast_Short_native.h>
 #include <ATen/ops/_dim_arange_native.h>
 #include <ATen/ops/_efficientzerotensor_native.h>
-#include <ATen/ops/_empty_affine_quantized.h>
-#include <ATen/ops/_empty_per_channel_affine_quantized.h>
-#include <ATen/ops/_sparse_compressed_tensor_with_dims_native.h>
 #include <ATen/ops/arange.h>
 #include <ATen/ops/arange_native.h>
-#include <ATen/ops/bartlett_window_native.h>
-#include <ATen/ops/blackman_window_native.h>
 #include <ATen/ops/clone_native.h>
 #include <ATen/ops/complex.h>
 #include <ATen/ops/complex_native.h>
@@ -59,9 +54,6 @@
 #include <ATen/ops/from_file_native.h>
 #include <ATen/ops/full_like_native.h>
 #include <ATen/ops/full_native.h>
-#include <ATen/ops/hamming_window_native.h>
-#include <ATen/ops/hann_window_native.h>
-#include <ATen/ops/kaiser_window_native.h>
 #include <ATen/ops/linspace.h>
 #include <ATen/ops/linspace_native.h>
 #include <ATen/ops/logspace.h>
@@ -91,7 +83,6 @@
 #include <ATen/ops/scalar_tensor_native.h>
 #include <ATen/ops/tril_indices_native.h>
 #include <ATen/ops/triu_indices_native.h>
-#include <ATen/ops/vander_native.h>
 #include <ATen/ops/zeros_like_native.h>
 #include <ATen/ops/zeros_like_ops.h>
 #include <ATen/ops/zeros_native.h>
@@ -1683,44 +1674,7 @@ static Tensor zeros_sparse_compressed_symint(
     Layout layout,
     std::optional<Device> device,
     std::optional<bool> pin_memory) {
-  check_size_nonnegative(size);
-  TORCH_CHECK(
-      size.size() >= 2,
-      "torch.zeros: Only batched sparse compressed (non-block) tensors are supported, but got size ",
-      size);
-  auto size_ = C10_AS_INTARRAYREF_SLOW(size);
-  // torch.zeros cannot be used to create blocked tensors because its
-  // API lacks a method to specify the block size.
-  AT_DISPATCH_SPARSE_COMPRESSED_NONBLOCK_LAYOUTS(
-      layout, "zeros_sparse_compressed", [&] {});
-
-  int64_t nnz = 0;
-  auto compressed_indices_size = DimVector(size_.slice(0, size.size() - 2));
-  auto plain_indices_and_values_size =
-      DimVector(size_.slice(0, size.size() - 2));
-  compressed_indices_size.push_back(
-      size_[at::sparse_csr::compressedDimension(layout, size_)] + 1);
-  plain_indices_and_values_size.push_back(nnz);
-
-  TensorOptions options = TensorOptions()
-                              .dtype(ScalarType::Long)
-                              .layout(Layout::Strided)
-                              .device(device)
-                              .pinned_memory(pin_memory);
-  auto compressed_indices = at::empty(compressed_indices_size, options);
-  compressed_indices.zero_();
-  auto plain_indices = at::empty(plain_indices_and_values_size, options);
-  auto values = at::empty(plain_indices_and_values_size, options.dtype(dtype));
-
-  return at::_sparse_compressed_tensor_unsafe(
-      compressed_indices,
-      plain_indices,
-      values,
-      size_,
-      dtype,
-      layout,
-      device,
-      pin_memory);
+  TORCH_CHECK(false, "_sparse_compressed_tensor_unsafe removed in EasyFHE");
 }
 
 Tensor zeros_symint(
@@ -1826,282 +1780,7 @@ Tensor new_zeros(
   return r;
 }
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~ bartlett_window ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor bartlett_window(
-    int64_t window_length,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::bartlett_window(
-      window_length, /*periodic=*/true, dtype, layout, device, pin_memory);
-}
-
-Tensor bartlett_window(
-    int64_t window_length,
-    bool periodic,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  // See [Note: hacky wrapper removal for TensorOptions]
-  ScalarType dtype = c10::dtype_or_default(dtype_opt);
-  TensorOptions options =
-      TensorOptions().dtype(dtype).layout(layout).device(device).pinned_memory(
-          pin_memory);
-
-  window_function_checks("bartlett_window", options, window_length);
-  if (window_length == 0) {
-    return at::empty({0}, options);
-  }
-  if (window_length == 1) {
-    return native::ones({1}, dtype, layout, device, pin_memory);
-  }
-  if (periodic) {
-    window_length += 1;
-  }
-  auto window = native::arange(window_length, dtype, layout, device, pin_memory)
-                    .mul_(2. / static_cast<double>(window_length - 1));
-  const int64_t first_half_size = ((window_length - 1) >> 1) + 1;
-  window.narrow(0, first_half_size, window_length - first_half_size)
-      .mul_(-1)
-      .add_(2);
-  return periodic ? window.narrow(0, 0, window_length - 1) : std::move(window);
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~ blackman_window ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor blackman_window(
-    int64_t window_length,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::blackman_window(
-      window_length, /*periodic=*/true, dtype, layout, device, pin_memory);
-}
-
-Tensor blackman_window(
-    int64_t window_length,
-    bool periodic,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  // See [Note: hacky wrapper removal for TensorOptions]
-  ScalarType dtype = c10::dtype_or_default(dtype_opt);
-  TensorOptions options =
-      TensorOptions().dtype(dtype).layout(layout).device(device).pinned_memory(
-          pin_memory);
-
-  window_function_checks("blackman_window", options, window_length);
-  if (window_length == 0) {
-    return at::empty({0}, options);
-  }
-  if (window_length == 1) {
-    return native::ones({1}, dtype, layout, device, pin_memory);
-  }
-  if (periodic) {
-    window_length += 1;
-  }
-  // from https://en.wikipedia.org/wiki/Window_function#Blackman_window
-  auto window =
-      native::arange(window_length, dtype, layout, device, pin_memory)
-          .mul_(c10::pi<double> / static_cast<double>(window_length - 1));
-  window =
-      window.mul(4).cos_().mul_(0.08) - window.mul(2).cos_().mul_(0.5) + 0.42;
-  return periodic ? window.narrow(0, 0, window_length - 1) : std::move(window);
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ hamming_window ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor hamming_window(
-    int64_t window_length,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::hamming_window(
-      window_length, /*periodic=*/true, dtype, layout, device, pin_memory);
-}
-
-Tensor hamming_window(
-    int64_t window_length,
-    bool periodic,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::hamming_window(
-      window_length,
-      periodic,
-      /*alpha=*/0.54,
-      dtype,
-      layout,
-      device,
-      pin_memory);
-}
-
-Tensor hamming_window(
-    int64_t window_length,
-    bool periodic,
-    double alpha,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::hamming_window(
-      window_length,
-      periodic,
-      alpha,
-      /*beta=*/0.46,
-      dtype,
-      layout,
-      device,
-      pin_memory);
-}
-
-Tensor hamming_window(
-    int64_t window_length,
-    bool periodic,
-    double alpha,
-    double beta,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  // See [Note: hacky wrapper removal for TensorOptions]
-  ScalarType dtype = c10::dtype_or_default(dtype_opt);
-  TensorOptions options =
-      TensorOptions().dtype(dtype).layout(layout).device(device).pinned_memory(
-          pin_memory);
-
-  window_function_checks("hamming_window", options, window_length);
-  if (window_length == 0) {
-    return at::empty({0}, options);
-  }
-  if (window_length == 1) {
-    return native::ones({1}, dtype, layout, device, pin_memory);
-  }
-  if (periodic) {
-    window_length += 1;
-  }
-  auto window =
-      native::arange(window_length, dtype, layout, device, pin_memory);
-  window.mul_(c10::pi<double> * 2. / static_cast<double>(window_length - 1))
-      .cos_()
-      .mul_(-beta)
-      .add_(alpha);
-  return periodic ? window.narrow(0, 0, window_length - 1) : std::move(window);
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ hann_window ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor hann_window(
-    int64_t window_length,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::hann_window(
-      window_length, /*periodic=*/true, dtype, layout, device, pin_memory);
-}
-
-Tensor hann_window(
-    int64_t window_length,
-    bool periodic,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  // See [Note: hacky wrapper removal for TensorOptions]
-  TensorOptions options =
-      TensorOptions().dtype(dtype).layout(layout).device(device).pinned_memory(
-          pin_memory);
-
-  window_function_checks("hann_window", options, window_length);
-  return native::hamming_window(
-      window_length,
-      periodic,
-      /*alpha=*/0.5,
-      /*beta=*/0.5,
-      dtype,
-      layout,
-      device,
-      pin_memory);
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ kaiser_window ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor kaiser_window(
-    int64_t window_length,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::kaiser_window(
-      window_length,
-      /*periodic=*/true,
-      /*beta=*/12.0,
-      dtype,
-      layout,
-      device,
-      pin_memory);
-}
-
-Tensor kaiser_window(
-    int64_t window_length,
-    bool periodic,
-    std::optional<ScalarType> dtype,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  return native::kaiser_window(
-      window_length,
-      periodic,
-      /*beta=*/12.0,
-      dtype,
-      layout,
-      device,
-      pin_memory);
-}
-
-Tensor kaiser_window(
-    int64_t window_length,
-    bool periodic,
-    double beta,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout,
-    std::optional<Device> device,
-    std::optional<bool> pin_memory) {
-  // See [Note: hacky wrapper removal for TensorOptions]
-  ScalarType dtype = c10::dtype_or_default(dtype_opt);
-  TensorOptions options =
-      TensorOptions().dtype(dtype).layout(layout).device(device).pinned_memory(
-          pin_memory);
-
-  window_function_checks("kaiser_window", options, window_length);
-  // short-circuit for `meta`.
-  if (device == kMeta) {
-    return at::empty({window_length}, options);
-  }
-
-  if (window_length == 0) {
-    return at::empty({0}, options);
-  }
-  if (window_length == 1) {
-    return at::ones({1}, options);
-  }
-  if (periodic) {
-    window_length += 1;
-  }
-  auto initial = at::arange(window_length, options);
-  auto window = at::empty(window_length, options);
-  auto iter = TensorIterator::unary_op(window, initial);
-  kaiser_window_stub(iter.device_type(), iter, window_length, beta);
-  return periodic ? window.narrow(0, 0, window_length - 1) : std::move(window);
-}
+// Window functions (bartlett, blackman, hamming, hann, kaiser) removed in EasyFHE
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~ vandermonde_matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

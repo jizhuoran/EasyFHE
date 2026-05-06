@@ -27,8 +27,6 @@
 #include <ATen/ops/_propagate_xla_data_native.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/copy_native.h>
-#include <ATen/ops/_foreach_copy.h>
-#include <ATen/ops/_foreach_copy_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_strided.h>
 #include <ATen/ops/expand_copy.h>
@@ -319,20 +317,6 @@ Tensor copy(const Tensor& self, const Tensor& src, bool non_blocking) {
   }
   r.copy_(src, non_blocking);
   return r;
-}
-
-::std::vector<at::Tensor> _foreach_copy(at::TensorList self, at::TensorList src, bool non_blocking) {
-  std::vector<at::Tensor> outs;
-  outs.reserve(self.size());
-  // This is a very slow implementation, but needs to directly call the copy() kernel above to handle
-  // when self has zero storage.
-  // This kernel should never really be run, except with debugging using compile(backend="aot_eager")
-  for (const auto i : c10::irange(src.size())) {
-    const auto& curr_src = src[i];
-    const auto& curr_self = self[i];
-    outs.push_back(at::copy(curr_self, curr_src, non_blocking));
-  }
-  return outs;
 }
 
 Tensor& copy_(Tensor& self, const Tensor& src, bool non_blocking) {

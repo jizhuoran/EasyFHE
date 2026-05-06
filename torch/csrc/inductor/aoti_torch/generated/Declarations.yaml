@@ -72570,6 +72570,2040 @@
   with_gil: false
   deprecated: false
   has_math_kernel: false
+- name: hardtanh
+  operator_name: hardtanh
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::hardtanh(Tensor self, Scalar min_val=-1, Scalar max_val=1) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: hardtanh_
+  operator_name: hardtanh_
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::hardtanh_(Tensor(a!) self, Scalar min_val=-1, Scalar max_val=1) -> Tensor(a!)
+  arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (at::Tensor &, const at::Scalar &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: self
+    type: at::Tensor &
+  inplace: true
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: hardtanh_out
+  operator_name: hardtanh
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::hardtanh.out(Tensor self, Scalar min_val=-1, Scalar max_val=1, *, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, const at::Scalar &, const at::Scalar &, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: -1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: min_val
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: max_val
+    type: const at::Scalar &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: leaky_relu
+  operator_name: leaky_relu
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::leaky_relu(Tensor self, Scalar negative_slope=0.01) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: leaky_relu_
+  operator_name: leaky_relu_
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::leaky_relu_(Tensor(a!) self, Scalar negative_slope=0.01) -> Tensor(a!)
+  arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (at::Tensor &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: self
+    type: at::Tensor &
+  inplace: true
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: leaky_relu_out
+  operator_name: leaky_relu
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::leaky_relu.out(Tensor self, Scalar negative_slope=0.01, *, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, const at::Scalar &, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 0.01
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: leaky_relu_backward
+  operator_name: leaky_relu_backward
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::leaky_relu_backward(Tensor grad_output, Tensor self, Scalar negative_slope, bool self_is_result) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: self_is_result
+    type: bool
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &, const at::Scalar &, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: negative_slope
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: self_is_result
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: elu
+  operator_name: elu
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::elu(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: elu_
+  operator_name: elu_
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::elu_(Tensor(a!) self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor(a!)
+  arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &)
+  schema_order_arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: self
+    type: at::Tensor &
+  inplace: true
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: elu_out
+  operator_name: elu
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::elu.out(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1, *, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    default: 1
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: elu_backward
+  operator_name: elu_backward
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::elu_backward(Tensor grad_output, Scalar alpha, Scalar scale, Scalar input_scale, bool is_result, Tensor self_or_result) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: is_result
+    type: bool
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self_or_result
+    type: const at::Tensor &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &, bool, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: alpha
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: scale
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: input_scale
+    type: const at::Scalar &
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: is_result
+    type: bool
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self_or_result
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: _prelu_kernel
+  operator_name: _prelu_kernel
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_prelu_kernel(Tensor self, Tensor weight) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _prelu_kernel_backward
+  operator_name: _prelu_kernel_backward
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_prelu_kernel_backward(Tensor grad_output, Tensor self, Tensor weight) -> (Tensor, Tensor)
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  schema_order_cpp_signature: ::std::tuple<at::Tensor,at::Tensor> (const at::Tensor &, const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: grad_output
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result0
+    type: at::Tensor
+  - dynamic_type: at::Tensor
+    name: result1
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: log_sigmoid_forward
+  operator_name: log_sigmoid_forward
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::log_sigmoid_forward(Tensor self) -> (Tensor output, Tensor buffer)
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  schema_order_cpp_signature: ::std::tuple<at::Tensor,at::Tensor> (const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    field_name: output
+    name: output
+    type: at::Tensor
+  - dynamic_type: at::Tensor
+    field_name: buffer
+    name: buffer
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: log_sigmoid_forward_out
+  operator_name: log_sigmoid_forward
+  overload_name: output
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::log_sigmoid_forward.output(Tensor self, *, Tensor(a!) output, Tensor(b!) buffer) -> (Tensor(a!), Tensor(b!))
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: output
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: b!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: buffer
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  schema_order_cpp_signature: ::std::tuple<at::Tensor &,at::Tensor &> (const at::Tensor &, at::Tensor &, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: output
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: b!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: buffer
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: nn
+  returns:
+  - dynamic_type: at::Tensor
+    name: output
+    type: at::Tensor &
+  - dynamic_type: at::Tensor
+    name: buffer
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _sparse_compressed_tensor_unsafe
+  operator_name: _sparse_compressed_tensor_unsafe
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: compressed_indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: plain_indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: values
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: size
+    type: at::IntArrayRef
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::TensorOptions
+    is_nullable: false
+    kwarg_only: true
+    name: options
+    type: at::TensorOptions
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &, const at::Tensor &, at::IntArrayRef, ::std::optional<at::ScalarType>, ::std::optional<at::Layout>, ::std::optional<at::Device>, ::std::optional<bool>)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: compressed_indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: plain_indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: values
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: size
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ScalarType
+    is_nullable: true
+    kwarg_only: true
+    name: dtype
+    type: ::std::optional<at::ScalarType>
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::Layout
+    is_nullable: true
+    kwarg_only: true
+    name: layout
+    type: ::std::optional<at::Layout>
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::Device
+    is_nullable: true
+    kwarg_only: true
+    name: device
+    type: ::std::optional<at::Device>
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: bool
+    is_nullable: true
+    kwarg_only: true
+    name: pin_memory
+    type: ::std::optional<bool>
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: true
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: resize_as_sparse_
+  operator_name: resize_as_sparse_
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::resize_as_sparse_(Tensor(a!) self, Tensor the_template) -> Tensor(a!)
+  arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  schema_order_cpp_signature: const at::Tensor & (const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - Tensor
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: self
+    type: const at::Tensor &
+  inplace: true
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _fft_c2c
+  operator_name: _fft_c2c
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_fft_c2c(Tensor self, SymInt[] dim, int normalization, bool forward) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: dim
+    type: at::IntArrayRef
+  - annotation: null
+    dynamic_type: int64_t
+    is_nullable: false
+    name: normalization
+    type: int64_t
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: forward
+    type: bool
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, at::IntArrayRef, int64_t, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: dim
+    type: at::IntArrayRef
+  - annotation: null
+    dynamic_type: int64_t
+    is_nullable: false
+    name: normalization
+    type: int64_t
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: forward
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _fft_c2c_out
+  operator_name: _fft_c2c
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: dim
+    type: at::IntArrayRef
+  - annotation: null
+    dynamic_type: int64_t
+    is_nullable: false
+    name: normalization
+    type: int64_t
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: forward
+    type: bool
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, at::IntArrayRef, int64_t, bool, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: dim
+    type: at::IntArrayRef
+  - annotation: null
+    dynamic_type: int64_t
+    is_nullable: false
+    name: normalization
+    type: int64_t
+  - annotation: null
+    dynamic_type: bool
+    is_nullable: false
+    name: forward
+    type: bool
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: linalg_vector_norm
+  operator_name: linalg_vector_norm
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::linalg_vector_norm(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 2
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: ord
+    type: const at::Scalar &
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::IntArrayRef
+    is_nullable: true
+    name: dim
+    size: 1
+    type: at::OptionalIntArrayRef
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: keepdim
+    type: bool
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ScalarType
+    is_nullable: true
+    kwarg_only: true
+    name: dtype
+    type: ::std::optional<at::ScalarType>
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Scalar &, at::OptionalIntArrayRef, bool, ::std::optional<at::ScalarType>)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 2
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: ord
+    type: const at::Scalar &
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::IntArrayRef
+    is_nullable: true
+    name: dim
+    size: 1
+    type: at::OptionalIntArrayRef
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: keepdim
+    type: bool
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ScalarType
+    is_nullable: true
+    kwarg_only: true
+    name: dtype
+    type: ::std::optional<at::ScalarType>
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: linalg
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: linalg_vector_norm_out
+  operator_name: linalg_vector_norm
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::linalg_vector_norm.out(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 2
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: ord
+    type: const at::Scalar &
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::IntArrayRef
+    is_nullable: true
+    name: dim
+    size: 1
+    type: at::OptionalIntArrayRef
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: keepdim
+    type: bool
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ScalarType
+    is_nullable: true
+    kwarg_only: true
+    name: dtype
+    type: ::std::optional<at::ScalarType>
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, const at::Scalar &, at::OptionalIntArrayRef, bool, ::std::optional<at::ScalarType>, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    default: 2
+    dynamic_type: const at::Scalar &
+    is_nullable: false
+    name: ord
+    type: const at::Scalar &
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::IntArrayRef
+    is_nullable: true
+    name: dim
+    size: 1
+    type: at::OptionalIntArrayRef
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: keepdim
+    type: bool
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ScalarType
+    is_nullable: true
+    kwarg_only: true
+    name: dtype
+    type: ::std::optional<at::ScalarType>
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: linalg
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _embedding_bag
+  operator_name: _embedding_bag
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_embedding_bag(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1) -> (Tensor, Tensor, Tensor, Tensor)
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: offsets
+    type: const at::Tensor &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: scale_grad_by_freq
+    type: bool
+  - annotation: null
+    default: 0
+    dynamic_type: int64_t
+    is_nullable: false
+    name: mode
+    type: int64_t
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: sparse
+    type: bool
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: per_sample_weights
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: include_last_offset
+    type: bool
+  - annotation: null
+    default: -1
+    dynamic_type: int64_t
+    is_nullable: false
+    name: padding_idx
+    type: int64_t
+  schema_order_cpp_signature: ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> (const at::Tensor &, const at::Tensor &, const at::Tensor &, bool, int64_t, bool, const ::std::optional<at::Tensor> &, bool, int64_t)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: offsets
+    type: const at::Tensor &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: scale_grad_by_freq
+    type: bool
+  - annotation: null
+    default: 0
+    dynamic_type: int64_t
+    is_nullable: false
+    name: mode
+    type: int64_t
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: sparse
+    type: bool
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: per_sample_weights
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: include_last_offset
+    type: bool
+  - annotation: null
+    default: -1
+    dynamic_type: int64_t
+    is_nullable: false
+    name: padding_idx
+    type: int64_t
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result0
+    type: at::Tensor
+  - dynamic_type: at::Tensor
+    name: result1
+    type: at::Tensor
+  - dynamic_type: at::Tensor
+    name: result2
+    type: at::Tensor
+  - dynamic_type: at::Tensor
+    name: result3
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: fbgemm_linear_fp16_weight_fp32_activation
+  operator_name: fbgemm_linear_fp16_weight_fp32_activation
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::fbgemm_linear_fp16_weight_fp32_activation(Tensor input, Tensor packed_weight, Tensor? bias) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: input
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: packed_weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: bias
+    type: const ::std::optional<at::Tensor> &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &, const ::std::optional<at::Tensor> &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: input
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: packed_weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: bias
+    type: const ::std::optional<at::Tensor> &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: fbgemm_pack_gemm_matrix_fp16
+  operator_name: fbgemm_pack_gemm_matrix_fp16
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::fbgemm_pack_gemm_matrix_fp16(Tensor input) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: input
+    type: const at::Tensor &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: input
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: _wrapped_linear_prepack
+  operator_name: _wrapped_linear_prepack
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_wrapped_linear_prepack(Tensor weight, Tensor weight_scale, Tensor weight_zero_point, Tensor bias) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight_scale
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight_zero_point
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: bias
+    type: const at::Tensor &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &, const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight_scale
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight_zero_point
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: bias
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
+- name: _histogramdd_bin_edges
+  operator_name: _histogramdd_bin_edges
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_bin_edges(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor[]
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: ::std::vector<at::Tensor> (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::TensorList
+    name: result
+    type: ::std::vector<at::Tensor>
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _histogramdd_from_bin_cts
+  operator_name: _histogramdd_from_bin_cts
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_from_bin_cts(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _histogramdd_from_bin_tensors
+  operator_name: _histogramdd_from_bin_tensors
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_from_bin_tensors(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: bins
+    type: at::TensorList
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, at::TensorList, const ::std::optional<at::Tensor> &, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: bins
+    type: at::TensorList
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: histogramdd
+  operator_name: histogramdd
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::histogramdd(Tensor self, int[] bins, float[]? range=None, Tensor? weight=None, bool density=False) -> (Tensor hist, Tensor[] bin_edges)
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: density
+    type: bool
+  schema_order_cpp_signature: ::std::tuple<at::Tensor,::std::vector<at::Tensor>> (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: density
+    type: bool
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    field_name: hist
+    name: hist
+    type: at::Tensor
+  - dynamic_type: at::TensorList
+    field_name: bin_edges
+    name: bin_edges
+    type: ::std::vector<at::Tensor>
+  inplace: false
+  is_factory_method: false
+  abstract: false
+  device_guard: true
+  with_gil: false
+  deprecated: false
+  has_math_kernel: true
 - name: _new_zeros_with_same_feature_meta_out
   operator_name: _new_zeros_with_same_feature_meta
   overload_name: out
@@ -84421,6 +86455,588 @@
     is_nullable: false
     name: self
     type: const at::Tensor &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: resize_as_sparse_out
+  operator_name: resize_as_sparse
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::resize_as_sparse.out(Tensor self, Tensor the_template, *, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  schema_order_cpp_signature: const at::Tensor & (const at::Tensor &, const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: const at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: resize_as_sparse
+  operator_name: resize_as_sparse
+  overload_name: ''
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::resize_as_sparse(Tensor self, Tensor the_template) -> Tensor
+  arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  schema_order_cpp_signature: at::Tensor (const at::Tensor &, const at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: the_template
+    type: const at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: result
+    type: at::Tensor
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _embedding_bag_out
+  operator_name: _embedding_bag
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_embedding_bag.out(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1, *, Tensor(a!) out0, Tensor(b!) out1, Tensor(c!) out2, Tensor(d!) out3) -> (Tensor(a!), Tensor(b!), Tensor(c!), Tensor(d!))
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out0
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: b!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out1
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: c!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out2
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: d!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out3
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: offsets
+    type: const at::Tensor &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: scale_grad_by_freq
+    type: bool
+  - annotation: null
+    default: 0
+    dynamic_type: int64_t
+    is_nullable: false
+    name: mode
+    type: int64_t
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: sparse
+    type: bool
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: per_sample_weights
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: include_last_offset
+    type: bool
+  - annotation: null
+    default: -1
+    dynamic_type: int64_t
+    is_nullable: false
+    name: padding_idx
+    type: int64_t
+  schema_order_cpp_signature: ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> (const at::Tensor &, const at::Tensor &, const at::Tensor &, bool, int64_t, bool, const ::std::optional<at::Tensor> &, bool, int64_t, at::Tensor &, at::Tensor &, at::Tensor &, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: weight
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: indices
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: offsets
+    type: const at::Tensor &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: scale_grad_by_freq
+    type: bool
+  - annotation: null
+    default: 0
+    dynamic_type: int64_t
+    is_nullable: false
+    name: mode
+    type: int64_t
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: sparse
+    type: bool
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    name: per_sample_weights
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    name: include_last_offset
+    type: bool
+  - annotation: null
+    default: -1
+    dynamic_type: int64_t
+    is_nullable: false
+    name: padding_idx
+    type: int64_t
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out0
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: b!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out1
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: c!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out2
+    output: true
+    type: at::Tensor &
+  - allocate: true
+    annotation: d!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out3
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: out0
+    type: at::Tensor &
+  - dynamic_type: at::Tensor
+    name: out1
+    type: at::Tensor &
+  - dynamic_type: at::Tensor
+    name: out2
+    type: at::Tensor &
+  - dynamic_type: at::Tensor
+    name: out3
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _histogramdd_bin_edges_out
+  operator_name: _histogramdd_bin_edges
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_bin_edges.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!)[] out) -> ()
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: out
+    output: true
+    type: at::TensorList
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: void (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool, at::TensorList)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: out
+    output: true
+    type: at::TensorList
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns: []
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _histogramdd_from_bin_cts_out
+  operator_name: _histogramdd_from_bin_cts
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_from_bin_cts.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::IntArrayRef
+    is_nullable: false
+    name: bins
+    type: at::IntArrayRef
+  - annotation: null
+    default: ::std::nullopt
+    dynamic_type: at::ArrayRef<double>
+    is_nullable: true
+    kwarg_only: true
+    name: range
+    type: ::std::optional<at::ArrayRef<double>>
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  method_of:
+  - Type
+  - namespace
+  mode: native
+  python_module: ''
+  returns:
+  - dynamic_type: at::Tensor
+    name: out
+    type: at::Tensor &
+  inplace: false
+  is_factory_method: false
+  abstract: true
+  device_guard: false
+  with_gil: false
+  deprecated: false
+  has_math_kernel: false
+- name: _histogramdd_from_bin_tensors_out
+  operator_name: _histogramdd_from_bin_tensors
+  overload_name: out
+  manual_kernel_registration: false
+  category_override: ''
+  schema_string: aten::_histogramdd_from_bin_tensors.out(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+  arguments:
+  - allocate: true
+    annotation: a!
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: out
+    output: true
+    type: at::Tensor &
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: bins
+    type: at::TensorList
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
+  schema_order_cpp_signature: at::Tensor & (const at::Tensor &, at::TensorList, const ::std::optional<at::Tensor> &, bool, at::Tensor &)
+  schema_order_arguments:
+  - annotation: null
+    dynamic_type: at::Tensor
+    is_nullable: false
+    name: self
+    type: const at::Tensor &
+  - annotation: null
+    dynamic_type: at::TensorList
+    is_nullable: false
+    name: bins
+    type: at::TensorList
+  - annotation: null
+    default: '{}'
+    dynamic_type: at::Tensor
+    is_nullable: true
+    kwarg_only: true
+    name: weight
+    type: const ::std::optional<at::Tensor> &
+  - annotation: null
+    default: false
+    dynamic_type: bool
+    is_nullable: false
+    kwarg_only: true
+    name: density
+    type: bool
   - allocate: true
     annotation: a!
     dynamic_type: at::Tensor

@@ -8,10 +8,8 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/bmm.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_strided.h>
-#include <ATen/ops/mm.h>
 #include <ATen/ops/zeros.h>
 #endif
 
@@ -125,50 +123,7 @@ const std::optional<at::Tensor>& offs,
 const std::optional<at::Tensor>& bias,
 std::optional<c10::ScalarType> out_dtype,
 Tensor out) {
-  LOG(INFO) << "fallback path for `torch._grouped_mm`, performance may not be optimal";
-  const bool a_is_2d = mat_a.dim() == 2;
-  const bool b_is_2d = mat_b.dim() == 2;
-  if (a_is_2d && !b_is_2d) {
-    // 2d x 3d with offsets
-    int group_start_idx = 0;
-    auto offs_cpu = offs.value().cpu();
-    for (int group_idx = 0; group_idx < offs_cpu.size(0); group_idx++) {
-      int group_end_idx = offs_cpu[group_idx].item<int>();
-      auto mat_a_slice = mat_a.slice(0, group_start_idx, group_end_idx);
-      auto out_slice = out.slice(0, group_start_idx, group_end_idx);
-      at::mm_out(out_slice, mat_a_slice, mat_b[group_idx]);
-      group_start_idx = group_end_idx;
-    }
-
-  } else if (!a_is_2d && b_is_2d) {
-    // 3d x 2d with offsets
-    int group_start_idx = 0;
-    auto offs_cpu = offs.value().cpu();
-    for (int group_idx = 0; group_idx < offs_cpu.size(0); group_idx++) {
-      int group_end_idx = offs_cpu[group_idx].item<int>();
-      auto mat_b_slice = mat_b.slice(1, group_start_idx, group_end_idx);
-      auto out_slice = out.slice(1, group_start_idx, group_end_idx);
-      at::mm_out(out_slice, mat_a[group_idx], mat_b_slice);
-      group_start_idx = group_end_idx;
-    }
-
-  } else if (a_is_2d && b_is_2d) {
-    // 2d x 2d with offsets
-    int group_start_idx = 0;
-    auto offs_cpu = offs.value().cpu();
-    for (int group_idx = 0; group_idx < offs_cpu.size(0); group_idx++) {
-      int group_end_idx = offs_cpu[group_idx].item<int>();
-      auto mat_a_slice = mat_a.slice(1, group_start_idx, group_end_idx);
-      auto mat_b_slice = mat_b.slice(0, group_start_idx, group_end_idx);
-      auto out_slice = out[group_idx];
-      at::mm_out(out_slice, mat_a_slice, mat_b_slice);
-      group_start_idx = group_end_idx;
-    }
-
-  } else {
-    // 3d x 3d without offsets - regular bmm
-    at::bmm_out(out, mat_a, mat_b);
-  }
+  TORCH_CHECK(false, "grouped_mm fallback (mm_out/bmm_out) removed in EasyFHE");
 }
 
 

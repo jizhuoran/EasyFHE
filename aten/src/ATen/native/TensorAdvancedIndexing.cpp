@@ -79,11 +79,8 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_gather_sparse_backward.h>
-#include <ATen/ops/_gather_sparse_backward_native.h>
 #include <ATen/ops/_index_put_impl.h>
 #include <ATen/ops/_index_put_impl_native.h>
-#include <ATen/ops/_sparse_coo_tensor_unsafe.h>
 #include <ATen/ops/_unsafe_index_native.h>
 #include <ATen/ops/_unsafe_index_put_native.h>
 #include <ATen/ops/arange.h>
@@ -114,13 +111,11 @@
 #include <ATen/ops/masked_scatter_native.h>
 #include <ATen/ops/masked_select_backward_native.h>
 #include <ATen/ops/masked_select_native.h>
-#include <ATen/ops/nested_to_padded_tensor_native.h>
 #include <ATen/ops/nonzero_native.h>
 #include <ATen/ops/nonzero_numpy_native.h>
 #include <ATen/ops/nonzero_static_native.h>
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/put_native.h>
-#include <ATen/ops/quantize_per_tensor.h>
 #include <ATen/ops/scatter_add_meta.h>
 #include <ATen/ops/scatter_add_native.h>
 #include <ATen/ops/scatter_meta.h>
@@ -2064,9 +2059,7 @@ Tensor gather_backward(
     int64_t dim,
     const Tensor& index,
     bool sparse_grad) {
-  if (sparse_grad) {
-    return at::_gather_sparse_backward(self, dim, index, grad);
-  }
+  TORCH_CHECK(!sparse_grad, "_gather_sparse_backward removed in EasyFHE");
   auto result = grad.new_zeros_symint(self.sym_sizes());
   // for composite, vmap and inductor compliance, use out-of-place variant of
   // `scatter_add` if index or grad tensors is a Tensor Subclass.
@@ -2723,40 +2716,7 @@ Tensor _gather_sparse_backward(
     int64_t dim,
     const Tensor& index,
     const Tensor& grad) {
-  // special case scalar input and/or index
-  if (self.ndimension() == 0)
-    return at::_sparse_coo_tensor_unsafe_symint(
-        at::empty_symint({0, grad.sym_numel()}, index.options()),
-        grad,
-        self.sym_sizes());
-  if (grad.ndimension() == 0)
-    return at::_sparse_coo_tensor_unsafe_symint(
-        index.view({1, 1}), grad, self.sym_sizes());
-  Tensor sparse_ind = at::empty_symint(
-      {self.ndimension(), grad.sym_numel()}, self.options().dtype(at::kLong));
-  SymInt grad_numel = grad.sym_numel();
-  if (grad_numel > 0) {
-    SymInt n_above = grad_numel;
-    SymInt n_below = 1;
-    if (dim < 0)
-      dim += self.ndimension();
-    for (const auto i : c10::irange(self.ndimension())) {
-      n_above /= grad.sym_size(i);
-      if (i == dim) {
-        sparse_ind[i] = index.reshape(-1);
-      } else {
-        sparse_ind[i] =
-            at::arange(grad.sym_size(i), self.options().dtype(at::kLong))
-                .unsqueeze(1)
-                .expand_symint({grad.sym_size(i), n_above})
-                .reshape(-1)
-                .repeat_symint(n_below);
-      }
-      n_below *= grad.sym_size(i);
-    }
-  }
-  return at::_sparse_coo_tensor_unsafe_symint(
-      sparse_ind, grad.reshape(-1), self.sym_sizes());
+  TORCH_CHECK(false, "_gather_sparse_backward removed in EasyFHE");
 }
 
 template <typename scalar_t>

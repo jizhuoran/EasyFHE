@@ -9067,6 +9067,211 @@ namespace redispatch {
         return at::_ops::cpmul_broadcast_pt::redispatch(dispatchKeySet, cipher, plaintext, param_primes, barret_mu, num_cipher, curr_limbs, N);
     }
 
+    // aten::hardtanh(Tensor self, Scalar min_val=-1, Scalar max_val=1) -> Tensor
+    inline at::Tensor hardtanh(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1) {
+        return at::_ops::hardtanh::redispatch(dispatchKeySet, self, min_val, max_val);
+    }
+
+    // aten::hardtanh_(Tensor(a!) self, Scalar min_val=-1, Scalar max_val=1) -> Tensor(a!)
+    inline at::Tensor & hardtanh_(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1) {
+        return at::_ops::hardtanh_::redispatch(dispatchKeySet, self, min_val, max_val);
+    }
+
+    // aten::hardtanh.out(Tensor self, Scalar min_val=-1, Scalar max_val=1, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & hardtanh_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1) {
+        return at::_ops::hardtanh_out::redispatch(dispatchKeySet, self, min_val, max_val, out);
+    }
+
+    // aten::hardtanh.out(Tensor self, Scalar min_val=-1, Scalar max_val=1, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & hardtanh_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val, at::Tensor & out) {
+        return at::_ops::hardtanh_out::redispatch(dispatchKeySet, self, min_val, max_val, out);
+    }
+
+    // aten::leaky_relu(Tensor self, Scalar negative_slope=0.01) -> Tensor
+    inline at::Tensor leaky_relu(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & negative_slope=0.01) {
+        return at::_ops::leaky_relu::redispatch(dispatchKeySet, self, negative_slope);
+    }
+
+    // aten::leaky_relu_(Tensor(a!) self, Scalar negative_slope=0.01) -> Tensor(a!)
+    inline at::Tensor & leaky_relu_(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & negative_slope=0.01) {
+        return at::_ops::leaky_relu_::redispatch(dispatchKeySet, self, negative_slope);
+    }
+
+    // aten::leaky_relu.out(Tensor self, Scalar negative_slope=0.01, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & leaky_relu_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, const at::Scalar & negative_slope=0.01) {
+        return at::_ops::leaky_relu_out::redispatch(dispatchKeySet, self, negative_slope, out);
+    }
+
+    // aten::leaky_relu.out(Tensor self, Scalar negative_slope=0.01, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & leaky_relu_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & negative_slope, at::Tensor & out) {
+        return at::_ops::leaky_relu_out::redispatch(dispatchKeySet, self, negative_slope, out);
+    }
+
+    // aten::leaky_relu_backward(Tensor grad_output, Tensor self, Scalar negative_slope, bool self_is_result) -> Tensor
+    inline at::Tensor leaky_relu_backward(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Tensor & self, const at::Scalar & negative_slope, bool self_is_result) {
+        return at::_ops::leaky_relu_backward::redispatch(dispatchKeySet, grad_output, self, negative_slope, self_is_result);
+    }
+
+    // aten::elu(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor
+    inline at::Tensor elu(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1) {
+        return at::_ops::elu::redispatch(dispatchKeySet, self, alpha, scale, input_scale);
+    }
+
+    // aten::elu_(Tensor(a!) self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor(a!)
+    inline at::Tensor & elu_(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1) {
+        return at::_ops::elu_::redispatch(dispatchKeySet, self, alpha, scale, input_scale);
+    }
+
+    // aten::elu.out(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & elu_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1) {
+        return at::_ops::elu_out::redispatch(dispatchKeySet, self, alpha, scale, input_scale, out);
+    }
+
+    // aten::elu.out(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & elu_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, at::Tensor & out) {
+        return at::_ops::elu_out::redispatch(dispatchKeySet, self, alpha, scale, input_scale, out);
+    }
+
+    // aten::elu_backward(Tensor grad_output, Scalar alpha, Scalar scale, Scalar input_scale, bool is_result, Tensor self_or_result) -> Tensor
+    inline at::Tensor elu_backward(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, bool is_result, const at::Tensor & self_or_result) {
+        return at::_ops::elu_backward::redispatch(dispatchKeySet, grad_output, alpha, scale, input_scale, is_result, self_or_result);
+    }
+
+    // aten::_prelu_kernel(Tensor self, Tensor weight) -> Tensor
+    inline at::Tensor _prelu_kernel(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & weight) {
+        return at::_ops::_prelu_kernel::redispatch(dispatchKeySet, self, weight);
+    }
+
+    // aten::_prelu_kernel_backward(Tensor grad_output, Tensor self, Tensor weight) -> (Tensor, Tensor)
+    inline ::std::tuple<at::Tensor,at::Tensor> _prelu_kernel_backward(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Tensor & self, const at::Tensor & weight) {
+        return at::_ops::_prelu_kernel_backward::redispatch(dispatchKeySet, grad_output, self, weight);
+    }
+
+    // aten::log_sigmoid_forward(Tensor self) -> (Tensor output, Tensor buffer)
+    inline ::std::tuple<at::Tensor,at::Tensor> log_sigmoid_forward(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self) {
+        return at::_ops::log_sigmoid_forward::redispatch(dispatchKeySet, self);
+    }
+
+    // aten::log_sigmoid_forward.output(Tensor self, *, Tensor(a!) output, Tensor(b!) buffer) -> (Tensor(a!), Tensor(b!))
+    inline ::std::tuple<at::Tensor &,at::Tensor &> log_sigmoid_forward_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & output, at::Tensor & buffer, const at::Tensor & self) {
+        return at::_ops::log_sigmoid_forward_output::redispatch(dispatchKeySet, self, output, buffer);
+    }
+
+    // aten::log_sigmoid_forward.output(Tensor self, *, Tensor(a!) output, Tensor(b!) buffer) -> (Tensor(a!), Tensor(b!))
+    inline ::std::tuple<at::Tensor &,at::Tensor &> log_sigmoid_forward_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::Tensor & output, at::Tensor & buffer) {
+        return at::_ops::log_sigmoid_forward_output::redispatch(dispatchKeySet, self, output, buffer);
+    }
+
+    // aten::_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
+    inline at::Tensor _sparse_compressed_tensor_unsafe(c10::DispatchKeySet dispatchKeySet, const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, at::IntArrayRef size, at::TensorOptions options={}) {
+        return at::_ops::_sparse_compressed_tensor_unsafe::redispatch(dispatchKeySet, compressed_indices, plain_indices, values, c10::fromIntArrayRefSlow(size), c10::optTypeMetaToScalarType(options.dtype_opt()), options.layout_opt(), options.device_opt(), options.pinned_memory_opt());
+    }
+
+    // aten::_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
+    inline at::Tensor _sparse_compressed_tensor_unsafe(c10::DispatchKeySet dispatchKeySet, const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, at::IntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory) {
+        return at::_ops::_sparse_compressed_tensor_unsafe::redispatch(dispatchKeySet, compressed_indices, plain_indices, values, c10::fromIntArrayRefSlow(size), dtype, layout, device, pin_memory);
+    }
+
+    // aten::_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
+    inline at::Tensor _sparse_compressed_tensor_unsafe_symint(c10::DispatchKeySet dispatchKeySet, const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, at::TensorOptions options={}) {
+        return at::_ops::_sparse_compressed_tensor_unsafe::redispatch(dispatchKeySet, compressed_indices, plain_indices, values, size, c10::optTypeMetaToScalarType(options.dtype_opt()), options.layout_opt(), options.device_opt(), options.pinned_memory_opt());
+    }
+
+    // aten::_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
+    inline at::Tensor _sparse_compressed_tensor_unsafe_symint(c10::DispatchKeySet dispatchKeySet, const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory) {
+        return at::_ops::_sparse_compressed_tensor_unsafe::redispatch(dispatchKeySet, compressed_indices, plain_indices, values, size, dtype, layout, device, pin_memory);
+    }
+
+    // aten::resize_as_sparse_(Tensor(a!) self, Tensor the_template) -> Tensor(a!)
+    inline const at::Tensor & resize_as_sparse_(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template) {
+        return at::_ops::resize_as_sparse_::redispatch(dispatchKeySet, self, the_template);
+    }
+
+    // aten::_fft_c2c(Tensor self, SymInt[] dim, int normalization, bool forward) -> Tensor
+    inline at::Tensor _fft_c2c(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward) {
+        return at::_ops::_fft_c2c::redispatch(dispatchKeySet, self, c10::fromIntArrayRefSlow(dim), normalization, forward);
+    }
+
+    // aten::_fft_c2c(Tensor self, SymInt[] dim, int normalization, bool forward) -> Tensor
+    inline at::Tensor _fft_c2c_symint(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward) {
+        return at::_ops::_fft_c2c::redispatch(dispatchKeySet, self, dim, normalization, forward);
+    }
+
+    // aten::_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _fft_c2c_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward) {
+        return at::_ops::_fft_c2c_out::redispatch(dispatchKeySet, self, c10::fromIntArrayRefSlow(dim), normalization, forward, out);
+    }
+
+    // aten::_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _fft_c2c_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out) {
+        return at::_ops::_fft_c2c_out::redispatch(dispatchKeySet, self, c10::fromIntArrayRefSlow(dim), normalization, forward, out);
+    }
+
+    // aten::_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _fft_c2c_symint_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward) {
+        return at::_ops::_fft_c2c_out::redispatch(dispatchKeySet, self, dim, normalization, forward, out);
+    }
+
+    // aten::_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _fft_c2c_symint_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out) {
+        return at::_ops::_fft_c2c_out::redispatch(dispatchKeySet, self, dim, normalization, forward, out);
+    }
+
+    // aten::linalg_vector_norm(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
+    inline at::Tensor linalg_vector_norm(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt) {
+        return at::_ops::linalg_vector_norm::redispatch(dispatchKeySet, self, ord, dim, keepdim, dtype);
+    }
+
+    // aten::linalg_vector_norm.out(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & linalg_vector_norm_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt) {
+        return at::_ops::linalg_vector_norm_out::redispatch(dispatchKeySet, self, ord, dim, keepdim, dtype, out);
+    }
+
+    // aten::linalg_vector_norm.out(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & linalg_vector_norm_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype, at::Tensor & out) {
+        return at::_ops::linalg_vector_norm_out::redispatch(dispatchKeySet, self, ord, dim, keepdim, dtype, out);
+    }
+
+    // aten::_embedding_bag(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1) -> (Tensor, Tensor, Tensor, Tensor)
+    inline ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> _embedding_bag(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq=false, int64_t mode=0, bool sparse=false, const ::std::optional<at::Tensor> & per_sample_weights={}, bool include_last_offset=false, int64_t padding_idx=-1) {
+        return at::_ops::_embedding_bag::redispatch(dispatchKeySet, weight, indices, offsets, scale_grad_by_freq, mode, sparse, per_sample_weights, include_last_offset, padding_idx);
+    }
+
+    // aten::fbgemm_linear_fp16_weight_fp32_activation(Tensor input, Tensor packed_weight, Tensor? bias) -> Tensor
+    inline at::Tensor fbgemm_linear_fp16_weight_fp32_activation(c10::DispatchKeySet dispatchKeySet, const at::Tensor & input, const at::Tensor & packed_weight, const ::std::optional<at::Tensor> & bias) {
+        return at::_ops::fbgemm_linear_fp16_weight_fp32_activation::redispatch(dispatchKeySet, input, packed_weight, bias);
+    }
+
+    // aten::fbgemm_pack_gemm_matrix_fp16(Tensor input) -> Tensor
+    inline at::Tensor fbgemm_pack_gemm_matrix_fp16(c10::DispatchKeySet dispatchKeySet, const at::Tensor & input) {
+        return at::_ops::fbgemm_pack_gemm_matrix_fp16::redispatch(dispatchKeySet, input);
+    }
+
+    // aten::_wrapped_linear_prepack(Tensor weight, Tensor weight_scale, Tensor weight_zero_point, Tensor bias) -> Tensor
+    inline at::Tensor _wrapped_linear_prepack(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & weight_scale, const at::Tensor & weight_zero_point, const at::Tensor & bias) {
+        return at::_ops::_wrapped_linear_prepack::redispatch(dispatchKeySet, weight, weight_scale, weight_zero_point, bias);
+    }
+
+    // aten::_histogramdd_bin_edges(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor[]
+    inline ::std::vector<at::Tensor> _histogramdd_bin_edges(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_bin_edges::redispatch(dispatchKeySet, self, bins, range, weight, density);
+    }
+
+    // aten::_histogramdd_from_bin_cts(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor
+    inline at::Tensor _histogramdd_from_bin_cts(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_from_bin_cts::redispatch(dispatchKeySet, self, bins, range, weight, density);
+    }
+
+    // aten::_histogramdd_from_bin_tensors(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False) -> Tensor
+    inline at::Tensor _histogramdd_from_bin_tensors(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_from_bin_tensors::redispatch(dispatchKeySet, self, bins, weight, density);
+    }
+
+    // aten::histogramdd(Tensor self, int[] bins, float[]? range=None, Tensor? weight=None, bool density=False) -> (Tensor hist, Tensor[] bin_edges)
+    inline ::std::tuple<at::Tensor,::std::vector<at::Tensor>> histogramdd(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::histogramdd::redispatch(dispatchKeySet, self, bins, range, weight, density);
+    }
+
     // aten::_new_zeros_with_same_feature_meta.out(Tensor self, Tensor other, *, int self_num_batch_dims=0, Tensor(a!) out) -> Tensor(a!)
     inline at::Tensor & _new_zeros_with_same_feature_meta_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, const at::Tensor & other, int64_t self_num_batch_dims=0) {
         return at::_ops::_new_zeros_with_same_feature_meta_out::redispatch(dispatchKeySet, self, other, self_num_batch_dims, out);
@@ -11150,6 +11355,61 @@ namespace redispatch {
     // aten::alias_copy.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)
     inline at::Tensor & alias_copy_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::Tensor & out) {
         return at::_ops::alias_copy_out::redispatch(dispatchKeySet, self, out);
+    }
+
+    // aten::resize_as_sparse.out(Tensor self, Tensor the_template, *, Tensor(a!) out) -> Tensor(a!)
+    inline const at::Tensor & resize_as_sparse_out(c10::DispatchKeySet dispatchKeySet, const at::Tensor & out, const at::Tensor & self, const at::Tensor & the_template) {
+        return at::_ops::resize_as_sparse_out::redispatch(dispatchKeySet, self, the_template, out);
+    }
+
+    // aten::resize_as_sparse.out(Tensor self, Tensor the_template, *, Tensor(a!) out) -> Tensor(a!)
+    inline const at::Tensor & resize_as_sparse_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template, const at::Tensor & out) {
+        return at::_ops::resize_as_sparse_out::redispatch(dispatchKeySet, self, the_template, out);
+    }
+
+    // aten::resize_as_sparse(Tensor self, Tensor the_template) -> Tensor
+    inline at::Tensor resize_as_sparse(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template) {
+        return at::_ops::resize_as_sparse::redispatch(dispatchKeySet, self, the_template);
+    }
+
+    // aten::_embedding_bag.out(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1, *, Tensor(a!) out0, Tensor(b!) out1, Tensor(c!) out2, Tensor(d!) out3) -> (Tensor(a!), Tensor(b!), Tensor(c!), Tensor(d!))
+    inline ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> _embedding_bag_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq=false, int64_t mode=0, bool sparse=false, const ::std::optional<at::Tensor> & per_sample_weights={}, bool include_last_offset=false, int64_t padding_idx=-1) {
+        return at::_ops::_embedding_bag_out::redispatch(dispatchKeySet, weight, indices, offsets, scale_grad_by_freq, mode, sparse, per_sample_weights, include_last_offset, padding_idx, out0, out1, out2, out3);
+    }
+
+    // aten::_embedding_bag.out(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1, *, Tensor(a!) out0, Tensor(b!) out1, Tensor(c!) out2, Tensor(d!) out3) -> (Tensor(a!), Tensor(b!), Tensor(c!), Tensor(d!))
+    inline ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> _embedding_bag_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx, at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3) {
+        return at::_ops::_embedding_bag_out::redispatch(dispatchKeySet, weight, indices, offsets, scale_grad_by_freq, mode, sparse, per_sample_weights, include_last_offset, padding_idx, out0, out1, out2, out3);
+    }
+
+    // aten::_histogramdd_bin_edges.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!)[] out) -> ()
+    inline void _histogramdd_bin_edges_out(c10::DispatchKeySet dispatchKeySet, at::TensorList out, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_bin_edges_out::redispatch(dispatchKeySet, self, bins, range, weight, density, out);
+    }
+
+    // aten::_histogramdd_bin_edges.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!)[] out) -> ()
+    inline void _histogramdd_bin_edges_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::TensorList out) {
+        return at::_ops::_histogramdd_bin_edges_out::redispatch(dispatchKeySet, self, bins, range, weight, density, out);
+    }
+
+    // aten::_histogramdd_from_bin_cts.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _histogramdd_from_bin_cts_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_from_bin_cts_out::redispatch(dispatchKeySet, self, bins, range, weight, density, out);
+    }
+
+    // aten::_histogramdd_from_bin_cts.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _histogramdd_from_bin_cts_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out) {
+        return at::_ops::_histogramdd_from_bin_cts_out::redispatch(dispatchKeySet, self, bins, range, weight, density, out);
+    }
+
+    // aten::_histogramdd_from_bin_tensors.out(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _histogramdd_from_bin_tensors_out(c10::DispatchKeySet dispatchKeySet, at::Tensor & out, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight={}, bool density=false) {
+        return at::_ops::_histogramdd_from_bin_tensors_out::redispatch(dispatchKeySet, self, bins, weight, density, out);
+    }
+
+    // aten::_histogramdd_from_bin_tensors.out(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)
+    inline at::Tensor & _histogramdd_from_bin_tensors_outf(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out) {
+        return at::_ops::_histogramdd_from_bin_tensors_out::redispatch(dispatchKeySet, self, bins, weight, density, out);
     }
 } // namespace redispatch
 

@@ -36,21 +36,10 @@
 #include <ATen/Functions.h>
 #else
 
-#include <ATen/ops/_addmm_activation.h>
-#include <ATen/ops/_embedding_bag.h>
-#include <ATen/ops/_fft_c2c.h>
-#include <ATen/ops/_wrapped_linear_prepack.h>
-#include <ATen/ops/_wrapped_quantized_linear_prepacked.h>
-#include <ATen/ops/addmm.h>
 #include <ATen/ops/as_strided.h>
-#include <ATen/ops/bmm.h>
-#include <ATen/ops/convolution.h>
 #include <ATen/ops/empty_strided.h>
-#include <ATen/ops/fbgemm_linear_fp16_weight_fp32_activation.h>
-#include <ATen/ops/fbgemm_pack_gemm_matrix_fp16.h>
 #include <ATen/ops/from_blob.h>
 #include <ATen/ops/index_put.h>
-#include <ATen/ops/mm.h>
 #include <ATen/ops/nonzero.h>
 #include <ATen/ops/scalar_tensor.h>
 #include <ATen/ops/scatter.h>
@@ -584,31 +573,16 @@ AOTITorchError aoti_torch__embedding_bag(
     int32_t scale_grad_by_freq,
     int32_t mode,
     int32_t sparse,
-    AtenTensorHandle per_sample_weights, // optional argument
+    AtenTensorHandle per_sample_weights,
     int32_t include_last_offset,
     int32_t padding_idx,
-    AtenTensorHandle* ret0, // returns new reference
-    AtenTensorHandle* ret1, // returns new reference
-    AtenTensorHandle* ret2, // returns new reference
-    AtenTensorHandle* ret3 // returns new reference
+    AtenTensorHandle* ret0,
+    AtenTensorHandle* ret1,
+    AtenTensorHandle* ret2,
+    AtenTensorHandle* ret3
 ) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    auto [r0, r1, r2, r3] = at::_embedding_bag(
-        *tensor_handle_to_tensor_pointer(weight),
-        *tensor_handle_to_tensor_pointer(indices),
-        *tensor_handle_to_tensor_pointer(offsets),
-        scale_grad_by_freq,
-        mode,
-        sparse,
-        pointer_to_optional(
-            tensor_handle_to_tensor_pointer(per_sample_weights)),
-        include_last_offset,
-        padding_idx);
-
-    *ret0 = new_tensor_handle(std::move(r0));
-    *ret1 = new_tensor_handle(std::move(r1));
-    *ret2 = new_tensor_handle(std::move(r2));
-    *ret3 = new_tensor_handle(std::move(r3));
+    TORCH_CHECK(false, "_embedding_bag not supported in EasyFHE");
   });
 }
 
@@ -618,12 +592,10 @@ AOTITorchError aoti_torch__fft_c2c(
     int64_t dim_size,
     int64_t normalization,
     int32_t forward,
-    AtenTensorHandle* ret // returns new reference
+    AtenTensorHandle* ret
 ) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    auto dim = c10::IntArrayRef(dim_ptr, dim_size);
-    *ret = new_tensor_handle(at::_fft_c2c(
-        *tensor_handle_to_tensor_pointer(self), dim, normalization, forward));
+    TORCH_CHECK(false, "_fft_c2c not supported in EasyFHE");
   });
 }
 
@@ -895,9 +867,7 @@ AOTITorchError aoti_torch_cpu_wrapped_fbgemm_pack_gemm_matrix_fp16(
     AtenTensorHandle weight,
     AtenTensorHandle* out) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* weight_tensor = tensor_handle_to_tensor_pointer(weight);
-
-    *out = new_tensor_handle(at::fbgemm_pack_gemm_matrix_fp16(*weight_tensor));
+    TORCH_CHECK(false, "fbgemm_pack_gemm_matrix_fp16 not supported in EasyFHE");
   });
 }
 
@@ -908,35 +878,18 @@ AOTITorchError aoti_torch_cpu__wrapped_linear_prepack(
     AtenTensorHandle bias,
     AtenTensorHandle* out) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* weight_tensor = tensor_handle_to_tensor_pointer(weight);
-    at::Tensor* weight_scale_tensor =
-        tensor_handle_to_tensor_pointer(weight_scale);
-    at::Tensor* weight_zero_point_tensor =
-        tensor_handle_to_tensor_pointer(weight_zero_point);
-    at::Tensor* bias_tensor = tensor_handle_to_tensor_pointer(bias);
-
-    *out = new_tensor_handle(at::_wrapped_linear_prepack(
-        *weight_tensor,
-        *weight_scale_tensor,
-        *weight_zero_point_tensor,
-        *bias_tensor));
+    TORCH_CHECK(false, "_wrapped_linear_prepack not supported in EasyFHE");
   });
 }
 
 AOTITorchError aoti_torch_cpu_wrapped_fbgemm_linear_fp16_weight(
     AtenTensorHandle input,
     AtenTensorHandle weight,
-    AtenTensorHandle bias, // optional argument
+    AtenTensorHandle bias,
     int64_t out_channel,
     AtenTensorHandle* out) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* input_tensor = tensor_handle_to_tensor_pointer(input);
-    at::Tensor* weight_tensor = tensor_handle_to_tensor_pointer(weight);
-    auto optional_bias_tensor =
-        pointer_to_optional(tensor_handle_to_tensor_pointer(bias));
-
-    *out = new_tensor_handle(at::fbgemm_linear_fp16_weight_fp32_activation(
-        *input_tensor, *weight_tensor, optional_bias_tensor));
+    TORCH_CHECK(false, "fbgemm_linear_fp16_weight not supported in EasyFHE");
   });
 }
 
@@ -950,23 +903,7 @@ AOTITorchError aoti_torch_cpu__wrapped_quantized_linear_prepacked(
     int64_t out_channel,
     AtenTensorHandle* out) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    at::Tensor* input_tensor = tensor_handle_to_tensor_pointer(input);
-    at::Tensor* input_scale_tensor =
-        tensor_handle_to_tensor_pointer(input_scale);
-    at::Tensor* input_zero_point_tensor =
-        tensor_handle_to_tensor_pointer(input_zero_point);
-    at::Tensor* weight_tensor = tensor_handle_to_tensor_pointer(weight);
-    at::Tensor* out_scale_tensor = tensor_handle_to_tensor_pointer(out_scale);
-    at::Tensor* out_zeropoint_tensor =
-        tensor_handle_to_tensor_pointer(out_zeropoint);
-    *out = new_tensor_handle(at::_wrapped_quantized_linear_prepacked(
-        *input_tensor,
-        *input_scale_tensor,
-        *input_zero_point_tensor,
-        *weight_tensor,
-        *out_scale_tensor,
-        *out_zeropoint_tensor,
-        out_channel));
+    TORCH_CHECK(false, "_wrapped_quantized_linear_prepacked not supported in EasyFHE");
   });
 }
 

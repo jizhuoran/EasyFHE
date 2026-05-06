@@ -7301,5 +7301,16 @@ struct TORCH_API isneginf {
   static at::Tensor call(const at::Tensor & self);
   static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self);
 };
+
+struct TORCH_API resize_as_sparse_ {
+  using schema = const at::Tensor & (const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::resize_as_sparse_";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "resize_as_sparse_(Tensor(a!) self, Tensor the_template) -> Tensor(a!)";
+  static const at::Tensor & call(const at::Tensor & self, const at::Tensor & the_template);
+  static const at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template);
+};
 } // namespace _ops
 } // namespace at

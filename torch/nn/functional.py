@@ -9,10 +9,16 @@ from typing import Any as _Any, Optional, TYPE_CHECKING
 import torch
 from torch import _VF, sym_int as _sym_int, Tensor
 from torch._C import (
-    _add_docstr,
+    _add_docstr as _orig_add_docstr,
     _ScalingType as ScalingType,  # pyrefly: ignore [missing-module-attribute]
     _SwizzleType as SwizzleType,  # pyrefly: ignore [missing-module-attribute]
 )
+
+
+def _add_docstr(obj, docstr):
+    if obj is None:
+        return None
+    return _orig_add_docstr(obj, docstr)
 from torch._jit_internal import (
     _overload,
     boolean_dispatch,
@@ -48,7 +54,7 @@ except ModuleNotFoundError:
 
 
 conv1d = _add_docstr(
-    torch.conv1d,
+    getattr(torch, "conv1d", None),
     r"""
 conv1d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor
 
@@ -97,7 +103,7 @@ Examples::
 )
 
 conv2d = _add_docstr(
-    torch.conv2d,
+    getattr(torch, "conv2d", None),
     r"""
 conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor
 
@@ -148,7 +154,7 @@ Examples::
 )
 
 conv3d = _add_docstr(
-    torch.conv3d,
+    getattr(torch, "conv3d", None),
     r"""
 conv3d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor
 
@@ -198,7 +204,7 @@ Examples::
 )
 
 conv_transpose1d = _add_docstr(
-    torch.conv_transpose1d,
+    getattr(torch, "conv_transpose1d", None),
     r"""
 conv_transpose1d(input, weight, bias=None, stride=1, padding=0, output_padding=0, groups=1, dilation=1) -> Tensor
 
@@ -239,7 +245,7 @@ Examples::
 )
 
 conv_transpose2d = _add_docstr(
-    torch.conv_transpose2d,
+    getattr(torch, "conv_transpose2d", None),
     r"""
 conv_transpose2d(input, weight, bias=None, stride=1, padding=0, output_padding=0, groups=1, dilation=1) -> Tensor
 
@@ -282,7 +288,7 @@ Examples::
 )
 
 conv_transpose3d = _add_docstr(
-    torch.conv_transpose3d,
+    getattr(torch, "conv_transpose3d", None),
     r"""
 conv_transpose3d(input, weight, bias=None, stride=1, padding=0, output_padding=0, groups=1, dilation=1) -> Tensor
 
@@ -324,7 +330,7 @@ Examples::
 )
 
 conv_tbc = _add_docstr(
-    torch.conv_tbc,
+    getattr(torch, "conv_tbc", None),
     r"""
 Applies a 1-dimensional sequence convolution over an input sequence.
 Input and output dimensions are (Time, Batch, Channels) - hence TBC.
@@ -340,7 +346,7 @@ Args:
 
 # Pooling
 avg_pool1d = _add_docstr(
-    torch.avg_pool1d,
+    getattr(torch, "avg_pool1d", None),
     r"""
 avg_pool1d(input, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True) -> Tensor
 
@@ -375,7 +381,7 @@ Examples::
 
 
 avg_pool2d = _add_docstr(
-    torch._C._nn.avg_pool2d,
+    getattr(torch._C._nn, "avg_pool2d", None),
     r"""
 avg_pool2d(input, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None) -> Tensor
 
@@ -405,7 +411,7 @@ Args:
 )
 
 avg_pool3d = _add_docstr(
-    torch._C._nn.avg_pool3d,
+    getattr(torch._C._nn, "avg_pool3d", None),
     r"""
 avg_pool3d(input, kernel_size, stride=None, padding=0, ceil_mode=False, count_include_pad=True, divisor_override=None) -> Tensor
 
@@ -1374,7 +1380,7 @@ adaptive_max_pool3d = boolean_dispatch(
 
 
 adaptive_avg_pool1d = _add_docstr(
-    torch.adaptive_avg_pool1d,
+    getattr(torch, "adaptive_avg_pool1d", None),
     r"""
 adaptive_avg_pool1d(input, output_size) -> Tensor
 
@@ -1706,7 +1712,7 @@ def _threshold(
 threshold = _threshold
 
 threshold_ = _add_docstr(
-    _VF.threshold_,
+    getattr(_VF, "threshold_", None),
     r"""
 threshold_(input, threshold, value) -> Tensor
 
@@ -1731,7 +1737,7 @@ def relu(input: Tensor, inplace: bool = False) -> Tensor:
 
 
 relu_ = _add_docstr(
-    torch.relu_,
+    getattr(torch, "relu_", None),
     r"""
 relu_(input) -> Tensor
 
@@ -1793,7 +1799,7 @@ def hardtanh(
 
 
 hardtanh_ = _add_docstr(
-    torch._C._nn.hardtanh_,
+    getattr(torch._C._nn, "hardtanh_", None),
     r"""
 hardtanh_(input, min_val=-1., max_val=1.) -> Tensor
 
@@ -1833,7 +1839,7 @@ def elu(input: Tensor, alpha: float = 1.0, inplace: bool = False) -> Tensor:
 
 
 elu_ = _add_docstr(
-    torch._C._nn.elu_,
+    getattr(torch._C._nn, "elu_", None),
     r"""
 elu_(input, alpha=1.) -> Tensor
 
@@ -1862,7 +1868,7 @@ def selu(input: Tensor, inplace: bool = False) -> Tensor:
 
 
 selu_ = _add_docstr(
-    torch.selu_,
+    getattr(torch, "selu_", None),
     r"""
 selu_(input) -> Tensor
 
@@ -1895,7 +1901,7 @@ def celu(
 
 
 celu_ = _add_docstr(
-    torch.celu_,
+    getattr(torch, "celu_", None),
     r"""
 celu_(input, alpha=1.) -> Tensor
 
@@ -1929,7 +1935,7 @@ def leaky_relu(
 
 
 leaky_relu_ = _add_docstr(
-    torch._C._nn.leaky_relu_,
+    getattr(torch._C._nn, "leaky_relu_", None),
     r"""
 leaky_relu_(input, negative_slope=0.01) -> Tensor
 
@@ -1939,7 +1945,7 @@ In-place version of :func:`~leaky_relu`.
 
 
 prelu = _add_docstr(
-    torch.prelu,
+    getattr(torch, "prelu", None),
     r"""prelu(input, weight) -> Tensor
 
 Applies element-wise the function
@@ -1990,7 +1996,7 @@ def rrelu(
 
 
 rrelu_ = _add_docstr(
-    torch.rrelu_,
+    getattr(torch, "rrelu_", None),
     r"""
 rrelu_(input, lower=1./8, upper=1./3, training=False) -> Tensor
 
@@ -1999,7 +2005,7 @@ In-place version of :func:`~rrelu`.
 )
 
 logsigmoid = _add_docstr(
-    torch._C._nn.log_sigmoid,
+    getattr(torch._C._nn, "log_sigmoid", None),
     r"""
 logsigmoid(input) -> Tensor
 
@@ -2010,7 +2016,7 @@ See :class:`~torch.nn.LogSigmoid` for more details.
 )
 
 gelu = _add_docstr(
-    torch._C._nn.gelu,
+    getattr(torch._C._nn, "gelu", None),
     r"""
 gelu(input, approximate = 'none') -> Tensor
 
@@ -2029,7 +2035,7 @@ See `Gaussian Error Linear Units (GELUs) <https://arxiv.org/abs/1606.08415>`_.
 )
 
 hardshrink = _add_docstr(
-    torch.hardshrink,
+    getattr(torch, "hardshrink", None),
     r"""
 hardshrink(input, lambd=0.5) -> Tensor
 
@@ -2065,7 +2071,7 @@ def softsign(input):
 
 
 softplus = _add_docstr(
-    torch._C._nn.softplus,
+    getattr(torch._C._nn, "softplus", None),
     r"""
 softplus(input, beta=1, threshold=20) -> Tensor
 
@@ -2277,7 +2283,7 @@ def log_softmax(
 
 
 softshrink = _add_docstr(
-    torch._C._nn.softshrink,
+    getattr(torch._C._nn, "softshrink", None),
     r"""
 softshrink(input, lambd=0.5) -> Tensor
 
@@ -2332,7 +2338,7 @@ def hardsigmoid(input: Tensor, inplace: bool = False) -> Tensor:
 
 
 linear = _add_docstr(
-    torch._C._nn.linear,
+    getattr(torch._C._nn, "linear", None),
     r"""
 linear(input, weight, bias=None) -> Tensor
 
@@ -2356,7 +2362,7 @@ Shape:
 
 
 bilinear = _add_docstr(
-    torch.bilinear,
+    getattr(torch, "bilinear", None),
     r"""
 bilinear(input1, input2, weight, bias=None) -> Tensor
 
@@ -4469,7 +4475,7 @@ def multi_margin_loss(
 
 
 pixel_shuffle = _add_docstr(
-    torch.pixel_shuffle,
+    getattr(torch, "pixel_shuffle", None),
     r"""
 pixel_shuffle(input, upscale_factor) -> Tensor
 
@@ -4492,7 +4498,7 @@ Examples::
 )
 
 pixel_unshuffle = _add_docstr(
-    torch.pixel_unshuffle,
+    getattr(torch, "pixel_unshuffle", None),
     r"""
 pixel_unshuffle(input, downscale_factor) -> Tensor
 
@@ -4516,7 +4522,7 @@ Examples::
 )
 
 channel_shuffle = _add_docstr(
-    torch.channel_shuffle,
+    getattr(torch, "channel_shuffle", None),
     r"""
 channel_shuffle(input, groups) -> Tensor
 
@@ -4558,7 +4564,7 @@ Examples::
 )
 
 native_channel_shuffle = _add_docstr(
-    torch.native_channel_shuffle,
+    getattr(torch, "native_channel_shuffle", None),
     r"""
 native_channel_shuffle(input, groups) -> Tensor
 
@@ -5627,7 +5633,7 @@ pad.__module__ = "torch.nn.functional"
 
 
 pairwise_distance = _add_docstr(
-    torch.pairwise_distance,
+    getattr(torch, "pairwise_distance", None),
     r"""
 pairwise_distance(x1, x2, p=2.0, eps=1e-6, keepdim=False) -> Tensor
 
@@ -5637,7 +5643,7 @@ See :class:`torch.nn.PairwiseDistance` for details
 
 
 pdist = _add_docstr(
-    torch.pdist,
+    getattr(torch, "pdist", None),
     r"""
 pdist(input, p=2) -> Tensor
 
@@ -5664,7 +5670,7 @@ Args:
 
 
 cosine_similarity = _add_docstr(
-    torch.cosine_similarity,
+    getattr(torch, "cosine_similarity", None),
     r"""
 cosine_similarity(x1, x2, dim=1, eps=1e-8) -> Tensor
 
@@ -5696,7 +5702,7 @@ Example::
 
 
 one_hot = _add_docstr(
-    torch._C._nn.one_hot,
+    getattr(torch._C._nn, "one_hot", None),
     r"""
 one_hot(tensor, num_classes=-1) -> LongTensor
 
@@ -6136,7 +6142,7 @@ def _in_projection(
 
 
 scaled_dot_product_attention = _add_docstr(
-    torch._C._nn.scaled_dot_product_attention,
+    getattr(torch._C._nn, "scaled_dot_product_attention", None),
     r"""scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
         is_causal=False, scale=None, enable_gqa=False) -> Tensor:
 

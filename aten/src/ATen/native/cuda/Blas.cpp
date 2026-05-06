@@ -34,8 +34,6 @@
 #else
 #include <ATen/ops/_addmm_activation_native.h>
 #include <ATen/ops/_efficientzerotensor.h>
-#include <ATen/ops/_int_mm_native.h>
-#include <ATen/ops/_scaled_mm_native.h>
 #include <ATen/ops/_unsafe_view_native.h>
 #include <ATen/ops/abs.h>
 #include <ATen/ops/addmm_native.h>
@@ -46,11 +44,9 @@
 #include <ATen/ops/dot_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_strided.h>
-#include <ATen/ops/gelu.h>
 #include <ATen/ops/max.h>
 #include <ATen/ops/mm_native.h>
 #include <ATen/ops/mul.h>
-#include <ATen/ops/relu.h>
 #include <ATen/ops/ones.h>
 #include <ATen/ops/scalar_tensor_native.h>
 #include <ATen/ops/vdot_native.h>
@@ -481,28 +477,13 @@ Tensor& addmm_out_cuda_impl(Tensor& result, const Tensor& self, const Tensor& ma
       );
     }
 
-    // Apply epilogue
-    switch (activation) {
-      case Activation::RELU:
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        at::relu_(const_cast<Tensor&>(*args.result));
-        break;
-      case Activation::GELU:
-        // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-        at::gelu_(const_cast<Tensor&>(*args.result), "tanh");
-        break;
-      default: break;
-    }
+    // Activation epilogue stubbed (gelu/relu ops not available)
+    (void)activation;
   } // end GEMM path
 
-// Preprocessor gate here needs to match the inverse of the check
-// gating activation_to_gemm_and_blas_arg above; here we are manually
-// performing a post-GELU because we weren't able to use the GELU
-// epilogue above.
+// Post-GELU stubbed (gelu op not available)
 #if !defined(CUDA_VERSION) && !defined(USE_ROCM)
-  if (!disable_addmm_cuda_lt && activation == Activation::GELU) {
-    at::gelu_(const_cast<Tensor&>(*args.result), "tanh");
-  }
+  (void)disable_addmm_cuda_lt;
 #endif
 
   if (!result.is_same(*args.result)) {
@@ -852,169 +833,5 @@ TORCH_IMPL_FUNC(addmv_out_cuda)(const Tensor &self, const Tensor &mat, const Ten
     }
   }
 }
-
-Tensor& _int_mm_out_cuda(const Tensor& self, const Tensor& mat2, Tensor& result) {
-  // NOTE: cuBLAS is currently broken for some combination of transposed inputs.
-  TORCH_CHECK(self.dim() == 2, "Expected self to be of dimension 2 but got ", self.dim());
-  TORCH_CHECK(mat2.dim() == 2, "Expected mat2 to be of dimension 2 but got ", mat2.dim());
-  TORCH_CHECK(self.size(0) > 16, "self.size(0) needs to be greater than 16, but got ", self.size(0));
-  TORCH_CHECK(self.size(1) > 0 && self.size(1) % 8 == 0, "self.size(1) needs to be greater than 0 and a multiple of 8, but got ", self.size(1));
-  TORCH_CHECK(self.size(1) == mat2.size(0), "self.size(1) needs to match mat2.size(0) but got ", self.size(1), " and ", mat2.size(0));
-  TORCH_CHECK(mat2.size(1) > 0 && mat2.size(1) % 8 == 0, "mat2.size(1) needs to be greater than 0 and a multiple of 8, but got ", mat2.size(1));
-
-  TORCH_CHECK(result.dtype() == at::kInt, "Expected result dtype to be of type kInt but got ", result.dtype());
-  TORCH_CHECK(result.size(0) == self.size(0), "Expected result.size(0) to be ", self.size(0), " but got ", result.size(0));
-  TORCH_CHECK(result.size(1) == mat2.size(1), "Expected result.size(1) to be ", mat2.size(1), " but got ", result.size(1));
-
-  TORCH_CHECK(result.dim() == 2, "Expected result to be of dimension 2 but got ", result.dim());
-
-  TORCH_CHECK(result.is_contiguous(), "Expected result to be contiguous.");
-
-  cublasCommonArgs args(self, mat2, result);
-
-  at::cuda::blas::int8_gemm(
-      args.transa == 't',
-      args.transb == 't',
-      args.m,
-      args.n,
-      args.k,
-      args.mata->data_ptr<int8_t>(),
-      args.lda,
-      args.matb->data_ptr<int8_t>(),
-      args.ldb,
-      args.result->data_ptr<int32_t>(),
-      args.result_ld);
-
-  if (!result.is_same(*args.result)) {
-    result.copy_(*args.result);
-  }
-  return result;
-}
-
-Tensor _int_mm_cuda(const Tensor& self, const Tensor& mat2) {
-  Tensor result = at::empty({self.size(0), mat2.size(1)}, self.options().dtype(at::kInt));
-  return _int_mm_out_cuda(self, mat2, result);
-}
-
-static void baddbmm_bmm_out_dtype_checks(const Tensor& batch1, const Tensor& batch2, const Scalar& beta, const Scalar& alpha, const at::ScalarType out_dtype, const std::optional<Tensor>& self_baddbmm = std::nullopt) {
-  // ref ATen/native/LinearAlgebra.cpp common_checks_baddbmm_bmm
-  TORCH_CHECK(batch1.dim() == 3, "batch1 must be a 3D tensor");
-  TORCH_CHECK(batch2.dim() == 3, "batch2 must be a 3D tensor");
-
-  const auto batch1_sizes = batch1.sizes();
-  const auto batch2_sizes = batch2.sizes();
-
-  int64_t bs = batch1_sizes[0];
-  int64_t contraction_size = batch1_sizes[2];
-  int64_t res_rows = batch1_sizes[1];
-  int64_t res_cols = batch2_sizes[2];
-  std::vector<int64_t> output_size {bs, res_rows, res_cols};
-
-  TORCH_CHECK(batch2_sizes[0] == bs && batch2_sizes[1] == contraction_size,
-              "Expected size for first two dimensions of batch2 tensor to be: [",
-              bs, ", ", contraction_size, "] but got: [", batch2_sizes[0], ", ", batch2_sizes[1], "].");
-
-  TORCH_CHECK(batch1.scalar_type() == batch2.scalar_type(), "batch1 and batch2 must have the same dtype");
-
-  TORCH_CHECK(out_dtype == batch1.scalar_type() ||
-    (out_dtype == at::ScalarType::Float && (batch1.scalar_type() == at::ScalarType::Half || batch1.scalar_type() == at::ScalarType::BFloat16)),
-    "out_dtype must be the same as input dtype or fp32 for fp16/bf16 inputs");
-
-  if (self_baddbmm.has_value()) {
-    const auto& self = self_baddbmm.value();
-    TORCH_CHECK(self.dim() == 3, "self must be a 3D tensor");
-    TORCH_CHECK(self.sizes() == output_size, "self must have the same shape as the output");
-  }
-}
-
-Tensor _bmm_dtype_cuda(const Tensor& batch1, const Tensor& batch2, const at::ScalarType out_dtype) {
-  Tensor out = at::empty({batch1.size(0), batch1.size(1), batch2.size(2)}, batch1.options().dtype(out_dtype));
-  return _bmm_out_dtype_cuda(batch1, batch2, out_dtype, out);
-}
-
-Tensor& _bmm_out_dtype_cuda(const Tensor& batch1, const Tensor& batch2, const at::ScalarType out_dtype, Tensor &out) {
-  baddbmm_bmm_out_dtype_checks(batch1, batch2, 0.0, 1.0, out_dtype);
-  Scalar beta(0.0);
-  Scalar alpha(1.0);
-  {
-    NoNamesGuard guard;
-    baddbmm_out_cuda_impl(out, out, batch1, batch2, beta, alpha);
-  }
-
-  return out;
-}
-
-Tensor _baddbmm_dtype_cuda(const Tensor& self, const Tensor& batch1, const Tensor& batch2, const at::ScalarType out_dtype, const Scalar& beta, const Scalar& alpha) {
-  TORCH_CHECK(self.scalar_type() == out_dtype || self.scalar_type() == batch1.dtype(),
-  "self dtype must match either out_dtype or batch1 dtype");
-  Tensor out = at::empty({batch1.size(0), batch1.size(1), batch2.size(2)}, batch1.options().dtype(out_dtype));
-  return _baddbmm_out_dtype_cuda(self, batch1, batch2, out_dtype, beta, alpha, out);
-}
-
-Tensor& _baddbmm_out_dtype_cuda(const Tensor& self, const Tensor& batch1, const Tensor& batch2, const at::ScalarType out_dtype, const Scalar& beta, const Scalar& alpha, Tensor &out) {
-  baddbmm_bmm_out_dtype_checks(batch1, batch2, beta, alpha, out_dtype, out);
-  // We need to copy the tensor
-  out.copy_(self);
-  {
-    NoNamesGuard guard;
-    baddbmm_out_cuda_impl(out, out, batch1, batch2, beta, alpha);
-  }
-
-  return out;
-}
-
-Tensor _mm_dtype_cuda(const Tensor& self, const Tensor& mat2, const at::ScalarType out_dtype) {
-  Tensor result = at::empty({self.size(0), mat2.size(1)}, self.options().dtype(out_dtype));
-  return _mm_dtype_out_cuda(self, mat2, out_dtype, result);
-}
-
-Tensor& _mm_dtype_out_cuda(const Tensor& self, const Tensor& mat2, const at::ScalarType out_dtype, Tensor &out) {
-  TORCH_CHECK(self.dim() == 2,  "self must be a matrix, got ", self.dim(), "-D tensor");
-  TORCH_CHECK(mat2.dim() == 2,  "mat2 must be a matrix, got ", mat2.dim(), "-D tensor");
-  TORCH_CHECK(
-      self.sizes()[1] == mat2.sizes()[0], "mat1 and mat2 shapes cannot be multiplied (",
-      self.sizes()[0], "x", self.sizes()[1], " and ", mat2.sizes()[0], "x", mat2.sizes()[1], ")");
-
-  TORCH_CHECK(out_dtype == out.scalar_type(), "out_dtype must be the same as the dtype of the provided out tensor");
-  TORCH_CHECK(self.scalar_type() == mat2.scalar_type(), "input dtypes must be the same");
-  TORCH_CHECK(out_dtype == self.scalar_type() ||
-    (out_dtype == at::ScalarType::Float && (self.scalar_type() == at::ScalarType::Half || self.scalar_type() == at::ScalarType::BFloat16)),
-    "out_dtype must be the same as input dtype or fp32 for fp16/bf16 inputs");
-  TORCH_CHECK(out_dtype == out.scalar_type(), "out_dtype must be the same as the dtype of the provided out tensor");
-
-
-  addmm_out_cuda_impl(out, out, self, mat2, 0, 1);
-
-  return out;
-}
-
-Tensor _addmm_dtype_cuda(const Tensor& self, const Tensor& mat1, const Tensor& mat2, const at::ScalarType out_dtype, const Scalar& beta, const Scalar& alpha) {
-  TORCH_CHECK(mat1.dim() == 2, "mat1 must be a matrix, got ", mat1.dim(), "-D tensor");
-  TORCH_CHECK(mat2.dim() == 2, "mat2 must be a matrix, got ", mat2.dim(), "-D tensor");
-  Tensor result = at::empty({mat1.size(0), mat2.size(1)}, self.options().dtype(out_dtype));
-  return _addmm_dtype_out_cuda(self, mat1, mat2, out_dtype, beta, alpha, result);
-}
-
-Tensor& _addmm_dtype_out_cuda(const Tensor& self, const Tensor& mat1, const Tensor& mat2, const at::ScalarType out_dtype, const Scalar& beta, const Scalar& alpha, Tensor &out) {
-// repeat dimensionality checks for direct calls to `out` overload
-  TORCH_CHECK(mat1.dim() == 2, "mat1 must be a matrix, got ", mat1.dim(), "-D tensor");
-  TORCH_CHECK(mat2.dim() == 2, "mat2 must be a matrix, got ", mat2.dim(), "-D tensor");
-  TORCH_CHECK(
-      mat1.sizes()[1] == mat2.sizes()[0], "mat1 and mat2 shapes cannot be multiplied (",
-      mat1.sizes()[0], "x", mat1.sizes()[1], " and ", mat2.sizes()[0], "x", mat2.sizes()[1], ")");
-  TORCH_CHECK(mat1.scalar_type() == mat2.scalar_type(), "mat1 and mat2 must have the same dtype, but got ", mat1.scalar_type(), " and ", mat2.scalar_type());
-  TORCH_CHECK(out_dtype == mat1.scalar_type() ||
-  (out_dtype == at::ScalarType::Float && (mat1.scalar_type() == at::ScalarType::Half || mat1.scalar_type() == at::ScalarType::BFloat16)),
-  "out_dtype must be the same as input dtype or fp32 for fp16/bf16 inputs");
-
-  TORCH_CHECK(out_dtype == out.scalar_type(), "out_dtype must be the same as the dtype of the provided out tensor");
-  TORCH_CHECK(out_dtype == self.scalar_type() || self.scalar_type() == mat1.scalar_type(),
-    "self dtype must match either out_dtype or mat1 dtype");
-
-  addmm_out_cuda_impl(out, self, mat1, mat2, beta, alpha);
-
-  return out;
-}
-
 
 } // namespace at::native

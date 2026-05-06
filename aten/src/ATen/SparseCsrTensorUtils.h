@@ -9,8 +9,6 @@
 #include <ATen/NativeFunctions.h>
 #include <ATen/Operators.h>
 #else
-#include <ATen/ops/_sparse_compressed_tensor_unsafe.h>
-#include <ATen/ops/resize_as_sparse_native.h>
 #endif
 
 #define AT_DISPATCH_ALL_SPARSE_COMPRESSED_LAYOUTS(LAYOUT, NAME, ...) \
@@ -406,17 +404,7 @@ inline bool only_sparse_compressed_add_trivial_cases(
 }
 
 inline Tensor to_type(const Tensor& input, ScalarType dtype) {
-  auto [compressed_indices, plain_indices] =
-      at::sparse_csr::getCompressedPlainIndices(input);
-  return at::_sparse_compressed_tensor_unsafe(
-      compressed_indices,
-      plain_indices,
-      std::move(input.values()).to(dtype),
-      input.sizes(),
-      dtype,
-      input.layout(),
-      input.device(),
-      input.options().pinned_memory_opt());
+  TORCH_CHECK(false, "_sparse_compressed_tensor_unsafe (sparse ops) removed in EasyFHE");
 }
 
 template <typename acc_t, typename scalar_t>

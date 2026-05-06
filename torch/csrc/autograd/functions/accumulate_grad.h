@@ -12,7 +12,6 @@
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
 #else
-#include <ATen/ops/_sparse_coo_tensor_unsafe.h>
 #endif
 
 #include <mutex>
@@ -213,11 +212,7 @@ struct TORCH_API AccumulateGrad : public Node {
             !at::caching::is_cached_tensor(new_grad._values()) &&
             !at::caching::is_cached_tensor(new_grad));
 
-        update_grad(at::_sparse_coo_tensor_unsafe(
-            new_grad._indices(),
-            new_grad._values(),
-            new_grad.sizes(),
-            new_grad.options()));
+        update_grad(new_grad.clone());
       } else {
         if (new_grad.is_sparse() || new_grad.is_sparse_csr() ||
             new_grad.is_nested()) {

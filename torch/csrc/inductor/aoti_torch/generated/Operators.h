@@ -6582,6 +6582,314 @@ struct TORCH_API cpmul_broadcast_pt {
   static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & cipher, const at::Tensor & plaintext, const at::Tensor & param_primes, const at::Tensor & barret_mu, int64_t num_cipher, int64_t curr_limbs, int64_t N);
 };
 
+struct TORCH_API hardtanh {
+  using schema = at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::hardtanh";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "hardtanh(Tensor self, Scalar min_val=-1, Scalar max_val=1) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val);
+};
+
+struct TORCH_API hardtanh_ {
+  using schema = at::Tensor & (at::Tensor &, const at::Scalar &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::hardtanh_";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "hardtanh_(Tensor(a!) self, Scalar min_val=-1, Scalar max_val=1) -> Tensor(a!)";
+  static at::Tensor & call(at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val);
+};
+
+struct TORCH_API hardtanh_out {
+  using schema = at::Tensor & (const at::Tensor &, const at::Scalar &, const at::Scalar &, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::hardtanh";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "hardtanh.out(Tensor self, Scalar min_val=-1, Scalar max_val=1, *, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val, at::Tensor & out);
+};
+
+struct TORCH_API leaky_relu {
+  using schema = at::Tensor (const at::Tensor &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::leaky_relu";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "leaky_relu(Tensor self, Scalar negative_slope=0.01) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Scalar & negative_slope);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & negative_slope);
+};
+
+struct TORCH_API leaky_relu_ {
+  using schema = at::Tensor & (at::Tensor &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::leaky_relu_";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "leaky_relu_(Tensor(a!) self, Scalar negative_slope=0.01) -> Tensor(a!)";
+  static at::Tensor & call(at::Tensor & self, const at::Scalar & negative_slope);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & negative_slope);
+};
+
+struct TORCH_API leaky_relu_out {
+  using schema = at::Tensor & (const at::Tensor &, const at::Scalar &, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::leaky_relu";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "leaky_relu.out(Tensor self, Scalar negative_slope=0.01, *, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, const at::Scalar & negative_slope, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & negative_slope, at::Tensor & out);
+};
+
+struct TORCH_API leaky_relu_backward {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &, const at::Scalar &, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::leaky_relu_backward";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "leaky_relu_backward(Tensor grad_output, Tensor self, Scalar negative_slope, bool self_is_result) -> Tensor";
+  static at::Tensor call(const at::Tensor & grad_output, const at::Tensor & self, const at::Scalar & negative_slope, bool self_is_result);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Tensor & self, const at::Scalar & negative_slope, bool self_is_result);
+};
+
+struct TORCH_API elu {
+  using schema = at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::elu";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "elu(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale);
+};
+
+struct TORCH_API elu_ {
+  using schema = at::Tensor & (at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::elu_";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "elu_(Tensor(a!) self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1) -> Tensor(a!)";
+  static at::Tensor & call(at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale);
+};
+
+struct TORCH_API elu_out {
+  using schema = at::Tensor & (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::elu";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "elu.out(Tensor self, Scalar alpha=1, Scalar scale=1, Scalar input_scale=1, *, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, at::Tensor & out);
+};
+
+struct TORCH_API elu_backward {
+  using schema = at::Tensor (const at::Tensor &, const at::Scalar &, const at::Scalar &, const at::Scalar &, bool, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::elu_backward";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "elu_backward(Tensor grad_output, Scalar alpha, Scalar scale, Scalar input_scale, bool is_result, Tensor self_or_result) -> Tensor";
+  static at::Tensor call(const at::Tensor & grad_output, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, bool is_result, const at::Tensor & self_or_result);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, bool is_result, const at::Tensor & self_or_result);
+};
+
+struct TORCH_API _prelu_kernel {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_prelu_kernel";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_prelu_kernel(Tensor self, Tensor weight) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Tensor & weight);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & weight);
+};
+
+struct TORCH_API _prelu_kernel_backward {
+  using schema = ::std::tuple<at::Tensor,at::Tensor> (const at::Tensor &, const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_prelu_kernel_backward";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_prelu_kernel_backward(Tensor grad_output, Tensor self, Tensor weight) -> (Tensor, Tensor)";
+  static ::std::tuple<at::Tensor,at::Tensor> call(const at::Tensor & grad_output, const at::Tensor & self, const at::Tensor & weight);
+  static ::std::tuple<at::Tensor,at::Tensor> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & grad_output, const at::Tensor & self, const at::Tensor & weight);
+};
+
+struct TORCH_API log_sigmoid_forward {
+  using schema = ::std::tuple<at::Tensor,at::Tensor> (const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::log_sigmoid_forward";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "log_sigmoid_forward(Tensor self) -> (Tensor output, Tensor buffer)";
+  static ::std::tuple<at::Tensor,at::Tensor> call(const at::Tensor & self);
+  static ::std::tuple<at::Tensor,at::Tensor> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self);
+};
+
+struct TORCH_API log_sigmoid_forward_output {
+  using schema = ::std::tuple<at::Tensor &,at::Tensor &> (const at::Tensor &, at::Tensor &, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::log_sigmoid_forward";
+  static constexpr const char* overload_name = "output";
+  static constexpr const char* schema_str = "log_sigmoid_forward.output(Tensor self, *, Tensor(a!) output, Tensor(b!) buffer) -> (Tensor(a!), Tensor(b!))";
+  static ::std::tuple<at::Tensor &,at::Tensor &> call(const at::Tensor & self, at::Tensor & output, at::Tensor & buffer);
+  static ::std::tuple<at::Tensor &,at::Tensor &> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::Tensor & output, at::Tensor & buffer);
+};
+
+struct TORCH_API _sparse_compressed_tensor_unsafe {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &, const at::Tensor &, c10::SymIntArrayRef, ::std::optional<at::ScalarType>, ::std::optional<at::Layout>, ::std::optional<at::Device>, ::std::optional<bool>);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_sparse_compressed_tensor_unsafe";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_sparse_compressed_tensor_unsafe(Tensor compressed_indices, Tensor plain_indices, Tensor values, SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor";
+  static at::Tensor call(const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory);
+};
+
+struct TORCH_API _fft_c2c {
+  using schema = at::Tensor (const at::Tensor &, c10::SymIntArrayRef, int64_t, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_fft_c2c";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_fft_c2c(Tensor self, SymInt[] dim, int normalization, bool forward) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward);
+};
+
+struct TORCH_API _fft_c2c_out {
+  using schema = at::Tensor & (const at::Tensor &, c10::SymIntArrayRef, int64_t, bool, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_fft_c2c";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "_fft_c2c.out(Tensor self, SymInt[] dim, int normalization, bool forward, *, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out);
+};
+
+struct TORCH_API linalg_vector_norm {
+  using schema = at::Tensor (const at::Tensor &, const at::Scalar &, at::OptionalIntArrayRef, bool, ::std::optional<at::ScalarType>);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::linalg_vector_norm";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "linalg_vector_norm(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype);
+};
+
+struct TORCH_API linalg_vector_norm_out {
+  using schema = at::Tensor & (const at::Tensor &, const at::Scalar &, at::OptionalIntArrayRef, bool, ::std::optional<at::ScalarType>, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::linalg_vector_norm";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "linalg_vector_norm.out(Tensor self, Scalar ord=2, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype, at::Tensor & out);
+};
+
+struct TORCH_API _embedding_bag {
+  using schema = ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> (const at::Tensor &, const at::Tensor &, const at::Tensor &, bool, int64_t, bool, const ::std::optional<at::Tensor> &, bool, int64_t);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_embedding_bag";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_embedding_bag(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1) -> (Tensor, Tensor, Tensor, Tensor)";
+  static ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> call(const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx);
+  static ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx);
+};
+
+struct TORCH_API fbgemm_linear_fp16_weight_fp32_activation {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &, const ::std::optional<at::Tensor> &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::fbgemm_linear_fp16_weight_fp32_activation";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "fbgemm_linear_fp16_weight_fp32_activation(Tensor input, Tensor packed_weight, Tensor? bias) -> Tensor";
+  static at::Tensor call(const at::Tensor & input, const at::Tensor & packed_weight, const ::std::optional<at::Tensor> & bias);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & input, const at::Tensor & packed_weight, const ::std::optional<at::Tensor> & bias);
+};
+
+struct TORCH_API fbgemm_pack_gemm_matrix_fp16 {
+  using schema = at::Tensor (const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::fbgemm_pack_gemm_matrix_fp16";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "fbgemm_pack_gemm_matrix_fp16(Tensor input) -> Tensor";
+  static at::Tensor call(const at::Tensor & input);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & input);
+};
+
+struct TORCH_API _wrapped_linear_prepack {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &, const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_wrapped_linear_prepack";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_wrapped_linear_prepack(Tensor weight, Tensor weight_scale, Tensor weight_zero_point, Tensor bias) -> Tensor";
+  static at::Tensor call(const at::Tensor & weight, const at::Tensor & weight_scale, const at::Tensor & weight_zero_point, const at::Tensor & bias);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & weight_scale, const at::Tensor & weight_zero_point, const at::Tensor & bias);
+};
+
+struct TORCH_API _histogramdd_bin_edges {
+  using schema = ::std::vector<at::Tensor> (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_bin_edges";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_histogramdd_bin_edges(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor[]";
+  static ::std::vector<at::Tensor> call(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+  static ::std::vector<at::Tensor> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+};
+
+struct TORCH_API _histogramdd_from_bin_cts {
+  using schema = at::Tensor (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_from_bin_cts";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_histogramdd_from_bin_cts(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+};
+
+struct TORCH_API _histogramdd_from_bin_tensors {
+  using schema = at::Tensor (const at::Tensor &, at::TensorList, const ::std::optional<at::Tensor> &, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_from_bin_tensors";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "_histogramdd_from_bin_tensors(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density);
+};
+
+struct TORCH_API histogramdd {
+  using schema = ::std::tuple<at::Tensor,::std::vector<at::Tensor>> (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::histogramdd";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "histogramdd(Tensor self, int[] bins, float[]? range=None, Tensor? weight=None, bool density=False) -> (Tensor hist, Tensor[] bin_edges)";
+  static ::std::tuple<at::Tensor,::std::vector<at::Tensor>> call(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+  static ::std::tuple<at::Tensor,::std::vector<at::Tensor>> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density);
+};
+
 struct TORCH_API _new_zeros_with_same_feature_meta_out {
   using schema = at::Tensor & (const at::Tensor &, const at::Tensor &, int64_t, at::Tensor &);
   using ptr_schema = schema*;
@@ -8527,6 +8835,72 @@ struct TORCH_API alias_copy_out {
   static constexpr const char* schema_str = "alias_copy.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)";
   static at::Tensor & call(const at::Tensor & self, at::Tensor & out);
   static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::Tensor & out);
+};
+
+struct TORCH_API resize_as_sparse_out {
+  using schema = const at::Tensor & (const at::Tensor &, const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::resize_as_sparse";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "resize_as_sparse.out(Tensor self, Tensor the_template, *, Tensor(a!) out) -> Tensor(a!)";
+  static const at::Tensor & call(const at::Tensor & self, const at::Tensor & the_template, const at::Tensor & out);
+  static const at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template, const at::Tensor & out);
+};
+
+struct TORCH_API resize_as_sparse {
+  using schema = at::Tensor (const at::Tensor &, const at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::resize_as_sparse";
+  static constexpr const char* overload_name = "";
+  static constexpr const char* schema_str = "resize_as_sparse(Tensor self, Tensor the_template) -> Tensor";
+  static at::Tensor call(const at::Tensor & self, const at::Tensor & the_template);
+  static at::Tensor redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, const at::Tensor & the_template);
+};
+
+struct TORCH_API _embedding_bag_out {
+  using schema = ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> (const at::Tensor &, const at::Tensor &, const at::Tensor &, bool, int64_t, bool, const ::std::optional<at::Tensor> &, bool, int64_t, at::Tensor &, at::Tensor &, at::Tensor &, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_embedding_bag";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "_embedding_bag.out(Tensor weight, Tensor indices, Tensor offsets, bool scale_grad_by_freq=False, int mode=0, bool sparse=False, Tensor? per_sample_weights=None, bool include_last_offset=False, int padding_idx=-1, *, Tensor(a!) out0, Tensor(b!) out1, Tensor(c!) out2, Tensor(d!) out3) -> (Tensor(a!), Tensor(b!), Tensor(c!), Tensor(d!))";
+  static ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> call(const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx, at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3);
+  static ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx, at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3);
+};
+
+struct TORCH_API _histogramdd_bin_edges_out {
+  using schema = void (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool, at::TensorList);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_bin_edges";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "_histogramdd_bin_edges.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!)[] out) -> ()";
+  static void call(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::TensorList out);
+  static void redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::TensorList out);
+};
+
+struct TORCH_API _histogramdd_from_bin_cts_out {
+  using schema = at::Tensor & (const at::Tensor &, at::IntArrayRef, ::std::optional<at::ArrayRef<double>>, const ::std::optional<at::Tensor> &, bool, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_from_bin_cts";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "_histogramdd_from_bin_cts.out(Tensor self, int[] bins, *, float[]? range=None, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
+};
+
+struct TORCH_API _histogramdd_from_bin_tensors_out {
+  using schema = at::Tensor & (const at::Tensor &, at::TensorList, const ::std::optional<at::Tensor> &, bool, at::Tensor &);
+  using ptr_schema = schema*;
+  // See Note [static constexpr char* members for windows NVCC]
+  static constexpr const char* name = "aten::_histogramdd_from_bin_tensors";
+  static constexpr const char* overload_name = "out";
+  static constexpr const char* schema_str = "_histogramdd_from_bin_tensors.out(Tensor self, Tensor[] bins, *, Tensor? weight=None, bool density=False, Tensor(a!) out) -> Tensor(a!)";
+  static at::Tensor & call(const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
+  static at::Tensor & redispatch(c10::DispatchKeySet dispatchKeySet, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
 };
 } // namespace _ops
 } // namespace at

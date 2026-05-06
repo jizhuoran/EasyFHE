@@ -769,5 +769,35 @@ TORCH_API ::std::vector<at::Tensor> encrypt(const at::Tensor & ptx, const at::Te
 TORCH_API at::Tensor pre_encode(const at::Tensor & input, int64_t slots, int64_t M, const at::Tensor & rotGroup, const at::Tensor & ksiPows, const at::Tensor & bitrev);
 TORCH_API at::Tensor batched_pairwise_mac(const at::Tensor & cipher, const at::Tensor & plaintext, const at::Tensor & param_primes, const at::Tensor & barret_ratio, const at::Tensor & barret_k, int64_t num_batches, int64_t num_cipher, int64_t curr_limbs, int64_t N);
 TORCH_API at::Tensor cpmul_broadcast_pt(const at::Tensor & cipher, const at::Tensor & plaintext, const at::Tensor & param_primes, const at::Tensor & barret_mu, int64_t num_cipher, int64_t curr_limbs, int64_t N);
+TORCH_API at::Tensor hardtanh(const at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1);
+TORCH_API at::Tensor & hardtanh_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1);
+TORCH_API at::Tensor & hardtanh_outf(const at::Tensor & self, const at::Scalar & min_val, const at::Scalar & max_val, at::Tensor & out);
+TORCH_API at::Tensor & hardtanh_(at::Tensor & self, const at::Scalar & min_val=-1, const at::Scalar & max_val=1);
+TORCH_API at::Tensor leaky_relu(const at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor & leaky_relu_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor & leaky_relu_outf(const at::Tensor & self, const at::Scalar & negative_slope, at::Tensor & out);
+TORCH_API at::Tensor & leaky_relu_(at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor elu(const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor & elu_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor & elu_outf(const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, at::Tensor & out);
+TORCH_API at::Tensor & elu_(at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor _prelu_kernel(const at::Tensor & self, const at::Tensor & weight);
+TORCH_API ::std::tuple<at::Tensor,at::Tensor> _prelu_kernel_backward(const at::Tensor & grad_output, const at::Tensor & self, const at::Tensor & weight);
+TORCH_API ::std::tuple<at::Tensor,at::Tensor> log_sigmoid_forward(const at::Tensor & self);
+TORCH_API ::std::tuple<at::Tensor &,at::Tensor &> log_sigmoid_forward_out(at::Tensor & output, at::Tensor & buffer, const at::Tensor & self);
+TORCH_API ::std::tuple<at::Tensor &,at::Tensor &> log_sigmoid_forward_outf(const at::Tensor & self, at::Tensor & output, at::Tensor & buffer);
+TORCH_API at::Tensor _fft_c2c(const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward);
+TORCH_API at::Tensor _fft_c2c_symint(const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward);
+TORCH_API at::Tensor & _fft_c2c_out(at::Tensor & out, const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward);
+TORCH_API at::Tensor & _fft_c2c_outf(const at::Tensor & self, at::IntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out);
+TORCH_API at::Tensor & _fft_c2c_symint_out(at::Tensor & out, const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward);
+TORCH_API at::Tensor & _fft_c2c_symint_outf(const at::Tensor & self, c10::SymIntArrayRef dim, int64_t normalization, bool forward, at::Tensor & out);
+TORCH_API at::Tensor linalg_vector_norm(const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt);
+TORCH_API at::Tensor & linalg_vector_norm_out(at::Tensor & out, const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt);
+TORCH_API at::Tensor & linalg_vector_norm_outf(const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype, at::Tensor & out);
+TORCH_API ::std::tuple<at::Tensor,at::Tensor,at::Tensor,at::Tensor> _embedding_bag(const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq=false, int64_t mode=0, bool sparse=false, const ::std::optional<at::Tensor> & per_sample_weights={}, bool include_last_offset=false, int64_t padding_idx=-1);
+TORCH_API ::std::vector<at::Tensor> _histogramdd_bin_edges(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false);
+TORCH_API at::Tensor _histogramdd_from_bin_cts(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false);
+TORCH_API at::Tensor _histogramdd_from_bin_tensors(const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight={}, bool density=false);
 } // namespace cpu
 } // namespace at

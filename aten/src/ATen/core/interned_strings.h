@@ -228,31 +228,34 @@ namespace c10 {
   _(aten, is_autocast_xla_enabled)   \
   _(aten, get_autocast_dtype)        \
   _(aten, is_autocast_mps_enabled)   \
+  FORALL_ATEN_BASE_SYMBOLS(_)        \
+  /* EasyFHE: symbols for deleted ops still referenced by JIT passes */ \
+  _(aten, Generator) \
+  _(aten, Size) \
   _(aten, __interpolate) \
   _(aten, __upsample) \
   _(aten, __upsample_bilinear) \
   _(aten, __upsample_nearest) \
-  _(aten, _adaptive_avg_pool2d) \
   _(aten, _add_relu) \
   _(aten, _add_relu_) \
-  _(aten, _addmm_activation) \
   _(aten, _assert_int_or_pair) \
   _(aten, _batch_norm_impl_index) \
   _(aten, _batch_norm_with_update) \
   _(aten, _choose_qparams_per_tensor) \
-  _(aten, _convert_indices_from_coo_to_csr) \
-  _(aten, _convert_indices_from_csr_to_coo) \
-  _(aten, _empty_affine_quantized) \
+  _(aten, _convolution) \
+  _(aten, _embedding_bag) \
+  _(aten, _fft_c2c) \
   _(aten, _foreach_norm) \
   _(aten, _fused_dropout) \
   _(aten, _get_cpu_capability) \
   _(aten, _get_tracing_state) \
+  _(aten, _histogramdd_bin_edges) \
+  _(aten, _histogramdd_from_bin_cts) \
+  _(aten, _histogramdd_from_bin_tensors) \
   _(aten, _infer_size) \
   _(aten, _list_to_tensor) \
   _(aten, _log_softmax) \
-  _(aten, _log_softmax_backward_data) \
   _(aten, _native_batch_norm_legit) \
-  _(aten, _ncf_view) \
   _(aten, _nested_get) \
   _(aten, _no_grad_embedding_renorm_) \
   _(aten, _no_grad_fill_) \
@@ -260,192 +263,42 @@ namespace c10 {
   _(aten, _no_grad_uniform_) \
   _(aten, _no_grad_zero_) \
   _(aten, _pack_sequence) \
+  _(aten, _prelu_kernel) \
+  _(aten, _prelu_kernel_backward) \
   _(aten, _saturate_weight_to_fp16) \
-  _(aten, _slow_conv2d_backward) \
   _(aten, _slow_conv2d_forward) \
   _(aten, _softmax) \
-  _(aten, _softmax_backward_data) \
+  _(aten, _sparse_compressed_tensor_unsafe) \
   _(aten, _sparse_semi_structured_tile) \
+  _(aten, _standard_gamma) \
   _(aten, _tensor_to_list) \
+  _(aten, _test_optional_filled_intlist) \
+  _(aten, _test_optional_floatlist) \
+  _(aten, _test_optional_intlist) \
+  _(aten, _test_parallel_materialize) \
+  _(aten, _test_serialization_subcmul) \
   _(aten, _transformer_encoder_layer_fwd) \
+  _(aten, _wrapped_linear_prepack) \
   _(aten, adaptive_avg_pool1d) \
   _(aten, adaptive_avg_pool2d) \
   _(aten, adaptive_avg_pool3d) \
   _(aten, adaptive_max_pool2d) \
-  _(aten, adaptive_max_pool2d_backward) \
   _(aten, adaptive_max_pool3d) \
-  _(aten, adaptive_max_pool3d_backward) \
+  _(aten, addr) \
   _(aten, alpha_dropout) \
   _(aten, avg_pool1d) \
   _(aten, avg_pool2d) \
   _(aten, avg_pool3d) \
+  _(aten, batch_norm) \
   _(aten, batch_norm_stats) \
   _(aten, bilinear) \
+  _(aten, binomial) \
   _(aten, broadcast_shapes) \
-  _(aten, celu) \
-  _(aten, cholesky_inverse) \
-  _(aten, cholesky_solve) \
-  _(aten, conv) \
-  _(aten, convolution_backward) \
-  _(aten, convrelu) \
-  _(aten, cross) \
-  _(aten, cross_entropy_loss) \
-  _(aten, cudnn_batch_norm) \
-  _(aten, cudnn_convolution_add_relu) \
-  _(aten, cudnn_convolution_relu) \
-  _(aten, dequantize) \
-  _(aten, det) \
-  _(aten, digamma) \
-  _(aten, dist) \
-  _(aten, dist_backward) \
-  _(aten, dot) \
-  _(aten, elu) \
-  _(aten, elu_) \
-  _(aten, elu_backward) \
-  _(aten, embedding_renorm_) \
-  _(aten, erfc) \
-  _(aten, erfinv) \
-  _(aten, feature_alpha_dropout) \
-  _(aten, feature_dropout) \
-  _(aten, feature_dropout_) \
-  _(aten, gelu_) \
-  _(aten, gelu_backward) \
-  _(aten, ger) \
-  _(aten, glu) \
-  _(aten, gru) \
-  _(aten, hardshrink) \
-  _(aten, hardshrink_) \
-  _(aten, hardshrink_backward) \
-  _(aten, hardsigmoid_) \
-  _(aten, hardsigmoid_backward) \
-  _(aten, i0) \
-  _(aten, index_put_impl_) \
-  _(aten, inner) \
-  _(aten, instance_norm) \
-  _(aten, inverse) \
-  _(aten, kron) \
-  _(aten, leaky_relu) \
-  _(aten, leaky_relu_) \
-  _(aten, leaky_relu_backward) \
-  _(aten, lgamma) \
-  _(aten, linalg_cond) \
-  _(aten, linalg_cross) \
-  _(aten, linalg_det) \
-  _(aten, linalg_diagonal) \
-  _(aten, linalg_eigvals) \
-  _(aten, linalg_householder_product) \
-  _(aten, linalg_inv) \
-  _(aten, linalg_matmul) \
-  _(aten, linalg_matrix_exp) \
-  _(aten, linalg_matrix_power) \
-  _(aten, linalg_norm) \
-  _(aten, linalg_solve) \
-  _(aten, linalg_solve_triangular) \
-  _(aten, linalg_tensorinv) \
-  _(aten, logdet) \
-  _(aten, lstm) \
-  _(aten, matrix_exp) \
-  _(aten, matrix_power) \
-  _(aten, miopen_batch_norm) \
-  _(aten, miopen_convolution_add_relu) \
-  _(aten, miopen_convolution_relu) \
-  _(aten, mish) \
-  _(aten, mkldnn_convolution) \
-  _(aten, mse_loss) \
-  _(aten, multi_margin_loss) \
-  _(aten, multilabel_margin_loss) \
-  _(aten, native_batch_norm) \
-  _(aten, native_batch_norm_backward) \
-  _(aten, native_channel_shuffle) \
-  _(aten, native_dropout) \
-  _(aten, native_layer_norm) \
-  _(aten, nll_loss_forward) \
-  _(aten, nuclear_norm) \
-  _(aten, orgqr) \
-  _(aten, ormqr) \
-  _(aten, outer) \
-  _(aten, pinverse) \
-  _(aten, polygamma) \
-  _(aten, q_scale) \
-  _(aten, q_zero_point) \
-  _(aten, quantize_per_channel) \
-  _(aten, quantize_per_tensor) \
-  _(aten, quantized_gru) \
-  _(aten, quantized_lstm) \
-  _(aten, reflection_pad1d) \
-  _(aten, reflection_pad2d) \
-  _(aten, reflection_pad3d) \
-  _(aten, relu6) \
-  _(aten, relu6_) \
-  _(aten, relu) \
-  _(aten, replication_pad1d) \
-  _(aten, replication_pad2d) \
-  _(aten, replication_pad3d) \
-  _(aten, rrelu) \
-  _(aten, rrelu_with_noise) \
-  _(aten, selu) \
-  _(aten, silu_backward) \
-  _(aten, soft_margin_loss) \
-  _(aten, softplus) \
-  _(aten, softplus_backward) \
-  _(aten, softshrink) \
-  _(aten, softshrink_backward) \
-  _(aten, special_digamma) \
-  _(aten, special_entr) \
-  _(aten, special_erf) \
-  _(aten, special_erfc) \
-  _(aten, special_erfcx) \
-  _(aten, special_erfinv) \
-  _(aten, special_exp2) \
-  _(aten, special_expit) \
-  _(aten, special_expm1) \
-  _(aten, special_gammainc) \
-  _(aten, special_gammaincc) \
-  _(aten, special_gammaln) \
-  _(aten, special_i0) \
-  _(aten, special_i0e) \
-  _(aten, special_i1) \
-  _(aten, special_i1e) \
-  _(aten, special_log1p) \
-  _(aten, special_log_ndtr) \
-  _(aten, special_log_softmax) \
-  _(aten, special_logit) \
-  _(aten, special_logsumexp) \
-  _(aten, special_multigammaln) \
-  _(aten, special_ndtr) \
-  _(aten, special_ndtri) \
-  _(aten, special_polygamma) \
-  _(aten, special_psi) \
-  _(aten, special_round) \
-  _(aten, special_sinc) \
-  _(aten, special_softmax) \
-  _(aten, special_xlog1py) \
-  _(aten, special_xlogy) \
-  _(aten, special_zeta) \
-  _(aten, threshold) \
-  _(aten, threshold_backward) \
-  _(aten, upsample_bilinear2d) \
-  _(aten, upsample_linear1d) \
-  _(aten, upsample_nearest1d) \
-  _(aten, upsample_nearest2d) \
-  _(aten, upsample_nearest3d) \
-  _(aten, upsample_trilinear3d) \
-  _(aten, vdot) \
-  _(aten, xlogy) \
-  _(aten, Generator) \
-  _(aten, ParallelThreadPoolNative) \
-  _(aten, Size) \
-  _(aten, _convolution) \
-  _(aten, addbmm) \
-  _(aten, addmm) \
-  _(aten, addmv) \
-  _(aten, addr) \
-  _(aten, baddbmm) \
-  _(aten, batch_norm) \
-  _(aten, bmm) \
   _(aten, capitalize) \
+  _(aten, celu) \
   _(aten, center) \
   _(aten, confirmed_by_owner) \
+  _(aten, conv) \
   _(aten, conv1d) \
   _(aten, conv2d) \
   _(aten, conv3d) \
@@ -454,36 +307,67 @@ namespace c10 {
   _(aten, conv_transpose2d) \
   _(aten, conv_transpose3d) \
   _(aten, convolution) \
+  _(aten, convolution_backward) \
+  _(aten, convrelu) \
   _(aten, count) \
   _(aten, cpu) \
+  _(aten, cross_entropy_loss) \
   _(aten, cuda) \
+  _(aten, cudnn_batch_norm) \
+  _(aten, cudnn_convolution_add_relu) \
+  _(aten, cudnn_convolution_relu) \
   _(aten, degrees) \
+  _(aten, dequantize) \
+  _(aten, det) \
+  _(aten, digamma) \
+  _(aten, dist) \
+  _(aten, dist_backward) \
   _(aten, dropout) \
   _(aten, dropout_) \
   _(aten, dtype) \
   _(aten, einsum) \
   _(aten, element_size) \
+  _(aten, elu) \
+  _(aten, elu_) \
+  _(aten, elu_backward) \
   _(aten, embedding) \
   _(aten, embedding_bag) \
+  _(aten, embedding_renorm_) \
   _(aten, endswith) \
+  _(aten, erfc) \
+  _(aten, erfinv) \
   _(aten, expandtabs) \
   _(aten, extend) \
   _(aten, fabs) \
   _(aten, factorial) \
+  _(aten, fbgemm_linear_fp16_weight_fp32_activation) \
+  _(aten, fbgemm_pack_gemm_matrix_fp16) \
+  _(aten, feature_alpha_dropout) \
+  _(aten, feature_dropout) \
+  _(aten, feature_dropout_) \
   _(aten, find) \
   _(aten, foo) \
   _(aten, fork) \
   _(aten, gamma) \
   _(aten, gelu) \
+  _(aten, gelu_) \
   _(aten, get) \
   _(aten, getelem) \
+  _(aten, glu) \
   _(aten, group_norm) \
+  _(aten, gru) \
+  _(aten, hardshrink) \
   _(aten, hardsigmoid) \
+  _(aten, hardsigmoid_) \
   _(aten, hardswish) \
   _(aten, hardswish_) \
   _(aten, hardtanh) \
   _(aten, hardtanh_) \
+  _(aten, histogramdd) \
+  _(aten, i0) \
   _(aten, initial_seed) \
+  _(aten, instance_norm) \
+  _(aten, inverse) \
   _(aten, is_cuda) \
   _(aten, is_grad_enabled) \
   _(aten, is_non_overlapping_and_dense) \
@@ -503,49 +387,132 @@ namespace c10 {
   _(aten, items) \
   _(aten, join) \
   _(aten, layer_norm) \
+  _(aten, leaky_relu) \
+  _(aten, leaky_relu_) \
+  _(aten, leaky_relu_backward) \
+  _(aten, lgamma) \
+  _(aten, linalg_det) \
+  _(aten, linalg_householder_product) \
+  _(aten, linalg_inv) \
+  _(aten, linalg_matmul) \
+  _(aten, linalg_matrix_exp) \
+  _(aten, linalg_matrix_power) \
+  _(aten, linalg_vector_norm) \
   _(aten, linear) \
   _(aten, ljust) \
   _(aten, local_value) \
+  _(aten, log_sigmoid) \
+  _(aten, log_sigmoid_forward) \
+  _(aten, log_softmax) \
+  _(aten, logdet) \
+  _(aten, logit) \
   _(aten, lower) \
+  _(aten, lstm) \
   _(aten, lstrip) \
   _(aten, mathremainder) \
-  _(aten, matmul) \
-  _(aten, mm) \
+  _(aten, matrix_exp) \
+  _(aten, matrix_power) \
+  _(aten, max_pool1d) \
+  _(aten, max_pool2d) \
+  _(aten, max_pool2d_with_indices) \
+  _(aten, max_pool3d) \
+  _(aten, max_unpool2d) \
+  _(aten, max_unpool3d) \
+  _(aten, miopen_batch_norm) \
+  _(aten, miopen_convolution_add_relu) \
+  _(aten, miopen_convolution_relu) \
+  _(aten, mish) \
+  _(aten, mkldnn_convolution) \
   _(aten, modf) \
-  _(aten, mv) \
+  _(aten, multinomial) \
   _(aten, mvlgamma) \
+  _(aten, native_batch_norm) \
+  _(aten, native_channel_shuffle) \
+  _(aten, native_dropout) \
+  _(aten, native_layer_norm) \
+  _(aten, nll_loss_forward) \
+  _(aten, op) \
+  _(aten, orgqr) \
   _(aten, owner) \
   _(aten, owner_name) \
   _(aten, partition) \
+  _(aten, pinverse) \
+  _(aten, poisson) \
+  _(aten, polygamma) \
   _(aten, popitem) \
   _(aten, prelu) \
+  _(aten, q_scale) \
+  _(aten, q_zero_point) \
+  _(aten, quantize_per_channel) \
+  _(aten, quantize_per_tensor) \
   _(aten, radians) \
+  _(aten, reflection_pad1d) \
+  _(aten, reflection_pad2d) \
+  _(aten, reflection_pad3d) \
+  _(aten, relu) \
+  _(aten, relu6) \
+  _(aten, relu6_) \
   _(aten, relu_) \
   _(aten, remove) \
   _(aten, replace) \
+  _(aten, replication_pad1d) \
+  _(aten, replication_pad2d) \
+  _(aten, replication_pad3d) \
+  _(aten, resize_as_sparse) \
+  _(aten, resize_as_sparse_) \
   _(aten, reverse) \
   _(aten, rfind) \
   _(aten, rindex) \
   _(aten, rjust) \
   _(aten, rpartition) \
+  _(aten, rrelu) \
+  _(aten, rrelu_with_noise) \
   _(aten, rsplit) \
   _(aten, rstrip) \
   _(aten, seed) \
+  _(aten, selu) \
   _(aten, set_grad_enabled) \
   _(aten, silu) \
   _(aten, silu_) \
   _(aten, softmax) \
+  _(aten, softplus) \
+  _(aten, softshrink) \
+  _(aten, special_digamma) \
+  _(aten, special_erf) \
+  _(aten, special_erfc) \
+  _(aten, special_erfinv) \
+  _(aten, special_exp2) \
+  _(aten, special_expit) \
+  _(aten, special_expm1) \
+  _(aten, special_gammaln) \
+  _(aten, special_i0) \
+  _(aten, special_log1p) \
+  _(aten, special_logsumexp) \
+  _(aten, special_multigammaln) \
+  _(aten, special_polygamma) \
+  _(aten, special_psi) \
+  _(aten, special_round) \
+  _(aten, special_sinc) \
+  _(aten, special_softmax) \
   _(aten, splitlines) \
   _(aten, startswith) \
   _(aten, strip) \
+  _(aten, sum_to) \
   _(aten, swapcase) \
+  _(aten, threshold) \
   _(aten, title) \
   _(aten, to_here) \
   _(aten, update) \
   _(aten, upper) \
+  _(aten, upsample_bilinear2d) \
+  _(aten, upsample_linear1d) \
+  _(aten, upsample_nearest1d) \
+  _(aten, upsample_nearest2d) \
+  _(aten, upsample_nearest3d) \
+  _(aten, upsample_trilinear3d) \
   _(aten, warns) \
+  _(aten, your_op) \
   _(aten, zfill) \
-  FORALL_ATEN_BASE_SYMBOLS(_)        \
   _(onnx, Add)                       \
   _(onnx, Concat)                    \
   _(onnx, Constant)                  \
@@ -618,31 +585,6 @@ namespace c10 {
   _(attr, df_input_vjps)             \
   _(attr, df_input_captured_inputs)  \
   _(attr, df_input_captured_outputs) \
-  _(attr, _outputs) \
-  _(attr, bias) \
-  _(attr, cudnn_enable) \
-  _(attr, data_format) \
-  _(attr, dilations) \
-  _(attr, epsilon) \
-  _(attr, exclude_pad) \
-  _(attr, groups) \
-  _(attr, hidden_size) \
-  _(attr, keep_stats) \
-  _(attr, kernel) \
-  _(attr, max_val) \
-  _(attr, min_val) \
-  _(attr, momentum) \
-  _(attr, normalized_shape) \
-  _(attr, pads_begin) \
-  _(attr, pads_end) \
-  _(attr, rounding_type) \
-  _(attr, running_mean) \
-  _(attr, running_var) \
-  _(attr, strides) \
-  _(attr, train) \
-  _(attr, training) \
-  _(attr, transpose_b) \
-  _(attr, weights_format) \
   _(attr, df_output_vjps)            \
   _(attr, axes)                      \
   _(attr, symbolic_shape_inputs)     \
@@ -679,7 +621,28 @@ namespace c10 {
   _(attr, allowzero)                 \
   _(attr, seen_none)                 \
   _(attr, overload_name)             \
-  _(attr, node_stack_idx)
+  _(attr, node_stack_idx)              \
+  /* EasyFHE: attr symbols for deleted ops */ \
+  _(attr, _outputs) \
+  _(attr, axis) \
+  _(attr, data_format) \
+  _(attr, dilations) \
+  _(attr, epsilon) \
+  _(attr, exclude_pad) \
+  _(attr, groups) \
+  _(attr, hidden_size) \
+  _(attr, keep_stats) \
+  _(attr, kernel) \
+  _(attr, max_val) \
+  _(attr, min_val) \
+  _(attr, pads_begin) \
+  _(attr, pads_end) \
+  _(attr, reduction) \
+  _(attr, rounding_type) \
+  _(attr, strides) \
+  _(attr, train) \
+  _(attr, transpose_b) \
+  _(attr, weights_format) \
 
 enum class _keys : unique_t {
     #define DEFINE_KEY(ns, s) ns##_##s,

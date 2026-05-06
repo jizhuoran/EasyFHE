@@ -296,8 +296,7 @@ std::ostream& print(
   Tensor tensor;
 
   if (tensor_.is_mkldnn()) {
-    fmt::print(stream, "MKLDNN Tensor: ");
-    tensor = tensor_.to_dense().to(kCPU, kDouble).contiguous();
+    TORCH_CHECK(false, "MKLDNN tensors not supported in EasyFHE");
   } else if (tensor_.is_mps()) {
     // MPS does not support double tensors, so first copy then convert
     tensor = tensor_.to(kCPU).to(kDouble).contiguous();

@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <utility>
 #include <vector>
 
@@ -214,7 +215,10 @@ Tensor _reshape_from_tensor(const Tensor& self, const Tensor& shape_tensor) {
 
 Tensor _shape_as_tensor(const Tensor& self) {
   auto options = TensorOptions(at::kLong);
-  return at::tensor(self.sizes(), options);
+  auto sizes = self.sizes();
+  auto result = at::empty({static_cast<int64_t>(sizes.size())}, options);
+  std::memcpy(result.mutable_data_ptr<int64_t>(), sizes.data(), sizes.size() * sizeof(int64_t));
+  return result;
 }
 
 Tensor& set_(Tensor& result, Storage source) {

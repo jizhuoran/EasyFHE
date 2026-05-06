@@ -552,5 +552,15 @@ TORCH_API at::Tensor _remove_batch_dim_symint(const at::Tensor & self, int64_t l
 TORCH_API at::Tensor flatten_dense_tensors(at::TensorList tensors);
 TORCH_API ::std::vector<at::Tensor> unflatten_dense_tensors(const at::Tensor & flat, at::TensorList tensors);
 TORCH_API void _propagate_xla_data(const at::Tensor & input, const at::Tensor & output);
+TORCH_API at::Tensor leaky_relu_backward(const at::Tensor & grad_output, const at::Tensor & self, const at::Scalar & negative_slope, bool self_is_result);
+TORCH_API at::Tensor elu_backward(const at::Tensor & grad_output, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale, bool is_result, const at::Tensor & self_or_result);
+TORCH_API at::Tensor _sparse_compressed_tensor_unsafe(const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, at::IntArrayRef size, at::TensorOptions options={});
+TORCH_API at::Tensor _sparse_compressed_tensor_unsafe(const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, at::IntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory);
+TORCH_API at::Tensor _sparse_compressed_tensor_unsafe_symint(const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, at::TensorOptions options={});
+TORCH_API at::Tensor _sparse_compressed_tensor_unsafe_symint(const at::Tensor & compressed_indices, const at::Tensor & plain_indices, const at::Tensor & values, c10::SymIntArrayRef size, ::std::optional<at::ScalarType> dtype, ::std::optional<at::Layout> layout, ::std::optional<at::Device> device, ::std::optional<bool> pin_memory);
+TORCH_API at::Tensor fbgemm_linear_fp16_weight_fp32_activation(const at::Tensor & input, const at::Tensor & packed_weight, const ::std::optional<at::Tensor> & bias);
+TORCH_API at::Tensor fbgemm_pack_gemm_matrix_fp16(const at::Tensor & input);
+TORCH_API at::Tensor _wrapped_linear_prepack(const at::Tensor & weight, const at::Tensor & weight_scale, const at::Tensor & weight_zero_point, const at::Tensor & bias);
+TORCH_API ::std::tuple<at::Tensor,::std::vector<at::Tensor>> histogramdd(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false);
 } // namespace compositeimplicitautograd
 } // namespace at

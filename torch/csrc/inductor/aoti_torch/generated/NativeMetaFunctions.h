@@ -833,6 +833,21 @@ struct TORCH_API structured_isneginf : public TensorIteratorBase {
 
     void meta(const at::Tensor & self);
 };
+struct TORCH_API structured_leaky_relu : public TensorIteratorBase {
+
+
+    void meta(const at::Tensor & self, const at::Scalar & negative_slope);
+};
+struct TORCH_API structured_elu : public TensorIteratorBase {
+
+
+    void meta(const at::Tensor & self, const at::Scalar & alpha, const at::Scalar & scale, const at::Scalar & input_scale);
+};
+struct TORCH_API structured_linalg_vector_norm : public at::impl::MetaBase {
+
+
+    void meta(const at::Tensor & self, const at::Scalar & ord, at::OptionalIntArrayRef dim, bool keepdim, ::std::optional<at::ScalarType> dtype);
+};
 
 } // namespace meta
 } // namespace at

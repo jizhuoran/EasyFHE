@@ -27,13 +27,11 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros_like.h>
 #include <ATen/ops/ones_like.h>
-#include <ATen/ops/empty_quantized.h>
 #include <ATen/ops/gather.h>
 #include <ATen/ops/index_add_native.h>
 #include <ATen/ops/index_reduce_native.h>
 #include <ATen/ops/index_select_native.h>
 #include <ATen/ops/masked_fill_native.h>
-#include <ATen/ops/_sparse_coo_tensor_with_dims_and_tensors.h>
 #endif
 
 #include <ATen/cuda/CUDAContext.h>
@@ -1653,7 +1651,7 @@ void index_select_out_cuda_impl(
   }
 
   if (self.is_quantized()){
-      out = at::empty_quantized(newSize, out);
+      TORCH_CHECK(false, "quantized index_select not supported in EasyFHE");
   } else {
     at::native::resize_output(out, newSize);
   }
@@ -1894,8 +1892,8 @@ Tensor index_select_sparse_cuda(const Tensor& self, int64_t dim, const Tensor& i
       res_indices[dim] = res_dim_indices;
       const auto res_values = values.index_select(0, selected_dim_indices);
 
-      return at::_sparse_coo_tensor_with_dims_and_tensors(
-          sparse_dim, dense_dim, res_sizes, res_indices, res_values, self.options());
+      TORCH_CHECK(false, "sparse index_select not supported in EasyFHE");
+      return Tensor(); // unreachable
     };
 
     // short-circuit if index is empty
@@ -2037,8 +2035,8 @@ Tensor index_select_sparse_cuda(const Tensor& self, int64_t dim, const Tensor& i
     // if `dim` refers to dense dimensions.
     const auto res_values = values.index_select(dim - sparse_dim + 1, index);
 
-    return _sparse_coo_tensor_with_dims_and_tensors(
-        sparse_dim, dense_dim, res_sizes, indices, res_values, self.options());
+    TORCH_CHECK(false, "sparse index_select not supported in EasyFHE");
+    return Tensor(); // unreachable
   }
 }
 

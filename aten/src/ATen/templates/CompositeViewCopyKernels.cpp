@@ -8,7 +8,6 @@
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Operators.h>
 #else
-#include <ATen/ops/clone.h>
 $ops_headers
 #endif
 

@@ -9,7 +9,6 @@
 #include <ATen/NativeFunctions.h>
 #else
 #include <ATen/ops/resize_as_native.h>
-#include <ATen/ops/resize_as_sparse_native.h>
 #include <ATen/ops/resize_native.h>
 #include <ATen/ops/resize.h>
 #include <ATen/ops/_resize_output.h>
@@ -136,11 +135,7 @@ const Tensor& resize_as_(
     const Tensor& the_template,
     std::optional<MemoryFormat> optional_memory_format) {
   if (self.is_sparse() && the_template.is_sparse()) {
-    TORCH_CHECK(
-        !optional_memory_format.has_value(),
-        "Unsupported memory format for sparse tensor resize_as_ :",
-        optional_memory_format.value());
-    return at::native::resize_as_sparse_(self, the_template);
+    TORCH_CHECK(false, "resize_as_sparse_ removed in EasyFHE");
   }
   const Tensor& result = self.resize_(the_template.sizes());
   if (optional_memory_format.has_value()) {

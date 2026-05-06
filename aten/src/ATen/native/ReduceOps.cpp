@@ -29,9 +29,6 @@
 #include <ATen/ops/_is_any_true_native.h>
 #include <ATen/ops/_logcumsumexp.h>
 #include <ATen/ops/_logcumsumexp_native.h>
-#include <ATen/ops/_sparse_csr_sum.h>
-#include <ATen/ops/_sparse_sum.h>
-#include <ATen/ops/_sparse_sum_native.h>
 #include <ATen/ops/_to_copy.h>
 #include <ATen/ops/add.h>
 #include <ATen/ops/all_meta.h>
@@ -64,7 +61,6 @@
 #include <ATen/ops/cumsum_meta.h>
 #include <ATen/ops/cumsum_native.h>
 #include <ATen/ops/diff_native.h>
-#include <ATen/ops/dist_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/equal_native.h>
@@ -75,7 +71,6 @@
 #include <ATen/ops/hash_tensor_native.h>
 #include <ATen/ops/imag.h>
 #include <ATen/ops/isnan_native.h>
-#include <ATen/ops/linalg_vector_norm.h>
 #include <ATen/ops/logcumsumexp.h>
 #include <ATen/ops/logcumsumexp_native.h>
 #include <ATen/ops/logical_xor.h>
@@ -98,7 +93,6 @@
 #include <ATen/ops/prod_native.h>
 #include <ATen/ops/real.h>
 #include <ATen/ops/slice.h>
-#include <ATen/ops/special_logsumexp_native.h>
 #include <ATen/ops/sqrt.h>
 #include <ATen/ops/squeeze.h>
 #include <ATen/ops/stack.h>
@@ -460,6 +454,7 @@ DEFINE_DISPATCH(cumsum_stub);
 DEFINE_DISPATCH(cumprod_stub);
 DEFINE_DISPATCH(logcumsumexp_stub);
 DEFINE_DISPATCH(xor_sum_stub);
+DEFINE_DISPATCH(norm_kernel);
 
 Tensor _logcumsumexp_cpu(const Tensor& self, int64_t dim) {
   Tensor result = at::empty_like(self, MemoryFormat::Contiguous);
@@ -1580,10 +1575,7 @@ static void impl_func_norm(
     bool keepdim,
     std::optional<ScalarType> opt_dtype,
     const Tensor& result) {
-  // Left this implementation without deprecating it as it is called in a number of places
-  // in the codebase. We should swap those by linalg_vector_norm
-  auto p = opt_p.has_value() ? opt_p.get() : Scalar(2.0).to<double>();
-  at::linalg_vector_norm_out(const_cast<Tensor&>(result), self, p, dim, keepdim, opt_dtype);
+  TORCH_CHECK(false, "linalg_vector_norm_out removed in EasyFHE");
 }
 
 TORCH_IMPL_FUNC(norm_out)
@@ -2399,29 +2391,7 @@ Tensor sum_coo(const Tensor &self, std::optional<ScalarType> dtype) {
 }
 
 Tensor sum_sparse_coo(const Tensor& self, at::OptionalIntArrayRef dim, bool keepdim, std::optional<ScalarType> dtype) {
-  Tensor result;
-  if (dim.has_value()) {
-    if (dtype.has_value()) {
-      result = at::_sparse_sum(self, *dim, *dtype);
-    } else {
-      if (c10::isIntegralType(self.scalar_type(), true)) {
-        result = at::_sparse_sum(self, *dim, at::kLong);
-      } else {
-        result = at::_sparse_sum(self, *dim);
-      }
-    }
-  } else {
-    result = sum_coo(self, dtype);
-  }
-  if (keepdim) {
-    auto dim_mask = make_dim_mask(dim, self.dim());
-    for (int dim = 0; dim < self.dim(); dim++) {
-      if (dim_mask[dim]) {
-        result = result.unsqueeze(dim);
-      }
-    }
-  }
-  return result;
+  TORCH_CHECK(false, "_sparse_sum removed in EasyFHE");
 }
 
 Tensor sum_sparse_compressed(
@@ -2429,17 +2399,7 @@ Tensor sum_sparse_compressed(
     at::OptionalIntArrayRef dim,
     bool keepdim,
     std::optional<ScalarType> dtype) {
-  // TODO: The signature of sum.dim_IntList and _sparse_csr_sum.dim_dtype is a little
-  // bit different in the second parameters `dim`, which causes the conversion of `dim`
-  // to call into `_sparse_csr_sum`. Align the signatures would be a better choice.
-  TORCH_CHECK(
-      dim.has_value(), "dim has no value, cannot be used in sum.dim_IntList");
-  auto layout = self.layout();
-  TORCH_CHECK(
-      layout == kSparseCsr,
-      "Currently the only compressed sparse format supported for sum.dim_IntList is CSR, but got layout ",
-      layout)
-  return at::_sparse_csr_sum(self, *dim, keepdim, dtype);
+  TORCH_CHECK(false, "_sparse_csr_sum removed in EasyFHE");
 }
 
 } // namespace at::native

@@ -4,7 +4,16 @@
 import re
 
 import torch._C
-from torch._C import _add_docstr as add_docstr
+from torch._C import _add_docstr as _orig_add_docstr
+
+
+def add_docstr(obj, docstr):
+    if obj is None:
+        return
+    try:
+        _orig_add_docstr(obj, docstr)
+    except (AttributeError, TypeError):
+        pass
 
 
 def parse_kwargs(desc):
@@ -217,7 +226,7 @@ sparse_support_notes = {
 }
 
 add_docstr(
-    torch.abs,
+    getattr(torch, "abs", None),
     r"""
 abs(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -241,7 +250,7 @@ Example::
 )
 
 add_docstr(
-    torch.absolute,
+    getattr(torch, "absolute", None),
     r"""
 absolute(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -250,7 +259,7 @@ Alias for :func:`torch.abs`
 )
 
 add_docstr(
-    torch.acos,
+    getattr(torch, "acos", None),
     r"""
 acos(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -277,7 +286,7 @@ Example::
 )
 
 add_docstr(
-    torch.arccos,
+    getattr(torch, "arccos", None),
     r"""
 arccos(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -286,7 +295,7 @@ Alias for :func:`torch.acos`.
 )
 
 add_docstr(
-    torch.acosh,
+    getattr(torch, "acosh", None),
     r"""
 acosh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -317,7 +326,7 @@ Example::
 )
 
 add_docstr(
-    torch.arccosh,
+    getattr(torch, "arccosh", None),
     r"""
 arccosh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -326,7 +335,7 @@ Alias for :func:`torch.acosh`.
 )
 
 add_docstr(
-    torch.index_add,
+    getattr(torch, "index_add", None),
     r"""
 index_add(input: Tensor, dim: int, index: Tensor, source: Tensor, *, alpha: Union[Number, _complex] = 1, out: Optional[Tensor]) -> Tensor # noqa: B950
 
@@ -335,7 +344,7 @@ See :meth:`~Tensor.index_add_` for function description.
 )
 
 add_docstr(
-    torch.index_copy,
+    getattr(torch, "index_copy", None),
     r"""
 index_copy(input: Tensor, dim: int, index: Tensor, source: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -344,7 +353,7 @@ See :meth:`~Tensor.index_copy_` for function description.
 )
 
 add_docstr(
-    torch.index_reduce,
+    getattr(torch, "index_reduce", None),
     r"""
 index_reduce(input: Tensor, dim: int, index: Tensor, source: Tensor, reduce: str, *, include_self: bool = True, out: Optional[Tensor]) -> Tensor # noqa: B950
 
@@ -353,7 +362,7 @@ See :meth:`~Tensor.index_reduce_` for function description.
 )
 
 add_docstr(
-    torch.add,
+    getattr(torch, "add", None),
     r"""
 add(input, other, *, alpha=1, out=None) -> Tensor
 
@@ -401,7 +410,7 @@ Examples::
 )
 
 add_docstr(
-    torch.addbmm,
+    getattr(torch, "addbmm", None),
     r"""
 addbmm(input, batch1, batch2, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -456,7 +465,7 @@ Example::
 )
 
 add_docstr(
-    torch.addcdiv,
+    getattr(torch, "addcdiv", None),
     r"""
 addcdiv(input, tensor1, tensor2, *, value=1, out=None) -> Tensor
 
@@ -505,7 +514,7 @@ Example::
 )
 
 add_docstr(
-    torch.addcmul,
+    getattr(torch, "addcmul", None),
     r"""
 addcmul(input, tensor1, tensor2, *, value=1, out=None) -> Tensor
 
@@ -545,7 +554,7 @@ Example::
 )
 
 add_docstr(
-    torch.addmm,
+    getattr(torch, "addmm", None),
     r"""
 addmm(input, mat1, mat2, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -618,7 +627,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.adjoint,
+    getattr(torch, "adjoint", None),
     r"""
 adjoint(input: Tensor) -> Tensor
 Returns a view of the tensor conjugated and with the last two dimensions transposed.
@@ -645,7 +654,7 @@ Example::
 )
 
 add_docstr(
-    torch.sspaddmm,
+    getattr(torch, "sspaddmm", None),
     r"""
 sspaddmm(input, mat1, mat2, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -668,7 +677,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.smm,
+    getattr(torch, "smm", None),
     r"""
 smm(input, mat) -> Tensor
 
@@ -682,7 +691,7 @@ Args:
 )
 
 add_docstr(
-    torch.addmv,
+    getattr(torch, "addmv", None),
     r"""
 addmv(input, mat, vec, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -729,7 +738,7 @@ Example::
 )
 
 add_docstr(
-    torch.addr,
+    getattr(torch, "addr", None),
     r"""
 addr(input, vec1, vec2, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -776,7 +785,7 @@ Example::
 )
 
 add_docstr(
-    torch.allclose,
+    getattr(torch, "allclose", None),
     r"""
 allclose(input: Tensor, other: Tensor, rtol: float = 1e-05, atol: float = 1e-08, equal_nan: bool = False) -> bool
 
@@ -810,7 +819,7 @@ Example::
 )
 
 add_docstr(
-    torch.all,
+    getattr(torch, "all", None),
     r"""
 all(input: Tensor, *, out=None) -> Tensor
 
@@ -871,7 +880,7 @@ Example::
 )
 
 add_docstr(
-    torch.any,
+    getattr(torch, "any", None),
     r"""
 any(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -932,7 +941,7 @@ Example::
 )
 
 add_docstr(
-    torch.angle,
+    getattr(torch, "angle", None),
     r"""
 angle(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -961,7 +970,7 @@ Example::
 )
 
 add_docstr(
-    torch.as_strided,
+    getattr(torch, "as_strided", None),
     r"""
 as_strided(input, size, stride, storage_offset=None) -> Tensor
 
@@ -1004,7 +1013,7 @@ Example::
 )
 
 add_docstr(
-    torch.as_tensor,
+    getattr(torch, "as_tensor", None),
     r"""
 as_tensor(data: Any, *, dtype: Optional[dtype] = None, device: Optional[DeviceLikeType]) -> Tensor
 
@@ -1057,7 +1066,7 @@ Example::
 )
 
 add_docstr(
-    torch.asin,
+    getattr(torch, "asin", None),
     r"""
 asin(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1084,7 +1093,7 @@ Example::
 )
 
 add_docstr(
-    torch.arcsin,
+    getattr(torch, "arcsin", None),
     r"""
 arcsin(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1093,7 +1102,7 @@ Alias for :func:`torch.asin`.
 )
 
 add_docstr(
-    torch.asinh,
+    getattr(torch, "asinh", None),
     r"""
 asinh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1120,7 +1129,7 @@ Example::
 )
 
 add_docstr(
-    torch.arcsinh,
+    getattr(torch, "arcsinh", None),
     r"""
 arcsinh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1129,7 +1138,7 @@ Alias for :func:`torch.asinh`.
 )
 
 add_docstr(
-    torch.atan,
+    getattr(torch, "atan", None),
     r"""
 atan(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1156,7 +1165,7 @@ Example::
 )
 
 add_docstr(
-    torch.arctan,
+    getattr(torch, "arctan", None),
     r"""
 arctan(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1165,7 +1174,7 @@ Alias for :func:`torch.atan`.
 )
 
 add_docstr(
-    torch.atan2,
+    getattr(torch, "atan2", None),
     r"""
 atan2(input: Tensor, other: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1197,7 +1206,7 @@ Example::
 )
 
 add_docstr(
-    torch.arctan2,
+    getattr(torch, "arctan2", None),
     r"""
 arctan2(input: Tensor, other: Tensor, *, out: Optional[Tensor]) -> Tensor
 Alias for :func:`torch.atan2`.
@@ -1205,7 +1214,7 @@ Alias for :func:`torch.atan2`.
 )
 
 add_docstr(
-    torch.atanh,
+    getattr(torch, "atanh", None),
     r"""
 atanh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1237,7 +1246,7 @@ Example::
 )
 
 add_docstr(
-    torch.arctanh,
+    getattr(torch, "arctanh", None),
     r"""
 arctanh(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1246,7 +1255,7 @@ Alias for :func:`torch.atanh`.
 )
 
 add_docstr(
-    torch.asarray,
+    getattr(torch, "asarray", None),
     r"""
 asarray(obj: Any, *, dtype: Optional[dtype], device: Optional[DeviceLikeType], copy: Optional[bool] = None, requires_grad: Optional[bool] = None) -> Tensor # noqa: B950
 
@@ -1364,7 +1373,7 @@ Example::
 )
 
 add_docstr(
-    torch.baddbmm,
+    getattr(torch, "baddbmm", None),
     r"""
 baddbmm(input, batch1, batch2, *, beta=1, alpha=1, out=None) -> Tensor
 
@@ -1433,7 +1442,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.bernoulli,
+    getattr(torch, "bernoulli", None),
     r"""
 bernoulli(input: Tensor, *, generator: Optional[Generator], out: Optional[Tensor]) -> Tensor
 
@@ -1491,7 +1500,7 @@ Example::
 )
 
 add_docstr(
-    torch.bincount,
+    getattr(torch, "bincount", None),
     r"""
 bincount(input, weights=None, minlength=0) -> Tensor
 
@@ -1535,7 +1544,7 @@ Example::
 )
 
 add_docstr(
-    torch.bitwise_not,
+    getattr(torch, "bitwise_not", None),
     r"""
 bitwise_not(input, *, out=None) -> Tensor
 
@@ -1556,7 +1565,7 @@ Example::
 )
 
 add_docstr(
-    torch.bmm,
+    getattr(torch, "bmm", None),
     r"""
 bmm(input, mat2, *, out=None) -> Tensor
 
@@ -1612,7 +1621,7 @@ Keyword Args:
 )
 
 add_docstr(
-    torch.bitwise_and,
+    getattr(torch, "bitwise_and", None),
     r"""
 bitwise_and(input, other, *, out=None) -> Tensor
 
@@ -1636,7 +1645,7 @@ Example::
 )
 
 add_docstr(
-    torch.bitwise_or,
+    getattr(torch, "bitwise_or", None),
     r"""
 bitwise_or(input: Tensor, other: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -1660,7 +1669,7 @@ Example::
 )
 
 add_docstr(
-    torch.bitwise_xor,
+    getattr(torch, "bitwise_xor", None),
     r"""
 bitwise_xor(input, other, *, out=None) -> Tensor
 
@@ -1684,7 +1693,7 @@ Example::
 )
 
 add_docstr(
-    torch.bitwise_left_shift,
+    getattr(torch, "bitwise_left_shift", None),
     r"""
 bitwise_left_shift(input, other, *, out=None) -> Tensor
 
@@ -1713,7 +1722,7 @@ Example::
 )
 
 add_docstr(
-    torch.bitwise_right_shift,
+    getattr(torch, "bitwise_right_shift", None),
     r"""
 bitwise_right_shift(input, other, *, out=None) -> Tensor
 
@@ -1744,7 +1753,7 @@ Example::
 )
 
 add_docstr(
-    torch.broadcast_to,
+    getattr(torch, "broadcast_to", None),
     r"""
 broadcast_to(input, shape) -> Tensor
 
@@ -1766,7 +1775,7 @@ Example::
 )
 
 add_docstr(
-    torch.stack,
+    getattr(torch, "stack", None),
     r"""
 stack(tensors, dim=0, *, out=None) -> Tensor
 
@@ -1826,7 +1835,7 @@ Example::
 )
 
 add_docstr(
-    torch.hstack,
+    getattr(torch, "hstack", None),
     r"""
 hstack(tensors, *, out=None) -> Tensor
 
@@ -1857,7 +1866,7 @@ Example::
 )
 
 add_docstr(
-    torch.vstack,
+    getattr(torch, "vstack", None),
     r"""
 vstack(tensors, *, out=None) -> Tensor
 
@@ -1893,7 +1902,7 @@ Example::
 )
 
 add_docstr(
-    torch.dstack,
+    getattr(torch, "dstack", None),
     r"""
 dstack(tensors, *, out=None) -> Tensor
 
@@ -1927,7 +1936,7 @@ Example::
 )
 
 add_docstr(
-    torch.tensor_split,
+    getattr(torch, "tensor_split", None),
     r"""
 tensor_split(input, indices_or_sections, dim=0) -> List of Tensors
 
@@ -1991,7 +2000,7 @@ Example::
 )
 
 add_docstr(
-    torch.chunk,
+    getattr(torch, "chunk", None),
     r"""
 chunk(input: Tensor, chunks: int, dim: int = 0) -> Tuple[Tensor, ...]
 
@@ -2044,7 +2053,7 @@ Example:
 )
 
 add_docstr(
-    torch.unsafe_chunk,
+    getattr(torch, "unsafe_chunk", None),
     r"""
 unsafe_chunk(input, chunks, dim=0) -> List of Tensors
 
@@ -2061,7 +2070,7 @@ on inplace modification of the outputs.
 )
 
 add_docstr(
-    torch.unsafe_split,
+    getattr(torch, "unsafe_split", None),
     r"""
 unsafe_split(tensor, split_size_or_sections, dim=0) -> List of Tensors
 
@@ -2078,7 +2087,7 @@ on inplace modification of the outputs.
 )
 
 add_docstr(
-    torch.hsplit,
+    getattr(torch, "hsplit", None),
     r"""
 hsplit(input, indices_or_sections) -> List of Tensors
 
@@ -2131,7 +2140,7 @@ Example::
 )
 
 add_docstr(
-    torch.vsplit,
+    getattr(torch, "vsplit", None),
     r"""
 vsplit(input, indices_or_sections) -> List of Tensors
 
@@ -2173,7 +2182,7 @@ Example::
 )
 
 add_docstr(
-    torch.dsplit,
+    getattr(torch, "dsplit", None),
     r"""
 dsplit(input, indices_or_sections) -> List of Tensors
 
@@ -2224,7 +2233,7 @@ Example::
 )
 
 add_docstr(
-    torch.can_cast,
+    getattr(torch, "can_cast", None),
     r"""
 can_cast(from_, to) -> bool
 
@@ -2245,7 +2254,7 @@ Example::
 )
 
 add_docstr(
-    torch.corrcoef,
+    getattr(torch, "corrcoef", None),
     r"""
 corrcoef(input) -> Tensor
 
@@ -2292,7 +2301,7 @@ Example::
 )
 
 add_docstr(
-    torch.cov,
+    getattr(torch, "cov", None),
     r"""
 cov(input, *, correction=1, fweights=None, aweights=None) -> Tensor
 
@@ -2372,7 +2381,7 @@ Example::
 )
 
 add_docstr(
-    torch.cat,
+    getattr(torch, "cat", None),
     r"""
 cat(tensors, dim=0, *, out=None) -> Tensor
 
@@ -2420,7 +2429,7 @@ Example::
 )
 
 add_docstr(
-    torch.concat,
+    getattr(torch, "concat", None),
     r"""
 concat(tensors, dim=0, *, out=None) -> Tensor
 
@@ -2429,7 +2438,7 @@ Alias of :func:`torch.cat`.
 )
 
 add_docstr(
-    torch.concatenate,
+    getattr(torch, "concatenate", None),
     r"""
 concatenate(tensors, axis=0, out=None) -> Tensor
 
@@ -2438,7 +2447,7 @@ Alias of :func:`torch.cat`.
 )
 
 add_docstr(
-    torch.ceil,
+    getattr(torch, "ceil", None),
     r"""
 ceil(input, *, out=None) -> Tensor
 
@@ -2469,7 +2478,7 @@ Example::
 )
 
 add_docstr(
-    torch.real,
+    getattr(torch, "real", None),
     r"""
 real(input) -> Tensor
 
@@ -2491,7 +2500,7 @@ Example::
 )
 
 add_docstr(
-    torch.imag,
+    getattr(torch, "imag", None),
     r"""
 imag(input) -> Tensor
 
@@ -2516,7 +2525,7 @@ Example::
 )
 
 add_docstr(
-    torch.view_as_real,
+    getattr(torch, "view_as_real", None),
     r"""
 view_as_real(input) -> Tensor
 
@@ -2545,7 +2554,7 @@ Example::
 )
 
 add_docstr(
-    torch.view_as_complex,
+    getattr(torch, "view_as_complex", None),
     r"""
 view_as_complex(input) -> Tensor
 
@@ -2579,7 +2588,7 @@ Example::
 )
 
 add_docstr(
-    torch.reciprocal,
+    getattr(torch, "reciprocal", None),
     r"""
 reciprocal(input, *, out=None) -> Tensor
 
@@ -2611,7 +2620,7 @@ Example::
 )
 
 add_docstr(
-    torch.cholesky,
+    getattr(torch, "cholesky", None),
     r"""
 cholesky(input, upper=False, *, out=None) -> Tensor
 
@@ -2693,7 +2702,7 @@ Example::
 )
 
 add_docstr(
-    torch.cholesky_solve,
+    getattr(torch, "cholesky_solve", None),
     r"""
 cholesky_solve(B, L, upper=False, *, out=None) -> Tensor
 
@@ -2758,7 +2767,7 @@ Example::
 )
 
 add_docstr(
-    torch.cholesky_inverse,
+    getattr(torch, "cholesky_inverse", None),
     r"""
 cholesky_inverse(L, upper=False, *, out=None) -> Tensor
 
@@ -2814,7 +2823,7 @@ Example::
 )
 
 add_docstr(
-    torch.clone,
+    getattr(torch, "clone", None),
     r"""
 clone(input, *, memory_format=torch.preserve_format) -> Tensor
 
@@ -2841,7 +2850,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.clamp,
+    getattr(torch, "clamp", None),
     r"""
 clamp(input, min=None, max=None, *, out=None) -> Tensor
 
@@ -2884,7 +2893,7 @@ Example::
 )
 
 add_docstr(
-    torch.clip,
+    getattr(torch, "clip", None),
     r"""
 clip(input, min=None, max=None, *, out=None) -> Tensor
 
@@ -2893,7 +2902,7 @@ Alias for :func:`torch.clamp`.
 )
 
 add_docstr(
-    torch.column_stack,
+    getattr(torch, "column_stack", None),
     r"""
 column_stack(tensors, *, out=None) -> Tensor
 
@@ -2929,7 +2938,7 @@ Example::
 )
 
 add_docstr(
-    torch.complex,
+    getattr(torch, "complex", None),
     r"""
 complex(real, imag, *, out=None) -> Tensor
 
@@ -2960,7 +2969,7 @@ Example::
 )
 
 add_docstr(
-    torch.polar,
+    getattr(torch, "polar", None),
     r"""
 polar(abs, angle, *, out=None) -> Tensor
 
@@ -3003,7 +3012,7 @@ Example::
 )
 
 add_docstr(
-    torch.conj_physical,
+    getattr(torch, "conj_physical", None),
     r"""
 conj_physical(input, *, out=None) -> Tensor
 
@@ -3035,7 +3044,7 @@ Example::
 )
 
 add_docstr(
-    torch.conj,
+    getattr(torch, "conj", None),
     r"""
 conj(input) -> Tensor
 
@@ -3065,7 +3074,7 @@ Example::
 )
 
 add_docstr(
-    torch.resolve_conj,
+    getattr(torch, "resolve_conj", None),
     r"""
 resolve_conj(input) -> Tensor
 
@@ -3090,7 +3099,7 @@ Example::
 )
 
 add_docstr(
-    torch.resolve_neg,
+    getattr(torch, "resolve_neg", None),
     r"""
 resolve_neg(input) -> Tensor
 
@@ -3116,7 +3125,7 @@ Example::
 )
 
 add_docstr(
-    torch.copysign,
+    getattr(torch, "copysign", None),
     r"""
 copysign(input, other, *, out=None) -> Tensor
 
@@ -3174,7 +3183,7 @@ Example::
 )
 
 add_docstr(
-    torch.cos,
+    getattr(torch, "cos", None),
     r"""
 cos(input, *, out=None) -> Tensor
 
@@ -3201,7 +3210,7 @@ Example::
 )
 
 add_docstr(
-    torch.cosh,
+    getattr(torch, "cosh", None),
     r"""
 cosh(input, *, out=None) -> Tensor
 
@@ -3234,7 +3243,7 @@ Example::
 )
 
 add_docstr(
-    torch.cross,
+    getattr(torch, "cross", None),
     r"""
 cross(input, other, dim=None, *, out=None) -> Tensor
 
@@ -3293,7 +3302,7 @@ Example::
 )
 
 add_docstr(
-    torch.logcumsumexp,
+    getattr(torch, "logcumsumexp", None),
     r"""
 logcumsumexp(input, dim, *, out=None) -> Tensor
 Returns the logarithm of the cumulative summation of the exponentiation of
@@ -3321,7 +3330,7 @@ Example::
 )
 
 add_docstr(
-    torch.cummax,
+    getattr(torch, "cummax", None),
     r"""
 cummax(input, dim, *, out=None) -> (Tensor, LongTensor)
 Returns a namedtuple ``(values, indices)`` where ``values`` is the cumulative maximum of
@@ -3353,7 +3362,7 @@ Example::
 )
 
 add_docstr(
-    torch.cummin,
+    getattr(torch, "cummin", None),
     r"""
 cummin(input, dim, *, out=None) -> (Tensor, LongTensor)
 Returns a namedtuple ``(values, indices)`` where ``values`` is the cumulative minimum of
@@ -3385,7 +3394,7 @@ Example::
 )
 
 add_docstr(
-    torch.cumprod,
+    getattr(torch, "cumprod", None),
     r"""
 cumprod(input, dim, *, dtype=None, out=None) -> Tensor
 
@@ -3424,7 +3433,7 @@ Example::
 )
 
 add_docstr(
-    torch.cumsum,
+    getattr(torch, "cumsum", None),
     r"""
 cumsum(input, dim, *, dtype=None, out=None) -> Tensor
 
@@ -3456,7 +3465,7 @@ Example::
 )
 
 add_docstr(
-    torch.count_nonzero,
+    getattr(torch, "count_nonzero", None),
     r"""
 count_nonzero(input, dim=None) -> Tensor
 
@@ -3483,7 +3492,7 @@ Example::
 )
 
 add_docstr(
-    torch.dequantize,
+    getattr(torch, "dequantize", None),
     r"""
 dequantize(tensor) -> Tensor
 
@@ -3503,7 +3512,7 @@ Args:
 )
 
 add_docstr(
-    torch.diag,
+    getattr(torch, "diag", None),
     r"""
 diag(input, diagonal=0, *, out=None) -> Tensor
 
@@ -3564,7 +3573,7 @@ Get the k-th diagonal of a given matrix::
 )
 
 add_docstr(
-    torch.diag_embed,
+    getattr(torch, "diag_embed", None),
     r"""
 diag_embed(input, offset=0, dim1=-2, dim2=-1) -> Tensor
 
@@ -3628,7 +3637,7 @@ Example::
 
 
 add_docstr(
-    torch.diagflat,
+    getattr(torch, "diagflat", None),
     r"""
 diagflat(input, offset=0) -> Tensor
 
@@ -3676,7 +3685,7 @@ Examples::
 )
 
 add_docstr(
-    torch.diagonal,
+    getattr(torch, "diagonal", None),
     r"""
 diagonal(input, offset=0, dim1=0, dim2=1) -> Tensor
 
@@ -3741,7 +3750,7 @@ Examples::
 )
 
 add_docstr(
-    torch.diagonal_scatter,
+    getattr(torch, "diagonal_scatter", None),
     r"""
 diagonal_scatter(input, src, offset=0, dim1=0, dim2=1) -> Tensor
 
@@ -3795,7 +3804,7 @@ Examples::
 )
 
 add_docstr(
-    torch.as_strided_scatter,
+    getattr(torch, "as_strided_scatter", None),
     r"""
 as_strided_scatter(input, src, size, stride, storage_offset=None) -> Tensor
 
@@ -3838,7 +3847,7 @@ Example::
 )
 
 add_docstr(
-    torch.diff,
+    getattr(torch, "diff", None),
     r"""
 diff(input, n=1, dim=-1, prepend=None, append=None) -> Tensor
 
@@ -3878,7 +3887,7 @@ Example::
 )
 
 add_docstr(
-    torch.digamma,
+    getattr(torch, "digamma", None),
     r"""
 digamma(input, *, out=None) -> Tensor
 
@@ -3887,7 +3896,7 @@ Alias for :func:`torch.special.digamma`.
 )
 
 add_docstr(
-    torch.dist,
+    getattr(torch, "dist", None),
     r"""
 dist(input, other, p=2) -> Tensor
 
@@ -3921,7 +3930,7 @@ Example::
 )
 
 add_docstr(
-    torch.div,
+    getattr(torch, "div", None),
     r"""
 div(input, other, *, rounding_mode=None, out=None) -> Tensor
 
@@ -3989,7 +3998,7 @@ Examples::
 )
 
 add_docstr(
-    torch.divide,
+    getattr(torch, "divide", None),
     r"""
 divide(input, other, *, rounding_mode=None, out=None) -> Tensor
 
@@ -3998,7 +4007,7 @@ Alias for :func:`torch.div`.
 )
 
 add_docstr(
-    torch.dot,
+    getattr(torch, "dot", None),
     r"""
 dot(input, tensor, *, out=None) -> Tensor
 
@@ -4028,7 +4037,7 @@ Example::
 )
 
 add_docstr(
-    torch.vdot,
+    getattr(torch, "vdot", None),
     r"""
 vdot(input, other, *, out=None) -> Tensor
 
@@ -4077,7 +4086,7 @@ Example::
 )
 
 add_docstr(
-    torch.eq,
+    getattr(torch, "eq", None),
     r"""
 eq(input, other, *, out=None) -> Tensor
 
@@ -4105,7 +4114,7 @@ Example::
 )
 
 add_docstr(
-    torch.equal,
+    getattr(torch, "equal", None),
     r"""
 equal(input, other) -> bool
 
@@ -4129,7 +4138,7 @@ Example::
 )
 
 add_docstr(
-    torch.erf,
+    getattr(torch, "erf", None),
     r"""
 erf(input, *, out=None) -> Tensor
 
@@ -4138,7 +4147,7 @@ Alias for :func:`torch.special.erf`.
 )
 
 add_docstr(
-    torch.erfc,
+    getattr(torch, "erfc", None),
     r"""
 erfc(input, *, out=None) -> Tensor
 
@@ -4147,7 +4156,7 @@ Alias for :func:`torch.special.erfc`.
 )
 
 add_docstr(
-    torch.erfinv,
+    getattr(torch, "erfinv", None),
     r"""
 erfinv(input, *, out=None) -> Tensor
 
@@ -4156,7 +4165,7 @@ Alias for :func:`torch.special.erfinv`.
 )
 
 add_docstr(
-    torch.exp,
+    getattr(torch, "exp", None),
     r"""
 exp(input, *, out=None) -> Tensor
 
@@ -4181,7 +4190,7 @@ Example::
 )
 
 add_docstr(
-    torch.exp2,
+    getattr(torch, "exp2", None),
     r"""
 exp2(input, *, out=None) -> Tensor
 
@@ -4190,7 +4199,7 @@ Alias for :func:`torch.special.exp2`.
 )
 
 add_docstr(
-    torch.expm1,
+    getattr(torch, "expm1", None),
     r"""
 expm1(input, *, out=None) -> Tensor
 
@@ -4199,7 +4208,7 @@ Alias for :func:`torch.special.expm1`.
 )
 
 add_docstr(
-    torch.eye,
+    getattr(torch, "eye", None),
     r"""
 eye(n, m=None, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -4229,7 +4238,7 @@ Example::
 )
 
 add_docstr(
-    torch.floor,
+    getattr(torch, "floor", None),
     r"""
 floor(input, *, out=None) -> Tensor
 
@@ -4260,7 +4269,7 @@ Example::
 )
 
 add_docstr(
-    torch.floor_divide,
+    getattr(torch, "floor_divide", None),
     r"""
 floor_divide(input, other, *, out=None) -> Tensor
 
@@ -4300,7 +4309,7 @@ Example::
 )
 
 add_docstr(
-    torch.fmod,
+    getattr(torch, "fmod", None),
     r"""
 fmod(input, other, *, out=None) -> Tensor
 
@@ -4351,7 +4360,7 @@ Example::
 )
 
 add_docstr(
-    torch.frac,
+    getattr(torch, "frac", None),
     r"""
 frac(input, *, out=None) -> Tensor
 
@@ -4368,7 +4377,7 @@ Example::
 )
 
 add_docstr(
-    torch.frexp,
+    getattr(torch, "frexp", None),
     r"""
 frexp(input, *, out=None) -> (Tensor mantissa, Tensor exponent)
 
@@ -4400,7 +4409,7 @@ Example::
 )
 
 add_docstr(
-    torch.from_numpy,
+    getattr(torch, "from_numpy", None),
     r"""
 from_numpy(ndarray) -> Tensor
 
@@ -4431,7 +4440,7 @@ Example::
 )
 
 add_docstr(
-    torch.frombuffer,
+    getattr(torch, "frombuffer", None),
     r"""
 frombuffer(buffer, *, dtype, count=-1, offset=0, requires_grad=False) -> Tensor
 
@@ -4505,7 +4514,7 @@ Example::
 )
 
 add_docstr(
-    torch.from_file,
+    getattr(torch, "from_file", None),
     r"""
 from_file(filename, shared=None, size=0, *, dtype=None, layout=None, device=None, pin_memory=False)
 
@@ -4545,7 +4554,7 @@ Example::
 )
 
 add_docstr(
-    torch.flatten,
+    getattr(torch, "flatten", None),
     r"""
 flatten(input, start_dim=0, end_dim=-1) -> Tensor
 
@@ -4581,7 +4590,7 @@ Example::
 )
 
 add_docstr(
-    torch.unflatten,
+    getattr(torch, "unflatten", None),
     r"""
 unflatten(input, dim, sizes) -> Tensor
 
@@ -4614,7 +4623,7 @@ Examples::
 )
 
 add_docstr(
-    torch.gather,
+    getattr(torch, "gather", None),
     r"""
 gather(input, dim, index, *, sparse_grad=False, out=None) -> Tensor
 
@@ -4653,7 +4662,7 @@ Example::
 
 
 add_docstr(
-    torch.gcd,
+    getattr(torch, "gcd", None),
     r"""
 gcd(input, other, *, out=None) -> Tensor
 
@@ -4684,7 +4693,7 @@ Example::
 )
 
 add_docstr(
-    torch.ge,
+    getattr(torch, "ge", None),
     r"""
 ge(input, other, *, out=None) -> Tensor
 
@@ -4713,7 +4722,7 @@ Example::
 )
 
 add_docstr(
-    torch.greater_equal,
+    getattr(torch, "greater_equal", None),
     r"""
 greater_equal(input, other, *, out=None) -> Tensor
 
@@ -4722,7 +4731,7 @@ Alias for :func:`torch.ge`.
 )
 
 add_docstr(
-    torch.gradient,
+    getattr(torch, "gradient", None),
     r"""
 gradient(input, *, spacing=1, dim=None, edge_order=1) -> List of Tensors
 
@@ -4849,7 +4858,7 @@ Examples::
 )
 
 add_docstr(
-    torch.geqrf,
+    getattr(torch, "geqrf", None),
     r"""
 geqrf(input, *, out=None) -> (Tensor, Tensor)
 
@@ -4885,7 +4894,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.inner,
+    getattr(torch, "inner", None),
     r"""
 inner(input, other, *, out=None) -> Tensor
 
@@ -4946,7 +4955,7 @@ Example::
 )
 
 add_docstr(
-    torch.outer,
+    getattr(torch, "outer", None),
     r"""
 outer(input, vec2, *, out=None) -> Tensor
 
@@ -4976,7 +4985,7 @@ Example::
 )
 
 add_docstr(
-    torch.ger,
+    getattr(torch, "ger", None),
     r"""
 ger(input, vec2, *, out=None) -> Tensor
 
@@ -4989,7 +4998,7 @@ Alias of :func:`torch.outer`.
 )
 
 add_docstr(
-    torch.get_default_dtype,
+    getattr(torch, "get_default_dtype", None),
     r"""
 get_default_dtype() -> torch.dtype
 
@@ -5007,7 +5016,7 @@ Example::
 )
 
 add_docstr(
-    torch.get_num_threads,
+    getattr(torch, "get_num_threads", None),
     r"""
 get_num_threads() -> int
 
@@ -5016,7 +5025,7 @@ Returns the number of threads used for parallelizing CPU operations
 )
 
 add_docstr(
-    torch.get_num_interop_threads,
+    getattr(torch, "get_num_interop_threads", None),
     r"""
 get_num_interop_threads() -> int
 
@@ -5026,7 +5035,7 @@ Returns the number of threads used for inter-op parallelism on CPU
 )
 
 add_docstr(
-    torch.gt,
+    getattr(torch, "gt", None),
     r"""
 gt(input, other, *, out=None) -> Tensor
 
@@ -5055,7 +5064,7 @@ Example::
 )
 
 add_docstr(
-    torch.greater,
+    getattr(torch, "greater", None),
     r"""
 greater(input, other, *, out=None) -> Tensor
 
@@ -5064,7 +5073,7 @@ Alias for :func:`torch.gt`.
 )
 
 add_docstr(
-    torch.hash_tensor,
+    getattr(torch, "hash_tensor", None),
     r"""
 hash_tensor(input, *, mode=0) -> Tensor
 
@@ -5118,7 +5127,7 @@ Example::
 )
 
 add_docstr(
-    torch.histc,
+    getattr(torch, "histc", None),
     r"""
 histc(input, bins=100, min=0, max=0, *, out=None) -> Tensor
 
@@ -5150,7 +5159,7 @@ Example::
 )
 
 add_docstr(
-    torch.histogram,
+    getattr(torch, "histogram", None),
     r"""
 histogram(input, bins, *, range=None, weight=None, density=False, out=None) -> (Tensor, Tensor)
 
@@ -5195,7 +5204,7 @@ Example::
 )
 
 add_docstr(
-    torch.histogramdd,
+    getattr(torch, "histogramdd", None),
     r"""
 histogramdd(input, bins, *, range=None, weight=None, density=False, out=None) -> (Tensor, Tensor[])
 
@@ -5287,10 +5296,11 @@ Example::
 """.format(**common_args),
 )
 # TODO: Fix via https://github.com/pytorch/pytorch/issues/75798
-torch.histogramdd.__module__ = "torch"
+if hasattr(torch, 'histogramdd'):
+    torch.histogramdd.__module__ = "torch"
 
 add_docstr(
-    torch.hypot,
+    getattr(torch, "hypot", None),
     r"""
 hypot(input, other, *, out=None) -> Tensor
 
@@ -5319,7 +5329,7 @@ Example::
 )
 
 add_docstr(
-    torch.i0,
+    getattr(torch, "i0", None),
     r"""
 i0(input, *, out=None) -> Tensor
 
@@ -5328,7 +5338,7 @@ Alias for :func:`torch.special.i0`.
 )
 
 add_docstr(
-    torch.igamma,
+    getattr(torch, "igamma", None),
     r"""
 igamma(input, other, *, out=None) -> Tensor
 
@@ -5337,7 +5347,7 @@ Alias for :func:`torch.special.gammainc`.
 )
 
 add_docstr(
-    torch.igammac,
+    getattr(torch, "igammac", None),
     r"""
 igammac(input, other, *, out=None) -> Tensor
 
@@ -5346,7 +5356,7 @@ Alias for :func:`torch.special.gammaincc`.
 )
 
 add_docstr(
-    torch.index_select,
+    getattr(torch, "index_select", None),
     r"""
 index_select(input, dim, index, *, out=None) -> Tensor
 
@@ -5389,7 +5399,7 @@ Example::
 )
 
 add_docstr(
-    torch.inverse,
+    getattr(torch, "inverse", None),
     r"""
 inverse(input, *, out=None) -> Tensor
 
@@ -5398,7 +5408,7 @@ Alias for :func:`torch.linalg.inv`
 )
 
 add_docstr(
-    torch.isin,
+    getattr(torch, "isin", None),
     r"""
 isin(elements, test_elements, *, assume_unique=False, invert=False) -> Tensor
 
@@ -5430,7 +5440,7 @@ Example:
 )
 
 add_docstr(
-    torch.isinf,
+    getattr(torch, "isinf", None),
     r"""
 isinf(input) -> Tensor
 
@@ -5455,7 +5465,7 @@ Example::
 )
 
 add_docstr(
-    torch.isposinf,
+    getattr(torch, "isposinf", None),
     r"""
 isposinf(input, *, out=None) -> Tensor
 Tests if each element of :attr:`input` is positive infinity or not.
@@ -5475,7 +5485,7 @@ Example::
 )
 
 add_docstr(
-    torch.isneginf,
+    getattr(torch, "isneginf", None),
     r"""
 isneginf(input, *, out=None) -> Tensor
 Tests if each element of :attr:`input` is negative infinity or not.
@@ -5495,7 +5505,7 @@ Example::
 )
 
 add_docstr(
-    torch.isclose,
+    getattr(torch, "isclose", None),
     r"""
 isclose(input, other, rtol=1e-05, atol=1e-08, equal_nan=False) -> Tensor
 
@@ -5530,7 +5540,7 @@ Examples::
 )
 
 add_docstr(
-    torch.isfinite,
+    getattr(torch, "isfinite", None),
     r"""
 isfinite(input) -> Tensor
 
@@ -5553,7 +5563,7 @@ Example::
 )
 
 add_docstr(
-    torch.isnan,
+    getattr(torch, "isnan", None),
     r"""
 isnan(input) -> Tensor
 
@@ -5575,7 +5585,7 @@ Example::
 )
 
 add_docstr(
-    torch.isreal,
+    getattr(torch, "isreal", None),
     r"""
 isreal(input) -> Tensor
 
@@ -5596,7 +5606,7 @@ Example::
 )
 
 add_docstr(
-    torch.is_floating_point,
+    getattr(torch, "is_floating_point", None),
     r"""
 is_floating_point(input: Tensor) -> bool
 
@@ -5620,7 +5630,7 @@ Example::
 )
 
 add_docstr(
-    torch.is_complex,
+    getattr(torch, "is_complex", None),
     r"""
 is_complex(input: Tensor) -> bool
 
@@ -5644,7 +5654,7 @@ Example::
 )
 
 add_docstr(
-    torch.is_grad_enabled,
+    getattr(torch, "is_grad_enabled", None),
     r"""
 is_grad_enabled() -> (bool)
 
@@ -5653,7 +5663,7 @@ Returns True if grad mode is currently enabled.
 )
 
 add_docstr(
-    torch.is_inference_mode_enabled,
+    getattr(torch, "is_inference_mode_enabled", None),
     r"""
 is_inference_mode_enabled() -> (bool)
 
@@ -5662,7 +5672,7 @@ Returns True if inference mode is currently enabled.
 )
 
 add_docstr(
-    torch.is_inference,
+    getattr(torch, "is_inference", None),
     r"""
 is_inference(input) -> (bool)
 
@@ -5681,7 +5691,7 @@ Args:
 )
 
 add_docstr(
-    torch.is_conj,
+    getattr(torch, "is_conj", None),
     r"""
 is_conj(input) -> (bool)
 
@@ -5693,7 +5703,7 @@ Args:
 )
 
 add_docstr(
-    torch.is_nonzero,
+    getattr(torch, "is_nonzero", None),
     r"""
 is_nonzero(input) -> (bool)
 
@@ -5729,7 +5739,7 @@ Examples::
 )
 
 add_docstr(
-    torch.kron,
+    getattr(torch, "kron", None),
     r"""
 kron(input, other, *, out=None) -> Tensor
 
@@ -5789,7 +5799,7 @@ Examples::
 )
 
 add_docstr(
-    torch.kthvalue,
+    getattr(torch, "kthvalue", None),
     r"""
 kthvalue(input, k, dim=None, keepdim=False, *, out=None) -> (Tensor, LongTensor)
 
@@ -5838,7 +5848,7 @@ Example::
 )
 
 add_docstr(
-    torch.lcm,
+    getattr(torch, "lcm", None),
     r"""
 lcm(input, other, *, out=None) -> Tensor
 
@@ -5869,7 +5879,7 @@ Example::
 )
 
 add_docstr(
-    torch.ldexp,
+    getattr(torch, "ldexp", None),
     r"""
 ldexp(input, other, *, out=None) -> Tensor
 
@@ -5903,7 +5913,7 @@ Example::
 )
 
 add_docstr(
-    torch.le,
+    getattr(torch, "le", None),
     r"""
 le(input, other, *, out=None) -> Tensor
 
@@ -5933,7 +5943,7 @@ Example::
 )
 
 add_docstr(
-    torch.less_equal,
+    getattr(torch, "less_equal", None),
     r"""
 less_equal(input, other, *, out=None) -> Tensor
 
@@ -5942,7 +5952,7 @@ Alias for :func:`torch.le`.
 )
 
 add_docstr(
-    torch.lerp,
+    getattr(torch, "lerp", None),
     r"""
 lerp(input, end, weight, *, out=None)
 
@@ -5981,7 +5991,7 @@ Example::
 )
 
 add_docstr(
-    torch.lgamma,
+    getattr(torch, "lgamma", None),
     r"""
 lgamma(input, *, out=None) -> Tensor
 
@@ -6006,7 +6016,7 @@ Example::
 )
 
 add_docstr(
-    torch.linspace,
+    getattr(torch, "linspace", None),
     r"""
 linspace(start, end, steps, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -6054,7 +6064,7 @@ Example::
 )
 
 add_docstr(
-    torch.log,
+    getattr(torch, "log", None),
     r"""
 log(input, *, out=None) -> Tensor
 
@@ -6083,7 +6093,7 @@ Example::
 )
 
 add_docstr(
-    torch.log10,
+    getattr(torch, "log10", None),
     r"""
 log10(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -6115,7 +6125,7 @@ Example::
 )
 
 add_docstr(
-    torch.log1p,
+    getattr(torch, "log1p", None),
     r"""
 log1p(input, *, out=None) -> Tensor
 
@@ -6145,7 +6155,7 @@ Example::
 )
 
 add_docstr(
-    torch.log2,
+    getattr(torch, "log2", None),
     r"""
 log2(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -6177,7 +6187,7 @@ Example::
 )
 
 add_docstr(
-    torch.logaddexp,
+    getattr(torch, "logaddexp", None),
     r"""
 logaddexp(input, other, *, out=None) -> Tensor
 
@@ -6211,7 +6221,7 @@ Example::
 )
 
 add_docstr(
-    torch.logaddexp2,
+    getattr(torch, "logaddexp2", None),
     r"""
 logaddexp2(input, other, *, out=None) -> Tensor
 
@@ -6230,7 +6240,7 @@ Keyword arguments:
 )
 
 add_docstr(
-    torch.xlogy,
+    getattr(torch, "xlogy", None),
     r"""
 xlogy(input, other, *, out=None) -> Tensor
 
@@ -6239,7 +6249,7 @@ Alias for :func:`torch.special.xlogy`.
 )
 
 add_docstr(
-    torch.logical_and,
+    getattr(torch, "logical_and", None),
     r"""
 logical_and(input, other, *, out=None) -> Tensor
 
@@ -6271,7 +6281,7 @@ Example::
 )
 
 add_docstr(
-    torch.logical_not,
+    getattr(torch, "logical_not", None),
     r"""
 logical_not(input, *, out=None) -> Tensor
 
@@ -6298,7 +6308,7 @@ Example::
 )
 
 add_docstr(
-    torch.logical_or,
+    getattr(torch, "logical_or", None),
     r"""
 logical_or(input, other, *, out=None) -> Tensor
 
@@ -6330,7 +6340,7 @@ Example::
 )
 
 add_docstr(
-    torch.logical_xor,
+    getattr(torch, "logical_xor", None),
     r"""
 logical_xor(input: Tensor, other: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -6362,7 +6372,7 @@ Example::
 )
 
 add_docstr(
-    torch.logspace,
+    getattr(torch, "logspace", None),
     """
 logspace(start, end, steps, base=10.0, *, \
          out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -6416,7 +6426,7 @@ Example::
 )
 
 add_docstr(
-    torch.logsumexp,
+    getattr(torch, "logsumexp", None),
     r"""
 logsumexp(input, dim, keepdim=False, *, out=None)
 
@@ -6450,7 +6460,7 @@ Example::
 )
 
 add_docstr(
-    torch.lt,
+    getattr(torch, "lt", None),
     r"""
 lt(input, other, *, out=None) -> Tensor
 
@@ -6479,7 +6489,7 @@ Example::
 )
 
 add_docstr(
-    torch.lu_unpack,
+    getattr(torch, "lu_unpack", None),
     r"""
 lu_unpack(LU_data, LU_pivots, unpack_data=True, unpack_pivots=True, *, out=None) -> (Tensor, Tensor, Tensor)
 
@@ -6529,7 +6539,7 @@ Examples::
 )
 
 add_docstr(
-    torch.less,
+    getattr(torch, "less", None),
     r"""
 less(input, other, *, out=None) -> Tensor
 
@@ -6538,7 +6548,7 @@ Alias for :func:`torch.lt`.
 )
 
 add_docstr(
-    torch.lu_solve,
+    getattr(torch, "lu_solve", None),
     r"""
 lu_solve(b, LU_data, LU_pivots, *, out=None) -> Tensor
 
@@ -6583,7 +6593,7 @@ Example::
 )
 
 add_docstr(
-    torch.masked_select,
+    getattr(torch, "masked_select", None),
     r"""
 masked_select(input, mask, *, out=None) -> Tensor
 
@@ -6621,7 +6631,7 @@ Example::
 )
 
 add_docstr(
-    torch.matrix_power,
+    getattr(torch, "matrix_power", None),
     r"""
 matrix_power(input, n, *, out=None) -> Tensor
 
@@ -6630,7 +6640,7 @@ Alias for :func:`torch.linalg.matrix_power`
 )
 
 add_docstr(
-    torch.matrix_exp,
+    getattr(torch, "matrix_exp", None),
     r"""
 matrix_exp(A) -> Tensor
 
@@ -6639,7 +6649,7 @@ Alias for :func:`torch.linalg.matrix_exp`.
 )
 
 add_docstr(
-    torch.max,
+    getattr(torch, "max", None),
     r"""
 max(input, *, out=None) -> Tensor
 
@@ -6724,7 +6734,7 @@ See :func:`torch.maximum`.
 )
 
 add_docstr(
-    torch.maximum,
+    getattr(torch, "maximum", None),
     r"""
 maximum(input, other, *, out=None) -> Tensor
 
@@ -6751,7 +6761,7 @@ Example::
 )
 
 add_docstr(
-    torch.fmax,
+    getattr(torch, "fmax", None),
     r"""
 fmax(input, other, *, out=None) -> Tensor
 
@@ -6783,7 +6793,7 @@ Example::
 )
 
 add_docstr(
-    torch.amax,
+    getattr(torch, "amax", None),
     r"""
 amax(input, dim=None, keepdim=False, *, out=None) -> Tensor
 
@@ -6826,7 +6836,7 @@ Example::
 )
 
 add_docstr(
-    torch.argmax,
+    getattr(torch, "argmax", None),
     r"""
 argmax(input) -> LongTensor
 
@@ -6878,7 +6888,7 @@ Example::
 )
 
 add_docstr(
-    torch.argwhere,
+    getattr(torch, "argwhere", None),
     r"""
 argwhere(input) -> Tensor
 
@@ -6915,7 +6925,7 @@ Example::
 )
 
 add_docstr(
-    torch.mean,
+    getattr(torch, "mean", None),
     r"""
 mean(input, *, dtype=None) -> Tensor
 
@@ -6983,7 +6993,7 @@ Example::
 )
 
 add_docstr(
-    torch.nanmean,
+    getattr(torch, "nanmean", None),
     r"""
 nanmean(input, dim=None, keepdim=False, *, dtype=None, out=None) -> Tensor
 
@@ -7029,7 +7039,7 @@ Example::
 )
 
 add_docstr(
-    torch.median,
+    getattr(torch, "median", None),
     r"""
 median(input) -> Tensor
 
@@ -7104,7 +7114,7 @@ Example::
 )
 
 add_docstr(
-    torch.nanmedian,
+    getattr(torch, "nanmedian", None),
     r"""
 nanmedian(input) -> Tensor
 
@@ -7161,7 +7171,7 @@ Example::
 )
 
 add_docstr(
-    torch.quantile,
+    getattr(torch, "quantile", None),
     r"""
 quantile(input, q, dim=None, keepdim=False, *, interpolation='linear', out=None) -> Tensor
 
@@ -7233,7 +7243,7 @@ Example::
 )
 
 add_docstr(
-    torch.nanquantile,
+    getattr(torch, "nanquantile", None),
     r"""
 nanquantile(input, q, dim=None, keepdim=False, *, interpolation='linear', out=None) -> Tensor
 
@@ -7273,7 +7283,7 @@ Example::
 )
 
 add_docstr(
-    torch.min,
+    getattr(torch, "min", None),
     r"""
 min(input, *, out=None) -> Tensor
 
@@ -7348,7 +7358,7 @@ See :func:`torch.minimum`.
 )
 
 add_docstr(
-    torch.minimum,
+    getattr(torch, "minimum", None),
     r"""
 minimum(input, other, *, out=None) -> Tensor
 
@@ -7375,7 +7385,7 @@ Example::
 )
 
 add_docstr(
-    torch.fmin,
+    getattr(torch, "fmin", None),
     r"""
 fmin(input, other, *, out=None) -> Tensor
 
@@ -7407,7 +7417,7 @@ Example::
 )
 
 add_docstr(
-    torch.amin,
+    getattr(torch, "amin", None),
     r"""
 amin(input, dim=None, keepdim=False, *, out=None) -> Tensor
 
@@ -7450,7 +7460,7 @@ Example::
 )
 
 add_docstr(
-    torch.aminmax,
+    getattr(torch, "aminmax", None),
     r"""
 aminmax(input, *, dim=None, keepdim=False, out=None) -> (Tensor min, Tensor max)
 
@@ -7514,7 +7524,7 @@ Example::
 )
 
 add_docstr(
-    torch.argmin,
+    getattr(torch, "argmin", None),
     r"""
 argmin(input, dim=None, keepdim=False) -> LongTensor
 
@@ -7551,7 +7561,7 @@ Example::
 )
 
 add_docstr(
-    torch.mm,
+    getattr(torch, "mm", None),
     r"""
 mm(input, mat2, *, out=None) -> Tensor
 
@@ -7607,7 +7617,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.hspmm,
+    getattr(torch, "hspmm", None),
     r"""
 hspmm(mat1, mat2, *, out=None) -> Tensor
 
@@ -7626,7 +7636,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.matmul,
+    getattr(torch, "matmul", None),
     r"""
 matmul(input, other, *, out=None) -> Tensor
 
@@ -7710,7 +7720,7 @@ Example::
 )
 
 add_docstr(
-    torch.mode,
+    getattr(torch, "mode", None),
     r"""
 mode(input, dim=-1, keepdim=False, *, out=None) -> (Tensor, LongTensor)
 
@@ -7749,7 +7759,7 @@ Example::
 )
 
 add_docstr(
-    torch.mul,
+    getattr(torch, "mul", None),
     r"""
 mul(input, other, *, out=None) -> Tensor
 
@@ -7797,7 +7807,7 @@ Examples::
 )
 
 add_docstr(
-    torch.multiply,
+    getattr(torch, "multiply", None),
     r"""
 multiply(input, other, *, out=None)
 
@@ -7806,7 +7816,7 @@ Alias for :func:`torch.mul`.
 )
 
 add_docstr(
-    torch.multinomial,
+    getattr(torch, "multinomial", None),
     r"""
 multinomial(input, num_samples, replacement=False, *, generator=None, out=None) -> LongTensor
 
@@ -7861,7 +7871,7 @@ Example::
 )
 
 add_docstr(
-    torch.mv,
+    getattr(torch, "mv", None),
     r"""
 mv(input, vec, *, out=None) -> Tensor
 
@@ -7890,7 +7900,7 @@ Example::
 )
 
 add_docstr(
-    torch.mvlgamma,
+    getattr(torch, "mvlgamma", None),
     r"""
 mvlgamma(input, p, *, out=None) -> Tensor
 
@@ -7899,7 +7909,7 @@ Alias for :func:`torch.special.multigammaln`.
 )
 
 add_docstr(
-    torch.movedim,
+    getattr(torch, "movedim", None),
     r"""
 movedim(input, source, destination) -> Tensor
 
@@ -7946,7 +7956,7 @@ Examples::
 )
 
 add_docstr(
-    torch.moveaxis,
+    getattr(torch, "moveaxis", None),
     r"""
 moveaxis(input, source, destination) -> Tensor
 
@@ -7986,7 +7996,7 @@ Examples::
 )
 
 add_docstr(
-    torch.swapdims,
+    getattr(torch, "swapdims", None),
     r"""
 swapdims(input, dim0, dim1) -> Tensor
 
@@ -8019,7 +8029,7 @@ Examples::
 )
 
 add_docstr(
-    torch.swapaxes,
+    getattr(torch, "swapaxes", None),
     r"""
 swapaxes(input, axis0, axis1) -> Tensor
 
@@ -8052,7 +8062,7 @@ Examples::
 )
 
 add_docstr(
-    torch.narrow,
+    getattr(torch, "narrow", None),
     r"""
 narrow(input, dim, start, length) -> Tensor
 
@@ -8086,7 +8096,7 @@ Example::
 )
 
 add_docstr(
-    torch.narrow_copy,
+    getattr(torch, "narrow_copy", None),
     r"""
 narrow_copy(input, dim, start, length, *, out=None) -> Tensor
 
@@ -8133,7 +8143,7 @@ Example::
 )
 
 add_docstr(
-    torch.nan_to_num,
+    getattr(torch, "nan_to_num", None),
     r"""
 nan_to_num(input, nan=0.0, posinf=None, neginf=None, *, out=None) -> Tensor
 
@@ -8170,7 +8180,7 @@ Example::
 )
 
 add_docstr(
-    torch.ne,
+    getattr(torch, "ne", None),
     r"""
 ne(input, other, *, out=None) -> Tensor
 
@@ -8199,7 +8209,7 @@ Example::
 )
 
 add_docstr(
-    torch.not_equal,
+    getattr(torch, "not_equal", None),
     r"""
 not_equal(input, other, *, out=None) -> Tensor
 
@@ -8208,7 +8218,7 @@ Alias for :func:`torch.ne`.
 )
 
 add_docstr(
-    torch.neg,
+    getattr(torch, "neg", None),
     r"""
 neg(input, *, out=None) -> Tensor
 
@@ -8235,7 +8245,7 @@ Example::
 )
 
 add_docstr(
-    torch.negative,
+    getattr(torch, "negative", None),
     r"""
 negative(input, *, out=None) -> Tensor
 
@@ -8244,7 +8254,7 @@ Alias for :func:`torch.neg`
 )
 
 add_docstr(
-    torch.nextafter,
+    getattr(torch, "nextafter", None),
     r"""
 nextafter(input, other, *, out=None) -> Tensor
 
@@ -8270,7 +8280,7 @@ Example::
 )
 
 add_docstr(
-    torch.nonzero,
+    getattr(torch, "nonzero", None),
     r"""
 nonzero(input, *, out=None, as_tuple=False) -> LongTensor or tuple of LongTensors
 
@@ -8352,7 +8362,7 @@ Example::
 )
 
 add_docstr(
-    torch.normal,
+    getattr(torch, "normal", None),
     r"""
 normal(mean, std, *, generator=None, out=None) -> Tensor
 
@@ -8446,7 +8456,7 @@ Example::
 )
 
 add_docstr(
-    torch.numel,
+    getattr(torch, "numel", None),
     r"""
 numel(input: Tensor) -> int
 
@@ -8468,7 +8478,7 @@ Example::
 )
 
 add_docstr(
-    torch.ones,
+    getattr(torch, "ones", None),
     r"""
 ones(*size, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -8499,7 +8509,7 @@ Example::
 )
 
 add_docstr(
-    torch.ones_like,
+    getattr(torch, "ones_like", None),
     r"""
 ones_like(input, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format) -> Tensor
 
@@ -8532,7 +8542,7 @@ Example::
 )
 
 add_docstr(
-    torch.orgqr,
+    getattr(torch, "orgqr", None),
     r"""
 orgqr(input, tau) -> Tensor
 
@@ -8541,7 +8551,7 @@ Alias for :func:`torch.linalg.householder_product`.
 )
 
 add_docstr(
-    torch.ormqr,
+    getattr(torch, "ormqr", None),
     r"""
 ormqr(input, tau, other, left=True, transpose=False, *, out=None) -> Tensor
 
@@ -8585,7 +8595,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.permute,
+    getattr(torch, "permute", None),
     r"""
 permute(input, dims) -> Tensor
 
@@ -8605,7 +8615,7 @@ Example:
 )
 
 add_docstr(
-    torch.poisson,
+    getattr(torch, "poisson", None),
     r"""
 poisson(input, generator=None) -> Tensor
 
@@ -8636,7 +8646,7 @@ Example::
 )
 
 add_docstr(
-    torch.polygamma,
+    getattr(torch, "polygamma", None),
     r"""
 polygamma(n, input, *, out=None) -> Tensor
 
@@ -8645,7 +8655,7 @@ Alias for :func:`torch.special.polygamma`.
 )
 
 add_docstr(
-    torch.positive,
+    getattr(torch, "positive", None),
     r"""
 positive(input) -> Tensor
 
@@ -8667,7 +8677,7 @@ Example::
 )
 
 add_docstr(
-    torch.pow,
+    getattr(torch, "pow", None),
     r"""
 pow(input, exponent, *, out=None) -> Tensor
 
@@ -8743,7 +8753,7 @@ Example::
 )
 
 add_docstr(
-    torch.float_power,
+    getattr(torch, "float_power", None),
     r"""
 float_power(input, exponent, *, out=None) -> Tensor
 
@@ -8785,7 +8795,7 @@ Example::
 )
 
 add_docstr(
-    torch.prod,
+    getattr(torch, "prod", None),
     r"""
 prod(input: Tensor, *, dtype: Optional[_dtype]) -> Tensor
 
@@ -8835,7 +8845,7 @@ Example::
 )
 
 add_docstr(
-    torch.promote_types,
+    getattr(torch, "promote_types", None),
     r"""
 promote_types(type1, type2) -> dtype
 
@@ -8858,7 +8868,7 @@ Example::
 )
 
 add_docstr(
-    torch.qr,
+    getattr(torch, "qr", None),
     r"""
 qr(input: Tensor, some: bool = True, *, out: Union[Tensor, Tuple[Tensor, ...], List[Tensor], None]) -> (Tensor, Tensor)
 
@@ -8942,7 +8952,7 @@ Example::
 )
 
 add_docstr(
-    torch.rad2deg,
+    getattr(torch, "rad2deg", None),
     r"""
 rad2deg(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -8967,7 +8977,7 @@ Example::
 )
 
 add_docstr(
-    torch.deg2rad,
+    getattr(torch, "deg2rad", None),
     r"""
 deg2rad(input, *, out=None) -> Tensor
 
@@ -8992,7 +9002,7 @@ Example::
 )
 
 add_docstr(
-    torch.heaviside,
+    getattr(torch, "heaviside", None),
     r"""
 heaviside(input, values, *, out=None) -> Tensor
 
@@ -9029,7 +9039,7 @@ Example::
 )
 
 add_docstr(
-    torch.rand,
+    getattr(torch, "rand", None),
     """
 rand(*size, *, generator=None, out=None, dtype=None, layout=torch.strided, device=None, \
 requires_grad=False, pin_memory=False) -> Tensor
@@ -9064,7 +9074,7 @@ Example::
 )
 
 add_docstr(
-    torch.rand_like,
+    getattr(torch, "rand_like", None),
     """
 rand_like(input, *, generator=None, dtype=None, layout=None, device=None, \
 requires_grad=False, memory_format=torch.preserve_format) -> Tensor
@@ -9090,7 +9100,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.randint,
+    getattr(torch, "randint", None),
     """
 randint(low=0, high, size, \\*, generator=None, out=None, \
 dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -9138,7 +9148,7 @@ Example::
 )
 
 add_docstr(
-    torch.randint_like,
+    getattr(torch, "randint_like", None),
     """
 randint_like(input, low=0, high, \\*, generator=None, dtype=None, layout=torch.strided, \
 device=None, requires_grad=False, memory_format=torch.preserve_format) -> Tensor
@@ -9169,7 +9179,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.randn,
+    getattr(torch, "randn", None),
     """
 randn(*size, *, generator=None, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False, \
 pin_memory=False) -> Tensor
@@ -9225,7 +9235,7 @@ Example::
 )
 
 add_docstr(
-    torch.randn_like,
+    getattr(torch, "randn_like", None),
     """
 randn_like(input, *, generator=None, dtype=None, layout=None, device=None, \
 requires_grad=False, memory_format=torch.preserve_format) -> Tensor
@@ -9251,7 +9261,7 @@ Keyword args:
 )
 
 add_docstr(
-    torch.randperm,
+    getattr(torch, "randperm", None),
     """
 randperm(n, *, generator=None, out=None, dtype=torch.int64,layout=torch.strided, \
 device=None, requires_grad=False, pin_memory=False) -> Tensor
@@ -9280,7 +9290,7 @@ Example::
 )
 
 add_docstr(
-    torch.tensor,
+    getattr(torch, "tensor", None),
     r"""
 tensor(data, *, dtype=None, device=None, requires_grad=False, pin_memory=False) -> Tensor
 
@@ -9335,7 +9345,7 @@ Example::
 )
 
 add_docstr(
-    torch.range,
+    getattr(torch, "range", None),
     r"""
 range(start=0, end, step=1, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -9377,7 +9387,7 @@ Example::
 )
 
 add_docstr(
-    torch.arange,
+    getattr(torch, "arange", None),
     r"""
 arange(start=0, end, step=1, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -9427,7 +9437,7 @@ Example::
 )
 
 add_docstr(
-    torch.ravel,
+    getattr(torch, "ravel", None),
     r"""
 ravel(input) -> Tensor
 
@@ -9448,7 +9458,7 @@ Example::
 )
 
 add_docstr(
-    torch.remainder,
+    getattr(torch, "remainder", None),
     r"""
 remainder(input, other, *, out=None) -> Tensor
 
@@ -9493,7 +9503,7 @@ Example::
 )
 
 add_docstr(
-    torch.renorm,
+    getattr(torch, "renorm", None),
     r"""
 renorm(input, p, dim, maxnorm, *, out=None) -> Tensor
 
@@ -9531,7 +9541,7 @@ Example::
 )
 
 add_docstr(
-    torch.reshape,
+    getattr(torch, "reshape", None),
     r"""
 reshape(input, shape) -> Tensor
 
@@ -9564,7 +9574,7 @@ Example::
 
 
 add_docstr(
-    torch.result_type,
+    getattr(torch, "result_type", None),
     r"""
 result_type(tensor1, tensor2) -> dtype
 
@@ -9586,7 +9596,7 @@ Example::
 )
 
 add_docstr(
-    torch.row_stack,
+    getattr(torch, "row_stack", None),
     r"""
 row_stack(tensors, *, out=None) -> Tensor
 
@@ -9595,7 +9605,7 @@ Alias of :func:`torch.vstack`.
 )
 
 add_docstr(
-    torch.round,
+    getattr(torch, "round", None),
     r"""
 round(input, *, decimals=0, out=None) -> Tensor
 
@@ -9651,7 +9661,7 @@ Example::
 )
 
 add_docstr(
-    torch.rsqrt,
+    getattr(torch, "rsqrt", None),
     r"""
 rsqrt(input, *, out=None) -> Tensor
 
@@ -9679,7 +9689,7 @@ Example::
 )
 
 add_docstr(
-    torch.scatter,
+    getattr(torch, "scatter", None),
     r"""
 scatter(input, dim, index, src) -> Tensor
 
@@ -9688,7 +9698,7 @@ Out-of-place version of :meth:`torch.Tensor.scatter_`
 )
 
 add_docstr(
-    torch.scatter_add,
+    getattr(torch, "scatter_add", None),
     r"""
 scatter_add(input, dim, index, src) -> Tensor
 
@@ -9697,7 +9707,7 @@ Out-of-place version of :meth:`torch.Tensor.scatter_add_`
 )
 
 add_docstr(
-    torch.scatter_reduce,
+    getattr(torch, "scatter_reduce", None),
     r"""
 scatter_reduce(input, dim, index, src, reduce, *, include_self=True) -> Tensor
 
@@ -9706,7 +9716,7 @@ Out-of-place version of :meth:`torch.Tensor.scatter_reduce_`
 )
 
 add_docstr(
-    torch.segment_reduce,
+    getattr(torch, "segment_reduce", None),
     r"""
 segment_reduce(data: Tensor, reduce: str, *, lengths: Tensor | None = None, indices: Tensor | None = None, offsets: Tensor | None = None, axis: _int = 0, unsafe: _bool = False, initial: Number | _complex | None = None) -> Tensor # noqa: B950
 
@@ -9734,7 +9744,7 @@ Example::
 )
 
 add_docstr(
-    torch.select,
+    getattr(torch, "select", None),
     r"""
 select(input, dim, index) -> Tensor
 
@@ -9760,7 +9770,7 @@ Args:
 )
 
 add_docstr(
-    torch.select_scatter,
+    getattr(torch, "select_scatter", None),
     r"""
 select_scatter(input, src, dim, index) -> Tensor
 
@@ -9791,7 +9801,7 @@ Example::
 )
 
 add_docstr(
-    torch.slice_scatter,
+    getattr(torch, "slice_scatter", None),
     r"""
 slice_scatter(input, src, dim=0, start=None, end=None, step=1) -> Tensor
 
@@ -9836,7 +9846,7 @@ Example::
 )
 
 add_docstr(
-    torch.set_flush_denormal,
+    getattr(torch, "set_flush_denormal", None),
     r"""
 set_flush_denormal(mode) -> bool
 
@@ -9864,7 +9874,7 @@ Example::
 )
 
 add_docstr(
-    torch.set_num_threads,
+    getattr(torch, "set_num_threads", None),
     r"""
 set_num_threads(int)
 
@@ -9877,7 +9887,7 @@ Sets the number of threads used for intraop parallelism on CPU.
 )
 
 add_docstr(
-    torch.set_num_interop_threads,
+    getattr(torch, "set_num_interop_threads", None),
     r"""
 set_num_interop_threads(int)
 
@@ -9891,7 +9901,7 @@ Sets the number of threads used for interop parallelism
 )
 
 add_docstr(
-    torch.sigmoid,
+    getattr(torch, "sigmoid", None),
     r"""
 sigmoid(input, *, out=None) -> Tensor
 
@@ -9900,7 +9910,7 @@ Alias for :func:`torch.special.expit`.
 )
 
 add_docstr(
-    torch.logit,
+    getattr(torch, "logit", None),
     r"""
 logit(input, eps=None, *, out=None) -> Tensor
 
@@ -9909,7 +9919,7 @@ Alias for :func:`torch.special.logit`.
 )
 
 add_docstr(
-    torch.sign,
+    getattr(torch, "sign", None),
     r"""
 sign(input, *, out=None) -> Tensor
 
@@ -9936,7 +9946,7 @@ Example::
 )
 
 add_docstr(
-    torch.signbit,
+    getattr(torch, "signbit", None),
     r"""
 signbit(input, *, out=None) -> Tensor
 
@@ -9964,7 +9974,7 @@ Example::
 )
 
 add_docstr(
-    torch.sgn,
+    getattr(torch, "sgn", None),
     r"""
 sgn(input, *, out=None) -> Tensor
 
@@ -9997,7 +10007,7 @@ Example::
 )
 
 add_docstr(
-    torch.sin,
+    getattr(torch, "sin", None),
     r"""
 sin(input, *, out=None) -> Tensor
 
@@ -10025,7 +10035,7 @@ Example::
 )
 
 add_docstr(
-    torch.sinc,
+    getattr(torch, "sinc", None),
     r"""
 sinc(input, *, out=None) -> Tensor
 
@@ -10034,7 +10044,7 @@ Alias for :func:`torch.special.sinc`.
 )
 
 add_docstr(
-    torch.sinh,
+    getattr(torch, "sinh", None),
     r"""
 sinh(input, *, out=None) -> Tensor
 
@@ -10067,7 +10077,7 @@ Example::
 )
 
 add_docstr(
-    torch.sort,
+    getattr(torch, "sort", None),
     r"""
 sort(input, dim=-1, descending=False, *, stable=False, out=None) -> (Tensor, LongTensor)
 
@@ -10132,7 +10142,7 @@ Example::
 )
 
 add_docstr(
-    torch.argsort,
+    getattr(torch, "argsort", None),
     r"""
 argsort(input, dim=-1, descending=False, *, stable=False) -> Tensor
 
@@ -10173,7 +10183,7 @@ Example::
 )
 
 add_docstr(
-    torch.msort,
+    getattr(torch, "msort", None),
     r"""
 msort(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -10204,7 +10214,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_compressed_tensor,
+    getattr(torch, "sparse_compressed_tensor", None),
     r"""sparse_compressed_tensor(compressed_indices, plain_indices, values, size=None, """
     r"""*, dtype=None, layout=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None) -> Tensor
 
@@ -10277,7 +10287,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_csr_tensor,
+    getattr(torch, "sparse_csr_tensor", None),
     r"""sparse_csr_tensor(crow_indices, col_indices, values, size=None, """
     r"""*, dtype=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None) -> Tensor
 
@@ -10338,7 +10348,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_csc_tensor,
+    getattr(torch, "sparse_csc_tensor", None),
     r"""sparse_csc_tensor(ccol_indices, row_indices, values, size=None, """
     r"""*, dtype=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None) -> Tensor
 
@@ -10401,7 +10411,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_bsr_tensor,
+    getattr(torch, "sparse_bsr_tensor", None),
     r"""sparse_bsr_tensor(crow_indices, col_indices, values, size=None, """
     r"""*, dtype=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None) -> Tensor
 
@@ -10469,7 +10479,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_bsc_tensor,
+    getattr(torch, "sparse_bsc_tensor", None),
     r"""sparse_bsc_tensor(ccol_indices, row_indices, values, size=None, """
     r"""*, dtype=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None) -> Tensor
 
@@ -10536,7 +10546,7 @@ Example::
 )
 
 add_docstr(
-    torch.sparse_coo_tensor,
+    getattr(torch, "sparse_coo_tensor", None),
     r"""sparse_coo_tensor(indices, values, size=None, """
     r"""*, dtype=None, device=None, pin_memory=False, requires_grad=False, check_invariants=None, is_coalesced=None) -> Tensor
 
@@ -10634,7 +10644,7 @@ Example::
 )
 
 add_docstr(
-    torch.sqrt,
+    getattr(torch, "sqrt", None),
     r"""
 sqrt(input, *, out=None) -> Tensor
 
@@ -10661,7 +10671,7 @@ Example::
 )
 
 add_docstr(
-    torch.square,
+    getattr(torch, "square", None),
     r"""
 square(input: Tensor, *, out: Optional[Tensor]) -> Tensor
 
@@ -10684,7 +10694,7 @@ Example::
 )
 
 add_docstr(
-    torch.squeeze,
+    getattr(torch, "squeeze", None),
     r"""
 squeeze(input: Tensor, dim: Optional[Union[int, List[int]]]) -> Tensor
 
@@ -10734,7 +10744,7 @@ Example::
 )
 
 add_docstr(
-    torch.std,
+    getattr(torch, "std", None),
     r"""
 std(input, dim=None, *, correction=1, keepdim=False, out=None) -> Tensor
 
@@ -10789,7 +10799,7 @@ Example:
 )
 
 add_docstr(
-    torch.std_mean,
+    getattr(torch, "std_mean", None),
     r"""
 std_mean(input, dim=None, *, correction=1, keepdim=False, out=None) -> (Tensor, Tensor)
 
@@ -10846,7 +10856,7 @@ Example:
 )
 
 add_docstr(
-    torch.sub,
+    getattr(torch, "sub", None),
     r"""
 sub(input, other, *, alpha=1, out=None) -> Tensor
 
@@ -10878,7 +10888,7 @@ Example::
 )
 
 add_docstr(
-    torch.subtract,
+    getattr(torch, "subtract", None),
     r"""
 subtract(input, other, *, alpha=1, out=None) -> Tensor
 
@@ -10887,7 +10897,7 @@ Alias for :func:`torch.sub`.
 )
 
 add_docstr(
-    torch.sum,
+    getattr(torch, "sum", None),
     r"""
 sum(input, *, dtype=None) -> Tensor
 
@@ -10944,7 +10954,7 @@ Example::
 )
 
 add_docstr(
-    torch.nansum,
+    getattr(torch, "nansum", None),
     r"""
 nansum(input, *, dtype=None) -> Tensor
 
@@ -10994,7 +11004,7 @@ Example::
 )
 
 add_docstr(
-    torch.svd,
+    getattr(torch, "svd", None),
     r"""
 svd(input, some=True, compute_uv=True, *, out=None) -> (Tensor, Tensor, Tensor)
 
@@ -11129,7 +11139,7 @@ Example::
 
 
 add_docstr(
-    torch.t,
+    getattr(torch, "t", None),
     r"""
 t(input) -> Tensor
 
@@ -11168,7 +11178,7 @@ See also :func:`torch.transpose`.
 )
 
 add_docstr(
-    torch.flip,
+    getattr(torch, "flip", None),
     r"""
 flip(input, dims) -> Tensor
 
@@ -11202,7 +11212,7 @@ Example::
 )
 
 add_docstr(
-    torch.fliplr,
+    getattr(torch, "fliplr", None),
     r"""
 fliplr(input) -> Tensor
 
@@ -11235,7 +11245,7 @@ Example::
 )
 
 add_docstr(
-    torch.flipud,
+    getattr(torch, "flipud", None),
     r"""
 flipud(input) -> Tensor
 
@@ -11268,7 +11278,7 @@ Example::
 )
 
 add_docstr(
-    torch.roll,
+    getattr(torch, "roll", None),
     r"""
 roll(input, shifts, dims=None) -> Tensor
 
@@ -11317,7 +11327,7 @@ Example::
 )
 
 add_docstr(
-    torch.rot90,
+    getattr(torch, "rot90", None),
     r"""
 rot90(input, k=1, dims=(0, 1)) -> Tensor
 
@@ -11356,7 +11366,7 @@ Example::
 )
 
 add_docstr(
-    torch.take,
+    getattr(torch, "take", None),
     r"""
 take(input, index) -> Tensor
 
@@ -11378,7 +11388,7 @@ Example::
 )
 
 add_docstr(
-    torch.take_along_dim,
+    getattr(torch, "take_along_dim", None),
     r"""
 take_along_dim(input, indices, dim=None, *, out=None) -> Tensor
 
@@ -11415,7 +11425,7 @@ Example::
 )
 
 add_docstr(
-    torch.tan,
+    getattr(torch, "tan", None),
     r"""
 tan(input, *, out=None) -> Tensor
 
@@ -11443,7 +11453,7 @@ Example::
 )
 
 add_docstr(
-    torch.tanh,
+    getattr(torch, "tanh", None),
     r"""
 tanh(input, *, out=None) -> Tensor
 
@@ -11472,7 +11482,7 @@ Example::
 
 add_docstr(
     # torch.softmax doc str. Point this to torch.nn.functional.softmax
-    torch.softmax,
+    getattr(torch, "softmax", None),
     r"""
 softmax(input, dim, *, dtype=None) -> Tensor
 
@@ -11481,7 +11491,7 @@ Alias for :func:`torch.nn.functional.softmax`.
 )
 
 add_docstr(
-    torch.topk,
+    getattr(torch, "topk", None),
     r"""
 topk(input, k, dim=None, largest=True, sorted=True, *, out=None) -> (Tensor, LongTensor)
 
@@ -11527,7 +11537,7 @@ Example::
 )
 
 add_docstr(
-    torch.trace,
+    getattr(torch, "trace", None),
     r"""
 trace(input) -> Tensor
 
@@ -11546,7 +11556,7 @@ Example::
 )
 
 add_docstr(
-    torch.transpose,
+    getattr(torch, "transpose", None),
     r"""
 transpose(input, dim0, dim1) -> Tensor
 
@@ -11596,7 +11606,7 @@ See also :func:`torch.t`.
 )
 
 add_docstr(
-    torch.triangular_solve,
+    getattr(torch, "triangular_solve", None),
     r"""
 triangular_solve(b, A, upper=True, transpose=False, unitriangular=False, *, out=None) -> (Tensor, Tensor)
 
@@ -11670,7 +11680,7 @@ Examples::
 )
 
 add_docstr(
-    torch.tril,
+    getattr(torch, "tril", None),
     r"""
 tril(input, diagonal=0, *, out=None) -> Tensor
 
@@ -11730,7 +11740,7 @@ Example::
 # docstr is split in two parts to avoid format mis-captureing :math: braces '{}'
 # as common args.
 add_docstr(
-    torch.tril_indices,
+    getattr(torch, "tril_indices", None),
     r"""
 tril_indices(row, col, offset=0, *, dtype=torch.long, device='cpu', layout=torch.strided) -> Tensor
 
@@ -11787,7 +11797,7 @@ Example::
 )
 
 add_docstr(
-    torch.triu,
+    getattr(torch, "triu", None),
     r"""
 triu(input, diagonal=0, *, out=None) -> Tensor
 
@@ -11855,7 +11865,7 @@ Example::
 # docstr is split in two parts to avoid format mis-capturing :math: braces '{}'
 # as common args.
 add_docstr(
-    torch.triu_indices,
+    getattr(torch, "triu_indices", None),
     r"""
 triu_indices(row, col, offset=0, *, dtype=torch.long, device='cpu', layout=torch.strided) -> Tensor
 
@@ -11912,7 +11922,7 @@ Example::
 )
 
 add_docstr(
-    torch.true_divide,
+    getattr(torch, "true_divide", None),
     r"""
 true_divide(dividend, divisor, *, out) -> Tensor
 
@@ -11921,7 +11931,7 @@ Alias for :func:`torch.div` with ``rounding_mode=None``.
 )
 
 add_docstr(
-    torch.trunc,
+    getattr(torch, "trunc", None),
     r"""
 trunc(input, *, out=None) -> Tensor
 
@@ -11948,7 +11958,7 @@ Example::
 )
 
 add_docstr(
-    torch.fake_quantize_per_tensor_affine,
+    getattr(torch, "fake_quantize_per_tensor_affine", None),
     r"""
 fake_quantize_per_tensor_affine(input, scale, zero_point, quant_min, quant_max) -> Tensor
 
@@ -11989,7 +11999,7 @@ Example::
 )
 
 add_docstr(
-    torch.fake_quantize_per_channel_affine,
+    getattr(torch, "fake_quantize_per_channel_affine", None),
     r"""
 fake_quantize_per_channel_affine(input, scale, zero_point, axis, quant_min, quant_max) -> Tensor
 
@@ -12043,7 +12053,7 @@ Example::
 )
 
 add_docstr(
-    torch.fix,
+    getattr(torch, "fix", None),
     r"""
 fix(input, *, out=None) -> Tensor
 
@@ -12052,7 +12062,7 @@ Alias for :func:`torch.trunc`
 )
 
 add_docstr(
-    torch.unsqueeze,
+    getattr(torch, "unsqueeze", None),
     r"""
 unsqueeze(input, dim) -> Tensor
 
@@ -12083,7 +12093,7 @@ Example::
 )
 
 add_docstr(
-    torch.var,
+    getattr(torch, "var", None),
     r"""
 var(input, dim=None, *, correction=1, keepdim=False, out=None) -> Tensor
 
@@ -12138,7 +12148,7 @@ Example:
 )
 
 add_docstr(
-    torch.var_mean,
+    getattr(torch, "var_mean", None),
     r"""
 var_mean(input, dim=None, *, correction=1, keepdim=False, out=None) -> (Tensor, Tensor)
 
@@ -12194,7 +12204,7 @@ Example:
 )
 
 add_docstr(
-    torch.zeros,
+    getattr(torch, "zeros", None),
     r"""
 zeros(*size, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -12224,7 +12234,7 @@ Example::
 )
 
 add_docstr(
-    torch.zeros_like,
+    getattr(torch, "zeros_like", None),
     r"""
 zeros_like(input, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format) -> Tensor
 
@@ -12257,7 +12267,7 @@ Example::
 )
 
 add_docstr(
-    torch.empty,
+    getattr(torch, "empty", None),
     """
 empty(*size, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False, pin_memory=False, \
 memory_format=torch.contiguous_format) -> Tensor
@@ -12295,7 +12305,7 @@ Example::
 )
 
 add_docstr(
-    torch.empty_like,
+    getattr(torch, "empty_like", None),
     r"""
 empty_like(input, *, dtype=None, layout=None, device=None, requires_grad=False, memory_format=torch.preserve_format) -> Tensor
 
@@ -12337,7 +12347,7 @@ Example::
 )
 
 add_docstr(
-    torch.empty_strided,
+    getattr(torch, "empty_strided", None),
     r"""
 empty_strided(size, stride, *, dtype=None, layout=None, device=None, requires_grad=False, pin_memory=False) -> Tensor
 
@@ -12380,7 +12390,7 @@ Example::
 )
 
 add_docstr(
-    torch.empty_permuted,
+    getattr(torch, "empty_permuted", None),
     r"""
 empty_permuted(size, physical_layout, *, dtype=None, layout=None, device=None, requires_grad=False, pin_memory=False) -> Tensor
 
@@ -12433,7 +12443,7 @@ Examples:
 )
 
 add_docstr(
-    torch.full,
+    getattr(torch, "full", None),
     r"""
 full(size, fill_value, *, out=None, dtype=None, layout=torch.strided, device=None, requires_grad=False) -> Tensor
 
@@ -12461,7 +12471,7 @@ Example::
 )
 
 add_docstr(
-    torch.full_like,
+    getattr(torch, "full_like", None),
     """
 full_like(input, fill_value, \\*, dtype=None, layout=torch.strided, device=None, requires_grad=False, \
 memory_format=torch.preserve_format) -> Tensor
@@ -12502,7 +12512,7 @@ Example::
 )
 
 add_docstr(
-    torch.det,
+    getattr(torch, "det", None),
     r"""
 det(input) -> Tensor
 
@@ -12511,7 +12521,7 @@ Alias for :func:`torch.linalg.det`
 )
 
 add_docstr(
-    torch.where,
+    getattr(torch, "where", None),
     r"""
 where(condition, input, other, *, out=None) -> Tensor
 
@@ -12578,7 +12588,7 @@ Example::
 )
 
 add_docstr(
-    torch.logdet,
+    getattr(torch, "logdet", None),
     r"""
 logdet(input) -> Tensor
 
@@ -12626,7 +12636,7 @@ Example::
 )
 
 add_docstr(
-    torch.slogdet,
+    getattr(torch, "slogdet", None),
     r"""
 slogdet(input) -> (Tensor, Tensor)
 
@@ -12635,7 +12645,7 @@ Alias for :func:`torch.linalg.slogdet`
 )
 
 add_docstr(
-    torch.pinverse,
+    getattr(torch, "pinverse", None),
     r"""
 pinverse(input, rcond=1e-15) -> Tensor
 
@@ -12644,7 +12654,7 @@ Alias for :func:`torch.linalg.pinv`
 )
 
 add_docstr(
-    torch.hann_window,
+    getattr(torch, "hann_window", None),
     """
 hann_window(window_length, periodic=True, *, dtype=None, \
 layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -12691,7 +12701,7 @@ Returns:
 
 
 add_docstr(
-    torch.hamming_window,
+    getattr(torch, "hamming_window", None),
     """
 hamming_window(window_length, *, dtype=None, layout=None, device=None, pin_memory=False, \
 requires_grad=False) -> Tensor
@@ -12808,7 +12818,7 @@ Returns:
 
 
 add_docstr(
-    torch.bartlett_window,
+    getattr(torch, "bartlett_window", None),
     """
 bartlett_window(window_length, periodic=True, *, dtype=None, \
 layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -12857,7 +12867,7 @@ Returns:
 
 
 add_docstr(
-    torch.blackman_window,
+    getattr(torch, "blackman_window", None),
     """
 blackman_window(window_length, periodic=True, *, dtype=None, \
 layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -12903,7 +12913,7 @@ Returns:
 
 
 add_docstr(
-    torch.kaiser_window,
+    getattr(torch, "kaiser_window", None),
     """
 kaiser_window(window_length, periodic=True, beta=12.0, *, dtype=None, \
 layout=torch.strided, device=None, requires_grad=False) -> Tensor
@@ -12946,7 +12956,7 @@ Keyword args:
 
 
 add_docstr(
-    torch.vander,
+    getattr(torch, "vander", None),
     """
 vander(x, N=None, increasing=False) -> Tensor
 """
@@ -12993,7 +13003,7 @@ Example::
 
 
 add_docstr(
-    torch.unbind,
+    getattr(torch, "unbind", None),
     r"""
 unbind(input, dim=0) -> seq
 
@@ -13016,7 +13026,7 @@ Example::
 
 
 add_docstr(
-    torch.combinations,
+    getattr(torch, "combinations", None),
     r"""
 combinations(input: Tensor, r: int = 2, with_replacement: bool = False) -> seq
 
@@ -13062,7 +13072,7 @@ Example::
 )
 
 add_docstr(
-    torch.trapezoid,
+    getattr(torch, "trapezoid", None),
     r"""
 trapezoid(y, x=None, *, dx=None, dim=-1) -> Tensor
 
@@ -13173,7 +13183,7 @@ Examples::
 )
 
 add_docstr(
-    torch.trapz,
+    getattr(torch, "trapz", None),
     r"""
 trapz(y, x=None, *, dim=-1) -> Tensor
 
@@ -13182,7 +13192,7 @@ Alias for :func:`torch.trapezoid`.
 )
 
 add_docstr(
-    torch.cumulative_trapezoid,
+    getattr(torch, "cumulative_trapezoid", None),
     r"""
 cumulative_trapezoid(y, x=None, *, dx=None, dim=-1) -> Tensor
 
@@ -13271,7 +13281,7 @@ Examples::
 )
 
 add_docstr(
-    torch.repeat_interleave,
+    getattr(torch, "repeat_interleave", None),
     r"""
 repeat_interleave(input, repeats, dim=None, *, output_size=None) -> Tensor
 
@@ -13341,7 +13351,7 @@ Example::
 )
 
 add_docstr(
-    torch.tile,
+    getattr(torch, "tile", None),
     r"""
 tile(input, dims) -> Tensor
 
@@ -13384,7 +13394,7 @@ Example::
 )
 
 add_docstr(
-    torch.quantize_per_tensor,
+    getattr(torch, "quantize_per_tensor", None),
     r"""
 quantize_per_tensor(input, scale, zero_point, dtype) -> Tensor
 
@@ -13420,7 +13430,7 @@ Example::
 )
 
 add_docstr(
-    torch.quantize_per_tensor_dynamic,
+    getattr(torch, "quantize_per_tensor_dynamic", None),
     r"""
 quantize_per_tensor_dynamic(input, dtype, reduce_range) -> Tensor
 
@@ -13450,7 +13460,7 @@ Example::
 )
 
 add_docstr(
-    torch.quantize_per_channel,
+    getattr(torch, "quantize_per_channel", None),
     r"""
 quantize_per_channel(input, scales, zero_points, axis, dtype) -> Tensor
 
@@ -13484,7 +13494,7 @@ Example::
 
 
 add_docstr(
-    torch.quantized_batch_norm,
+    getattr(torch, "quantized_batch_norm", None),
     r"""
 quantized_batch_norm(input, weight=None, bias=None, mean, var, eps, output_scale, output_zero_point) -> Tensor
 
@@ -13529,7 +13539,7 @@ Example::
 
 
 add_docstr(
-    torch.quantized_max_pool1d,
+    getattr(torch, "quantized_max_pool1d", None),
     r"""
 quantized_max_pool1d(input, kernel_size, stride=[], padding=0, dilation=1, ceil_mode=False) -> Tensor
 
@@ -13560,7 +13570,7 @@ Example::
 
 
 add_docstr(
-    torch.quantized_max_pool2d,
+    getattr(torch, "quantized_max_pool2d", None),
     r"""
 quantized_max_pool2d(input, kernel_size, stride=[], padding=0, dilation=1, ceil_mode=False) -> Tensor
 
@@ -13597,7 +13607,7 @@ Example::
 
 
 add_docstr(
-    torch.Stream,
+    getattr(torch, "Stream", None),
     r"""
 Stream(device, *, priority) -> Stream
 
@@ -13748,7 +13758,7 @@ Example::
 
 
 add_docstr(
-    torch.Event,
+    getattr(torch, "Event", None),
     r"""
 Event(device=None, *, enable_timing=False, blocking=False, interprocess=False)
 
@@ -13885,7 +13895,7 @@ Example::
 
 
 add_docstr(
-    torch.Generator,
+    getattr(torch, "Generator", None),
     r"""
 Generator(device='cpu') -> Generator
 
@@ -14071,7 +14081,7 @@ Example::
 )
 
 add_docstr(
-    torch._assert_async,
+    getattr(torch, "_assert_async", None),
     r"""
 _assert_async(tensor) -> void
 
@@ -14091,7 +14101,7 @@ Args:
 )
 
 add_docstr(
-    torch.searchsorted,
+    getattr(torch, "searchsorted", None),
     r"""
 searchsorted(sorted_sequence, values, *, out_int32=False, right=False, side=None, out=None, sorter=None) -> Tensor
 
@@ -14174,7 +14184,7 @@ Example::
 )
 
 add_docstr(
-    torch.bucketize,
+    getattr(torch, "bucketize", None),
     r"""
 bucketize(input, boundaries, *, out_int32=False, right=False, out=None) -> Tensor
 
@@ -14226,7 +14236,7 @@ Example::
 )
 
 add_docstr(
-    torch.view_as_real_copy,
+    getattr(torch, "view_as_real_copy", None),
     r"""
 Performs the same operation as :func:`torch.view_as_real`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14234,7 +14244,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.view_as_complex_copy,
+    getattr(torch, "view_as_complex_copy", None),
     r"""
 Performs the same operation as :func:`torch.view_as_complex`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14242,7 +14252,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.as_strided_copy,
+    getattr(torch, "as_strided_copy", None),
     r"""
 Performs the same operation as :func:`torch.as_strided`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14250,7 +14260,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.diagonal_copy,
+    getattr(torch, "diagonal_copy", None),
     r"""
 Performs the same operation as :func:`torch.diagonal`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14258,7 +14268,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.expand_copy,
+    getattr(torch, "expand_copy", None),
     r"""
 Performs the same operation as :func:`torch.Tensor.expand`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14266,7 +14276,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.permute_copy,
+    getattr(torch, "permute_copy", None),
     r"""
 Performs the same operation as :func:`torch.permute`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14274,7 +14284,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.select_copy,
+    getattr(torch, "select_copy", None),
     r"""
 Performs the same operation as :func:`torch.select`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14282,7 +14292,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.detach_copy,
+    getattr(torch, "detach_copy", None),
     r"""
 Performs the same operation as :func:`torch.detach`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14290,7 +14300,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.slice_copy,
+    getattr(torch, "slice_copy", None),
     r"""
 Performs the same operation as :func:`torch.slice`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14298,7 +14308,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.split_copy,
+    getattr(torch, "split_copy", None),
     r"""
 Performs the same operation as :func:`torch.split`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14306,7 +14316,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.split_with_sizes_copy,
+    getattr(torch, "split_with_sizes_copy", None),
     r"""
 Performs the same operation as :func:`torch.split_with_sizes`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14314,7 +14324,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.squeeze_copy,
+    getattr(torch, "squeeze_copy", None),
     r"""
 Performs the same operation as :func:`torch.squeeze`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14322,7 +14332,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.t_copy,
+    getattr(torch, "t_copy", None),
     r"""
 Performs the same operation as :func:`torch.t`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14330,7 +14340,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.transpose_copy,
+    getattr(torch, "transpose_copy", None),
     r"""
 Performs the same operation as :func:`torch.transpose`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14338,7 +14348,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.unsqueeze_copy,
+    getattr(torch, "unsqueeze_copy", None),
     r"""
 Performs the same operation as :func:`torch.unsqueeze`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14346,7 +14356,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.indices_copy,
+    getattr(torch, "indices_copy", None),
     r"""
 Performs the same operation as :func:`torch.indices`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14354,7 +14364,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.values_copy,
+    getattr(torch, "values_copy", None),
     r"""
 Performs the same operation as :func:`torch.values`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14362,7 +14372,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.crow_indices_copy,
+    getattr(torch, "crow_indices_copy", None),
     r"""
 Performs the same operation as :func:`torch.crow_indices`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14370,7 +14380,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.col_indices_copy,
+    getattr(torch, "col_indices_copy", None),
     r"""
 Performs the same operation as :func:`torch.col_indices`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14378,7 +14388,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.unbind_copy,
+    getattr(torch, "unbind_copy", None),
     r"""
 Performs the same operation as :func:`torch.unbind`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14386,7 +14396,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.view_copy,
+    getattr(torch, "view_copy", None),
     r"""
 Performs the same operation as :func:`torch.view`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14394,7 +14404,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.unfold_copy,
+    getattr(torch, "unfold_copy", None),
     r"""
 Performs the same operation as :func:`torch.unfold`, but all output tensors
 are freshly created instead of aliasing the input.
@@ -14402,7 +14412,7 @@ are freshly created instead of aliasing the input.
 )
 
 add_docstr(
-    torch.alias_copy,
+    getattr(torch, "alias_copy", None),
     r"""
 Performs the same operation as :func:`torch.alias`, but all output tensors
 are freshly created instead of aliasing the input.

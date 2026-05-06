@@ -1,4 +1,5 @@
 #include <ATen/DLConvertor.h>
+#include <ATen/ops/from_blob.h>
 #include <memory>
 
 using namespace std;

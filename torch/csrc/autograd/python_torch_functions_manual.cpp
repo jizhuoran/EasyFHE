@@ -504,12 +504,10 @@ static void gatherTorchFunctions(std::vector<PyMethodDef>& torch_functions) {
   gatherTorchFunctions_1(torch_functions);
   gatherTorchFunctions_2(torch_functions);
 
-  static std::array<std::pair<const char*, const char*>, 4> aliases{
+  static std::array<std::pair<const char*, const char*>, 2> aliases{
       {// Canonical function, alias name
-       {"sspaddmm", "saddmm"},
        {"mm", "spmm"},
-       {"mm", "dsmm"},
-       {"hspmm", "hsmm"}}};
+       {"mm", "dsmm"}}};
 
   for (const auto& alias : aliases) {
     auto it = std::find_if(

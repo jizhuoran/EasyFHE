@@ -10,10 +10,8 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_sparse_coo_tensor_with_dims_and_tensors.h>
 #include <ATen/ops/arange.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/tensor.h>
 #endif
 
 #ifdef GPUCC

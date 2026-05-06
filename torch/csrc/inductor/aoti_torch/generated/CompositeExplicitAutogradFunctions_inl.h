@@ -904,5 +904,16 @@ TORCH_API at::Tensor & unfold_copy_out(at::Tensor & out, const at::Tensor & self
 TORCH_API at::Tensor & unfold_copy_outf(const at::Tensor & self, int64_t dimension, int64_t size, int64_t step, at::Tensor & out);
 TORCH_API at::Tensor & alias_copy_out(at::Tensor & out, const at::Tensor & self);
 TORCH_API at::Tensor & alias_copy_outf(const at::Tensor & self, at::Tensor & out);
+TORCH_API at::Tensor resize_as_sparse(const at::Tensor & self, const at::Tensor & the_template);
+TORCH_API const at::Tensor & resize_as_sparse_out(const at::Tensor & out, const at::Tensor & self, const at::Tensor & the_template);
+TORCH_API const at::Tensor & resize_as_sparse_outf(const at::Tensor & self, const at::Tensor & the_template, const at::Tensor & out);
+TORCH_API ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> _embedding_bag_out(at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3, const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq=false, int64_t mode=0, bool sparse=false, const ::std::optional<at::Tensor> & per_sample_weights={}, bool include_last_offset=false, int64_t padding_idx=-1);
+TORCH_API ::std::tuple<at::Tensor &,at::Tensor &,at::Tensor &,at::Tensor &> _embedding_bag_outf(const at::Tensor & weight, const at::Tensor & indices, const at::Tensor & offsets, bool scale_grad_by_freq, int64_t mode, bool sparse, const ::std::optional<at::Tensor> & per_sample_weights, bool include_last_offset, int64_t padding_idx, at::Tensor & out0, at::Tensor & out1, at::Tensor & out2, at::Tensor & out3);
+TORCH_API void _histogramdd_bin_edges_out(at::TensorList out, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false);
+TORCH_API void _histogramdd_bin_edges_outf(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::TensorList out);
+TORCH_API at::Tensor & _histogramdd_from_bin_cts_out(at::Tensor & out, const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range=::std::nullopt, const ::std::optional<at::Tensor> & weight={}, bool density=false);
+TORCH_API at::Tensor & _histogramdd_from_bin_cts_outf(const at::Tensor & self, at::IntArrayRef bins, ::std::optional<at::ArrayRef<double>> range, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
+TORCH_API at::Tensor & _histogramdd_from_bin_tensors_out(at::Tensor & out, const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight={}, bool density=false);
+TORCH_API at::Tensor & _histogramdd_from_bin_tensors_outf(const at::Tensor & self, at::TensorList bins, const ::std::optional<at::Tensor> & weight, bool density, at::Tensor & out);
 } // namespace compositeexplicitautograd
 } // namespace at

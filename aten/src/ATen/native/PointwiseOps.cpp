@@ -74,5 +74,8 @@ TORCH_IMPL_FUNC(addcdiv_out)
 
 DEFINE_DISPATCH(addcmul_stub);
 DEFINE_DISPATCH(addcdiv_stub);
+DEFINE_DISPATCH(huber_backward_stub);
+DEFINE_DISPATCH(mse_backward_stub);
+DEFINE_DISPATCH(smooth_l1_backward_stub);
 
 } // namespace at::native

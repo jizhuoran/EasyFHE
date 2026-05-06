@@ -3,12 +3,12 @@
 #include <ATen/Parallel.h>
 #include <ATen/SparseTensorImpl.h>
 #include <ATen/core/Tensor.h>
+#include <cstring>
 
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/Functions.h>
 #else
 #include <ATen/ops/empty.h>
-#include <ATen/ops/tensor.h>
 #endif
 
 namespace at::sparse {
@@ -158,9 +158,10 @@ class TensorGeometryHolder<0> {
     const int64_t t_ndims = sizes.size();
     const auto cpu_options = TensorOptions(options).dtype(kLong).device(kCPU);
     Tensor t_sizes_and_strides_cpu = at::empty({2, t_ndims}, cpu_options);
-    t_sizes_and_strides_cpu.select(0, 0).copy_(at::tensor(sizes, cpu_options));
-    t_sizes_and_strides_cpu.select(0, 1).copy_(
-        at::tensor(strides, cpu_options));
+    auto sizes_view = t_sizes_and_strides_cpu.select(0, 0);
+    auto strides_view = t_sizes_and_strides_cpu.select(0, 1);
+    std::memcpy(sizes_view.data_ptr<int64_t>(), sizes.data(), t_ndims * sizeof(int64_t));
+    std::memcpy(strides_view.data_ptr<int64_t>(), strides.data(), t_ndims * sizeof(int64_t));
     const Tensor t_sizes_and_strides =
         t_sizes_and_strides_cpu.to(options.device());
     t_sizes = t_sizes_and_strides.select(0, 0);

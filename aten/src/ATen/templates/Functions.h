@@ -71,8 +71,10 @@
 #include <optional>
 #include <c10/util/OptionalArrayRef.h>
 
+// Include from_blob for TensorMaker (hand-written, not in yaml)
 #include <ATen/ops/from_blob.h>
 #include <ATen/ops/tensor.h>
+
 
 ${Functions_includes}
 

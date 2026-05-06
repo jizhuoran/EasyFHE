@@ -145,8 +145,7 @@ file(GLOB_RECURSE native_mps_sparse_metal CONFIGURE_DEPENDS "native/sparse/mps/*
 
 file(GLOB native_sparse_cpp CONFIGURE_DEPENDS "native/sparse/*.cpp")
 file(GLOB native_quantized_cpp CONFIGURE_DEPENDS
-            "native/quantized/*.cpp"
-            "native/quantized/cpu/*.cpp")
+            "native/quantized/*.cpp")
 file(GLOB native_nested_cpp CONFIGURE_DEPENDS "native/nested/*.cpp")
 file(GLOB native_transformers_cpp CONFIGURE_DEPENDS "native/transformers/*.cpp")
 file(GLOB_RECURSE native_fhe_cpp CONFIGURE_DEPENDS "native/fhe/cpu/*.cpp")
@@ -497,6 +496,7 @@ else()
   set(
     all_cpu_cpp ${base_cpp} ${ATen_CORE_SRCS} ${native_cpp}
     ${native_sparse_cpp}
+    ${native_quantized_cpp}
     ${native_mkl_cpp} ${native_mkldnn_cpp}
     ${native_fhe_cpp}
     ${native_utils_cpp} ${native_xnnpack} ${generated_sources} ${core_generated_sources}

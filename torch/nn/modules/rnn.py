@@ -28,8 +28,8 @@ __all__ = [
 ]
 
 _rnn_impls = {
-    "RNN_TANH": _VF.rnn_tanh,
-    "RNN_RELU": _VF.rnn_relu,
+    "RNN_TANH": getattr(_VF, "rnn_tanh", None),
+    "RNN_RELU": getattr(_VF, "rnn_relu", None),
 }
 
 

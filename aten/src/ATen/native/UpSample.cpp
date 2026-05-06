@@ -31,3 +31,33 @@ TORCH_API c10::SmallVector<int64_t, 3> compute_output_size(
 }
 
 } // namespace at::native::upsample
+
+namespace at::native {
+
+DEFINE_DISPATCH(upsample_nearest1d_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact1d_kernel);
+DEFINE_DISPATCH(upsample_nearest2d_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact2d_kernel);
+DEFINE_DISPATCH(upsample_nearest3d_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact3d_kernel);
+DEFINE_DISPATCH(upsample_nearest1d_backward_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact1d_backward_kernel);
+DEFINE_DISPATCH(upsample_nearest2d_backward_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact2d_backward_kernel);
+DEFINE_DISPATCH(upsample_nearest3d_backward_kernel);
+DEFINE_DISPATCH(_upsample_nearest_exact3d_backward_kernel);
+DEFINE_DISPATCH(upsample_linear1d_kernel);
+DEFINE_DISPATCH(upsample_bilinear2d_kernel);
+DEFINE_DISPATCH(_upsample_bilinear2d_aa_kernel);
+DEFINE_DISPATCH(upsample_trilinear3d_kernel);
+DEFINE_DISPATCH(upsample_linear1d_backward_kernel);
+DEFINE_DISPATCH(upsample_bilinear2d_backward_kernel);
+DEFINE_DISPATCH(_upsample_bilinear2d_aa_backward_kernel);
+DEFINE_DISPATCH(upsample_trilinear3d_backward_kernel);
+DEFINE_DISPATCH(upsample_bicubic2d_kernel);
+DEFINE_DISPATCH(_upsample_bicubic2d_aa_kernel);
+DEFINE_DISPATCH(_upsample_bicubic2d_aa_backward_kernel);
+DEFINE_DISPATCH(_upsample_lanczos2d_aa_kernel);
+DEFINE_DISPATCH(_upsample_lanczos2d_aa_backward_kernel);
+
+} // namespace at::native

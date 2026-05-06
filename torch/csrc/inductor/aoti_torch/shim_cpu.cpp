@@ -8,7 +8,6 @@
 #ifndef AT_PER_OPERATOR_HEADERS
 #include <ATen/CPUFunctions.h>
 #else
-#include <ATen/ops/mkldnn_rnn_layer_cpu_dispatch.h>
 #endif
 #include <ATen/native/mkldnn/Conv.h>
 #include <ATen/native/mkldnn/Linear.h>
@@ -524,12 +523,7 @@ AOTITorchError aoti_torch_cpu__weight_int4pack_mm_cpu_tensor(
     AtenTensorHandle qScaleAndZeros,
     AtenTensorHandle* ret0) {
   AOTI_TORCH_CONVERT_EXCEPTION_TO_ERROR_CODE({
-    auto tmp_result = at::native::_weight_int4pack_mm_cpu_tensor(
-        *tensor_handle_to_tensor_pointer(X),
-        *tensor_handle_to_tensor_pointer(w),
-        *tensor_handle_to_tensor_pointer(qGroupSize),
-        *tensor_handle_to_tensor_pointer(qScaleAndZeros));
-    *ret0 = new_tensor_handle(std::move(tmp_result));
+    TORCH_CHECK(false, "_weight_int4pack_mm_cpu_tensor not supported in EasyFHE");
   });
 }
 

@@ -10,7 +10,6 @@
 #include <ATen/NativeFunctions.h>
 #else
 #include <ATen/ops/contiguous_native.h>
-#include <ATen/ops/cudnn_is_acceptable_native.h>
 #include <ATen/ops/detach_native.h>
 #include <ATen/ops/dim_native.h>
 #include <ATen/ops/equal.h>

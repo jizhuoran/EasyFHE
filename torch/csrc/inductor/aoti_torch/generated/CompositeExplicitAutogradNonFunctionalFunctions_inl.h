@@ -313,5 +313,10 @@ TORCH_API at::Tensor view_copy_symint(const at::Tensor & self, c10::SymIntArrayR
 TORCH_API at::Tensor view_copy(const at::Tensor & self, at::ScalarType dtype);
 TORCH_API at::Tensor unfold_copy(const at::Tensor & self, int64_t dimension, int64_t size, int64_t step);
 TORCH_API at::Tensor alias_copy(const at::Tensor & self);
+TORCH_API at::Tensor leaky_relu(const at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor & leaky_relu_(at::Tensor & self, const at::Scalar & negative_slope=0.01);
+TORCH_API at::Tensor elu(const at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor & elu_(at::Tensor & self, const at::Scalar & alpha=1, const at::Scalar & scale=1, const at::Scalar & input_scale=1);
+TORCH_API at::Tensor linalg_vector_norm(const at::Tensor & self, const at::Scalar & ord=2, at::OptionalIntArrayRef dim=::std::nullopt, bool keepdim=false, ::std::optional<at::ScalarType> dtype=::std::nullopt);
 } // namespace compositeexplicitautogradnonfunctional
 } // namespace at

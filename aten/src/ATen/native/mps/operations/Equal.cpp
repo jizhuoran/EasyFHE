@@ -6,7 +6,6 @@
 #include <ATen/NativeFunctions.h>
 #include <ATen/MPSFunctions.h>
 #else
-#include <ATen/ops/eq_mps_dispatch.h>
 #include <ATen/ops/equal_native.h>
 #endif
 

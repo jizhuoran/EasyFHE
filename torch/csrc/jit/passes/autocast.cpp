@@ -377,7 +377,6 @@ void handleBlock(Block* block, AutocastContext initial_state) {
       case aten::sinh:
       case aten::tan:
       case aten::pow:
-      case aten::renorm:
       case aten::logsumexp:
         if (!node->schema().is_mutable()) {
           castTensorInputs(

@@ -11,8 +11,6 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/quantize_per_tensor_native.h>
-#include <ATen/ops/quantize_per_channel_native.h>
 #include <ATen/ops/zeros.h>
 #endif
 
