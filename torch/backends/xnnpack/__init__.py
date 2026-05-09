@@ -2,15 +2,18 @@
 import sys
 import types
 
-import torch
+
+def is_available():
+    return False
 
 
 class _XNNPACKEnabled:
     def __get__(self, obj, objtype):
-        return torch._C._is_xnnpack_enabled()
+        return False
 
     def __set__(self, obj, val):
-        raise RuntimeError("Assignment not supported")
+        if val:
+            raise RuntimeError("XNNPACK is disabled in EasyFHE")
 
 
 class XNNPACKEngine(types.ModuleType):
@@ -24,6 +27,4 @@ class XNNPACKEngine(types.ModuleType):
     enabled = _XNNPACKEnabled()
 
 
-# This is the sys.modules replacement trick, see
-# https://stackoverflow.com/questions/2447353/getattr-on-a-module/7668273#7668273
 sys.modules[__name__] = XNNPACKEngine(sys.modules[__name__], __name__)

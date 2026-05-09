@@ -61,7 +61,6 @@ torch.nativert <nativert>
 torch.package <package>
 profiler
 nn.init
-nn.attention
 onnx
 optim
 complex_numbers

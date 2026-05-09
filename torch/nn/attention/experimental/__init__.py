@@ -1,2 +1,7 @@
-# Experimental features are not mature yet and are subject to change.
-# We do not provide any BC/FC guarantees
+# mypy: allow-untyped-defs
+
+
+def __getattr__(name):
+    raise AttributeError(
+        f"torch.nn.attention.experimental.{name} is disabled in EasyFHE"
+    )

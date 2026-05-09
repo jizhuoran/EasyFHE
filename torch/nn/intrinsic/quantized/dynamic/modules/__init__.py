@@ -1,6 +1,10 @@
-from torch.nn.intrinsic.quantized.dynamic.modules.linear_relu import LinearReLU
+# mypy: allow-untyped-defs
 
 
-__all__ = [
-    "LinearReLU",
-]
+__all__: list[str] = []
+
+
+def __getattr__(name):
+    raise AttributeError(
+        f"torch.nn.intrinsic.quantized.dynamic.modules.{name} is disabled in EasyFHE"
+    )

@@ -1,14 +1,8 @@
-# to ensure customers can use the module below
-# without importing it directly
-from torch.nn.intrinsic.quantized import dynamic, modules
-from torch.nn.intrinsic.quantized.modules import *  # noqa: F403
+# mypy: allow-untyped-defs
 
 
-__all__ = [
-    "BNReLU2d",
-    "BNReLU3d",
-    "ConvReLU1d",
-    "ConvReLU2d",
-    "ConvReLU3d",
-    "LinearReLU",
-]
+__all__: list[str] = []
+
+
+def __getattr__(name):
+    raise AttributeError(f"torch.nn.intrinsic.quantized.{name} is disabled in EasyFHE")

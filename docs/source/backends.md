@@ -20,8 +20,6 @@ These backends include:
 - `torch.backends.mha`
 - `torch.backends.mps`
 - `torch.backends.mkl`
-- `torch.backends.mkldnn`
-- `torch.backends.nnpack`
 - `torch.backends.openmp`
 - `torch.backends.opt_einsum`
 - `torch.backends.python_native`
@@ -337,38 +335,6 @@ These backends include:
 
 ```
 
-## torch.backends.mkldnn
-
-```{eval-rst}
-.. automodule:: torch.backends.mkldnn
-```
-
-```{eval-rst}
-.. autofunction::  torch.backends.mkldnn.is_available
-```
-
-```{eval-rst}
-.. autoclass::  torch.backends.mkldnn.verbose
-```
-
-## torch.backends.nnpack
-
-```{eval-rst}
-.. automodule:: torch.backends.nnpack
-```
-
-```{eval-rst}
-.. autofunction::  torch.backends.nnpack.is_available
-```
-
-```{eval-rst}
-.. autofunction::  torch.backends.nnpack.flags
-```
-
-```{eval-rst}
-.. autofunction::  torch.backends.nnpack.set_flags
-```
-
 ## torch.backends.openmp
 
 ```{eval-rst}
@@ -382,14 +348,6 @@ These backends include:
 % Docs for other backends need to be added here.
 % Automodules are just here to ensure checks run but they don't actually
 % add anything to the rendered page for now.
-
-```{eval-rst}
-.. py:module:: torch.backends.quantized
-```
-
-```{eval-rst}
-.. py:module:: torch.backends.xnnpack
-```
 
 ```{eval-rst}
 .. py:module:: torch.backends.kleidiai

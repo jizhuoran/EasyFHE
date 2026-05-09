@@ -6270,7 +6270,7 @@ scaled_dot_product_attention = _add_docstr(
         dropout_p (float): Dropout probability; if greater than 0.0, dropout is applied
         is_causal (bool): If set to true, the attention masking is a lower triangular matrix when the mask is a
             square matrix. The attention masking has the form of the upper left causal bias due to the alignment
-            (see :class:`torch.nn.attention.bias.CausalBias`) when the mask is a non-square matrix.
+            when the mask is a non-square matrix.
             An error is thrown if both attn_mask and is_causal are set.
         scale (optional float, keyword-only): Scaling factor applied prior to softmax. If None, the default value is set
             to :math:`\frac{1}{\sqrt{E}}`.

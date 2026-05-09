@@ -9,7 +9,14 @@ from typing import Any, IO, Literal, Optional, TYPE_CHECKING, Union
 
 import torch.fx
 
-from .standalone_compile import CompiledArtifact, DynamicShapesType  # noqa: TC001
+try:
+    from .standalone_compile import CompiledArtifact, DynamicShapesType  # noqa: TC001
+except ModuleNotFoundError:
+    @dataclasses.dataclass
+    class CompiledArtifact:
+        path: str
+
+    DynamicShapesType = Literal["auto", "dynamic", "static"]
 
 
 if TYPE_CHECKING:

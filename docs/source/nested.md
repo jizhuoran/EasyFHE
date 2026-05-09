@@ -320,9 +320,7 @@ torch.Size([2, 6, j1])
 ### Attention mechanisms
 
 As variable-length sequences are common inputs to attention mechanisms, nested tensors support
-important attention operators
-[Scaled Dot Product Attention (SDPA)](https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html) and
-[FlexAttention](https://pytorch.org/docs/stable/nn.attention.flex_attention.html#module-torch.nn.attention.flex_attention).
+important tensor attention operators.
 See
 [here](https://pytorch.org/tutorials/intermediate/transformer_building_blocks.html#multiheadattention)
 for usage examples of NJT with SDPA and

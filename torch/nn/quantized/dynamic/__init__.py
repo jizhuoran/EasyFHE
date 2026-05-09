@@ -1,1 +1,8 @@
-from torch.ao.nn.quantized.dynamic import *  # noqa: F403
+# mypy: allow-untyped-defs
+
+
+__all__: list[str] = []
+
+
+def __getattr__(name):
+    raise AttributeError(f"torch.nn.quantized.dynamic.{name} is disabled in EasyFHE")

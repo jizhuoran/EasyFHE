@@ -276,9 +276,8 @@ cmake_dependent_option(USE_ROCM "Use ROCm" ON "LINUX OR WIN32" OFF)
 cmake_dependent_option(USE_ROCM_CK_GEMM "Use ROCm Composable Kernel for GEMMs" ON "USE_ROCM;NOT WIN32" OFF)
 option(USE_ROCM_CK_SDPA "Use ROCm Composable Kernel for SDPA" OFF)
 option(CAFFE2_STATIC_LINK_CUDA "Statically link CUDA libraries" OFF)
-cmake_dependent_option(USE_CUDNN "Use cuDNN" ON "USE_CUDA" OFF)
-cmake_dependent_option(USE_STATIC_CUDNN "Use cuDNN static libraries" OFF
-                       "USE_CUDNN" OFF)
+set(USE_CUDNN OFF CACHE BOOL "cuDNN is disabled in EasyFHE" FORCE)
+set(USE_STATIC_CUDNN OFF CACHE BOOL "Static cuDNN is disabled in EasyFHE" FORCE)
 cmake_dependent_option(USE_CUSPARSELT "Use cuSPARSELt" ON "USE_CUDA" OFF)
 cmake_dependent_option(USE_CUDSS "Use cuDSS" ON "USE_CUDA" OFF)
 # USE_ROCM is guarded against in Dependencies.cmake because USE_ROCM is not properly defined here

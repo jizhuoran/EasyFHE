@@ -243,9 +243,7 @@ S390X_BLOCKLIST = [
     "inductor/test_select_algorithm",
     "inductor/test_snode_runtime",
     "inductor/test_triton_wrapper",
-    # these tests fail when mkldnn is not available
     "inductor/test_custom_post_grad_passes",
-    "inductor/test_mkldnn_pattern_matcher",
     "test_metal",
     # lacks quantization support
     "onnx/test_models_quantized_onnxruntime",
@@ -335,7 +333,6 @@ CI_SERIAL_LIST = [
     "test_module_hooks",  # OOM
     "inductor/test_max_autotune",
     "inductor/test_cutlass_backend",  # slow due to many nvcc compilation steps,
-    "inductor/test_flex_attention",  # OOM
 ]
 # A subset of onnx tests that cannot run in parallel due to high memory usage.
 ONNX_SERIAL_LIST = [

@@ -78,12 +78,10 @@ def _is_lossless_fp_widening_cast(
 
 @init_once_fakemode
 def lazy_init(input_device: torch.device | None = None):
-    from .fuse_attention import _sfdp_init
     from .misc_patterns import _misc_patterns_init
     from .pad_mm import _pad_mm_init
 
     _pad_mm_init(input_device)
-    _sfdp_init(input_device)
     _misc_patterns_init(input_device)
 
 
