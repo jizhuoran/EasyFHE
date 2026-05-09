@@ -1116,10 +1116,6 @@ coverage_ignore_functions = [
     "no_fuser",
     "time_cpu",
     "time_cuda",
-    # torch.utils.mkldnn
-    "to_mkldnn",
-    # torch.utils.mobile_optimizer
-    "generate_mobile_module_lints",
     # torch.utils.tensorboard.summary
     "audio",
     "compute_curve",
@@ -2159,15 +2155,6 @@ coverage_ignore_classes = [
     # torch.utils.hooks
     "BackwardHook",
     "RemovableHandle",
-    # torch.utils.mkldnn
-    "MkldnnBatchNorm",
-    "MkldnnConv1d",
-    "MkldnnConv2d",
-    "MkldnnConv3d",
-    "MkldnnLinear",
-    "MkldnnPrelu",
-    # torch.utils.mobile_optimizer
-    "LintCode",
     # torch.utils.show_pickle
     "DumpUnpickler",
     "FakeClass",
