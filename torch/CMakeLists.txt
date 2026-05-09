@@ -471,13 +471,6 @@ if(USE_UCC)
   target_compile_definitions(torch_python PRIVATE USE_UCC)
 endif()
 
-if(BUILD_ONEDNN_GRAPH)
-  target_compile_definitions(torch_python PRIVATE "-DBUILD_ONEDNN_GRAPH")
-  if(NOT BUILD_LIBTORCHLESS)
-    target_compile_definitions(torch_cpu PRIVATE "-DBUILD_ONEDNN_GRAPH")
-  endif()
-endif()
-
 if(${CMAKE_BUILD_TYPE} STREQUAL "RelWithAssert")
    # Workaround numerous decret-without-a-gil warnings from JIT
    # see https://github.com/pytorch/pytorch/issues/130073

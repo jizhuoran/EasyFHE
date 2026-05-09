@@ -972,8 +972,6 @@ include(cmake/MiscCheck.cmake)
 # External projects
 include(ExternalProject)
 
-set(BUILD_ONEDNN_GRAPH OFF)
-
 if(MSVC)
   # The source code is in utf-8 encoding
   append_cxx_flag_if_supported("/utf-8" CMAKE_CXX_FLAGS)

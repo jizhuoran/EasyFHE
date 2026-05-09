@@ -10,9 +10,6 @@
 // #include <torch/csrc/jit/codegen/cuda/python_frontend/python_bindings.h>
 #include <torch/csrc/jit/codegen/fuser/interface.h>
 #include <torch/csrc/jit/codegen/fuser/kernel_cache.h>
-#if (!defined(FBCODE_CAFFE2) && defined(BUILD_ONEDNN_GRAPH))
-#include <torch/csrc/jit/codegen/onednn/interface.h>
-#endif
 #include <c10/core/SymNodeImpl.h>
 #include <torch/csrc/jit/frontend/ir_emitter.h>
 #include <torch/csrc/jit/frontend/schema_type_parser.h>
@@ -744,13 +741,8 @@ void initJITBindings(PyObject* module) {
             auto stack = toTraceableStack(args);
             checkAliasAnnotation(g, std::move(stack), unqualified_op_name);
           })
-#if (!defined(FBCODE_CAFFE2) && defined(BUILD_ONEDNN_GRAPH))
-      .def("_jit_set_llga_enabled", &RegisterLlgaFuseGraph::setEnabled)
-      .def("_jit_llga_enabled", &RegisterLlgaFuseGraph::isEnabled)
-#else
       .def("_jit_set_llga_enabled", [](bool flag) { return false; })
       .def("_jit_llga_enabled", []() { return false; })
-#endif
       .def(
           "_jit_set_tracer_state_warn",
           [](bool new_warn) {
