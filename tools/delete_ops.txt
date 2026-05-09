@@ -40,6 +40,10 @@ min.names_dim
 min.names_dim_min
 mode.dimname
 mode.dimname_out
+nanquantile
+nanquantile.out
+nanquantile.scalar
+nanquantile.scalar_out
 nanmedian.names_dim
 nanmedian.names_dim_values
 norm.names_ScalarOpt_dim
@@ -48,6 +52,10 @@ norm.names_dtype_out
 norm.names_out
 prod.Dimname_out
 prod.dim_Dimname
+quantile
+quantile.out
+quantile.scalar
+quantile.scalar_out
 scatter.dimname_src
 scatter.dimname_value
 scatter_add.dimname

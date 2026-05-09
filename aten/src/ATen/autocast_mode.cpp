@@ -258,10 +258,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   KERNEL_CPU(polar, fp32)
   KERNEL_CPU(prod, fp32)
   KERNEL_CPU(prod, dim_int, fp32)
-  KERNEL_CPU(quantile, fp32)
-  KERNEL_CPU(quantile, scalar, fp32)
-  KERNEL_CPU(nanquantile, fp32)
-  KERNEL_CPU(nanquantile, scalar, fp32)
   KERNEL_CPU(trace, fp32)
   KERNEL_CPU(view_as_complex, fp32)
 
