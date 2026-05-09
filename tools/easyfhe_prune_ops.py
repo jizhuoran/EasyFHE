@@ -84,13 +84,17 @@ def entry_blocks(lines: list[str], extractor) -> list[Block]:
     return blocks
 
 
-def prune_lines(lines: list[str], blocks: list[Block], delete_bases: set[str]) -> tuple[list[str], list[Block]]:
+def should_delete(block: Block, delete_specs: set[str]) -> bool:
+    return block.name in delete_specs or block.base in delete_specs
+
+
+def prune_lines(lines: list[str], blocks: list[Block], delete_specs: set[str]) -> tuple[list[str], list[Block]]:
     deleted: list[Block] = []
     output: list[str] = []
     cursor = 0
 
     for block in blocks:
-        if block.base not in delete_bases:
+        if not should_delete(block, delete_specs):
             continue
         output.extend(lines[cursor:block.start])
         while output and output[-1].strip() == "":
@@ -112,11 +116,11 @@ def load_delete_list(path: Path) -> set[str]:
     }
 
 
-def validate_derivatives(native_blocks: list[Block], derivative_blocks: list[Block], delete_bases: set[str]) -> list[str]:
-    kept_native = {block.base for block in native_blocks if block.base not in delete_bases}
+def validate_derivatives(native_blocks: list[Block], derivative_blocks: list[Block], delete_specs: set[str]) -> list[str]:
+    kept_native = {block.base for block in native_blocks if not should_delete(block, delete_specs)}
     problems = []
     for block in derivative_blocks:
-        if block.base not in delete_bases and block.base not in kept_native:
+        if not should_delete(block, delete_specs) and block.base not in kept_native:
             problems.append(block.name)
     return sorted(set(problems))
 
@@ -138,7 +142,7 @@ def ts_non_native_bases(lines: list[str]) -> set[str]:
 def prune_ts_lines(
     lines: list[str],
     kept_native_bases: set[str],
-    delete_bases: set[str],
+    delete_specs: set[str],
 ) -> tuple[list[str], list[str]]:
     non_native_bases = ts_non_native_bases(lines)
     output: list[str] = []
@@ -153,7 +157,7 @@ def prune_ts_lines(
             output.append(line)
             continue
         base = base_name(name)
-        if base in delete_bases or (base not in kept_native_bases and base not in non_native_bases):
+        if name in delete_specs or base in delete_specs or (base not in kept_native_bases and base not in non_native_bases):
             deleted.append(name)
             continue
         output.append(line)
@@ -171,8 +175,8 @@ def main() -> None:
     parser.add_argument("--allow-delete-fhe", action="store_true")
     args = parser.parse_args()
 
-    delete_bases = load_delete_list(args.delete_list)
-    fhe_deletes = sorted(delete_bases & FHE_OPS)
+    delete_specs = load_delete_list(args.delete_list)
+    fhe_deletes = sorted(delete_specs & FHE_OPS)
     if fhe_deletes and not args.allow_delete_fhe:
         raise SystemExit(f"Refusing to delete FHE ops: {', '.join(fhe_deletes)}")
 
@@ -182,7 +186,7 @@ def main() -> None:
     native_blocks = entry_blocks(native_lines, extract_native_name)
     derivative_blocks = entry_blocks(derivative_lines, extract_derivative_name)
 
-    dangling = validate_derivatives(native_blocks, derivative_blocks, delete_bases)
+    dangling = validate_derivatives(native_blocks, derivative_blocks, delete_specs)
     if dangling:
         raise SystemExit(
             "derivatives.yaml has entries whose native op would be missing: "
@@ -190,12 +194,12 @@ def main() -> None:
             + (" ..." if len(dangling) > 40 else "")
         )
 
-    pruned_native, deleted_native = prune_lines(native_lines, native_blocks, delete_bases)
-    pruned_derivatives, deleted_derivatives = prune_lines(derivative_lines, derivative_blocks, delete_bases)
-    kept_native_bases = {block.base for block in native_blocks if block.base not in delete_bases}
-    pruned_ts_native, deleted_ts_native = prune_ts_lines(ts_native_lines, kept_native_bases, delete_bases)
+    pruned_native, deleted_native = prune_lines(native_lines, native_blocks, delete_specs)
+    pruned_derivatives, deleted_derivatives = prune_lines(derivative_lines, derivative_blocks, delete_specs)
+    kept_native_bases = {block.base for block in native_blocks if not should_delete(block, delete_specs)}
+    pruned_ts_native, deleted_ts_native = prune_ts_lines(ts_native_lines, kept_native_bases, delete_specs)
 
-    print(f"delete list bases: {len(delete_bases)}")
+    print(f"delete list entries: {len(delete_specs)}")
     print(f"native schemas: {len(native_blocks)} -> {len(native_blocks) - len(deleted_native)}")
     print(f"native deleted schemas: {len(deleted_native)}")
     print(f"ts native entries deleted: {len(deleted_ts_native)}")

@@ -191,7 +191,6 @@ TORCH_LIBRARY_IMPL(aten, Autocast, m) {
   // when autocasting.
   // KERNEL_CUDA(norm, ScalarOpt_dtype, fp32_set_opt_dtype)
   // KERNEL_CUDA(norm, ScalarOpt_dim_dtype, fp32_set_opt_dtype)
-  // KERNEL_CUDA(norm, names_ScalarOpt_dim_dtype, fp32_set_opt_dtype)
 
   // fp32_append_dtype
   // The fp32_append_dtype wrapper overrides implicit promotion behavior.
@@ -234,14 +233,10 @@ TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
   // fp32_set_opt_dtype
   KERNEL_MPS(prod, fp32)
   KERNEL_MPS(prod, dim_int, fp32)
-  KERNEL_MPS(prod, dim_Dimname, fp32)
   KERNEL_MPS(cumprod, fp32)
-  KERNEL_MPS(cumprod, dimname, fp32)
   KERNEL_MPS(cumsum, fp32)
-  KERNEL_MPS(cumsum, dimname, fp32)
   KERNEL_MPS(sum, fp32)
   KERNEL_MPS(sum, dim_IntList, fp32)
-  KERNEL_MPS(sum, dim_DimnameList, fp32)
 
   // promote
   KERNEL_MPS(addcdiv, promote)
@@ -263,7 +258,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   KERNEL_CPU(polar, fp32)
   KERNEL_CPU(prod, fp32)
   KERNEL_CPU(prod, dim_int, fp32)
-  KERNEL_CPU(prod, dim_Dimname, fp32)
   KERNEL_CPU(quantile, fp32)
   KERNEL_CPU(quantile, scalar, fp32)
   KERNEL_CPU(nanquantile, fp32)
@@ -275,7 +269,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   KERNEL_CPU(stack, promote)
   KERNEL_CPU(cat, promote)
   KERNEL_CPU(index_copy, promote)
-  KERNEL_CPU(index_copy, dimname, promote)
 
 }
 
