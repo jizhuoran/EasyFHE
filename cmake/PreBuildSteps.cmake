@@ -78,13 +78,6 @@ if(NOT DEFINED USE_SYSTEM_LIBS OR NOT USE_SYSTEM_LIBS)
       )
     endif()
   endforeach()
-  # Extra check for fbgemm's nested dependency
-  if(NOT EXISTS "${PROJECT_SOURCE_DIR}/third_party/fbgemm/external/asmjit/CMakeLists.txt")
-    message(FATAL_ERROR
-      "third_party/fbgemm/external/asmjit appears incomplete.\n"
-      "Please run: git submodule update --init --recursive"
-    )
-  endif()
 endif()
 
 # --- NCCL checkout ---

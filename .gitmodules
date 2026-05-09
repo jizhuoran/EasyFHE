@@ -14,10 +14,6 @@
     ignore = dirty
     path = third_party/protobuf
     url = https://github.com/protocolbuffers/protobuf.git
-[submodule "third_party/NNPACK"]
-    ignore = dirty
-    path = third_party/NNPACK
-    url = https://github.com/Maratyszcza/NNPACK.git
 [submodule "third_party/gloo"]
     ignore = dirty
     path = third_party/gloo
@@ -54,26 +50,14 @@
     ignore = dirty
     path = third_party/sleef
     url = https://github.com/shibatch/sleef
-[submodule "third_party/ideep"]
-    ignore = dirty
-    path = third_party/ideep
-    url = https://github.com/intel/ideep
 [submodule "third_party/gemmlowp/gemmlowp"]
     ignore = dirty
     path = third_party/gemmlowp/gemmlowp
     url = https://github.com/google/gemmlowp.git
-[submodule "third_party/fbgemm"]
-    ignore = dirty
-    path = third_party/fbgemm
-    url = https://github.com/pytorch/fbgemm
 [submodule "android/libs/fbjni"]
     ignore = dirty
     path = android/libs/fbjni
     url = https://github.com/facebookincubator/fbjni.git
-[submodule "third_party/XNNPACK"]
-    ignore = dirty
-    path = third_party/XNNPACK
-    url = https://github.com/google/XNNPACK.git
 [submodule "third_party/fmt"]
     ignore = dirty
     path = third_party/fmt
@@ -85,9 +69,6 @@
 [submodule "third_party/cudnn_frontend"]
 	path = third_party/cudnn_frontend
 	url = https://github.com/NVIDIA/cudnn-frontend.git
-[submodule "third_party/kineto"]
-    path = third_party/kineto
-    url = https://github.com/pytorch/kineto
 [submodule "third_party/pocketfft"]
 	path = third_party/pocketfft
 	url = https://github.com/mreineck/pocketfft
@@ -123,9 +104,6 @@
 [submodule "third_party/kleidiai"]
 	path = third_party/kleidiai
 	url = https://github.com/ARM-software/kleidiai.git
-[submodule "third_party/flash-attention"]
-	path = third_party/flash-attention
-	url = https://github.com/Dao-AILab/flash-attention.git
 [submodule "third_party/aiter"]
 	path = third_party/aiter
 	url = https://github.com/ROCm/aiter.git
