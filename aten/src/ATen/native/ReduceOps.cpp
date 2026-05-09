@@ -27,8 +27,6 @@
 #include <ATen/ops/_cummin_helper_native.h>
 #include <ATen/ops/_is_all_true_native.h>
 #include <ATen/ops/_is_any_true_native.h>
-#include <ATen/ops/_logcumsumexp.h>
-#include <ATen/ops/_logcumsumexp_native.h>
 #include <ATen/ops/_to_copy.h>
 #include <ATen/ops/add.h>
 #include <ATen/ops/all_meta.h>
@@ -71,8 +69,6 @@
 #include <ATen/ops/hash_tensor_native.h>
 #include <ATen/ops/imag.h>
 #include <ATen/ops/isnan_native.h>
-#include <ATen/ops/logcumsumexp.h>
-#include <ATen/ops/logcumsumexp_native.h>
 #include <ATen/ops/logical_xor.h>
 #include <ATen/ops/logsumexp.h>
 #include <ATen/ops/logsumexp_native.h>
@@ -457,31 +453,22 @@ DEFINE_DISPATCH(xor_sum_stub);
 DEFINE_DISPATCH(norm_kernel);
 
 Tensor _logcumsumexp_cpu(const Tensor& self, int64_t dim) {
-  Tensor result = at::empty_like(self, MemoryFormat::Contiguous);
-  return _logcumsumexp_out_cpu(self, dim, result);
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
+  return self;
 }
 
 Tensor& _logcumsumexp_out_cpu(const Tensor& self, int64_t dim, Tensor& result) {
-  logcumsumexp_stub(self.device().type(), result, self, dim);
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
   return result;
 }
 
 Tensor logcumsumexp(const Tensor& self, int64_t dim) {
-  auto result = [&]() {
-    NoNamesGuard guard;
-    return at::_logcumsumexp(self, dim);
-  }();
-  namedinference::propagate_names(result, self);
-  return result;
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
+  return self;
 }
 
 Tensor& logcumsumexp_out(const Tensor& self, int64_t dim, Tensor& result) {
-  check_scalar_type_device_layout_equal(result, self);
-  {
-    NoNamesGuard guard;
-    at::_logcumsumexp_out(result, self.toType(result.scalar_type()), dim);
-  }
-  namedinference::propagate_names(result, self);
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
   return result;
 }
 
@@ -2224,10 +2211,12 @@ Tensor _is_any_true(const Tensor& self) {
   return self.any();
 }
 Tensor logcumsumexp(const Tensor& self, Dimname dim) {
-  return at::logcumsumexp(self, dimname_to_position(self, dim));
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
+  return self;
 }
 Tensor& logcumsumexp_out(const Tensor& self, Dimname dim, Tensor& result) {
-  return at::logcumsumexp_out(result, self, dimname_to_position(self, dim));
+  TORCH_CHECK(false, "logcumsumexp is not supported in EasyFHE fast build");
+  return result;
 }
 Tensor cumsum(const Tensor& self, Dimname dim, std::optional<ScalarType> dtype) {
   return at::cumsum(self, dimname_to_position(self, dim), dtype);

@@ -807,10 +807,11 @@ Tensor prod_backward(
     return prod_safe_zeros_backward(grad, input.contiguous().view(-1), 0)
         .view_as(input);
   }
-  Tensor zero_idx = (input == 0).nonzero();
-  if (zero_idx.sym_numel() == 0) {
+  Tensor zero_mask = input == 0;
+  int64_t total_zeros = zero_mask.sum().item<int64_t>();
+  if (total_zeros == 0) {
     return grad * (result / input).conj();
-  } else if (!at::GradMode::is_enabled() && zero_idx.sym_size(0) > 1) {
+  } else if (!at::GradMode::is_enabled() && total_zeros > 1) {
     return at::zeros_like(input, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
   } else {
     return prod_safe_zeros_backward(grad, input.contiguous().view(-1), 0)
@@ -886,42 +887,11 @@ Tensor logcumsumexp_backward(
     const Tensor& self,
     const Tensor& result,
     int64_t dim) {
-  if (grad.dim() == 0 || grad.sym_numel() == 0) {
-    return grad;
-  }
-
-  // Reference:
-  // https://github.com/tensorflow/tensorflow/blob/2a5910906a0e0f3dbc186ff9db6386d81a63448c/tensorflow/python/ops/math_grad.py#L1832-L1863
-
-  auto scalar_min = AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND2(
-      at::ScalarType::Half,
-      at::ScalarType::BFloat16,
-      at::typeMetaToScalarType(grad.dtype()),
-      "logcumsumexp_backward",
-      []() { return c10::Scalar(std::numeric_limits<scalar_t>::lowest()); });
-
-  auto reverse_logcumsumexp = [dim](const auto& x) {
-    return at::flip(at::logcumsumexp(at::flip(x, {dim}), dim), {dim});
-  };
-
-  if (!at::is_complex(grad)) {
-    auto grad_min = at::scalar_tensor(scalar_min, grad.options());
-    auto log_abs_grad = grad.abs().log();
-    auto log_grad_positive = at::where(grad > 0, log_abs_grad, grad_min);
-    auto log_grad_negative = at::where(grad < 0, log_abs_grad, grad_min);
-
-    auto output_pos =
-        (reverse_logcumsumexp(log_grad_positive - result) + self).exp();
-    auto output_neg =
-        (reverse_logcumsumexp(log_grad_negative - result) + self).exp();
-
-    return output_pos - output_neg;
-  } else {
-    // no trick separating the positive and negative required
-    auto log_grad = grad.conj().log();
-    auto output = (reverse_logcumsumexp(log_grad - result) + self).exp();
-    return output.conj();
-  }
+  (void)grad;
+  (void)result;
+  (void)dim;
+  TORCH_CHECK(false, "logcumsumexp backward is not supported in EasyFHE fast build");
+  return at::zeros_like(self);
 }
 
 Tensor logcumsumexp_jvp(

@@ -49,7 +49,6 @@ _is_any_true
 _is_zerotensor
 _lazy_clone
 _local_scalar_dense
-_logcumsumexp
 _make_dep_token
 _make_dual
 _make_dual_copy
@@ -69,8 +68,6 @@ _shape_as_tensor
 _stack
 _to_copy
 _to_cpu
-_unique
-_unique2
 _unpack_dual
 _unsafe_index
 _unsafe_index_put
@@ -128,7 +125,6 @@ arctanh
 arctanh_
 argmax
 argmin
-argsort
 argwhere
 as_strided
 as_strided_
@@ -331,7 +327,6 @@ isneginf
 isposinf
 isreal
 item
-kthvalue
 lcm
 lcm_
 ldexp
@@ -358,7 +353,6 @@ log2_
 log_
 logaddexp
 logaddexp2
-logcumsumexp
 logical_and
 logical_and_
 logical_not
@@ -384,17 +378,14 @@ matrix_H
 max
 maximum
 mean
-median
 meshgrid
 min
 minimum
 mod_raise
 moddown
-mode
 modup
 moveaxis
 movedim
-msort
 mul
 mul_
 mul_by_monomial
@@ -410,7 +401,6 @@ multiply_
 nan_to_num
 nan_to_num_
 nanmean
-nanmedian
 nanquantile
 nansum
 narrow
@@ -430,9 +420,6 @@ new_ones
 new_zeros
 nextafter
 nextafter_
-nonzero
-nonzero_numpy
-nonzero_static
 norm
 normal
 normal_
@@ -527,7 +514,6 @@ slice_backward
 slice_copy
 slice_inverse
 slice_scatter
-sort
 split
 split_copy
 split_with_sizes
@@ -575,7 +561,6 @@ tan_
 tensor_split
 tile
 to
-topk
 trace
 trace_backward
 transpose
@@ -598,9 +583,6 @@ unfold
 unfold_backward
 unfold_copy
 uniform_
-unique_consecutive
-unique_dim
-unique_dim_consecutive
 unsafe_chunk
 unsafe_split
 unsafe_split_with_sizes

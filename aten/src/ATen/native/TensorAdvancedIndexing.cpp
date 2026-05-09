@@ -111,9 +111,6 @@
 #include <ATen/ops/masked_scatter_native.h>
 #include <ATen/ops/masked_select_backward_native.h>
 #include <ATen/ops/masked_select_native.h>
-#include <ATen/ops/nonzero_native.h>
-#include <ATen/ops/nonzero_numpy_native.h>
-#include <ATen/ops/nonzero_static_native.h>
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/put_native.h>
 #include <ATen/ops/scatter_add_meta.h>
@@ -3027,22 +3024,13 @@ Tensor nonzero_static_cpu(
 }
 
 std::vector<Tensor> nonzero_numpy(const Tensor& self) {
-  // special case scalar for compatibility with numpy:
-  //
-  // >>> np.array(5).nonzero()
-  // (array([0]),)
-  // >>> np.array(0).nonzero()
-  // (array([], dtype=int64),)
-
-  if (self.dim() == 0) {
-    return self.unsqueeze(0).nonzero().unbind(1);
-  }
-
-  return self.nonzero().unbind(1);
+  TORCH_CHECK(false, "nonzero_numpy is not supported in EasyFHE fast build");
+  return {};
 }
 
 Tensor argwhere(const Tensor& self) {
-  return self.nonzero();
+  TORCH_CHECK(false, "argwhere is not supported in EasyFHE fast build");
+  return self;
 }
 
 Tensor& masked_scatter__cpu(

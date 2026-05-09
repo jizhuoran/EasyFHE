@@ -17,8 +17,6 @@ AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_cummax(AtenTensorHandle self, in
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_cummin(AtenTensorHandle self, int64_t dim, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_exponential(AtenTensorHandle self, double lambd, AtenGeneratorHandle* generator, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_index_put(AtenTensorHandle self, const AtenTensorHandle** indices, int64_t indices_len_, AtenTensorHandle values, int32_t accumulate, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_kthvalue(AtenTensorHandle self, int64_t k, int64_t dim, int32_t keepdim, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_logcumsumexp(AtenTensorHandle self, int64_t dim, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_masked_scatter(AtenTensorHandle self, AtenTensorHandle mask, AtenTensorHandle source, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_masked_scatter_backward(AtenTensorHandle grad_output, AtenTensorHandle mask, const int64_t* sizes, int64_t sizes_len_, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_mul_Scalar(AtenTensorHandle self, double other, AtenTensorHandle* ret0);
@@ -56,7 +54,6 @@ AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_randperm(int64_t n, int32_t* dty
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_reshape(AtenTensorHandle self, const int64_t* shape, int64_t shape_len_, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_resize_as_(AtenTensorHandle self, AtenTensorHandle the_template, int32_t* memory_format);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_slice_Tensor(AtenTensorHandle self, int64_t dim, int64_t* start, int64_t* end, int64_t step, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_sort(AtenTensorHandle self, int64_t dim, int32_t descending, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_squeeze_dim(AtenTensorHandle self, int64_t dim, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_uniform(AtenTensorHandle self, double from, double to, AtenGeneratorHandle* generator, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_xpu_view_dtype(AtenTensorHandle self, int32_t dtype, AtenTensorHandle* ret0);

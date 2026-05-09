@@ -19,7 +19,6 @@
 #include <ATen/ops/rename_native.h>
 #include <ATen/ops/scatter_add_native.h>
 #include <ATen/ops/scatter_native.h>
-#include <ATen/ops/sort_native.h>
 #include <ATen/ops/squeeze.h>
 #include <ATen/ops/squeeze_native.h>
 #include <ATen/ops/zeros_like_ops.h>

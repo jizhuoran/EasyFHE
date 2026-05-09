@@ -29,20 +29,12 @@ AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_gcd(AtenTensorHandle self, AtenT
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_index_Tensor(AtenTensorHandle self, const AtenTensorHandle** indices, int64_t indices_len_, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_index_put(AtenTensorHandle self, const AtenTensorHandle** indices, int64_t indices_len_, AtenTensorHandle values, int32_t accumulate, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_index_reduce(AtenTensorHandle self, int64_t dim, AtenTensorHandle index, AtenTensorHandle source, const char* reduce, int32_t include_self, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_kthvalue(AtenTensorHandle self, int64_t k, int64_t dim, int32_t keepdim, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_logcumsumexp(AtenTensorHandle self, int64_t dim, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_masked_scatter(AtenTensorHandle self, AtenTensorHandle mask, AtenTensorHandle source, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_masked_scatter_backward(AtenTensorHandle grad_output, AtenTensorHandle mask, const int64_t* sizes, int64_t sizes_len_, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_masked_select(AtenTensorHandle self, AtenTensorHandle mask, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_median(AtenTensorHandle self, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_mul_Scalar(AtenTensorHandle self, double other, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_mul_Tensor(AtenTensorHandle self, AtenTensorHandle other, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_nanmedian(AtenTensorHandle self, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_narrow(AtenTensorHandle self, int64_t dim, int64_t start, int64_t length, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_nonzero(AtenTensorHandle self, AtenTensorHandle* ret0);
-#if TORCH_FEATURE_VERSION >= TORCH_VERSION_2_11_0
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_nonzero_static(AtenTensorHandle self, int64_t size, int64_t fill_value, AtenTensorHandle* ret0);
-#endif // TORCH_FEATURE_VERSION >= TORCH_VERSION_2_11_0
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_normal_functional(AtenTensorHandle self, double mean, double std, AtenGeneratorHandle* generator, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_permute(AtenTensorHandle self, const int64_t* dims, int64_t dims_len_, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_polar(AtenTensorHandle abs, AtenTensorHandle angle, AtenTensorHandle* ret0);
@@ -85,10 +77,7 @@ AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_scatter_value_out(AtenTensorHand
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_scatter_reduce_two_out(AtenTensorHandle out, AtenTensorHandle self, int64_t dim, AtenTensorHandle index, AtenTensorHandle src, const char* reduce, int32_t include_self);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_set__source_Tensor(AtenTensorHandle self, AtenTensorHandle source);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_slice_Tensor(AtenTensorHandle self, int64_t dim, int64_t* start, int64_t* end, int64_t step, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_sort(AtenTensorHandle self, int64_t dim, int32_t descending, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_sort_stable(AtenTensorHandle self, int32_t* stable, int64_t dim, int32_t descending, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_squeeze_dim(AtenTensorHandle self, int64_t dim, AtenTensorHandle* ret0);
-AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_topk(AtenTensorHandle self, int64_t k, int64_t dim, int32_t largest, int32_t sorted, AtenTensorHandle* ret0, AtenTensorHandle* ret1);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_uniform(AtenTensorHandle self, double from, double to, AtenGeneratorHandle* generator, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_view_dtype(AtenTensorHandle self, int32_t dtype, AtenTensorHandle* ret0);
 AOTI_TORCH_EXPORT AOTITorchError aoti_torch_mps_view_as_complex(AtenTensorHandle self, AtenTensorHandle* ret0);

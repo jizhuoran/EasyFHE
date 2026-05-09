@@ -466,13 +466,15 @@ static PyObject * THPVariable_cpu(PyObject* self, PyObject* args, PyObject* kwar
 static Tensor dispatch_nonzero(const Tensor & self) {
   pybind11::gil_scoped_release no_gil;
   OptionalDeviceGuard device_guard(device_of(self));
-  return self.nonzero();
+  TORCH_CHECK(false, "nonzero is not supported in EasyFHE fast build");
+  return self;
 }
 
 static std::vector<Tensor> dispatch_nonzero_numpy(const Tensor & self) {
   pybind11::gil_scoped_release no_gil;
   OptionalDeviceGuard device_guard(device_of(self));
-  return self.nonzero_numpy();
+  TORCH_CHECK(false, "nonzero_numpy is not supported in EasyFHE fast build");
+  return {};
 }
 
 static PyObject * THPVariable_nonzero(PyObject* self, PyObject* args, PyObject* kwargs)

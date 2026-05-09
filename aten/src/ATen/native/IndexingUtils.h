@@ -9,7 +9,6 @@
 #include <ATen/Functions.h>
 #else
 #include <ATen/ops/empty.h>
-#include <ATen/ops/nonzero.h>
 #endif
 
 namespace at::native {
@@ -45,18 +44,7 @@ static void invalid_mask(const Tensor & self, int64_t idx, const Tensor & mask, 
             invalid_mask(self, srcIdx, index, j);
           }
         }
-        // Replace with nonzeros
-        at::Tensor nonzero;
-        if (ensure_same_device && index.device() != self.device()) {
-          bool non_blocking = index.is_cpu() && self.device().is_cuda();
-          auto out = at::empty({0}, index.options().dtype(kLong).pinned_memory(non_blocking));
-          nonzero = at::nonzero_out(out, index).to(self.device(), non_blocking);
-        } else {
-          nonzero = index.nonzero();
-        }
-        for (const auto j : c10::irange(index.dim())) {
-          result.emplace_back(nonzero.select(1, j));
-        }
+        TORCH_CHECK_INDEX(false, "boolean mask indexing is not supported in EasyFHE fast build");
       } else if (ensure_same_device && index.device() != self.device()) {
         result.emplace_back(index.to(self.device()));
       } else {

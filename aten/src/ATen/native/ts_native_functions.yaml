@@ -50,7 +50,6 @@ full_codegen:
   - ne.Scalar
   - ne.Tensor
   - neg
-  - nonzero
   - norm.ScalarOpt_dim
   - pow.Tensor_Scalar
   - pow.Tensor_Tensor
@@ -60,7 +59,6 @@ full_codegen:
   - rsqrt
   - scatter_add
   - sgn
-  - sort
   - sqrt
   - stack
   - std
@@ -69,7 +67,6 @@ full_codegen:
   - sub.Tensor
   - sum
   - sum.dim_IntList
-  - topk
   - trace
   - tril
   - triu

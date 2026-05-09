@@ -2134,17 +2134,6 @@
   device_check: NoCheck
   device_guard: False
   manual_cpp_binding: True
-
-- func: kthvalue(Tensor self, SymInt k, int dim=-1, bool keepdim=False) -> (Tensor values, Tensor indices)
-  variants: function, method
-  dispatch:
-    CompositeExplicitAutograd: kthvalue
-
-- func: kthvalue.values(Tensor self, SymInt k, int dim=-1, bool keepdim=False, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  dispatch:
-    CPU: kthvalue_out_cpu
-    CUDA: kthvalue_out_cuda
-    MPS: kthvalue_out_mps
 - func: nan_to_num(Tensor self, float? nan=None, float? posinf=None, float? neginf=None) -> Tensor
   variants: function, method
   dispatch:
@@ -2362,28 +2351,6 @@
   category_override: factory
   dispatch:
     CompositeExplicitAutograd: logspace_out
-
-# log_softmax allows positional dtype, unlike most operators, because kwonly is BC-breaking when loading jit models.
-- func: _logcumsumexp(Tensor self, int dim) -> Tensor
-  dispatch:
-    CPU: _logcumsumexp_cpu
-    CUDA: _logcumsumexp_cuda
-    MPS: _logcumsumexp_mps
-
-- func: _logcumsumexp.out(Tensor self, int dim, *, Tensor(a!) out) -> Tensor(a!)
-  dispatch:
-    CPU: _logcumsumexp_out_cpu
-    CUDA: _logcumsumexp_out_cuda
-    MPS: _logcumsumexp_out_mps
-
-- func: logcumsumexp(Tensor self, int dim) -> Tensor
-  variants: function, method
-  dispatch:
-    CompositeExplicitAutograd: logcumsumexp
-
-- func: logcumsumexp.out(Tensor self, int dim, *, Tensor(a!) out) -> Tensor(a!)
-  dispatch:
-    CompositeExplicitAutograd: logcumsumexp_out
 - func: logsumexp(Tensor self, int[1] dim, bool keepdim=False) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
@@ -2489,43 +2456,6 @@
 
 - func: nanmean.out(Tensor self, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None, Tensor(a!) out) -> Tensor(a!)
   device_check: NoCheck   # Composite
-
-- func: median(Tensor self) -> Tensor
-  variants: function, method
-  dispatch:
-    CPU: median_cpu
-    CUDA: median_cuda
-    MPS: median_mps
-  autogen: median.out
-
-- func: median.dim(Tensor self, int dim, bool keepdim=False) -> (Tensor values, Tensor indices)
-  variants: function, method
-  dispatch:
-    CompositeExplicitAutograd: median
-
-- func: median.dim_values(Tensor self, int dim, bool keepdim=False, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  dispatch:
-    CPU: median_out_cpu
-    CUDA: median_out_cuda
-    MPS: median_out_mps
-- func: nanmedian(Tensor self) -> Tensor
-  variants: function, method
-  dispatch:
-    CPU: nanmedian_cpu
-    CUDA: nanmedian_cuda
-    MPS: nanmedian_mps
-  autogen: nanmedian.out
-
-- func: nanmedian.dim(Tensor self, int dim, bool keepdim=False) -> (Tensor values, Tensor indices)
-  variants: function, method
-  dispatch:
-    CompositeExplicitAutograd: nanmedian
-
-- func: nanmedian.dim_values(Tensor self, int dim, bool keepdim=False, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  dispatch:
-    CPU: nanmedian_out_cpu
-    CUDA: nanmedian_out_cuda
-    MPS: nanmedian_out_mps
 - func: min.dim(Tensor self, int dim, bool keepdim=False) -> (Tensor values, Tensor indices)
   device_check: NoCheck   # TensorIterator
   structured_delegate: min.dim_min
@@ -2552,15 +2482,6 @@
     CPU, CUDA: amin_out
     MPS: amin_out_mps
   tags: reduction
-
-- func: mode(Tensor self, int dim=-1, bool keepdim=False) -> (Tensor values, Tensor indices)
-  variants: function, method
-  dispatch:
-    CPU, CUDA: mode
-
-- func: mode.values(Tensor self, int dim=-1, bool keepdim=False, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  dispatch:
-    CompositeExplicitAutograd: mode_out
 - func: mul.Tensor(Tensor self, Tensor other) -> Tensor
   device_check: NoCheck   # TensorIterator
   structured_delegate: mul.out
@@ -3812,55 +3733,6 @@
 
 - func: _has_compatible_shallow_copy_type(Tensor self, Tensor from) -> bool
   variants: function
-
-- func: _unique(Tensor self, bool sorted=True, bool return_inverse=False) -> (Tensor, Tensor)
-  variants: function
-  dispatch:
-    CPU: _unique_cpu
-    CUDA: _unique_cuda
-    MPS: _unique_mps
-  autogen: _unique.out
-
-- func: unique_dim(Tensor self, int dim, bool sorted=True, bool return_inverse=False, bool return_counts=False) -> (Tensor, Tensor, Tensor)
-  variants: function
-  dispatch:
-    CPU: unique_dim_cpu
-    CUDA: unique_dim_cuda
-    MPS: unique_dim_mps
-  tags: dynamic_output_shape
-  autogen: unique_dim.out
-
-- func: unique_consecutive(Tensor self, bool return_inverse=False, bool return_counts=False, int? dim=None) -> (Tensor, Tensor, Tensor)
-  variants: function
-  dispatch:
-    CPU: unique_consecutive_cpu
-    CUDA: unique_consecutive_cuda
-    MPS: unique_consecutive_mps
-  tags: dynamic_output_shape
-  autogen: unique_consecutive.out
-
-- func: unique_dim_consecutive(Tensor self, int dim, bool return_inverse=False, bool return_counts=False) -> (Tensor, Tensor, Tensor)
-  variants: function
-  dispatch:
-    CPU: unique_dim_consecutive_cpu
-    CUDA: unique_dim_consecutive_cuda
-    MPS: unique_dim_consecutive_mps
-  tags: dynamic_output_shape
-  autogen: unique_dim_consecutive.out
-
-# _unique and _unique_dim are fragile and modifying them easily cause internal break
-# the below operator is a temporary hack for adding return_counts support
-# Please don't rely on these two operators, they will be removed soon
-
-- func: _unique2(Tensor self, bool sorted=True, bool return_inverse=False, bool return_counts=False) -> (Tensor, Tensor, Tensor)
-  variants: function
-  dispatch:
-    CPU: _unique2_cpu
-    CUDA: _unique2_cuda
-    MPS: _unique2_mps
-  tags: dynamic_output_shape
-  autogen: _unique2.out
-
 - func: _unsafe_view(Tensor self, SymInt[] size) -> Tensor
   dispatch:
     CompositeExplicitAutograd: _unsafe_view
@@ -5414,38 +5286,6 @@
   variants: function
   device_check: NoCheck
   device_guard: False
-
-- func: nonzero.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)
-  dispatch:
-    CPU: nonzero_out_cpu
-    CUDA: nonzero_out_cuda
-    MPS: nonzero_out_mps
-  tags: dynamic_output_shape
-
-- func: nonzero(Tensor self) -> Tensor
-  variants: method, function
-  dispatch:
-    CPU: nonzero_cpu
-    CUDA: nonzero_cuda
-    MPS: nonzero_mps
-  tags: [dynamic_output_shape, core]
-
-- func: nonzero_static.out(Tensor self, *, SymInt size, int fill_value=-1, Tensor(a!) out) -> Tensor(a!)
-  dispatch:
-    CPU: nonzero_static_out_cpu
-    CUDA: nonzero_static_out_cuda
-    MPS: nonzero_static_out_mps
-
-- func: nonzero_static(Tensor self, *, SymInt size, int fill_value=-1) -> Tensor
-  variants: method, function
-  dispatch:
-    CPU: nonzero_static_cpu
-    CUDA: nonzero_static_cuda
-    MPS: nonzero_static_mps
-
-- func: nonzero_numpy(Tensor self) -> Tensor[]
-  variants: method, function
-
 - func: argwhere(Tensor self) -> Tensor
   variants: method, function
   tags: dynamic_output_shape
@@ -5848,55 +5688,6 @@
   device_check: NoCheck   # TensorIterator
   variants: method, function
   tags: pointwise
-- func: sort.values(Tensor self, int dim=-1, bool descending=False, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  device_check: NoCheck   # TensorIterator
-  dispatch:
-    CompositeExplicitAutograd: sort_out
-
-- func: sort.values_stable(Tensor self, *, bool? stable, int dim=-1, bool descending=False, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  structured: True
-  dispatch:
-    CPU, CUDA: sort_stable_out
-    MPS: sort_stable_out_mps
-
-- func: sort(Tensor self, int dim=-1, bool descending=False) -> (Tensor values, Tensor indices)
-  device_check: NoCheck   # TensorIterator
-  variants: method, function
-  dispatch:
-    CompositeExplicitAutograd: sort
-  tags: core
-
-- func: sort.stable(Tensor self, *, bool? stable, int dim=-1, bool descending=False) -> (Tensor values, Tensor indices)
-  structured_delegate: sort.values_stable
-  variants: method, function
-- func: msort.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)
-
-- func: msort(Tensor self) -> Tensor
-  variants: method, function
-
-- func: argsort(Tensor self, int dim=-1, bool descending=False) -> Tensor
-  device_check: NoCheck   # TensorIterator
-  variants: method, function
-
-- func: argsort.stable(Tensor self, *, bool stable, int dim=-1, bool descending=False) -> Tensor
-  device_check: NoCheck   # TensorIterator
-  variants: method, function
-
-- func: argsort.stable_out(Tensor self, *, bool stable, int dim=-1, bool descending=False, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck   # TensorIterator
-  variants: function
-- func: topk.values(Tensor self, SymInt k, int dim=-1, bool largest=True, bool sorted=True, *, Tensor(a!) values, Tensor(b!) indices) -> (Tensor(a!) values, Tensor(b!) indices)
-  structured: True
-  dispatch:
-    CPU: topk_out_cpu
-    CUDA: topk_out_cuda
-    MPS: topk_out_mps
-
-- func: topk(Tensor self, SymInt k, int dim=-1, bool largest=True, bool sorted=True) -> (Tensor values, Tensor indices)
-  variants: method, function
-  structured_delegate: topk.values
-  tags: core
-
 - func: all(Tensor self) -> Tensor
   device_check: NoCheck   # TensorIterator
   structured_delegate: all.all_out

@@ -18,9 +18,6 @@
 #else
 #include <ATen/ops/full.h>
 #include <ATen/ops/imag.h>
-#include <ATen/ops/kthvalue_native.h>
-#include <ATen/ops/median_native.h>
-#include <ATen/ops/nanmedian_native.h>
 #include <ATen/ops/where.h>
 #endif
 
