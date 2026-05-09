@@ -329,6 +329,12 @@ if(USE_EASYFHE_FAST_BUILD)
     EASYFHE_DISABLE_LAZY_BINDINGS)
 endif()
 
+if(USE_EASYFHE_FAST_INFERENCE)
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/autograd/generated/python_functions_[0-9]+\\.cpp$")
+  list(APPEND TORCH_PYTHON_SRCS
+    ${TORCH_SRC_DIR}/csrc/autograd/easyfhe_python_functions_stubs.cpp)
+endif()
+
 add_library(torch_python SHARED ${TORCH_PYTHON_SRCS})
 torch_compile_options(torch_python)  # see cmake/public/utils.cmake
 if(APPLE)
