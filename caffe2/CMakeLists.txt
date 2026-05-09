@@ -605,6 +605,12 @@ if(NOT INTERN_DISABLE_AUTOGRAD AND NOT BUILD_LITE_INTERPRETER)
   )
 endif()
 
+if(USE_EASYFHE_FAST_INFERENCE)
+  list(APPEND TORCH_SRCS
+    ${TORCH_SRC_DIR}/csrc/autograd/easyfhe_variable_type_stubs.cpp
+  )
+endif()
+
 if(${USE_ITT})
   list(APPEND TORCH_SRCS
     ${TORCH_SRC_DIR}/csrc/itt_wrapper.cpp
