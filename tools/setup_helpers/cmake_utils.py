@@ -67,7 +67,7 @@ def get_cmake_cache_variables_from_file(
         #   "USE_CUDA":BOOL=ON
         #   USE_CUDA=ON
         #   USE_CUDA:=ON
-        #   Intel(R) MKL-DNN_SOURCE_DIR:STATIC=/path/to/pytorch/third_party/ideep/mkl-dnn
+        #   SOME_LIBRARY_SOURCE_DIR:STATIC=/path/to/source
         #   "OpenMP_COMPILE_RESULT_CXX_openmp:experimental":INTERNAL=FALSE
         matched = re.match(
             r'("?)(.+?)\1(?::\s*([a-zA-Z_-][a-zA-Z0-9_-]*)?)?\s*=\s*(.*)', line

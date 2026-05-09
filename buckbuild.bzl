@@ -282,9 +282,6 @@ def get_aten_preprocessor_flags():
         "-DATEN_MKL_ENABLED_FBXPLAT=0",
         "-DATEN_MKL_SEQUENTIAL_FBXPLAT=0",
         "-DUSE_PYTORCH_METAL",
-        "-DUSE_PYTORCH_QNNPACK",
-        "-DUSE_XNNPACK",
-        "-DPYTORCH_QNNPACK_RUNTIME_QUANTIZATION",
         "-DAT_PARALLEL_OPENMP_FBXPLAT=0",
         "-DAT_PARALLEL_NATIVE_FBXPLAT=1",
         "-DUSE_LAPACK_FBXPLAT=0",
@@ -2112,7 +2109,6 @@ def define_buck_targets(
                 third_party("fmt"),
                 third_party("ruy"),
                 C10,
-                ROOT_PATH + "aten/src/ATen/native/quantized/cpu/qnnpack:pytorch_qnnpack",
             ],
             labels = labels,
             **aten_default_args

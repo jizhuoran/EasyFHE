@@ -233,8 +233,7 @@ PackedLinearWeightQnnp::PackedLinearWeightQnnp(
     bias_ = at::zeros(output_channels_, at::device(at::kCPU).dtype(at::kFloat));
   }
 
-  // Pad amount (8) comes from make_zero_points_and_scales_tensor
-  // https://github.com/pytorch/pytorch/blob/f8c1acea1e78573c04cd18893c4abff9eea64b03/aten/src/ATen/native/quantized/cpu/qnnpack_utils.h#L468
+  // Pad amount (8) matches the legacy QNNPACK packed format.
   const int64_t output_channels_padded = output_channels_ + 8;
 
   w_scales_ = at::empty(

@@ -75,9 +75,6 @@ caffe2/CMakeLists.txt
 CMake files where oneDNN Graph submodule are included:
 
 ```bash
-third_party/ideep/mkl-dnn
-cmake/public/mkldnn.cmake
-cmake/Modules/FindMKLDNN.cmake
 cmake/Dependencies.cmake
 ```
 

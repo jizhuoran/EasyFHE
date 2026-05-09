@@ -41,7 +41,7 @@ This guide explains how to set up the GPU-FHE framework based on PyTorch along w
    Build and install GPU-FHE. Create the necessary data folders.
 
     ```bash
-    USE_DISTRIBUTED=0 USE_MKLDNN=0 BUILD_TEST=0 USE_FBGEMM=0 USE_NNPACK=0 USE_QNNPACK=0 USE_XNNPACK=0 USE_NINJA=OFF USE_ROCM=0 python3 setup.py develop --install-dir=~/torch/
+    USE_DISTRIBUTED=1 USE_NCCL=1 BUILD_TEST=0 USE_NINJA=OFF USE_ROCM=0 python3 setup.py develop --install-dir=~/torch/
     mkdir ./torch/fhe/data
     mkdir ./torch/fhe/example/data
     cd ../

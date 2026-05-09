@@ -110,10 +110,6 @@ if(ANDROID_ABI)
   import_static_lib(libtorch)
   import_static_lib(libtorch_cpu)
   import_static_lib(libc10)
-  import_static_lib(libnnpack)
-  import_static_lib(libXNNPACK)
-  import_static_lib(libmicrokernels-prod)
-  import_static_lib(libpytorch_qnnpack)
   import_static_lib(libpthreadpool)
   import_static_lib(libeigen_blas)
   import_static_lib(libcpuinfo)
@@ -128,10 +124,6 @@ if(ANDROID_ABI)
       libtorch_cpu
       -Wl,--no-whole-archive
       libc10
-      libnnpack
-      libXNNPACK
-      libmicrokernels-prod
-      libpytorch_qnnpack
       libpthreadpool
       libeigen_blas
       libcpuinfo
@@ -147,22 +139,8 @@ else()
       cpuinfo
   )
 
-  if(USE_NNPACK)
-    list(APPEND pytorch_jni_LIBS nnpack)
-  endif()
-
-  if(USE_XNNPACK)
-    list(APPEND pytorch_jni_LIBS XNNPACK)
-    list(APPEND pytorch_jni_LIBS microkernels-prod)
-  endif()
-
   if(USE_SYSTEM_PTHREADPOOL)
     list(APPEND pytorch_jni_LIBS pthreadpool)
-  endif()
-
-  if(USE_PYTORCH_QNNPACK)
-    list(APPEND pytorch_jni_LIBS pytorch_qnnpack)
-    list(APPEND pytorch_jni_LIBS clog)
   endif()
 
 endif()

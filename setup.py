@@ -55,9 +55,6 @@
 #   USE_CUFILE=0
 #     disables the cuFile build
 #
-#   USE_FBGEMM=0
-#     disables the FBGEMM build
-#
 #   USE_MSLK=0
 #     disables the MSLK build
 #
@@ -70,23 +67,10 @@
 #   BUILD_TEST=0
 #     disables the test build
 #
-#   USE_MKLDNN=0
-#     disables use of MKLDNN
-#
-#   USE_MKLDNN_ACL
-#     enables use of Compute Library backend for MKLDNN on Arm;
-#     USE_MKLDNN must be explicitly enabled.
-#
-#   MKLDNN_CPU_RUNTIME
-#     MKL-DNN threading mode: TBB or OMP (default)
-#
 #   USE_STATIC_MKL
 #     Prefer to link with MKL statically - Unix only
 #   USE_ITT=0
 #     disable use of Intel(R) VTune Profiler's ITT functionality
-#
-#   USE_NNPACK=0
-#     disables NNPACK build
 #
 #   USE_DISTRIBUTED=0
 #     disables distributed (c10d, gloo, mpi, etc.) build
@@ -194,9 +178,6 @@
 #   NCCL_LIB_DIR
 #   NCCL_INCLUDE_DIR
 #     specify where nccl is installed
-#
-#   ACL_ROOT_DIR
-#     specify where Compute Library is installed
 #
 #   LIBRARY_PATH
 #   LD_LIBRARY_PATH
