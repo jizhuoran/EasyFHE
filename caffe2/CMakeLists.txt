@@ -113,12 +113,12 @@ if(USE_EASYFHE_FAST_BUILD)
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/transformers/easyfhe_sdp_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizerBase.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizer.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/TensorAdvancedIndexing.cpp)
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/TensorAdvancedIndexing.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
   list(APPEND Caffe2_GPU_SRCS
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/EasyFHETunableStub.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/StreamTimer.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/cuda/SpectralOps.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/cuda/SpectralOps.cpp)
 endif()
 
 function(easyfhe_filter_runtime_sources _srcs)
@@ -150,15 +150,12 @@ function(easyfhe_filter_runtime_sources _srcs)
         ${TORCH_SRC_DIR}/csrc/jit/runtime/interpreter/preprocess_graph.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/register_prim_ops_fulljit.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/script_profile.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/serialization/easyfhe_pickler_stub.cpp
         ${TORCH_SRC_DIR}/csrc/jit/serialization/python_print.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_graph_executor_stub.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/serialize/output-archive.cpp)
-    endif()
-    if("${_srcs}" STREQUAL "Caffe2_GPU_SRCS")
-      list(APPEND ${_srcs}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
     endif()
     list(REMOVE_DUPLICATES ${_srcs})
     set(${_srcs} "${${_srcs}}" PARENT_SCOPE)
