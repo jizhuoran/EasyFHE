@@ -191,9 +191,6 @@ file(GLOB native_quantized_hip_hip CONFIGURE_DEPENDS "native/quantized/hip/*.hip
 file(GLOB native_quantized_hip_cpp CONFIGURE_DEPENDS "native/quantized/hip/*.cpp")
 file(GLOB native_transformers_cuda_cu CONFIGURE_DEPENDS "native/transformers/cuda/*.cu")
 file(GLOB native_transformers_cuda_cpp CONFIGURE_DEPENDS "native/transformers/cuda/*.cpp")
-file(GLOB native_transformers_hip_hip CONFIGURE_DEPENDS "native/transformers/hip/*.hip")
-file(GLOB native_transformers_hip_cpp CONFIGURE_DEPENDS "native/transformers/hip/*.cpp")
-file(GLOB native_transformers_xpu_cpp CONFIGURE_DEPENDS "native/transformers/xpu/*.cpp")
 file(GLOB native_quantized_cudnn_hip_cpp CONFIGURE_DEPENDS "native/quantized/cudnn/hip/*.cpp")
 file(GLOB native_utils_cpp CONFIGURE_DEPENDS "native/utils/*.cpp")
 # MSLK
@@ -358,7 +355,6 @@ endif()
 
 if(USE_XPU)
   list(APPEND ATen_XPU_SRCS ${mkldnn_xpu_cpp})
-  list(APPEND ATen_XPU_SRCS ${native_transformers_xpu_cpp})
   list(APPEND ATen_XPU_DEPENDENCY_LIBS xpu_mkldnn)
 
   list(APPEND ATen_XPU_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/native/mkldnn/xpu)
@@ -451,7 +447,6 @@ if(USE_ROCM)
     ${native_nested_hip_hip}
     ${native_sparse_hip_hip}
     ${native_quantized_hip_hip}
-    ${native_transformers_hip_hip} ${native_transformers_src_hip_hip}
   )
   if(NOT USE_ROCM_CK_GEMM)
     file(GLOB native_hip_bgemm CONFIGURE_DEPENDS "native/hip/bgemm_kernels/*.hip")
@@ -465,7 +460,6 @@ if(USE_ROCM)
     ${native_nested_hip_cpp}
     ${native_sparse_hip_cpp}
     ${native_quantized_hip_cpp}
-    ${native_transformers_hip_cpp}
     ${native_quantized_cudnn_hip_cpp}
     ${hip_cpp}
     ${native_hip_cpp}

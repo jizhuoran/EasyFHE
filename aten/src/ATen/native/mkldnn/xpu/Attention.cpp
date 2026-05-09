@@ -3,7 +3,6 @@
 #include <ATen/native/transformers/attention.h>
 #include <ATen/native/transformers/sdp_utils.h>
 #include <ATen/native/transformers/sdp_utils_cpp.h>
-#include <ATen/native/transformers/xpu/sdp_utils.h>
 #include <c10/util/Array.h>
 #include <torch/library.h>
 
@@ -78,6 +77,13 @@ bool can_use_overrideable_attention(sdp::sdp_params const& params, bool debug) {
 bool can_use_cudnn_attention(sdp::sdp_params const& params, bool debug) {
   if (debug) {
     TORCH_WARN("XPU don't support SDPA cudnn attention backend.");
+  }
+  return false;
+}
+
+bool can_use_flash_attention(sdp::sdp_params const& params, bool debug) {
+  if (debug) {
+    TORCH_WARN("XPU flash attention backend is disabled in EasyFHE.");
   }
   return false;
 }
@@ -209,7 +215,7 @@ sdp::SDPBackend select_sdp_backend_xpu(sdp::sdp_params const& kernel_params) {
         break;
       case sdp::SDPBackend::flash_attention:
         if (ctx.userEnabledFlashSDP() &&
-            sdp::can_use_flash_attention(kernel_params, print_debug)) {
+            can_use_flash_attention(kernel_params, print_debug)) {
           return sdp::SDPBackend::flash_attention;
         }
         break;
@@ -239,7 +245,7 @@ sdp::SDPBackend select_sdp_backend_xpu(sdp::sdp_params const& kernel_params) {
 
   print_debug = true;
   TORCH_WARN("Flash attention kernel not used because:");
-  sdp::can_use_flash_attention(kernel_params, print_debug);
+  can_use_flash_attention(kernel_params, print_debug);
   TORCH_WARN("Overrideable attention kernel not used because:");
   can_use_overrideable_attention(kernel_params, print_debug);
   TORCH_WARN("CuDNN attention kernel not used because:");
