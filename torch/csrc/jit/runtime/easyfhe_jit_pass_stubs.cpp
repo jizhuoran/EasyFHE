@@ -13,6 +13,7 @@
 #include <torch/csrc/jit/mobile/prim_ops_registery.h>
 #include <torch/csrc/jit/operator_upgraders/utils.h>
 #include <torch/csrc/jit/runtime/profiling_record.h>
+#include <torch/csrc/jit/runtime/script_profile.h>
 #include <torch/csrc/jit/serialization/pickle.h>
 #include <torch/csrc/jit/serialization/type_name_uniquer.h>
 
@@ -195,5 +196,17 @@ const std::vector<Function*>& getAllBuiltinFunctionsFor(Symbol) {
 c10::QualifiedName TypeNameUniquer::getUniqueName(c10::ConstNamedTypePtr t) {
   return t->name().value_or(c10::QualifiedName("__easyfhe_unnamed_type"));
 }
+
+namespace profiling {
+
+InstructionSpan::InstructionSpan(Node&) {}
+
+InstructionSpan::~InstructionSpan() = default;
+
+bool isProfilingOngoing() {
+  return false;
+}
+
+} // namespace profiling
 
 } // namespace torch::jit

@@ -981,25 +981,6 @@
 - func: cat.names(Tensor[] tensors, Dimname dim) -> Tensor
 
 - func: cat.names_out(Tensor[] tensors, Dimname dim, *, Tensor(a!) out) -> Tensor(a!)
-
-# alias for torch.cat
-- func: concat(Tensor[] tensors, int dim=0) -> Tensor
-
-- func: concat.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
-
-- func: concat.names(Tensor[] tensors, Dimname dim) -> Tensor
-
-- func: concat.names_out(Tensor[] tensors, Dimname dim, *, Tensor(a!) out) -> Tensor(a!)
-
-# alias for torch.cat
-- func: concatenate(Tensor[] tensors, int dim=0) -> Tensor
-
-- func: concatenate.out(Tensor[] tensors, int dim=0, *, Tensor(a!) out) -> Tensor(a!)
-
-- func: concatenate.names(Tensor[] tensors, Dimname dim) -> Tensor
-
-- func: concatenate.names_out(Tensor[] tensors, Dimname dim, *, Tensor(a!) out) -> Tensor(a!)
-
 - func: block_diag(Tensor[] tensors) -> Tensor
   variants: function
   dispatch:
@@ -1544,10 +1525,6 @@
 - func: true_divide_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
   variants: method
-- func: row_stack(Tensor[] tensors) -> Tensor
-
-- func: row_stack.out(Tensor[] tensors, *, Tensor(a!) out) -> Tensor(a!)
-
 - func: empty.names(int[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor
   device_check: NoCheck
   device_guard: False

@@ -1,6 +1,5 @@
-# Public aliases that duplicate kept canonical ops
 column_stack
-
-# Cold/exotic scalar math surface
-# Less-core creation/stack aliases
+concat
+concatenate
 diagflat
+row_stack

@@ -92,7 +92,7 @@ if(USE_EASYFHE_FAST_BUILD)
   set(_easyfhe_pruned_native_cpu_sources
       "/aten/src/ATen/native/cpu/(Activation|Adaptive|AmpGradScaler|AvgPool|Blas|ChannelShuffle|Cross|DepthwiseConv|Distance|FlashAttention|FunctionOfAMatrix|Fused|GridSampler|LinearAlgebra|MaxPool|MaxUnpool|NativeMultiheadAttn|Padding|PixelShuffle|ReducedPrecision|Renorm|SampledAddmm|SoftMax|Sparse|Spmm|UpSample|WeightNorm|airy|batch_norm|group_norm|int4mm|int8mm|layer_norm|scaled_modified_bessel|spherical_bessel)[A-Za-z0-9_]*\\.cpp\\.[A-Za-z0-9_]+\\.cpp$")
   set(_easyfhe_pruned_aten_sources
-      "/aten/src/ATen/(Register(Mkldnn|NestedTensor|Quantized|Sparse|SparseCsr)[^/]*|Sparse(Csr)?TensorImpl)\\.cpp$|/aten/src/ATen/cuda/(CUDASparse|CuSparse|tunable/)")
+      "/aten/src/ATen/(LegacyBatchingRegistrations|Register(Mkldnn|NestedTensor|Quantized|Sparse|SparseCsr)[^/]*|Sparse(Csr)?TensorImpl|VmapModeRegistrations)\\.cpp$|/aten/src/ATen/cuda/(CUDASparse|CuSparse|tunable/)")
   set(_easyfhe_pruned_cuda_sources
       "/aten/src/ATen/native/cuda/(Activation|Adaptive|AmpKernels|AveragePool|BatchLinearAlgebra|BinaryBitwiseOpsKernels|BinaryDivFloorKernel|BinaryDivTrueKernel|BinaryDivTruncKernel|BinaryGeometricKernels|BinaryLogicalOpsKernels|BinaryMiscBackwardOpsKernels|BinaryRemainderKernel|BinaryShiftOpsKernels|Blas|Col2Im|Convolution|CopysignKernel|CrossKernel|DepthwiseConv|DilatedMaxPool|Distance|Distribution|Distributions|Dropout|Embedding|FlattenIndices|Foreach|FractionalMax|FunctionOfAMatrix|Fused|GcdLcmKernel|GridSampler|GroupMM|GroupedBlas|IGamma|Im2Col|LinearAlgebra|LogAddExpKernel|Loss|MaxMinElementwiseKernel|MaxUnpooling|MixedDtypesLinear|Multi|NLLLoss|Naive|Normalization|PhiloxDistribution|PowKernel|RNN|ReduceArgMaxKernel|ReduceArgMinKernel|ReduceLogicKernel|ReduceMomentKernel|ReflectionPad|Renorm|ReplicationPadding|Rrelu|RowwiseScaledMM|Scaled|ScatterGatherKernel|SegmentReduce|SoftMax|Sparse|SpectralOps|StepKernel|SummaryOps|TensorModeKernel|UnaryFractionKernels|UnaryGamma|UnaryGeometric|UnaryLogKernels|UnarySpecialOps|UpSample|ValidateCompressedIndices|WeightNorm|Zeta|airy|bessel|chebyshev|fused_|group_norm|hermite|int4mm|int8mm|laguerre|layer_norm|legendre|linalg/|modified_bessel|scaled_modified_bessel|shifted_chebyshev|spherical_bessel)")
   foreach(_easyfhe_srcs
@@ -125,10 +125,11 @@ function(easyfhe_filter_runtime_sources _srcs)
   if(USE_EASYFHE_FAST_BUILD)
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(cuda/)?shim_common\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(dynamo|functorch|inductor|lazy)/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/backends/nnapi/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/jit_log\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/(api|backends|codegen|mobile|operator_upgraders|passes|python|serialization|tensorexpr|testing)/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/frontend/(builtin_functions|canonicalize_modified_loop|concrete_module_type|convert_to_ssa|edit_distance|exit_transforms|inline_loop_condition|ir_emitter|name_mangler|schema_matching|script_type_parser|sugared_value|tree_views|versioned_symbols)\\.cpp$")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/(autodiff|decomposition_registry|decomposition_registry_util|graph_executor|jit_trace|profiling_graph_executor_impl|profiling_record|register_prim_ops_fulljit|script_profile|serialized_shape_function_registry|simple_graph_executor_impl|symbolic_script|symbolic_shape_registry|symbolic_shape_registry_util)\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/(autodiff|decomposition_registry|decomposition_registry_util|graph_executor|jit_trace|profiling_graph_executor_impl|profiling_record|register_c10_ops|register_cuda_ops|register_ops_utils|register_prim_ops|register_prim_ops_fulljit|register_special_ops|script_profile|serialized_shape_function_registry|simple_graph_executor_impl|symbolic_script|symbolic_shape_registry|symbolic_shape_registry_util)\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/interpreter/preprocess_graph\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/static/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
@@ -148,8 +149,6 @@ function(easyfhe_filter_runtime_sources _srcs)
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_pass_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_api_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/interpreter/preprocess_graph.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/runtime/register_prim_ops_fulljit.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/runtime/script_profile.cpp
         ${TORCH_SRC_DIR}/csrc/jit/serialization/easyfhe_pickler_stub.cpp
         ${TORCH_SRC_DIR}/csrc/jit/serialization/python_print.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_graph_executor_stub.cpp

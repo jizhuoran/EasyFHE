@@ -180,10 +180,7 @@ clamp_min_
 clip
 clip_
 clone
-column_stack
 complex
-concat
-concatenate
 conj
 conj_physical
 conj_physical_
@@ -214,7 +211,6 @@ detach_
 detach_copy
 diag
 diag_embed
-diagflat
 diagonal
 diagonal_backward
 diagonal_copy
@@ -498,7 +494,6 @@ roll
 rot90
 round
 round_
-row_stack
 rsqrt
 rsqrt_
 rsub
