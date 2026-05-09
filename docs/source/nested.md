@@ -319,13 +319,8 @@ torch.Size([2, 6, j1])
 
 ### Attention mechanisms
 
-As variable-length sequences are common inputs to attention mechanisms, nested tensors support
-important tensor attention operators.
-See
-[here](https://pytorch.org/tutorials/intermediate/transformer_building_blocks.html#multiheadattention)
-for usage examples of NJT with SDPA and
-[here](https://pytorch.org/tutorials/intermediate/transformer_building_blocks.html#flexattention-njt)
-for usage examples of NJT with FlexAttention.
+Nested tensors support variable-length tensor workflows without depending on
+NN attention-specific APIs.
 
 (usage_with_torch_compile)=
 ## Usage with torch.compile

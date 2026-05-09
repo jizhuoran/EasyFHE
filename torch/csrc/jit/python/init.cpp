@@ -25,7 +25,6 @@
 #include <torch/csrc/jit/passes/constant_propagation.h>
 #include <torch/csrc/jit/passes/create_autodiff_subgraphs.h>
 #include <torch/csrc/jit/passes/create_functional_graphs.h>
-#include <torch/csrc/jit/passes/dbr_quantization/remove_redundant_aliases.h>
 #include <torch/csrc/jit/passes/dead_code_elimination.h>
 #include <torch/csrc/jit/passes/decompose_ops.h>
 #include <torch/csrc/jit/passes/device_type_analysis.h>
@@ -39,7 +38,6 @@
 #include <torch/csrc/jit/passes/frozen_graph_optimizations.h>
 #include <torch/csrc/jit/passes/frozen_linear_folding.h>
 #include <torch/csrc/jit/passes/frozen_linear_transpose.h>
-#include <torch/csrc/jit/passes/frozen_ops_to_mkldnn.h>
 #include <torch/csrc/jit/passes/fuse_linear.h>
 #include <torch/csrc/jit/passes/fuse_relu.h>
 #include <torch/csrc/jit/passes/graph_fuser.h>
@@ -54,12 +52,6 @@
 #include <torch/csrc/jit/passes/normalize_ops.h>
 #include <torch/csrc/jit/passes/peephole.h>
 #include <torch/csrc/jit/passes/peephole_list_idioms.h>
-#include <torch/csrc/jit/passes/quantization/dedup_module_uses.h>
-#include <torch/csrc/jit/passes/quantization/finalize.h>
-#include <torch/csrc/jit/passes/quantization/fusion_passes.h>
-#include <torch/csrc/jit/passes/quantization/insert_observers.h>
-#include <torch/csrc/jit/passes/quantization/insert_quant_dequant.h>
-#include <torch/csrc/jit/passes/quantization/quantization_type.h>
 #include <torch/csrc/jit/passes/refine_tuple_types.h>
 #include <torch/csrc/jit/passes/remove_dropout.h>
 #include <torch/csrc/jit/passes/remove_expands.h>
@@ -74,7 +66,6 @@
 #include <torch/csrc/jit/passes/tensorexpr_fuser.h>
 #include <torch/csrc/jit/passes/utils/check_alias_annotation.h>
 #include <torch/csrc/jit/passes/vulkan_rewrite.h>
-#include <torch/csrc/jit/passes/xnnpack_rewrite.h>
 #include <torch/csrc/jit/python/init.h>
 #include <torch/csrc/jit/python/opaque_obj.h>
 #include <torch/csrc/jit/python/pybind_utils.h>
@@ -311,95 +302,8 @@ void initJITBindings(PyObject* module) {
             return EliminateCommonSubexpression(g); // overload resolution
           })
       .def(
-          "_jit_pass_fuse_quantized_add_relu",
-          [](std::shared_ptr<Graph>& g) {
-            return FuseQuantizedAddRelu(g); // overload resolution
-          })
-      .def(
-          "_jit_pass_insert_observers",
-          [](Module& module,
-             const std::string& method_name,
-             const py::dict& qconfig_dict,
-             bool inplace,
-             int quant_type_int) {
-            auto dict = py::cast<std::unordered_map<
-                std::string,
-                std::optional<std::tuple<Module, Module>>>>(qconfig_dict);
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return InsertObservers(
-                module, method_name, dict, inplace, quant_type);
-          },
-          py::arg("module"),
-          py::arg("method_name"),
-          py::arg("qconfig_dict"),
-          py::arg("inplace"),
-          py::arg("quant_type_int") = 1)
-      .def(
-          "_jit_pass_insert_observer_method_for_ondevice_ptq",
-          [](Module& module,
-             const std::string& method_name,
-             const py::dict& qconfig_dict,
-             bool inplace,
-             int quant_type_int) {
-            auto dict = py::cast<std::unordered_map<
-                std::string,
-                std::optional<std::tuple<Module, Module>>>>(qconfig_dict);
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return InsertObserversForOnDevicePTQ(
-                module, method_name, dict, inplace, quant_type);
-          },
-          py::arg("module"),
-          py::arg("method_name"),
-          py::arg("qconfig_dict"),
-          py::arg("inplace"),
-          py::arg("quant_type_int") = 1)
-      .def(
-          "_jit_pass_insert_quant_dequant",
-          [](Module& module,
-             const std::string& method_name,
-             bool inplace,
-             bool debug,
-             int quant_type_int) {
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return InsertQuantDeQuant(
-                module, method_name, inplace, debug, quant_type);
-          },
-          py::arg("module"),
-          py::arg("method_name"),
-          py::arg("inplace"),
-          py::arg("debug"),
-          py::arg("quant_type_int") = 1)
-      .def(
-          "_jit_pass_insert_quant_dequant_for_ondevice_ptq",
-          [](Module& module,
-             const std::string& method_name,
-             bool inplace,
-             bool debug,
-             int quant_type_int) {
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return InsertQuantDeQuantOnDevicePTQ(
-                module, method_name, inplace, debug, quant_type);
-          },
-          py::arg("module"),
-          py::arg("method_name"),
-          py::arg("inplace"),
-          py::arg("debug"),
-          py::arg("quant_type_int") = 1)
-      .def(
-          "_jit_pass_insert_prepack_unpack",
-          [](std::shared_ptr<Graph>& g) { return InsertPrepackUnpack(g); })
-      .def(
-          "_jit_pass_insert_prepack_unpack",
-          [](Module& module) { return InsertPrepackUnpack(module); })
-      .def(
-          "_jit_pass_quant_fusion",
-          [](std::shared_ptr<Graph>& g) { return QuantFusion(g); })
-      .def(
           "_jit_pass_fold_convbn",
           [](Module& module) { return FoldConvBatchNorm(module); })
-      .def(
-          "_jit_pass_dbr_quant_remove_redundant_aliases",
-          [](Module& module) { return DBRQuantRemoveRedundantAliases(module); })
       .def(
           "_freeze_module",
           [](Module& module,
@@ -418,7 +322,6 @@ void initJITBindings(PyObject* module) {
       .def("_jit_pass_fold_frozen_conv_add_or_sub", &FoldFrozenConvAddOrSub)
       .def("_jit_pass_fold_frozen_conv_mul_or_div", &FoldFrozenConvMulOrDiv)
       .def("_jit_pass_fold_frozen_linear_bn", &FoldFrozenLinearBatchnorm)
-      .def("_jit_pass_convert_frozen_ops_to_mkldnn", &ConvertFrozenOpsToMKLDNN)
       .def("_jit_pass_fuse_frozen_conv_add_relu", &FuseFrozenConvAddRelu)
       .def("_jit_pass_transpose_frozen_linear", &FrozenLinearTranspose)
       .def("_jit_pass_optimize_frozen_graph", &OptimizeFrozenGraph)
@@ -433,36 +336,12 @@ void initJITBindings(PyObject* module) {
       .def(
           "_jit_pass_fuse_add_relu",
           [](std::shared_ptr<Graph>& graph) { FuseAddRelu(graph); })
-      .def("_jit_pass_dedup_module_uses", &DedupModuleUses)
-      .def("_jit_pass_replicate_dequantize", &ReplicateDeQuant)
       .def(
           "_jit_pass_swap_functional_linear",
           [](std::shared_ptr<Graph>& graph) { SwapFunctionalLinear(graph); })
       .def(
           "_jit_pass_swap_functional_linear",
           [](Module& module) { SwapFunctionalLinear(module); })
-      .def(
-          "_jit_pass_quant_finalize",
-          [](Module& module,
-             int quant_type_int,
-             const std::vector<std::string>& preserved_attrs) {
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return Finalize(module, quant_type, preserved_attrs);
-          },
-          py::arg("module"),
-          py::arg("quant_type_int") = 1,
-          py::arg("preserved_attrs") = std::vector<std::string>())
-      .def(
-          "_jit_pass_quant_finalize_for_ondevice_ptq",
-          [](Module& module,
-             int quant_type_int,
-             const std::string& method_name) {
-            auto quant_type = static_cast<QuantType>(quant_type_int);
-            return FinalizeOnDevicePTQ(module, quant_type, method_name);
-          },
-          py::arg("module"),
-          py::arg("quant_type_int") = 1,
-          py::arg("preserved_attrs") = std::vector<std::string>())
       .def(
           "_jit_pass_pattern_based_rewrite",
           [](const Module& m) { return PatternBasedRewrite(m); })
@@ -1043,22 +922,6 @@ void initJITBindings(PyObject* module) {
           [](script::Module& module) {
             return transformConv1dToConv2d(module);
           })
-      .def(
-          "_jit_pass_insert_prepacked_ops",
-          [](std::shared_ptr<Graph>& graph) {
-            return insertPrePackedOps(graph);
-          })
-      .def(
-          "_jit_pass_insert_prepacked_ops",
-          [](script::Module& module) { return insertPrePackedOps(module); })
-      .def(
-          "_jit_pass_fuse_clamp_w_prepacked_linear_conv",
-          [](script::Module& module) {
-            return fusePrePackedLinearConvWithClamp(module);
-          })
-      .def(
-          "_jit_pass_fold_prepacking_ops",
-          [](script::Module& module) { return FoldPrePackingOps(module); })
       .def(
           "_jit_pass_optimize_for_mobile",
           [](script::Module& module,

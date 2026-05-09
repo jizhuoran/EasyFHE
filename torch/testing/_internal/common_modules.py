@@ -32,10 +32,6 @@ import operator
 # List of all namespaces containing modules to test.
 MODULE_NAMESPACES: list[ModuleType] = [
     torch.nn.modules,
-    torch.ao.nn.qat.modules,
-    torch.ao.nn.quantizable.modules,
-    torch.ao.nn.quantized.modules,
-    torch.ao.nn.quantized.modules,
 ]
 
 # Modules that shouldn't be tested for one reason or another.
@@ -43,8 +39,6 @@ MODULES_TO_SKIP: set[type] = {
     torch.nn.Module,  # abstract base class
     torch.nn.Container,  # deprecated
     torch.nn.NLLLoss2d,  # deprecated
-    torch.ao.nn.quantized.MaxPool2d,  # aliases to nn.MaxPool2d
-    torch.ao.nn.quantized.MaxPool2d,  # aliases to nn.MaxPool2d
 }
 
 # List of all module classes to test.

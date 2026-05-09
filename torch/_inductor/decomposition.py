@@ -11,7 +11,6 @@ from typing_extensions import ParamSpec
 import torch
 import torch._decomp as decomp
 import torch._prims_common as utils
-import torch.ao.quantization.fx._decomposed
 from torch._decomp import (
     core_aten_decompositions,
     get_decompositions,

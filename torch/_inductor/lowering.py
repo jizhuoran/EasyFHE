@@ -20,7 +20,6 @@ from unittest.mock import patch
 import sympy
 
 import torch
-import torch.ao.quantization.fx._decomposed
 import torch.fx
 import torch.utils._pytree as pytree
 from torch._dynamo.utils import counters

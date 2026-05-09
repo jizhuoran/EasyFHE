@@ -51,8 +51,6 @@ __all__ = [
     "invoke_subgraph",
     "scan",
     "map",
-    "flex_attention",
-    "flex_attention_backward",
     "hints_wrapper",
     "BaseHOP",
     "flat_apply",

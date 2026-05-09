@@ -1,31 +1,11 @@
-# torch.ao is a package with a lot of interdependencies.
-# We will use lazy import to avoid cyclic dependencies here.
-
-from typing import TYPE_CHECKING as _TYPE_CHECKING
+__all__ = ["nn", "ns", "pruning", "quantization"]
 
 
-if _TYPE_CHECKING:
-    from types import ModuleType
-
-    from torch.ao import (
-        nn as nn,
-        ns as ns,
-        pruning as pruning,
-        quantization as quantization,
-    )
+def _disabled(name):
+    raise RuntimeError(f"torch.ao.{name} is disabled in EasyFHE")
 
 
-__all__ = [
-    "nn",
-    "ns",
-    "pruning",
-    "quantization",
-]
-
-
-def __getattr__(name: str) -> "ModuleType":
+def __getattr__(name):
     if name in __all__:
-        import importlib
-
-        return importlib.import_module("." + name, __name__)
+        _disabled(name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

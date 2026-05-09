@@ -224,7 +224,6 @@ S390X_BLOCKLIST = [
     "test_nn",
     # these tests run long and fail in addition to that
     "dynamo/test_dynamic_shapes",
-    "test_quantization",
     "inductor/test_torchinductor",
     "inductor/test_torchinductor_dynamic_shapes",
     "inductor/test_torchinductor_opinfo",
@@ -421,7 +420,6 @@ FUNCTORCH_TESTS = [test for test in TESTS if test.startswith("functorch")]
 DYNAMO_CORE_TESTS = [test for test in TESTS if test.startswith("dynamo")]
 CPYTHON_TESTS = [test for test in TESTS if "cpython" in test]
 ONNX_TESTS = [test for test in TESTS if test.startswith("onnx")]
-QUANTIZATION_TESTS = [test for test in TESTS if test.startswith("test_quantization")]
 
 
 def _is_cpp_test(test):
@@ -457,7 +455,6 @@ TESTS_NOT_USING_GRADCHECK = [
     "inductor/test_max_autotune",
     "inductor/test_select_algorithm",
     "inductor/test_smoke",
-    "test_quantization",
 ]
 
 
@@ -1129,16 +1126,7 @@ def run_doctests(test_module, test_directory, options):
         enabled["lapack"] = True
 
     if enabled["qengine"] == "auto":
-        try:
-            # Is there a better check if quantization is enabled?
-            import torch.ao.nn.quantized as nnq  # NOQA: F401
-
-            torch.backends.quantized.engine = "qnnpack"
-            torch.backends.quantized.engine = "fbgemm"
-        except (ImportError, RuntimeError):
-            ...
-        else:
-            enabled["qengine"] = True
+        enabled["qengine"] = False
 
     if enabled["onnx"] == "auto":
         try:
@@ -1320,7 +1308,6 @@ CUSTOM_HANDLERS = {
     "test_cpp_extensions_aot_no_ninja": test_cpp_extensions_aot_no_ninja,
     "test_cpp_extensions_aot_ninja": test_cpp_extensions_aot_ninja,
     "distributed/test_distributed_spawn": test_distributed,
-    "distributed/algorithms/quantization/test_quantization": test_distributed,
     "distributed/test_c10d_nccl": run_test_with_subprocess,
     "distributed/test_c10d_gloo": run_test_with_subprocess,
     "distributed/test_c10d_ucc": run_test_with_subprocess,
@@ -1773,7 +1760,6 @@ def get_selected_tests(options) -> list[str]:
         options.exclude.extend(AOT_DISPATCH_TESTS)
 
     if options.exclude_quantization_tests:
-        options.exclude.extend(QUANTIZATION_TESTS)
 
     # these tests failing in CUDA 11.6 temporary disabling. issue https://github.com/pytorch/pytorch/issues/75375
     if torch.version.cuda is not None:
