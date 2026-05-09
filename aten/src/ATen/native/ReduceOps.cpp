@@ -2383,11 +2383,11 @@ Tensor value_selecting_reduction_backward_symint(const Tensor& grad, int64_t dim
 }
 
 Tensor sum_csr(const Tensor &self, std::optional<ScalarType> dtype) {
-  return self.values().sum(dtype);
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
 }
 
 Tensor sum_coo(const Tensor &self, std::optional<ScalarType> dtype) {
-  return self._values().sum(dtype);
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
 }
 
 Tensor sum_sparse_coo(const Tensor& self, at::OptionalIntArrayRef dim, bool keepdim, std::optional<ScalarType> dtype) {

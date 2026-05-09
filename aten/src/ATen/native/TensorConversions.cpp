@@ -15,12 +15,10 @@
 #include <ATen/ops/_to_copy.h>
 #include <ATen/ops/_to_copy_native.h>
 #include <ATen/ops/_to_cpu_native.h>
-#include <ATen/ops/_to_dense_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/empty_strided.h>
 #include <ATen/ops/empty_strided_native.h>
-#include <ATen/ops/to_dense_native.h>
 #include <ATen/ops/to_native.h>
 #include <ATen/ops/view_native.h>
 #include <ATen/ops/zeros.h>

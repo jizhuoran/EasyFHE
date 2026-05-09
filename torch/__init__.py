@@ -2288,9 +2288,11 @@ from torch.autograd import (  # usort: skip
     set_grad_enabled as set_grad_enabled,
 )
 
-# EasyFHE: pre-import jit+fx to avoid circular imports during lazy loading
+# EasyFHE: pre-import jit to avoid circular imports during lazy loading
 import torch.jit as jit  # noqa: F811
-import torch.fx as fx  # noqa: F811
+import types as _easyfhe_types
+_jit_internal = _easyfhe_types.SimpleNamespace(is_scripting=lambda: False)
+del _easyfhe_types
 
 from torch import (
     __config__ as __config__,
@@ -2306,7 +2308,6 @@ from torch import (
     types as types,
     utils as utils,
     version as version,
-    xpu as xpu,
 )
 
 
@@ -3013,5 +3014,4 @@ def _as_tensor_fullprec(t):
 if _is_device_backend_autoload_enabled():
     _import_device_backends()
 
-# Register all registered custom / override ops in torch/_native
-import torch._native
+# EasyFHE fast build does not register torch/_native compiler/linalg kernels.

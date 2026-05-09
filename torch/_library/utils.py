@@ -1,4 +1,6 @@
 # mypy: allow-untyped-defs
+from __future__ import annotations
+
 import dataclasses
 import inspect
 import sys

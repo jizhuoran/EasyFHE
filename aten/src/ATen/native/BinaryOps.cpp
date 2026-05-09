@@ -95,11 +95,9 @@
 #include <ATen/ops/remainder_native.h>
 #include <ATen/ops/rshift_native.h>
 #include <ATen/ops/rsub_native.h>
-#include <ATen/ops/sigmoid_backward_native.h>
 #include <ATen/ops/sub.h>
 #include <ATen/ops/sub_native.h>
 #include <ATen/ops/subtract_native.h>
-#include <ATen/ops/tanh_backward_native.h>
 #include <ATen/ops/true_divide_native.h>
 #include <ATen/ops/xor_native.h>
 #endif
@@ -201,14 +199,6 @@ TORCH_META_FUNC2(fmod, Tensor) (const Tensor& self, const Tensor& other) {
   build_borrowing_binary_op(maybe_get_output(), self, other);
 }
 
-TORCH_META_FUNC(sigmoid_backward) (const Tensor& grad_output, const Tensor& output) {
-  build_borrowing_binary_op(maybe_get_output(), grad_output, output);
-}
-
-TORCH_META_FUNC(tanh_backward) (const Tensor& grad_output, const Tensor& output) {
-  build_borrowing_binary_op(maybe_get_output(), grad_output, output);
-}
-
 // These are normal binary ops that preserve dtype
 #define CREATE_BINARY_META_FUNC(func)                                 \
   TORCH_META_FUNC(func) (const Tensor& self, const Tensor& other) {   \
@@ -287,8 +277,6 @@ DEFINE_DISPATCH(gt_stub);
 DEFINE_DISPATCH(ge_stub);
 DEFINE_DISPATCH(eq_stub);
 DEFINE_DISPATCH(ne_stub);
-DEFINE_DISPATCH(sigmoid_backward_stub);
-DEFINE_DISPATCH(tanh_backward_stub);
 DEFINE_DISPATCH(maximum_stub);
 DEFINE_DISPATCH(minimum_stub);
 DEFINE_DISPATCH(fmax_stub);
@@ -354,14 +342,6 @@ TORCH_IMPL_FUNC(div_out_mode) (
   } else if (*rounding_mode == "floor") {
     div_floor_stub(device_type(), *this);
   }
-}
-
-TORCH_IMPL_FUNC(sigmoid_backward_out) (const Tensor& grad_output, const Tensor& output, const Tensor& result) {
-  sigmoid_backward_stub(device_type(), *this);
-}
-
-TORCH_IMPL_FUNC(tanh_backward_out) (const Tensor& grad_output, const Tensor& output, const Tensor& result) {
-  tanh_backward_stub(device_type(), *this);
 }
 
 #define CREATE_BINARY_TORCH_IMPL_FUNC(func_out, func_stub)                                                    \
@@ -537,8 +517,7 @@ Tensor& mul_(Tensor& self, const Scalar& other) {
 }
 
 Tensor& mul__scalar_sparse_csr(Tensor& self, const Scalar& other) {
-  self.values().mul_(other);
-  return self;
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
 }
 
 static Device correct_out_device(const Tensor& self, const Tensor& other) {

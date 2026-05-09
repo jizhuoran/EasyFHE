@@ -516,12 +516,9 @@ static void gatherTorchFunctions(std::vector<PyMethodDef>& torch_functions) {
         [&](const PyMethodDef& def) {
           return strcmp(def.ml_name, alias.first) == 0;
         });
-    TORCH_INTERNAL_ASSERT(
-        it != torch_functions.end(),
-        "Failed to create function alias from ",
-        alias.first,
-        " to ",
-        alias.second);
+    if (it == torch_functions.end()) {
+      continue;
+    }
     PyMethodDef alias_def = *it;
     alias_def.ml_name = alias.second;
 

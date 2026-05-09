@@ -34,6 +34,8 @@ implemented before registering it as a value-typed opaque object class:
 You can register a custom class as being a reference-based opaque object class
 through `register_opaque_type(MyClass, typ="value")`.
 """
+from __future__ import annotations
+
 
 import logging
 from collections.abc import Callable
@@ -84,7 +86,7 @@ class FakeOpaqueObject:
 
 OpaqueTypeStr = "__torch__.torch.classes.aten.OpaqueObject"
 
-OpaqueType = NewType("OpaqueType", torch._C.ScriptObject)
+OpaqueType = NewType("OpaqueType", getattr(torch._C, "ScriptObject", object))
 
 # Type for reconstruct_fn: called by PythonKeyTracer.create_arg when make_fx
 # encounters an untracked opaque reference (e.g. a backward closure capture).
@@ -265,7 +267,8 @@ def register_opaque_type(
     _OPAQUE_TYPES[cls] = type_info
     _OPAQUE_TYPES_BY_NAME[name] = type_info
 
-    torch._C._register_opaque_type(name)
+    if hasattr(torch._C, "_register_opaque_type"):
+        torch._C._register_opaque_type(name)
 
 
 # Enums are always opaque value types.

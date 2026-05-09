@@ -1,4 +1,6 @@
 # mypy: allow-untyped-defs
+from __future__ import annotations
+
 """
 The weak_script annotation needs to be here instead of inside torch/jit/ so it
 can be used in other places in torch/ (namely torch.nn) without running into
@@ -46,7 +48,8 @@ import torch
 import torch.distributed.rpc
 import torch.package._mangling as package_mangling
 from torch._awaits import _Await
-from torch._C import _Await as CAwait, Future as CFuture
+CAwait = getattr(torch._C, "_Await", object)
+CFuture = getattr(torch._C, "Future", object)
 from torch._sources import fake_range, get_source_lines_and_file, parse_def
 from torch.futures import Future
 
@@ -135,7 +138,8 @@ def _qualified_name(obj, mangle_name=True) -> str:
     if hasattr(obj, "_jit_override_qualname"):
         return obj._jit_override_qualname
     # short-circuit in cases where the object already has a known qualified name
-    if isinstance(obj, torch._C.ScriptFunction):
+    script_function = getattr(torch._C, "ScriptFunction", ())
+    if isinstance(obj, script_function):
         return obj.qualified_name
 
     if getattr(obj, "__name__", None):

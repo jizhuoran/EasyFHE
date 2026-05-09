@@ -1,4 +1,9 @@
-from torch._C import FileCheck as FileCheck
+try:
+    from torch._C import FileCheck as FileCheck
+except ImportError:
+    class FileCheck:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("FileCheck is disabled in EasyFHE fast build")
 
 from . import _utils
 

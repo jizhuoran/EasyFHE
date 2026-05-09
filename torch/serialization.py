@@ -86,6 +86,19 @@ else:
     MAP_SHARED, MAP_PRIVATE = None, None  # type: ignore[assignment]
 
 
+if not hasattr(torch._C, "PyTorchFileReader"):
+    class _DisabledPyTorchFileReader:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("torch serialization is disabled in EasyFHE fast build")
+
+    class _DisabledPyTorchFileWriter:
+        def __init__(self, *args, **kwargs):
+            raise RuntimeError("torch serialization is disabled in EasyFHE fast build")
+
+    torch._C.PyTorchFileReader = _DisabledPyTorchFileReader
+    torch._C.PyTorchFileWriter = _DisabledPyTorchFileWriter
+
+
 def _default_to_weights_only(pickle_module):
     is_fbcode = not hasattr(torch.version, "git_version")
     return pickle_module is None and not is_fbcode

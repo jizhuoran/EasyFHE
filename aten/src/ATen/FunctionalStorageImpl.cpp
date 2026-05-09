@@ -2,7 +2,6 @@
 
 #include <ATen/EmptyTensor.h>
 #include <ATen/FunctionalTensorWrapper.h>
-#include <ATen/SparseCsrTensorUtils.h>
 #include <ATen/core/LegacyTypeDispatch.h>
 #include <c10/util/Exception.h>
 #include <vector>
@@ -66,7 +65,7 @@ static c10::SymInt get_nbytes(const Tensor& value) {
   // for these tensors (which is wrong), but we don't give them any space.
   // A more proper fix would be to have a SparseFunctionalTensorWrapper that
   // models sparse correctly.
-  if (value.is_sparse() || at::sparse_csr::is_sparse_compressed(value)) {
+  if (value.is_sparse()) {
     return 0;
   }
   if (value.unsafeGetTensorImpl()->has_symbolic_sizes_strides()) {

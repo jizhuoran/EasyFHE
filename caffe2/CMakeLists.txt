@@ -86,6 +86,85 @@ if(INTERN_BUILD_ATEN_OPS)
   set(Caffe2_CUDA_DEPENDENCY_LIBS ${Caffe2_CUDA_DEPENDENCY_LIBS} PARENT_SCOPE)
 endif()
 
+if(USE_EASYFHE_FAST_BUILD)
+  set(_easyfhe_pruned_native_sources
+      "/aten/src/ATen/(functorch|native/(sparse|mkldnn|quantized|xnnpack|cudnn|mkl|miopen|transformers)|native/(Activation|Adaptive|AffineGridGenerator|AveragePool|BatchLinearAlgebra|Blas|CPUBlas|ChanelShuffle|Col2Im|Convolution|Correlation|Cross|DilatedMaxPool|Distance|Dropout|Embedding|Foreach|FractionalMaxPool|FunctionOfAMatrix|Fused|GatedLinearUnit|GridSampler|Im2Col|LinearAlgebra|Loss|MaxPooling|MaxUnpooling|NNPACK|NaiveConvolution|NaiveDilated|Normalization|Onehot|PackedSequence|PadNd|PixelShuffle|Pooling|QuantizedLinear|RNN|ReflectionPad|ReplicationPadding|RowwisePrune|ScaledBlas|SoftMax|SparseTensorUtils|SpectralOps|UpSample|WeightNorm|group_norm|layer_norm)[A-Za-z0-9_]*\\.(cpp|cu)$)")
+  set(_easyfhe_pruned_native_cpu_sources
+      "/aten/src/ATen/native/cpu/(Activation|Adaptive|AmpGradScaler|AvgPool|Blas|ChannelShuffle|Cross|DepthwiseConv|Distance|FlashAttention|FunctionOfAMatrix|Fused|GridSampler|LinearAlgebra|MaxPool|MaxUnpool|NativeMultiheadAttn|Padding|PixelShuffle|ReducedPrecision|Renorm|SampledAddmm|SoftMax|Sparse|Spmm|UpSample|WeightNorm|airy|batch_norm|group_norm|int4mm|int8mm|layer_norm|scaled_modified_bessel|spherical_bessel)[A-Za-z0-9_]*\\.cpp\\.[A-Za-z0-9_]+\\.cpp$")
+  set(_easyfhe_pruned_aten_sources
+      "/aten/src/ATen/(Register(Mkldnn|NestedTensor|Quantized|Sparse|SparseCsr)[^/]*|Sparse(Csr)?TensorImpl)\\.cpp$|/aten/src/ATen/cuda/(CUDASparse|CuSparse|tunable/)")
+  set(_easyfhe_pruned_cuda_sources
+      "/aten/src/ATen/native/cuda/(Activation|Adaptive|AmpKernels|AveragePool|BatchLinearAlgebra|BinaryMiscBackwardOpsKernels|Blas|Col2Im|Convolution|CrossKernel|DepthwiseConv|DilatedMaxPool|Distance|Dropout|Embedding|FlattenIndices|Foreach|FractionalMax|FunctionOfAMatrix|Fused|GridSampler|GroupMM|GroupedBlas|IGamma|Im2Col|LinearAlgebra|Loss|MaxUnpooling|MixedDtypesLinear|Multi|NLLLoss|Naive|Normalization|RNN|ReflectionPad|Renorm|ReplicationPadding|Rrelu|RowwiseScaledMM|Scaled|SoftMax|Sparse|SpectralOps|UnaryGamma|UnaryGeometricTanh|UnarySpecialOps|UpSample|ValidateCompressedIndices|WeightNorm|Zeta|airy|bessel|chebyshev|fused_|group_norm|hermite|int4mm|int8mm|laguerre|layer_norm|legendre|linalg/|modified_bessel|scaled_modified_bessel|shifted_chebyshev|spherical_bessel)")
+  foreach(_easyfhe_srcs
+      Caffe2_CPU_SRCS
+      Caffe2_GPU_SRCS
+      Caffe2_GPU_SRCS_W_SORT_BY_KEY
+      Caffe2_GPU_CU_SRCS
+      Caffe2_GPU_CU_SRCS_W_SORT_BY_KEY
+      Caffe2_HIP_SRCS)
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_native_sources}")
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_native_cpu_sources}")
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_aten_sources}")
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_cuda_sources}")
+  endforeach()
+  list(APPEND Caffe2_CPU_SRCS
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/functorch/easyfhe_functorch_stubs.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/easyfhe_conv_stubs.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/transformers/easyfhe_sdp_stubs.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizerBase.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizer.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/TensorAdvancedIndexing.cpp)
+  list(APPEND Caffe2_GPU_SRCS
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/EasyFHETunableStub.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/StreamTimer.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/cuda/SpectralOps.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
+endif()
+
+function(easyfhe_filter_runtime_sources _srcs)
+  if(USE_EASYFHE_FAST_BUILD)
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(cuda/)?shim_common\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(dynamo|functorch|inductor|lazy)/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/jit_log\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/(api|backends|codegen|mobile|operator_upgraders|passes|python|serialization|tensorexpr|testing)/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/frontend/(builtin_functions|canonicalize_modified_loop|concrete_module_type|convert_to_ssa|edit_distance|exit_transforms|inline_loop_condition|ir_emitter|name_mangler|schema_matching|script_type_parser|sugared_value|tree_views|versioned_symbols)\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/(autodiff|decomposition_registry|decomposition_registry_util|graph_executor|jit_trace|profiling_graph_executor_impl|profiling_record|register_prim_ops_fulljit|script_profile|serialized_shape_function_registry|simple_graph_executor_impl|symbolic_script|symbolic_shape_registry|symbolic_shape_registry_util)\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/interpreter/preprocess_graph\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/static/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
+    if("${_srcs}" STREQUAL "TORCH_SRCS" OR "${_srcs}" STREQUAL "Caffe2_CPU_SRCS")
+      list(APPEND ${_srcs}
+        ${TORCH_SRC_DIR}/csrc/dynamo/easyfhe_compiled_autograd_stub.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/api/function_impl.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/edit_distance.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/schema_matching.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/tracer.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/jit_log.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/mobile/promoted_prim_ops.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/mobile/register_ops_common_utils.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/passes/inliner.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/passes/utils/memory_dag.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/python/update_graph_executor_opt.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_pass_stubs.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_api_stubs.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/interpreter/preprocess_graph.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/register_prim_ops_fulljit.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/script_profile.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/serialization/python_print.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_graph_executor_stub.cpp
+        ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp
+        ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
+        ${TORCH_SRC_DIR}/csrc/api/src/serialize/output-archive.cpp)
+    endif()
+    if("${_srcs}" STREQUAL "Caffe2_GPU_SRCS")
+      list(APPEND ${_srcs}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
+    endif()
+    list(REMOVE_DUPLICATES ${_srcs})
+    set(${_srcs} "${${_srcs}}" PARENT_SCOPE)
+  endif()
+endfunction()
+
 # ---[ Caffe2 build
 # Note: the folders that are being commented out have not been properly
 # addressed yet.
@@ -442,6 +521,7 @@ else()
   endif()
 endif()
 list(APPEND TORCH_SRCS ${LIBTORCH_CMAKE_SRCS})
+easyfhe_filter_runtime_sources(TORCH_SRCS)
 
 if(PRINT_CMAKE_DEBUG_INFO)
   message(STATUS "Interpreter sources: ")
@@ -557,6 +637,7 @@ endif()
 
 if(USE_CUDA OR USE_ROCM)
   append_filelist("libtorch_cuda_core_sources" Caffe2_GPU_HIP_JIT_FUSERS_SRCS)
+  easyfhe_filter_runtime_sources(Caffe2_GPU_HIP_JIT_FUSERS_SRCS)
 endif()
 
 
@@ -678,6 +759,7 @@ if(NOT NO_API AND NOT BUILD_LITE_INTERPRETER)
   )
 endif()
 
+easyfhe_filter_runtime_sources(TORCH_SRCS)
 list(APPEND Caffe2_CPU_SRCS ${TORCH_SRCS})
 
 if(USE_MPS)
@@ -690,6 +772,8 @@ if(USE_MPS)
       list(APPEND Caffe2_CPU_SRCS ${CMAKE_BINARY_DIR}/caffe2/aten/src/ATen/metallib_dummy.cpp)
   endif()
 endif()
+
+easyfhe_filter_runtime_sources(Caffe2_CPU_SRCS)
 
 # NOTE [ Linking AVX and non-AVX files ]
 #
@@ -923,6 +1007,7 @@ if(USE_ROCM)
 elseif(USE_CUDA)
   set(CUDA_LINK_LIBRARIES_KEYWORD PRIVATE)
   list(APPEND Caffe2_GPU_SRCS ${GENERATED_CXX_TORCH_CUDA})
+  easyfhe_filter_runtime_sources(Caffe2_GPU_SRCS)
   if(CUDA_SEPARABLE_COMPILATION)
     # Separate compilation fails when kernels using `thrust::sort_by_key`
     # are linked with the rest of CUDA code. Workaround by linking them separately.
@@ -1240,6 +1325,11 @@ if(NOT NO_API)
     ${TORCH_SRC_DIR}/csrc/api
     ${TORCH_SRC_DIR}/csrc/api/include)
 endif()
+if(USE_EASYFHE_FAST_BUILD)
+  target_include_directories(torch_cpu PRIVATE
+    ${TORCH_SRC_DIR}/csrc/api
+    ${TORCH_SRC_DIR}/csrc/api/include)
+endif()
 
 if(USE_CUDA AND MSVC)
   # -INCLUDE is used to ensure torch_cuda is linked against in a project that relies on them.
@@ -1550,7 +1640,7 @@ endif()
 
 if(NOT INTERN_BUILD_MOBILE)
   if(${CAFFE2_LINK_LOCAL_PROTOBUF})
-    target_link_libraries(torch_cpu INTERFACE protobuf::libprotobuf)
+    target_link_libraries(torch_cpu PRIVATE protobuf::libprotobuf)
   else()
     target_link_libraries(torch_cpu PUBLIC protobuf::libprotobuf)
   endif()
@@ -1597,8 +1687,14 @@ target_include_directories(torch_cpu PRIVATE ${Caffe2_CPU_INCLUDE})
 target_include_directories(torch_cpu SYSTEM PRIVATE "${Caffe2_DEPENDENCY_INCLUDE}")
 
 target_compile_definitions(torch_cpu PRIVATE CAFFE2_BUILD_MAIN_LIB)
+if(USE_EASYFHE_FAST_BUILD)
+  target_compile_definitions(torch_cpu PRIVATE EASYFHE_DISABLE_JIT_BINDINGS)
+endif()
 if(USE_CUDA)
   target_compile_definitions(torch_cuda PRIVATE TORCH_CUDA_BUILD_MAIN_LIB)
+  if(USE_EASYFHE_FAST_BUILD)
+    target_compile_definitions(torch_cuda PRIVATE EASYFHE_DISABLE_JIT_BINDINGS)
+  endif()
 endif()
 
 if(USE_ROCM)

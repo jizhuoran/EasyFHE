@@ -313,6 +313,21 @@ if(USE_COREML_DELEGATE)
   list(APPEND TORCH_PYTHON_SRCS ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/cpp/preprocess.cpp)
 endif()
 
+if(USE_EASYFHE_FAST_BUILD)
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/(dynamo|export|functorch|inductor|jit|lazy|onnx)/")
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/autograd/generated/python_(fft|linalg|nested|nn|sparse|special)_functions\\.cpp$")
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/autograd/python_nested_functions_manual\\.cpp$")
+  list(APPEND TORCH_PYTHON_SRCS
+    ${TORCH_SRC_DIR}/csrc/jit/python/easyfhe_python_tracer_stub.cpp)
+  list(APPEND TORCH_PYTHON_COMPILE_DEFINITIONS
+    EASYFHE_DISABLE_DYNAMO_BINDINGS
+    EASYFHE_DISABLE_DOMAIN_PYTHON_BINDINGS
+    EASYFHE_DISABLE_EXPORT_BINDINGS
+    EASYFHE_DISABLE_FUNCTORCH_BINDINGS
+    EASYFHE_DISABLE_INDUCTOR_BINDINGS
+    EASYFHE_DISABLE_JIT_BINDINGS
+    EASYFHE_DISABLE_LAZY_BINDINGS)
+endif()
 
 add_library(torch_python SHARED ${TORCH_PYTHON_SRCS})
 torch_compile_options(torch_python)  # see cmake/public/utils.cmake
@@ -330,7 +345,9 @@ if(CAFFE2_USE_MKL AND BUILD_LIBTORCHLESS)
   target_link_libraries(torch_python PRIVATE caffe2::mkl)
 endif()
 
-add_dependencies(torch_python onnx_proto)
+if(TARGET onnx_proto)
+  add_dependencies(torch_python onnx_proto)
+endif()
 # Avoid numpy for the DEPLOY build
 if(USE_NUMPY)
   target_link_libraries(torch_python PRIVATE Python::NumPy)

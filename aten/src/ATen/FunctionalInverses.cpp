@@ -305,38 +305,6 @@ Tensor FunctionalInverses::unsqueeze_inverse(const Tensor& base, const Tensor& m
     }
 }
 
-Tensor FunctionalInverses::_indices_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::_values_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::indices_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::values_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::crow_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::col_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::ccol_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
-Tensor FunctionalInverses::row_indices_inverse(const at::Tensor& base, const at::Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
-    TORCH_INTERNAL_ASSERT(false, "Sparse tensors not supported during functionalization");
-}
-
 Tensor FunctionalInverses::unbind_int_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, int64_t mutated_view_idx, int64_t dim) {
     if (inverse_return_mode == InverseReturnMode::AlwaysView) {
       // NB: assumes mutated_view is a narrowed view of base.

@@ -59,8 +59,6 @@
 #include <ATen/ops/deg2rad_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
-#include <ATen/ops/erf.h>
-#include <ATen/ops/erf_native.h>
 #include <ATen/ops/exp2.h>
 #include <ATen/ops/exp2_native.h>
 #include <ATen/ops/exp_native.h>
@@ -99,8 +97,6 @@
 #include <ATen/ops/rsqrt_native.h>
 #include <ATen/ops/select.h>
 #include <ATen/ops/sgn_native.h>
-#include <ATen/ops/sigmoid.h>
-#include <ATen/ops/sigmoid_native.h>
 #include <ATen/ops/sign_native.h>
 #include <ATen/ops/signbit_native.h>
 #include <ATen/ops/sin_native.h>
@@ -110,7 +106,6 @@
 #include <ATen/ops/sqrt_native.h>
 #include <ATen/ops/square_native.h>
 #include <ATen/ops/tan_native.h>
-#include <ATen/ops/tanh_native.h>
 #include <ATen/ops/trunc.h>
 #include <ATen/ops/trunc_native.h>
 #include <ATen/ops/view_as_real.h>
@@ -136,7 +131,6 @@ CREATE_UNARY_FLOAT_META_FUNC(atan)
 CREATE_UNARY_FLOAT_META_FUNC(atanh)
 CREATE_UNARY_FLOAT_META_FUNC(cos)
 CREATE_UNARY_FLOAT_META_FUNC(cosh)
-CREATE_UNARY_FLOAT_META_FUNC(erf)
 CREATE_UNARY_FLOAT_META_FUNC(exp)
 CREATE_UNARY_FLOAT_META_FUNC(exp2)
 CREATE_UNARY_FLOAT_META_FUNC(expm1)
@@ -146,13 +140,11 @@ CREATE_UNARY_FLOAT_META_FUNC(log1p)
 CREATE_UNARY_FLOAT_META_FUNC(log2)
 CREATE_UNARY_FLOAT_META_FUNC(reciprocal)
 CREATE_UNARY_FLOAT_META_FUNC(rsqrt)
-CREATE_UNARY_FLOAT_META_FUNC(sigmoid)
 CREATE_UNARY_FLOAT_META_FUNC(sin)
 CREATE_UNARY_FLOAT_META_FUNC(sinc)
 CREATE_UNARY_FLOAT_META_FUNC(sinh)
 CREATE_UNARY_FLOAT_META_FUNC(sqrt)
 CREATE_UNARY_FLOAT_META_FUNC(tan)
-CREATE_UNARY_FLOAT_META_FUNC(tanh)
 
 
 // These are normal unary ops that preserve dtype
@@ -247,7 +239,6 @@ CREATE_UNARY_TORCH_IMPL_FUNC(atanh_out, atanh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(bitwise_not_out, bitwise_not_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(cos_out, cos_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(cosh_out, cosh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(erf_out, erf_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(exp_out, exp_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(exp2_out, exp2_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(expm1_out, expm1_stub)
@@ -259,14 +250,12 @@ CREATE_UNARY_TORCH_IMPL_FUNC(log2_out, log2_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(neg_out, neg_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(reciprocal_out, reciprocal_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(rsqrt_out, rsqrt_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(sigmoid_out, sigmoid_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sign_out, sign_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sin_out, sin_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sinc_out, sinc_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sinh_out, sinh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sqrt_out, sqrt_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(tan_out, tan_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(tanh_out, tanh_stub)
 
 TORCH_IMPL_FUNC(round_decimals_out)
 (const Tensor& self, int64_t decimals, const Tensor& result) {
@@ -699,7 +688,6 @@ DEFINE_DISPATCH(bitwise_not_stub); // NOLINT(cppcoreguidelines-avoid-non-const-g
 DEFINE_DISPATCH(ceil_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(cos_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(cosh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(erf_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(exp_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(exp2_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(expm1_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -717,7 +705,6 @@ DEFINE_DISPATCH(reciprocal_stub); // NOLINT(cppcoreguidelines-avoid-non-const-gl
 DEFINE_DISPATCH(round_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(round_decimals_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(rsqrt_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(sigmoid_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(logit_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sign_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(signbit_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
@@ -727,7 +714,6 @@ DEFINE_DISPATCH(sinc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 DEFINE_DISPATCH(sinh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sqrt_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(tan_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(tanh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(trunc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(digamma_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(erfc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)

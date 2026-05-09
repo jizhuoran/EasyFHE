@@ -340,6 +340,7 @@ void initDispatchBindings(PyObject* module) {
           py::arg("name"),
           py::arg("dispatch") = "",
           py::arg("debug") = "impl_t_t")
+#ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
       .def(
           "impl_with_aoti_compile",
           [](const py::object& self,
@@ -366,6 +367,7 @@ void initDispatchBindings(PyObject* module) {
           py::arg("ns"),
           py::arg("op_name_with_overload"),
           py::arg("dispatch"))
+#endif
       .def(
           "impl",
           [](const py::object& self,

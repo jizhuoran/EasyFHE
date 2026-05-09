@@ -5,8 +5,29 @@ import inspect
 from textwrap import dedent
 from typing import Any, NamedTuple
 
-from torch._C import ErrorReport
-from torch._C._jit_tree_views import SourceRangeFactory
+try:
+    from torch._C import ErrorReport
+except ImportError:
+    class ErrorReport:
+        @staticmethod
+        def call_stack():
+            return ""
+
+try:
+    from torch._C._jit_tree_views import SourceRangeFactory
+except ImportError:
+    class SourceRangeFactory:
+        def __init__(self, source, filename, file_lineno, leading_whitespace_len):
+            self.source = source
+            self.filename = filename
+            self.file_lineno = file_lineno
+            self.leading_whitespace_len = leading_whitespace_len
+
+        def make_raw_range(self, start, end):
+            return None
+
+        def make_range(self, start, end):
+            return None
 
 
 def get_source_lines_and_file(

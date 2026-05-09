@@ -5,7 +5,15 @@ from typing import Any, TYPE_CHECKING
 
 import torch
 from torch import Tensor
-from torch._C import _add_docstr, _sparse  # type: ignore[attr-defined]
+from torch._C import _add_docstr
+
+try:
+    from torch._C import _sparse  # type: ignore[attr-defined]
+except ImportError:
+    class _DisabledSparseModule:
+        pass
+
+    _sparse = _DisabledSparseModule()
 
 # Semi structured sparsity support
 try:

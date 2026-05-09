@@ -197,22 +197,8 @@ struct TORCH_API AccumulateGrad : public Node {
         // See Case 1.1: Stealable dense new_grad
         update_grad(new_grad.detach());
       } else if (
-          !GradMode::is_enabled() && new_grad.is_sparse() &&
-          new_grad._indices().is_contiguous() &&
-          new_grad._values().is_contiguous() &&
-          // Use count for indices and values should always be <=1 since the
-          // SparseTensor should be the only one holding a reference to these.
-          new_grad._indices().use_count() <= 1 &&
-          new_grad._values().use_count() <= 1 &&
-          impl::is_tensor_stealable(new_grad, num_expected_refs)) {
-        // Case 1.2: Stealable sparse new_grad
-        // No scenario where we expect this to be true currently
-        TORCH_INTERNAL_ASSERT_DEBUG_ONLY(
-            !at::caching::is_cached_tensor(new_grad._indices()) &&
-            !at::caching::is_cached_tensor(new_grad._values()) &&
-            !at::caching::is_cached_tensor(new_grad));
-
-        update_grad(new_grad.clone());
+          !GradMode::is_enabled() && new_grad.is_sparse()) {
+        TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
       } else {
         if (new_grad.is_sparse() || new_grad.is_sparse_csr() ||
             new_grad.is_nested()) {

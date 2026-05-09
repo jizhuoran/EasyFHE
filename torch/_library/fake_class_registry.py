@@ -1,4 +1,6 @@
 # mypy: allow-untyped-defs
+from __future__ import annotations
+
 import copy
 import logging
 from typing import Any, Protocol
@@ -415,6 +417,9 @@ def register_fake_class(qualname, fake_class: HasStaticMethodFromReal | None = N
 
     def inner(fake_class: HasStaticMethodFromReal):
         ns, name = parse_namespace(qualname)
+
+        if not hasattr(torch._C, "_get_custom_class_python_wrapper"):
+            return fake_class
 
         # This also checks whether the referred torch::class_ exists.
         torch._C._get_custom_class_python_wrapper(ns, name)

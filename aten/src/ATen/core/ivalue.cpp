@@ -1105,13 +1105,8 @@ std::vector<c10::weak_intrusive_ptr<c10::StorageImpl>> ivalue::Future::extractSt
     }
     weakStorageImpls.reserve(num_storages);
     for (const at::Tensor& tensor : tensors) {
-      if (tensor.is_sparse()) {
-        weakStorageImpls.emplace_back(tensor.indices().storage().getWeakStorageImpl());
-        weakStorageImpls.emplace_back(tensor.values().storage().getWeakStorageImpl());
-      } else {
-        // A dense/strided tensor contains 1 storage
-        weakStorageImpls.emplace_back(tensor.storage().getWeakStorageImpl());
-      }
+      TORCH_CHECK(!tensor.is_sparse(), "Sparse tensors not supported in EasyFHE");
+      weakStorageImpls.emplace_back(tensor.storage().getWeakStorageImpl());
     }
   } else {
     at::IValue::HashAliasedIValues sub_values;

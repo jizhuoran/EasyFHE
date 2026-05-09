@@ -1864,6 +1864,9 @@ Tensor & masked_fill__cuda(Tensor& self, const Tensor & mask, const Tensor & val
 
 
 Tensor index_select_sparse_cuda(const Tensor& self, int64_t dim, const Tensor& index) {
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return Tensor();
+#if 0
   const auto ndim = self.dim();
   TORCH_CHECK_INDEX(ndim, "index_select() cannot be applied to a 0-dim tensor.");
   TORCH_CHECK_INDEX(
@@ -2038,6 +2041,7 @@ Tensor index_select_sparse_cuda(const Tensor& self, int64_t dim, const Tensor& i
     TORCH_CHECK(false, "sparse index_select not supported in EasyFHE");
     return Tensor(); // unreachable
   }
+#endif
 }
 
 

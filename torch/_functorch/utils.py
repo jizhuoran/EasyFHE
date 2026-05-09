@@ -3,11 +3,21 @@ from collections.abc import Generator
 from typing import Any
 
 import torch
-from torch._C._functorch import (
-    get_single_level_autograd_function_allowed,
-    set_single_level_autograd_function_allowed,
-    unwrap_if_dead,
-)
+try:
+    from torch._C._functorch import (
+        get_single_level_autograd_function_allowed,
+        set_single_level_autograd_function_allowed,
+        unwrap_if_dead,
+    )
+except ModuleNotFoundError:
+    def get_single_level_autograd_function_allowed():
+        return False
+
+    def set_single_level_autograd_function_allowed(value):
+        return None
+
+    def unwrap_if_dead(value):
+        return value
 from torch.utils._exposed_in import exposed_in
 
 

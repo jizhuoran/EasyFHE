@@ -213,9 +213,13 @@ KEEP_INFRA = [
 # FHE-specific ops (ALWAYS keep)
 KEEP_FHE = [
     "encrypt", "encode", "pre_encode",
+    "add_mod", "sub_mod", "mul_mod",
+    "add_scalar_mod", "sub_scalar_mod",
+    "add_pt_broadcast", "add_pt_pairwise",
     "automorphism_transform", "batched_pairwise_mac", "cpmul_broadcast_pt",
     "extend_ciphertext", "mod_raise", "moddown", "modup",
     "drop_last_element_and_scale", "hash_tensor",
+    "innerproduct", "innerproduct_broadcast_cipher",
 ]
 
 
@@ -244,13 +248,14 @@ def classify_op(func_line: str) -> tuple[str, str]:
     if not base_name:
         return "KEEP", "unparseable"
 
+    if base_name in KEEP_FHE:
+        return "KEEP", "fhe"
+
     # Explicit KEEP overrides (false positives from substring matching)
     force_keep = {
         "detach": "autograd", "detach_": "autograd", "detach_copy": "autograd",
         "unfold": "shape", "unfold_backward": "shape", "unfold_copy": "shape",
         "slice_inverse": "shape",
-        "_indices": "infra", "_values": "infra",
-        "crow_indices": "infra", "col_indices": "infra",
     }
     if base_name in force_keep:
         return "KEEP", force_keep[base_name]
@@ -258,6 +263,7 @@ def classify_op(func_line: str) -> tuple[str, str]:
     # Check DELETE patterns FIRST (more specific, e.g. max_pool before max)
     delete_patterns = {
         "nn": ["conv", "pool", "batch_norm", "dropout", "relu", "gelu", "silu",
+               "sigmoid", "tanh",
                "softmax", "log_softmax", "cross_entropy", "nll_loss", "layer_norm",
                "rnn", "lstm", "gru", "embedding", "upsample", "grid_sample",
                "pixel_shuffle", "pixel_unshuffle", "unfold", "fold", "linear",
@@ -294,13 +300,14 @@ def classify_op(func_line: str) -> tuple[str, str]:
                    "matrix_exp", "linalg_", "_linalg_",
                    ],
         "special_math": ["special_", "bessel", "polygamma", "digamma", "lgamma",
-                         "erfinv", "erfc", "erfcx", "i0", "i1",
+                         "erf", "erfinv", "erfc", "erfcx", "i0", "i1",
                          "spherical_bessel", "airy", "chebyshev", "hermite",
                          "laguerre", "legendre", "shifted_chebyshev", "zeta",
                          "xlog1py", "xlogy", "entr", "multigammaln", "gammainc", "ndtr",
                          ],
         "sparse": ["sparse", "_sparse", "to_sparse", "crow_indices", "col_indices",
-                   "coalesce", "_nnz", "_indices", "_values",
+                   "ccol_indices", "row_indices", "coalesce", "_nnz", "_indices", "_values",
+                   "indices", "values", "dense_dim", "sparse_dim",
                    "sparse_coo", "sparse_csr", "sparse_csc", "sparse_bsr", "sparse_bsc",
                    ],
         "foreach": ["_foreach_"],

@@ -19,7 +19,11 @@ from torch._C import (
     _push_on_torch_dispatch_stack,
     DispatchKey,
 )
-from torch._C._dynamo.guards import set_is_in_mode_without_ignore_compile_internals
+try:
+    from torch._C._dynamo.guards import set_is_in_mode_without_ignore_compile_internals
+except ModuleNotFoundError:
+    def set_is_in_mode_without_ignore_compile_internals(value):
+        return None
 
 
 if TYPE_CHECKING:
@@ -393,8 +397,24 @@ def _disable_current_modes():
         _len_torch_dispatch_stack_pre_dispatch,
         _pop_mode_from_pre_dispatch,
     )
-    from torch._subclasses.functional_tensor import FunctionalTensorMode
-    from torch._subclasses.schema_check_mode import SchemaCheckMode
+    try:
+        from torch._subclasses.functional_tensor import FunctionalTensorMode
+        from torch._subclasses.schema_check_mode import SchemaCheckMode
+    except ModuleNotFoundError:
+        mode_len_pre_dispatch = _len_torch_dispatch_stack_pre_dispatch()
+        old_pre_dispatch_modes = [
+            _pop_mode_from_pre_dispatch() for _ in range(mode_len_pre_dispatch)
+        ]
+        mode_len = _len_torch_dispatch_stack()
+        old_modes = [_pop_mode() for _ in range(mode_len)]
+        try:
+            yield old_pre_dispatch_modes + old_modes
+        finally:
+            for mode in reversed(old_modes):
+                _push_mode(mode)
+            for mode in reversed(old_pre_dispatch_modes):
+                _push_mode(mode)
+        return
     try:
         from torch.fx.experimental.proxy_tensor import ProxyTorchDispatchMode
     except ImportError:

@@ -414,7 +414,10 @@ def get_summarized_data(self):
 
 
 def _str_intern(inp, *, tensor_contents=None):
-    if torch._C._functorch.is_functorch_wrapped_tensor(inp):
+    if (
+        hasattr(torch._C, "_functorch")
+        and torch._C._functorch.is_functorch_wrapped_tensor(inp)
+    ):
         return _functorch_wrapper_str_intern(inp, tensor_contents=tensor_contents)
     is_plain_tensor = type(inp) is torch.Tensor or type(inp) is torch.nn.Parameter
     if inp.is_nested:
@@ -607,7 +610,10 @@ def _str_intern(inp, *, tensor_contents=None):
         tensor_str = repr(torch._from_functional_tensor(self))
     else:
         # Circular import problem, so we import it here
-        from torch._subclasses.fake_tensor import FakeTensor
+        try:
+            from torch._subclasses.fake_tensor import FakeTensor
+        except ModuleNotFoundError:
+            FakeTensor = ()
 
         if self.is_meta or isinstance(self, FakeTensor):
             suffixes.append("size=" + str(tuple(self.shape)))

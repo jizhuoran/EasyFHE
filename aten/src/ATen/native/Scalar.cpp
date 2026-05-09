@@ -19,11 +19,8 @@ Scalar item(const Tensor& self) {
       "a Tensor with ",
       numel,
       " elements cannot be converted to Scalar");
-  if (self.is_sparse()) {
-    return at::_local_scalar_dense(self._values().sum());
-  } else {
-    return _local_scalar_dense(self);
-  }
+  TORCH_CHECK(!self.is_sparse(), "Sparse tensors not supported in EasyFHE");
+  return _local_scalar_dense(self);
 }
 
 #define AT_SD_BASE_TYPES AT_EXPAND(AT_ALL_TYPES), AT_EXPAND(AT_COMPLEX_TYPES), kComplexHalf, kHalf, kBool, kBFloat16, AT_EXPAND(AT_BAREBONES_UNSIGNED_TYPES)

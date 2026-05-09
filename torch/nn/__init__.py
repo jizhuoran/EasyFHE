@@ -5,17 +5,52 @@ from torch.nn.parameter import (  # usort: skip
     UninitializedBuffer as UninitializedBuffer,
     UninitializedParameter as UninitializedParameter,
 )
-from torch.nn.modules import *  # usort: skip # noqa: F403
-from torch.nn import (
-    attention as attention,
-    functional as functional,
-    init as init,
-    modules as modules,
-    parallel as parallel,
-    parameter as parameter,
-    utils as utils,
-)
-from torch.nn.parallel import DataParallel as DataParallel
+import torch
+import importlib
+
+
+if not hasattr(torch._C, "_nn"):
+    class _DisabledNNBindings:
+        pass
+
+    torch._C._nn = _DisabledNNBindings()
+
+
+from torch.nn import parameter as parameter
+
+
+def __getattr__(name):
+    if name in {"functional", "init", "modules"}:
+        module = importlib.import_module(f"torch.nn.{name}")
+        globals()[name] = module
+        return module
+    if name == "Module":
+        from torch.nn.modules.module import Module
+        globals()[name] = Module
+        return Module
+    if name in {"ModuleDict", "ModuleList", "Sequential"}:
+        module = importlib.import_module("torch.nn.modules")
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    if name == "Conv2d":
+        from torch.nn.modules.conv import Conv2d
+        globals()[name] = Conv2d
+        return Conv2d
+    if name in {"BatchNorm1d", "BatchNorm2d"}:
+        module = importlib.import_module("torch.nn.modules")
+        value = getattr(module, name)
+        globals()[name] = value
+        return value
+    if name == "Linear":
+        from torch.nn.modules.linear import Linear
+        globals()[name] = Linear
+        return Linear
+    if name == "AdaptiveAvgPool2d":
+        from torch.nn.modules.pooling import AdaptiveAvgPool2d
+        globals()[name] = AdaptiveAvgPool2d
+        return AdaptiveAvgPool2d
+    raise AttributeError(f"torch.nn.{name} is disabled in EasyFHE fast build")
 
 
 def factory_kwargs(kwargs):

@@ -1910,25 +1910,8 @@ Tensor glu_double_backward(
     const Tensor& grad_output,
     const Tensor& input,
     int64_t dim) {
-  auto& gO = grad_output;
-  auto input_size = input.size(dim) / 2;
-  auto first_half = input.narrow(dim, 0, input_size);
-  auto second_half = input.narrow(dim, input_size, input_size);
-  auto sig_second_half = second_half.sigmoid();
-  auto one_sub_sig_second_half = 1 - sig_second_half;
-  auto sig_one_sub_sig = sig_second_half * one_sub_sig_second_half;
-
-  auto ggI_first_half = grad.narrow(dim, 0, input_size);
-  auto ggI_second_half = grad.narrow(dim, input_size, input_size);
-  auto ggI_second_half_times_first_half = ggI_second_half * first_half;
-
-  auto gI_first_half = ggI_second_half * gO * sig_one_sub_sig;
-  auto second_order_sh = sig_one_sub_sig * one_sub_sig_second_half -
-      sig_second_half * sig_one_sub_sig;
-  auto gI_second_half =
-      ggI_second_half_times_first_half * gO * second_order_sh +
-      ggI_first_half * gO * sig_one_sub_sig;
-  return at::cat({std::move(gI_first_half), std::move(gI_second_half)}, dim);
+  TORCH_CHECK(false, "glu removed in EasyFHE");
+  return Tensor();
 }
 
 Tensor glu_double_backward_grad_output(
@@ -1942,18 +1925,15 @@ Tensor glu_double_backward_grad_output(
 Tensor infinitely_differentiable_silu_backward(
     const Tensor& grad_output,
     const Tensor& input) {
-  const Tensor sigmoid = input.sigmoid();
-  return grad_output * sigmoid * (1.0 + input * (1.0 - sigmoid));
+  TORCH_CHECK(false, "silu removed in EasyFHE");
+  return Tensor();
 }
 
 Tensor infinitely_differentiable_mish_backward(
     const Tensor& grad_output,
     const Tensor& input) {
-  const Tensor sigmoid = input.sigmoid();
-  const Tensor softplus = input.exp().log1p();
-  const Tensor tanh_softplus = softplus.tanh();
-  return grad_output *
-      (tanh_softplus + input * sigmoid * (1.0 - tanh_softplus * tanh_softplus));
+  TORCH_CHECK(false, "mish removed in EasyFHE");
+  return Tensor();
 }
 
 Tensor infinitely_differentiable_logit_backward(
@@ -2030,52 +2010,8 @@ Tensor binary_cross_entropy_with_logits_backward(
     const std::optional<Tensor>& weight,
     const std::optional<Tensor>& pos_weight,
     int64_t reduction) {
-  // Trivial case
-  if (grad._is_zerotensor()) {
-    return at::_efficientzerotensor(input.sizes(), input.options());
-  }
-
-  // -w * [ pos * y * (1 -sigmoid(x)) - (1 - y) sigmoid(x)] * grad
-
-  // If there are subclassed tensors use the out of place version
-  Tensor grad_input;
-  if (isDefined(pos_weight)) {
-    // pos_weight might need to be broadcasted, thus mul(target) is not inplace.
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    auto t = pos_weight->mul(target);
-    grad_input = at::areAnyTensorSubclassLike({input, target}) ||
-            at::GradMode::is_enabled()
-        ? t.add(1).sub(target).mul(input.sigmoid()).sub(t)
-        : t.add(1).sub_(target).mul_(input.sigmoid()).sub_(t);
-  } else {
-    grad_input = at::areAnyTensorSubclassLike({input, target}) ||
-            at::GradMode::is_enabled()
-        ? input.sigmoid().sub(target)
-        : input.sigmoid().sub_(target);
-  }
-
-  if (at::isTensorSubclassLike(grad) || at::GradMode::is_enabled()) {
-    grad_input = grad_input.mul(grad);
-  } else {
-    grad_input.mul_(grad);
-  }
-
-  if (isDefined(weight)) {
-    // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-    if (at::isTensorSubclassLike(*weight) || at::GradMode::is_enabled()) {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_input = grad_input.mul(*weight);
-    } else {
-      // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
-      grad_input.mul_(*weight);
-    }
-  }
-
-  if (reduction == at::Reduction::Mean) {
-    grad_input.div_(input.sym_numel());
-  }
-
-  return grad_input;
+  TORCH_CHECK(false, "binary_cross_entropy_with_logits removed in EasyFHE");
+  return Tensor();
 }
 
 Tensor binary_cross_entropy_with_logits_target_backward(
@@ -2089,8 +2025,8 @@ Tensor binary_cross_entropy_with_logits_target_backward(
 }
 
 Tensor log_sigmoid_double_backward(const Tensor& grad, const Tensor& input) {
-  auto z = input.sigmoid();
-  return grad * (z - 1) * z;
+  TORCH_CHECK(false, "log_sigmoid removed in EasyFHE");
+  return Tensor();
 }
 
 Tensor softmax_double_backward(
@@ -2282,9 +2218,8 @@ Tensor softplus_double_backward(
     const Tensor& input,
     const Scalar& beta,
     const Scalar& threshold) {
-  auto x = (input * beta);
-  return sigmoid_backward(grad, x.sigmoid()) * (x < threshold).type_as(grad) *
-      beta;
+  TORCH_CHECK(false, "softplus removed in EasyFHE");
+  return Tensor();
 }
 
 // NOTE [ as_strided Backward and layout-aware/agnostic autograd ]

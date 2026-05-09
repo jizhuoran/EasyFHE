@@ -13,7 +13,11 @@ import torch._C as _C
 import torch._functorch as _functorch
 import torch.utils.hooks as hooks
 from torch._C import _functions
-from torch._functorch.autograd_function import custom_function_call
+try:
+    from torch._functorch.autograd_function import custom_function_call
+except ModuleNotFoundError:
+    def custom_function_call(*args, **kwargs):
+        raise RuntimeError("functorch is disabled in EasyFHE fast build")
 
 
 __all__ = [

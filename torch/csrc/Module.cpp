@@ -62,35 +62,51 @@
 #include <torch/csrc/autograd/generated/python_return_types.h>
 #include <torch/csrc/autograd/python_cpp_function.h>
 #include <torch/csrc/autograd/python_enum_tag.h>
+#ifndef EASYFHE_DISABLE_DOMAIN_PYTHON_BINDINGS
 #include <torch/csrc/autograd/python_fft_functions.h>
+#endif
 #include <torch/csrc/autograd/python_function.h>
 #include <torch/csrc/autograd/python_legacy_variable.h>
+#ifndef EASYFHE_DISABLE_DOMAIN_PYTHON_BINDINGS
 #include <torch/csrc/autograd/python_linalg_functions.h>
 #include <torch/csrc/autograd/python_nested_functions.h>
 #include <torch/csrc/autograd/python_nn_functions.h>
 #include <torch/csrc/autograd/python_sparse_functions.h>
 #include <torch/csrc/autograd/python_special_functions.h>
+#endif
 #include <torch/csrc/autograd/python_variable.h>
 #include <torch/csrc/cpu/Module.h>
 #include <torch/csrc/distributed/python_placement.h>
 #include <torch/csrc/dynamo/init.h>
+#ifndef EASYFHE_DISABLE_EXPORT_BINDINGS
 #include <torch/csrc/export/pybind.h>
+#endif
 #include <torch/csrc/functionalization/Module.h>
+#ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
 #include <torch/csrc/functorch/init.h>
+#endif
 #include <torch/csrc/fx/node.h>
+#ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
 #include <torch/csrc/inductor/aoti_package/pybind.h>
 #include <torch/csrc/inductor/aoti_runner/pybind.h>
+#endif
 #include <torch/csrc/instruction_counter/Module.h>
+#ifndef EASYFHE_DISABLE_JIT_BINDINGS
 #include <torch/csrc/jit/python/init.h>
 #include <torch/csrc/jit/python/python_ir.h>
 #include <torch/csrc/jit/python/python_tracer.h>
 #include <torch/csrc/jit/serialization/pickler.h>
+#endif
+#ifndef EASYFHE_DISABLE_LAZY_BINDINGS
 #include <torch/csrc/lazy/python/init.h>
+#endif
 #include <torch/csrc/monitor/python_init.h>
 #include <torch/csrc/mps/Module.h>
 #include <torch/csrc/mtia/Module.h>
 #include <torch/csrc/multiprocessing/init.h>
+#ifndef EASYFHE_DISABLE_JIT_BINDINGS
 #include <torch/csrc/onnx/init.h>
+#endif
 #include <torch/csrc/profiler/python/init.h>
 #include <torch/csrc/tensor/python_tensor.h>
 #include <torch/csrc/utils/disable_torch_function.h>
@@ -118,7 +134,9 @@
 #include <ATen/cuda/CUDABlas.h>
 #include <ATen/cuda/CUDAConfig.h>
 #include <ATen/native/transformers/cuda/sdp_utils.h>
+#ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
 #include <torch/csrc/inductor/static_launcher/cuda.h>
+#endif
 #ifdef __HIP_PLATFORM_AMD__
 #include <ATen/native/cudnn/hip/BatchNorm.h>
 #else
@@ -128,7 +146,7 @@
 
 #ifdef USE_XPU
 #include <ATen/native/transformers/xpu/sdp_utils.h>
-#ifndef _WIN32
+#if !defined(_WIN32) && !defined(EASYFHE_DISABLE_INDUCTOR_BINDINGS)
 #include <torch/csrc/inductor/static_launcher/xpu.h>
 #endif
 #endif
@@ -2442,42 +2460,58 @@ PyObject* initModule() {
   ASSERT_TRUE(THPVariable_initModule(module));
   ASSERT_TRUE(THPFunction_initModule(module));
   ASSERT_TRUE(THPEngine_initModule(module));
+#ifndef EASYFHE_DISABLE_JIT_BINDINGS
   // NOTE: We need to be able to access OperatorExportTypes from ONNX for use in
   // the export side of JIT, so this ONNX init needs to appear before the JIT
   // init.
   torch::onnx::initONNXBindings(module);
+#endif
   torch::autograd::initEnumTag(module);
+#ifndef EASYFHE_DISABLE_JIT_BINDINGS
   torch::jit::initJITBindings(module);
+#endif
   torch::monitor::initMonitorBindings(module);
   torch::impl::dispatch::initDispatchBindings(module);
+#ifndef EASYFHE_DISABLE_DYNAMO_BINDINGS
   torch::dynamo::initDynamoBindings(module);
+#endif
+#ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
   torch::functorch::impl::initFuncTorchBindings(module);
+#endif
   torch::throughput_benchmark::initThroughputBenchmarkBindings(module);
   torch::autograd::initReturnTypes(module);
+#ifndef EASYFHE_DISABLE_DOMAIN_PYTHON_BINDINGS
   torch::autograd::initNNFunctions(module);
   torch::autograd::initFFTFunctions(module);
   torch::autograd::initLinalgFunctions(module);
   torch::autograd::initNestedFunctions(module);
   torch::autograd::initSparseFunctions(module);
   torch::autograd::initSpecialFunctions(module);
+#endif
   torch::autograd::init_legacy_variable(module);
   torch::profiler::initPythonBindings(module);
   torch::python::init_bindings(module);
+#ifndef EASYFHE_DISABLE_LAZY_BINDINGS
   torch::lazy::initLazyBindings(module);
+#endif
+#ifndef EASYFHE_DISABLE_EXPORT_BINDINGS
   torch::_export::initExportBindings(module);
+#endif
+#ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
   torch::inductor::initAOTIRunnerBindings(module);
   torch::inductor::initAOTIPackageBindings(module);
+#endif
 #ifdef USE_ITT
   torch::profiler::initIttBindings(module);
 #endif
 #ifdef USE_CUDA
   torch::cuda::initModule(module);
 #endif
-#if defined(USE_CUDA)
+#if defined(USE_CUDA) && !defined(EASYFHE_DISABLE_INDUCTOR_BINDINGS)
   ASSERT_TRUE(StaticCudaLauncher_init(module));
   ASSERT_TRUE(FastCudaLauncher_init(module));
 #endif
-#if defined(USE_XPU) && !defined(_WIN32)
+#if defined(USE_XPU) && !defined(_WIN32) && !defined(EASYFHE_DISABLE_INDUCTOR_BINDINGS)
   ASSERT_TRUE(StaticXpuLauncher_init(module));
 #endif
 #ifdef USE_MPS
@@ -3070,12 +3104,14 @@ Call this whenever a new thread is created in order to propagate values from
       "_set_conj", [](const at::Tensor& x, bool conj) { x._set_conj(conj); });
   py_module.def(
       "_set_neg", [](const at::Tensor& x, bool neg) { x._set_neg(neg); });
+#ifndef EASYFHE_DISABLE_JIT_BINDINGS
   py_module.def("_get_tensor_metadata", &torch::jit::getTensorMetadata);
   py_module.def(
       "_set_tensor_metadata",
       static_cast<void (*)(
           const at::Tensor&, std::unordered_map<std::string, bool>)>(
           torch::jit::setTensorMetadata));
+#endif
   py_module.def("_dispatch_key_set", [](const at::Tensor& x) {
     return toString(x.key_set());
   });

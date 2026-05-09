@@ -2398,16 +2398,7 @@ Tensor transpose(const Tensor& self, int64_t dim0, int64_t dim1) {
 
 static void check_t(const Tensor& self, const char* fn) {
   if (self.is_sparse()) {
-    int64_t sparse_dim = self.sparse_dim();
-    int64_t dense_dim = self.dense_dim();
-    TORCH_CHECK(
-        sparse_dim <= 2 && dense_dim == 0,
-        fn,
-        " expects a tensor with <= 2 sparse and 0 dense dimensions, but got ",
-        sparse_dim,
-        " sparse and ",
-        dense_dim,
-        " dense dimensions");
+    TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
   } else {
     TORCH_CHECK(
         self.dim() <= 2,

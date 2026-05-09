@@ -46,10 +46,7 @@ inline void copy_into_sparse(
     const Tensor& indices,
     const Tensor& values,
     bool non_blocking) {
-  alias_into_sparse(
-      self,
-      indices.to(self._indices().options(), non_blocking, /*copy=*/true),
-      values.to(self._values().options(), non_blocking, /*copy=*/true));
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
 }
 
 // TODO: put this into the public API
@@ -58,8 +55,8 @@ inline bool is_same_tensor(const Tensor& lhs, const Tensor& rhs) {
 }
 
 inline bool is_same_density(const SparseTensor& self, const SparseTensor& src) {
-  return self.sparse_dim() == src.sparse_dim() &&
-      self.dense_dim() == src.dense_dim();
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return false;
 }
 
 // Give us a new values tensor, with the same dimensionality

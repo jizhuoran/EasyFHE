@@ -8,7 +8,6 @@
 #include <ATen/MapAllocator.h>
 #include <ATen/NamedTensorUtils.h>
 #include <ATen/Parallel.h>
-#include <ATen/SparseCsrTensorUtils.h>
 #include <ATen/TensorOperators.h>
 #include <ATen/TracerMode.h>
 #include <ATen/core/Generator.h>
@@ -81,8 +80,6 @@
 #include <ATen/ops/range.h>
 #include <ATen/ops/range_native.h>
 #include <ATen/ops/scalar_tensor_native.h>
-#include <ATen/ops/tril_indices_native.h>
-#include <ATen/ops/triu_indices_native.h>
 #include <ATen/ops/zeros_like_native.h>
 #include <ATen/ops/zeros_like_ops.h>
 #include <ATen/ops/zeros_native.h>
@@ -1561,111 +1558,6 @@ Tensor range(
   return at::native::range(start, end, 1, dtype, layout, device, pin_memory);
 }
 
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ triangle ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Tensor tril_indices_cpu(
-    int64_t row,
-    int64_t col,
-    int64_t offset,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout_opt,
-    std::optional<Device> device_opt,
-    std::optional<bool> pin_memory_opt) {
-  if (!dtype_opt.has_value()) {
-    dtype_opt = ScalarType::Long;
-  }
-
-  check_args(row, col, layout_opt);
-
-  auto tril_size = get_tril_size(row, col, offset);
-
-  // create an empty Tensor with correct size
-  auto result = at::native::empty_cpu(
-      {2, tril_size}, dtype_opt, layout_opt, device_opt, pin_memory_opt);
-
-  // The following three approaches result in very little performance
-  // differences. Hence, the 2nd option is taken for simpler code, and to return
-  // contiguous tensors. Refer to #14904 for more details.
-  //
-  // 1. sequential RAM access: fill row coordinates first, then columns. This
-  //    results in two for-loop and more arithmetic operations.
-  //
-  // 2. interleaved RAM access: fill in index coordinates one by one, which
-  //    jumps between the two output Tensor rows in every iteration.
-  //
-  // 3. sequential RAM + transpose: create an n X 2 Tensor, fill the Tensor
-  //    sequentially, and then transpose it.
-  AT_DISPATCH_INDEX_TYPES(result.scalar_type(), "tril_indices", [&]() -> void {
-    // fill the Tensor with correct values
-    index_t* result_data = result.data_ptr<index_t>();
-    int64_t i = 0;
-
-    index_t r = std::max<int64_t>(0, -offset), c = 0;
-    while (i < tril_size) {
-      result_data[i] = r;
-      result_data[tril_size + i++] = c;
-
-      // move to the next column and check if (r, c) is still in bound
-      c += 1;
-      if (c > r + offset || c >= col) {
-        r += 1;
-        c = 0;
-        // NOTE: not necessary to check if r is less than row here, because i
-        // and tril_size provide the guarantee
-      }
-    }
-  });
-
-  return result;
-}
-
-Tensor triu_indices_cpu(
-    int64_t row,
-    int64_t col,
-    int64_t offset,
-    std::optional<ScalarType> dtype_opt,
-    std::optional<Layout> layout_opt,
-    std::optional<Device> device_opt,
-    std::optional<bool> pin_memory_opt) {
-  if (!dtype_opt.has_value()) {
-    dtype_opt = ScalarType::Long;
-  }
-
-  check_args(row, col, layout_opt);
-
-  auto triu_size = row * col - get_tril_size(row, col, offset - 1);
-
-  // create an empty Tensor with correct size
-  auto result = at::native::empty_cpu(
-      {2, triu_size}, dtype_opt, layout_opt, device_opt, pin_memory_opt);
-
-  AT_DISPATCH_INDEX_TYPES(result.scalar_type(), "triu_indices", [&]() -> void {
-    // fill the Tensor with correct values
-    index_t* result_data = result.data_ptr<index_t>();
-    int64_t i = 0;
-    // not typing std::max with scalar_t as it could be an unsigned type
-    // NOTE: no need to check if the returned value of std::max overflows
-    // index_t, as i and triu_size act as a guard.
-    index_t c = std::max<int64_t>(0, offset), r = 0;
-    while (i < triu_size) {
-      result_data[i] = r;
-      result_data[triu_size + i++] = c;
-
-      // move to the next column and check if (r, c) is still in bound
-      c += 1;
-      if (c >= col) {
-        r += 1;
-        // not typing std::max with scalar_t as it could be an unsigned type
-        // NOTE: not necessary to check if c is less than col or overflows here,
-        // because i and triu_size act as a guard.
-        c = std::max<int64_t>(0, r + offset);
-      }
-    }
-  });
-
-  return result;
-}
-
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ zeros ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 static Tensor zeros_sparse_compressed_symint(
@@ -1687,7 +1579,8 @@ Tensor zeros_symint(
     TORCH_CHECK(dim_size >= 0, "zeros: Dimension size must be non-negative.");
   }
   Layout layout_ = layout.value_or(Layout::Strided);
-  if (at::sparse_csr::is_sparse_compressed(layout_)) {
+  if (layout_ == kSparseCsr || layout_ == kSparseCsc ||
+      layout_ == kSparseBsr || layout_ == kSparseBsc) {
     return zeros_sparse_compressed_symint(
         size, dtype, layout_, device, pin_memory);
   }

@@ -1189,7 +1189,7 @@ class Tensor(torch._C.TensorBase):
             return handle_torch_function(Tensor.__len__, (self,), self)
         if self.dim() == 0:
             raise TypeError("len() of a 0-d tensor")
-        if torch._C._get_tracing_state():
+        if getattr(torch._C, "_get_tracing_state", lambda: False)():
             warnings.warn(
                 "Using len to get tensor shape might cause the trace to be incorrect. "
                 "Recommended usage would be tensor.shape[0]. "
@@ -1211,7 +1211,7 @@ class Tensor(torch._C.TensorBase):
         # See gh-54457
         if self.dim() == 0:
             raise TypeError("iteration over a 0-d tensor")
-        if torch._C._get_tracing_state():
+        if getattr(torch._C, "_get_tracing_state", lambda: False)():
             warnings.warn(
                 "Iterating over a tensor might cause the trace to be incorrect. "
                 "Passing a tensor of different shape won't change the number of "

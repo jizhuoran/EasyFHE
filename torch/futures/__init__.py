@@ -6,6 +6,29 @@ from typing import cast, Generic, TYPE_CHECKING, TypeVar
 
 import torch
 
+if not hasattr(torch._C, "Future"):
+    class _DisabledFuture:
+        def __init__(self, *args, **kwargs):
+            self._done = False
+            self._value = None
+
+        def done(self):
+            return self._done
+
+        def wait(self):
+            if not self._done:
+                raise RuntimeError("Future is disabled in EasyFHE fast build")
+            return self._value
+
+        def value(self):
+            return self.wait()
+
+        def set_result(self, result):
+            self._value = result
+            self._done = True
+
+    torch._C.Future = _DisabledFuture
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable

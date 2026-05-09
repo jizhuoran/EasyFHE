@@ -1038,13 +1038,11 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   UNARY_POINTWISE(reciprocal);
   UNARY_POINTWISE(round);
   UNARY_POINTWISE(rsqrt);
-  UNARY_POINTWISE(sigmoid);
   UNARY_POINTWISE(sign);
   UNARY_POINTWISE(sin);
   UNARY_POINTWISE(sinh);
   UNARY_POINTWISE(sqrt);
   UNARY_POINTWISE(tan);
-  UNARY_POINTWISE(tanh);
   UNARY_POINTWISE(trunc);
 #undef UNARY_POINTWISE
 #define TO_BATCHING_RULE(name, ...) \
@@ -1091,8 +1089,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   m.impl("pow.Tensor_Tensor", binary_pointwise_batching_rule<TensorTensorType, at::pow>);
   m.impl("pow.Tensor_Scalar", unwrap_and_call<TensorScalarType, at::pow, const Scalar&>);
   m.impl("pow.Scalar", pow_scalar_Tensor_batching_rule);
-
-  m.impl("sigmoid_backward", binary_pointwise_batching_rule<TensorTensorType, at::sigmoid_backward>);
 
   // for at::result_type, call the native::result_type implementation.
   // We don't have to do anything special because native::result_type operates

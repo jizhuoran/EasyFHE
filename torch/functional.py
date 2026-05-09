@@ -5,7 +5,6 @@ from collections.abc import Sequence
 from typing import Any, TYPE_CHECKING
 
 import torch
-import torch.nn.functional as F
 from torch import _VF, Tensor
 from torch._C import _add_docstr as _orig_add_docstr
 
@@ -14,7 +13,6 @@ def _add_docstr(obj, docstr):
     if obj is None:
         return
     _orig_add_docstr(obj, docstr)
-from torch._jit_internal import _overload as overload, boolean_dispatch
 from torch._lowrank import pca_lowrank, svd_lowrank
 from torch.overrides import (
     handle_torch_function,
@@ -22,6 +20,28 @@ from torch.overrides import (
     has_torch_function_unary,
     has_torch_function_variadic,
 )
+
+
+def overload(fn):
+    return fn
+
+
+def boolean_dispatch(
+    arg_name,
+    arg_index,
+    default,
+    if_true,
+    if_false,
+    module_name,
+    func_name,
+):
+    def fn(*args, **kwargs):
+        dispatch_flag = kwargs.get(arg_name, args[arg_index] if len(args) > arg_index else default)
+        return (if_true if dispatch_flag else if_false)(*args, **kwargs)
+
+    fn.__module__ = module_name
+    fn.__name__ = func_name
+    return fn
 
 
 __all__ = [
@@ -679,6 +699,8 @@ def stft(
     # NOTE: Do not edit. This code will be removed once the forward-compatibility
     #       period is over for PR #73432
     if center:
+        import torch.nn.functional as F
+
         signal_dim = input.dim()
         extended_shape = [1] * (3 - signal_dim) + list(input.size())
         pad = int(n_fft // 2)

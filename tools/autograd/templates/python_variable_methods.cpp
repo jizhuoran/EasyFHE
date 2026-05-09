@@ -1298,7 +1298,6 @@ PyMethodDef variable_methods[] = {
   {"__index__", THPVariable_index_scalar, METH_NOARGS, nullptr},
   {"__nonzero__", THPVariable_bool_scalar, METH_NOARGS, nullptr},
   {"__invert__", THPVariable_invert, METH_NOARGS, nullptr},
-  {"__matmul__", castPyCFunctionWithKeywords(TypeError_to_NotImplemented_<THPVariable_matmul>), METH_VARARGS | METH_KEYWORDS, nullptr},
   {"_is_view", THPVariable__is_view, METH_NOARGS, nullptr},
   {"apply_", THPVariable_apply_, METH_O, nullptr},
   {"bfloat16", castPyCFunctionWithKeywords(THPVariable_bfloat16), METH_VARARGS | METH_KEYWORDS, nullptr},

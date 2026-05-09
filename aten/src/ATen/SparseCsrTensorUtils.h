@@ -292,38 +292,20 @@ inline size_t plainDimension(
 }
 
 inline int64_t numBatchDimensions(Tensor const& self) {
-  return AT_DISPATCH_ROW_SPARSE_COMPRESSED_LAYOUTS(
-      self.layout(),
-      "numBatchDimensions",
-      [&self] { return self.crow_indices().dim() - 1; },
-      [&self] { return self.ccol_indices().dim() - 1; });
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return 0;
 }
 
 inline std::pair<Tensor, Tensor> getCompressedPlainIndices(Tensor const& self) {
-  return AT_DISPATCH_ROW_SPARSE_COMPRESSED_LAYOUTS(
-      self.layout(),
-      "getCompressedPlainIndices",
-      [&self] {
-        return std::make_pair(self.crow_indices(), self.col_indices());
-      },
-      [&self] {
-        return std::make_pair(self.ccol_indices(), self.row_indices());
-      });
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return std::make_pair(Tensor(), Tensor());
 }
 
 inline ScalarType getIndexDtype(Tensor const& self) {
-  switch (self.layout()) {
-    case kSparseCsr:
-    case kSparseBsr:
-      return self.crow_indices().scalar_type();
-    case kSparseCsc:
-    case kSparseBsc:
-      return self.ccol_indices().scalar_type();
-    case kSparse:
-      return self._indices().scalar_type();
-    default:
-      return ScalarType::Long;
-  }
+  TORCH_CHECK(
+      !is_sparse_compressed(self) && self.layout() != kSparse,
+      "Sparse tensors not supported in EasyFHE");
+  return ScalarType::Long;
 }
 
 inline Layout flip_compressed_layout(Layout layout) {
@@ -343,17 +325,15 @@ inline Layout flip_compressed_layout(Layout layout) {
 }
 
 inline DimVector getBlockSize(Tensor const& self) {
-  int64_t n_batch = numBatchDimensions(self);
-  return at::DimVector(self.values().sizes().slice(n_batch + 1, 2));
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
+  return {};
 }
 
 inline at::OptionalArray<at::SymInt> getSymIntBlockSize(Tensor const& self) {
-  if (self.layout() == at::kSparseBsr || self.layout() == at::kSparseBsc) {
-    int64_t n_batch = numBatchDimensions(self);
-    return self.values().sym_sizes().slice(n_batch + 1, 2).vec();
-  } else {
-    return {};
-  }
+  TORCH_CHECK(
+      self.layout() != at::kSparseBsr && self.layout() != at::kSparseBsc,
+      "Sparse tensors not supported in EasyFHE");
+  return {};
 }
 
 template <typename binary_op_t, typename binary_op_out_t>
@@ -367,21 +347,7 @@ inline bool only_sparse_compressed_binary_op_trivial_cases(
   TORCH_INTERNAL_ASSERT(at::sparse_csr::is_sparse_compressed(self));
   TORCH_INTERNAL_ASSERT(at::sparse_csr::is_sparse_compressed(other));
   TORCH_INTERNAL_ASSERT(at::sparse_csr::is_sparse_compressed(out));
-  if (self.is_same(out) && self.is_same(other)) {
-    binary_op_out(self.values(), other.values(), alpha);
-    return true;
-  }
-  if (self.is_same(other)) {
-    auto [compressed_indices, plain_indices] =
-        at::sparse_csr::getCompressedPlainIndices(self);
-    static_cast<SparseCsrTensorImpl*>(out.unsafeGetTensorImpl())
-        ->set_member_tensors(
-            compressed_indices,
-            plain_indices,
-            binary_op(self.values(), other.values(), alpha),
-            self.sizes());
-    return true;
-  }
+  TORCH_CHECK(false, "Sparse tensors not supported in EasyFHE");
   return false;
 }
 

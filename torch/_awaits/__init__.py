@@ -9,11 +9,20 @@ __all__ = ['Await']
 
 W = TypeVar("W")
 
-class _PyAwaitMeta(type(torch._C._Await), type(Generic)):  # type: ignore[misc, no-redef]
-    pass
+_CAwait = getattr(torch._C, "_Await", object)
 
-class _Await(torch._C._Await, Generic[W], metaclass=_PyAwaitMeta):
-    r"""
+
+if _CAwait is object:
+    class _Await(Generic[W]):
+        pass
+else:
+    class _PyAwaitMeta(type(_CAwait), type(Generic)):  # type: ignore[misc, no-redef]
+        pass
+
+    class _Await(_CAwait, Generic[W], metaclass=_PyAwaitMeta):
+        pass
+
+_Await.__doc__ = r"""
     Wrapper around a ``torch._C.Await`` which encapsulates delayed execution
     of a callable. All manipulations happen with functions ``torch.jit._awaitable``,
     ``torch.jit._awaitable_wait``, ``torch.jit._awaitable_nowait``.

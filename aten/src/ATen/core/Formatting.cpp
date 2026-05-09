@@ -285,11 +285,7 @@ std::ostream& print(
   }
 
   if (tensor_.is_sparse()) {
-    fmt::print(stream, "[ {}{{}}\nindices:\n", tensor_.toString());
-    print(stream, tensor_._indices(), linesize);
-    fmt::print(stream, "\nvalues:\n");
-    print(stream, tensor_._values(), linesize);
-    fmt::print(stream, "\nsize:\n{}\n]", fmt::streamed(tensor_.sizes()));
+    fmt::print(stream, "[ sparse tensors not supported in EasyFHE ]");
     return stream;
   }
 

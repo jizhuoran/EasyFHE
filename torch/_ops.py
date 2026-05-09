@@ -1,4 +1,6 @@
 # mypy: allow-untyped-defs
+from __future__ import annotations
+
 import abc
 import contextlib
 import ctypes
@@ -15,7 +17,19 @@ import torch
 import torch.utils._pytree as pytree
 from torch import _utils_internal
 from torch._C import _dispatch_is_included_in_alias as is_included_in_alias, DispatchKey
-from torch._functorch.pyfunctorch import dispatch_functorch, TransformType
+try:
+    from torch._functorch.pyfunctorch import dispatch_functorch, TransformType
+except ModuleNotFoundError:
+    import enum
+
+    class TransformType(enum.Enum):
+        Grad = 1
+        Vmap = 2
+        Jvp = 3
+        Functionalize = 4
+
+    def dispatch_functorch(op, args, kwargs):
+        raise RuntimeError("functorch is disabled in EasyFHE fast build")
 from torch.utils._python_dispatch import TorchDispatchMode
 
 
