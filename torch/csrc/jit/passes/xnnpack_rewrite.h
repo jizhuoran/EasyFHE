@@ -4,6 +4,9 @@
 #include <torch/csrc/jit/ir/ir.h>
 #include <torch/csrc/jit/passes/mobile_optimizer_type.h>
 
+#include <set>
+#include <vector>
+
 namespace torch::jit {
 
 TORCH_API void transformConv1dToConv2d(std::shared_ptr<Graph>& graph);
