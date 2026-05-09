@@ -1377,10 +1377,6 @@
   dispatch:
     CompositeExplicitAutogradNonFunctional: diag_embed
   autogen: diag_embed.out
-
-- func: diagflat(Tensor self, int offset=0) -> Tensor
-  variants: function, method
-
 - func: diagonal(Tensor(a) self, int offset=0, int dim1=0, int dim2=1) -> Tensor(a)
   variants: function, method
   dispatch:
@@ -6120,10 +6116,6 @@
   dispatch:
     CompositeExplicitAutograd: alias
   tags: core
-- func: column_stack(Tensor[] tensors) -> Tensor
-
-- func: column_stack.out(Tensor[] tensors, *, Tensor(a!) out) -> Tensor(a!)
-
 - func: isfinite(Tensor self) -> Tensor
   variants: function, method
   device_check: NoCheck
