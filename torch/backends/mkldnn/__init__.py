@@ -25,6 +25,15 @@ def is_acl_available():
     return torch._C._has_mkldnn_acl
 
 
+def _get_enabled():
+    return is_available() and torch._C._get_mkldnn_enabled()
+
+
+def _set_enabled(enabled):
+    if is_available():
+        torch._C._set_mkldnn_enabled(enabled)
+
+
 VERBOSE_OFF = 0
 VERBOSE_ON = 1
 VERBOSE_ON_CREATION = 2
@@ -83,13 +92,13 @@ def set_flags(
     _enabled=None, _deterministic=None, _allow_tf32=None, _fp32_precision="none"
 ):
     orig_flags = (
-        torch._C._get_mkldnn_enabled(),
+        _get_enabled(),
         torch._C._get_mkldnn_deterministic(),
         torch._C._get_onednn_allow_tf32(),
         torch._C._get_fp32_precision_getter("mkldnn", "all"),
     )
     if _enabled is not None:
-        torch._C._set_mkldnn_enabled(_enabled)
+        _set_enabled(_enabled)
     if _deterministic is not None:
         torch._C._set_mkldnn_deterministic(_deterministic)
     if _allow_tf32 is not None:
@@ -114,7 +123,7 @@ class MkldnnModule(PropModule):
     def is_available(self):
         return is_available()
 
-    enabled = ContextProp(torch._C._get_mkldnn_enabled, torch._C._set_mkldnn_enabled)
+    enabled = ContextProp(_get_enabled, _set_enabled)
     deterministic = ContextProp(
         torch._C._get_mkldnn_deterministic, torch._C._set_mkldnn_deterministic
     )
