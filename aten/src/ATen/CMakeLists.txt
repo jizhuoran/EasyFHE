@@ -196,173 +196,6 @@ file(GLOB native_transformers_hip_cpp CONFIGURE_DEPENDS "native/transformers/hip
 file(GLOB native_transformers_xpu_cpp CONFIGURE_DEPENDS "native/transformers/xpu/*.cpp")
 file(GLOB native_quantized_cudnn_hip_cpp CONFIGURE_DEPENDS "native/quantized/cudnn/hip/*.cpp")
 file(GLOB native_utils_cpp CONFIGURE_DEPENDS "native/utils/*.cpp")
-file(GLOB flash_attention_cuda_kernels_cu CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src/*.cu)
-file(GLOB flash_attention_cuda_cpp CONFIGURE_DEPENDS ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src/*.cpp)
-file(GLOB native_flash_attn_api_cpp CONFIGURE_DEPENDS "native/transformers/cuda/flash_attn/flash_api.cpp")
-
-
-# flash_attention hip sources
-file(GLOB flash_attention_hip_hip CONFIGURE_DEPENDS "native/transformers/hip/flash_attn/*.hip")
-# if USE_FLASH_ATTENTION is set, ensure CK instances get generated
-if(USE_FLASH_ATTENTION)
-  # Now building CK by default
-  if(USE_ROCM)
-    if(DEFINED ENV{USE_ROCM_CK_SDPA})
-        if(ENV{USE_ROCM_CK_SDPA} EQUAL 1)
-          caffe2_update_option(USE_ROCM_CK_SDPA ON)
-        endif()
-    else()
-      caffe2_update_option(USE_ROCM_CK_SDPA ON)
-    endif()
-  endif()
-  if(USE_ROCM_CK_SDPA)
-    if(DEFINED ENV{PYTORCH_ROCM_ARCH})
-      list(LENGTH PYTORCH_ROCM_ARCH NUM_ARCHS)
-      if(NUM_ARCHS GREATER 1)
-        message(WARNING "Building CK for multiple archs can increase build time considerably!
-        Consider setting PYTORCH_ROCM_ARCH env var value as the gfx arch you need to build for")
-      endif()
-    endif()
-    message(STATUS "USE_ROCM_CK_SDPA is set; building PyTorch with CK SDPA enabled")
-
-    # CK SDPA sources require specific compilation flags
-    set(CK_SDPA_EXTRA_HIPCC_FLAGS
-        -fno-autolink
-        -fhip-new-launch-api
-        -fgnuc-version=4.2.1
-        -fno-implicit-modules
-        -fskip-odr-check-in-gmf
-        -fcxx-exceptions
-        -fexceptions
-        -fcolor-diagnostics
-        -faddrsig
-        -fno-rounding-math
-        -mconstructor-aliases
-        -mllvm
-        -amdgpu-internalize-symbols
-        -fvisibility=hidden
-        -Wno-float-equal
-        -fgpu-flush-denormals-to-zero
-        -Wno-unused-parameter)
-
-    #TODO: The following flags are specific to 8-bit width types which are not integrated via CK yet.
-    #      Add once that support is integrated
-    #check_cxx_compiler_flag("-fno-offload-uniform-block" HAS_NO_OFFLOAD_UNIFORM_BLOCK)
-    #if(HAS_NO_OFFLOAD_UNIFORM_BLOCK)
-    #      list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -fno-offload-uniform-block)
-    #endif()
-    #check_cxx_compiler_flag("-mllvm --lsr-drop-solution=1" HAS_LSR_DROP_SOLUTION)
-    #if(HAS_LSR_DROP_SOLUTION)
-    #    list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -mllvm --lsr-drop-solution=1)
-    #endif()
-    #check_cxx_compiler_flag("-mllvm -enable-post-misched=0" HAS_ENABLE_POST_MISCHED)
-    #if(HAS_ENABLE_POST_MISCHED)
-    #    list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -mllvm -enable-post-misched=0)
-    #endif()
-    #set(check-coerce)
-    #check_cxx_compiler_flag(" -mllvm -amdgpu-coerce-illegal-types=1" check-coerce)
-    #if(check-coerce)
-    #  list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -mllvm -amdgpu-coerce-illegal-types=1)
-    #endif()
-
-    list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -mllvm -amdgpu-early-inline-all=true)
-    list(APPEND CK_SDPA_EXTRA_HIPCC_FLAGS -mllvm -amdgpu-function-calls=false)
-
-    # Additional CK compiler flags
-    set(CK_SDPA_EXTRA_HIPCC_OPTIONS
-        CK_ENABLE_BF16
-        CK_ENABLE_BF8
-        CK_ENABLE_FP16
-        CK_ENABLE_FP32
-        CK_ENABLE_FP64
-        CK_ENABLE_FP8
-        CK_ENABLE_INT8
-        CK_USE_FNUZ_FP8
-        CK_USE_GFX94
-        CK_USE_XDL
-        __HIP_PLATFORM_AMD__=1
-        __HIP_PLATFORM_HCC__=1
-        CK_TILE_FMHA_FWD_FAST_EXP2=1
-        CK_TILE_FMHA_FWD_SPLITKV_API=1
-        CK_TILE_FMHA_FWD_APPENDKV_API=1
-        CK_TILE_FMHA_FWD_PAGEDKV_API=1
-        __GCC_HAVE_DWARF2_CFI_ASM=1
-        USE_ROCM_CK_SDPA)
-
-    message(STATUS "Generating CK kernel instances...")
-    add_subdirectory(native/transformers/hip/flash_attn/ck)
-    # FAv3 Generation
-    add_subdirectory(native/transformers/hip/flash_attn/ck/fav_v3)
-    file(GLOB ck_sdpa_sources_hip CONFIGURE_DEPENDS
-         "native/transformers/hip/flash_attn/ck/*.hip"
-         "native/transformers/hip/flash_attn/ck/fav_v3/*.hip")
-
-    set_source_files_properties(${ck_sdpa_sources_hip} PROPERTIES HIP_SOURCE_PROPERTY_FORMAT 1)
-    hip_add_library(ck_sdpa STATIC
-                    ${ck_sdpa_sources_hip}
-                    HIPCC_OPTIONS ${HIP_HCC_FLAGS} ${CK_SDPA_EXTRA_HIPCC_FLAGS})
-    set_target_properties(ck_sdpa PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_compile_definitions(ck_sdpa PUBLIC ${CK_SDPA_EXTRA_HIPCC_OPTIONS})
-    target_compile_definitions(ck_sdpa PRIVATE AITER_EMBEDDED_HSA_HEADER="aiter_embedded_hsa.h")
-    target_include_directories(ck_sdpa PUBLIC
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/include
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/library/include
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/example/ck_tile/01_fmha
-                               ${CMAKE_CURRENT_BINARY_DIR}/composable_kernel
-                               ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/aiter/csrc/include
-                               ${CMAKE_CURRENT_SOURCE_DIR}/native/transformers/hip/flash_attn/ck
-                               ${AITER_EMBEDDED_HSA_HEADER_DIR}
-                               )
-
-  endif()
-  file(GLOB flash_attention_hip_aot_hip CONFIGURE_DEPENDS "native/transformers/hip/flash_attn/aot/*.hip")
-  file(GLOB flash_attention_src_hip_hip CONFIGURE_DEPENDS "native/transformers/hip/flash_attn/src/*.hip")
-endif()
-
-#Mem_eff attention sources
-file(GLOB mem_eff_attention_cuda_cu CONFIGURE_DEPENDS "native/transformers/cuda/mem_eff_attention/*.cu")
-file(GLOB mem_eff_attention_cuda_kernels_cu CONFIGURE_DEPENDS "native/transformers/cuda/mem_eff_attention/kernels/*.cu")
-file(GLOB mem_eff_attention_cuda_cpp CONFIGURE_DEPENDS "native/transformers/cuda/mem_eff_attention/*.cpp")
-
-if(USE_CUDA AND (USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION))
-  add_library(flash_attention OBJECT EXCLUDE_FROM_ALL ${flash_attention_cuda_kernels_cu} ${flash_attention_cuda_cpp})
-
-  target_include_directories(flash_attention SYSTEM PUBLIC
-    ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc
-    ${PROJECT_SOURCE_DIR}/third_party/flash-attention/include
-    ${PROJECT_SOURCE_DIR}/third_party/cutlass/include
-    ${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src
-  )
-
-  target_compile_definitions(flash_attention PRIVATE
-    # Copied from https://github.com/pytorch/pytorch/blob/a10024d7dea47c52469059a47efe376eb20adca0/caffe2/CMakeLists.txt#L1431
-    FLASH_NAMESPACE=pytorch_flash
-    FLASHATTENTION_DISABLE_ALIBI
-    FLASHATTENTION_DISABLE_SOFTCAP
-    UNFUSE_FMA
-  )
-
-  set_target_properties(flash_attention PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
-
-if(USE_FLASH_ATTENTION)
-  list(APPEND native_transformers_cuda_cpp ${native_flash_attn_api_cpp})
-  list(APPEND FLASH_ATTENTION_CUDA_SOURCES ${flash_attention_cuda_cu} ${flash_attention_cuda_kernels_cu})
-  list(APPEND ATen_ATTENTION_KERNEL_SRCS ${flash_attention_cuda_kernels_cu})
-
-  list(APPEND native_transformers_hip_hip ${flash_attention_hip_hip})
-  list(APPEND native_transformers_hip_hip ${flash_attention_hip_aot_hip})
-  list(APPEND native_transformers_src_hip_hip ${flash_attention_src_hip_hip})
-endif()
-
-if(USE_MEM_EFF_ATTENTION)
-  list(APPEND native_transformers_cuda_cu ${mem_eff_attention_cuda_cu})
-  list(APPEND native_transformers_cuda_cu ${mem_eff_attention_cuda_kernels_cu})
-  list(APPEND native_transformers_cuda_cpp ${mem_eff_attention_cuda_cpp})
-  list(APPEND MEM_EFF_ATTENTION_CUDA_SOURCES ${native_transformers_cuda_cu} ${mem_eff_attention_cuda_cu} ${mem_eff_attention_cuda_kernels_cu})
-  list(APPEND ATen_ATTENTION_KERNEL_SRCS ${mem_eff_attention_cuda_kernels_cu})
-endif()
-
 # MSLK
 IF(USE_MSLK)
   set(MSLK_THIRD_PARTY ${PROJECT_SOURCE_DIR}/third_party/mslk/external/)
@@ -474,9 +307,6 @@ IF(USE_MSLK)
   add_dependencies(mslk torch_cpu)
 endif()
 
-# XNNPACK
-file(GLOB native_xnnpack CONFIGURE_DEPENDS "native/xnnpack/*.cpp")
-
 # KLEIDIAI
 file(GLOB native_kleidiai CONFIGURE_DEPENDS "native/kleidiai/*.cpp")
 file(GLOB native_kleidiai_h CONFIGURE_DEPENDS "native/kleidiai/*.h")
@@ -499,7 +329,7 @@ else()
     ${native_quantized_cpp}
     ${native_mkl_cpp} ${native_mkldnn_cpp}
     ${native_fhe_cpp}
-    ${native_utils_cpp} ${native_xnnpack} ${generated_sources} ${core_generated_sources}
+    ${native_utils_cpp} ${generated_sources} ${core_generated_sources}
     ${ATen_CPU_SRCS} ${ATen_NNAPI_SRCS} ${cpu_kernel_cpp}
   )
 endif()
@@ -512,9 +342,6 @@ if(AT_MKL_ENABLED)
 endif()
 if(AT_KLEIDIAI_ENABLED)
   set(all_cpu_cpp ${all_cpu_cpp} ${native_kleidiai})
-endif()
-if(AT_MKLDNN_ENABLED)
-  set(all_cpu_cpp ${all_cpu_cpp} ${mkldnn_cpp})
 endif()
 if(USE_VULKAN)
   set(all_cpu_cpp ${all_cpu_cpp} ${vulkan_cpp} ${native_vulkan_cpp} ${vulkan_generated_cpp})
@@ -597,13 +424,12 @@ if(USE_CUDA)
 endif()
 
 if(USE_ROCM)
-  if((USE_FLASH_ATTENTION AND USE_ROCM_CK_SDPA) OR USE_ROCM_CK_GEMM)
+  if(USE_ROCM_CK_GEMM)
     list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/hip)
     list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/include)
     list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/library/include)
     list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/composable_kernel/example/ck_tile/01_fmha)
     list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_BINARY_DIR}/composable_kernel)
-    list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/../../../third_party/aiter/csrc/include)
     # NOTE: The PyTorch build does not actually add_subdirectory
     # third_party/composable_kernel or use it as a CMake library. What is used
     # is header only, so this should be ok, except that the CMake build generates
@@ -618,9 +444,6 @@ if(USE_ROCM)
   # Next two lines are needed because TunableOp uses third-party/fmt
   list(APPEND ATen_HIP_INCLUDE $<TARGET_PROPERTY:fmt::fmt-header-only,INTERFACE_INCLUDE_DIRECTORIES>)
   list(APPEND ATen_HIP_DEPENDENCY_LIBS fmt::fmt-header-only)
-  if(USE_FLASH_ATTENTION AND USE_ROCM_CK_SDPA)
-    list(APPEND ATen_HIP_INCLUDE ${CMAKE_CURRENT_SOURCE_DIR}/native/transformers/hip/flash_attn/ck)
-  endif()
   list(APPEND ATen_HIP_SRCS
     ${ATen_HIP_SRCS}
     ${hip_hip}
@@ -728,19 +551,6 @@ if(NOT MSVC)
   list(APPEND ATen_CPU_DEPENDENCY_LIBS m)
 endif()
 
-if(AT_NNPACK_ENABLED)
-  include_directories(${NNPACK_INCLUDE_DIRS})
-  list(APPEND ATen_CPU_DEPENDENCY_LIBS nnpack) # cpuinfo is added below
-endif()
-
-if(MKLDNN_FOUND)
-  list(APPEND ATen_CPU_DEPENDENCY_LIBS ${MKLDNN_LIBRARIES})
-endif(MKLDNN_FOUND)
-
-if(USE_MKLDNN_ACL)
-    list(APPEND ATen_CPU_INCLUDE ${ACL_INCLUDE_DIRS})
-    list(APPEND ATen_CPU_DEPENDENCY_LIBS ${ACL_LIBRARIES})
-endif()
 
 if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(s390x|ppc64le)$")
   list(APPEND ATen_CPU_DEPENDENCY_LIBS cpuinfo)
@@ -1034,6 +844,3 @@ set(ATen_CPU_DEPENDENCY_LIBS ${ATen_CPU_DEPENDENCY_LIBS} PARENT_SCOPE)
 set(ATen_CUDA_DEPENDENCY_LIBS ${ATen_CUDA_DEPENDENCY_LIBS} PARENT_SCOPE)
 set(ATen_XPU_DEPENDENCY_LIBS ${ATen_XPU_DEPENDENCY_LIBS} PARENT_SCOPE)
 set(ATen_HIP_DEPENDENCY_LIBS ${ATen_HIP_DEPENDENCY_LIBS} PARENT_SCOPE)
-set(FLASH_ATTENTION_CUDA_SOURCES ${FLASH_ATTENTION_CUDA_SOURCES} PARENT_SCOPE)
-set(MEM_EFF_ATTENTION_CUDA_SOURCES ${MEM_EFF_ATTENTION_CUDA_SOURCES} PARENT_SCOPE)
-set(ATen_ATTENTION_KERNEL_SRCS ${ATen_ATTENTION_KERNEL_SRCS} PARENT_SCOPE)

@@ -169,22 +169,10 @@ endfunction()
 # Note: the folders that are being commented out have not been properly
 # addressed yet.
 
-if(NOT MSVC AND USE_XNNPACK)
-  if(NOT TARGET fxdiv)
-    set(FXDIV_BUILD_TESTS OFF CACHE BOOL "")
-    set(FXDIV_BUILD_BENCHMARKS OFF CACHE BOOL "")
-    add_subdirectory(
-      "${FXDIV_SOURCE_DIR}"
-      "${CMAKE_BINARY_DIR}/FXdiv")
-  endif()
-endif()
-
 add_subdirectory(core)
 add_subdirectory(serialize)
 add_subdirectory(utils)
-if(NOT USE_FBGEMM)
-  add_subdirectory(perfkernels)
-endif()
+add_subdirectory(perfkernels)
 
 # Advanced: if we have allow list specified, we will do intersections for all
 # main lib srcs.
@@ -635,7 +623,7 @@ if(NOT INTERN_BUILD_MOBILE AND NOT BUILD_LITE_INTERPRETER)
 
   if(USE_DISTRIBUTED)
     append_filelist("libtorch_distributed_base_sources" TORCH_SRCS)
-    if(NOT WIN32)
+    if(NOT WIN32 AND USE_TENSORPIPE)
       append_filelist("libtorch_distributed_extra_sources" TORCH_SRCS)
     endif()
   endif()
@@ -917,8 +905,6 @@ endif()
 
 set_property(SOURCE ${ATen_CORE_SRCS} APPEND
     PROPERTY COMPILE_DEFINITIONS "TORCH_ASSERT_ONLY_METHOD_OPERATORS")
-set_property(SOURCE ${ATen_ATTENTION_KERNEL_SRCS} APPEND
-    PROPERTY COMPILE_DEFINITIONS "TORCH_ASSERT_NO_OPERATORS")
 
 if(USE_MPS OR USE_PYTORCH_METAL)
   enable_language(OBJC OBJCXX)
@@ -989,9 +975,6 @@ if(USE_ROCM)
   set(CUDA_LINK_LIBRARIES_KEYWORD PRIVATE)
   list(APPEND Caffe2_HIP_SRCS ${GENERATED_CXX_TORCH_CUDA})
   hip_add_library(torch_hip ${Caffe2_HIP_SRCS})
-  if(USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION)
-    target_link_libraries(torch_hip PRIVATE __caffe2_aotriton)
-  endif()
   set(CUDA_LINK_LIBRARIES_KEYWORD)
   torch_compile_options(torch_hip)  # see cmake/public/utils.cmake
   # TODO: Not totally sure if this is live or not
@@ -1120,26 +1103,6 @@ elseif(USE_CUDA)
     target_link_libraries(torch_cuda PRIVATE __caffe2_ucc)
     target_compile_definitions(torch_cuda PRIVATE USE_UCC)
   endif()
-  if(USE_FLASH_ATTENTION)
-    target_compile_definitions(torch_cuda PRIVATE
-        USE_FLASH_ATTENTION
-        FLASHATTENTION_DISABLE_ALIBI    # Disable alibi attention as it's not currently used
-        FLASHATTENTION_DISABLE_SOFTCAP
-        FLASH_NAMESPACE=pytorch_flash
-        UNFUSE_FMA                      # Addressing issue #121558
-      )
-    target_sources(torch_cuda PRIVATE $<TARGET_OBJECTS:flash_attention>)
-    target_include_directories(torch_cuda SYSTEM PUBLIC
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc>
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/flash-attention/include>
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/cutlass/include>
-      $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/third_party/flash-attention/csrc/flash_attn/src>
-      $<INSTALL_INTERFACE:include>
-    )
-  endif()
-  if(USE_MEM_EFF_ATTENTION)
-    target_compile_definitions(torch_cuda PRIVATE USE_MEM_EFF_ATTENTION)
-  endif()
   if(BUILD_LAZY_CUDA_LINALG)
     add_library(torch_cuda_linalg ${ATen_CUDA_LINALG_SRCS})
     target_compile_definitions(torch_cuda_linalg PRIVATE USE_CUDA BUILD_LAZY_CUDA_LINALG)
@@ -1266,10 +1229,6 @@ if(USE_XPU)
   endif()
 endif()
 
-if(NOT MSVC AND USE_XNNPACK)
-  TARGET_LINK_LIBRARIES(torch_cpu PRIVATE fxdiv)
-endif()
-
 # ==========================================================
 # formerly-libtorch flags
 # ==========================================================
@@ -1367,11 +1326,6 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
   set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/qlinear_unpack.cpp PROPERTIES COMPILE_FLAGS -Wno-deprecated-declarations)
 endif()
 
-if(USE_MKLDNN_ACL)
-  find_package(ACL REQUIRED)
-  target_include_directories(torch_cpu SYSTEM PRIVATE ${ACL_INCLUDE_DIRS})
-endif()
-
 target_include_directories(torch_cpu PRIVATE ${ATen_CPU_INCLUDE})
 
 target_include_directories(torch_cpu PRIVATE
@@ -1380,14 +1334,6 @@ target_include_directories(torch_cpu PRIVATE
 
 target_include_directories(torch_cpu PRIVATE
   ${TORCH_ROOT}/third_party/miniz-3.0.2)
-
-target_include_directories(torch_cpu PRIVATE
-  ${TORCH_ROOT}/third_party/kineto/libkineto/include)
-
-if(USE_KINETO)
-  target_include_directories(torch_cpu PRIVATE
-    ${TORCH_ROOT}/third_party/kineto/libkineto/src)
-endif()
 
 target_include_directories(torch_cpu PRIVATE
   ${TORCH_ROOT}/third_party/cpp-httplib)
@@ -1503,18 +1449,6 @@ if(USE_ROCM)
     set(ROCM_SOURCE_DIR "/opt/rocm")
   endif()
   message(INFO "caffe2 ROCM_SOURCE_DIR = ${ROCM_SOURCE_DIR}")
-  if(USE_FLASH_ATTENTION)
-    target_compile_definitions(torch_hip PRIVATE
-        USE_FLASH_ATTENTION
-        FLASHATTENTION_DISABLE_ALIBI    # Disable alibi attention as it's not currently used
-        FLASHATTENTION_DISABLE_SOFTCAP
-        FLASH_NAMESPACE=pytorch_flash
-        UNFUSE_FMA                      # Addressing issue #121558
-      )
-  endif()
-  if(USE_MEM_EFF_ATTENTION)
-    target_compile_definitions(torch_hip PRIVATE USE_MEM_EFF_ATTENTION)
-  endif()
   if(USE_ROCM_CK_SDPA)
     target_compile_definitions(torch_hip PRIVATE USE_ROCM_CK_SDPA)
   endif()
@@ -1634,7 +1568,7 @@ if(USE_DISTRIBUTED)
   # Pass USE_RPC in order to reduce use of
   # #if defined(USE_DISTRIBUTED) && !defined(_WIN32)
   # need to be removed when RPC is supported
-  if(NOT WIN32)
+  if(NOT WIN32 AND USE_TENSORPIPE)
     target_compile_definitions(torch_cpu PUBLIC USE_RPC)
   endif()
   # Pass USE_TENSORPIPE to torch_cpu as some parts of rpc/utils.cpp
@@ -1776,12 +1710,6 @@ endif()
 
 # ---[ CUDA library.
 if(USE_CUDA)
-  # FIXME: If kineto is linked with CUPTI it pollutes torch_cpu with CUDA dependencies
-  # Even worse, it never declares that it depends on cudart, but calls the API, see
-  # https://github.com/pytorch/kineto/blob/aef2f5c0f15e3be52406ac0b885e8689de6bc9f6/libkineto/src/CudaDeviceProperties.cpp#L24
-  if(USE_KINETO AND NOT LIBKINETO_NOCUPTI)
-    target_link_libraries(torch_cpu PRIVATE torch::cudart)
-  endif()
   target_link_libraries(torch_cuda INTERFACE torch::cudart)
   target_link_libraries(torch_cuda PUBLIC c10_cuda)
   if(TARGET torch::nvtx3)
@@ -1794,6 +1722,11 @@ if(USE_CUDA)
       torch_cuda INTERFACE $<INSTALL_INTERFACE:include>)
   target_include_directories(
       torch_cuda PRIVATE ${Caffe2_GPU_INCLUDE})
+  if(USE_EASYFHE_FAST_BUILD)
+    target_include_directories(torch_cuda PRIVATE
+      ${TORCH_SRC_DIR}/csrc/api
+      ${TORCH_SRC_DIR}/csrc/api/include)
+  endif()
   target_link_libraries(
       torch_cuda PRIVATE ${Caffe2_CUDA_DEPENDENCY_LIBS})
 
@@ -1986,9 +1919,6 @@ if(BUILD_TEST)
           add_executable(${test_name}_${CPU_CAPABILITY} "${test_src}" ../aten/src/ATen/native/quantized/AffineQuantizerBase.cpp)
           # TODO: Get rid of c10 dependency (which is only needed for the implementation of AT_ERROR)
           target_link_libraries(${test_name}_${CPU_CAPABILITY} c10 sleef gtest_main nlohmann)
-          if(USE_FBGEMM)
-            target_link_libraries(${test_name}_${CPU_CAPABILITY} fbgemm)
-          endif()
           if(USE_ASAN)
             if(TARGET Sanitizer::address)
               target_link_libraries(${test_name}_${CPU_CAPABILITY} Sanitizer::address)
@@ -2153,17 +2083,4 @@ if(BUILD_TEST)
   endif()
 endif()
 
-if(MSVC)
-  # This is used to enable the conforming lambda processor in MSVC
-  # Which allows us to capture constexpr in lambdas
-  # Note that this will be turned on by default for std=c++20 and above
-  # This should be applied globally when https://github.com/pytorch/pytorch/issues/92600 is fixed
-  foreach(tmp ${MEM_EFF_ATTENTION_CUDA_SOURCES})
-    # MEM_EFF_ATTENTION_CUDA is populated in pytorch/aten/src/ATen/CMakeLists.txt
-    # We iterate over these files, updating paths and adding the compile flag
-    FILE(RELATIVE_PATH tmp_path "${PROJECT_SOURCE_DIR}" "${tmp}")
-    SET(tmp_path "../${tmp_path}")
-    set_source_files_properties(${tmp_path} PROPERTIES COMPILE_FLAGS "-Xcompiler /Zc:lambda")
-  endforeach()
-endif()
 endif()

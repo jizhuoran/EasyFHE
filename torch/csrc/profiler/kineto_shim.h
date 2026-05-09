@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 
@@ -12,7 +13,43 @@
 #undef USE_KINETO
 #endif
 
+#ifdef USE_KINETO
 #include <ActivityType.h>
+#else
+namespace libkineto {
+enum class ActivityType : uint8_t {
+  CPU_OP,
+  CPU_INSTANT_EVENT,
+  USER_ANNOTATION,
+  EXTERNAL_CORRELATION,
+  XPU_RUNTIME,
+  XPU_DRIVER,
+  CUDA_RUNTIME,
+  CUDA_DRIVER,
+  PYTHON_FUNCTION,
+  PRIVATEUSE1_RUNTIME,
+  PRIVATEUSE1_DRIVER,
+  GPU_MEMCPY,
+  GPU_MEMSET,
+  GPU_USER_ANNOTATION,
+  CONCURRENT_KERNEL,
+  OVERHEAD,
+  MTIA_CCP_EVENTS,
+  MTIA_RUNTIME,
+  MTIA_INSIGHT,
+  MTIA_COUNTERS,
+  HPU_OP,
+  CUDA_PROFILER_RANGE,
+  CUDA_SYNC,
+  COLLECTIVE_COMM,
+  GLOW_RUNTIME,
+};
+
+inline const char* toString(ActivityType) {
+  return "UNKNOWN";
+}
+} // namespace libkineto
+#endif
 
 #include <torch/csrc/Export.h>
 #include <torch/csrc/profiler/api.h>

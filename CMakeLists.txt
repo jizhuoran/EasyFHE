@@ -283,8 +283,8 @@ cmake_dependent_option(USE_CUSPARSELT "Use cuSPARSELt" ON "USE_CUDA" OFF)
 cmake_dependent_option(USE_CUDSS "Use cuDSS" ON "USE_CUDA" OFF)
 # USE_ROCM is guarded against in Dependencies.cmake because USE_ROCM is not properly defined here
 cmake_dependent_option(USE_CUFILE "Use cuFile" ON "USE_CUDA AND NOT WIN32" OFF)
-option(USE_FBGEMM "Use FBGEMM (quantized 8-bit server operators)" ON)
-option(USE_KINETO "Use Kineto profiling library" ON)
+set(USE_FBGEMM OFF CACHE BOOL "FBGEMM is disabled in EasyFHE" FORCE)
+set(USE_KINETO OFF CACHE BOOL "Kineto is disabled in EasyFHE" FORCE)
 option(USE_CUPTI_SO "Use CUPTI as a shared library" ON)
 option(USE_GFLAGS "Use GFLAGS" OFF)
 option(USE_GLOG "Use GLOG" OFF)
@@ -307,7 +307,7 @@ cmake_dependent_option(USE_SYSTEM_NCCL "Use system-wide NCCL" OFF "USE_NCCL"
 cmake_dependent_option(USE_NVSHMEM "Use NVSHMEM" ON
                        "USE_DISTRIBUTED;USE_CUDA OR USE_ROCM;UNIX;NOT APPLE" OFF)
 option(USE_NNAPI "Use NNAPI" OFF)
-option(USE_NNPACK "Use NNPACK" ON)
+set(USE_NNPACK OFF CACHE BOOL "NNPACK is disabled in EasyFHE" FORCE)
 cmake_dependent_option(USE_NUMA "Use NUMA. Only available on Linux." ON "LINUX"
                        OFF)
 cmake_dependent_option(USE_NVRTC "Use NVRTC. Only available if USE_CUDA is on."
@@ -320,7 +320,7 @@ option(USE_PRECOMPILED_HEADERS "Use pre-compiled headers to accelerate build."
        OFF)
 
 option(USE_PROF "Use profiling" OFF)
-option(USE_PYTORCH_QNNPACK "Use ATen/QNNPACK (quantized 8-bit operators)" ON)
+set(USE_PYTORCH_QNNPACK OFF CACHE BOOL "QNNPACK is disabled in EasyFHE" FORCE)
 option(USE_SNPE "Use Qualcomm's SNPE library" OFF)
 option(USE_EIGEN_SPARSE "Use Eigen Sparse Matrices" OFF)
 option(USE_SYSTEM_EIGEN_INSTALL
@@ -341,23 +341,15 @@ cmake_dependent_option(
 option(USE_VULKAN_FP16_INFERENCE "Vulkan - Use fp16 inference" OFF)
 option(USE_VULKAN_RELAXED_PRECISION
        "Vulkan - Use relaxed precision math in the kernels (mediump)" OFF)
-# option USE_XNNPACK: try to enable xnnpack by default.
-option(USE_XNNPACK "Use XNNPACK" ON)
+set(USE_XNNPACK OFF CACHE BOOL "XNNPACK is disabled in EasyFHE" FORCE)
 option(USE_ROCM_KERNEL_ASSERT "Use Kernel Assert for ROCm" OFF)
 # Ensure that an ITT build is the default for x86 CPUs
 cmake_dependent_option(USE_ITT "Use Intel(R) VTune Profiler ITT functionality"
                        ON "CPU_INTEL" OFF)
-# Ensure that an MKLDNN build is the default for x86 CPUs but optional for
-# AArch64 (dependent on -DUSE_MKLDNN).
-cmake_dependent_option(
-  USE_MKLDNN "Use MKLDNN. Only available on x86, x86_64, AArch64, ppc64le and riscv64."
-  "${CPU_INTEL}" "CPU_INTEL OR CPU_AARCH64 OR CPU_POWER OR CPU_RISCV" OFF)
-cmake_dependent_option(
-  USE_MKLDNN_ACL "Use Compute Library for the Arm architecture." OFF
-  "USE_MKLDNN AND CPU_AARCH64" OFF)
-set(MKLDNN_ENABLE_CONCURRENT_EXEC ${USE_MKLDNN})
-cmake_dependent_option(USE_MKLDNN_CBLAS "Use CBLAS in MKLDNN" OFF "USE_MKLDNN"
-                       OFF)
+set(USE_MKLDNN OFF CACHE BOOL "MKLDNN is disabled in EasyFHE" FORCE)
+set(USE_MKLDNN_ACL OFF CACHE BOOL "MKLDNN ACL is disabled in EasyFHE" FORCE)
+set(USE_MKLDNN_CBLAS OFF CACHE BOOL "MKLDNN CBLAS is disabled in EasyFHE" FORCE)
+set(MKLDNN_ENABLE_CONCURRENT_EXEC OFF)
 option(USE_STATIC_MKL "Prefer to link with MKL statically (Unix only)" OFF)
 cmake_dependent_option(
   USE_MPI "Use MPI for Caffe2. Only available if USE_DISTRIBUTED is on." ON
@@ -423,11 +415,11 @@ if(USE_EASYFHE_FAST_BUILD)
   set(INSTALL_TEST OFF CACHE BOOL "" FORCE)
   set(NO_API ON CACHE BOOL "" FORCE)
 
-  set(USE_DISTRIBUTED OFF CACHE BOOL "" FORCE)
+  set(USE_DISTRIBUTED ON CACHE BOOL "" FORCE)
   set(USE_GLOO OFF CACHE BOOL "" FORCE)
   set(USE_C10D_GLOO OFF CACHE BOOL "" FORCE)
-  set(USE_NCCL OFF CACHE BOOL "" FORCE)
-  set(USE_C10D_NCCL OFF CACHE BOOL "" FORCE)
+  set(USE_NCCL ON CACHE BOOL "" FORCE)
+  set(USE_C10D_NCCL ON CACHE BOOL "" FORCE)
   set(USE_MPI OFF CACHE BOOL "" FORCE)
   set(USE_C10D_MPI OFF CACHE BOOL "" FORCE)
   set(USE_TENSORPIPE OFF CACHE BOOL "" FORCE)
@@ -572,7 +564,7 @@ option(USE_SYSTEM_PSIMD "Use system-provided psimd." OFF)
 option(USE_SYSTEM_FXDIV "Use system-provided fxdiv." OFF)
 option(USE_SYSTEM_BENCHMARK "Use system-provided google benchmark." OFF)
 option(USE_SYSTEM_ONNX "Use system-provided onnx." OFF)
-option(USE_SYSTEM_XNNPACK "Use system-provided xnnpack." OFF)
+set(USE_SYSTEM_XNNPACK OFF CACHE BOOL "XNNPACK is disabled in EasyFHE" FORCE)
 option(USE_SYSTEM_NVTX "Use system-provided nvtx." OFF)
 option(USE_GOLD_LINKER "Use ld.gold to link" OFF)
 if(USE_SYSTEM_LIBS)
@@ -587,7 +579,7 @@ if(USE_SYSTEM_LIBS)
   set(USE_SYSTEM_FXDIV ON)
   set(USE_SYSTEM_BENCHMARK ON)
   set(USE_SYSTEM_ONNX ON)
-  set(USE_SYSTEM_XNNPACK ON)
+  set(USE_SYSTEM_XNNPACK OFF)
   set(USE_SYSTEM_PYBIND11 ON)
   if(USE_NCCL)
     set(USE_SYSTEM_NCCL ON)
@@ -980,16 +972,6 @@ include(cmake/MiscCheck.cmake)
 # External projects
 include(ExternalProject)
 
-# ---[ Dependencies ---[ FBGEMM doesn't work on x86 32bit and
-# CMAKE_SYSTEM_PROCESSOR thinks its 64bit
-if(USE_FBGEMM AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|aarch64)$")
-  message(WARNING
-    "x86_64 or aarch64 required for FBGEMM. "
-    "Not compiling with FBGEMM. "
-    "Turn this warning off by USE_FBGEMM=OFF.")
-  set(USE_FBGEMM OFF)
-endif()
-
 set(BUILD_ONEDNN_GRAPH OFF)
 
 if(MSVC)
@@ -997,29 +979,9 @@ if(MSVC)
   append_cxx_flag_if_supported("/utf-8" CMAKE_CXX_FLAGS)
 endif()
 
-# Note for ROCM platform: 1. USE_ROCM is always ON until
-# include(cmake/Dependencies.cmake) 2. USE_CUDA will become OFF during
-# re-configuration Truth Table: CUDA 1st pass: USE_CUDA=True;USE_ROCM=True,
-# FLASH evaluates to ON by default CUDA 2nd pass: USE_CUDA=True;USE_ROCM=False,
-# FLASH evaluates to ON by default ROCM 1st pass: USE_CUDA=True;USE_ROCM=True,
-# FLASH evaluates to ON by default ROCM 2nd pass: USE_CUDA=False;USE_ROCM=True,
-# FLASH evaluates to ON by default CPU 1st pass: USE_CUDA=False(Cmd
-# Option);USE_ROCM=True, FLASH evaluates to OFF by default CPU 2nd pass:
-# USE_CUDA=False(Cmd Option);USE_ROCM=False, FLASH evaluates to OFF by default
-# Thus we cannot tell ROCM 2nd pass and CPU 1st pass
-#
-# The only solution is to include(cmake/Dependencies.cmake), and defer the
-# aotriton build decision later.
-
 include(cmake/Dependencies.cmake)
 
-cmake_dependent_option(
-  USE_FLASH_ATTENTION
-  "Whether to build the flash_attention kernel for scaled dot product attention.\
-  Will be disabled if not supported by the platform"
-  ON
-  "(USE_CUDA AND NOT MSVC) OR USE_ROCM"
-  OFF)
+set(USE_FLASH_ATTENTION OFF CACHE BOOL "Flash attention is disabled in EasyFHE" FORCE)
 
 
 IF(USE_ROCM AND ("gfx942" IN_LIST PYTORCH_ROCM_ARCH OR "gfx950" IN_LIST PYTORCH_ROCM_ARCH))
@@ -1045,23 +1007,7 @@ cmake_dependent_option(
 if(USE_CUDA AND "$ENV{TORCH_CUDA_ARCH_LIST}" MATCHES "10.0" AND CMAKE_CUDA_COMPILER_VERSION VERSION_GREATER_EQUAL 12.8 AND NOT WIN32)
 endif()
 
-# CAVEAT: Again, Flash Attention2 will error while building for sm52 while Mem
-# Eff Attention won't
-cmake_dependent_option(
-  USE_MEM_EFF_ATTENTION
-  "Enable memory-efficient attention for scaled dot product attention.\
-  Will be disabled if not supported by the platform" ON
-  "USE_CUDA OR USE_ROCM" OFF)
-
-#
-# Cannot be put into Dependencies.cmake due circular dependency:
-# USE_FLASH_ATTENTION -> USE_ROCM -> Dependencies.cmake -> aotriton.cmake
-#
-if(USE_ROCM)
-  if(USE_FLASH_ATTENTION OR USE_MEM_EFF_ATTENTION)
-    include(cmake/External/aotriton.cmake)
-  endif()
-endif()
+set(USE_MEM_EFF_ATTENTION OFF CACHE BOOL "Memory efficient attention is disabled in EasyFHE" FORCE)
 
 if(DEBUG_CUDA)
   string(APPEND CMAKE_CUDA_FLAGS_DEBUG " -lineinfo")
@@ -1074,16 +1020,8 @@ if(DEBUG_CUDA)
   endif()
 endif(DEBUG_CUDA)
 
-if(USE_FBGEMM)
-  string(APPEND CMAKE_CXX_FLAGS " -DUSE_FBGEMM")
-endif()
-
 if(USE_MSLK)
   string(APPEND CMAKE_CXX_FLAGS " -DUSE_MSLK")
-endif()
-
-if(USE_PYTORCH_QNNPACK)
-  string(APPEND CMAKE_CXX_FLAGS " -DUSE_PYTORCH_QNNPACK")
 endif()
 
 # Enable sleef on macOS with Apple silicon by default
@@ -1100,10 +1038,6 @@ if((NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Android")
   add_definitions(-DAT_BUILD_ARM_VEC256_WITH_SLEEF)
 endif()
 
-
-if(USE_XNNPACK)
-  string(APPEND CMAKE_CXX_FLAGS " -DUSE_XNNPACK")
-endif()
 
 if(USE_VULKAN)
   string(APPEND CMAKE_CXX_FLAGS " -DUSE_VULKAN")
@@ -1139,10 +1073,6 @@ if(USE_SOURCE_DEBUG_ON_MOBILE)
   string(APPEND CMAKE_CXX_FLAGS " -DSYMBOLICATE_MOBILE_DEBUG_HANDLE")
 endif()
 
-if(BUILD_LITE_INTERPRETER AND USE_LITE_INTERPRETER_PROFILER)
-  string(APPEND CMAKE_CXX_FLAGS " -DEDGE_PROFILER_USE_KINETO")
-endif()
-
 if(USE_COREML_DELEGATE)
   string(APPEND CMAKE_CXX_FLAGS " -DUSE_COREML_DELEGATE")
 endif()
@@ -1159,8 +1089,6 @@ if(CMAKE_COMPILER_IS_GNUCXX AND NOT ANDROID)
   list(APPEND Caffe2_DEPENDENCY_LIBS gcc_s gcc)
 endif()
 
-# ---[ Build flags Re-include to override append_cxx_flag_if_supported from
-# third_party/FBGEMM
 include(cmake/public/utils.cmake)
 if(USE_COLORIZE_OUTPUT)
   set(CMAKE_COLOR_DIAGNOSTICS ON)
@@ -1458,7 +1386,6 @@ if(BUILD_SHARED_LIBS)
           ${PROJECT_SOURCE_DIR}/cmake/public/glog.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/gflags.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/mkl.cmake
-          ${PROJECT_SOURCE_DIR}/cmake/public/mkldnn.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/protobuf.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/utils.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/LoadHIP.cmake

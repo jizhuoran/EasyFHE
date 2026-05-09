@@ -183,7 +183,7 @@ Reducer::Reducer(
       // evidence that the parameter has participated in an iteration.
       auto grad_accumulator = torch::autograd::impl::grad_accumulator(variable);
 
-#ifndef _WIN32
+#ifdef USE_RPC
       using torch::distributed::autograd::ThreadLocalDistAutogradContext;
 #endif
       // Hook to execute after the gradient accumulator has executed.
@@ -194,7 +194,7 @@ Reducer::Reducer(
               [this, variable_index](
                   const torch::autograd::variable_list& outputs,
                   const torch::autograd::variable_list& /* unused */) {
-#ifndef _WIN32
+#ifdef USE_RPC
                 this->rpc_context_.set(
                     ThreadLocalDistAutogradContext::getContextPtr());
 #endif
@@ -1057,7 +1057,7 @@ void Reducer::initialize_buckets(
   // bucket_view, then it needs to check rpc context ptr is nullptr or not,
   // If rpc context ptr is nullptr, mutate variable.grad(); otherwise,
   // mutate grad in rpc context.
-#ifndef _WIN32
+#ifdef USE_RPC
   using torch::distributed::autograd::ThreadLocalDistAutogradContext;
   this->rpc_context_.set(ThreadLocalDistAutogradContext::getContextPtr());
 #endif
@@ -1773,9 +1773,7 @@ void Reducer::finalize_backward() {
 void Reducer::runGradCallbackForVariable(
     at::Tensor& variable,
     const GradCallback& cb) {
-#ifdef _WIN32
-  cb(variable.mutable_grad());
-#else
+#ifdef USE_RPC
   auto context_ptr = rpc_context_.context_ptr.load();
   if (context_ptr == nullptr) {
     cb(variable.mutable_grad());
@@ -1783,6 +1781,8 @@ void Reducer::runGradCallbackForVariable(
     // Under distributed autograd
     context_ptr->runGradCallbackForVariable(variable, cb);
   }
+#else
+  cb(variable.mutable_grad());
 #endif
 }
 
@@ -1835,7 +1835,7 @@ void Reducer::flush_deferred_copies(Bucket& bucket, size_t bucket_index) {
   }
 }
 
-#ifndef _WIN32
+#ifdef USE_RPC
 void Reducer::RpcContext::set(ContextPtr&& new_context_ptr) {
   // We should set 'new_context_ptr' even if it's nullptr. That means the
   // reducer is under a local backward run.

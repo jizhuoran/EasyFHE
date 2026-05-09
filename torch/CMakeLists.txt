@@ -66,7 +66,6 @@ set(TORCH_PYTHON_INCLUDE_DIRECTORIES
     ${TORCH_ROOT}/third_party/gloo
     ${TORCH_ROOT}/third_party/onnx
     ${TORCH_ROOT}/third_party/flatbuffers/include
-    ${TORCH_ROOT}/third_party/kineto/libkineto/include
     ${TORCH_ROOT}/third_party/cpp-httplib
     ${TORCH_ROOT}/third_party/nlohmann/include
 
@@ -275,15 +274,17 @@ add_custom_command(
     "${TORCH_ROOT}"
 )
 if(USE_DISTRIBUTED)
-    if(WIN32)
+    if(WIN32 OR NOT USE_TENSORPIPE)
       append_filelist("libtorch_python_distributed_core_sources" TORCH_PYTHON_SRCS)
     else()
       append_filelist("libtorch_python_distributed_sources" TORCH_PYTHON_SRCS)
     endif()
     # Disable certain warnings for GCC-9.X
     if(CMAKE_COMPILER_IS_GNUCXX)
-      set_source_files_properties(${TORCH_SRC_DIR}/csrc/distributed/autograd/init.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-function-type")
-      set_source_files_properties(${TORCH_SRC_DIR}/csrc/distributed/rpc/testing/init.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-function-type")
+      if(NOT WIN32 AND USE_TENSORPIPE)
+        set_source_files_properties(${TORCH_SRC_DIR}/csrc/distributed/autograd/init.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-function-type")
+        set_source_files_properties(${TORCH_SRC_DIR}/csrc/distributed/rpc/testing/init.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-function-type")
+      endif()
       set_source_files_properties(${TORCH_SRC_DIR}/csrc/distributed/c10d/init.cpp PROPERTIES COMPILE_FLAGS "-Wno-cast-function-type")
     endif()
     # NCCL is a private dependency of libtorch, but libtorch_python includes
@@ -397,7 +398,7 @@ if(BUILD_LIBTORCHLESS)
     target_compile_definitions(torch_python PRIVATE USE_C10D_GLOO)
   endif()
 
-  if(NOT WIN32)
+  if(NOT WIN32 AND USE_TENSORPIPE)
     target_compile_definitions(torch_python PRIVATE USE_RPC)
   endif()
 
