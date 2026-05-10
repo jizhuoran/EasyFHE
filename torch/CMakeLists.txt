@@ -229,7 +229,6 @@ add_custom_target(torch_python_stubs DEPENDS
     "${TORCH_SRC_DIR}/_C/__init__.pyi"
     "${TORCH_SRC_DIR}/_C/_VariableFunctions.pyi"
     "${TORCH_SRC_DIR}/nn/functional.pyi"
-    "${TORCH_SRC_DIR}/utils/data/datapipes/datapipe.pyi"
 )
 
 file(GLOB_RECURSE torchgen_python CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/torchgen/*.py")
@@ -257,19 +256,6 @@ add_custom_command(
       ${pyi_python}
       ${autograd_python}
       ${torchgen_python}
-    WORKING_DIRECTORY
-    "${TORCH_ROOT}"
-)
-file(GLOB_RECURSE datapipe_files CONFIGURE_DEPENDS "${TORCH_SRC_DIR}/utils/data/datapipes/*.py")
-add_custom_command(
-    OUTPUT
-    "${TORCH_SRC_DIR}/utils/data/datapipes/datapipe.pyi"
-    COMMAND
-    ${CMAKE_COMMAND} -E env --modify PYTHONPATH=path_list_prepend:"${TORCH_ROOT}" --
-    "${Python_EXECUTABLE}" ${TORCH_SRC_DIR}/utils/data/datapipes/gen_pyi.py
-    DEPENDS
-    "${TORCH_SRC_DIR}/utils/data/datapipes/datapipe.pyi.in"
-    ${datapipe_files}
     WORKING_DIRECTORY
     "${TORCH_ROOT}"
 )

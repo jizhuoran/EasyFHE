@@ -1,60 +1,27 @@
-"""
-:mod:`torch.optim` is a package implementing various optimization algorithms.
-
-Most commonly used methods are already supported, and the interface is general
-enough, so that more sophisticated ones can also be easily integrated in the
-future.
-"""
-
-from torch.optim import lr_scheduler as lr_scheduler, swa_utils as swa_utils
-from torch.optim._adafactor import Adafactor as Adafactor
-from torch.optim._muon import Muon as Muon
-from torch.optim.adadelta import Adadelta as Adadelta
-from torch.optim.adagrad import Adagrad as Adagrad
-from torch.optim.adam import Adam as Adam
-from torch.optim.adamax import Adamax as Adamax
-from torch.optim.adamw import AdamW as AdamW
-from torch.optim.asgd import ASGD as ASGD
-from torch.optim.lbfgs import LBFGS as LBFGS
-from torch.optim.nadam import NAdam as NAdam
-from torch.optim.optimizer import Optimizer as Optimizer
-from torch.optim.radam import RAdam as RAdam
-from torch.optim.rmsprop import RMSprop as RMSprop
-from torch.optim.rprop import Rprop as Rprop
-from torch.optim.sgd import SGD as SGD
-from torch.optim.sparse_adam import SparseAdam as SparseAdam
+from .optimizer import (
+    Optimizer,
+    register_optimizer_step_post_hook,
+    register_optimizer_step_pre_hook,
+    required,
+)
 
 
-Adafactor.__module__ = "torch.optim"
-Muon.__module__ = "torch.optim"
+class _DisabledOptimizer(Optimizer):
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError("torch.optim optimizers are not available in EasyFHE")
 
 
-del adadelta  # type: ignore[name-defined] # noqa: F821
-del adagrad  # type: ignore[name-defined] # noqa: F821
-del adam  # type: ignore[name-defined] # noqa: F821
-del adamw  # type: ignore[name-defined] # noqa: F821
-del sparse_adam  # type: ignore[name-defined] # noqa: F821
-del adamax  # type: ignore[name-defined] # noqa: F821
-del asgd  # type: ignore[name-defined] # noqa: F821
-del sgd  # type: ignore[name-defined] # noqa: F821
-del radam  # type: ignore[name-defined] # noqa: F821
-del rprop  # type: ignore[name-defined] # noqa: F821
-del rmsprop  # type: ignore[name-defined] # noqa: F821
-del optimizer  # type: ignore[name-defined] # noqa: F821
-del nadam  # type: ignore[name-defined] # noqa: F821
-del lbfgs  # type: ignore[name-defined] # noqa: F821
+Adadelta = Adagrad = Adam = AdamW = Adamax = ASGD = LBFGS = NAdam = RAdam = RMSprop = Rprop = SGD = SparseAdam = _DisabledOptimizer
+
 
 __all__ = [
-    "Adafactor",
+    "ASGD",
     "Adadelta",
     "Adagrad",
     "Adam",
-    "Adamax",
     "AdamW",
-    "ASGD",
+    "Adamax",
     "LBFGS",
-    "lr_scheduler",
-    "Muon",
     "NAdam",
     "Optimizer",
     "RAdam",
@@ -62,5 +29,8 @@ __all__ = [
     "Rprop",
     "SGD",
     "SparseAdam",
-    "swa_utils",
+    "register_optimizer_step_post_hook",
+    "register_optimizer_step_pre_hook",
+    "required",
 ]
+

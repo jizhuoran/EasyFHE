@@ -271,7 +271,8 @@ def get_supported_param_types():
         (device, "Device", False, False, False),
     ]
 
-    if torch.distributed.is_available():
+    distributed = getattr(torch, "distributed", None)
+    if distributed is not None and distributed.is_available():
         from torch.distributed.distributed_c10d import GroupName
 
         data.append((typing.cast(type, GroupName), "str", False, False, False))

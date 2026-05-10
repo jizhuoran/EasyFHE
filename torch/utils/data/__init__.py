@@ -1,78 +1,51 @@
-from torch.utils.data.dataloader import (
-    _DatasetKind,
-    DataLoader,
-    default_collate,
-    default_convert,
-    get_worker_info,
-)
-from torch.utils.data.datapipes._decorator import (
-    argument_validation,
-    functional_datapipe,
-    guaranteed_datapipes_determinism,
-    non_deterministic,
-    runtime_validation,
-    runtime_validation_disabled,
-)
-from torch.utils.data.datapipes.datapipe import (
-    DataChunk,
-    DFIterDataPipe,
-    IterDataPipe,
-    MapDataPipe,
-)
-from torch.utils.data.dataset import (
-    ChainDataset,
-    ConcatDataset,
-    Dataset,
-    IterableDataset,
-    random_split,
-    StackDataset,
-    Subset,
-    TensorDataset,
-)
-from torch.utils.data.distributed import DistributedSampler
-from torch.utils.data.sampler import (
-    BatchSampler,
-    RandomSampler,
-    Sampler,
-    SequentialSampler,
-    SubsetRandomSampler,
-    WeightedRandomSampler,
-)
+class Dataset:
+    def __getitem__(self, index):
+        raise NotImplementedError
+
+    def __len__(self):
+        raise NotImplementedError
+
+
+class IterableDataset(Dataset):
+    def __iter__(self):
+        raise NotImplementedError
+
+
+class TensorDataset(Dataset):
+    def __init__(self, *tensors):
+        self.tensors = tensors
+
+    def __getitem__(self, index):
+        return tuple(tensor[index] for tensor in self.tensors)
+
+    def __len__(self):
+        return len(self.tensors[0]) if self.tensors else 0
+
+
+class DataLoader:
+    def __init__(self, *args, **kwargs):
+        raise RuntimeError("torch.utils.data is not available in EasyFHE")
+
+
+def random_split(*args, **kwargs):
+    raise RuntimeError("torch.utils.data is not available in EasyFHE")
+
+
+def default_collate(batch):
+    return batch
+
+
+def get_worker_info():
+    return None
 
 
 __all__ = [
-    "BatchSampler",
-    "ChainDataset",
-    "ConcatDataset",
-    "DFIterDataPipe",
-    "DataChunk",
     "DataLoader",
     "Dataset",
-    "DistributedSampler",
-    "IterDataPipe",
     "IterableDataset",
-    "MapDataPipe",
-    "RandomSampler",
-    "Sampler",
-    "SequentialSampler",
-    "StackDataset",
-    "Subset",
-    "SubsetRandomSampler",
     "TensorDataset",
-    "WeightedRandomSampler",
-    "_DatasetKind",
-    "argument_validation",
     "default_collate",
-    "default_convert",
-    "functional_datapipe",
     "get_worker_info",
-    "guaranteed_datapipes_determinism",
-    "non_deterministic",
     "random_split",
-    "runtime_validation",
-    "runtime_validation_disabled",
 ]
 
-# Please keep this list sorted
-if __all__ != sorted(__all__):
-    raise AssertionError("__all__ is not sorted")
