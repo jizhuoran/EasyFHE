@@ -1143,15 +1143,6 @@
 - name: transpose_(Tensor(a!) self, int dim0, int dim1) -> Tensor(a!)
   self: grad.transpose(dim0, dim1)
   result: auto_linear
-
-- name: tril(Tensor self, SymInt diagonal=0) -> Tensor
-  self: grad.tril_symint(diagonal)
-  result: auto_linear
-
-- name: triu(Tensor self, SymInt diagonal=0) -> Tensor
-  self: grad.triu_symint(diagonal)
-  result: auto_linear
-
 - name: trunc(Tensor self) -> Tensor
   self: zeros_like(grad)
   result: auto_element_wise

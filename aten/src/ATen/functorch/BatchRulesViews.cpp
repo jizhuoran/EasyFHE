@@ -487,23 +487,6 @@ std::tuple<Tensor, std::optional<int64_t>> expand_batch_rule(
   return std::make_tuple(Func(self_.view_symint(view_shape), size_, implicit), 0);
 }
 
-std::tuple<Tensor, std::optional<int64_t>> unfold_batch_rule(
-    const Tensor &self, std::optional<int64_t> self_bdim, int64_t dim, int64_t size, int64_t step)
-{
-  TORCH_INTERNAL_ASSERT(self_bdim.has_value());
-  auto self_ = moveBatchDimToFront(self, self_bdim);
-  auto logical_rank = rankWithoutBatchDim(self, self_bdim);
-  dim = maybe_wrap_dim(dim, logical_rank) + 1;
-  if (logical_rank==0) {
-    self_ = self_.unsqueeze(-1);
-  }
-  auto result = self_.unfold(dim, size, step);
-  if (logical_rank==0) {
-    result = result.squeeze(-1);
-  }
-  return std::make_tuple(std::move(result), 0);
-}
-
 std::tuple<Tensor, std::optional<int64_t>> narrow_copy_batch_rule(
     const Tensor &self, std::optional<int64_t> self_bdim, int64_t dim, c10::SymInt start, c10::SymInt length)
 {
@@ -601,7 +584,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   VMAP_SUPPORT(view_copy, view_copy_batch_rule);
   VMAP_SUPPORT(expand, SINGLE_ARG(expand_batch_rule<decltype(&ATEN_FN(expand)), &ATEN_FN(expand)>));
   VMAP_SUPPORT(expand_copy, SINGLE_ARG(expand_batch_rule<decltype(&ATEN_FN(expand_copy)), &ATEN_FN(expand_copy)>));
-  VMAP_SUPPORT(unfold, unfold_batch_rule);
   VMAP_SUPPORT2(slice, Tensor, slice_batch_rule);
   VMAP_SUPPORT2(transpose, int, transpose_int_batch_rule);
   m.impl("t", native::t);  // CompositeExplicitAutograd, should not go in BatchRulesDecompositions.cpp

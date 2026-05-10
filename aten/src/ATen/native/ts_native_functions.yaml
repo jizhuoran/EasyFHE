@@ -68,8 +68,6 @@ full_codegen:
   - sum
   - sum.dim_IntList
   - trace
-  - tril
-  - triu
   - trunc
   - alias_copy
   - as_strided_copy

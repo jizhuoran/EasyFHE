@@ -334,28 +334,6 @@ Tensor FunctionalInverses::view_dtype_inverse(const Tensor& base, const Tensor& 
     }
 }
 
-Tensor FunctionalInverses::unfold_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode, int64_t dimension, int64_t size, int64_t step) {
-    if (inverse_return_mode == InverseReturnMode::AlwaysView) {
-      // NB: assumes mutated_view is a narrowed view of base.
-      // We should NOT do this for functionalization
-      return mutated_view.as_strided_symint(
-          base.sym_sizes(), base.sym_strides(), base.sym_storage_offset());
-    } else {
-      // I think autograd and the functionalization pass want the exact same thing here, but need to test to confirm.
-      // unfold_backward() is safe to use here because it is NOT a view op.
-      // (note: technically, we'll have an extra memory copy.
-      // We'd need to add an aliasing version of unfold_backward to fix that though).
-      TORCH_CHECK(
-        !(inverse_return_mode == InverseReturnMode::ViewOrScatterInverse && size > step),
-        "While executing unfold, functionalization encountered a tensor being mutated that has internal overlap. \
-When using torch.compile (or running functionalization directly), this is banned \
-as the behavior is not well defined. Consider cloning the tensor before mutating it, \
-or removing the mutation from your model."
-          );
-      return unfold_backward(mutated_view, base.sizes(), dimension, size, step);
-    }
-}
-
 Tensor FunctionalInverses::alias_inverse(const Tensor& base, const Tensor& mutated_view, InverseReturnMode inverse_return_mode) {
     if (inverse_return_mode != InverseReturnMode::NeverView) {
       return at::alias(mutated_view);

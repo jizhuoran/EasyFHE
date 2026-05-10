@@ -1377,34 +1377,6 @@
 
 - func: fill_diagonal_(Tensor(a!) self, Scalar fill_value, bool wrap=False) -> Tensor(a!)
   variants: method
-
-- func: diff(Tensor self, int n=1, int dim=-1, Tensor? prepend=None, Tensor? append=None) -> Tensor
-  variants: function, method
-
-- func: diff.out(Tensor self, int n=1, int dim=-1, Tensor? prepend=None, Tensor? append=None, *, Tensor(a!) out) -> Tensor(a!)
-  variants: function
-
-- func: gradient.scalarint(Tensor self, *, Scalar? spacing=None, int? dim=None, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.scalararray(Tensor self, *, Scalar spacing, int[] dim, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.array(Tensor self, *, int[] dim, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.scalarrayint(Tensor self, *, Scalar[] spacing, int? dim=None, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.scalarrayarray(Tensor self, *, Scalar[] spacing, int[] dim, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.tensorarrayint(Tensor self, *, Tensor[] spacing, int? dim=None, int edge_order=1) -> Tensor[]
-  variants: function
-
-- func: gradient.tensorarray(Tensor self, *, Tensor[] spacing, int[] dim, int edge_order=1) -> Tensor[]
-  variants: function
-
 - func: div.Tensor(Tensor self, Tensor other) -> Tensor
   device_check: NoCheck   # TensorIterator
   variants: function, method
@@ -1737,20 +1709,6 @@
   variants: function, method
   dispatch:
     CompositeImplicitAutograd: unflatten_dimname_symint
-
-- func: unfold(Tensor(a) self, int dimension, int size, int step) -> Tensor(a)
-  variants: method
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CPU, CUDA, Meta, MPS, MTIA: unfold
-
-- func: unfold_backward(Tensor grad_in, SymInt[] input_sizes, int dim, int size, int step) -> Tensor
-  variants: function
-  dispatch:
-    CPU, CUDA, MPS: unfold_backward
-  autogen: unfold_backward.out
-
 - func: fill.Scalar(Tensor self, Scalar value) -> Tensor
   variants: function
   dispatch:
@@ -4807,15 +4765,6 @@
     CompositeExplicitAutograd: bitwise_right_shift
   autogen: bitwise_right_shift.Scalar_Tensor_out
   tags: pointwise
-
-- func: tril_(Tensor(a!) self, SymInt diagonal=0) -> Tensor(a!)
-  structured_delegate: tril.out
-  variants: method
-
-- func: triu_(Tensor(a!) self, SymInt diagonal=0) -> Tensor(a!)
-  structured_delegate: triu.out
-  variants: method
-
 - func: lerp_.Scalar(Tensor(a!) self, Tensor end, Scalar weight) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
   variants: method
@@ -4880,28 +4829,6 @@
 - func: diag.out(Tensor self, int diagonal=0, *, Tensor(a!) out) -> Tensor(a!)
 
 - func: diag(Tensor self, int diagonal=0) -> Tensor
-  variants: method, function
-
-- func: triu.out(Tensor self, SymInt diagonal=0, *, Tensor(a!) out) -> Tensor(a!)
-  structured: True
-  dispatch:
-    CPU: triu_cpu
-    CUDA: triu_cuda
-    MPS: triu_mps_out
-
-- func: triu(Tensor self, SymInt diagonal=0) -> Tensor
-  structured_delegate: triu.out
-  variants: method, function
-
-- func: tril.out(Tensor self, SymInt diagonal=0, *, Tensor(a!) out) -> Tensor(a!)
-  structured: True
-  dispatch:
-    CPU: tril_cpu
-    CUDA: tril_cuda
-    MPS: tril_mps_out
-
-- func: tril(Tensor self, SymInt diagonal=0) -> Tensor
-  structured_delegate: tril.out
   variants: method, function
 - func: trace(Tensor self) -> Tensor
   variants: method, function
@@ -6131,14 +6058,6 @@
     CompositeExplicitAutogradNonFunctional: view_copy_dtype
   tags: view_copy
   autogen: view_copy.dtype_out
-
-- func: unfold_copy(Tensor self, int dimension, int size, int step) -> Tensor
-  variants: function
-  dispatch:
-    CompositeExplicitAutogradNonFunctional: unfold_copy
-  tags: view_copy
-  autogen: unfold_copy.out
-
 - func: alias_copy(Tensor self) -> Tensor
   variants: function
   dispatch:

@@ -58,13 +58,13 @@
 #include <ATen/ops/cumsum.h>
 #include <ATen/ops/cumsum_meta.h>
 #include <ATen/ops/cumsum_native.h>
-#include <ATen/ops/diff_native.h>
+#include <ATen/ops/diagonal.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/equal_native.h>
 #include <ATen/ops/exp.h>
+#include <ATen/ops/expand_as.h>
 #include <ATen/ops/gather.h>
-#include <ATen/ops/gradient_native.h>
 #include <ATen/ops/hash_tensor.h>
 #include <ATen/ops/hash_tensor_native.h>
 #include <ATen/ops/imag.h>
@@ -898,309 +898,6 @@ Tensor cummaxmin_backward(const Tensor& grad, const Tensor& input, const Tensor&
   return result.scatter_add_(dim, indices, grad);
 }
 
-static Tensor prepend_append_on_dim(const Tensor& self, const std::optional<Tensor>& prepend, const std::optional<Tensor>& append, int64_t dim) {
-  // Helper for diff that handles prepending and appending when at least one is present
-  TORCH_INTERNAL_ASSERT(prepend.has_value() || append.has_value(), "either prepend or append must be have value");
-  if (!prepend.has_value() && append.has_value()) {
-    return at::cat({self, append.value()}, dim);
-  } else if (prepend.has_value() && !append.has_value()) {
-    return at::cat({prepend.value(), self}, dim);
-  } else {
-    return at::cat({prepend.value(), self, append.value()}, dim);
-  }
-}
-
-static inline void diff_check_compatible_shape(const Tensor& self, const std::optional<Tensor>&other, int64_t dim) {
-  // Helper for diff that checks whether the shape of the tensor to prepend or append
-  // is compatible with that of input
-  if (other.has_value()) {
-    int64_t wrapped_dim = maybe_wrap_dim(dim, self.dim(), false);
-
-    TORCH_CHECK(
-        other.value().dim() == self.dim(),
-        "diff expects prepend or append to be the same dimension as input");
-
-    for (const auto i : c10::irange(other.value().dim())) {
-      if (i == wrapped_dim) {
-        continue;
-      }
-      TORCH_SYM_CHECK(
-          other.value().sym_size(i).sym_eq(self.sym_size(i)),
-          "diff expects the shape of tensor to prepend or append to match that of"
-          " input except along the differencing dimension;"
-          " input.size(", i, ") = ", self.sym_size(i), ", but got"
-          " tensor.size(", i, ") = ", other.value().sym_size(i));
-    }
-  }
-}
-
-static inline void diff_check(const Tensor& self, int64_t n, int64_t dim, const std::optional<Tensor>&prepend, const std::optional<Tensor>& append) {
-  // Helper for diff that checks whether its parameters are valid
-  TORCH_CHECK(
-      self.dim() >= 1,
-      "diff expects input to be at least one-dimensional");
-
-  TORCH_CHECK(
-      n >= 0,
-      "order must be non-negative but got ", n);
-
-  diff_check_compatible_shape(self, prepend, dim);
-  diff_check_compatible_shape(self, append, dim);
-}
-
-static inline Tensor diff_helper(const Tensor& self, int64_t n, int64_t dim) {
-  if (n == 0) {
-    auto result = at::zeros_like(self);
-    result.copy_(self);
-    return result;
-  }
-
-  auto out_len = self.sym_size(dim) - 1;
-  auto result = self;
-  bool is_kBool = (self.dtype() == at::kBool);
-  n = n > self.sym_size(dim) ? self.sym_size(dim).guard_int(__FILE__, __LINE__) : n;
-
-  for ([[maybe_unused]] const auto i : c10::irange(n)) {
-    if (is_kBool) {
-      result = at::logical_xor(
-        at::narrow_symint(result, dim, 1, out_len),
-        at::narrow_symint(result, dim, 0, out_len)
-      );
-    } else {
-      result = at::narrow_symint(result, dim, 1, out_len) - at::narrow_symint(result, dim, 0, out_len);
-    }
-    out_len = out_len - 1;
-  }
-
-  return result;
-}
-
-Tensor diff(const Tensor& self, int64_t n, int64_t dim, const std::optional<Tensor>& prepend, const std::optional<Tensor>& append) {
-  diff_check(self, n, dim, prepend, append);
-  if ((!prepend.has_value() && !append.has_value()) || n == 0) {
-    return diff_helper(self, n, dim);
-  } else {
-    auto a = prepend_append_on_dim(self, prepend, append, dim);
-    return diff_helper(a, n, dim);
-  }
-}
-
-static inline Tensor& diff_out_helper(const Tensor& self, int64_t n, int64_t dim, Tensor& result) {
-  if (n == 0) {
-    if (resize_output_check_symint(result, self.sym_sizes())) {
-      result.resize__symint(self.sym_sizes());
-    }
-    check_scalar_type_device_layout_equal(result, self);
-    return result.copy_(self);
-  }
-
-  n = n > self.sym_size(dim) ? self.sym_size(dim).guard_int(__FILE__, __LINE__) : n;
-  const auto out_len = self.sym_size(dim) - n;
-  auto prev_result = self;
-
-  if (n > 1) {
-    prev_result = diff_helper(self, n - 1, dim);
-  }
-
-  if (self.dtype() == at::kBool) {
-    at::logical_xor_out(
-      result,
-      at::narrow_symint(prev_result, dim, 1, out_len),
-      at::narrow_symint(prev_result, dim, 0, out_len)
-    );
-  } else {
-    at::sub_out(
-      result,
-      at::narrow_symint(prev_result, dim, 1, out_len),
-      at::narrow_symint(prev_result, dim, 0, out_len)
-    );
-  }
-
-  return result;
-}
-
-Tensor& diff_out(const Tensor& self, int64_t n, int64_t dim, const std::optional<Tensor>& prepend, const std::optional<Tensor>& append, Tensor& result) {
-  diff_check(self, n, dim, prepend, append);
-  if ((!prepend.has_value() && !append.has_value()) || n == 0) {
-    return diff_out_helper(self, n, dim, result);
-  } else {
-    auto a = prepend_append_on_dim(self, prepend, append, dim);
-    return diff_out_helper(a, n, dim, result);
-  }
-}
-
-static void pre_check_gradient(const Tensor& self, std::optional<int64_t> spacing_size, at::OptionalIntArrayRef dim,  int64_t edge_order) {
-  // Helper for gradient function to make sure input data satisfies prerequisites
-  TORCH_CHECK(self.scalar_type() != ScalarType::Byte, "torch.gradient does not support uint8 input.");
-  if (spacing_size.has_value() && !dim.has_value()) {
-    // NOTE: If spacing was given as a scalar, the callers of this function
-    // create a spacing vector of the expected size, and this check passes
-    TORCH_CHECK(spacing_size.value() == self.dim(),
-      "torch.gradient expected spacing to be unspecified, a scalar, or a list ",
-      "of length equal to 'self.dim() = ", self.dim(), "', since dim argument ",
-      "was not given, but got a list of length ", spacing_size.value());
-  }
-  if (spacing_size.has_value() && dim.has_value()) {
-    TORCH_CHECK(spacing_size.value() == static_cast<int64_t>(dim.value().size()),
-    "torch.gradient expected spacing to be unspecified, a scalar or it's spacing and dim arguments to have the same length, but got a spacing argument of length ", spacing_size.value(), " and a dim argument of length ", dim.value().size(), "." );
-  }
-  TORCH_CHECK(edge_order == 1 || edge_order == 2, "torch.gradient only supports edge_order=1 and edge_order=2.");
-  if (dim.has_value()) {
-    // The following function get called to check whether dim argument satisfies prerequisites.
-    // The output of the function is not used for the computation of gradient.
-    dim_list_to_bitset(dim.value(), self.dim());
-    for (const auto i : c10::irange(dim.value().size())) {
-      TORCH_CHECK(self.size(dim.value()[i]) >= edge_order + 1, "torch.gradient expected each dimension size to be at least edge_order+1");
-    }
-  } else {
-    for (const auto i : c10::irange(self.dim())) {
-      TORCH_CHECK(self.size(i) >= edge_order + 1, "torch.gradient expected each dimension size to be at least edge_order+1");
-    }
-  }
-}
-
-static std::vector<Tensor> gradient_helper(const Tensor& self, TensorList coordinates, IntArrayRef dim, int64_t edge_order) {
-  for (const auto i : c10::irange(coordinates.size())) {
-    TORCH_CHECK(self.device() == coordinates[i].device(), "torch.gradient expected each tensor to be on the same device, but got devices ", self.device(), " and ", coordinates[i].device(), "!");
-  }
-
-  std::vector<Tensor> result;
-  for (const auto i : c10::irange(dim.size())) {
-    TORCH_CHECK( coordinates[i].dim() == 1, "torch.gradient expected each element of spacing to have one dimension, but got an element with ", coordinates[i].dim(), " dimensions!");
-    int64_t direction = maybe_wrap_dim(dim[i], self.dim());
-    Tensor prepend, append;
-    std::vector<int64_t> shape(self.dim(),1);
-    shape[ direction ] = -1;
-
-    auto ax_dx = coordinates[i].diff(1,0);
-    auto dx1 = at::slice(ax_dx, 0, 0, -1);
-    auto dx2 = at::slice(ax_dx, 0, 1);
-    auto a = (   -dx2    / (dx1*(dx1+dx2)) ).reshape(shape);
-    auto b = ( (dx2-dx1) / (dx1*dx2)       ).reshape(shape);
-    auto c = (    dx1    / (dx2*(dx1+dx2)) ).reshape(shape);
-
-    auto center = a * at::slice(self, direction, 0, -2) + b * at::slice(self, direction , 1, -1) + c * at::slice(self, direction, 2);
-    if (edge_order == 1) {
-     prepend = (at::slice(self, direction, 1, 2  ) - at::slice(self, direction, 0, 1   )) / ax_dx[0]  ;
-     append  = (at::slice(self, direction, -1    ) - at::slice(self, direction, -2, -1 )) / ax_dx[-1] ;
-    } else if (edge_order == 2) {
-     a =-(2.0 * ax_dx[0] + ax_dx[1]) / (ax_dx[0] * (ax_dx[0] + ax_dx[1])) ;
-     b = (      ax_dx[0] + ax_dx[1]) / (ax_dx[0] * ax_dx[1])       ;
-     c = (     -ax_dx[0]           ) / (ax_dx[1] * (ax_dx[0] + ax_dx[1]));
-     prepend = a * at::slice(self, direction, 0, 1) + b * at::slice(self, direction, 1, 2) + c * at::slice(self, direction, 2, 3);
-
-     a = (    ax_dx[-1]            ) / (ax_dx[-2] * (ax_dx[-1] + ax_dx[-2]));
-     b =-(    ax_dx[-1] + ax_dx[-2]) / (ax_dx[-1] * ax_dx[-2]);
-     c = (2 * ax_dx[-1] + ax_dx[-2]) / (ax_dx[-1] * (ax_dx[-1] + ax_dx[-2]));
-     append = a * at::slice(self, direction, -3, -2) + b * at::slice(self, direction, -2, -1) + c * at::slice(self, direction, -1);
-    }
-
-    result.emplace_back(prepend_append_on_dim(center, prepend, append, direction));
-  }
-  return result;
-}
-
-static std::vector<Tensor> gradient_helper_float(const Tensor& self, ArrayRef<Scalar> spacing, IntArrayRef dim, int64_t edge_order) {
-  std::vector<Tensor> result;
-  for (const auto i : c10::irange(dim.size())) {
-      int64_t direction = maybe_wrap_dim(dim[i], self.dim());
-      const auto& ax_dx = spacing[i];
-      Tensor prepend, append;
-      auto center  = (at::slice(self,direction, 2   ) - at::slice(self, direction, 0, -2 ) ) / ax_dx;
-      if (edge_order==1) {
-        prepend = (at::slice(self,direction, 1, 2) - at::slice(self, direction, 0, 1  ) ) / ax_dx;
-        append  = (at::slice(self,direction, -1  ) - at::slice(self, direction, -2, -1) ) / ax_dx ;
-      } else if (edge_order==2) {
-        prepend = (-1.5 * at::slice(self, direction, 0, 1) + 2 * at::slice(self, direction, 1, 2)   - 0.5 * at::slice(self, direction, 2, 3))/ ax_dx;
-        append = (0.5 * at::slice(self, direction, -3, -2) - 2 * at::slice(self, direction, -2, -1) + 1.5 * at::slice(self, direction, -1))  / ax_dx;
-      }
-
-      result.emplace_back(prepend_append_on_dim(center/2, prepend, append, direction));
-  }
-  return result;
-}
-
-static std::vector<int64_t> gradient_dim_preprocess(const Tensor& self, std::optional<int64_t> dim) {
-  // if gradient dim is provided as an integer, then we need to compute gradient only on this direction.
-  // Moreover, if it's not provided at all, then we are interested in gradient for all directions.
-  // Finally, if dim is provided as vector of ints, then it is not expected to be called by this function.
-  if (dim.has_value()) {
-    return std::vector<int64_t>{dim.value()};
-  }
-
-  std::vector<int64_t> axis(self.dim());
-  std::iota(axis.begin(), axis.end(), 0);
-  return axis;
-}
-
-std::vector<Tensor> gradient(const Tensor& self, TensorList coordinates, IntArrayRef dim, int64_t edge_order) {
-    pre_check_gradient(self,
-                       std::optional<int64_t>(coordinates.size()),
-                       at::OptionalIntArrayRef(dim),
-                       edge_order);
-    return gradient_helper(self, coordinates, dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, TensorList coordinates, std::optional<int64_t> dim, int64_t edge_order) {
-  const auto processed_dim = gradient_dim_preprocess(self, dim);
-  pre_check_gradient(self,
-                     std::optional<int64_t>(coordinates.size()),
-                     dim.has_value() ? at::OptionalIntArrayRef(processed_dim) : std::nullopt,
-                     edge_order);
-  return gradient_helper(self, coordinates, processed_dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, c10::ArrayRef<Scalar> spacing, IntArrayRef dim, int64_t edge_order) {
-  pre_check_gradient(self,
-                     std::optional<int64_t>(spacing.size()),
-                     at::OptionalIntArrayRef(dim),
-                     edge_order);
-  return gradient_helper_float(self, spacing, dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, ArrayRef<Scalar> spacing, std::optional<int64_t> dim, int64_t edge_order) {
-  const auto processed_dim = gradient_dim_preprocess(self, dim);
-  pre_check_gradient(self,
-                     std::optional<int64_t>(spacing.size()),
-                     dim.has_value() ? at::OptionalIntArrayRef(processed_dim) : std::nullopt,
-                     edge_order);
-  return gradient_helper_float(self, spacing, processed_dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, const Scalar& unit_size, IntArrayRef dim, int64_t edge_order) {
-  // When spacing is given as scalar, while dim is given as IntArrayRef, scalar value need to
-  // be taken as unit size at every given dimension element of - dim.
-  std::vector<Scalar> spacing(dim.size(), unit_size);
-  pre_check_gradient(self,
-                     std::optional<int64_t>(spacing.size()),
-                     at::OptionalIntArrayRef(dim),
-                     edge_order);
-  return gradient_helper_float(self, spacing, dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, const std::optional<Scalar>& unit_size, std::optional<int64_t> dim, int64_t edge_order) {
-  const auto processed_dim = gradient_dim_preprocess(self, dim);
-  // When unit_size not provided, it is always assumed to be equal to 1.
-  // When dim has integer value it implies we are looking for gradient in the specific direction, however when
-  // it is not provided, it means we are interested to find gradient in all directions.
-  std::vector<Scalar> spacing(dim.has_value() ? 1 : self.dim(),
-                              unit_size.has_value() ? unit_size.value() : 1.0) ;
-  pre_check_gradient(self,
-                     unit_size.has_value() ?  std::optional<int64_t>(spacing.size()) : std::nullopt,
-                     dim.has_value() ? at::OptionalIntArrayRef(processed_dim) : std::nullopt,
-                     edge_order);
-  return gradient_helper_float(self, spacing, processed_dim, edge_order);
-}
-
-std::vector<Tensor> gradient(const Tensor& self, IntArrayRef dim, int64_t edge_order) {
-  std::vector<Scalar> spacing(dim.size(), 1.0) ;
-  pre_check_gradient(self,
-                     std::optional<int64_t>(spacing.size()),
-                     at::OptionalIntArrayRef(dim),
-                     edge_order);
-  return gradient_helper_float(self, spacing, dim, edge_order);
-}
-
 // ALL REDUCE #################################################################
 
 static inline bool should_use_acc_buffer(at::TensorIterator& iter) {
@@ -1332,6 +1029,13 @@ Tensor trace_cpu(const Tensor& self) {
   });
 
   return result;
+}
+
+Tensor trace_backward_symint(const Tensor& grad, c10::SymIntArrayRef sizes) {
+  auto grad_input = at::zeros_symint(sizes, grad.options());
+  auto diag = grad_input.diagonal(0, 0, 1);
+  diag.copy_(grad.expand_as(diag));
+  return grad_input;
 }
 
 static void impl_func_prod(

@@ -450,13 +450,6 @@ std::vector<Tensor> unbind_batching_rule(const Tensor& self, int64_t dim) {
   return result;
 }
 
-Tensor unfold_batching_rule(const Tensor& self, int64_t dim, int64_t size, int64_t step) {
-  auto self_physical = MultiBatchVmapTransform::logicalToPhysical(self);
-  auto dim_physical = self_physical.getPhysicalDim(dim);
-  auto result = self_physical.tensor().unfold(dim_physical, size, step);
-  return self_physical.getPhysicalToLogicalMap().apply(result);
-}
-
 Tensor contiguous_batching_rule(const Tensor& self, MemoryFormat memory_format) {
   TORCH_CHECK(memory_format == MemoryFormat::Contiguous,
       "NYI: Tensor.contiguous(...) inside of vmap for memory_format other ",
@@ -1005,7 +998,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
   m.impl("trace", trace_batching_rule);
   m.impl("transpose.int", transpose_int_batching_rule);
   m.impl("unbind.int", unbind_batching_rule);
-  m.impl("unfold", unfold_batching_rule);
   m.impl("unsqueeze", unsqueeze_batching_rule);
   m.impl("view", view_batching_rule);
   m.impl("view_as", native::view_as); // composite wrt autograd

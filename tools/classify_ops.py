@@ -254,7 +254,6 @@ def classify_op(func_line: str) -> tuple[str, str]:
     # Explicit KEEP overrides (false positives from substring matching)
     force_keep = {
         "detach": "autograd", "detach_": "autograd", "detach_copy": "autograd",
-        "unfold": "shape", "unfold_backward": "shape", "unfold_copy": "shape",
         "slice_inverse": "shape",
     }
     if base_name in force_keep:
@@ -332,6 +331,8 @@ def classify_op(func_line: str) -> tuple[str, str]:
                         "_weight_norm", "rms_norm", "_fused_rms_norm",
                         "_transformer_encoder_layer_fwd",
                         "col2im", "im2col",
+                        "diff", "gradient",
+                        "tril", "triu",
                         "_cufft_clear_plan_cache", "_cufft_get_plan_cache",
                         "_cufft_set_plan_cache",
                         "chalf",

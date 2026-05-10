@@ -1411,7 +1411,14 @@ Tensor repeat(const Tensor& self, IntArrayRef repeats) {
     // can't unfold with step 0, so make sure step is at least 1
     // (it doesn't matter what it is in that case, because the size is 0).
     auto size_i = xtensor.sizes()[i];
-    urtensor = urtensor.unfold(i, size_i, std::max<int64_t>(size_i, 1));
+    auto step_i = std::max<int64_t>(size_i, 1);
+    auto sizes = urtensor.sizes().vec();
+    auto strides = urtensor.strides().vec();
+    sizes.push_back(size_i);
+    strides.push_back(strides[i]);
+    sizes[i] = (sizes[i] - size_i) / step_i + 1;
+    strides[i] *= step_i;
+    urtensor = urtensor.as_strided(sizes, strides);
   }
 
   urtensor.copy_(xtensor.expand_as(urtensor));
@@ -3086,34 +3093,6 @@ Tensor detach(const Tensor& self) {
       // appropriate values if it runs; otherwise these are the values.
       /*version_counter=*/0,
       /*allow_tensor_metadata_change=*/false));
-}
-
-Tensor unfold(const Tensor& self, int64_t d, int64_t size, int64_t step) {
-  // some special handling to deal with allow d == 0 when self.dim() == 0
-  auto ndim = self.dim();
-  d = at::maybe_wrap_dim(d, ndim, /*wrap_scalar=*/true);
-
-  auto sizes = self.sizes().vec();
-  auto strides = self.strides().vec();
-  int64_t max_size = self.dim() == 0 ? 1 : sizes[d];
-  TORCH_CHECK(size >= 0, "size is ", size, " but must be >= 0");
-  TORCH_CHECK(
-      size <= max_size,
-      "maximum size for tensor at dimension ",
-      d,
-      " is ",
-      max_size,
-      " but size is ",
-      size);
-  TORCH_CHECK(step > 0, "step is ", step, " but must be > 0");
-  sizes.push_back(size);
-  strides.push_back(self.dim() == 0 ? 1 : strides[d]);
-  // The if handles the self.dim() == 0 case
-  if (d < ndim) {
-    sizes[d] = (sizes[d] - size) / step + 1;
-    strides[d] *= step;
-  }
-  return self.as_strided(sizes, strides);
 }
 
 Tensor diag(const Tensor& self, int64_t offset) {
