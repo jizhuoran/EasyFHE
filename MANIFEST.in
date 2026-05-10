@@ -43,7 +43,6 @@ include .ctags.d/*.ctags
 # Include subfolders completely
 graft .devcontainer
 graft .vscode
-graft android
 graft aten
 graft benchmarks
 graft binaries
