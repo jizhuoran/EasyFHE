@@ -92,7 +92,7 @@ if(USE_EASYFHE_FAST_BUILD)
   set(_easyfhe_pruned_native_cpu_sources
       "/aten/src/ATen/native/cpu/(Activation|Adaptive|AmpGradScaler|AvgPool|Blas|ChannelShuffle|Cross|DepthwiseConv|Distance|FlashAttention|FunctionOfAMatrix|Fused|GridSampler|LinearAlgebra|MaxPool|MaxUnpool|NativeMultiheadAttn|Padding|PixelShuffle|ReducedPrecision|Renorm|SampledAddmm|SoftMax|SortingKernel|Sparse|Spmm|UpSample|WeightNorm|airy|batch_norm|group_norm|int4mm|int8mm|layer_norm|scaled_modified_bessel|spherical_bessel)[A-Za-z0-9_]*\\.cpp\\.[A-Za-z0-9_]+\\.cpp$")
   set(_easyfhe_pruned_aten_sources
-      "/aten/src/ATen/(LegacyBatchingRegistrations|Register(Mkldnn|NestedTensor|Quantized|Sparse|SparseCsr)[^/]*|Sparse(Csr)?TensorImpl|VmapModeRegistrations)\\.cpp$|/aten/src/ATen/cuda/(CUDASparse|CuSparse|tunable/)")
+      "/aten/src/ATen/(LegacyBatchingRegistrations|Register(Mkldnn|NestedTensor|Quantized|Sparse|SparseCsr)[^/]*|Sparse(Csr)?TensorImpl|VmapModeRegistrations|quantized/(QTensorImpl|Quantizer))\\.cpp$|/aten/src/ATen/cuda/(CUDASparse|CuSparse|tunable/)")
   set(_easyfhe_pruned_cuda_sources
       "/aten/src/ATen/native/cuda/(Activation|Adaptive|AmpKernels|AveragePool|BatchLinearAlgebra|BinaryBitwiseOpsKernels|BinaryDivFloorKernel|BinaryDivTrueKernel|BinaryDivTruncKernel|BinaryGeometricKernels|BinaryLogicalOpsKernels|BinaryMiscBackwardOpsKernels|BinaryRemainderKernel|BinaryShiftOpsKernels|Blas|Col2Im|Convolution|CopysignKernel|CrossKernel|DepthwiseConv|DilatedMaxPool|Distance|Distribution|Distributions|Dropout|Embedding|FlattenIndices|Foreach|FractionalMax|FunctionOfAMatrix|Fused|GcdLcmKernel|GridSampler|GroupMM|GroupedBlas|IGamma|Im2Col|LinearAlgebra|LogAddExpKernel|LogcumsumexpKernel|Loss|MaxMinElementwiseKernel|MaxUnpooling|MixedDtypesLinear|Multi|NLLLoss|Naive|Nonzero|Normalization|PhiloxDistribution|PowKernel|RNN|ReduceArgMaxKernel|ReduceArgMinKernel|ReduceLogicKernel|ReduceMomentKernel|ReflectionPad|Renorm|ReplicationPadding|Rrelu|RowwiseScaledMM|Scaled|ScatterGatherKernel|SegmentReduce|SoftMax|Sort|Sorting|Sparse|SpectralOps|StepKernel|SummaryOps|TensorModeKernel|TensorTopK|UnaryFractionKernels|UnaryGamma|UnaryGeometric|UnaryLogKernels|UnarySpecialOps|Unique|UniqueCub|UpSample|ValidateCompressedIndices|WeightNorm|Zeta|airy|bessel|chebyshev|fused_|group_norm|hermite|int4mm|int8mm|laguerre|layer_norm|legendre|linalg/|modified_bessel|scaled_modified_bessel|shifted_chebyshev|spherical_bessel)")
   foreach(_easyfhe_srcs
@@ -107,14 +107,13 @@ if(USE_EASYFHE_FAST_BUILD)
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_aten_sources}")
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_cuda_sources}")
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "/aten/src/ATen/native/cuda/(IndexKernel\\.cpp|ReduceOps\\.cpp|ScanKernels\\.cpp)$")
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "/aten/src/ATen/native/nested/cuda/NestedTensorTransformerFunctions\\.cpp$")
   endforeach()
   list(APPEND Caffe2_CPU_SRCS
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/functorch/easyfhe_functorch_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/easyfhe_conv_stubs.cpp
+      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/easyfhe_quantized_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/transformers/easyfhe_sdp_stubs.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizerBase.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/AffineQuantizer.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/quantized/TensorAdvancedIndexing.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
   list(APPEND Caffe2_GPU_SRCS
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/EasyFHETunableStub.cpp
