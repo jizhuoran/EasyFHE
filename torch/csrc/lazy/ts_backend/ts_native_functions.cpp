@@ -351,10 +351,6 @@ at::Tensor LazyNativeFunctions::lift_fresh(const at::Tensor& tensor) {
 // core that call into view operators internally. These are all composite ops
 // that LTC can technically reuse / get for free, but we need to
 // "functionalize" them to remove the view ops before we can use them.
-at::Tensor LazyNativeFunctions::block_diag(at::TensorList tensors) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(
-      block_diag)>::call(tensors);
-}
 at::Tensor LazyNativeFunctions::new_empty_strided_symint(
     const at::Tensor& self,
     c10::SymIntArrayRef size,
@@ -409,15 +405,6 @@ at::Tensor& LazyNativeFunctions::logsumexp_out(
   out.resize_(out_unwrapped.sizes());
   out.copy_(out_unwrapped);
   return out;
-}
-
-at::Tensor LazyNativeFunctions::diag_embed(
-    const at::Tensor& self,
-    int64_t offset,
-    int64_t dim1,
-    int64_t dim2) {
-  return at::functionalization::functionalize_aten_op<ATEN_OP(
-      diag_embed)>::call(self, offset, dim1, dim2);
 }
 
 at::Tensor LazyNativeFunctions::diagonal_backward_symint(

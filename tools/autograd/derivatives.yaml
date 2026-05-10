@@ -452,14 +452,6 @@
   self: deg2rad_backward(grad)
   result: auto_element_wise
 
-- name: block_diag(Tensor[] tensors) -> Tensor
-  tensors: block_diag_backward(grad, to_args_sizes(tensors), to_args_scalartypes(tensors))
-  result: block_diag_jvp(tensors)
-
-- name: diag_embed(Tensor self, int offset=0, int dim1=-2, int dim2=-1) -> Tensor
-  self: grad.diagonal(offset, dim1, dim2)
-  result: auto_linear
-
 - name: diagonal(Tensor(a) self, int offset=0, int dim1=0, int dim2=1) -> Tensor(a)
   self: diagonal_backward_symint(grad, self.sym_sizes(), offset, dim1, dim2)
   result: auto_linear
@@ -831,22 +823,6 @@
   other: zeros_like(other)
   result: at::where(self_p != other_p, self_t, 0)
 
-- name: norm.Scalar(Tensor self, Scalar p=2) -> Tensor
-  self: norm_backward(grad, self, p, result)
-  result: norm_jvp(self_p, self_t, p, result)
-
-- name: norm.ScalarOpt_dim(Tensor self, Scalar? p, int[1] dim, bool keepdim=False) -> Tensor
-  self: norm_backward(grad, self, p, result, dim, keepdim)
-  result: norm_jvp(self_p, self_t, p, result, dim, keepdim)
-
-- name: norm.ScalarOpt_dtype(Tensor self, Scalar? p, *, ScalarType dtype) -> Tensor
-  self: norm_backward(grad, self.to(grad.scalar_type()), p, result)
-  result: norm_jvp(self_p, self_t, p, result)
-
-- name: norm.ScalarOpt_dim_dtype(Tensor self, Scalar? p, int[1] dim, bool keepdim, *, ScalarType dtype) -> Tensor
-  self: norm_backward(grad, self.to(grad.scalar_type()), p, result, dim, keepdim)
-  result: norm_jvp(self_p, self_t, p, result, dim, keepdim)
-
 - name: normal_(Tensor(a!) self, float mean=0, float std=1, *, Generator? generator=None) -> Tensor(a!)
   self: zeros_like(grad)
   result: self_t.zero_()
@@ -1128,10 +1104,6 @@
 - name: tan(Tensor self) -> Tensor
   self: grad * (1 + result.pow(2)).conj()
   result: auto_element_wise
-- name: trace(Tensor self) -> Tensor
-  self: trace_backward_symint(grad, self.sym_sizes())
-  result: auto_linear
-
 - name: transpose.int(Tensor(a) self, int dim0, int dim1) -> Tensor(a)
   self: grad.transpose(dim0, dim1)
   result: auto_linear

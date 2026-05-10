@@ -261,10 +261,6 @@ std::vector<at::Tensor> stack_tensors_backward(
     const at::Tensor& grad,
     int64_t dim,
     const std::vector<ScalarType>& dtypes);
-std::vector<at::Tensor> block_diag_backward(
-    const at::Tensor& grad,
-    const std::vector<std::vector<int64_t>>& sizes,
-    const std::vector<ScalarType>& dtypes);
 at::Tensor clamp_backward(
     const at::Tensor& grad,
     const at::Tensor& self,
@@ -1085,7 +1081,6 @@ Tensor convolution_backward_jvp_grad_bias(
     const Tensor& grad_bias);
 
 Tensor cat_jvp(const at::ITensorListRef& tensors, int64_t dim);
-Tensor block_diag_jvp(at::TensorList tensors);
 Tensor stack_jvp(at::TensorList tensors, int64_t dim);
 Tensor cumprod_jvp(
     const Tensor& self_t,

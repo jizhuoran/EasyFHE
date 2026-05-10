@@ -52,11 +52,6 @@ static Tensor min_decomp(
   return std::get<0>(at::min(self.flatten(), 0, false));
 }
 
-static Tensor norm_scalar_decomp(
-    const Tensor& self, const Scalar& p) {
-  return at::norm(self, p, range(0, self.dim()), false);
-}
-
 static Tensor nanmedian_decomp(
     const Tensor& self) {
   return std::get<0>(at::nanmedian(self.flatten(), 0, false));
@@ -236,10 +231,6 @@ static void boxed_reduction_batch_rule(const c10::OperatorHandle& op, torch::jit
 
 // Skipping all/any since they don't have opinfo tests right now :P
 
-static Tensor dist_decomp(const Tensor& self, const Tensor& other, const Scalar& p) {
-  return at::norm((self - other), p);
-}
-
 static std::tuple<Tensor, Tensor> expand_bdims(
     const Tensor& a, bool a_has_bdim,
     const Tensor& b, bool b_has_bdim) {
@@ -300,9 +291,7 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   REDUCTION_NO_KEEPDIM_ARG(cummin);
   REDUCTION_NO_KEEPDIM_ARG(cumprod);
   REDUCTION_NO_KEEPDIM_ARG(cumsum);
-  m.impl("dist", dist_decomp);
   REDUCTION_BOXED_ARGS(kthvalue, 2, KEEPDIM_CASE_VARIABLE, 3);
-  REDUCTION_BOXED_ARGS(linalg_vector_norm, 2, KEEPDIM_CASE_VARIABLE, 3);
   REDUCTION_NO_KEEPDIM_ARG(logcumsumexp);
   REDUCTION_WITH_KEEPDIM_ARG(logsumexp);
   m.impl("max", max_decomp);
@@ -317,8 +306,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   m.impl("nanmedian", nanmedian_decomp);
   REDUCTION_WITH_KEEPDIM_ARG(nanmedian.dim);
   REDUCTION_WITH_KEEPDIM_ARG(nansum);
-  m.impl("norm.Scalar", norm_scalar_decomp);
-  REDUCTION_BOXED_ARGS(norm.ScalarOpt_dim, 2, KEEPDIM_CASE_VARIABLE, 3);
   m.impl("prod", prod_decomp);
   REDUCTION_WITH_KEEPDIM_ARG(prod.dim_int);
   REDUCTION_BOXED_ARGS(std.correction, 1, KEEPDIM_CASE_VARIABLE, 3);

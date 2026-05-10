@@ -845,22 +845,7 @@ copy pasted in from VariableTypeEverything.cpp with appropriate substitutions.
   _(sum)                                \
   _(sum, dim_IntList)
 
-#define AT_FORALL_DIFFERENT_REDISPATCH_SIGNATURE(_)                         \
-  _(ADD_NS(norm),                                                           \
-    "norm.Scalar",                                                          \
-    Tensor(const Tensor&, const Scalar&),                                   \
-    Tensor(const Tensor&, const std::optional<Scalar>&, ScalarType),        \
-    fp32_append_dtype)                                                      \
-  _(ADD_NS(norm),                                                           \
-    "norm.ScalarOpt_dim",                                                   \
-    Tensor(const Tensor&, const std::optional<Scalar>&, IntArrayRef, bool), \
-    Tensor(                                                                 \
-        const Tensor&,                                                      \
-        const std::optional<Scalar>&,                                       \
-        IntArrayRef,                                                        \
-        bool,                                                               \
-        ScalarType),                                                        \
-    fp32_append_dtype)
+#define AT_FORALL_DIFFERENT_REDISPATCH_SIGNATURE(_)
 
 #define AT_FORALL_PROMOTE(_) \
   _(addcdiv)                 \

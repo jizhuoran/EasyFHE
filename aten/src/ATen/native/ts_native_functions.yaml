@@ -50,7 +50,6 @@ full_codegen:
   - ne.Scalar
   - ne.Tensor
   - neg
-  - norm.ScalarOpt_dim
   - pow.Tensor_Scalar
   - pow.Tensor_Tensor
   - reciprocal
@@ -67,7 +66,6 @@ full_codegen:
   - sub.Tensor
   - sum
   - sum.dim_IntList
-  - trace
   - trunc
   - alias_copy
   - as_strided_copy
@@ -113,8 +111,6 @@ supported:
   # Why? These operators are all CompositeExplicitAutograd, which mean that they run
   # after functionalization,
   # but their implementations call view operators (which we need to functionalize away).
-  - block_diag
-  - diag_embed
   - diagonal_backward
   - slice_backward
   - new_empty_strided

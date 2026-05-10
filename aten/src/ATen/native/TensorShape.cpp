@@ -545,87 +545,6 @@ Tensor cat_sparse(const ITensorListRef& tensors, int64_t dim) {
 }
 
 
-Tensor block_diag(TensorList tensors) {
-  Tensor result;
-  if (tensors.empty()) {
-    result = at::empty({1, 0});
-    return result;
-  }
-
-  const Device& device = tensors[0].device();
-  for (const auto tensor_idx : c10::irange(tensors.size())) {
-    const Tensor& tensor = tensors[tensor_idx];
-
-    TORCH_CHECK(
-        tensor.device() == device,
-        "torch.block_diag: input tensors must all be on the same device.",
-        " Input 0 is on device ",
-        device,
-        " and input ",
-        tensor_idx,
-        " is on device ",
-        tensor.device());
-  }
-
-  ScalarType output_scalar_type = native::result_type(tensors);
-  int64_t result_dim0 = 0;
-  int64_t result_dim1 = 0;
-  std::vector<Tensor> tensors_2D(tensors.size());
-
-  // Sum the dimensions of the tensors, check tensor sizes,
-  // and expand all 0-D and 1-D tensors so that everything
-  // is 2-D
-  for (const auto tensor_idx : c10::irange(tensors.size())) {
-    const Tensor& tensor = tensors[tensor_idx];
-    int64_t ndims = tensor.dim();
-    TORCH_CHECK(
-        ndims <= 2,
-        "torch.block_diag: Input tensors must have 2 or fewer dimensions. Input ",
-        tensor_idx,
-        " has ",
-        ndims,
-        " dimensions");
-
-    int64_t dim0 = 1;
-    int64_t dim1 = 1;
-
-    if (ndims == 2) {
-      dim0 = tensor.size(0);
-      dim1 = tensor.size(1);
-      tensors_2D[tensor_idx] = tensor;
-    } else if (ndims == 1) {
-      // Switching dim 0 to dim 1 is intentional
-      dim1 = tensor.size(0);
-      tensors_2D[tensor_idx] = tensor.expand({dim0, dim1});
-    } else {
-      tensors_2D[tensor_idx] = tensor.expand({dim0, dim1});
-    }
-    result_dim0 += dim0;
-    result_dim1 += dim1;
-  }
-
-  result = at::zeros(
-      {result_dim0, result_dim1},
-      tensors[0].options().dtype(output_scalar_type));
-
-  int64_t cur_dim0 = 0;
-  int64_t cur_dim1 = 0;
-
-  // Copy each tensor into the appropriate location in the result matrix
-  for (const auto& tensor : tensors_2D) {
-    int64_t dim0 = tensor.size(0);
-    int64_t dim1 = tensor.size(1);
-    result.slice(0, cur_dim0, cur_dim0 + dim0)
-        .slice(1, cur_dim1, cur_dim1 + dim1)
-        .copy_(tensor);
-
-    cur_dim0 += dim0;
-    cur_dim1 += dim1;
-  }
-
-  return result;
-}
-
 std::vector<Tensor> chunk(const Tensor& self, int64_t chunks, int64_t dim) {
   TORCH_CHECK(self.dim() > 0, "chunk expects at least a 1-dimensional tensor");
   TORCH_CHECK(
@@ -849,7 +768,7 @@ Tensor diagonal(
   return result;
 }
 
-Tensor diag_embed(
+static Tensor diag_embed_impl(
     const Tensor& self,
     int64_t offset,
     int64_t dim1_,
@@ -2768,101 +2687,6 @@ std::vector<Tensor> unbind(const Tensor& self, int64_t dim) {
   return tensors;
 }
 
-std::vector<Tensor> meshgrid(TensorList tensors) {
-  TORCH_WARN_ONCE(
-      "torch.meshgrid: in an upcoming release, it will be required to pass the "
-      "indexing argument.");
-  return native::meshgrid(tensors, /*indexing=*/"ij");
-}
-
-std::vector<Tensor> meshgrid(TensorList tensors, std::string_view indexing) {
-  int64_t size = tensors.size();
-  TORCH_CHECK(size > 0, "meshgrid expects a non-empty TensorList");
-
-  for (const auto i : c10::irange(size - 1)) {
-    TORCH_CHECK(
-        tensors[i].dtype() == tensors[i + 1].dtype(),
-        "meshgrid expects all tensors to have the same dtype");
-    TORCH_CHECK(
-        tensors[i].device() == tensors[i + 1].device(),
-        "meshgrid expects all tensors to have the same device");
-  }
-
-  // Input tensors is of type TensorList, which is an alias to a
-  // constant array slice, which doesn't allow for mutations. We may
-  // need to swap our first two elements if indexing is "ij", so we
-  // unconditionally create a vector that we can reorder to keep the
-  // implementation simple.
-  //
-  // We are not concerned with the performance of this relative to
-  // constructor a grid for each input.
-  std::vector<std::reference_wrapper<const Tensor>> tensor_refs(
-      tensors.begin(), tensors.end());
-
-  // Whether or not to swap the first two tensors.
-  //
-  // We only swap if there are at least two* input tensors (obviously)
-  // and if indexing is "xy".
-  //
-  // A reminder about "xy" semantics: "xy" semantics implies that the
-  // output grids are in the cartesian coordinate system. Thus the
-  // first dimension is the "x" axis (corresponding to column) and the
-  // second dimension is the "y" axis (corresponding to row). Tensors,
-  // however, generally consider the first axis to be the row and the
-  // second axis to be the columns. Thus we flip the two dimensions in
-  // contrast to "ij" indexing.
-  //
-  // It turns out that it's easiest to implement this by just swapping
-  // the first two inputs. However, the order of the outputs still
-  // must correspond to the order of the inputs. Thus we also must
-  // swap the outputs if we swapped the inputs.
-  //
-  // * Why do we even support this function for exactly one input?
-  bool swap_first_and_second_tensors = false;
-
-  if (indexing == "xy") {
-    // We can only swap if there are multiple tensors.
-    swap_first_and_second_tensors = size >= 2;
-    if (swap_first_and_second_tensors) {
-      std::swap(tensor_refs[0], tensor_refs[1]);
-    }
-  } else {
-    // Only "xy" and "ij" are supported, and we already checked for
-    // "xy" above. Only "ij" remains as a valid mode.
-    TORCH_CHECK(
-        indexing == "ij",
-        "torch.meshgrid: indexing must be one of \"xy\" or \"ij\", "
-        "but received: ",
-        indexing);
-  }
-
-  std::vector<c10::SymInt> shape(size);
-  for (const auto i : c10::irange(size)) {
-    TORCH_CHECK(
-        tensor_refs[i].get().dim() <= 1,
-        "torch.meshgrid: Expected 0D or 1D tensor in the tensor list but got: ",
-        tensor_refs[i]);
-    shape[i] = tensor_refs[i]
-                   .get()
-                   .sym_numel(); // treat 0D tensors as if they were a 1D tensor
-  }
-  std::vector<Tensor> grids;
-  grids.reserve(size);
-  std::vector<c10::SymInt> view_shape(size, 1);
-  for (const auto i : c10::irange(size)) {
-    view_shape[i] = -1; // select this dimension to infer
-    grids.push_back(
-        tensor_refs[i].get().view_symint(view_shape).expand_symint(shape));
-    view_shape[i] = 1; // restore to previous value
-  }
-
-  // Remember we need to also swap the outputs if we swapped the inputs.
-  if (swap_first_and_second_tensors) {
-    std::swap(grids[0], grids[1]);
-  }
-  return grids;
-}
-
 // Numpy-style `a.T`: returns the tensor
 // with dims reversed
 Tensor numpy_T(const Tensor& self) {
@@ -2977,7 +2801,7 @@ Tensor diag(const Tensor& self, int64_t offset) {
       self.dim(),
       "D");
   if (ndim == 1) {
-    return at::diag_embed(self, offset);
+    return diag_embed_impl(self, offset, -2, -1);
   } else {
     // We return a copy of the diagonal
     return at::diagonal_copy(self, offset);
@@ -2998,7 +2822,9 @@ Tensor& diag_out(const Tensor& self, int64_t offset, Tensor& out) {
         self.scalar_type(),
         " can't be cast to the desired out= type ",
         out.scalar_type());
-    return at::diag_embed_out(out, self, offset);
+    auto result = diag_embed_impl(self, offset, -2, -1);
+    at::native::resize_output(out, result.sizes());
+    return out.copy_(result);
   } else {
     return at::diagonal_copy_out(out, self, offset);
   }

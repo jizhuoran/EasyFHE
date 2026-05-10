@@ -16,20 +16,10 @@ Tensor index_select_backward_hack(const Tensor& grad, IntArrayRef self_sizes, in
   return at::zeros(self_sizes, grad.options()).index_add(dim, index, grad);
 }
 
-Tensor trace_backward_decomp(const Tensor& grad, IntArrayRef sizes) {
-  TORCH_CHECK(sizes.size() == 2, "expected matrix input");
-  auto grad_input = at::zeros(sizes[0] * sizes[1], grad.options());
-  auto diag_size = std::min(sizes[0], sizes[1]);
-  auto step = sizes[1] + 1;
-  auto indices = at::arange(0, diag_size * step, step, grad.options().dtype(at::kLong));
-  grad_input = grad_input.index_put({indices}, grad);
-  return grad_input.view(sizes);
-}
 }
 
 TORCH_LIBRARY_IMPL(aten, FuncTorchDynamicLayerFrontMode, m) {
   m.impl("index_select_backward", index_select_backward_hack);
-  m.impl("trace_backward", trace_backward_decomp);
 }
 
 } // namespace at::functorch

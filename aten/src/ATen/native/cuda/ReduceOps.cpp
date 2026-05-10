@@ -120,9 +120,4 @@ REGISTER_CUDA_DISPATCH(aminmax_stub, &aminmax_kernel_impl)
 REGISTER_CUDA_DISPATCH(norm_stub, &norm_kernel_cuda)
 REGISTER_CUDA_DISPATCH(powsum_stub, &powsum_kernel_cuda)
 
-Tensor trace_cuda(const Tensor& self) {
-  TORCH_CHECK(self.dim() == 2, "trace: expected a matrix, but got tensor with dim ", self.dim());
-  return at::sum(at::diagonal(self, 0, 0, 1));
-}
-
 } // namespace at::native

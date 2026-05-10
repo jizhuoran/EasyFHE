@@ -523,19 +523,6 @@ std::tuple<std::vector<Tensor>, std::optional<int64_t>> unbind_copy_batch_rule(
   return std::make_tuple(std::move(result), 0);
 }
 
-std::tuple<Tensor, std::optional<int64_t>> diag_embed_batch_rule(const Tensor& self, std::optional<int64_t> self_bdim, int64_t offset, int64_t dim1, int64_t dim2) {
-  auto logical_rank = rankWithoutBatchDim(self, self_bdim);
-  auto self_ = moveBatchDimToFront(self, self_bdim);
-  dim1 = maybe_wrap_dim(dim1, logical_rank + 1) + 1;
-  dim2 = maybe_wrap_dim(dim2, logical_rank + 1) + 1;
-  return std::make_tuple(at::diag_embed(self_, offset, dim1, dim2), 0);
-}
-
-Tensor trace_decomp(const Tensor& tensor) {
-  TORCH_CHECK(tensor.dim() == 2, "trace: expected a matrix, but got tensor with dim ", tensor.dim());
-  return tensor.diagonal().sum();
-}
-
 std::tuple<Tensor, std::optional<int64_t>> tril_batch_rule(
     const Tensor& self,
     std::optional<int64_t> self_bdim,
@@ -560,7 +547,6 @@ std::tuple<Tensor, std::optional<int64_t>> triu_batch_rule(
 
 TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   VMAP_SUPPORT(flip, flip_batch_rule);
-  m.impl("trace", trace_decomp);
   VMAP_SUPPORT(tril, tril_batch_rule);
   VMAP_SUPPORT(triu, triu_batch_rule);
   VMAP_SUPPORT(repeat, repeat_batch_rule);
@@ -588,7 +574,6 @@ TORCH_LIBRARY_IMPL(aten, FuncTorchBatched, m) {
   VMAP_SUPPORT2(transpose, int, transpose_int_batch_rule);
   m.impl("t", native::t);  // CompositeExplicitAutograd, should not go in BatchRulesDecompositions.cpp
   m.impl("t_", native::t_);  // CompositeExplicitAutograd, should not go in BatchRulesDecompositions.cpp
-  VMAP_SUPPORT(diag_embed, diag_embed_batch_rule);
   VMAP_SUPPORT(narrow_copy, narrow_copy_batch_rule);
   VMAP_SUPPORT2(unsafe_split, Tensor, unsafe_split_batch_rule);
 }

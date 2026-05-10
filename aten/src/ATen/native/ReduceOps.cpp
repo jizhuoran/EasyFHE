@@ -317,32 +317,6 @@ static ScalarType get_result_or_self_value_dtype(
   }
 }
 
-TORCH_META_FUNC2(norm, ScalarOpt_dim)
-(const Tensor& self, const OptionalScalarRef p, IntArrayRef dim, bool keepdim) {
-  TORCH_CHECK(
-      at::isFloatingType(self.scalar_type()) || at::isComplexType(self.scalar_type()),
-      "norm(): input dtype should be either floating point or complex. "
-      "Got ", self.scalar_type(), " instead.");
-
-  auto out_dtype = get_result_or_self_value_dtype(self, maybe_get_output(), std::nullopt);
-  resize_reduction(*this, self, dim, keepdim, out_dtype);
-}
-
-TORCH_META_FUNC2(norm, ScalarOpt_dim_dtype)
-(const Tensor& self,
- const OptionalScalarRef p,
- IntArrayRef dim,
- bool keepdim,
- ScalarType dtype) {
-  TORCH_CHECK(
-      at::isFloatingType(dtype) || at::isComplexType(dtype),
-      "norm(): the desired output dtype should be either floating point or complex. "
-      "Got ", dtype, " instead.");
-
-  auto out_dtype = get_result_or_self_value_dtype(self, maybe_get_output(), dtype);
-  resize_reduction(*this, self, dim, keepdim, out_dtype);
-}
-
 TORCH_META_FUNC(aminmax)
 (const Tensor& self, std::optional<int64_t> dim_opt, bool keepdim) {
   DimVector shape;
@@ -999,45 +973,6 @@ void inline set_result(Tensor& result, accscalar_t sum)
     }
 }
 }
-// NOTE: this could be implemented via diag and sum, but this has perf problems,
-// see https://github.com/pytorch/pytorch/pull/47305,
-Tensor trace_cpu(const Tensor& self) {
-  Tensor result;
-  // Returns the ScalarType of the self tensor if the tensor is non integral type
-  // In the case, self is an integer type tensor, at::kLong is return since promote_integers
-  // is set to true
-  ScalarType dtype = get_dtype_from_self(self, std::nullopt, true);
-  result = at::empty({}, self.options().dtype(dtype));
-  AT_DISPATCH_ALL_TYPES_AND_COMPLEX(self.scalar_type(), "trace", [&] {
-    using accscalar_t = at::acc_type<scalar_t, false>;
-    accscalar_t sum = 0;
-    const auto* t_data = self.const_data_ptr<scalar_t>();
-
-    int64_t t_stride_0, t_stride_1, t_diag_size;
-
-    TORCH_CHECK(self.dim() == 2, "trace: expected a matrix, but got tensor with dim ", self.dim());
-
-    t_stride_0 = self.stride(0);
-    t_stride_1 = self.stride(1);
-
-    t_diag_size = std::min(self.size(0), self.size(1));
-    for (const auto i : c10::irange(t_diag_size)) {
-      sum += t_data[i * (t_stride_0 + t_stride_1)];
-    }
-    set_result<scalar_t>(result, sum);
-
-  });
-
-  return result;
-}
-
-Tensor trace_backward_symint(const Tensor& grad, c10::SymIntArrayRef sizes) {
-  auto grad_input = at::zeros_symint(sizes, grad.options());
-  auto diag = grad_input.diagonal(0, 0, 1);
-  diag.copy_(grad.expand_as(diag));
-  return grad_input;
-}
-
 static void impl_func_prod(
     const Tensor& self,
     IntArrayRef dims,
@@ -1257,60 +1192,6 @@ Tensor special_logsumexp(const Tensor& self, IntArrayRef dims, bool keepdim) {
 }
 Tensor& special_logsumexp_out(const Tensor& self, IntArrayRef dims, bool keepdim, Tensor& result) {
   return at::logsumexp_out(result, self, dims, keepdim);
-}
-
-static void impl_func_norm(
-    const Tensor& self,
-    const OptionalScalarRef& opt_p,
-    IntArrayRef dim,
-    bool keepdim,
-    std::optional<ScalarType> opt_dtype,
-    const Tensor& result) {
-  TORCH_CHECK(false, "linalg_vector_norm_out removed in EasyFHE");
-}
-
-TORCH_IMPL_FUNC(norm_out)
-(const Tensor& self,
- const OptionalScalarRef p,
- IntArrayRef dim,
- bool keepdim,
- const Tensor& result) {
-  impl_func_norm(self, p, dim, keepdim, std::nullopt, result);
-}
-
-TORCH_IMPL_FUNC(norm_dtype_out)
-(const Tensor& self,
- const OptionalScalarRef p,
- IntArrayRef dim,
- bool keepdim,
- ScalarType dtype,
- const Tensor& result) {
-  impl_func_norm(self, p, dim, keepdim, dtype, result);
-}
-
-Tensor sparse_norm(
-    const Tensor& self,
-    const std::optional<Scalar>& p,
-    IntArrayRef dim,
-    bool keepdim) {
-  TORCH_CHECK(false, "sparse_norm not supported in EasyFHE");
-}
-
-Tensor sparse_dtype_norm(
-    const Tensor& self,
-    const std::optional<Scalar>& p,
-    IntArrayRef dim,
-    bool keepdim,
-    ScalarType dtype) {
-  TORCH_CHECK(false, "sparse_dtype_norm not supported in EasyFHE");
-}
-
-Tensor norm(const Tensor& self, const std::optional<Scalar>& p, ScalarType dtype) {
-  return at::norm(self, p, IntArrayRef{}, false, dtype);
-}
-
-Tensor norm(const Tensor& self, const Scalar& p) {
-  return at::norm(self, p, IntArrayRef{}, false);
 }
 
 static inline TensorIterator get_allany_iter(
@@ -1878,22 +1759,6 @@ std::tuple<Tensor,Tensor> std_mean(const Tensor& self, DimnameList dim,
   return at::std_mean(self, dimnames_to_positions(self, dim), correction, keepdim);
 }
 
-Tensor& norm_out(const Tensor& self, const std::optional<Scalar>& p, DimnameList dim, bool keepdim, ScalarType dtype, Tensor& result) {
-  return at::norm_out(result, self, p, dimnames_to_positions(self, dim), keepdim, dtype);
-}
-
-Tensor& norm_out(const Tensor& self, const std::optional<Scalar>& p, DimnameList dim, bool keepdim, Tensor& result) {
-  return at::norm_out(result, self, p, dimnames_to_positions(self, dim), keepdim);
-}
-
-Tensor norm(const Tensor& self, const std::optional<Scalar>& p, DimnameList dim, bool keepdim, ScalarType dtype) {
-  return at::norm(self, p, dimnames_to_positions(self, dim), keepdim, dtype);
-}
-
-Tensor norm(const Tensor& self, const std::optional<Scalar>& p, DimnameList dim, bool keepdim) {
-  return at::norm(self, p, dimnames_to_positions(self, dim), keepdim);
-}
-
 Tensor any(const Tensor& self, Dimname dim, bool keepdim) {
   reportNYIDimnameOverload("any");
 }
@@ -1951,10 +1816,6 @@ std::tuple<Tensor, Tensor> cummin(const Tensor& self, Dimname dim) {
 }
 std::tuple<Tensor&, Tensor&> cummin_out(const Tensor& self, Dimname dim, Tensor& values, Tensor& indices) {
   return at::cummin_out(values, indices, self, dimname_to_position(self, dim));
-}
-
-Tensor dist(const Tensor &self, const Tensor& other, const Scalar& p){
-  return at::norm(self - other, p);
 }
 
 enum class HashMode { XOR_SUM = 0 };

@@ -258,7 +258,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   KERNEL_CPU(polar, fp32)
   KERNEL_CPU(prod, fp32)
   KERNEL_CPU(prod, dim_int, fp32)
-  KERNEL_CPU(trace, fp32)
   KERNEL_CPU(view_as_complex, fp32)
 
   // promote
