@@ -130,6 +130,18 @@ inline void maybeSetSequenceInfo(
     const std::shared_ptr<ParamCommsDebugInfo>&,
     const T&) {}
 
+#ifdef EASYFHE_DISABLE_DDP_BINDINGS
+#define RECORD_PARAM_COMMS(...) \
+  do {                          \
+  } while (false)
+#define RECORD_PARAM_COMMS_DATA(...) \
+  do {                               \
+  } while (false)
+#define RECORD_PARAM_COMMS_DATA_WITH_ASYNC_OP(...) \
+  do {                                             \
+  } while (false)
+#else
+
 #define RECORD_PARAM_COMMS(                                                    \
     seq,                                                                       \
     pgName,                                                                    \
@@ -252,4 +264,5 @@ inline void maybeSetSequenceInfo(
       at::kParamCommsCallName,                                                 \
       paramInputs,                                                             \
       std::vector<c10::IValue>(1, c10::IValue(OutputTensors)));
+#endif
 } // namespace torch

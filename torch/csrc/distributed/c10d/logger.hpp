@@ -1,7 +1,15 @@
 #pragma once
 
 #include <c10/util/Logging.h>
+#include <atomic>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 #include <torch/csrc/distributed/c10d/reducer.hpp>
+#endif
 
 #include <utility>
 
@@ -38,6 +46,7 @@ struct ProcessGroupStatus {
   size_t lastStartedNumelOut;
 };
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 class TORCH_API Logger {
  public:
   explicit Logger(std::shared_ptr<c10d::Reducer> reducer);
@@ -133,6 +142,7 @@ class TORCH_API Logger {
   // track the number of iterations when runtime stats are collected so far.
   long num_iterations_stats_recorded_ = 0;
 };
+#endif
 
 // a generic logging data struct that holds different types of logging data.
 // starting with key value pairs of strings and integers,

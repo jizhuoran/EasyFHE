@@ -57,11 +57,15 @@
 
 #include <torch/csrc/distributed/c10d/comm.hpp>
 #include <torch/csrc/distributed/c10d/debug.h>
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 #include <torch/csrc/distributed/c10d/logger.hpp>
 #include <torch/csrc/distributed/c10d/reducer.hpp>
+#endif
 
 #include <torch/csrc/Exceptions.h>
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 #include <torch/csrc/distributed/c10d/python_comm_hook.h>
+#endif
 #include <torch/csrc/jit/python/pybind_utils.h>
 #include <torch/csrc/utils/object_ptr.h>
 #include <torch/csrc/utils/pybind.h>
@@ -375,6 +379,7 @@ class PythonResponse : public ::c10d::control_plane::Response {
   }
 };
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 // Called from DDP's Python API to create a c10d Python comm hook object.
 // The input state and callable comm_hook are Python objects. It later calls
 // register_comm_hook function of the reducer input to register the hook.
@@ -394,6 +399,7 @@ void _register_builtin_comm_hook(
     ::c10d::BuiltinCommHookType comm_hook_type) {
   reducer.register_builtin_comm_hook(comm_hook_type);
 }
+#endif
 
 // Customize the metaclass of ::c10d::ReduceOp for the backward compatibility.
 // https://github.com/pytorch/pytorch/pull/84243 changed ::c10d::ReduceOp to
@@ -473,6 +479,7 @@ PyObject* c10d_init(PyObject* _unused, PyObject* noargs) {
 
   auto module = py::handle(m).cast<py::module>();
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
   module
       .def(
           "_register_comm_hook",
@@ -789,6 +796,7 @@ An enum-like class for built-in communication hooks: ``ALLREDUCE`` and ``FP16_CO
           "_set_static_graph",
           &::c10d::Logger::set_static_graph,
           py::call_guard<py::gil_scoped_release>());
+#endif
 
   py::enum_<::c10d::DebugLevel>(module, "DebugLevel", R"(
       An enum whose values correspond to different debug levels of the
@@ -4053,6 +4061,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
       .def_readwrite("strs_map", &c10::DDPLoggingData::strs_map)
       .def_readwrite("ints_map", &c10::DDPLoggingData::ints_map);
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
   module.def(
       "_compute_bucket_assignment_by_size",
       [](const std::vector<at::Tensor>& tensors,
@@ -4119,6 +4128,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
       // The source of truth rank to broadcast the tensors from.
       py::arg("src") = 0,
       py::call_guard<py::gil_scoped_release>());
+#endif
 
   module.def(
       "_test_python_store",
@@ -4179,7 +4189,9 @@ such as `dist.all_reduce(tensor, async_op=True)`.
       },
       py::call_guard<py::gil_scoped_release>());
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
   module.attr("_DEFAULT_FIRST_BUCKET_BYTES") = ::c10d::kDefaultFirstBucketBytes;
+#endif
   module.attr("_DEFAULT_PG_TIMEOUT") = py::cast(kProcessGroupDefaultTimeout);
 #ifdef USE_C10D_NCCL
   module.attr("_DEFAULT_PG_NCCL_TIMEOUT") =

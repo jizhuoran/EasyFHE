@@ -11,6 +11,8 @@
 
 namespace c10d {
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
+
 static std::vector<std::string> TORCH_NCCL_BLOCKING_WAIT = {
     "TORCH_NCCL_BLOCKING_WAIT",
     "NCCL_BLOCKING_WAIT"};
@@ -401,6 +403,8 @@ at::DDPLoggingData Logger::get_ddp_logging_data() {
   std::lock_guard<std::mutex> lock(reducer_->mutex_);
   return *ddp_logging_data_;
 }
+
+#endif
 
 // initialization of static variables in C10dLogger
 std::unique_ptr<C10dLogger> C10dLogger::logger_ = nullptr;

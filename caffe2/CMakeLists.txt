@@ -133,6 +133,8 @@ function(easyfhe_filter_runtime_sources _srcs)
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/interpreter/preprocess_graph\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/static/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(comm|default_comm_hooks|ParamCommsUtils|reducer|reducer_cuda)\\.(cpp|cu)$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/rpc/")
     if("${_srcs}" STREQUAL "TORCH_SRCS" OR "${_srcs}" STREQUAL "Caffe2_CPU_SRCS")
       list(APPEND ${_srcs}
         ${TORCH_SRC_DIR}/csrc/dynamo/easyfhe_compiled_autograd_stub.cpp
@@ -1608,11 +1610,13 @@ target_include_directories(torch_cpu SYSTEM PRIVATE "${Caffe2_DEPENDENCY_INCLUDE
 target_compile_definitions(torch_cpu PRIVATE CAFFE2_BUILD_MAIN_LIB)
 if(USE_EASYFHE_FAST_BUILD)
   target_compile_definitions(torch_cpu PRIVATE EASYFHE_DISABLE_JIT_BINDINGS)
+  target_compile_definitions(torch_cpu PRIVATE EASYFHE_DISABLE_DDP_BINDINGS)
 endif()
 if(USE_CUDA)
   target_compile_definitions(torch_cuda PRIVATE TORCH_CUDA_BUILD_MAIN_LIB)
   if(USE_EASYFHE_FAST_BUILD)
     target_compile_definitions(torch_cuda PRIVATE EASYFHE_DISABLE_JIT_BINDINGS)
+    target_compile_definitions(torch_cuda PRIVATE EASYFHE_DISABLE_DDP_BINDINGS)
   endif()
 endif()
 
