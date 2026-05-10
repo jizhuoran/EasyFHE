@@ -3,39 +3,22 @@
 # Include individual top-level files
 include CITATION.cff
 include CODEOWNERS
-include Dockerfile
 include LICENSE
 include MANIFEST.in
 include Makefile
 include NOTICE
-include .bc-linter.yml
-include .clang-format .clang-tidy
-include .cmakelintrc
-include .coveragerc
-include .dockerignore
+include .clang-format
 include .editorconfig
-include .flake8
 include .gdbinit
-include .lintrunner.toml
 include .lldbinit
 include codex_setup.sh
-include docker.Makefile
-include pyrefly.toml
-include ubsan.supp
 
-# Include bazel and BUCK related files
-include BUILD.bazel BUCK.oss
-include WORKSPACE
-include *.bzl
-include .bazelignore .bazelrc .bazelversion
-
-# Include general configuration files
-include *.ini
 # Include important top-level information
 include *.md
 # Include technical text files at the moment, comprises
 # version.txt, CMakeLists.txt, requirements.txt
 include *.txt
+include build_variables.bzl
 
 # Include ctags configuration
 include .ctags.d/*.ctags
@@ -48,7 +31,6 @@ graft c10
 graft caffe2
 graft cmake
 graft functorch
-graft ios
 graft mypy_plugins
 graft scripts
 graft third_party
@@ -65,7 +47,6 @@ prune third_party/flatbuffers/java
 prune third_party/flatbuffers/kotlin
 prune third_party/ittapi/rust
 prune third_party/nccl/pkg/debian
-prune third_party/opentelemetry-cpp/third_party/prometheus-cpp/cmake/project-import-*
 
 # The following document is also an invalid symlink[1] and superfluous
 exclude third_party/flatbuffers/docs/source/CONTRIBUTING.md
