@@ -11,6 +11,7 @@
 #include <torch/csrc/jit/frontend/builtin_functions.h>
 #include <torch/csrc/jit/frontend/versioned_symbols.h>
 #include <torch/csrc/jit/mobile/prim_ops_registery.h>
+#include <torch/csrc/jit/mobile/promoted_prim_ops.h>
 #include <torch/csrc/jit/operator_upgraders/utils.h>
 #include <torch/csrc/jit/runtime/profiling_record.h>
 #include <torch/csrc/jit/runtime/script_profile.h>
@@ -134,7 +135,72 @@ uint64_t get_min_version_for_kind(const NodeKind&) {
 
 namespace mobile {
 void registerPrimOpsFunction(const std::string&, const std::function<void(Stack&)>&) {}
+
+bool hasPrimOpsFn(const std::string&) {
+  return false;
+}
+
+std::function<void(Stack&)>& getPrimOpsFn(const std::string&) {
+  static std::function<void(Stack&)> disabled = [](Stack&) {
+    TORCH_CHECK(
+        false, "JIT mobile primitive ops are disabled in EasyFHE fast build");
+  };
+  return disabled;
+}
 } // namespace mobile
+
+int64_t normalizeIndex(int64_t idx, int64_t list_size) {
+  return idx < 0 ? list_size + idx : idx;
+}
+
+IValue tensorToListRecursive(
+    char*,
+    int64_t,
+    int64_t,
+    at::TypePtr,
+    at::ScalarType,
+    at::IntArrayRef,
+    at::IntArrayRef,
+    size_t) {
+  TORCH_CHECK(
+      false, "JIT tensor-to-list conversion is disabled in EasyFHE fast build");
+  return {};
+}
+
+#define EASYFHE_DISABLED_PROMOTED_PRIM(name)                              \
+  void name(Stack&) {                                                     \
+    TORCH_CHECK(false, "JIT promoted primitive op is disabled: " #name); \
+  }
+
+EASYFHE_DISABLED_PROMOTED_PRIM(tupleIndex)
+EASYFHE_DISABLED_PROMOTED_PRIM(raiseException)
+EASYFHE_DISABLED_PROMOTED_PRIM(is)
+EASYFHE_DISABLED_PROMOTED_PRIM(unInitialized)
+EASYFHE_DISABLED_PROMOTED_PRIM(isNot)
+EASYFHE_DISABLED_PROMOTED_PRIM(aten_format)
+EASYFHE_DISABLED_PROMOTED_PRIM(size)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_size)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_size_int)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_stride_int)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_numel)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_storage_offset)
+EASYFHE_DISABLED_PROMOTED_PRIM(sym_stride)
+EASYFHE_DISABLED_PROMOTED_PRIM(device)
+EASYFHE_DISABLED_PROMOTED_PRIM(device_with_index)
+EASYFHE_DISABLED_PROMOTED_PRIM(dtype)
+EASYFHE_DISABLED_PROMOTED_PRIM(layout)
+EASYFHE_DISABLED_PROMOTED_PRIM(toPrimDType)
+EASYFHE_DISABLED_PROMOTED_PRIM(dim)
+EASYFHE_DISABLED_PROMOTED_PRIM(_not)
+EASYFHE_DISABLED_PROMOTED_PRIM(boolTensor)
+EASYFHE_DISABLED_PROMOTED_PRIM(toList)
+EASYFHE_DISABLED_PROMOTED_PRIM(numToTensorScalar)
+EASYFHE_DISABLED_PROMOTED_PRIM(isCuda)
+EASYFHE_DISABLED_PROMOTED_PRIM(numToTensorBool)
+EASYFHE_DISABLED_PROMOTED_PRIM(dictIndex)
+EASYFHE_DISABLED_PROMOTED_PRIM(raiseExceptionWithMessage)
+
+#undef EASYFHE_DISABLED_PROMOTED_PRIM
 
 std::vector<char> pickle_save(const IValue&) {
   return {};

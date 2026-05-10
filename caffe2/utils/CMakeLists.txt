@@ -10,7 +10,7 @@ if(USE_PTHREADPOOL)
   )
 endif()
 
-if(NOT INTERN_BUILD_MOBILE)
+if(NOT INTERN_BUILD_MOBILE AND NOT USE_EASYFHE_FAST_BUILD)
   list(APPEND Caffe2_CPU_SRCS
     utils/proto_wrap.cc
   )

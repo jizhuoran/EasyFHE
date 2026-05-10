@@ -144,8 +144,6 @@ function(easyfhe_filter_runtime_sources _srcs)
         ${TORCH_SRC_DIR}/csrc/jit/frontend/schema_matching.cpp
         ${TORCH_SRC_DIR}/csrc/jit/frontend/tracer.cpp
         ${TORCH_SRC_DIR}/csrc/jit/jit_log.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/mobile/promoted_prim_ops.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/mobile/register_ops_common_utils.cpp
         ${TORCH_SRC_DIR}/csrc/jit/passes/inliner.cpp
         ${TORCH_SRC_DIR}/csrc/jit/passes/utils/memory_dag.cpp
         ${TORCH_SRC_DIR}/csrc/jit/python/update_graph_executor_opt.cpp
@@ -1560,7 +1558,7 @@ if(USE_DISTRIBUTED)
   endif()
 endif()
 
-if(NOT INTERN_BUILD_MOBILE)
+if(NOT INTERN_BUILD_MOBILE AND NOT USE_EASYFHE_FAST_BUILD)
   if(${CAFFE2_LINK_LOCAL_PROTOBUF})
     target_link_libraries(torch_cpu PRIVATE protobuf::libprotobuf)
   else()
