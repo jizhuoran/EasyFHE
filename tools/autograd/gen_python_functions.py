@@ -34,6 +34,7 @@
 from __future__ import annotations
 
 import itertools
+import os
 import re
 from collections import defaultdict
 from typing import TYPE_CHECKING
@@ -308,15 +309,16 @@ def gen(
         symint=symint,
     )
 
-    create_python_bindings(
-        fm,
-        functions,
-        is_py_nn_function,
-        "torch.nn",
-        "python_nn_functions.cpp",
-        method=False,
-        symint=symint,
-    )
+    if os.environ.get("USE_EASYFHE_FAST_BUILD") != "1":
+        create_python_bindings(
+            fm,
+            functions,
+            is_py_nn_function,
+            "torch.nn",
+            "python_nn_functions.cpp",
+            method=False,
+            symint=symint,
+        )
 
     create_python_bindings(
         fm,

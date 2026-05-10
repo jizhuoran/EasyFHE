@@ -153,7 +153,7 @@ function(easyfhe_filter_runtime_sources _srcs)
         ${TORCH_SRC_DIR}/csrc/jit/serialization/easyfhe_pickler_stub.cpp
         ${TORCH_SRC_DIR}/csrc/jit/serialization/python_print.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_graph_executor_stub.cpp
-        ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp
+        ${TORCH_SRC_DIR}/csrc/api/src/nn/easyfhe_module_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/serialize/output-archive.cpp)
     endif()
@@ -385,6 +385,10 @@ set(GENERATED_CXX_PYTHON
   "${TORCH_SRC_DIR}/csrc/autograd/generated/python_enum_tag.cpp"
   "${TORCH_SRC_DIR}/csrc/functionalization/generated/ViewMetaClassesPythonBinding.cpp"
   )
+
+if(USE_EASYFHE_FAST_BUILD)
+  list(FILTER GENERATED_CXX_PYTHON EXCLUDE REGEX "/torch/csrc/autograd/generated/python_nn_functions\\.cpp$")
+endif()
 
 set(GENERATED_H_PYTHON
   "${TORCH_SRC_DIR}/csrc/autograd/generated/python_functions.h"
@@ -725,12 +729,15 @@ if(NOT NO_API AND NOT BUILD_LITE_INTERPRETER)
     ${TORCH_SRC_DIR}/csrc/api/src/serialize.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/jit.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/mps.cpp
-    ${TORCH_SRC_DIR}/csrc/api/src/nn/init.cpp
-    ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/serialize/output-archive.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/xpu.cpp
   )
+  if(NOT USE_EASYFHE_FAST_BUILD)
+    list(APPEND TORCH_SRCS
+      ${TORCH_SRC_DIR}/csrc/api/src/nn/init.cpp
+      ${TORCH_SRC_DIR}/csrc/api/src/nn/module.cpp)
+  endif()
 endif()
 
 easyfhe_filter_runtime_sources(TORCH_SRCS)

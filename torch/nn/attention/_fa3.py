@@ -1,5 +1,0 @@
-# mypy: allow-untyped-defs
-
-
-def __getattr__(name):
-    raise AttributeError(f"torch.nn.attention._fa3.{name} is disabled in EasyFHE")

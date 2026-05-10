@@ -1,19 +1,10 @@
-# mypy: allow-untyped-defs
-from .module import Module
-from .container import ModuleDict, ModuleList, Sequential
-from .conv import Conv2d
-from .batchnorm import BatchNorm1d, BatchNorm2d
-from .linear import Linear
-from .pooling import AdaptiveAvgPool2d
+from torch.nn.modules.module import Module as Module
 
-__all__ = [
-    "AdaptiveAvgPool2d",
-    "BatchNorm1d",
-    "BatchNorm2d",
-    "Conv2d",
-    "Linear",
-    "Module",
-    "ModuleDict",
-    "ModuleList",
-    "Sequential",
-]
+
+def __getattr__(name):
+    if name == "Module":
+        return Module
+    raise AttributeError(f"torch.nn.modules.{name} is disabled in EasyFHE")
+
+
+__all__ = ["Module"]

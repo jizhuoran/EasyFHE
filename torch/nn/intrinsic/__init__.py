@@ -1,5 +1,0 @@
-__all__ = []
-
-
-def __getattr__(name):
-    raise RuntimeError("torch.nn.intrinsic is disabled in EasyFHE")
