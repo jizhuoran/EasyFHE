@@ -746,13 +746,6 @@ Tensor unwrap_and_call_method(const Tensor& input, ExtraArgs... extra_args) {
   return makeBatched(output_physical, BatchDims(old_bdims.begin(), old_bdims.end()));
 }
 
-Tensor pow_scalar_Tensor_batching_rule(const Scalar& other, const Tensor& self) {
-  auto* self_batched = unsafeGetBatchedImpl(self);
-  auto output_physical = at::pow(other, self_batched->value());
-  auto old_bdims = self_batched->bdims();
-  return makeBatched(output_physical, BatchDims(old_bdims.begin(), old_bdims.end()));
-}
-
 Tensor clone_batching_rule(const Tensor& self, std::optional<MemoryFormat> memory_format) {
   // Memory format support is a little tricky because vmap is allowed to move
   // around batch dimensions and some memory formats are rank-dependent.
@@ -1076,11 +1069,6 @@ TORCH_LIBRARY_IMPL(aten, Batched, m) {
     m.impl("div.Tensor_mode", binary_pointwise_batching_rule<Binop, at::div, std::optional<std::string_view>>);
     m.impl("div.Scalar_mode", unwrap_and_call<Unop, at::div, const Scalar&, std::optional<std::string_view>>);
   }
-
-  // at::pow has three out-of-place overloads
-  m.impl("pow.Tensor_Tensor", binary_pointwise_batching_rule<TensorTensorType, at::pow>);
-  m.impl("pow.Tensor_Scalar", unwrap_and_call<TensorScalarType, at::pow, const Scalar&>);
-  m.impl("pow.Scalar", pow_scalar_Tensor_batching_rule);
 
   // for at::result_type, call the native::result_type implementation.
   // We don't have to do anything special because native::result_type operates

@@ -826,10 +826,7 @@ copy pasted in from VariableTypeEverything.cpp with appropriate substitutions.
   _(log2)                             \
   _(log1p)                            \
   _(reciprocal)                       \
-  _(rsqrt)                            \
-  _(pow, Tensor_Scalar)               \
-  _(pow, Tensor_Tensor)               \
-  _(pow, Scalar)
+  _(rsqrt)
 
 #define AT_FORALL_FP32_SET_OPT_DTYPE(_)
 

@@ -19,27 +19,15 @@
 #include <ATen/ops/add.h>
 #include <ATen/ops/add_native.h>
 #include <ATen/ops/add_ops.h>
-#include <ATen/ops/copysign.h>
-#include <ATen/ops/copysign_native.h>
 #include <ATen/ops/div.h>
 #include <ATen/ops/div_native.h>
 #include <ATen/ops/div_ops.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/floor_divide.h>
-#include <ATen/ops/floor_divide_native.h>
-#include <ATen/ops/fmod.h>
-#include <ATen/ops/fmod_native.h>
 #include <ATen/ops/full.h>
-#include <ATen/ops/heaviside_native.h>
-#include <ATen/ops/hypot_native.h>
 #include <ATen/ops/mul.h>
 #include <ATen/ops/mul_native.h>
 #include <ATen/ops/mul_ops.h>
 #include <ATen/ops/multiply_native.h>
-#include <ATen/ops/nextafter_native.h>
-#include <ATen/ops/pow.h>
-#include <ATen/ops/remainder.h>
-#include <ATen/ops/remainder_native.h>
 #include <ATen/ops/sub.h>
 #include <ATen/ops/sub_native.h>
 #include <ATen/ops/subtract_native.h>
@@ -87,41 +75,11 @@ TORCH_META_FUNC2(div, Tensor_mode) (const Tensor& self, const Tensor& other, std
   }
 }
 
-TORCH_META_FUNC2(copysign, Tensor) (
-  const Tensor& self, const Tensor& other
-) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(heaviside) (
-  const Tensor& self, const Tensor& other
-) {
-  TORCH_CHECK(!self.is_complex() && !other.is_complex() &&
-              (maybe_get_output().defined() ? !maybe_get_output().is_complex() : true),
-              "heaviside is not yet implemented for complex tensors.");
-  TORCH_CHECK(self.dtype() == other.dtype() &&
-              (maybe_get_output().defined() ? maybe_get_output().dtype() == self.dtype() : true),
-              "heaviside is not yet implemented for tensors with different dtypes.");
-
-  build_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(remainder, Tensor)(const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(fmod, Tensor) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
 // These are normal binary ops that preserve dtype
 #define CREATE_BINARY_META_FUNC(func)                                 \
   TORCH_META_FUNC(func) (const Tensor& self, const Tensor& other) {   \
     build_borrowing_binary_op(maybe_get_output(), self, other);                 \
   }
-
-CREATE_BINARY_META_FUNC(hypot)
-CREATE_BINARY_META_FUNC(nextafter)
 
 #define CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(func)                     \
   TORCH_META_FUNC2(func, Tensor)(const Tensor& self, const Tensor& other) { \
@@ -234,11 +192,6 @@ TORCH_IMPL_FUNC(func_out) (const Tensor& self, const Tensor& other, const Tensor
   func_stub(device_type(), *this);                                                           \
 }
 
-CREATE_BINARY_TORCH_IMPL_FUNC(fmod_out, fmod_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(hypot_out, hypot_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(nextafter_out, nextafter_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(remainder_out, remainder_stub)
-
 Tensor arctan2(const Tensor& self, const Tensor& other) {
   TORCH_CHECK(false, "atan2/arctan2 is disabled in EasyFHE");
   return self;
@@ -252,27 +205,6 @@ Tensor& arctan2_(Tensor& self, const Tensor& other) {
 Tensor& arctan2_out(const Tensor& self, const Tensor& other, Tensor& result) {
   TORCH_CHECK(false, "atan2/arctan2 is disabled in EasyFHE");
   return result;
-}
-
-TORCH_IMPL_FUNC(copysign_out) (
-  const Tensor& self, const Tensor& other, const Tensor& result
-) {
-  copysign_stub(device_type(), *this);
-}
-
-Tensor copysign(const Tensor& self, const Scalar& other) {
-  // redispatch!
-  return at::copysign(self, wrapped_scalar_tensor(other));
-}
-
-Tensor& copysign_(Tensor& self, const Scalar& other) {
-  // redispatch!
-  return self.copysign_(wrapped_scalar_tensor(other));
-}
-
-Tensor& copysign_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  // redispatch!
-  return at::copysign_out(result, self, wrapped_scalar_tensor(other));
 }
 
 // WARNING: There doesn't appear to be any testing for this function
@@ -357,26 +289,6 @@ Tensor true_divide(const Tensor& self, const Scalar& divisor) {
 
 Tensor& true_divide_(Tensor& self, const Scalar& divisor) {
   return self.div_(divisor);
-}
-
-Tensor& floor_divide_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  auto iter = TensorIterator::binary_op(result, self, other);
-  div_floor_stub(iter.device_type(), iter);
-  if (!result.defined()) {
-    result = iter.output();
-  }
-  return result;
-}
-
-Tensor floor_divide(const Tensor& self, const Tensor& other) {
-  Tensor result;
-  auto iter = TensorIterator::binary_op(result, self, other);
-  div_floor_stub(iter.device_type(), iter);
-  return iter.output();
-}
-
-Tensor& floor_divide_(Tensor& self, const Tensor& other) {
-  return native::floor_divide_out(self, other, self);
 }
 
 // TODO: Make this structured to undo the perf regression from native:: removal
@@ -550,25 +462,6 @@ Tensor add(const Tensor& self, const Scalar& other, const Scalar& alpha) {
 
 Tensor& add_(Tensor& self, const Scalar& other, const Scalar& alpha) {
   return self.add_(wrapped_scalar_tensor(other), alpha);
-}
-
-Tensor remainder(const Tensor& self, const Scalar& other) {
-  // redispatch
-  return at::remainder(self, wrapped_scalar_tensor(other));
-}
-
-Tensor& remainder_(Tensor& self, const Scalar& other) {
-  // redispatch
-  return self.remainder_(wrapped_scalar_tensor(other));
-}
-
-Tensor& remainder_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  // redispatch
-  return at::remainder_out(result, self, wrapped_scalar_tensor(other));
-}
-
-Tensor remainder(const Scalar& self, const Tensor& other) {
-  return at::remainder(wrapped_scalar_tensor(self), other);
 }
 
 Tensor rsub(const Tensor& self, const Scalar& other, const Scalar& alpha) {
@@ -886,48 +779,6 @@ Tensor& min_out(const Tensor& self, const Tensor& other, Tensor& result) {
 Tensor min(const Tensor& self, const Tensor& other) {
   TORCH_CHECK(false, "minimum/min Tensor overload is disabled in EasyFHE");
   return self;
-}
-
-Tensor floor_divide(const Tensor& self, const Scalar& other) {
-  return at::floor_divide(self, wrapped_scalar_tensor(other));
-}
-
-Tensor& floor_divide_(Tensor& self, const Scalar& other) {
-  return at::floor_divide_out(self, self, wrapped_scalar_tensor(other));
-}
-
-Tensor& fmod_out(const Tensor& self, const Scalar& other, Tensor & result) {
-  // redispatch
-  return at::fmod_out(result, self, wrapped_scalar_tensor(other));
-}
-
-Tensor fmod(const Tensor& self, const Scalar& other) {
-  // redispatch
-  return at::fmod(self, wrapped_scalar_tensor(other));
-}
-
-Tensor& fmod_(Tensor& self, const Scalar& other) {
-  // redispatch
-  return self.fmod_(wrapped_scalar_tensor(other));
-}
-
-// Note: this function is only for testing.
-// It is undocumented and should not be used outside of tests.
-
-TORCH_IMPL_FUNC(heaviside_out) (
-  const Tensor& self, const Tensor& other, const Tensor& result
-) {
-  heaviside_stub(device_type(), *this);
-}
-
-static inline Tensor _pow2(const Tensor& self, const Tensor& other) {
-  const auto self_dtype = self.scalar_type();
-  // All integral types are promoted to float32
-  if (isIntegralType(self_dtype, true) || self_dtype == kFloat) {
-      return at::pow(2.0, other);
-  }
-  // For double and reduced floating types do regular type promotion
-  return at::full({}, 2.0, self.options()).pow(other);
 }
 
 // This function is used to dispatch to kernels that use std::ldexp on CPU and the global namespaces ::ldexp on CUDA

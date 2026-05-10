@@ -339,20 +339,8 @@ Tensor norm_backward(
     auto self_abs = self.abs();
     auto mask = self_abs.eq(norm).logical_or(self_abs.isnan());
     return self.sgn() * ((grad / mask.sum(dim, true)) * mask);
-  } else if (p < 1.0) {
-    self_scaled =
-        self.sgn() * self.abs().pow_(p - 1).masked_fill_(self == 0, 0);
-    return self_scaled * grad * norm.pow(1 - p);
-  } else if (p < 2.0) {
-    self_scaled = self.sgn() * self.abs().pow_(p - 1);
-    scale_v = grad / norm.pow(p - 1);
-    scale_v.masked_fill_(norm == 0, 0);
-    return self_scaled * scale_v;
   } else {
-    self_scaled = self * self.abs().pow_(p - 2);
-    scale_v = grad / norm.pow(p - 1);
-    scale_v.masked_fill_(norm == 0, 0);
-    return self_scaled * scale_v;
+    TORCH_CHECK(false, "norm backward for non-special p is disabled in EasyFHE");
   }
 }
 
@@ -402,23 +390,8 @@ Tensor norm_jvp(
     }
     return (at::real(self_p.sgn() * self_t.conj()) * is_eq_max / nb_max)
         .sum(dim, keepdim);
-  } else if (p < 1.0) {
-    auto sumpow_t = (self_p.abs().pow_(p - 1).masked_fill_(self_p == 0, 0) *
-                     at::real(self_p.sgn() * self_t.conj()))
-                        .sum(dim, keepdim);
-    return sumpow_t * norm.pow(1 - p);
-  } else if (p < 2.0) {
-    auto sumpow_t =
-        (self_p.abs().pow_(p - 1) * at::real(self_p.sgn() * self_t.conj()))
-            .sum(dim, keepdim);
-    auto out = sumpow_t / norm.pow(p - 1);
-    return out.masked_fill_(norm == 0, 0);
   } else {
-    auto sumpow_t =
-        (self_p.abs().pow_(p - 2) * at::real(self_p * self_t.conj()))
-            .sum(dim, keepdim);
-    auto out = sumpow_t / norm.pow(p - 1);
-    return out.masked_fill_(norm == 0, 0);
+    TORCH_CHECK(false, "norm JVP for non-special p is disabled in EasyFHE");
   }
 }
 
@@ -475,28 +448,14 @@ Tensor linalg_vector_norm_backward(
 }
 
 Tensor pow_backward(Tensor grad, const Tensor& self, const Scalar& exponent) {
-  if (exponent.equal(0.0)) {
-    return at::zeros_like(self, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
-  } else {
-    auto grad_lambda = [&](auto exp) {
-      return grad * (exp * self.pow(exp - 1)).conj();
-    };
-    Tensor out = (exponent.isComplex())
-        ? grad_lambda(exponent.toComplexDouble())
-        : grad_lambda(exponent.toDouble());
-    return handle_r_to_c(self, std::move(out));
-  }
+  TORCH_CHECK(false, "pow backward is disabled in EasyFHE");
 }
 
 Tensor pow_backward_self(
     const Tensor& grad,
     const Tensor& self,
     const Tensor& exponent) {
-  auto out = at::where(
-      exponent == 0.0,
-      at::scalar_tensor(0.0, grad.options()),
-      grad * (exponent * self.pow(exponent - 1)).conj());
-  return handle_r_to_c(self, std::move(out));
+  TORCH_CHECK(false, "pow backward is disabled in EasyFHE");
 }
 
 // Caveats:
@@ -563,10 +522,11 @@ Tensor pow_backward_exponent(
 
 Tensor angle_backward(const Tensor& grad, const Tensor& self) {
   if (self.is_complex()) {
+    auto self_abs = self.abs();
     return at::where(
         self == 0.0,
         at::zeros({}, self.options()),
-        grad * self / self.abs().pow(2) *
+        grad * self / (self_abs * self_abs) *
             Scalar(c10::complex<double>{0.0, 1.0}));
   } else {
     return at::zeros_like(self, at::MemoryFormat::Preserve);
@@ -1903,7 +1863,7 @@ Tensor binary_cross_entropy_double_backward(
   auto one_m_inp_pl_eps = 1 - input + eps;
   // gradient wrt input
   auto gI = (input * input - 2 * input * target + target) /
-      (inp_pl_eps.pow(2) * one_m_inp_pl_eps.pow(2));
+      ((inp_pl_eps * inp_pl_eps) * (one_m_inp_pl_eps * one_m_inp_pl_eps));
   if (!areAnyTensorSubclassLike({gI, grad})) {
     gI *= (grad * grad_output);
   } else {

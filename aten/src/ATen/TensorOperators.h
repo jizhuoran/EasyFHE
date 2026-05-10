@@ -22,10 +22,7 @@ namespace at {
     ::at::empty_like(y, at::MemoryFormat::Preserve).fill_(x).sub_(y))       \
   _(/,                                                                      \
     x.div(y),                                                               \
-    ::at::empty_like(y, at::MemoryFormat::Preserve).fill_(x).div_(y))       \
-  _(%,                                                                      \
-    x.remainder(y),                                                         \
-    ::at::empty_like(y, at::MemoryFormat::Preserve).fill_(x).remainder_(y))
+    ::at::empty_like(y, at::MemoryFormat::Preserve).fill_(x).div_(y))
 
 #define DEFINE_OPERATOR(op, body, reverse_scalar_body)          \
   inline Tensor operator op(const Tensor& x, const Tensor& y) { \

@@ -220,9 +220,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
   KERNEL_MPS(log1p, fp32)
   KERNEL_MPS(reciprocal, fp32)
   KERNEL_MPS(rsqrt, fp32)
-  KERNEL_MPS(pow, Tensor_Scalar, fp32)
-  KERNEL_MPS(pow, Tensor_Tensor, fp32)
-  KERNEL_MPS(pow, Scalar, fp32)
 
   // promote
   KERNEL_MPS(addcdiv, promote)
@@ -240,7 +237,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
   // lower_precision_fp cast policy — all deleted (NN/linalg ops)
 
   // fp32 cast policy
-  KERNEL_CPU(polar, fp32)
   KERNEL_CPU(view_as_complex, fp32)
 
   // promote

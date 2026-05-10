@@ -8,7 +8,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from copy import deepcopy
 from numbers import Number
-from typing import Any, cast, Concatenate, TypeVar, Union
+from typing import Any, Concatenate, TypeVar, Union
 from typing_extensions import ParamSpec
 
 import torch
@@ -1108,25 +1108,6 @@ class Tensor(torch._C.TensorBase):
     __rtruediv__ = __rdiv__
     __itruediv__ = _C.TensorBase.__idiv__
 
-    # pyrefly: ignore [bad-override]
-    __pow__ = cast(
-        Callable[
-            ["torch._C.TensorBase", Union["Tensor", int, float, bool, complex]],
-            "Tensor",
-        ],
-        _handle_torch_function_and_wrap_type_error_to_not_implemented(
-            _C.TensorBase.pow
-        ),
-    )
-
-    __ipow__ = _handle_torch_function_and_wrap_type_error_to_not_implemented(
-        _C.TensorBase.pow_
-    )
-
-    @_handle_torch_function_and_wrap_type_error_to_not_implemented
-    def __rmod__(self, other: Union["Tensor", int, float, bool, complex]) -> "Tensor":
-        return torch.remainder(other, self)
-
     def __format__(self, format_spec):
         if has_torch_function_unary(self):
             return handle_torch_function(Tensor.__format__, (self,), self, format_spec)
@@ -1135,20 +1116,6 @@ class Tensor(torch._C.TensorBase):
             # requires gradients to a python number. It is ok for formatting.
             return self.detach().item().__format__(format_spec)
         return object.__format__(self, format_spec)
-
-    @_handle_torch_function_and_wrap_type_error_to_not_implemented
-    def __rpow__(self, other: Union["Tensor", int, float, bool, complex]) -> "Tensor":
-        return torch.pow(other, self)
-
-    @_handle_torch_function_and_wrap_type_error_to_not_implemented
-    def __floordiv__(self, other: Union["Tensor", int, float, bool]) -> "Tensor":  # type: ignore[override]
-        # TODO(rec): the superclass says it accepts complex here,
-        # but torch.floor_divide says it doesn't.
-        return torch.floor_divide(self, other)
-
-    @_handle_torch_function_and_wrap_type_error_to_not_implemented
-    def __rfloordiv__(self, other: Union["Tensor", int, float, bool]) -> "Tensor":  # type: ignore[override]
-        return torch.floor_divide(other, self)
 
     @_handle_torch_function_and_wrap_type_error_to_not_implemented
     def __rlshift__(

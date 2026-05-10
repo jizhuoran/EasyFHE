@@ -50,7 +50,6 @@
 #include <ATen/ops/neg_native.h>
 #include <ATen/ops/negative_native.h>
 #include <ATen/ops/positive_native.h>
-#include <ATen/ops/pow.h>
 #include <ATen/ops/real.h>
 #include <ATen/ops/real_native.h>
 #include <ATen/ops/reciprocal_native.h>
@@ -59,7 +58,6 @@
 #include <ATen/ops/rsqrt_native.h>
 #include <ATen/ops/select.h>
 #include <ATen/ops/sgn_native.h>
-#include <ATen/ops/sign_native.h>
 #include <ATen/ops/sqrt_native.h>
 #include <ATen/ops/square_native.h>
 #include <ATen/ops/view_as_real.h>
@@ -102,12 +100,6 @@ TORCH_META_FUNC(neg)(const Tensor& self) {
   build_borrowing_unary_op(maybe_get_output(), self);
 }
 
-TORCH_META_FUNC(sign) (const Tensor& self) {
-  TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(),
-              "Unlike NumPy, torch.sign is not intended to support complex numbers. Please use torch.sgn instead.");
-  build_borrowing_unary_op(maybe_get_output(), self);
-}
-
 } // namespace at::meta
 
 namespace at::native {
@@ -140,7 +132,6 @@ CREATE_UNARY_TORCH_IMPL_FUNC(log2_out, log2_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(neg_out, neg_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(reciprocal_out, reciprocal_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(rsqrt_out, rsqrt_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(sign_out, sign_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sqrt_out, sqrt_stub)
 
 template <typename Stub>
@@ -474,9 +465,9 @@ Tensor& arctanh_(Tensor& self) {
   return self;
 }
 
-Tensor& square_out(const Tensor& self, Tensor& result) { return at::pow_out(result, self, 2); }
-Tensor square(const Tensor& self) { return at::pow(self, 2); }
-Tensor& square_(Tensor& self) { return self.pow_(2); }
+Tensor& square_out(const Tensor& self, Tensor& result) { return at::mul_out(result, self, self); }
+Tensor square(const Tensor& self) { return self.mul(self); }
+Tensor& square_(Tensor& self) { return self.mul_(self); }
 
 
 

@@ -557,7 +557,7 @@ static Tensor wrapIndexOnce(const Tensor & index, int64_t dim, int64_t dim_size,
     at::_assert_async(index.max() < dim_size);
     at::_assert_async(index.min() >= -dim_size);
   }
-  return index.remainder(dim_size);
+  return index;
 }
 
 static std::vector<int64_t> computeLinearStride(const Tensor & tensor) {

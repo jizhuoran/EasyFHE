@@ -292,15 +292,6 @@
   # (If dtype IS nullopt, we rely on the regular check that any input requires grad).
   output_differentiability: ["!dtype || isDifferentiableType(*dtype)"]
 
-- name: complex(Tensor real, Tensor imag) -> Tensor
-  real: at::real(grad)
-  imag: at::imag(grad)
-  result: at::complex(real_t, imag_t)
-
-- name: polar(Tensor abs, Tensor angle) -> Tensor
-  abs, angle: polar_backward(grad, result)
-  result: at::complex(abs_t*angle_p.cos() - angle_t*abs_p*angle_p.sin(), abs_t*angle_p.sin() + angle_t*abs_p*angle_p.cos())
-
 - name: _conj(Tensor(a) self) -> Tensor(a)
   self: grad.conj()
   result: self_t.conj()
@@ -316,15 +307,6 @@
 - name: conj_physical_(Tensor(a!) self) -> Tensor(a!)
   self: grad.conj_physical()
   result: self_t.conj_physical_()
-
-- name: copysign.Tensor(Tensor self, Tensor other) -> Tensor
-  self: copysign_tensor_self_backward(grad, self, result)
-  other: zeros_like(other)
-  result: copysign_tensor_self_backward(self_t, self_p, result)
-
-- name: copysign.Scalar(Tensor self, Scalar other) -> Tensor
-  self: copysign_tensor_self_backward(grad, self, result)
-  result: auto_element_wise
 
 - name: diagonal(Tensor(a) self, int offset=0, int dim1=0, int dim2=1) -> Tensor(a)
   self: diagonal_backward_symint(grad, self.sym_sizes(), offset, dim1, dim2)
@@ -376,24 +358,10 @@
   self: zeros_like(grad)
   result: self_t.fill_(0)
 
-- name: fmod.Scalar(Tensor self, Scalar other) -> Tensor
-  self: grad
-  result: auto_element_wise
-
-- name: fmod.Tensor(Tensor self, Tensor other) -> Tensor
-  self: grad
-  other: -grad * self.div(other, /*rounding_mode=*/"trunc")
-  result: self_t - other_t * self_p.div(other_p, /*rounding_mode=*/"trunc")
-
 - name: gather(Tensor self, int dim, Tensor index, *, bool sparse_grad=False) -> Tensor
   self: gather_backward(grad, self, dim, index, sparse_grad)
   index: non_differentiable
   result: auto_linear
-
-- name: hypot(Tensor self, Tensor other) -> Tensor
-  self: grad * self / result
-  other: grad * other / result
-  result: self_t * self_p / result + other_t * other_p / result
 
 - name: index.Tensor(Tensor self, Tensor?[] indices) -> Tensor
   self: index_backward(grad.new_zeros_symint(self.sym_sizes(), self.options()), indices, grad)
@@ -445,17 +413,6 @@
   self: index_select_backward_symint(grad, self.sym_sizes(), dim, index)
   index: non_differentiable
   result: auto_linear
-
-- name: lerp.Scalar(Tensor self, Tensor end, Scalar weight) -> Tensor
-  self: "weight.isComplex() ? grad * (1 - weight.conj().toComplexDouble()) : grad * (1 - weight.toDouble())"
-  end: grad * weight.conj()
-  result: at::lerp(self_t, end_t, weight)
-
-- name: lerp.Tensor(Tensor self, Tensor end, Tensor weight) -> Tensor
-  self: grad * (1 - weight).conj()
-  end: grad * weight.conj()
-  weight: grad * (end - self).conj()
-  result: at::lerp(self_t, end_t, weight_p) + weight_t * (end_p - self_p)
 
 - name: log(Tensor self) -> Tensor
   self: grad.div(self.conj())
@@ -509,19 +466,6 @@
   self: permute_backwards(grad, dims)
   result: auto_linear
 
-- name: pow.Tensor_Scalar(Tensor self, Scalar exponent) -> Tensor
-  self: pow_backward(grad, self, exponent)
-  result: auto_element_wise
-
-- name: pow.Tensor_Tensor(Tensor self, Tensor exponent) -> Tensor
-  self: pow_backward_self(grad, self, exponent)
-  exponent: pow_backward_exponent(grad, self, exponent, result)
-  result: (pow_backward_self(self_t.conj(), self_p, exponent_p) + pow_backward_exponent(exponent_t.conj(), self_p, exponent_p, result)).conj()
-
-- name: pow.Scalar(Scalar self, Tensor exponent) -> Tensor
-  exponent: pow_backward_exponent(grad, self, exponent, result)
-  result: auto_element_wise
-
 - name: put(Tensor self, Tensor index, Tensor source, bool accumulate=False) -> Tensor
   self: "accumulate ? grad : grad.put(index, zeros_like(source), false)"
   index: non_differentiable
@@ -544,15 +488,6 @@
   self: -grad * (result * result).conj()
   result: auto_element_wise
 
-- name: remainder.Scalar(Tensor self, Scalar other) -> Tensor
-  self: grad
-  result: auto_element_wise
-
-- name: remainder.Tensor(Tensor self, Tensor other) -> Tensor
-  self: grad
-  other: -grad * self.div(other, /*rounding_mode=*/"floor")
-  result: self_t - other_t * self_p.div(other_p, /*rounding_mode=*/"floor")
-
 - name: repeat(Tensor self, SymInt[] repeats) -> Tensor
   self: repeat_backward(grad, repeats, self.sym_sizes())
   result: auto_linear
@@ -562,7 +497,7 @@
   result: auto_linear
 
 - name: rsqrt(Tensor self) -> Tensor
-  self: -0.5 * grad * result.pow(3).conj()
+  self: -0.5 * grad * (result * result * result).conj()
   result: auto_element_wise
 
 - name: scatter.src(Tensor self, int dim, Tensor index, Tensor src) -> Tensor
@@ -589,10 +524,6 @@
 - name: select_backward(Tensor grad_output, SymInt[] input_sizes, int dim, SymInt index) -> Tensor
   grad_output: grad.select_symint(dim, index)
   result: auto_linear
-- name: sign(Tensor self) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
-
 - name: sgn(Tensor self) -> Tensor
   self: sgn_backward(self, grad, result)
   # Cannot use auto_element_wise here because the Jacobian is *not* Hermitian (in fact, it is symmetric)

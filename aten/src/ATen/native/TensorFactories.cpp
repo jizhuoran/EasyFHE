@@ -36,8 +36,6 @@
 #include <ATen/ops/arange.h>
 #include <ATen/ops/arange_native.h>
 #include <ATen/ops/clone_native.h>
-#include <ATen/ops/complex.h>
-#include <ATen/ops/complex_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/empty_like_native.h>
@@ -65,8 +63,6 @@
 #include <ATen/ops/ones.h>
 #include <ATen/ops/ones_like_native.h>
 #include <ATen/ops/ones_native.h>
-#include <ATen/ops/polar.h>
-#include <ATen/ops/polar_native.h>
 #include <ATen/ops/promote_types.h>
 #include <ATen/ops/rand_like_native.h>
 #include <ATen/ops/rand_native.h>
@@ -170,81 +166,6 @@ Tensor& arange_out(const Scalar& end, Tensor& result) {
 
 Tensor _dim_arange(const Tensor& like, int64_t dim) {
   return at::arange(like.size(dim), like.options().dtype(at::kLong));
-}
-
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ complex / polar ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-static void complex_check_floating(const Tensor& a, const Tensor& b) {
-  TORCH_CHECK(
-      (a.scalar_type() == kFloat || a.scalar_type() == kDouble ||
-       a.scalar_type() == kHalf) &&
-          (b.scalar_type() == kFloat || b.scalar_type() == kDouble ||
-           b.scalar_type() == kHalf),
-      "Expected both inputs to be Half, Float or Double tensors but got ",
-      a.scalar_type(),
-      " and ",
-      b.scalar_type());
-}
-
-static void complex_check_dtype(
-    const Tensor& result,
-    const Tensor& a,
-    const Tensor& b) {
-  complex_check_floating(a, b);
-  TORCH_CHECK(
-      a.scalar_type() == b.scalar_type(),
-      "Expected object of scalar type ",
-      a.scalar_type(),
-      " but got scalar type ",
-      b.scalar_type(),
-      " for second argument");
-  TORCH_CHECK(
-      result.scalar_type() == toComplexType(a.scalar_type()),
-      "Expected object of scalar type ",
-      toComplexType(a.scalar_type()),
-      " but got scalar type ",
-      result.scalar_type(),
-      " for argument 'out'");
-}
-
-Tensor& complex_out(const Tensor& real, const Tensor& imag, Tensor& result) {
-  complex_check_dtype(result, real, imag);
-  auto iter = TensorIteratorConfig()
-                  .add_output(result)
-                  .add_const_input(real)
-                  .add_const_input(imag)
-                  .check_all_same_dtype(false)
-                  .build();
-  complex_stub(iter.device_type(), iter);
-  return result;
-}
-
-Tensor complex(const Tensor& real, const Tensor& imag) {
-  complex_check_floating(real, imag);
-  c10::TensorOptions options = real.options();
-  options = options.dtype(toComplexType(real.scalar_type()));
-  Tensor result = at::empty(0, options);
-  return at::complex_out(result, real, imag);
-}
-
-Tensor& polar_out(const Tensor& abs, const Tensor& angle, Tensor& result) {
-  complex_check_dtype(result, abs, angle);
-  auto iter = TensorIteratorConfig()
-                  .add_output(result)
-                  .add_const_input(abs)
-                  .add_const_input(angle)
-                  .check_all_same_dtype(false)
-                  .build();
-  polar_stub(iter.device_type(), iter);
-  return result;
-}
-
-Tensor polar(const Tensor& abs, const Tensor& angle) {
-  complex_check_floating(abs, angle);
-  c10::TensorOptions options = abs.options();
-  options = options.dtype(toComplexType(abs.scalar_type()));
-  Tensor result = at::empty(0, options);
-  return at::polar_out(result, abs, angle);
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ empty ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
