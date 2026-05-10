@@ -140,9 +140,6 @@ if(NOT BUILD_LIBTORCHLESS)
       $<INSTALL_INTERFACE:include>)
 endif()
 
-add_subdirectory(test)
-add_subdirectory(benchmark)
-
 if(USE_CUDA)
   add_subdirectory(cuda)
 endif()

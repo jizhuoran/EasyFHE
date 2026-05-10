@@ -165,7 +165,6 @@ endfunction()
 add_subdirectory(core)
 add_subdirectory(serialize)
 add_subdirectory(utils)
-add_subdirectory(perfkernels)
 
 # Advanced: if we have allow list specified, we will do intersections for all
 # main lib srcs.
@@ -727,7 +726,6 @@ if(NOT NO_API AND NOT BUILD_LITE_INTERPRETER)
     ${TORCH_SRC_DIR}/csrc/api/src/mps.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
     ${TORCH_SRC_DIR}/csrc/api/src/serialize/output-archive.cpp
-    ${TORCH_SRC_DIR}/csrc/api/src/xpu.cpp
   )
   if(NOT USE_EASYFHE_FAST_BUILD)
     list(APPEND TORCH_SRCS
@@ -847,10 +845,6 @@ if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang" AND NOT USE_IOS AND NOT USE_COREML
     if(res GREATER -1)
       set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "-Wno-missing-prototypes;-Wno-error=missing-prototypes")
       continue()
-    endif()
-    string(FIND "${source_file}" "embedding_lookup_idx_avx2.cc" res)
-    if(res GREATER -1)
-      set_source_files_properties(${source_file} PROPERTIES COMPILE_OPTIONS "-Wno-missing-prototypes;-Wno-error=missing-prototypes")
     endif()
   endforeach()
 endif()

@@ -267,7 +267,7 @@ endif()
 # CUDA is incompatible with TSAN
 cmake_dependent_option(USE_CUDA "Use CUDA" ON "NOT USE_TSAN" OFF)
 
-option(USE_XPU "Use XPU" ON)
+set(USE_XPU OFF CACHE BOOL "XPU is disabled in EasyFHE" FORCE)
 option(USE_MTIA "Use MTIA" OFF)
 cmake_dependent_option(
   BUILD_LAZY_CUDA_LINALG "Build cuda linalg ops as separate library" ON
@@ -1387,7 +1387,6 @@ if(BUILD_SHARED_LIBS)
     COMPONENT dev)
   install(
     FILES ${PROJECT_SOURCE_DIR}/cmake/public/cuda.cmake
-          ${PROJECT_SOURCE_DIR}/cmake/public/xpu.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/glog.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/gflags.cmake
           ${PROJECT_SOURCE_DIR}/cmake/public/mkl.cmake

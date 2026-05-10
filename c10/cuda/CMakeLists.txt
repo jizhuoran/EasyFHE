@@ -90,8 +90,6 @@ install(TARGETS c10_cuda EXPORT Caffe2Targets DESTINATION lib)
 
 endif()
 
-add_subdirectory(test)
-
 foreach(file ${C10_CUDA_HEADERS})
   get_filename_component( dir ${file} DIRECTORY )
   install( FILES ${file} DESTINATION include/c10/cuda/${dir} )

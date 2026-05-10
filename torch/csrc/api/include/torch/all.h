@@ -13,4 +13,3 @@
 #include <torch/types.h>
 #include <torch/utils.h>
 #include <torch/version.h>
-#include <torch/xpu.h>

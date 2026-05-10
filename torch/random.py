@@ -71,11 +71,6 @@ def _manual_seed_impl(seed) -> torch._C.Generator:
     if not torch.mps._is_in_bad_fork():
         torch.mps.manual_seed(seed)
 
-    import torch.xpu
-
-    if not torch.xpu._is_in_bad_fork():
-        torch.xpu.manual_seed_all(seed)
-
     import torch.mtia
 
     if not torch.mtia._is_in_bad_fork():
@@ -100,11 +95,6 @@ def seed() -> int:
 
     if not torch.mps._is_in_bad_fork():
         torch.mps.manual_seed(seed)
-
-    import torch.xpu
-
-    if not torch.xpu._is_in_bad_fork():
-        torch.xpu.manual_seed_all(seed)
 
     import torch.mtia
 
