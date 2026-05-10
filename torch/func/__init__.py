@@ -1,31 +1,38 @@
-from torch._functorch.apis import grad, grad_and_value, vmap
-from torch._functorch.batch_norm_replacement import replace_all_batch_norm_modules_
-from torch._functorch.eager_transforms import (
-    debug_unwrap,
-    functionalize,
-    hessian,
-    jacfwd,
-    jacrev,
-    jvp,
-    linearize,
-    vjp,
-)
-from torch._functorch.functional_call import functional_call, stack_module_state
+from __future__ import annotations
 
+from typing import Any
+
+
+def _disabled(*args: Any, **kwargs: Any) -> None:
+    raise RuntimeError("torch.func is disabled in EasyFHE")
+
+
+functional_call = _disabled
+functionalize = _disabled
+grad = _disabled
+grad_and_value = _disabled
+hessian = _disabled
+jacfwd = _disabled
+jacrev = _disabled
+jvp = _disabled
+linearize = _disabled
+replace_all_batch_norm_modules_ = _disabled
+stack_module_state = _disabled
+vjp = _disabled
+vmap = _disabled
 
 __all__ = [
+    "functional_call",
+    "functionalize",
     "grad",
     "grad_and_value",
-    "vmap",
-    "replace_all_batch_norm_modules_",
-    "functionalize",
     "hessian",
     "jacfwd",
     "jacrev",
     "jvp",
     "linearize",
-    "vjp",
-    "functional_call",
+    "replace_all_batch_norm_modules_",
     "stack_module_state",
-    "debug_unwrap",
+    "vjp",
+    "vmap",
 ]

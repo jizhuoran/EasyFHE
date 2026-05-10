@@ -1,4 +1,13 @@
-# mypy: disable-error-code=attr-defined
-from .core import reify, unify
-from .more import unifiable
-from .variable import isvar, Var, var, variables, vars
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class Var:
+    name: str | None = None
+
+
+def unify(lhs: Any, rhs: Any, *args: Any, **kwargs: Any) -> dict[Any, Any]:
+    return {}

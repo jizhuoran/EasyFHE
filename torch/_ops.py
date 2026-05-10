@@ -1419,7 +1419,11 @@ class _OpNamespace(types.ModuleType):
 
 
 def _get_packet(qualname, op_module):
-    op, overload_names = torch._C._jit_get_operation(qualname)
+    jit_get_operation = getattr(torch._C, "_jit_get_operation", None)
+    if jit_get_operation is None:
+        return None, []
+
+    op, overload_names = jit_get_operation(qualname)
     if op is not None:
         # let the script frontend know that op is identical to the builtin op
         # with qualified_op_name

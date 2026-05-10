@@ -1117,6 +1117,49 @@ if not TYPE_CHECKING:
     _import_extension_to_sys_modules(_C)
     del _import_extension_to_sys_modules
 
+if "torch._C._functorch" not in sys.modules:
+    import enum as _enum
+    import types as _types
+
+    def _functorch_identity(x, *args, **kwargs):
+        return x
+
+    def _functorch_false(*args, **kwargs):
+        return False
+
+    def _functorch_zero(*args, **kwargs):
+        return 0
+
+    def _functorch_none(*args, **kwargs):
+        return None
+
+    class _EasyFHETransformType(_enum.Enum):
+        Grad = 1
+        Vmap = 2
+        Jvp = 3
+        Functionalize = 4
+
+    _functorch_stub = _types.ModuleType("torch._C._functorch")
+    _functorch_stub.TransformType = _EasyFHETransformType
+    _functorch_stub.get_unwrapped = _functorch_identity
+    _functorch_stub.unwrap_if_dead = _functorch_identity
+    _functorch_stub.is_batchedtensor = _functorch_false
+    _functorch_stub.is_gradtrackingtensor = _functorch_false
+    _functorch_stub.is_functionaltensor = _functorch_false
+    _functorch_stub.is_functorch_wrapped_tensor = _functorch_false
+    _functorch_stub.is_legacy_batchedtensor = _functorch_false
+    _functorch_stub.maybe_get_level = _functorch_zero
+    _functorch_stub.maybe_get_bdim = _functorch_zero
+    _functorch_stub.current_level = _functorch_zero
+    _functorch_stub.peek_interpreter_stack = _functorch_none
+    _functorch_stub.get_interpreter_stack = lambda *args, **kwargs: []
+    _functorch_stub.CInterpreter = object
+    _functorch_stub.__getattr__ = lambda name: _functorch_identity
+    sys.modules["torch._C._functorch"] = _functorch_stub
+    setattr(_C, "_functorch", _functorch_stub)
+    del _enum
+    del _types
+
 ################################################################################
 # Define basic utilities
 ################################################################################

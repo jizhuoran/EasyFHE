@@ -1,6 +1,8 @@
 # mypy: allow-untyped-defs
 from contextlib import contextmanager
 
+from torch.futures import Future
+
 
 def _disabled(*args, **kwargs):
     raise RuntimeError("torch.jit is disabled in EasyFHE fast build")
@@ -32,6 +34,7 @@ wait = _disabled
 __all__ = [
     "freeze",
     "fork",
+    "Future",
     "is_scripting",
     "is_tracing",
     "load",

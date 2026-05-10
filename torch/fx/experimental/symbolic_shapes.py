@@ -56,7 +56,18 @@ import torch.utils._pytree as pytree
 
 # NB: The sym_* functions are used via getattr() and must be imported here.
 from torch import SymBool, SymFloat, SymInt
-from torch._C._functorch import get_unwrapped, is_batchedtensor, is_gradtrackingtensor
+try:
+    from torch._C._functorch import get_unwrapped, is_batchedtensor, is_gradtrackingtensor
+except ModuleNotFoundError:
+
+    def get_unwrapped(x: object) -> object:
+        return x
+
+    def is_batchedtensor(x: object) -> bool:
+        return False
+
+    def is_gradtrackingtensor(x: object) -> bool:
+        return False
 from torch._guards import ShapeGuard, SLoc, Source, TracingContext
 from torch._library.fake_class_registry import FakeScriptObject
 from torch._library.opaque_object import is_opaque_value

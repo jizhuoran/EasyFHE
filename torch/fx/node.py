@@ -86,6 +86,15 @@ _side_effectful_need_to_be_preserved_pre_dispatch: list[Callable[..., Any]] = [
     torch.amp._exit_autocast,
 ]
 
+
+def _maybe_op(root: Any, *names: str) -> Any:
+    try:
+        for name in names:
+            root = getattr(root, name)
+        return root
+    except AttributeError:
+        return None
+
 # TODO: Either refactor this into 2 functions 1 dce for functional graphs and 1 dce for all graphs,
 # or add logic to correctly mark all inplace ops as side effectful.
 #
@@ -99,24 +108,25 @@ _side_effectful_need_to_be_preserved_pre_dispatch: list[Callable[..., Any]] = [
 _side_effectful_functions: set[Callable[..., Any]] = {
     torch._assert,
     torch._assert_async,
-    _ops.aten._assert_async.msg,
-    _ops.aten._assert_scalar.default,
-    _ops.aten._assert_tensor_metadata.default,
-    _ops.aten.sym_constrain_range.default,
-    _ops.aten.sym_constrain_range_for_size.default,
-    _ops.profiler._record_function_enter,
-    _ops.profiler._record_function_enter.default,
-    _ops.profiler._record_function_enter_new,
-    _ops.profiler._record_function_enter_new.default,
-    _ops.profiler._record_function_exit,
-    _ops.profiler._record_function_exit._RecordFunction,
-    getattr(_ops.inductor, 'accumulate_grad_', None),
+    _maybe_op(_ops.aten, "_assert_async", "msg"),
+    _maybe_op(_ops.aten, "_assert_scalar", "default"),
+    _maybe_op(_ops.aten, "_assert_tensor_metadata", "default"),
+    _maybe_op(_ops.aten, "sym_constrain_range", "default"),
+    _maybe_op(_ops.aten, "sym_constrain_range_for_size", "default"),
+    _maybe_op(_ops.profiler, "_record_function_enter"),
+    _maybe_op(_ops.profiler, "_record_function_enter", "default"),
+    _maybe_op(_ops.profiler, "_record_function_enter_new"),
+    _maybe_op(_ops.profiler, "_record_function_enter_new", "default"),
+    _maybe_op(_ops.profiler, "_record_function_exit"),
+    _maybe_op(_ops.profiler, "_record_function_exit", "_RecordFunction"),
+    _maybe_op(_ops.inductor, "accumulate_grad_"),
     operator.setitem,
     *_side_effectful_need_to_be_preserved_pre_dispatch,
 }
+_side_effectful_functions.discard(None)
 
-if hasattr(_ops.inductor, "resize_storage_bytes_"):
-    _side_effectful_functions.add(_ops.inductor.resize_storage_bytes_.default)
+if resize_storage_bytes := _maybe_op(_ops.inductor, "resize_storage_bytes_", "default"):
+    _side_effectful_functions.add(resize_storage_bytes)
 
 
 @compatibility(is_backward_compatible=False)

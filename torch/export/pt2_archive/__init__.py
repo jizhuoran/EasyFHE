@@ -1,4 +1,3 @@
-from ._package import is_pt2_package, PT2ArchiveReader, PT2ArchiveWriter
+from ._package import AOTI_FILES, is_pt2_package, load_pt2, package_pt2
 
-
-__all__ = ["PT2ArchiveWriter", "PT2ArchiveReader", "is_pt2_package"]
+__all__ = ["AOTI_FILES", "is_pt2_package", "load_pt2", "package_pt2"]
