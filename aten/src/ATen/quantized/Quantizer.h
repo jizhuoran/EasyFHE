@@ -164,8 +164,8 @@ struct TORCH_API PerChannelAffineQuantizer : public AffineQuantizer {
     auto* other_per_channel_affine =
         static_cast<PerChannelAffineQuantizer*>(other.get());
     return scalar_type() == other_per_channel_affine->scalar_type() &&
-        scales().equal(other_per_channel_affine->scales()) &&
-        zero_points().equal(other_per_channel_affine->zero_points()) &&
+        scales().is_same(other_per_channel_affine->scales()) &&
+        zero_points().is_same(other_per_channel_affine->zero_points()) &&
         axis() == other_per_channel_affine->axis();
   }
 
@@ -215,8 +215,8 @@ struct TORCH_API PerChannelAffineFloatQParamsQuantizer : public PerChannelAffine
     auto* other_per_channel_float_qparams =
         static_cast<PerChannelAffineFloatQParamsQuantizer*>(other.get());
     return scalar_type() == other_per_channel_float_qparams->scalar_type() &&
-        scales().equal(other_per_channel_float_qparams->scales()) &&
-        zero_points().equal(other_per_channel_float_qparams->zero_points()) &&
+        scales().is_same(other_per_channel_float_qparams->scales()) &&
+        zero_points().is_same(other_per_channel_float_qparams->zero_points()) &&
         axis() == other_per_channel_float_qparams->axis();
   }
 };

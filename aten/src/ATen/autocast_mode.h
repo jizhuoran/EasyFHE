@@ -819,9 +819,6 @@ copy pasted in from VariableTypeEverything.cpp with appropriate substitutions.
 #define AT_FORALL_LOWER_PRECISION_FP(_)
 
 #define AT_FORALL_FP32(_)             \
-  _(acos)                             \
-  _(asin)                             \
-  _(cosh)                             \
   _(exp)                              \
   _(expm1)                            \
   _(log)                              \
@@ -830,26 +827,16 @@ copy pasted in from VariableTypeEverything.cpp with appropriate substitutions.
   _(log1p)                            \
   _(reciprocal)                       \
   _(rsqrt)                            \
-  _(sinh)                             \
-  _(tan)                              \
   _(pow, Tensor_Scalar)               \
   _(pow, Tensor_Tensor)               \
-  _(pow, Scalar)                      \
-  _(logsumexp)
+  _(pow, Scalar)
 
-#define AT_FORALL_FP32_SET_OPT_DTYPE(_) \
-  _(prod)                               \
-  _(prod, dim_int)                      \
-  _(cumprod)                            \
-  _(cumsum)                             \
-  _(sum)                                \
-  _(sum, dim_IntList)
+#define AT_FORALL_FP32_SET_OPT_DTYPE(_)
 
 #define AT_FORALL_DIFFERENT_REDISPATCH_SIGNATURE(_)
 
 #define AT_FORALL_PROMOTE(_) \
   _(addcdiv)                 \
   _(addcmul)                 \
-  _(atan2)                   \
   _(index_put)               \
   _(scatter_add)

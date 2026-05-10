@@ -222,10 +222,6 @@
   self: grad * self.sgn()
   result: handle_r_to_c(result.scalar_type(), self_t.conj() * self_p.sgn())
 
-- name: acos(Tensor self) -> Tensor
-  self: grad * -((-self * self + 1).rsqrt()).conj()
-  result: auto_element_wise
-
 - name: add.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor
   self: handle_r_to_c(self.scalar_type(), grad)
   other: handle_r_to_c(other.scalar_type(), maybe_multiply(grad, alpha.conj()))
@@ -257,52 +253,6 @@
 
 # The four items below are necessary because TensorIterator doesn't work on
 # Variables (codegen does not unwrap the input Tensor for all() and any() ).
-- name: any(Tensor self) -> Tensor
-  output_differentiability: [False]
-
-- name: any.dim(Tensor self, int dim, bool keepdim=False) -> Tensor
-  output_differentiability: [False]
-
-- name: any.dims(Tensor self, int[]? dim=None, bool keepdim=False) -> Tensor
-  output_differentiability: [False]
-
-- name: _is_all_true(Tensor self) -> Tensor
-  self: non_differentiable
-
-- name: _is_any_true(Tensor self) -> Tensor
-  self: non_differentiable
-
-- name: all(Tensor self) -> Tensor
-  output_differentiability: [False]
-
-- name: all.dim(Tensor self, int dim, bool keepdim=False) -> Tensor
-  output_differentiability: [False]
-
-- name: all.dims(Tensor self, int[]? dim=None, bool keepdim=False) -> Tensor
-  output_differentiability: [False]
-
-- name: acosh(Tensor self) -> Tensor
-# Save one rsqrt in the real case by using that for x real and positive sqrt(x*y) = sqrt(x)*sqrt(y) (not true in the complex case)
-  self: "self.is_complex() ? grad * ((self + 1).rsqrt() * (self - 1).rsqrt()).conj() : grad * (self * self - 1).rsqrt()"
-  result: auto_element_wise
-
-- name: acosh_(Tensor(a!) self) -> Tensor(a!)
-  self: not_implemented("inplace version of acosh")
-
-- name: asinh(Tensor self) -> Tensor
-  self: grad * (self.pow(2) + 1).rsqrt().conj()
-  result: auto_element_wise
-
-- name: asinh_(Tensor(a!) self) -> Tensor(a!)
-  self: not_implemented("inplace version of asinh")
-
-- name: atanh(Tensor self) -> Tensor
-  self: grad * 1 / (1 - self.pow(2)).conj()
-  result: auto_element_wise
-
-- name: atanh_(Tensor(a!) self) -> Tensor(a!)
-  self: not_implemented("inplace version of atanh")
-
 - name: as_strided(Tensor(a) self, SymInt[] size, SymInt[] stride, SymInt? storage_offset=None) -> Tensor(a)
   self: as_strided_backward(grad, TensorGeometry(self), size, stride, storage_offset)
   result: auto_linear
@@ -310,18 +260,6 @@
 - name: as_strided_(Tensor(a!) self, SymInt[] size, SymInt[] stride, SymInt? storage_offset=None) -> Tensor(a!)
   self: as_strided_backward(grad, TensorGeometry(self), size, stride, storage_offset)
   result: auto_linear
-
-- name: asin(Tensor self) -> Tensor
-  self: grad * (-self * self + 1).rsqrt().conj()
-  result: auto_element_wise
-
-- name: atan(Tensor self) -> Tensor
-  self: grad / (self * self + 1).conj()
-  result: auto_element_wise
-
-- name: atan2(Tensor self, Tensor other) -> Tensor
-  self, other: atan2_backward(grad, self, other, grad_input_mask)
-  result: (-self_p * other_t + other_p * self_t) / (self_p.pow(2) + other_p.pow(2))
 
 - name: bernoulli(Tensor self, *, Generator? generator=None) -> Tensor
   self: zeros_like(grad)
@@ -338,37 +276,6 @@
 - name: cat(Tensor[] tensors, int dim=0) -> Tensor
   tensors: cat_tensors_backward(grad, to_args_sizes_symint(tensors), to_args_scalartypes(tensors), dim)
   result: cat_jvp(tensors, dim)
-
-- name: ceil(Tensor self) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
-
-- name: clamp.Tensor(Tensor self, Tensor? min=None, Tensor? max=None) -> Tensor
-  self: clamp_backward(grad, self, min, max)
-  min, max: clamp_backward_min_max(grad, self, min, max, grad_input_mask)
-  result: clamp_jvp(self_p, self_t, min_p, min_t, max_p, max_t)
-
-- name: clamp(Tensor self, Scalar? min=None, Scalar? max=None) -> Tensor
-  self: clamp_backward(grad, self, min, max)
-  result: auto_element_wise
-
-- name: clamp_min(Tensor self, Scalar min) -> Tensor
-  self: where(self >= min, grad, at::scalar_tensor(0., grad.options()))
-  result: auto_element_wise
-
-- name: clamp_min.Tensor(Tensor self, Tensor min) -> Tensor
-  self: where(self >= min, grad, at::scalar_tensor(0., grad.options()))
-  min: where(self < min, grad, at::scalar_tensor(0., grad.options()))
-  result: where(self_p >= min_p, self_t, min_t)
-
-- name: clamp_max(Tensor self, Scalar max) -> Tensor
-  self: where(self <= max, grad, at::scalar_tensor(0., grad.options()))
-  result: auto_element_wise
-
-- name: clamp_max.Tensor(Tensor self, Tensor max) -> Tensor
-  self: where(self <= max, grad, at::scalar_tensor(0., grad.options()))
-  max: where(self > max, grad, at::scalar_tensor(0., grad.options()))
-  result: where(self_p <= max_p, self_t, max_t)
 
 - name: clone(Tensor self, *, MemoryFormat? memory_format=None) -> Tensor
   self: grad
@@ -419,39 +326,6 @@
   self: copysign_tensor_self_backward(grad, self, result)
   result: auto_element_wise
 
-- name: cos(Tensor self) -> Tensor
-  self: grad * -self.sin().conj()
-  result: auto_element_wise
-
-- name: cosh(Tensor self) -> Tensor
-  self: grad * self.sinh().conj()
-  result: auto_element_wise
-
-- name: count_nonzero.dim_IntList(Tensor self, int[] dim) -> Tensor
-  output_differentiability: [False]
-
-- name: count_nonzero(Tensor self, int? dim=None) -> Tensor
-  output_differentiability: [False]
-- name: cumprod(Tensor self, int dim, *, ScalarType? dtype=None) -> Tensor
-  self: cumprod_backward(grad.to(self.scalar_type()), self, dim, result)
-  result: "cumprod_jvp(self_t, self_p, result, dim).to(dtype.has_value() ? *dtype : self_p.scalar_type())"
-
-- name: cumsum(Tensor self, int dim, *, ScalarType? dtype=None) -> Tensor
-  self: cumsum_backward(grad.to(self.scalar_type()), dim)
-  result: auto_linear
-
-- name: cummax(Tensor self, int dim) -> (Tensor values, Tensor indices)
-  self: cummaxmin_backward(grad, self, indices, dim)
-  values: self_t.gather(dim, indices)
-
-- name: cummin(Tensor self, int dim) -> (Tensor values, Tensor indices)
-  self: cummaxmin_backward(grad, self, indices, dim)
-  values: self_t.gather(dim, indices)
-
-- name: deg2rad(Tensor self) -> Tensor
-  self: deg2rad_backward(grad)
-  result: auto_element_wise
-
 - name: diagonal(Tensor(a) self, int offset=0, int dim1=0, int dim2=1) -> Tensor(a)
   self: diagonal_backward_symint(grad, self.sym_sizes(), offset, dim1, dim2)
   result: auto_linear
@@ -477,20 +351,8 @@
   self: div_tensor_self_backward(grad, other, self.scalar_type(), rounding_mode)
   result: "rounding_mode.has_value() ? result.new_zeros_symint(result.sym_sizes()) : self_t / other"
 
-- name: eq_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: eq_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
 - name: exp(Tensor self) -> Tensor
   self: grad * result.conj()
-  result: auto_element_wise
-
-- name: exp2(Tensor self) -> Tensor
-  self: grad * result.conj() * M_LN2
   result: auto_element_wise
 
 - name: expm1(Tensor self) -> Tensor
@@ -510,23 +372,9 @@
   self: zeros_like(grad)
   result: at::fill(self_t, 0)
 
-- name: fill.Tensor(Tensor self, Tensor value) -> Tensor
-  self: zeros_like(grad)
-  value: grad.sum()
-  result: at::fill(self_t, value_t)
-
 - name: fill_.Scalar(Tensor(a!) self, Scalar value) -> Tensor(a!)
   self: zeros_like(grad)
   result: self_t.fill_(0)
-
-- name: fill_.Tensor(Tensor(a!) self, Tensor value) -> Tensor(a!)
-  self: zeros_like(grad)
-  value: grad.sum()
-  result: self_t.fill_(value_t)
-
-- name: floor(Tensor self) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
 
 - name: fmod.Scalar(Tensor self, Scalar other) -> Tensor
   self: grad
@@ -537,35 +385,10 @@
   other: -grad * self.div(other, /*rounding_mode=*/"trunc")
   result: self_t - other_t * self_p.div(other_p, /*rounding_mode=*/"trunc")
 
-- name: frac(Tensor self) -> Tensor
-  self: grad
-  result: self_t
-
-- name: frexp.Tensor(Tensor self) -> (Tensor mantissa, Tensor exponent)
-  self: grad / exponent.exp2()
-  mantissa: self_t / exponent.exp2()
-
 - name: gather(Tensor self, int dim, Tensor index, *, bool sparse_grad=False) -> Tensor
   self: gather_backward(grad, self, dim, index, sparse_grad)
   index: non_differentiable
   result: auto_linear
-
-- name: ge_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: ge_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
-- name: gt_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: gt_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
 
 - name: hypot(Tensor self, Tensor other) -> Tensor
   self: grad * self / result
@@ -580,17 +403,6 @@
   self: at::_unsafe_index_put(grad.new_zeros_symint(self.sym_sizes(), self.options()), indices, grad, true)
   result: auto_linear
 
-- name: _unsafe_masked_index(Tensor self, Tensor mask, Tensor?[] indices, Scalar fill) -> Tensor
-  self: at::_unsafe_masked_index_put_accumulate(grad.new_zeros_symint(self.sym_sizes(), self.options()), mask, indices, grad)
-  mask: non_differentiable
-  result: _unsafe_masked_index(self_t, mask, indices, 0)
-
-- name: _unsafe_masked_index_put_accumulate(Tensor self, Tensor mask, Tensor?[] indices, Tensor values) -> Tensor
-  self: grad
-  mask: non_differentiable
-  values: at::_unsafe_masked_index(grad, mask, indices, 0)
-  result: at::_unsafe_masked_index_put_accumulate(self_t, mask, indices, values_t)
-
 - name: index_add(Tensor self, int dim, Tensor index, Tensor source, *, Scalar alpha=1) -> Tensor
   self: grad
   # The case source.dim() == 0  is necessary to support scalar tensors of the form
@@ -599,10 +411,6 @@
   source: "maybe_multiply(source.dim() > 0 ? grad.index_select(dim, index).expand_as(source) : grad.index_select(dim, index.squeeze(0)), alpha)"
   index: non_differentiable
   result: at::index_add(self_t, dim, index, maybe_multiply(source_t, alpha))
-
-- name: index_reduce(Tensor self, int dim, Tensor index, Tensor source, str reduce, *, bool include_self=True) -> Tensor
-  self, source: index_reduce_backward(grad, self, dim, index, source, reduce, include_self, result)
-  index: non_differentiable
 
 - name: index_copy(Tensor self, int dim, Tensor index, Tensor source) -> Tensor
   self: grad.index_fill(dim, index, 0)
@@ -617,12 +425,6 @@
   self: grad.index_fill(dim, index, 0)
   index: non_differentiable
   result: self_t.index_fill(dim, index, 0)
-
-- name: index_fill.int_Tensor(Tensor self, int dim, Tensor index, Tensor value) -> Tensor
-  self: grad.index_fill(dim, index, 0)
-  value: grad.index_select(dim, index).sum()
-  index: non_differentiable
-  result: self_t.index_fill(dim, index, value_t)
 
 - name: index_put(Tensor self, Tensor?[] indices, Tensor values, bool accumulate=False) -> Tensor
   self: "accumulate ? grad : grad.index_put(indices, zeros_like(values), false)"
@@ -643,22 +445,6 @@
   self: index_select_backward_symint(grad, self.sym_sizes(), dim, index)
   index: non_differentiable
   result: auto_linear
-
-- name: isnan(Tensor self) -> Tensor
-  self: non_differentiable
-- name: ldexp.Tensor(Tensor self, Tensor other) -> Tensor
-  self: grad * at::pow(2, other).conj()
-  other: grad * result.conj() * M_LN2
-  result: self_t * at::pow(2, other_p) + other_t * result * M_LN2
-
-- name: le_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: le_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
 
 - name: lerp.Scalar(Tensor self, Tensor end, Scalar weight) -> Tensor
   self: "weight.isComplex() ? grad * (1 - weight.conj().toComplexDouble()) : grad * (1 - weight.toDouble())"
@@ -687,29 +473,6 @@
   self: grad / (self.conj() * 0.6931471805599453)
   result: auto_element_wise
 
-- name: logaddexp(Tensor self, Tensor other) -> Tensor
-  self: grad / (1 + exp(other - self)).conj()
-  other: grad / (1 + exp(self - other)).conj()
-  result: self_t / (1 + exp(other_p - self_p)) + other_t / (1 + exp(self_p - other_p))
-
-- name: logaddexp2(Tensor self, Tensor other) -> Tensor
-  self: grad / (1 + pow(2, other - self))
-  other: grad / (1 + pow(2, self - other))
-  result: self_t / (1 + pow(2, other_p - self_p)) + other_t / (1 + pow(2, self_p - other_p))
-
-- name: logsumexp(Tensor self, int[1] dim, bool keepdim=False) -> Tensor
-  self: logsumexp_backward(grad, self, result, dim, keepdim)
-  result: logsumexp_jvp(self_p, self_t, dim, keepdim)
-
-- name: lt_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: lt_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
-
 - name: masked_fill.Scalar(Tensor self, Tensor mask, Scalar value) -> Tensor
   self: grad.masked_fill(mask, 0)
   mask: non_differentiable
@@ -721,77 +484,6 @@
   mask: non_differentiable
   result: self_t.masked_fill(mask, value_t)
 
-- name: masked_scatter(Tensor self, Tensor mask, Tensor source) -> Tensor
-  self: grad.masked_fill(mask, 0)
-  source: masked_scatter_backward_symint(grad, mask, source.sym_sizes())
-  mask: non_differentiable
-  result: self_t.masked_scatter(mask, source_t)
-
-- name: masked_scatter_backward(Tensor grad_output, Tensor mask, SymInt[] sizes) -> Tensor
-  grad_output: zeros_like(grad_output).masked_scatter(mask, grad)
-  mask: non_differentiable
-  result: masked_scatter_backward(grad_output_t, mask, grad_output_t.sizes())
-
-- name: masked_select(Tensor self, Tensor mask) -> Tensor
-  self: masked_select_backward(grad, self, mask)
-  mask: non_differentiable
-  result: auto_linear
-
-- name: max.dim(Tensor self, int dim, bool keepdim=False) -> (Tensor values, Tensor indices)
-  self: value_selecting_reduction_backward_symint(grad, dim, indices, self.sym_sizes(), keepdim)
-  values: gather_with_keepdimed_indices(self_t, dim, indices, keepdim)
-
-- name: max(Tensor self) -> Tensor
-  self: evenly_distribute_backward(grad, self, result)
-  result: evenly_read_jvp(self_t, self_p, result)
-
-- name: maximum(Tensor self, Tensor other) -> Tensor
-  self: at::where(self == other, grad / 2, grad).masked_fill_(self < other, 0)
-  other: at::where(self == other, grad / 2, grad).masked_fill_(self > other, 0)
-  result: other_t + at::where(self_p == other_p, at::scalar_tensor(0.5, result.options()), (self_p > other_p).to(result.scalar_type())) * (self_t - other_t)
-
-- name: fmax(Tensor self, Tensor other) -> Tensor
-  self: grad.masked_fill((self >= other).logical_or_(other.isnan()).logical_not_(), 0)
-  other: grad.masked_fill((self >= other).logical_or_(other.isnan()), 0)
-  result: other_t + (self_p > other_p).logical_or_(other_p.isnan()) * (self_t - other_t)
-
-- name: mean(Tensor self, *, ScalarType? dtype=None) -> Tensor
-  self: grad.expand_symint(self.sym_sizes()) / self.sym_numel()
-  result: auto_linear
-
-- name: mean.dim(Tensor self, int[1]? dim, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
-  self: mean_backward(grad, self.sym_sizes(), dim, self.sym_numel(), keepdim)
-  result: auto_linear
-- name: min.dim(Tensor self, int dim, bool keepdim=False) -> (Tensor values, Tensor indices)
-  self: value_selecting_reduction_backward_symint(grad, dim, indices, self.sym_sizes(), keepdim)
-  values: gather_with_keepdimed_indices(self_t, dim, indices, keepdim)
-
-- name: min(Tensor self) -> Tensor
-  self: evenly_distribute_backward(grad, self, result)
-  result: evenly_read_jvp(self_t, self_p, result)
-
-- name: minimum(Tensor self, Tensor other) -> Tensor
-  self: at::where(self == other, grad / 2, grad).masked_fill_(self > other, 0)
-  other: at::where(self == other, grad / 2, grad).masked_fill_(self < other, 0)
-  result: other_t + at::where(self_p == other_p, at::scalar_tensor(0.5, result.options()), (self_p < other_p).to(result.scalar_type())) * (self_t - other_t)
-
-- name: fmin(Tensor self, Tensor other) -> Tensor
-  self: grad.masked_fill((self <= other).logical_or_(other.isnan()).logical_not_(), 0)
-  other: grad.masked_fill((self <= other).logical_or_(other.isnan()), 0)
-  result: other_t + (self_p <= other_p).logical_or_(other_p.isnan()) * (self_t - other_t)
-
-- name: amax(Tensor self, int[1] dim=[], bool keepdim=False) -> Tensor
-  self: scale_grad_by_count(restore_reduced_dims(grad, dim, keepdim), restore_reduced_dims(result, dim, keepdim) == self, dim)
-  result: amaxamin_jvp(self_p, self_t, result, dim, keepdim)
-
-- name: amin(Tensor self, int[1] dim=[], bool keepdim=False) -> Tensor
-  self: scale_grad_by_count(restore_reduced_dims(grad, dim, keepdim), restore_reduced_dims(result, dim, keepdim) == self, dim)
-  result: amaxamin_jvp(self_p, self_t, result, dim, keepdim)
-
-- name: aminmax(Tensor self, *, int? dim=None, bool keepdim=False) -> (Tensor min, Tensor max)
-  self: aminmax_backward(self, dim, keepdim, grad_min, grad_max, min, max)
-  min: aminmax_jvp(self_p, self_t, min, dim, keepdim)
-  max: aminmax_jvp(self_p, self_t, max, dim, keepdim)
 - name: mul.Tensor(Tensor self, Tensor other) -> Tensor
   self: mul_tensor_backward(grad, other, self.scalar_type())
   other: mul_tensor_backward(grad, self, other.scalar_type())
@@ -801,27 +493,9 @@
   self: mul_tensor_backward(grad, other, self.scalar_type())
   result: self_t * other
 
-- name: nan_to_num(Tensor self, float? nan=None, float? posinf=None, float? neginf=None) -> Tensor
-  self: grad * at::isfinite(self)
-  result: auto_element_wise
-
-- name: ne_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
-  self: zeros_like(self)
-  result: self_t.zero_()
-
-- name: ne_.Tensor(Tensor(a!) self, Tensor other) -> Tensor(a!)
-  self: zeros_like(self)
-  other: zeros_like(other)
-  result: self_t.zero_()
-
 - name: neg(Tensor self) -> Tensor
   self: grad.neg()
   result: auto_element_wise
-
-- name: nextafter(Tensor self, Tensor other) -> Tensor
-  self: at::where(self != other, grad, 0)
-  other: zeros_like(other)
-  result: at::where(self_p != other_p, self_t, 0)
 
 - name: normal_(Tensor(a!) self, float mean=0, float std=1, *, Generator? generator=None) -> Tensor(a!)
   self: zeros_like(grad)
@@ -830,15 +504,6 @@
 - name: normal.Tensor_float(Tensor mean, float std=1, *, Generator? generator=None) -> Tensor
   mean: at::zeros_symint(mean.sym_sizes(), grad.options())
   result: auto_element_wise
-
-- name: normal.float_Tensor(float mean, Tensor std, *, Generator? generator=None) -> Tensor
-  std: at::zeros_symint(std.sym_sizes(), grad.options())
-  result: auto_element_wise
-
-- name: normal.Tensor_Tensor(Tensor mean, Tensor std, *, Generator? generator=None) -> Tensor
-  mean: at::zeros_symint(mean.sym_sizes(), grad.options())
-  std: at::zeros_symint(std.sym_sizes(), grad.options())
-  result: zeros_like(mean_t)
 
 - name: permute(Tensor(a) self, int[] dims) -> Tensor(a)
   self: permute_backwards(grad, dims)
@@ -857,23 +522,11 @@
   exponent: pow_backward_exponent(grad, self, exponent, result)
   result: auto_element_wise
 
-- name: prod(Tensor self, *, ScalarType? dtype=None) -> Tensor
-  self: prod_backward(grad, self.to(grad.scalar_type()), result)
-  result: (prod_backward(at::ones({}, result.options()).expand_as(result), self_p.to(result.scalar_type()), result) * self_t.conj()).sum().conj()
-
-- name: prod.dim_int(Tensor self, int dim, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
-  self: prod_backward(grad, self.to(grad.scalar_type()), result, dim, keepdim)
-  result: (prod_backward(at::ones({}, result.options()).expand_as(result), self_p.to(result.scalar_type()), result, dim, keepdim) * self_t.conj()).sum(dim, keepdim).conj()
-
 - name: put(Tensor self, Tensor index, Tensor source, bool accumulate=False) -> Tensor
   self: "accumulate ? grad : grad.put(index, zeros_like(source), false)"
   index: non_differentiable
   source: grad.take(index).reshape_as(source)
   result: self_t.put(index, source_t, accumulate)
-
-- name: rad2deg(Tensor self) -> Tensor
-  self: rad2deg_backward(grad)
-  result: auto_element_wise
 
 - name: random_.from(Tensor(a!) self, int from, int? to, *, Generator? generator=None) -> Tensor(a!)
   self: zeros_like(grad)
@@ -907,14 +560,6 @@
 - name: _reshape_alias(Tensor(a) self, SymInt[] size, SymInt[] stride) -> Tensor(a)
   self: grad.reshape_symint(self.sym_sizes())
   result: auto_linear
-
-- name: round(Tensor self) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
-
-- name: round.decimals(Tensor self, *, int decimals) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
 
 - name: rsqrt(Tensor self) -> Tensor
   self: -0.5 * grad * result.pow(3).conj()
@@ -954,14 +599,6 @@
   # The function is not holomorphic, so there's no reason for its Jacobian to be Hermitian
   # auto_element_wise has a name that's a bit deceiving in the complex case
   result: sgn_backward(self_p, self_t, result)
-
-- name: sin(Tensor self) -> Tensor
-  self: grad * self.cos().conj()
-  result: auto_element_wise
-
-- name: sinh(Tensor self) -> Tensor
-  self: grad * self.cosh().conj()
-  result: auto_element_wise
 
 - name: slice.Tensor(Tensor(a) self, int dim=0, SymInt? start=None, SymInt? end=None, SymInt step=1) -> Tensor(a)
   self: slice_backward_wrapper(grad, self.sym_sizes(), dim, start, end, step)
@@ -1035,17 +672,6 @@
   self: unsqueeze_to(grad, dim, self.sym_sizes())
   result: auto_linear
 
-- name: std.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> Tensor
-  self: std_backward(result, grad, self, dim, correction, keepdim)
-  # pointwise (variance) + sum + sqrt
-  result: (at::real(var_backward(self_t.conj(), self_p, dim, correction, true).sum(dim.value_or(IntArrayRef({})), keepdim)) / (2. * result)).masked_fill_(result == 0, 0)
-
-- name: std_mean.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
-  self: std_mean_backward(grads[0], grads[1], self, result0, dim, correction, keepdim)
-  result0: (at::real(var_backward(self_t.conj(), self_p, dim, correction, true).sum(dim.value_or(IntArrayRef({})), keepdim)) / (2. * result0)).masked_fill_(result0 == 0, 0)
-  # linear
-  result1: mean(self_t, dim.value_or(IntArrayRef({})), keepdim)
-
 - name: sub.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor
   self: handle_r_to_c(self.scalar_type(), grad)
   other: handle_r_to_c(other.scalar_type(), maybe_multiply(-grad, alpha.conj()))
@@ -1054,27 +680,6 @@
 - name: sub.Scalar(Tensor self, Scalar other, Scalar alpha=1) -> Tensor
   self: handle_r_to_c(self.scalar_type(), grad)
   result: auto_element_wise
-
-- name: rsub.Tensor(Tensor self, Tensor other, *, Scalar alpha=1) -> Tensor
-  self: handle_r_to_c(self.scalar_type(), maybe_multiply(-grad, alpha.conj()))
-  other: handle_r_to_c(other.scalar_type(), grad)
-  result: -maybe_multiply(self_t, alpha) + other_t
-
-- name: rsub.Scalar(Tensor self, Scalar other, Scalar alpha=1) -> Tensor
-  self: handle_r_to_c(self.scalar_type(), maybe_multiply(-grad, alpha.conj()))
-  result: auto_element_wise
-
-- name: sum(Tensor self, *, ScalarType? dtype=None) -> Tensor
-  self: grad.expand_symint(self.sym_sizes())
-  result: auto_linear
-
-- name: sum.dim_IntList(Tensor self, int[1]? dim, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
-  self: sum_backward(grad, self.sym_sizes(), dim, keepdim)
-  result: auto_linear
-
-- name: nansum(Tensor self, int[1]? dim=None, bool keepdim=False, *, ScalarType? dtype=None) -> Tensor
-  self: nansum_backward(grad.to(self.scalar_type()), self, dim, keepdim)
-  result: at::where(self_p.isnan(), 0, self_t).sum(dim, keepdim, dtype)
 
 - name: t(Tensor(a) self) -> Tensor(a)
   self: grad.t()
@@ -1101,9 +706,6 @@
   index: non_differentiable
   result: auto_linear
 
-- name: tan(Tensor self) -> Tensor
-  self: grad * (1 + result.pow(2)).conj()
-  result: auto_element_wise
 - name: transpose.int(Tensor(a) self, int dim0, int dim1) -> Tensor(a)
   self: grad.transpose(dim0, dim1)
   result: auto_linear
@@ -1111,13 +713,6 @@
 - name: transpose_(Tensor(a!) self, int dim0, int dim1) -> Tensor(a!)
   self: grad.transpose(dim0, dim1)
   result: auto_linear
-- name: trunc(Tensor self) -> Tensor
-  self: zeros_like(grad)
-  result: auto_element_wise
-
-- name: hash_tensor(Tensor self, int[1] dim=[], *, bool keepdim=False, int mode=0) -> Tensor
-  output_differentiability: [False]
-
 - name: uniform_(Tensor(a!) self, float from=0, float to=1, *, Generator? generator=None) -> Tensor(a!)
   self: zeros_like(grad)
   result: self_t.zero_()
@@ -1140,17 +735,6 @@
 - name: unsqueeze_(Tensor(a!) self, int dim) -> Tensor(a!)
   self: grad.squeeze(dim)
   result: auto_linear
-
-- name: var.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> Tensor
-  self: var_backward(grad, self, dim, correction, keepdim)
-  # pointwise + sum
-  result: at::real(var_backward(self_t.conj(), self_p, dim, correction, true).sum(dim.value_or(IntArrayRef({})), keepdim))
-
-- name: var_mean.correction(Tensor self, int[1]? dim=None, *, Scalar? correction=None, bool keepdim=False) -> (Tensor, Tensor)
-  self: var_mean_backward(grads[0], grads[1], self, dim, correction, keepdim)
-  result0: at::real(var_backward(self_t.conj(), self_p, dim, correction, true).sum(dim.value_or(IntArrayRef({})), keepdim))
-  # linear
-  result1: mean(self_t, dim.value_or(IntArrayRef({})), keepdim)
 
 - name: view(Tensor(a) self, SymInt[] size) -> Tensor(a)
   self: grad.reshape_symint(self.sym_sizes())
@@ -1184,41 +768,6 @@
 - name: stack(Tensor[] tensors, int dim=0) -> Tensor
   tensors: stack_tensors_backward(grad, dim, to_args_scalartypes(tensors))
   result: stack_jvp(tensors, dim)
-- name: eq.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: eq.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
-
-- name: ge.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: ge.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
-
-- name: gt.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: gt.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
-
-- name: le.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: le.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
-
-- name: lt.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: lt.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
-
-- name: ne.Scalar(Tensor self, Scalar other) -> Tensor
-  output_differentiability: [False]
-
-- name: ne.Tensor(Tensor self, Tensor other) -> Tensor
-  output_differentiability: [False]
 - name: _pin_memory(Tensor self, Device? device=None) -> Tensor
   self: grad
 
@@ -1229,11 +778,6 @@
 
 - name: _efficientzerotensor(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   output_differentiability: [False]
-
-- name: scatter_reduce.two(Tensor self, int dim, Tensor index, Tensor src, str reduce, *, bool include_self=True) -> Tensor
-  self, src: scatter_reduce_backward(grad, self, dim, index, src, reduce, include_self, result)
-  index: non_differentiable
-  result: scatter_reduce_jvp(self_p, self_t, dim, index, src_p, src_t, reduce, include_self, result)
 
 - name: _reshape_copy(Tensor self, SymInt[] size) -> Tensor
   self: grad.reshape_symint(self.sym_sizes())

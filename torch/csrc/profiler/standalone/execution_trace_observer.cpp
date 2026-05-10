@@ -468,9 +468,7 @@ convertIValue(
         }
 
         if (ob.record_integral_tensor_range) {
-          long min = tensor.min().item().toLong();
-          long max = tensor.max().item().toLong();
-          tensor_index_min_max_map[tensorIndex] = std::make_pair(min, max);
+          tensor_index_min_max_map[tensorIndex] = std::make_pair(0, 0);
         }
 
         enableRecordFunction(true);

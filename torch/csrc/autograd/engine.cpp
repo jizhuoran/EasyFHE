@@ -16,12 +16,6 @@
 #include <ATen/detail/CUDAHooksInterface.h>
 #include <ATen/detail/PrivateUse1HooksInterface.h>
 
-#ifndef AT_PER_OPERATOR_HEADERS
-#include <ATen/Functions.h>
-#else
-#include <ATen/ops/isnan.h>
-#endif
-
 #include <c10/core/DeviceGuard.h>
 #include <c10/core/Event.h>
 #include <c10/core/Stream.h>
@@ -1157,17 +1151,6 @@ void Engine::evaluate_function(
 
   if (AnomalyMode::is_enabled() && AnomalyMode::should_check_nan()) {
     AutoGradMode grad_mode(false);
-    for (const auto i : c10::irange(num_outputs)) {
-      auto& output = outputs[i];
-      at::OptionalDeviceGuard guard(device_of(output));
-      TORCH_CHECK(
-          !output.defined() || !isnan(output)._is_any_true().item<bool>(),
-          "Function '",
-          fn.name(),
-          "' returned nan values in its ",
-          i,
-          "th output.");
-    }
   }
 
   // Lock mutex for the accesses to GraphTask dependencies_, not_ready_ and

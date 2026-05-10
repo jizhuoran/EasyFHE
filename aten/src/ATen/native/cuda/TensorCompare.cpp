@@ -10,10 +10,7 @@ namespace {
 // so it is not very memory efficient, but it is fast on CUDA.
 void isin_default_kernel_gpu(
     const Tensor& elements, const Tensor& test_elements, bool invert, const Tensor& out) {
-  std::vector<int64_t> bc_shape(elements.dim(), 1);
-  bc_shape.push_back(-1);
-  out.copy_(invert ? elements.unsqueeze(-1).ne(test_elements.view(bc_shape)).all(-1)
-            : elements.unsqueeze(-1).eq(test_elements.view(bc_shape)).any(-1));
+  TORCH_CHECK(false, "isin is disabled in EasyFHE");
 }
 
 } // anonymous namespace

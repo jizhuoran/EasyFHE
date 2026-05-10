@@ -3,12 +3,6 @@
 #include <ATen/core/Tensor.h>
 #include <c10/core/impl/TorchDispatchModeTLS.h>
 
-#ifndef AT_PER_OPERATOR_HEADERS
-#include <ATen/Functions.h>
-#else
-#include <ATen/ops/equal.h>
-#endif
-
 namespace at {
 
 // Note [Tensor-subclass-like Tensors]
@@ -82,7 +76,7 @@ inline bool areAnyOptionalTensorSubclassLike(
 inline bool is_scalar_tensor_true(const Tensor& t) {
   TORCH_INTERNAL_ASSERT(t.dim() == 0)
   TORCH_INTERNAL_ASSERT(t.scalar_type() == kBool)
-  return at::equal(t, t.new_ones({}, t.options()));
+  return t.item<bool>();
 }
 
 } // namespace at

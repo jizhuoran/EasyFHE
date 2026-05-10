@@ -392,7 +392,8 @@ static PyObject * THPVariable_index_scalar(PyObject* self, PyObject* args) {
 static Tensor dispatch_invert(const Tensor & self) {
   pybind11::gil_scoped_release no_gil;
   OptionalDeviceGuard device_guard(device_of(self));
-  return self.bitwise_not();
+  TORCH_CHECK(false, "bitwise_not is disabled in EasyFHE");
+  return Tensor();
 }
 
 static PyObject * THPVariable_invert(PyObject* self, PyObject* args) {
@@ -1098,6 +1099,59 @@ static PyObject * THPVariable_type(PyObject* self, PyObject* args, PyObject* kwa
 
 ${py_methods}
 
+static PyObject * THPVariable_disabled_compute(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  HANDLE_TH_ERRORS
+  TORCH_CHECK(false, "comparison and bitwise tensor operators are disabled in EasyFHE");
+  Py_RETURN_NONE;
+  END_HANDLE_TH_ERRORS
+}
+
+static PyObject * THPVariable_eq(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_ne(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_lt(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_le(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_gt(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_ge(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_bitwise_and(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_bitwise_or(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
+static PyObject * THPVariable_bitwise_xor(PyObject* self, PyObject* args, PyObject* kwargs)
+{
+  return THPVariable_disabled_compute(self, args, kwargs);
+}
+
 static PyObject * THPVariable_bool_scalar(PyObject* self, PyObject* args) {
   if (has_torch_function(self)) {
     HANDLE_TH_ERRORS
@@ -1110,37 +1164,7 @@ static PyObject * THPVariable_bool_scalar(PyObject* self, PyObject* args) {
 
 static PyObject * THPVariable___eq__(PyObject* self_, PyObject* args, PyObject* kwargs)
 {
-  HANDLE_TH_ERRORS
-#ifdef USE_NUMPY
-  if (torch::utils::is_numpy_available()) {
-    static PythonArgParser parser({
-      "__eq__(PyObject* other)",
-    }, /*traceable=*/true);
-
-    ParsedArgs<1> parsed_args;
-    auto _r = parser.parse(self_, args, kwargs, parsed_args);
-    if(_r.has_torch_function()) {
-      return handle_torch_function(_r, self_, args, kwargs, THPVariableClass, "torch.Tensor");
-    }
-    switch (_r.idx) {
-      case 0: {
-        auto other = _r.pyobject(0);
-        if (PyArray_Check(other)) {
-          auto other_tensor = torch::utils::tensor_from_numpy(other);
-          auto dispatch_eq = [](const at::Tensor & self, const at::Tensor & other) -> at::Tensor {
-            pybind11::gil_scoped_release no_gil;
-            return self.eq(other);
-          };
-          const Tensor& self = THPVariable_Unpack(self_);
-          return wrap(dispatch_eq(self, other_tensor));
-        }
-      }
-    }
-  }
-#endif
-  return THPVariable_eq(self_, args, kwargs);
-  Py_RETURN_NONE;
-  END_HANDLE_TH_ERRORS
+  return THPVariable_disabled_compute(self_, args, kwargs);
 }
 
 // Wrapper converts a raised TypeError into returning NotImplemented

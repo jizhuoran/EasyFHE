@@ -1072,20 +1072,8 @@ Tensor clamp_backward(
     const Tensor& self,
     const std::optional<Scalar>& min,
     const std::optional<Scalar>& max) {
-  // clamp: gradients not defined on min and max, so we return the subgradient 1
-  // for these cases.
-  if (max && min) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    return where((self >= *min).logical_and_(self <= *max), grad, zero);
-  } else if (min) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    return where(self >= *min, grad, zero);
-  } else if (max) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    return where(self <= *max, grad, zero);
-  } else {
-    return grad;
-  }
+  TORCH_CHECK(false, "clamp backward is disabled in EasyFHE");
+  return grad;
 }
 
 Tensor clamp_backward(
@@ -1093,25 +1081,8 @@ Tensor clamp_backward(
     const Tensor& self,
     const Tensor& min,
     const Tensor& max) {
-  // clamp: gradients not defined on min and max, so we return the subgradient 1
-  // for these cases.
-  if (max.defined() && min.defined()) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    const auto self_ge_min = self >= min;
-    const auto self_le_max = self <= max;
-    const auto& pred = areAnyTensorSubclassLike({self, min, max})
-        ? self_ge_min.logical_and(self_le_max)
-        : self_ge_min.logical_and_(self_le_max);
-    return where(pred, grad, zero);
-  } else if (min.defined()) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    return where(self >= min, grad, zero);
-  } else if (max.defined()) {
-    auto zero = at::scalar_tensor(0., grad.options());
-    return where(self <= max, grad, zero);
-  } else {
-    return grad;
-  }
+  TORCH_CHECK(false, "clamp backward is disabled in EasyFHE");
+  return grad;
 }
 
 std::tuple<at::Tensor, at::Tensor> clamp_backward_min_max(
@@ -1120,36 +1091,8 @@ std::tuple<at::Tensor, at::Tensor> clamp_backward_min_max(
     const Tensor& min,
     const Tensor& max,
     const std::array<bool, 2>& grad_input_mask) {
-  // If min > max, min has no gradient
-  std::tuple<at::Tensor, at::Tensor> ret;
-  if (!grad.defined()) {
-    return ret;
-  }
-
-  auto zero = at::scalar_tensor(0., grad.options());
-  if (max.defined() && min.defined()) {
-    if (grad_input_mask[0]) {
-      const auto self_lt_min = self < min;
-      const auto min_lt_max = min < max;
-      const auto& pred = areAnyTensorSubclassLike({self, min, max})
-          ? self_lt_min.logical_and(min_lt_max)
-          : self_lt_min.logical_and_(min_lt_max);
-      std::get<0>(ret) = where(pred, grad, zero);
-    }
-    if (grad_input_mask[1]) {
-      const auto self_gt_max = self > max;
-      const auto max_lt_min = max < min;
-      const auto& pred = areAnyTensorSubclassLike({self, min, max})
-          ? self_gt_max.logical_or(max_lt_min)
-          : self_gt_max.logical_or_(max_lt_min);
-      std::get<1>(ret) = where(pred, grad, zero);
-    }
-  } else if (min.defined() && grad_input_mask[0]) {
-    std::get<0>(ret) = where(self < min, grad, zero);
-  } else if (max.defined() && grad_input_mask[1]) {
-    std::get<1>(ret) = where(self > max, grad, zero);
-  }
-  return ret;
+  TORCH_CHECK(false, "clamp backward is disabled in EasyFHE");
+  return std::tuple<at::Tensor, at::Tensor>();
 }
 
 at::Tensor clamp_jvp(
@@ -1159,18 +1102,8 @@ at::Tensor clamp_jvp(
     const Tensor& min_t,
     const Tensor& max_p,
     const Tensor& max_t) {
-  if (min_p.defined() && max_p.defined()) {
-    return where(
-        min_p > max_p,
-        max_t,
-        where(self_p < min_p, min_t, where(self_p > max_p, max_t, self_t)));
-  } else if (min_p.defined()) {
-    return where(self_p > min_p, self_t, min_t);
-  } else if (max_p.defined()) {
-    return where(self_p < max_p, self_t, max_t);
-  } else {
-    return self_t;
-  }
+  TORCH_CHECK(false, "clamp jvp is disabled in EasyFHE");
+  return self_t;
 }
 
 Tensor convolution_jvp(

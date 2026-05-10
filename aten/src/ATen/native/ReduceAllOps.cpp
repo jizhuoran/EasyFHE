@@ -8,13 +8,7 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_aminmax_native.h>
-#include <ATen/ops/aminmax.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/max.h>
-#include <ATen/ops/max_native.h>
-#include <ATen/ops/min.h>
-#include <ATen/ops/min_native.h>
 #endif
 
 namespace at::native {
@@ -68,9 +62,8 @@ Tensor& max_unary_out(const Tensor &self, Tensor& out) {
 
 // DEPRECATED: Use at::aminmax instead
 std::tuple<Tensor, Tensor> _aminmax_all(const Tensor &self) {
-  TORCH_WARN_ONCE("_aminmax is deprecated as of PyTorch 1.11 and will be removed in a future release. Use aminmax instead."
-                  " This warning will only appear once per process.");
-  return at::aminmax(self);
+  TORCH_CHECK(false, "_aminmax is disabled in EasyFHE");
+  return std::make_tuple(self, self);
 }
 
 } // namespace at::native

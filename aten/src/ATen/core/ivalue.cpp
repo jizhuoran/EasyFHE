@@ -313,7 +313,7 @@ IValue IValue::equals(const IValue& rhs) const {
       if (!rhs.isTensor()) {
         return false;
       }
-      return lhs.toTensor().eq(rhs.toTensor());
+      return lhs.toTensor().is_same(rhs.toTensor());
     }
     case Tag::Storage:
       return rhs.isStorage() && lhs.toStorage().unsafeGetStorageImpl() == rhs.toStorage().unsafeGetStorageImpl();
@@ -697,7 +697,10 @@ torch::jit::Function* checkObjectSortSchema(const c10::ClassTypePtr& t, std::str
 IValueComparator getLessThanComparator(const IValue& v) {
   if (v.isTensor()) {
       return [](const IValue& a, const IValue& b) {
-        return a.toTensor().lt(b.toTensor()).is_nonzero();
+        (void)a;
+        (void)b;
+        TORCH_CHECK(false, "Tensor comparison is disabled in EasyFHE");
+        return false;
       };
   }
 

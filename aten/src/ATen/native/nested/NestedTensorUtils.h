@@ -18,7 +18,6 @@
 #include <ATen/ops/cat.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/ones_native.h>
-#include <ATen/ops/prod.h>
 #include <ATen/ops/stack_native.h>
 #endif
 

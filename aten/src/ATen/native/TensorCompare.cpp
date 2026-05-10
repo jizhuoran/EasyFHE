@@ -21,14 +21,11 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/_aminmax_native.h>
 #include <ATen/ops/_assert_async_native.h>
 #include <ATen/ops/_assert_scalar_native.h>
 #include <ATen/ops/_functional_assert_async_native.h>
 #include <ATen/ops/_functional_assert_scalar_native.h>
 #include <ATen/ops/_print_native.h>
-#include <ATen/ops/allclose_native.h>
-#include <ATen/ops/aminmax.h>
 #include <ATen/ops/cat.h>
 #include <ATen/ops/clamp.h>
 #include <ATen/ops/clamp_max.h>
@@ -36,31 +33,12 @@
 #include <ATen/ops/clamp_min.h>
 #include <ATen/ops/clamp_min_native.h>
 #include <ATen/ops/clamp_native.h>
-#include <ATen/ops/clip_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
-#include <ATen/ops/eq.h>
 #include <ATen/ops/fill.h>
 #include <ATen/ops/imag.h>
 #include <ATen/ops/index.h>
 #include <ATen/ops/is_nonzero_native.h>
-#include <ATen/ops/isclose.h>
-#include <ATen/ops/isclose_native.h>
-#include <ATen/ops/isfinite.h>
-#include <ATen/ops/isfinite_native.h>
-#include <ATen/ops/isin.h>
-#include <ATen/ops/isin_native.h>
-#include <ATen/ops/isinf.h>
-#include <ATen/ops/isinf_native.h>
-#include <ATen/ops/isnan_native.h>
-#include <ATen/ops/isneginf_native.h>
-#include <ATen/ops/isposinf_native.h>
-#include <ATen/ops/isreal_native.h>
-#include <ATen/ops/max.h>
-#include <ATen/ops/max_native.h>
-#include <ATen/ops/min.h>
-#include <ATen/ops/min_native.h>
-#include <ATen/ops/ne.h>
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/real.h>
 #include <ATen/ops/result_type_native.h>
@@ -73,16 +51,6 @@
 #endif
 
 namespace at::meta {
-
-static inline void check_for_unsupported_isin_dtype(const ScalarType type) {
-  // Bail out for dtypes unsupported by the sorting algorithm to keep the
-  // interface consistent.
-  TORCH_CHECK(
-      type != ScalarType::Bool && type != ScalarType::ComplexFloat &&
-          type != ScalarType::ComplexDouble,
-      "Unsupported input type encountered for isin(): ",
-      type);
-}
 
 static inline void check_for_unsupported_clamp_dtypes(ScalarType dtype) {
   TORCH_CHECK_NOT_IMPLEMENTED(
@@ -206,91 +174,8 @@ TORCH_META_FUNC2(clamp_min, Tensor)(const Tensor& self, const Tensor& min) {
   build_borrowing_binary_op(maybe_get_output(), self, min);
 }
 
-TORCH_META_FUNC2(isin, Tensor_Tensor)
-(const Tensor& elements,
- const Tensor& test_elements,
- bool /*assume_unique*/,
- bool /*invert*/
-) {
-  check_for_unsupported_isin_dtype(elements.scalar_type());
-  check_for_unsupported_isin_dtype(test_elements.scalar_type());
-  set_output_raw_strided(
-      0,
-      elements.sizes(),
-      {},
-      TensorOptions(elements.device()).dtype(ScalarType::Bool));
-}
-
-TORCH_META_FUNC2(isin, Tensor_Scalar)
-(const Tensor& elements,
- const c10::Scalar& test_elements,
- bool /*assume_unique*/,
- bool /*invert*/
-) {
-  check_for_unsupported_isin_dtype(elements.scalar_type());
-  check_for_unsupported_isin_dtype(test_elements.type());
-  set_output_raw_strided(
-      0,
-      elements.sizes(),
-      {},
-      TensorOptions(elements.device()).dtype(ScalarType::Bool));
-}
-
-TORCH_META_FUNC2(isin, Scalar_Tensor)
-(const c10::Scalar& elements,
- const Tensor& test_elements,
- bool /*assume_unique*/,
- bool /*invert*/
-) {
-  check_for_unsupported_isin_dtype(elements.type());
-  check_for_unsupported_isin_dtype(test_elements.scalar_type());
-  set_output_raw_strided(
-      0,
-      {0},
-      {},
-      TensorOptions(test_elements.device()).dtype(ScalarType::Bool));
-}
-
-TORCH_META_FUNC(isposinf)(const Tensor& self) {
-  TORCH_CHECK(!self.is_complex(), "isposinf does not support complex inputs.");
-  TORCH_CHECK(
-      maybe_get_output().defined() ? maybe_get_output().dtype() == at::kBool
-                                   : true,
-      "isposinf does not support non-boolean outputs.");
-  build_borrowing_unary_force_boolean_op(maybe_get_output(), self);
-}
-
-TORCH_META_FUNC(isneginf)(const Tensor& self) {
-  TORCH_CHECK(!self.is_complex(), "isneginf does not support complex inputs.");
-  TORCH_CHECK(
-      maybe_get_output().defined() ? maybe_get_output().dtype() == at::kBool
-                                   : true,
-      "isneginf does not support non-boolean outputs.");
-  build_borrowing_unary_force_boolean_op(maybe_get_output(), self);
-}
-
 static void check_unsupported_complex(const char* name, const Tensor& self) {
   TORCH_CHECK(!self.is_complex(), name, ": does not support complex input");
-}
-
-TORCH_PRECOMPUTE_META_FUNC2(max, dim)
-(const Tensor& self, int64_t dim, bool keepdim) {
-  dim = maybe_wrap_dim(dim, self.dim());
-  at::native::zero_numel_check_dims(self, dim, "max()");
-  check_unsupported_complex("max()", self);
-  resize_reduction_with_indices(*this, self, dim, keepdim, self.scalar_type());
-  return TORCH_PRECOMPUTE_STRUCT2(max, dim)().set_dim(
-      maybe_wrap_dim(dim, self.dim()));
-}
-
-TORCH_PRECOMPUTE_META_FUNC2(min, dim)
-(const Tensor& self, int64_t dim, bool keepdim) {
-  dim = maybe_wrap_dim(dim, self.dim());
-  at::native::zero_numel_check_dims(self, dim, "min()");
-  check_unsupported_complex("min()", self);
-  resize_reduction_with_indices(*this, self, dim, keepdim, self.scalar_type());
-  return TORCH_PRECOMPUTE_STRUCT2(min, dim)().set_dim(
-      maybe_wrap_dim(dim, self.dim()));
 }
 
 } // namespace at::meta
@@ -324,7 +209,8 @@ bool allclose(
     double rtol,
     double atol,
     bool equal_nan) {
-  return at::isclose(self, other, rtol, atol, equal_nan).all().item<uint8_t>();
+  TORCH_CHECK(false, "allclose is disabled in EasyFHE");
+  return false;
 }
 
 // Note [closeness]
@@ -346,95 +232,18 @@ Tensor isclose(
     double rtol,
     double atol,
     bool equal_nan) {
-  TORCH_CHECK(
-      self.scalar_type() == other.scalar_type(),
-      self.scalar_type(),
-      " did not match ",
-      other.scalar_type());
-  TORCH_CHECK(
-      !(self.is_quantized() || other.is_quantized()),
-      "isclose is not supported for quantized inputs.");
-
-  // Checks that rtol and atol are non-negative
-  // Note: consistent with Python's isclose but divergent from NumPy's, which
-  //  allows negative atol and rtol.
-  TORCH_CHECK(
-      rtol >= 0, "rtol must be greater than or equal to zero, but got ", rtol);
-  TORCH_CHECK(
-      atol >= 0, "atol must be greater than or equal to zero, but got ", atol);
-
-  // Computes equality closeness
-  Tensor close = self == other;
-  if (equal_nan && (self.is_floating_point() || self.is_complex())) {
-    // For CompositeCompliance, if `other` is a CCT and `self` is a regular
-    // Tensor, then we can't perform inplace op into `self` with `other`. NOTE:
-    // Inplacing into `close` is fine because it is generated from out-of-place
-    // with args `self` and `other`. So if either of them is a CCT then `close`
-    // will also be a `CCT`.
-    if (isTensorSubclassLike(other)) {
-      close.__ior__(self.isnan().bitwise_and(other.isnan()));
-    } else {
-      // In-place __iand__ requires the target shape to equal the broadcast
-      // result. Check shapes to pick the right in-place target, or fall back
-      // to out-of-place for mutual broadcast (e.g. [3,1] vs [1,4] -> [3,4]).
-      if (self.sizes() == other.sizes()) {
-        close.__ior__(self.isnan().__iand__(other.isnan()));
-      } else {
-        close.__ior__(self.isnan().bitwise_and(other.isnan()));
-      }
-    }
-  }
-
-  // In case of zero tolerances the closeness inequality degenerates to an
-  // equality check. In this case, the short-circuit prevents false positives as
-  // detailed in the paragraph below.
-  if (rtol == 0 && atol == 0) {
-    return close;
-  }
-
-  // Note [closeness error computation]
-  // atol and rtol are provided as doubles, so the computation
-  // rtol * other will produce a float or complex tensor.
-  // When the difference (self - other) is compared to it then the
-  // tensor representing the difference will also be cast to float or complex.
-  // However, since (self - other) in uint8 is very likely to produce a
-  // negative value, this moves the cast forward so the difference is
-  // always computed in a float or complex type.
-  // If the values of the integer tensors cannot be exactly represented
-  // by the default scalar type then this may cause an incorrect result.
-
-  // Computes allowed and actual error
-  Tensor cast_self, cast_other;
-  cast_self =
-      self.scalar_type() == at::kBool ? self.to(at::get_default_dtype()) : self;
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    cast_other = other.to(at::get_default_dtype());
-  } else {
-    cast_other = other;
-  }
-
-  Tensor allowed_error = atol + (rtol * cast_other).abs();
-  Tensor actual_error = (cast_self - cast_other).abs();
-
-  // Computes finite closeness
-  close.__ior__(
-      at::isfinite(actual_error).__iand__(actual_error <= allowed_error));
-
-  return close;
+  TORCH_CHECK(false, "isclose is disabled in EasyFHE");
+  return self;
 }
 
 Tensor isnan(const Tensor& self) {
-  return self != self;
+  TORCH_CHECK(false, "isnan is disabled in EasyFHE");
+  return self;
 }
 
 Tensor isreal(const Tensor& self) {
-  // Note: Integral and Floating tensor values are always real
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true) ||
-      c10::isFloatingType(self.scalar_type())) {
-    return at::ones_like(self, at::kBool, at::MemoryFormat::Preserve);
-  }
-
-  return at::imag(self) == 0;
+  TORCH_CHECK(false, "isreal is disabled in EasyFHE");
+  return self;
 }
 
 #if !defined(C10_MOBILE)
@@ -447,37 +256,13 @@ Tensor isreal(const Tensor& self) {
 #endif
 
 Tensor isinf(const Tensor& self) {
-  // Note: Integral tensor values are never infinite
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    return at::zeros_like(self, at::kBool, at::MemoryFormat::Preserve);
-  }
-
-  // Note: a complex value is infinite when either part is infinite
-  if (self.is_complex()) {
-    return at::isinf(at::real(self)).__ior__(at::isinf(at::imag(self)));
-  }
-
-  return _AT_DISPATCH_INF_TYPES(self.scalar_type(), "isinf", [&]() {
-    return self.abs() == std::numeric_limits<scalar_t>::infinity();
-  });
+  TORCH_CHECK(false, "isinf is disabled in EasyFHE");
+  return self;
 }
 
 Tensor isfinite(const Tensor& self) {
-  // Note: Integral tensor values are always finite
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true) ||
-      self.scalar_type() == kFloat8_e8m0fnu) {
-    return at::ones_like(self, at::kBool, at::MemoryFormat::Preserve);
-  }
-
-  // Note: a complex value is finite iff both parts are finite
-  if (self.is_complex()) {
-    return at::isfinite(at::real(self)).__iand__(at::isfinite(at::imag(self)));
-  }
-
-  return _AT_DISPATCH_INF_TYPES(self.scalar_type(), "isfinite", [&]() {
-    return (self == self) *
-        (self.abs() != std::numeric_limits<scalar_t>::infinity());
-  });
+  TORCH_CHECK(false, "isfinite is disabled in EasyFHE");
+  return self;
 }
 
 void _assert_async_cpu(const Tensor& self) {
@@ -661,24 +446,6 @@ static void minmax_out_impl(
   }
 }
 
-TORCH_IMPL_FUNC(max_out)
-(const Tensor& self,
- int64_t dim,
- bool keepdim,
- const Tensor& values,
- const Tensor& indices) {
-  minmax_out_impl(self, dim, keepdim, values, indices, max_stub);
-}
-
-TORCH_IMPL_FUNC(min_out)
-(const Tensor& self,
- int64_t dim,
- bool keepdim,
- const Tensor& values,
- const Tensor& indices) {
-  minmax_out_impl(self, dim, keepdim, values, indices, min_stub);
-}
-
 std::tuple<Tensor, Tensor> qmax(const Tensor& self, int64_t dim, bool keepdim) {
   TORCH_CHECK(false, "Quantized max not supported in EasyFHE");
   return std::make_tuple(self, at::empty({0}, self.options().dtype(kLong)));
@@ -694,10 +461,8 @@ std::tuple<Tensor, Tensor> _aminmax(
     const Tensor& self,
     int64_t dim,
     bool keepdim) {
-  TORCH_WARN_ONCE(
-      "_aminmax is deprecated as of PyTorch 1.11 and will be removed in a future release. Use aminmax instead."
-      " This warning will only appear once per process.");
-  return at::aminmax(self, dim, keepdim);
+  TORCH_CHECK(false, "_aminmax is disabled in EasyFHE");
+  return std::make_tuple(self, self);
 }
 
 TORCH_IMPL_FUNC(clamp_out)
@@ -818,7 +583,8 @@ Tensor& clip_(
 // Named tensor overloads
 
 std::tuple<Tensor, Tensor> min(const Tensor& self, Dimname dim, bool keepdim) {
-  return at::min(self, dimname_to_position(self, dim), keepdim);
+  TORCH_CHECK(false, "min is disabled in EasyFHE");
+  return std::make_tuple(self, Tensor());
 }
 std::tuple<Tensor&, Tensor&> min_out(
     const Tensor& self,
@@ -826,11 +592,12 @@ std::tuple<Tensor&, Tensor&> min_out(
     bool keepdim,
     Tensor& min,
     Tensor& min_indices) {
-  return at::min_out(
-      min, min_indices, self, dimname_to_position(self, dim), keepdim);
+  TORCH_CHECK(false, "min is disabled in EasyFHE");
+  return std::tie(min, min_indices);
 }
 std::tuple<Tensor, Tensor> max(const Tensor& self, Dimname dim, bool keepdim) {
-  return at::max(self, dimname_to_position(self, dim), keepdim);
+  TORCH_CHECK(false, "max is disabled in EasyFHE");
+  return std::make_tuple(self, Tensor());
 }
 std::tuple<Tensor&, Tensor&> max_out(
     const Tensor& self,
@@ -838,8 +605,8 @@ std::tuple<Tensor&, Tensor&> max_out(
     bool keepdim,
     Tensor& max,
     Tensor& max_indices) {
-  return at::max_out(
-      max, max_indices, self, dimname_to_position(self, dim), keepdim);
+  TORCH_CHECK(false, "max is disabled in EasyFHE");
+  return std::tie(max, max_indices);
 }
 Tensor argsort(const Tensor& /*self*/, Dimname /*dim*/, bool /*keepdim*/) {
   reportNYIDimnameOverload("argsort");
@@ -856,75 +623,6 @@ std::tuple<Tensor&, Tensor&> mode_out(
     Tensor& indices) {
   TORCH_CHECK(false, "mode is not supported in EasyFHE fast build");
   return std::tie(values, indices);
-}
-
-TORCH_IMPL_FUNC(isin_Tensor_Tensor_out)
-(const Tensor& elements,
- const Tensor& test_elements,
- bool assume_unique,
- bool invert,
- const Tensor& out) {
-  if (elements.numel() == 0) {
-    return;
-  }
-
-  // Heuristic taken from numpy's implementation.
-  // See
-  // https://github.com/numpy/numpy/blob/fb215c76967739268de71aa4bda55dd1b062bc2e/numpy/lib/arraysetops.py#L575
-  if (test_elements.numel() <
-      static_cast<int64_t>(
-          10.0f * std::pow(static_cast<double>(elements.numel()), 0.145))) {
-    out.fill_(invert);
-    isin_default_stub(
-        elements.device().type(), elements, test_elements, invert, out);
-  } else {
-    TORCH_CHECK(false, "large isin is not supported in EasyFHE fast build");
-  }
-}
-
-TORCH_IMPL_FUNC(isin_Tensor_Scalar_out)
-(const Tensor& elements,
- const c10::Scalar& test_elements,
- bool assume_unique,
- bool invert,
- const Tensor& out) {
-  // redispatch to eq / ne
-  if (invert) {
-    at::ne_out(const_cast<Tensor&>(out), elements, test_elements);
-  } else {
-    at::eq_out(const_cast<Tensor&>(out), elements, test_elements);
-  }
-}
-
-TORCH_IMPL_FUNC(isin_Scalar_Tensor_out)
-(const c10::Scalar& elements,
- const Tensor& test_elements,
- bool assume_unique,
- bool invert,
- const Tensor& out) {
-  // redispatch
-  at::isin_out(
-      const_cast<Tensor&>(out),
-      wrapped_scalar_tensor(elements, test_elements.device()),
-      test_elements,
-      assume_unique,
-      invert);
-}
-
-TORCH_IMPL_FUNC(isposinf_out)(const Tensor& self, const Tensor& result) {
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    result.fill_(false);
-  } else {
-    isposinf_stub(device_type(), *this);
-  }
-}
-
-TORCH_IMPL_FUNC(isneginf_out)(const Tensor& self, const Tensor& result) {
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    result.fill_(false);
-  } else {
-    isneginf_stub(device_type(), *this);
-  }
 }
 
 } // namespace at::native

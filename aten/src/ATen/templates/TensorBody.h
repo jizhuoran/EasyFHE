@@ -125,6 +125,145 @@ class TORCH_API Tensor: public TensorBase {
     return TensorBase::contiguous(memory_format);
   }
 
+  Tensor sum() const {
+    TORCH_CHECK(false, "sum is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor sum(IntArrayRef dim, bool keepdim=false, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "sum is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor sum(int64_t dim, bool keepdim=false, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "sum is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor mean() const {
+    TORCH_CHECK(false, "mean is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor mean(IntArrayRef dim, bool keepdim=false, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "mean is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor mean(int64_t dim, bool keepdim=false, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "mean is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor min() const {
+    TORCH_CHECK(false, "min is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor max() const {
+    TORCH_CHECK(false, "max is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor any() const {
+    TORCH_CHECK(false, "any is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor any(int64_t dim, bool keepdim=false) const {
+    TORCH_CHECK(false, "any is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor all() const {
+    TORCH_CHECK(false, "all is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor all(int64_t dim, bool keepdim=false) const {
+    TORCH_CHECK(false, "all is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor count_nonzero(IntArrayRef dim) const {
+    TORCH_CHECK(false, "count_nonzero is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor cumsum(int64_t dim, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "cumsum is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor cumprod(int64_t dim, std::optional<ScalarType> dtype=std::nullopt) const {
+    TORCH_CHECK(false, "cumprod is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor masked_select(const Tensor& mask) const {
+    TORCH_CHECK(false, "masked_select is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor eq(const Tensor& other) const {
+    TORCH_CHECK(false, "eq is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor eq(const Scalar& other) const {
+    TORCH_CHECK(false, "eq is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor ne(const Tensor& other) const {
+    TORCH_CHECK(false, "ne is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor ne(const Scalar& other) const {
+    TORCH_CHECK(false, "ne is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor isnan() const {
+    TORCH_CHECK(false, "isnan is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor logical_not() const {
+    TORCH_CHECK(false, "logical_not is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor logical_and(const Tensor& other) const {
+    TORCH_CHECK(false, "logical_and is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor& logical_and_(const Tensor& other) {
+    TORCH_CHECK(false, "logical_and is disabled in EasyFHE");
+    return *this;
+  }
+  Tensor logical_and_(const Tensor& other) const {
+    TORCH_CHECK(false, "logical_and is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor logical_or(const Tensor& other) const {
+    TORCH_CHECK(false, "logical_or is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor& logical_or_(const Tensor& other) {
+    TORCH_CHECK(false, "logical_or is disabled in EasyFHE");
+    return *this;
+  }
+  Tensor logical_or_(const Tensor& other) const {
+    TORCH_CHECK(false, "logical_or is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor sin() const {
+    TORCH_CHECK(false, "sin is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor cos() const {
+    TORCH_CHECK(false, "cos is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor scatter_reduce(
+      int64_t dim,
+      const Tensor& index,
+      const Tensor& src,
+      std::string_view reduce,
+      bool include_self) const {
+    TORCH_CHECK(false, "scatter_reduce is disabled in EasyFHE");
+    return Tensor();
+  }
+  Tensor index_reduce(
+      int64_t dim,
+      const Tensor& index,
+      const Tensor& source,
+      std::string_view reduce,
+      bool include_self) const {
+    TORCH_CHECK(false, "index_reduce is disabled in EasyFHE");
+    return Tensor();
+  }
+
   Tensor conj() const {
     if (!this->is_complex()) {
       return *this;
@@ -265,9 +404,6 @@ class TORCH_API Tensor: public TensorBase {
   C10_DEPRECATED_MESSAGE("packed_accessor is deprecated, use packed_accessor32 or packed_accessor64 instead")
   GenericPackedTensorAccessor<T,N,PtrTraits,index_t> packed_accessor() && = delete;
 
-  Tensor operator~() const {
-    return bitwise_not();
-  }
   Tensor operator-() const {
     return neg();
   }
@@ -294,15 +430,6 @@ class TORCH_API Tensor: public TensorBase {
   }
   Tensor& operator/=(const Scalar & other) {
     return div_(other);
-  }
-  Tensor& operator&=(const Tensor & other) {
-    return bitwise_and_(other);
-  }
-  Tensor& operator|=(const Tensor & other) {
-    return bitwise_or_(other);
-  }
-  Tensor& operator^=(const Tensor & other) {
-    return bitwise_xor_(other);
   }
   Tensor operator[](const Scalar & index) const {
     if (!index.isIntegral(false)) {
@@ -524,18 +651,6 @@ class TORCH_API Tensor: public TensorBase {
   //example
   //Tensor * add(Tensor & b);
   ${tensor_method_declarations}
-
-  // Special C++ only overloads for std()-like functions (See gh-40287)
-  // These are needed because int -> bool conversion takes precedence over int -> IntArrayRef
-  // So, for example std(0) would select the std(unbiased=False) overload
-
-  Tensor var(int dim) const {
-    return var(IntArrayRef{dim});
-  }
-
-  Tensor std(int dim) const {
-    return std(IntArrayRef{dim});
-  }
 
   // We changed .dtype() to return a TypeMeta in #12766. Ideally, we want the
   // at::kDouble and its friends to be TypeMeta's, but that hasn't happened yet.

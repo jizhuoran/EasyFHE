@@ -38,7 +38,6 @@
 #include <ATen/ops/clone_native.h>
 #include <ATen/ops/complex.h>
 #include <ATen/ops/complex_native.h>
-#include <ATen/ops/cumprod.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/empty_like_native.h>
@@ -1645,34 +1644,8 @@ Tensor new_zeros(
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~ vandermonde_matrix ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Tensor vander(const Tensor& x, std::optional<int64_t> N, bool increasing) {
-  TORCH_CHECK(x.dim() == 1, "x must be a one-dimensional tensor.");
-
-  // Acquires n, defaulting to size if not provided
-  int64_t n = x.size(0);
-  if (N.has_value()) {
-    n = *N;
-    TORCH_CHECK(n >= 0, "N must be non-negative.");
-  }
-
-  // Note: result is long if x is an integer tensor (like int8) because
-  // cumprod promotes integer tensors to long
-  auto result = at::empty(
-      {x.size(0), n},
-      x.options().dtype(
-          at::promote_types(x.scalar_type(), c10::ScalarType::Long)));
-
-  if (n > 0) {
-    result.select(1, 0).fill_(1);
-  }
-  if (n > 1) {
-    result.slice(1, 1).copy_(x.unsqueeze(1));
-    result.slice(1, 1).copy_(at::cumprod(result.slice(1, 1), 1));
-  }
-
-  if (!increasing) {
-    return at::flip(result, {1});
-  }
-  return result;
+  TORCH_CHECK(false, "vander is disabled in EasyFHE because cumprod is not supported");
+  return x;
 }
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ tensor ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

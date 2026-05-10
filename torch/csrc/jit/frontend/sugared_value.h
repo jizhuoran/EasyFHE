@@ -518,10 +518,6 @@ struct TORCH_API CastValue : public BuiltinFunction {
       at::ArrayRef<NamedValue> kwargs,
       size_t n_binders) override {
     if (args.size() == 1 && kwargs.empty()) {
-      auto len_op = std::make_shared<BuiltinFunction>(aten::len, std::nullopt);
-      auto gt_op = std::make_shared<BuiltinFunction>(aten::gt, std::nullopt);
-      auto zero = m.graph()->insertConstant(0);
-
       auto v = args[0].value(*m.graph());
       if (v->type()->isSubtypeOf(*type_)) {
         return std::make_shared<SimpleValue>(v);
@@ -530,8 +526,7 @@ struct TORCH_API CastValue : public BuiltinFunction {
           (v->type()->isSubtypeOf(*AnyListType::get()) ||
            v->type()->isSubtypeOf(*StringType::get()) ||
            v->type()->cast<DictType>())) {
-        auto len = len_op->call(loc, m, {v}, {}, 1);
-        return gt_op->call(loc, m, {len->asValue(loc, m), zero}, {}, 1);
+        TORCH_CHECK(false, "JIT bool casts are disabled in EasyFHE");
       }
     }
     return BuiltinFunction::call(loc, m, args, kwargs, n_binders);

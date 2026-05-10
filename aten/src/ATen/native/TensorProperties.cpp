@@ -11,7 +11,6 @@
 #include <ATen/ops/contiguous_native.h>
 #include <ATen/ops/detach_native.h>
 #include <ATen/ops/dim_native.h>
-#include <ATen/ops/equal.h>
 #include <ATen/ops/get_device_native.h>
 #include <ATen/ops/is_contiguous_native.h>
 #include <ATen/ops/is_same_size_native.h>

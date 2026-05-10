@@ -19,87 +19,30 @@
 #include <ATen/ops/add.h>
 #include <ATen/ops/add_native.h>
 #include <ATen/ops/add_ops.h>
-#include <ATen/ops/and_native.h>
-#include <ATen/ops/arctan2_native.h>
-#include <ATen/ops/atan2.h>
-#include <ATen/ops/atan2_native.h>
-#include <ATen/ops/bitwise_and.h>
-#include <ATen/ops/bitwise_and_native.h>
-#include <ATen/ops/bitwise_left_shift.h>
-#include <ATen/ops/bitwise_left_shift_native.h>
-#include <ATen/ops/bitwise_or.h>
-#include <ATen/ops/bitwise_or_native.h>
-#include <ATen/ops/bitwise_right_shift.h>
-#include <ATen/ops/bitwise_right_shift_native.h>
-#include <ATen/ops/bitwise_xor.h>
-#include <ATen/ops/bitwise_xor_native.h>
 #include <ATen/ops/copysign.h>
 #include <ATen/ops/copysign_native.h>
 #include <ATen/ops/div.h>
 #include <ATen/ops/div_native.h>
 #include <ATen/ops/div_ops.h>
-#include <ATen/ops/divide_native.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/eq_native.h>
 #include <ATen/ops/floor_divide.h>
 #include <ATen/ops/floor_divide_native.h>
-#include <ATen/ops/fmax_native.h>
-#include <ATen/ops/fmin_native.h>
 #include <ATen/ops/fmod.h>
 #include <ATen/ops/fmod_native.h>
 #include <ATen/ops/full.h>
-#include <ATen/ops/gcd_native.h>
-#include <ATen/ops/ge.h>
-#include <ATen/ops/ge_native.h>
-#include <ATen/ops/greater_equal_native.h>
-#include <ATen/ops/greater_native.h>
-#include <ATen/ops/gt.h>
-#include <ATen/ops/gt_native.h>
 #include <ATen/ops/heaviside_native.h>
 #include <ATen/ops/hypot_native.h>
-#include <ATen/ops/lcm_native.h>
-#include <ATen/ops/ldexp.h>
-#include <ATen/ops/ldexp_native.h>
-#include <ATen/ops/le.h>
-#include <ATen/ops/le_native.h>
-#include <ATen/ops/less_equal_native.h>
-#include <ATen/ops/less_native.h>
-#include <ATen/ops/logaddexp2_native.h>
-#include <ATen/ops/logaddexp_native.h>
-#include <ATen/ops/logical_and.h>
-#include <ATen/ops/logical_and_native.h>
-#include <ATen/ops/logical_or.h>
-#include <ATen/ops/logical_or_native.h>
-#include <ATen/ops/logical_xor.h>
-#include <ATen/ops/logical_xor_native.h>
-#include <ATen/ops/lshift_native.h>
-#include <ATen/ops/lt.h>
-#include <ATen/ops/lt_native.h>
-#include <ATen/ops/max_native.h>
-#include <ATen/ops/maximum.h>
-#include <ATen/ops/maximum_native.h>
-#include <ATen/ops/min_native.h>
-#include <ATen/ops/minimum.h>
-#include <ATen/ops/minimum_native.h>
 #include <ATen/ops/mul.h>
 #include <ATen/ops/mul_native.h>
 #include <ATen/ops/mul_ops.h>
 #include <ATen/ops/multiply_native.h>
-#include <ATen/ops/ne.h>
-#include <ATen/ops/ne_native.h>
 #include <ATen/ops/nextafter_native.h>
-#include <ATen/ops/not_equal_native.h>
-#include <ATen/ops/or_native.h>
 #include <ATen/ops/pow.h>
 #include <ATen/ops/remainder.h>
 #include <ATen/ops/remainder_native.h>
-#include <ATen/ops/rshift_native.h>
-#include <ATen/ops/rsub_native.h>
 #include <ATen/ops/sub.h>
 #include <ATen/ops/sub_native.h>
 #include <ATen/ops/subtract_native.h>
-#include <ATen/ops/true_divide_native.h>
-#include <ATen/ops/xor_native.h>
 #endif
 
 namespace at::meta {
@@ -163,35 +106,7 @@ TORCH_META_FUNC(heaviside) (
   build_binary_op(maybe_get_output(), self, other);
 }
 
-TORCH_META_FUNC(atan2) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_float_op(maybe_get_output(), self, other);
-}
-
 TORCH_META_FUNC2(remainder, Tensor)(const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(bitwise_left_shift, Tensor) (
-  const Tensor& self, const Tensor& other
-) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(bitwise_right_shift, Tensor) (
-  const Tensor& self, const Tensor& other
-) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(bitwise_and, Tensor) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(bitwise_or, Tensor) (const Tensor& self, const Tensor& other) {
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC2(bitwise_xor, Tensor) (const Tensor& self, const Tensor& other) {
   build_borrowing_binary_op(maybe_get_output(), self, other);
 }
 
@@ -205,32 +120,8 @@ TORCH_META_FUNC2(fmod, Tensor) (const Tensor& self, const Tensor& other) {
     build_borrowing_binary_op(maybe_get_output(), self, other);                 \
   }
 
-CREATE_BINARY_META_FUNC(logaddexp)
-CREATE_BINARY_META_FUNC(logaddexp2)
-CREATE_BINARY_META_FUNC(gcd)
-CREATE_BINARY_META_FUNC(lcm)
 CREATE_BINARY_META_FUNC(hypot)
 CREATE_BINARY_META_FUNC(nextafter)
-
-TORCH_META_FUNC(maximum) (const Tensor& self, const Tensor& other) {
-  TORCH_CHECK(!self.is_complex() && !other.is_complex(), "maximum not implemented for complex tensors.");
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(minimum) (const Tensor& self, const Tensor& other) {
-  TORCH_CHECK(!self.is_complex() && !other.is_complex(), "minimum not implemented for complex tensors.");
-  build_borrowing_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(fmax) (const Tensor& self, const Tensor& other) {
-    TORCH_CHECK(!self.is_complex() && !other.is_complex(), "fmax not implemented for complex tensors.");
-    build_binary_op(maybe_get_output(), self, other);
-}
-
-TORCH_META_FUNC(fmin) (const Tensor& self, const Tensor& other) {
-    TORCH_CHECK(!self.is_complex() && !other.is_complex(), "fmin not implemented for complex tensors.");
-    build_binary_op(maybe_get_output(), self, other);
-}
 
 #define CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(func)                     \
   TORCH_META_FUNC2(func, Tensor)(const Tensor& self, const Tensor& other) { \
@@ -244,12 +135,6 @@ TORCH_META_FUNC(fmin) (const Tensor& self, const Tensor& other) {
     build_borrowing_except_last_argument_comparison_op(maybe_get_output(), self, other_tensor);  \
   }
 
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(eq)
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(ne)
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(lt)
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(le)
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(gt)
-CREATE_COMPARISON_SCALAR_TENSOR_META_FUNC(ge)
 
 } // namespace at::meta
 
@@ -349,36 +234,24 @@ TORCH_IMPL_FUNC(func_out) (const Tensor& self, const Tensor& other, const Tensor
   func_stub(device_type(), *this);                                                           \
 }
 
-CREATE_BINARY_TORCH_IMPL_FUNC(bitwise_and_out, bitwise_and_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(bitwise_or_out, bitwise_or_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(bitwise_xor_out, bitwise_xor_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(maximum_out, maximum_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(minimum_out, minimum_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(fmax_out, fmax_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(fmin_out, fmin_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(fmod_out, fmod_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(logaddexp_out, logaddexp_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(logaddexp2_out, logaddexp2_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(gcd_out, gcd_stub)
-CREATE_BINARY_TORCH_IMPL_FUNC(lcm_out, lcm_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(hypot_out, hypot_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(nextafter_out, nextafter_stub)
 CREATE_BINARY_TORCH_IMPL_FUNC(remainder_out, remainder_stub)
 
-TORCH_IMPL_FUNC(atan2_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
-  atan2_stub(device_type(), *this);
-}
-
 Tensor arctan2(const Tensor& self, const Tensor& other) {
-  return at::atan2(self, other);
+  TORCH_CHECK(false, "atan2/arctan2 is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& arctan2_(Tensor& self, const Tensor& other) {
-  return self.atan2_(other);
+  TORCH_CHECK(false, "atan2/arctan2 is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& arctan2_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::atan2_out(result, self, other);
+  TORCH_CHECK(false, "atan2/arctan2 is disabled in EasyFHE");
+  return result;
 }
 
 TORCH_IMPL_FUNC(copysign_out) (
@@ -703,198 +576,205 @@ Tensor rsub(const Tensor& self, const Scalar& other, const Scalar& alpha) {
 }
 
 Tensor& bitwise_and_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::bitwise_and_out(result, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return result;
 }
 
 Tensor bitwise_and(const Tensor& self, const Scalar& other) {
-  return at::bitwise_and(self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 Tensor bitwise_and(const Scalar& self, const Tensor& other) {
-  return at::bitwise_and(wrapped_scalar_tensor(self), other);
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return other;
 }
 
 Tensor& bitwise_and_(Tensor& self, const Scalar& other) {
-  return self.bitwise_and_(wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 // Legacy and interfaces. They are aliased to bitwise_and* functions
 Tensor __and__(const Tensor& self, const Tensor& other) {
-  return at::bitwise_and(self, other);
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __and__(const Tensor& self, const Scalar& other) {
-  return at::bitwise_and(self, other);
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __iand__(Tensor& self, const Tensor& other) {
-  return self.bitwise_and_(other);
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __iand__(Tensor& self, const Scalar& other) {
-  return self.bitwise_and_(other);
+  TORCH_CHECK(false, "bitwise_and is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& bitwise_or_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::bitwise_or_out(result, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return result;
 }
 
 Tensor bitwise_or(const Tensor& self, const Scalar& other) {
-  return at::bitwise_or(self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 Tensor bitwise_or(const Scalar& self, const Tensor& other) {
-  return at::bitwise_or(wrapped_scalar_tensor(self), other);
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return other;
 }
 
 Tensor& bitwise_or_(Tensor& self, const Scalar& other) {
-  return self.bitwise_or_(wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 // Legacy or interfaces. They are aliased to bitwise_or* functions
 Tensor __or__(const Tensor& self, const Tensor& other) {
-  return at::bitwise_or(self, other);
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __or__(const Tensor& self, const Scalar& other) {
-  return at::bitwise_or(self, other);
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __ior__(Tensor& self, const Tensor& other) {
-  return self.bitwise_or_(other);
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __ior__(Tensor& self, const Scalar& other) {
-  return self.bitwise_or_(other);
+  TORCH_CHECK(false, "bitwise_or is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& bitwise_xor_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::bitwise_xor_out(result, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return result;
 }
 
 Tensor bitwise_xor(const Tensor& self, const Scalar& other) {
-  return at::bitwise_xor(self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 Tensor bitwise_xor(const Scalar& self, const Tensor& other) {
-  return at::bitwise_xor(wrapped_scalar_tensor(self), other);
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return other;
 }
 
 Tensor& bitwise_xor_(Tensor& self, const Scalar& other) {
-  return self.bitwise_xor_(wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 // Legacy xor interfaces. They are aliased to bitwise_xor* functions
 Tensor __xor__(const Tensor& self, const Tensor& other) {
-  return at::bitwise_xor(self, other);
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __xor__(const Tensor& self, const Scalar& other) {
-  return at::bitwise_xor(self, other);
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __ixor__(Tensor& self, const Tensor& other) {
-  return self.bitwise_xor_(other);
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __ixor__(Tensor& self, const Scalar& other) {
-  return self.bitwise_xor_(other);
+  TORCH_CHECK(false, "bitwise_xor is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __lshift__(const Tensor& self, const Tensor& other) {
-  Tensor result;
-  auto iter = TensorIterator::binary_op(result, self, other);
-  lshift_stub(iter.device_type(), iter);
-  return iter.output();
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __lshift__(const Tensor& self, const Scalar& other) {
-  Tensor result;
-  auto wrapper = wrapped_scalar_tensor(other);
-  auto iter = TensorIterator::binary_op(result, self, wrapper);
-  lshift_stub(iter.device_type(), iter);
-  return iter.output();
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __ilshift__(Tensor& self, const Tensor& other) {
-  auto iter = TensorIterator::binary_op(self, self, other);
-  lshift_stub(iter.device_type(), iter);
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
   return self;
 }
 
 Tensor& __ilshift__(Tensor& self, const Scalar& other) {
-  auto wrapper = wrapped_scalar_tensor(other);
-  auto iter = TensorIterator::binary_op(self, self, wrapper);
-  lshift_stub(iter.device_type(), iter);
   return self;
 }
 
-TORCH_IMPL_FUNC(bitwise_left_shift_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
-  lshift_stub(device_type(), *this);
-}
-
 Tensor& bitwise_left_shift_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::bitwise_left_shift_out(result, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return result;
 }
 
 Tensor bitwise_left_shift(const Tensor& self, const Scalar& other) {
-  return at::bitwise_left_shift(self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& bitwise_left_shift_(Tensor& self, const Scalar& other) {
-  return at::bitwise_left_shift_out(self, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor bitwise_left_shift(const Scalar& self, const Tensor& other) {
-  return at::bitwise_left_shift(wrapped_scalar_tensor(self), other);
+  TORCH_CHECK(false, "bitwise_left_shift is disabled in EasyFHE");
+  return other;
 }
 
 Tensor __rshift__(const Tensor& self, const Tensor& other) {
-  Tensor result;
-  auto iter = TensorIterator::binary_op(result, self, other);
-  rshift_stub(iter.device_type(), iter);
-  return iter.output();
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor __rshift__(const Tensor& self, const Scalar& other) {
-  Tensor result;
-  auto wrapper = wrapped_scalar_tensor(other);
-  auto iter = TensorIterator::binary_op(result, self, wrapper);
-  rshift_stub(iter.device_type(), iter);
-  return iter.output();
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& __irshift__(Tensor& self, const Tensor& other) {
-  auto iter = TensorIterator::binary_op(self, self, other);
-  rshift_stub(iter.device_type(), iter);
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
   return self;
 }
 
 Tensor& __irshift__(Tensor& self, const Scalar& other) {
-  auto wrapper = wrapped_scalar_tensor(other);
-  auto iter = TensorIterator::binary_op(self, self, wrapper);
-  rshift_stub(iter.device_type(), iter);
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
   return self;
 }
 
-TORCH_IMPL_FUNC(bitwise_right_shift_out) (const Tensor& self, const Tensor& other, const Tensor& result) {
-  rshift_stub(device_type(), *this);
-}
-
 Tensor& bitwise_right_shift_out(const Tensor& self, const Scalar& other, Tensor& result) {
-  return at::bitwise_right_shift_out(result, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return result;
 }
 
 Tensor bitwise_right_shift(const Tensor& self, const Scalar& other) {
-  return at::bitwise_right_shift(self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& bitwise_right_shift_(Tensor& self, const Scalar& other) {
-  return at::bitwise_right_shift_out(self, self, wrapped_scalar_tensor(other));
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return self;
 }
 
 Tensor bitwise_right_shift(const Scalar& self, const Tensor& other) {
-  return at::bitwise_right_shift(wrapped_scalar_tensor(self), other);
+  TORCH_CHECK(false, "bitwise_right_shift is disabled in EasyFHE");
+  return other;
 }
 
 template <typename Stub>
@@ -935,91 +815,77 @@ static Tensor& comparison_op_(Tensor& self, const Scalar& other, OutImpl& out_im
 using OutFunc = std::add_const_t<Tensor&(&)(Tensor&, const Tensor&, const Tensor&)>;
 
 // less, alias for torch.lt
-Tensor& less_out(const Tensor& self, const Tensor& other, Tensor& result) { return at::lt_out(result, self, other); }
-Tensor less(const Tensor& self, const Tensor& other) { return self.lt(other); }
-Tensor& less_(Tensor& self, const Tensor& other) { return self.lt_(other); }
-Tensor& less_out(const Tensor& self, const Scalar& other, Tensor& result) { return at::lt_out(result, self, other); }
-Tensor less(const Tensor& self, const Scalar& other) { return self.lt(other); }
-Tensor& less_(Tensor& self, const Scalar& other) { return self.lt_(other); }
+Tensor& less_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return result; }
+Tensor less(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return self; }
+Tensor& less_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return self; }
+Tensor& less_out(const Tensor& self, const Scalar& other, Tensor& result) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return result; }
+Tensor less(const Tensor& self, const Scalar& other) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return self; }
+Tensor& less_(Tensor& self, const Scalar& other) { TORCH_CHECK(false, "less is disabled in EasyFHE"); return self; }
 
 // less_equal, alias for torch.le
-Tensor& less_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { return at::le_out(result, self, other); }
-Tensor less_equal(const Tensor& self, const Tensor& other) { return self.le(other); }
-Tensor& less_equal_(Tensor& self, const Tensor& other) { return self.le_(other); }
-Tensor& less_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { return at::le_out(result, self, other); }
-Tensor less_equal(const Tensor& self, const Scalar& other) { return self.le(other); }
-Tensor& less_equal_(Tensor& self, const Scalar& other) { return self.le_(other); }
+Tensor& less_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return result; }
+Tensor less_equal(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return self; }
+Tensor& less_equal_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return self; }
+Tensor& less_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return result; }
+Tensor less_equal(const Tensor& self, const Scalar& other) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return self; }
+Tensor& less_equal_(Tensor& self, const Scalar& other) { TORCH_CHECK(false, "less_equal is disabled in EasyFHE"); return self; }
 
 // greater, alias for torch.gt
-Tensor& greater_out(const Tensor& self, const Tensor& other, Tensor& result) { return at::gt_out(result, self, other); }
-Tensor greater(const Tensor& self, const Tensor& other) { return self.gt(other); }
-Tensor& greater_(Tensor& self, const Tensor& other) { return self.gt_(other); }
-Tensor& greater_out(const Tensor& self, const Scalar& other, Tensor& result) { return at::gt_out(result, self, other); }
-Tensor greater(const Tensor& self, const Scalar& other) { return self.gt(other); }
-Tensor& greater_(Tensor& self, const Scalar& other) { return self.gt_(other); }
+Tensor& greater_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return result; }
+Tensor greater(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return self; }
+Tensor& greater_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return self; }
+Tensor& greater_out(const Tensor& self, const Scalar& other, Tensor& result) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return result; }
+Tensor greater(const Tensor& self, const Scalar& other) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return self; }
+Tensor& greater_(Tensor& self, const Scalar& other) { TORCH_CHECK(false, "greater is disabled in EasyFHE"); return self; }
 
 // greater_equal, alias for torch.ge
-Tensor& greater_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { return at::ge_out(result, self, other); }
-Tensor greater_equal(const Tensor& self, const Tensor& other) { return self.ge(other); }
-Tensor& greater_equal_(Tensor& self, const Tensor& other) { return self.ge_(other); }
-Tensor& greater_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { return at::ge_out(result, self, other); }
-Tensor greater_equal(const Tensor& self, const Scalar& other) { return self.ge(other); }
-Tensor& greater_equal_(Tensor& self, const Scalar& other) { return self.ge_(other); }
-
-#define CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(func)             \
-  TORCH_IMPL_FUNC(func##_Tensor_out)                                \
-  (const Tensor& self, const Tensor& other, const Tensor& result) { \
-    func##_stub(device_type(), *this);                              \
-  }                                                                 \
-                                                                    \
-  TORCH_IMPL_FUNC(func##_Scalar_out)                                \
-  (const Tensor& self, const Scalar& other, const Tensor& result) { \
-    func##_stub(device_type(), *this);                              \
-  }
-
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(eq)
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(ne)
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(gt)
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(ge)
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(lt)
-CREATE_COMPARISON_SCALAR_TENSOR_IMPL_FUNC(le)
+Tensor& greater_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return result; }
+Tensor greater_equal(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return self; }
+Tensor& greater_equal_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return self; }
+Tensor& greater_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return result; }
+Tensor greater_equal(const Tensor& self, const Scalar& other) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return self; }
+Tensor& greater_equal_(Tensor& self, const Scalar& other) { TORCH_CHECK(false, "greater_equal is disabled in EasyFHE"); return self; }
 
 // not_equal, alias for torch.ne
-Tensor& not_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { return at::ne_out(result, self, other); }
-Tensor not_equal(const Tensor& self, const Tensor& other) { return self.ne(other); }
-Tensor& not_equal_(Tensor& self, const Tensor& other) { return self.ne_(other); }
-Tensor& not_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { return at::ne_out(result, self, other); }
-Tensor not_equal(const Tensor& self, const Scalar& other) { return self.ne(other); }
-Tensor& not_equal_(Tensor& self, const Scalar& other) { return self.ne_(other); }
+Tensor& not_equal_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return result; }
+Tensor not_equal(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return self; }
+Tensor& not_equal_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return self; }
+Tensor& not_equal_out(const Tensor& self, const Scalar& other, Tensor& result) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return result; }
+Tensor not_equal(const Tensor& self, const Scalar& other) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return self; }
+Tensor& not_equal_(Tensor& self, const Scalar& other) { TORCH_CHECK(false, "not_equal is disabled in EasyFHE"); return self; }
 
-Tensor& logical_and_out(const Tensor& self, const Tensor& other, Tensor& result) { return comparison_op_out(result, self, other, logical_and_stub); }
-Tensor logical_and(const Tensor& self, const Tensor& other) { return comparison_op(self, other, static_cast<OutFunc>(at::logical_and_out)); }
-Tensor& logical_and_(Tensor& self, const Tensor& other) { return comparison_op_(self, other, static_cast<OutFunc>(at::logical_and_out)); }
+Tensor& logical_and_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "logical_and is disabled in EasyFHE"); return result; }
+Tensor logical_and(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_and is disabled in EasyFHE"); return self; }
+Tensor& logical_and_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_and is disabled in EasyFHE"); return self; }
 
-Tensor& logical_or_out(const Tensor& self, const Tensor& other, Tensor& result) { return comparison_op_out(result, self, other, logical_or_stub); }
-Tensor logical_or(const Tensor& self, const Tensor& other) { return comparison_op(self, other, static_cast<OutFunc>(at::logical_or_out)); }
-Tensor& logical_or_(Tensor& self, const Tensor& other) { return comparison_op_(self, other, static_cast<OutFunc>(at::logical_or_out)); }
+Tensor& logical_or_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "logical_or is disabled in EasyFHE"); return result; }
+Tensor logical_or(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_or is disabled in EasyFHE"); return self; }
+Tensor& logical_or_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_or is disabled in EasyFHE"); return self; }
 
-Tensor& logical_xor_out(const Tensor& self, const Tensor& other, Tensor& result) { return comparison_op_out(result, self, other, logical_xor_stub); }
-Tensor logical_xor(const Tensor& self, const Tensor& other) { return comparison_op(self, other, static_cast<OutFunc>(at::logical_xor_out)); }
-Tensor& logical_xor_(Tensor& self, const Tensor& other) { return comparison_op_(self, other, static_cast<OutFunc>(at::logical_xor_out)); }
+Tensor& logical_xor_out(const Tensor& self, const Tensor& other, Tensor& result) { TORCH_CHECK(false, "logical_xor is disabled in EasyFHE"); return result; }
+Tensor logical_xor(const Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_xor is disabled in EasyFHE"); return self; }
+Tensor& logical_xor_(Tensor& self, const Tensor& other) { TORCH_CHECK(false, "logical_xor is disabled in EasyFHE"); return self; }
 
 // binary max, alias for maximum
 Tensor& max_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::maximum_out(result, self, other);
+  TORCH_CHECK(false, "maximum/max Tensor overload is disabled in EasyFHE");
+  return result;
 }
 
 Tensor max(const Tensor& self, const Tensor& other) {
-  return at::maximum(self, other);
+  TORCH_CHECK(false, "maximum/max Tensor overload is disabled in EasyFHE");
+  return self;
 }
 
 // binary min, alias for minimum
 Tensor& min_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  return at::minimum_out(result, self, other);
+  TORCH_CHECK(false, "minimum/min Tensor overload is disabled in EasyFHE");
+  return result;
 }
 
 Tensor min(const Tensor& self, const Tensor& other) {
-  return at::minimum(self, other);
+  TORCH_CHECK(false, "minimum/min Tensor overload is disabled in EasyFHE");
+  return self;
 }
 
 Tensor floor_divide(const Tensor& self, const Scalar& other) {
@@ -1079,29 +945,18 @@ static inline Tensor& _ldexp_int_exponent(const Tensor& self, const Tensor& othe
 }
 
 Tensor& ldexp_out(const Tensor& self, const Tensor& other, Tensor& result) {
-  TORCH_CHECK(!isIntegralType(result.scalar_type(), /*includeBool=*/true),
-              "ldexp can't be cast to the desired output type ", result.scalar_type());
-
-  if (isIntegralType(other.scalar_type(), /*includeBool=*/true) &&
-      isFloatingType(self.scalar_type())) {
-    return _ldexp_int_exponent(self, other, result);
-  }
-
-  return at::mul_out(result, self, _pow2(self, other));
+  TORCH_CHECK(false, "ldexp is disabled in EasyFHE");
+  return result;
 }
 
 Tensor ldexp(const Tensor& self, const Tensor& other) {
-  if (isIntegralType(other.scalar_type(), /*includeBool=*/true) &&
-      isFloatingType(self.scalar_type())) {
-    Tensor result = at::empty_like(self);
-    return _ldexp_int_exponent(self, other, result);
-  }
-
-  return at::mul(self, _pow2(self, other));
+  TORCH_CHECK(false, "ldexp is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& ldexp_(Tensor& self, const Tensor& other) {
-  return at::ldexp_out(self, self, other);
+  TORCH_CHECK(false, "ldexp is disabled in EasyFHE");
+  return self;
 }
 
 } // namespace at::native

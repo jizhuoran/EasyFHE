@@ -87,8 +87,6 @@
 #include <ATen/ops/argwhere_native.h>
 #include <ATen/ops/as_strided.h>
 #include <ATen/ops/broadcast_to.h>
-#include <ATen/ops/count_nonzero.h>
-#include <ATen/ops/count_nonzero_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/gather.h>
 #include <ATen/ops/gather_backward_native.h>
@@ -103,22 +101,15 @@
 #include <ATen/ops/index_meta.h>
 #include <ATen/ops/index_native.h>
 #include <ATen/ops/index_put_native.h>
-#include <ATen/ops/index_reduce_meta.h>
-#include <ATen/ops/index_reduce_native.h>
 #include <ATen/ops/index_select_backward_native.h>
 #include <ATen/ops/index_select_native.h>
 #include <ATen/ops/masked_fill_native.h>
-#include <ATen/ops/masked_scatter_native.h>
-#include <ATen/ops/masked_select_backward_native.h>
-#include <ATen/ops/masked_select_native.h>
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/put_native.h>
 #include <ATen/ops/scatter_add_meta.h>
 #include <ATen/ops/scatter_add_native.h>
 #include <ATen/ops/scatter_meta.h>
 #include <ATen/ops/scatter_native.h>
-#include <ATen/ops/scatter_reduce_meta.h>
-#include <ATen/ops/scatter_reduce_native.h>
 #include <ATen/ops/take_along_dim_native.h>
 #include <ATen/ops/take_native.h>
 #include <ATen/ops/zeros_like.h>
@@ -232,18 +223,6 @@ TORCH_META_FUNC2(scatter, value_reduce)
 TORCH_META_FUNC(scatter_add)
 (const Tensor& self, int64_t dim, const Tensor& index, const Tensor& src) {
   scatter_meta_impl(*this, self, dim, index, src, "add");
-}
-
-TORCH_META_FUNC2(scatter_reduce, two)
-(const Tensor& self,
- int64_t dim,
- const Tensor& index,
- const Tensor& src,
- const std::string_view reduce,
- bool include_self) {
-  (void)include_self;
-  scatter_meta_impl</*use_new_options=*/true>(
-      *this, self, dim, index, src, reduce);
 }
 
 TORCH_PRECOMPUTE_META_FUNC(index_copy)
@@ -435,25 +414,6 @@ TORCH_PRECOMPUTE_META_FUNC(index_add)
   dim = maybe_wrap_dim(dim, self.dim());
   index_func_meta_impl(*this, self, dim, index, source, "index_add");
   return TORCH_PRECOMPUTE_STRUCT(index_add)().set_dim(dim);
-}
-
-TORCH_PRECOMPUTE_META_FUNC(index_reduce)
-(const Tensor& self,
- int64_t dim,
- const Tensor& index,
- const Tensor& source,
- const std::string_view reduce,
- bool include_self) {
-  (void)include_self;
-  TORCH_CHECK(
-      reduce == "prod" || reduce == "mean" || reduce == "amax" ||
-          reduce == "amin",
-      "index_reduce(): Expected reduce to be one of prod, mean, amax or amin but got ",
-      reduce,
-      ".");
-  dim = maybe_wrap_dim(dim, self.dim());
-  index_func_meta_impl(*this, self, dim, index, source, "index_reduce");
-  return TORCH_PRECOMPUTE_STRUCT(index_reduce)().set_dim(dim);
 }
 
 static void build_index_op(
@@ -737,67 +697,8 @@ Tensor _unsafe_masked_index(
     const Tensor& mask,
     const torch::List<std::optional<Tensor>>& indices,
     const Scalar& fill) {
-  // Unsafe masked index is equivalent to
-  //   where(mask, self[indices], fill)
-  // with the main difference being that the when the `mask` is false, the
-  // tensor `self` is not indexed using `indices`. This allows `indices` to be
-  // out-of-bounds when `mask` is false. When `mask` is true, the `indices` are
-  // expected to be in bounds and is not checked. We also assume that the
-  // `indices` are non-negative
-  //
-  // This function is not meant to be executed on eager mode. An unoptimized
-  // version is provided here.
-  //
-  // compiler backends should implement this op such that `self[indices]` is not
-  // loaded when `mask` is true. See inductor for a reference.
-  auto clamp = [](const std::optional<Tensor>& index,
-                  auto size) -> std::optional<Tensor> {
-    if (!index) {
-      return index;
-    }
-    // Disallow bool
-    auto dtype = index->scalar_type();
-    TORCH_CHECK(
-        dtype == kLong || dtype == kInt,
-        "_unsafe_masked_index found unexpected index type ",
-        dtype);
-    return at::clamp(*index, -size, size - 1);
-  };
-
-  torch::List<std::optional<Tensor>> clamped_indices(indices);
-  std::transform(
-      indices.begin(),
-      indices.end(),
-      self.sizes().begin(),
-      clamped_indices.begin(),
-      clamp);
-
-  if (self.numel() == 0) {
-    // Returns a tensor filled with `fill` value
-    // We use a hack here since we do not have a method to get the
-    // correct size of the tensor. (except with meta impl which is
-    // not available on mobile builds)
-    std::vector<int64_t> new_sizes(self.dim());
-    auto compute_new_size = [](const std::optional<Tensor>& index,
-                               auto size) -> int64_t {
-      if (index && size == 0) {
-        return 1;
-      } else {
-        return size;
-      }
-    };
-    std::transform(
-        indices.begin(),
-        indices.end(),
-        self.sizes().begin(),
-        new_sizes.begin(),
-        compute_new_size);
-    auto result = self.new_full(new_sizes, fill);
-    return at::_unsafe_index(result, clamped_indices);
-  }
-
-  auto result = at::_unsafe_index(self, clamped_indices);
-  return result.masked_fill(at::logical_not(mask), fill);
+  TORCH_CHECK(false, "_unsafe_masked_index is disabled in EasyFHE");
+  return self;
 }
 
 Tensor _unsafe_masked_index_put_accumulate(
@@ -805,39 +706,8 @@ Tensor _unsafe_masked_index_put_accumulate(
     const Tensor& mask,
     const torch::List<std::optional<Tensor>>& indices,
     const Tensor& values) {
-  // This is the backward of _unsafe_masked_index.
-  // This function is not meant to be executed on eager mode.
-
-  if (self.numel() == 0) {
-    return self.clone();
-  }
-
-  // We recompute the clamped indices and rely on inductor to CSE the
-  // computation
-  auto clamp = [](const std::optional<Tensor>& index,
-                  auto size) -> std::optional<Tensor> {
-    if (!index) {
-      return index;
-    }
-    // Disallow bool
-    auto dtype = index->scalar_type();
-    TORCH_CHECK(
-        dtype == kLong || dtype == kInt,
-        "_unsafe_masked_index found unexpected index type ",
-        dtype);
-    return at::clamp(*index, -size, size - 1);
-  };
-
-  torch::List<std::optional<Tensor>> clamped_indices(indices);
-  std::transform(
-      indices.begin(),
-      indices.end(),
-      self.sizes().begin(),
-      clamped_indices.begin(),
-      clamp);
-
-  auto masked_value = values.masked_fill(at::logical_not(mask), 0);
-  return at::_unsafe_index_put(self, clamped_indices, masked_value, true);
+  TORCH_CHECK(false, "_unsafe_masked_index_put_accumulate is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& put_(
@@ -1288,215 +1158,6 @@ TORCH_IMPL_FUNC(index_add_cpu_out)
               });
         });
   }
-}
-
-static void index_reduce_func_impl(
-    const Tensor& self,
-    int64_t dim,
-    const Tensor& index,
-    const Tensor& source,
-    bool include_self,
-    const Tensor& result,
-    const ReductionType& op) {
-  if (!result.is_same(self))
-    result.copy_(self);
-  if (!include_self) {
-    AT_DISPATCH_ALL_TYPES_AND2(
-        at::ScalarType::Half,
-        at::ScalarType::BFloat16,
-        self.scalar_type(),
-        "index_reduce_func_exclude_input_init",
-        [&] {
-          scalar_t init_val;
-          switch (op) {
-            case ReductionType::PROD:
-              init_val = (scalar_t)1;
-              break;
-            case ReductionType::MAX:
-              init_val = std::numeric_limits<scalar_t>::has_infinity
-                  ? -std::numeric_limits<scalar_t>::infinity()
-                  : std::numeric_limits<scalar_t>::lowest();
-              break;
-            case ReductionType::MIN:
-              init_val = std::numeric_limits<scalar_t>::has_infinity
-                  ? std::numeric_limits<scalar_t>::infinity()
-                  : std::numeric_limits<scalar_t>::max();
-              break;
-            default:
-              init_val = (scalar_t)0;
-              break;
-          }
-          // index_fill_ requires index to be a LongTensor
-          result.index_fill_(dim, index.to(at::ScalarType::Long), init_val);
-        });
-  }
-
-  auto numel = index.numel();
-
-  auto index_contig = index.contiguous();
-
-  if (result.dim() > 1) {
-    // Equivalent to:
-    //   for (const auto i : c10::irange(numel)) {
-    //     auto selfSlice = self.select(dim, index_data[i]);
-    //     auto sourceSlice = source.select(dim, i);
-    //     selfSlice.op_(sourceSlice);
-    //   }
-    // But much faster as this reuses the iterator from the binary op
-    if (numel == 0) {
-      return;
-    }
-    auto selfSlice = result.select(dim, 0);
-    auto sourceSlice = source.select(dim, 0);
-    auto self_stride_bytes =
-        result.stride(dim) * elementSize(result.scalar_type());
-    auto source_stride_bytes =
-        source.stride(dim) * elementSize(source.scalar_type());
-    auto self_dim_size = result.size(dim);
-    auto iter =
-        TensorIterator::borrowing_binary_op(selfSlice, selfSlice, sourceSlice);
-
-    AT_DISPATCH_INDEX_TYPES(index.scalar_type(), "index_func_cpu_", [&]() {
-      auto index_data = index_contig.const_data_ptr<index_t>();
-      for (const auto i : c10::irange(numel)) {
-        auto self_i = index_data[i];
-        TORCH_CHECK_INDEX(
-            (self_i >= 0) && (self_i < self_dim_size),
-            "index out of range in self");
-        auto self_data = static_cast<char*>(selfSlice.data_ptr()) +
-            self_i * self_stride_bytes;
-        auto source_data =
-            static_cast<const char*>(sourceSlice.const_data_ptr()) +
-            i * source_stride_bytes;
-        iter.unsafe_replace_operand(0, self_data);
-        iter.unsafe_replace_operand(1, self_data);
-        iter.unsafe_replace_operand(2, const_cast<char*>(source_data));
-
-        switch (op) {
-          case ReductionType::PROD:
-            mul_stub(iter.device_type(), iter);
-            break;
-          case ReductionType::MIN:
-            minimum_stub(iter.device_type(), iter);
-            break;
-          case ReductionType::MAX:
-            maximum_stub(iter.device_type(), iter);
-            break;
-          default:
-            add_stub(iter.device_type(), iter, 1);
-            break;
-        }
-      }
-    });
-
-    if (op == ReductionType::MEAN) {
-      auto counts =
-          include_self ? at::ones_like(result) : at::zeros_like(result);
-      counts.index_add_(dim, index, at::ones_like(source));
-      counts.masked_fill_(counts == 0, 1);
-      if (result.is_floating_point() || result.is_complex()) {
-        result.div_(counts);
-      } else {
-        result.div_(counts, "floor");
-      }
-    }
-  } else {
-    TORCH_CHECK(
-        source.dim() <= 1,
-        "source.dim() (",
-        source.dim(),
-        ") must one or zero for given self.dim() (",
-        self.dim(),
-        ")");
-    auto counts = include_self ? at::ones_like(result) : at::zeros_like(result);
-    // explicitly capture all required variables to work around windows build
-    // TODO: fix this when windows can correctly capture variables in nested
-    // lambda
-    AT_DISPATCH_ALL_TYPES_AND2(
-        ScalarType::Half,
-        ScalarType::BFloat16,
-        result.scalar_type(),
-        "index_func_",
-        [&result, &source, &dim, &index_contig, &numel, &op, &counts] {
-          auto result_stride = result.dim() == 0 ? 1 : result.stride(dim);
-          auto source_stride = source.dim() == 0 ? 1 : source.stride(dim);
-          auto counts_stride = counts.dim() == 0 ? 1 : counts.stride(dim);
-          // TODO: Maybe TensorAccessor can be used here?
-          auto* result_ptr = result.data_ptr<scalar_t>();
-          auto* source_ptr = source.const_data_ptr<scalar_t>();
-          auto counts_ptr = counts.data_ptr<scalar_t>();
-          AT_DISPATCH_INDEX_TYPES(
-              index_contig.scalar_type(),
-              "index_func_cpu_",
-              [&index_contig,
-               &numel,
-               &result,
-               &result_ptr,
-               &result_stride,
-               &source_ptr,
-               &source_stride,
-               &op,
-               &counts_ptr,
-               &counts_stride] {
-                auto index_data = index_contig.const_data_ptr<index_t>();
-                for (const auto i : c10::irange(numel)) {
-                  auto self_i = index_data[i];
-                  TORCH_CHECK_INDEX(
-                      (self_i >= 0) && (self_i < result.numel()),
-                      "index out of range in self");
-                  scalar_t* self_ip = result_ptr + self_i * result_stride;
-                  scalar_t* count_ip;
-                  scalar_t val;
-                  switch (op) {
-                    case ReductionType::MEAN:
-                      *self_ip += *(source_ptr + i * source_stride);
-                      count_ip = counts_ptr + self_i * counts_stride;
-                      *count_ip += 1;
-                      break;
-                    case ReductionType::PROD:
-                      *self_ip *= *(source_ptr + i * source_stride);
-                      break;
-                    case ReductionType::MIN:
-                      val = *(source_ptr + i * source_stride);
-                      *self_ip = at::_isnan<scalar_t>(val)
-                          ? val
-                          : std::min(*self_ip, val);
-                      break;
-                    case ReductionType::MAX:
-                      val = *(source_ptr + i * source_stride);
-                      *self_ip = at::_isnan<scalar_t>(val)
-                          ? val
-                          : std::max(*self_ip, val);
-                      break;
-                    default:
-                      break;
-                  }
-                }
-              });
-        });
-    if (op == ReductionType::MEAN) {
-      counts.masked_fill_(counts == 0, 1);
-      if (result.is_floating_point() || result.is_complex()) {
-        result.div_(counts);
-      } else {
-        result.div_(counts, "floor");
-      }
-    }
-  }
-}
-
-TORCH_IMPL_FUNC(index_reduce_cpu_out)
-(const Tensor& self,
- int64_t dim,
- const Tensor& index,
- const Tensor& source,
- const std::string_view reduce,
- bool include_input,
- const Tensor& result) {
-  TORCH_WARN_ONCE(
-      "index_reduce() is in beta and the API may change at any time.");
-  auto op = get_operator_enum(reduce, true);
-  index_reduce_func_impl(self, dim, index, source, include_input, result, op);
 }
 
 // Check that indices fall within dimension array size
@@ -2315,82 +1976,20 @@ TORCH_IMPL_FUNC(scatter_add)
   }
 }
 
-TORCH_IMPL_FUNC(scatter_reduce_two)
-(const Tensor& self,
- int64_t dim,
- const Tensor& index,
- const Tensor& src,
- const std::string_view reduce,
- bool include_self,
- const Tensor& out) {
-  dim = at::maybe_wrap_dim(dim, self.dim());
-
-  if (!self.is_same(out)) {
-    out.copy_(self);
-  }
-
-  const auto op = get_operator_enum(reduce, true);
-
-  if (can_use_expanded_index_path(
-          out, dim, index, src, /*is_scatter_like*/ true)) {
-    scatter_reduce_expanded_index_stub(
-        self.device().type(), out, index, src, op, include_self);
-    return;
-  }
-
-  scatter_impl</*use_new_options=*/true>(
-      self,
-      dim,
-      index,
-      src,
-      out,
-      scatter_reduce_two_stub,
-      scatter_stub,
-      reduce,
-      include_self);
-
-  if (op == ReductionType::MEAN) {
-    auto ones = at::ones_like(src);
-    auto count = include_self ? at::ones_like(out) : at::zeros_like(out);
-    count.scatter_add_(dim, index, ones);
-    count.masked_fill_(count == 0, 1);
-
-    if (out.is_floating_point() || out.is_complex()) {
-      out.div_(count);
-    } else {
-      out.div_(count, "floor");
-    }
-  }
-}
-
 Tensor masked_scatter(
     const Tensor& self,
     const Tensor& mask,
     const Tensor& source) {
-  auto [_mask, _self] = expand_outplace(mask, self);
-  return _self->clone(at::MemoryFormat::Contiguous)
-      .masked_scatter_(*_mask, source);
+  TORCH_CHECK(false, "masked_scatter is disabled in EasyFHE");
+  return self;
 }
 
 Tensor masked_scatter_backward_symint(
     const Tensor& grad,
     const Tensor& mask,
     c10::SymIntArrayRef sizes) {
-  c10::SymInt numel = 1;
-  for (const auto& size : sizes) {
-    numel *= size;
-  }
-  auto mask_selected = grad.masked_select(mask);
-  auto diff_nelem = numel - mask_selected.sym_numel();
-  if (diff_nelem > 0) {
-    // because mask_selected returns a 1-d tensor with size of masked elements
-    // that are 1, we need to fill out the rest with zeros then reshape back to
-    // tensor2's size.
-    auto zeros_fillin =
-        at::zeros_symint({std::move(diff_nelem)}, grad.options());
-    mask_selected = at::cat({mask_selected, std::move(zeros_fillin)}, 0);
-  }
-  return mask_selected.view_symint(sizes);
+  TORCH_CHECK(false, "masked_scatter backward is disabled in EasyFHE");
+  return grad;
 }
 
 static Tensor& masked_fill_impl_cpu(
@@ -2493,84 +2092,7 @@ static Tensor& masked_select_out_impl_cpu(
     Tensor& result,
     const Tensor& self,
     const Tensor& mask) {
-  NoNamesGuard guard;
-
-  TORCH_CHECK(
-      mask.scalar_type() == ScalarType::Bool,
-      "masked_select: expected BoolTensor for mask");
-  TORCH_CHECK(
-      self.scalar_type() == result.scalar_type(),
-      "masked_select(): self and result must have the same scalar type");
-
-  at::assert_no_internal_overlap(result);
-  at::assert_no_overlap(result, self);
-  at::assert_no_overlap(result, mask);
-
-  auto [_mask, _self] = expand_outplace(mask, self);
-
-  auto shape = _self->sizes();
-  int64_t numel = _mask->sum().item().toLong();
-  at::native::resize_output(result, {numel});
-  if (numel == 0) {
-    return result;
-  }
-
-  // Create strided view of result before feeding into TensorIterator
-  auto strides = DimVector(shape.size(), 0);
-  auto orig_stride = result.strides()[0];
-  auto result_strided = result.as_strided(shape, strides);
-
-  // serial kernel
-  // serial kernel requires that src is traversed in its logical order. However,
-  // TensorIterator might have reordered dimensions so that src would be
-  // traversed in its physical order, producing wrong answers. A sufficient
-  // condition that no reorder happened is that both _self and _mask is
-  // contiguous. If it is not satisfied, use parallel kernel that handles
-  // permutations correctly
-  bool use_serial_kernel =
-      (self.numel() < at::internal::GRAIN_SIZE || at::get_num_threads() == 1) &&
-      _self->is_contiguous() && _mask->is_contiguous();
-  if (use_serial_kernel) {
-    auto iter = TensorIteratorConfig()
-                    .set_check_mem_overlap(
-                        false) // result is intentionally zero-strided above
-                    .check_all_same_dtype(false)
-                    .resize_outputs(false)
-                    .add_output(result_strided)
-                    .add_const_input(*_self)
-                    .add_const_input(*_mask)
-                    .build();
-
-    masked_select_serial_stub(iter.device_type(), iter, orig_stride);
-    return result;
-  }
-
-  // Use a prefix sum to record the output locations of the masked elements,
-  // so as to parallel with TensorIterator.
-  auto mask_long =
-      at::empty(shape, self.options().dtype(at::kLong)).copy_(*_mask);
-  auto mask_prefix_sum = at::empty(shape, self.options().dtype(at::kLong));
-  auto mask_long_data = mask_long.const_data_ptr<int64_t>();
-  auto mask_prefix_sum_data = mask_prefix_sum.data_ptr<int64_t>();
-  // TODO: Here can only use std::partial_sum for C++14,
-  // use std::exclusive_scan when PyTorch upgrades to C++17, which have better
-  // performance. std::exclusive_scan(mask_long_data, mask_long_data +
-  // mask_long.numel(), mask_prefix_sum_data, 0);
-  std::partial_sum(
-      mask_long_data, mask_long_data + mask_long.numel(), mask_prefix_sum_data);
-
-  auto iter = TensorIteratorConfig()
-                  .set_check_mem_overlap(
-                      false) // result is intentionally zero-strided above
-                  .check_all_same_dtype(false)
-                  .resize_outputs(false)
-                  .add_output(result_strided)
-                  .add_const_input(*_self)
-                  .add_const_input(*_mask)
-                  .add_const_input(mask_prefix_sum)
-                  .build();
-
-  masked_select_stub(iter.device_type(), iter, orig_stride);
+  TORCH_CHECK(false, "masked_select is disabled in EasyFHE");
   return result;
 }
 
@@ -2578,36 +2100,21 @@ Tensor& masked_select_out_cpu(
     const Tensor& self,
     const Tensor& mask,
     Tensor& result) {
-  namedinference::compute_broadcast_outnames(self, mask);
-  return masked_select_out_impl_cpu(result, self, mask);
+  TORCH_CHECK(false, "masked_select is disabled in EasyFHE");
+  return result;
 }
 
 Tensor masked_select_cpu(const Tensor& self, const Tensor& mask) {
-  Tensor result = at::empty({0}, self.options());
-  return at::native::masked_select_out_cpu(self, mask, result);
+  TORCH_CHECK(false, "masked_select is disabled in EasyFHE");
+  return self;
 }
 
 Tensor masked_select_backward(
     const Tensor& grad,
     const Tensor& input,
     const Tensor& mask) {
-  // The following could just be written as
-  // `zeros_like(input).masked_scatter(mask, grad)`. However, as an
-  // optimization, we call the in-place variant of masked_scatter.
-  // Unfortunately, that doesn't allow for the broadcasting of the LHS, so we
-  // need to explicitly broadcast here (the out-of-place variant of
-  // masked_scatter implicitly handles broadcasting).
-  auto result = at::zeros_like(
-      input.expand(at::infer_size(input.sizes(), mask.sizes())),
-      at::MemoryFormat::Preserve);
-
-  // for composite compliance, use out-of-place variant
-  // of `masked_scatter`.
-  if (areAnyTensorSubclassLike({grad, mask})) {
-    return result.masked_scatter(mask, grad);
-  }
-  result.masked_scatter_(mask, grad);
-  return result;
+  TORCH_CHECK(false, "masked_select backward is disabled in EasyFHE");
+  return grad;
 }
 
 namespace {
@@ -2754,60 +2261,18 @@ static int64_t count_nonzero_impl(TensorIteratorBase& iter, Range range) {
 }
 
 Tensor count_nonzero_cuda(const Tensor& self, IntArrayRef dims) {
-  auto reduce = self;
-  if (reduce.scalar_type() != kBool) {
-    reduce = reduce != 0;
-  }
-  return reduce.sum(dims);
+  TORCH_CHECK(false, "count_nonzero is disabled in EasyFHE");
+  return self;
 }
 
 Tensor count_nonzero_cpu(const Tensor& self, IntArrayRef dims) {
-  if (!dims.empty()) {
-    auto reduce = self;
-    if (reduce.scalar_type() != kBool) {
-      reduce = reduce != 0;
-    }
-    return reduce.sum(dims);
-  }
-
-  // Optimized all-reduce
-  auto iter = TensorIteratorConfig().add_const_input(self).build();
-
-  const auto num_threads = at::get_num_threads();
-  DimVector thread_count_nonzero(num_threads);
-
-  AT_DISPATCH_ALL_TYPES_AND_COMPLEX_AND4(
-      kComplexHalf,
-      kHalf,
-      kBFloat16,
-      kBool,
-      self.scalar_type(),
-      "nonzero_count_cpu",
-      [&] {
-        at::parallel_for(
-            0,
-            iter.numel(),
-            internal::GRAIN_SIZE,
-            [&](int64_t begin, int64_t end) {
-              const auto tid = at::get_thread_num();
-              thread_count_nonzero[tid] =
-                  count_nonzero_impl<scalar_t>(iter, {begin, end});
-            });
-      });
-
-  for (const auto i : c10::irange(1, num_threads)) {
-    thread_count_nonzero[0] += thread_count_nonzero[i];
-  }
-  auto out = at::empty({}, self.options().dtype(kLong));
-  *out.mutable_data_ptr<int64_t>() = thread_count_nonzero[0];
-  return out;
+  TORCH_CHECK(false, "count_nonzero is disabled in EasyFHE");
+  return self;
 }
 
 Tensor count_nonzero(const Tensor& self, std::optional<int64_t> dim) {
-  if (dim) {
-    return at::count_nonzero(self, IntArrayRef{*dim});
-  }
-  return at::count_nonzero(self, IntArrayRef{});
+  TORCH_CHECK(false, "count_nonzero is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& nonzero_out_cpu(const Tensor& self, Tensor& result) {

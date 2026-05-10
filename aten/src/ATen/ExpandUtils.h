@@ -462,44 +462,12 @@ inline Tensor _sum_to(
     Tensor tensor,
     const c10::ArrayRef<T> shape,
     bool always_return_non_view = false) {
-  if (shape.size() == 0) {
-    return tensor.sum();
-  }
-
-  auto sizes = at::symint::sizes<T>(tensor);
-  c10::SmallVector<int64_t, 8> reduce_dims;
-  const int64_t leading_dims = sizes.size() - shape.size();
-  for (const auto i : c10::irange(leading_dims)) {
-    reduce_dims.push_back(i);
-  }
-  for (int64_t i = leading_dims; i < static_cast<int64_t>(sizes.size()); ++i) {
-    if (TORCH_GUARD_OR_FALSE(sym_eq(shape[i - leading_dims], 1)) &&
-        TORCH_GUARD_OR_TRUE(sym_ne(sizes[i], 1))) {
-      reduce_dims.push_back(i);
-    } else {
-      // if we assume no reduction due to unbacked we ensure that at runtime.
-      TORCH_MAYBE_SYM_CHECK(
-          sym_eq(shape[i - leading_dims], sizes[i]),
-          "non-reduction path was assumed due to unbacked symbols expected those two sizes to be the same:",
-          shape[i - leading_dims],
-          ", ",
-          sizes[i])
-    }
-  }
-
-  if (!reduce_dims.empty()) {
-    tensor = tensor.sum(reduce_dims, /*keepdim=*/true);
-  }
-
-  if (always_return_non_view) {
-    // This is only actually used by the functionalization pass.
-    // We want to be able to guarantee that this function doesn't return a view
-    // of the input.
-    return leading_dims > 0 ? at::symint::view_copy<T>(tensor, shape)
-                            : tensor.clone();
-  } else {
-    return leading_dims > 0 ? at::symint::view<T>(tensor, shape) : tensor;
-  }
+  (void)shape;
+  (void)always_return_non_view;
+  TORCH_CHECK(
+      false,
+      "sum_to_size is disabled in EasyFHE because ordinary reductions are not supported");
+  return tensor;
 }
 
 inline Tensor sum_to(

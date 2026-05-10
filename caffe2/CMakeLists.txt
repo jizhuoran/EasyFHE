@@ -106,6 +106,7 @@ if(USE_EASYFHE_FAST_BUILD)
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_native_cpu_sources}")
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_aten_sources}")
     list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "${_easyfhe_pruned_cuda_sources}")
+    list(FILTER ${_easyfhe_srcs} EXCLUDE REGEX "/aten/src/ATen/native/cuda/(IndexKernel\\.cpp|ReduceOps\\.cpp|ScanKernels\\.cpp)$")
   endforeach()
   list(APPEND Caffe2_CPU_SRCS
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/functorch/easyfhe_functorch_stubs.cpp

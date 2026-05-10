@@ -8,7 +8,6 @@
 #include <ATen/Functions.h>
 #include <ATen/NativeFunctions.h>
 #else
-#include <ATen/ops/float_power_native.h>
 #include <ATen/ops/pow.h>
 #include <ATen/ops/pow_native.h>
 #include <ATen/ops/result_type.h>
@@ -68,71 +67,43 @@ TORCH_IMPL_FUNC(pow_Scalar_out) (const Scalar& base, const Tensor& exp, const Te
 }
 
 Tensor& float_power_out(const Tensor& base, const Tensor& exp, Tensor& result) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || at::isComplexType(exp.scalar_type())) ?
-                at::kComplexDouble : at::kDouble;
-  TORCH_CHECK(result.scalar_type() == dtype,
-              "the output given to float_power has dtype ", result.scalar_type(),
-              " but the operation's result requires dtype ", dtype);
-
-  return at::pow_out(result, base.to(dtype), exp.to(dtype));
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return result;
 }
 
 Tensor& float_power_out(const Tensor& base, const Scalar& exp, Tensor& result) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || exp.isComplex()) ? at::kComplexDouble : at::kDouble;
-  TORCH_CHECK(result.scalar_type() == dtype,
-              "the output given to float_power has dtype ", result.scalar_type(),
-              " but the operation's result requires dtype ", dtype);
-
-  // Note: need the casts inside the ternary because conversion functions return e.g. c10::complex,
-  // which causes a complex scalar to always be returned.
-  auto casted_exp = (dtype == at::kComplexDouble) ? Scalar(exp.toComplexDouble()) : Scalar(exp.toDouble());
-  return at::pow_out(result, base.to(dtype), casted_exp);
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return result;
 }
 
 Tensor& float_power_out(const Scalar& base, const Tensor& exp, Tensor& result) {
-  auto dtype = (at::isComplexType(exp.scalar_type()) || base.isComplex()) ? at::kComplexDouble : at::kDouble;
-  TORCH_CHECK(result.scalar_type() == dtype,
-              "the output given to float_power has dtype ", result.scalar_type(),
-              " but the operation's result requires dtype ", dtype);
-
-  auto casted_base = (dtype == at::kComplexDouble) ? Scalar(base.toComplexDouble()) : Scalar(base.toDouble());
-  return at::pow_out(result, casted_base, exp.to(dtype));
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return result;
 }
 
 Tensor float_power(const Tensor& base, const Scalar& exp) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || exp.isComplex()) ? at::kComplexDouble : at::kDouble;
-  auto casted_exp = (dtype == at::kComplexDouble) ? Scalar(exp.toComplexDouble()) : Scalar(exp.toDouble());
-  return at::pow(base.to(dtype), casted_exp);
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return base;
 }
 
 Tensor float_power(const Scalar& base, const Tensor& exp) {
-  auto dtype = (at::isComplexType(exp.scalar_type()) || base.isComplex()) ? at::kComplexDouble : at::kDouble;
-  auto casted_base = (dtype == at::kComplexDouble) ? Scalar(base.toComplexDouble()) : Scalar(base.toDouble());
-  return at::pow(casted_base, exp.to(dtype));
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return exp;
 }
 
 Tensor float_power(const Tensor& base, const Tensor& exp) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || at::isComplexType(exp.scalar_type())) ? at::kComplexDouble : at::kDouble;
-  return at::pow(base.to(dtype), exp.to(dtype));
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return base;
 }
 
 Tensor& float_power_(Tensor& base, const Tensor& exp) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || at::isComplexType(exp.scalar_type())) ? at::kComplexDouble : at::kDouble;
-  TORCH_CHECK(base.scalar_type() == dtype,
-              "the base given to float_power_ has dtype ", base.scalar_type(),
-              " but the operation's result requires dtype ", dtype);
-
-  return base.pow_(exp.to(dtype));
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return base;
 }
 
 Tensor& float_power_(Tensor& base, const Scalar& exp) {
-  auto dtype = (at::isComplexType(base.scalar_type()) || exp.isComplex()) ? at::kComplexDouble : at::kDouble;
-  TORCH_CHECK(base.scalar_type() == dtype,
-              "the base given to float_power_ has dtype ", base.scalar_type(),
-              " but the operation's result requires dtype ", dtype);
-
-  auto casted_exp = (dtype == at::kComplexDouble) ? Scalar(exp.toComplexDouble()) : Scalar(exp.toDouble());
-  return base.pow_(casted_exp);
+  TORCH_CHECK(false, "float_power is disabled in EasyFHE");
+  return base;
 }
 
 } // namespace at::native

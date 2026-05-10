@@ -92,7 +92,7 @@ using at::set_num_interop_threads;
 inline bool equal_if_defined(const Tensor& t1, const Tensor& t2) {
   return (
       (!t1.defined() && !t2.defined()) ||
-      (t1.defined() && t2.defined() && torch::equal(t1, t2)));
+      (t1.defined() && t2.defined() && t1.is_same(t2)));
 }
 
 // RecordFunction API

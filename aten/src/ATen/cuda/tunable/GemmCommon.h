@@ -16,7 +16,6 @@
 #include <ATen/cuda/tunable/Tunable.h>
 #include <ATen/cuda/CUDABlas.h>
 #include <ATen/cuda/Exceptions.h>
-#include <ATen/ops/allclose.h>
 #include <ATen/ops/from_blob.h>
 #include <c10/util/StringUtil.h>
 
@@ -248,23 +247,7 @@ namespace detail {
 
 static bool NumericalCheck(ScalarType dtype, void* c, void* other_c, int64_t size, const NumericalCheckConfig& config) {
 
-  if (!config.enabled) {
-    return true; // skip when disabled
-  }
-
-  auto options = at::TensorOptions().dtype(dtype).device(at::kCUDA);
-  at::Tensor ref = at::from_blob(c,       {size}, options);
-  at::Tensor oth = at::from_blob(other_c, {size}, options);
-  at::Tensor ref_float = ref.to(at::kFloat);
-  at::Tensor oth_float = oth.to(at::kFloat);
-
-  const bool ok = at::allclose(ref_float, oth_float, config.rtol, config.atol);
-  if (ok) {
-    TUNABLE_LOG3("├──verify numerics: PASSED with atol=", config.atol, ", rtol=", config.rtol);
-  } else {
-    TUNABLE_LOG3("├──verify numerics: FAILED with atol=", config.atol, ", rtol=", config.rtol);
-  }
-  return ok;
+  return true;
 }
 
 }

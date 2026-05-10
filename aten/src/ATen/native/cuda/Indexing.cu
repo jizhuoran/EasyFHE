@@ -29,7 +29,6 @@
 #include <ATen/ops/ones_like.h>
 #include <ATen/ops/gather.h>
 #include <ATen/ops/index_add_native.h>
-#include <ATen/ops/index_reduce_native.h>
 #include <ATen/ops/index_select_native.h>
 #include <ATen/ops/masked_fill_native.h>
 #endif
@@ -688,7 +687,7 @@ void index_put_with_sort_kernel(Tensor & self, const c10::List<std::optional<Ten
       auto orig_indices = at::empty_like(linearIndex, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
       const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-      linearIndex.divide_(sliceSize, "trunc");
+      linearIndex.div_(sliceSize, "trunc");
 
       // Sort the inputs into sorted with the corresponding indices
       auto range = at::arange(num_indices, linearIndex.options());
@@ -889,7 +888,7 @@ void index_put_with_sort_quantized(Tensor & self, const c10::List<std::optional<
       auto orig_indices = at::empty_like(linearIndex, LEGACY_CONTIGUOUS_MEMORY_FORMAT);
       const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-      linearIndex.divide_(sliceSize, "trunc");
+      linearIndex.div_(sliceSize, "trunc");
 
       // Sort the inputs into sorted with the corresponding indices
       auto range = at::arange(num_indices, linearIndex.options());
@@ -1532,37 +1531,6 @@ void index_reduce_func_cuda_impl(
 TORCH_IMPL_FUNC(index_add_cuda_out)
 (const Tensor& self, int64_t dim, const Tensor& index, const Tensor& source, const Scalar& alpha, const Tensor& result) {
   index_add_cuda_impl(self, dim, index, source, alpha, result);
-}
-
-TORCH_IMPL_FUNC(index_reduce_cuda_out)
-(const Tensor& self,
- int64_t dim,
- const Tensor& index,
- const Tensor& source,
- const std::string_view reduce,
- bool include_self,
- const Tensor& result) {
-  TORCH_WARN_ONCE("index_reduce() is in beta and the API may change at any time.");
-
-  if (reduce == "prod") {
-    index_reduce_func_cuda_impl(self, dim, index, source, include_self, ReductionType::PROD, reduce_multiply, result);
-  } else if (reduce == "mean") {
-    index_reduce_func_cuda_impl(self, dim, index, source, include_self, ReductionType::MEAN, reduce_add, result);
-    auto counts = include_self ? at::ones_like(result) : at::zeros_like(result);
-    counts.index_add_(dim, index, at::ones_like(source));
-    counts.masked_fill_(counts == 0, 1);
-    if (result.is_floating_point() || result.is_complex()) {
-      result.div_(counts);
-    } else {
-      result.div_(counts, "floor");
-    }
-  } else if (reduce == "amax") {
-    index_reduce_func_cuda_impl(self, dim, index, source, include_self, ReductionType::MAX, reduce_maximum, result);
-  } else if (reduce == "amin") {
-    index_reduce_func_cuda_impl(self, dim, index, source, include_self, ReductionType::MIN, reduce_minimum, result);
-  } else {
-    TORCH_CHECK(false, "reduce argument must be either prod, mean, amax or amin, got ", reduce, ".");
-  }
 }
 
 namespace {

@@ -212,9 +212,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
   // lower_precision_fp — all deleted (NN/linalg ops)
 
   // fp32
-  KERNEL_MPS(acos, fp32)
-  KERNEL_MPS(asin, fp32)
-  KERNEL_MPS(cosh, fp32)
   KERNEL_MPS(exp, fp32)
   KERNEL_MPS(expm1, fp32)
   KERNEL_MPS(log, fp32)
@@ -223,25 +220,13 @@ TORCH_LIBRARY_IMPL(aten, AutocastMPS, m) {
   KERNEL_MPS(log1p, fp32)
   KERNEL_MPS(reciprocal, fp32)
   KERNEL_MPS(rsqrt, fp32)
-  KERNEL_MPS(sinh, fp32)
-  KERNEL_MPS(tan, fp32)
   KERNEL_MPS(pow, Tensor_Scalar, fp32)
   KERNEL_MPS(pow, Tensor_Tensor, fp32)
   KERNEL_MPS(pow, Scalar, fp32)
-  KERNEL_MPS(logsumexp, fp32)
-
-  // fp32_set_opt_dtype
-  KERNEL_MPS(prod, fp32)
-  KERNEL_MPS(prod, dim_int, fp32)
-  KERNEL_MPS(cumprod, fp32)
-  KERNEL_MPS(cumsum, fp32)
-  KERNEL_MPS(sum, fp32)
-  KERNEL_MPS(sum, dim_IntList, fp32)
 
   // promote
   KERNEL_MPS(addcdiv, promote)
   KERNEL_MPS(addcmul, promote)
-  KERNEL_MPS(atan2, promote)
   KERNEL_MPS(index_put, promote)
   KERNEL_MPS(scatter_add, promote)
 }
@@ -256,8 +241,6 @@ TORCH_LIBRARY_IMPL(aten, AutocastCPU, m) {
 
   // fp32 cast policy
   KERNEL_CPU(polar, fp32)
-  KERNEL_CPU(prod, fp32)
-  KERNEL_CPU(prod, dim_int, fp32)
   KERNEL_CPU(view_as_complex, fp32)
 
   // promote

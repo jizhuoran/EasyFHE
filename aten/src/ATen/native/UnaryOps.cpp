@@ -25,58 +25,24 @@
 #include <ATen/ops/_neg_view_native.h>
 #include <ATen/ops/abs.h>
 #include <ATen/ops/abs_native.h>
-#include <ATen/ops/absolute_native.h>
-#include <ATen/ops/acos.h>
-#include <ATen/ops/acos_native.h>
-#include <ATen/ops/acosh.h>
-#include <ATen/ops/acosh_native.h>
 #include <ATen/ops/angle.h>
 #include <ATen/ops/angle_native.h>
 #include <ATen/ops/arange_native.h>
-#include <ATen/ops/arccos_native.h>
-#include <ATen/ops/arccosh_native.h>
-#include <ATen/ops/arcsin_native.h>
-#include <ATen/ops/arcsinh_native.h>
-#include <ATen/ops/arctan_native.h>
-#include <ATen/ops/arctanh_native.h>
-#include <ATen/ops/asin.h>
-#include <ATen/ops/asin_native.h>
-#include <ATen/ops/asinh.h>
-#include <ATen/ops/asinh_native.h>
-#include <ATen/ops/atan.h>
-#include <ATen/ops/atan_native.h>
-#include <ATen/ops/atanh.h>
-#include <ATen/ops/atanh_native.h>
-#include <ATen/ops/bitwise_not_native.h>
 #include <ATen/ops/can_cast.h>
-#include <ATen/ops/ceil_native.h>
 #include <ATen/ops/conj_native.h>
 #include <ATen/ops/conj_physical.h>
 #include <ATen/ops/conj_physical_native.h>
-#include <ATen/ops/cos_native.h>
-#include <ATen/ops/cosh_native.h>
-#include <ATen/ops/deg2rad.h>
-#include <ATen/ops/deg2rad_native.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/empty_like.h>
-#include <ATen/ops/exp2.h>
-#include <ATen/ops/exp2_native.h>
 #include <ATen/ops/exp_native.h>
 #include <ATen/ops/expm1.h>
 #include <ATen/ops/expm1_native.h>
-#include <ATen/ops/fix_native.h>
-#include <ATen/ops/floor_native.h>
-#include <ATen/ops/frac_native.h>
-#include <ATen/ops/frexp.h>
-#include <ATen/ops/frexp_native.h>
 #include <ATen/ops/imag_native.h>
 #include <ATen/ops/log10_native.h>
 #include <ATen/ops/log1p.h>
 #include <ATen/ops/log1p_native.h>
 #include <ATen/ops/log2_native.h>
 #include <ATen/ops/log_native.h>
-#include <ATen/ops/logical_not.h>
-#include <ATen/ops/logical_not_native.h>
 #include <ATen/ops/mul.h>
 #include <ATen/ops/nan_to_num.h>
 #include <ATen/ops/nan_to_num_native.h>
@@ -85,27 +51,17 @@
 #include <ATen/ops/negative_native.h>
 #include <ATen/ops/positive_native.h>
 #include <ATen/ops/pow.h>
-#include <ATen/ops/rad2deg.h>
-#include <ATen/ops/rad2deg_native.h>
 #include <ATen/ops/real.h>
 #include <ATen/ops/real_native.h>
 #include <ATen/ops/reciprocal_native.h>
 #include <ATen/ops/resolve_conj_native.h>
 #include <ATen/ops/resolve_neg_native.h>
-#include <ATen/ops/round.h>
-#include <ATen/ops/round_native.h>
 #include <ATen/ops/rsqrt_native.h>
 #include <ATen/ops/select.h>
 #include <ATen/ops/sgn_native.h>
 #include <ATen/ops/sign_native.h>
-#include <ATen/ops/signbit_native.h>
-#include <ATen/ops/sin_native.h>
-#include <ATen/ops/sinh_native.h>
 #include <ATen/ops/sqrt_native.h>
 #include <ATen/ops/square_native.h>
-#include <ATen/ops/tan_native.h>
-#include <ATen/ops/trunc.h>
-#include <ATen/ops/trunc_native.h>
 #include <ATen/ops/view_as_real.h>
 #endif
 
@@ -121,16 +77,7 @@ namespace at::meta {
     build_borrowing_unary_float_op(maybe_get_output(), self);   \
   }
 
-CREATE_UNARY_FLOAT_META_FUNC(acos)
-CREATE_UNARY_FLOAT_META_FUNC(acosh)
-CREATE_UNARY_FLOAT_META_FUNC(asin)
-CREATE_UNARY_FLOAT_META_FUNC(asinh)
-CREATE_UNARY_FLOAT_META_FUNC(atan)
-CREATE_UNARY_FLOAT_META_FUNC(atanh)
-CREATE_UNARY_FLOAT_META_FUNC(cos)
-CREATE_UNARY_FLOAT_META_FUNC(cosh)
 CREATE_UNARY_FLOAT_META_FUNC(exp)
-CREATE_UNARY_FLOAT_META_FUNC(exp2)
 CREATE_UNARY_FLOAT_META_FUNC(expm1)
 CREATE_UNARY_FLOAT_META_FUNC(log)
 CREATE_UNARY_FLOAT_META_FUNC(log10)
@@ -138,10 +85,7 @@ CREATE_UNARY_FLOAT_META_FUNC(log1p)
 CREATE_UNARY_FLOAT_META_FUNC(log2)
 CREATE_UNARY_FLOAT_META_FUNC(reciprocal)
 CREATE_UNARY_FLOAT_META_FUNC(rsqrt)
-CREATE_UNARY_FLOAT_META_FUNC(sin)
-CREATE_UNARY_FLOAT_META_FUNC(sinh)
 CREATE_UNARY_FLOAT_META_FUNC(sqrt)
-CREATE_UNARY_FLOAT_META_FUNC(tan)
 
 
 // These are normal unary ops that preserve dtype
@@ -149,14 +93,7 @@ CREATE_UNARY_FLOAT_META_FUNC(tan)
   TORCH_META_FUNC(func) (const Tensor& self) {        \
     build_borrowing_unary_op(maybe_get_output(), self);   \
   }
-CREATE_UNARY_META_FUNC(bitwise_not)
-CREATE_UNARY_META_FUNC(frac)
-CREATE_UNARY_META_FUNC(round)
 CREATE_UNARY_META_FUNC(sgn)
-
-TORCH_META_FUNC2(round, decimals)(const Tensor& self, int64_t decimals){
-  build_unary_op(maybe_get_output(), self);
-}
 
 TORCH_META_FUNC(neg)(const Tensor& self) {
   TORCH_CHECK(self.scalar_type() != kBool,
@@ -165,37 +102,9 @@ TORCH_META_FUNC(neg)(const Tensor& self) {
   build_borrowing_unary_op(maybe_get_output(), self);
 }
 
-TORCH_META_FUNC(trunc) (const Tensor& self) {
-  // Note: this is consistent with NumPy
-  TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(),
-    "trunc is not supported for complex inputs");
-  build_borrowing_unary_op(maybe_get_output(), self);
-}
-
-TORCH_META_FUNC(floor) (const Tensor& self) {
-  // Note: this is consistent with NumPy
-  TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(),
-    "floor is not supported for complex inputs");
-  build_borrowing_unary_op(maybe_get_output(), self);
-}
-
 TORCH_META_FUNC(sign) (const Tensor& self) {
   TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(),
               "Unlike NumPy, torch.sign is not intended to support complex numbers. Please use torch.sgn instead.");
-  build_borrowing_unary_op(maybe_get_output(), self);
-}
-
-TORCH_META_FUNC(signbit) (const Tensor& self) {
-  TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(), "signbit is not implemented for complex tensors.");
-  TORCH_CHECK(maybe_get_output().defined() ? maybe_get_output().dtype() == at::kBool : true,
-              "signbit does not support non-boolean outputs.");
-  build_borrowing_unary_force_boolean_op(maybe_get_output(), self);
-}
-
-TORCH_META_FUNC(ceil) (const Tensor& self) {
-  // Note: this is consistent with NumPy
-  TORCH_CHECK_NOT_IMPLEMENTED(!self.is_complex(),
-    "ceil is not supported for complex inputs");
   build_borrowing_unary_op(maybe_get_output(), self);
 }
 
@@ -222,24 +131,8 @@ TORCH_IMPL_FUNC(func_out) (const Tensor& self, const Tensor& result) {  \
     func_stub(device_type(), *this);                                    \
   }                                                                     \
 }
-CREATE_UNARY_TORCH_IMPL_INTEGER_NO_OP_FUNC(ceil_out, ceil_stub)
-CREATE_UNARY_TORCH_IMPL_INTEGER_NO_OP_FUNC(floor_out, floor_stub)
-CREATE_UNARY_TORCH_IMPL_INTEGER_NO_OP_FUNC(round_out, round_stub)
-CREATE_UNARY_TORCH_IMPL_INTEGER_NO_OP_FUNC(trunc_out, trunc_stub)
-
-CREATE_UNARY_TORCH_IMPL_FUNC(acos_out, acos_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(acosh_out, acosh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(asin_out, asin_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(asinh_out, asinh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(atan_out, atan_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(atanh_out, atanh_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(bitwise_not_out, bitwise_not_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(cos_out, cos_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(cosh_out, cosh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(exp_out, exp_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(exp2_out, exp2_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(expm1_out, expm1_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(frac_out, frac_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log_out, log_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log10_out, log10_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(log1p_out, log1p_stub)
@@ -248,27 +141,7 @@ CREATE_UNARY_TORCH_IMPL_FUNC(neg_out, neg_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(reciprocal_out, reciprocal_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(rsqrt_out, rsqrt_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sign_out, sign_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(sin_out, sin_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(sinh_out, sinh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sqrt_out, sqrt_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(tan_out, tan_stub)
-
-TORCH_IMPL_FUNC(round_decimals_out)
-(const Tensor& self, int64_t decimals, const Tensor& result) {
-  if (decimals != 0) {
-    round_decimals_stub(device_type(), *this, decimals);
-  } else {
-    round_stub(device_type(), *this);
-  }
-}
-
-TORCH_IMPL_FUNC(signbit_out) (const Tensor& self, const Tensor& result) {
-  if (self.dtype() == at::kBool) {
-    result.fill_(false);
-  } else {
-    signbit_stub(device_type(), *this);
-  }
-}
 
 template <typename Stub>
 static inline Tensor& unary_op_impl_out(Tensor& result, const Tensor& self, Stub& stub) {
@@ -354,55 +227,72 @@ static inline Tensor& unary_op_impl_(Tensor& self, OutImpl& out_impl) {
 }
 
 // arccos, alias for acos
-Tensor& arccos_out(const Tensor& self, Tensor& result) { return at::acos_out(result, self); }
-Tensor arccos(const Tensor& self) { return self.acos(); }
-Tensor& arccos_(Tensor& self) { return self.acos_(); }
+Tensor& arccos_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arccos is disabled in EasyFHE");
+  return result;
+}
+Tensor arccos(const Tensor& self) {
+  TORCH_CHECK(false, "arccos is disabled in EasyFHE");
+  return self;
+}
+Tensor& arccos_(Tensor& self) {
+  TORCH_CHECK(false, "arccos is disabled in EasyFHE");
+  return self;
+}
 
 Tensor& rad2deg_out(const Tensor& self, Tensor& result) {
-  TORCH_CHECK(!self.is_complex(), "rad2deg is not supported for complex tensors.");
-  constexpr double M_180_PI = 57.295779513082320876798154814105170332405472466564;
-  return at::mul_out(result, self, wrapped_scalar_tensor(Scalar(M_180_PI)));
+  TORCH_CHECK(false, "rad2deg is disabled in EasyFHE");
+  return result;
 }
 Tensor rad2deg(const Tensor& self) {
-  // Note: int-> float promotion handled differently from other Unary ops,
-  // as it does not use the usual TensorIterator + Kernel Dispatch pattern.
-  auto options = self.options();
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    options = options.dtype(c10::get_default_dtype());
-  }
-  auto result = at::empty_like(self, options);
-  at::rad2deg_out(result, self);
-  return result;
+  TORCH_CHECK(false, "rad2deg is disabled in EasyFHE");
+  return self;
 }
-Tensor& rad2deg_(Tensor& self) { return unary_op_impl_(self, at::rad2deg_out); }
+Tensor& rad2deg_(Tensor& self) {
+  TORCH_CHECK(false, "rad2deg is disabled in EasyFHE");
+  return self;
+}
 
 Tensor& deg2rad_out(const Tensor& self, Tensor& result) {
-  TORCH_CHECK(!self.is_complex(), "deg2rad is not supported for complex tensors.");
-  constexpr double M_PI_180 = 0.017453292519943295769236907684886127134428718885417;
-  return at::mul_out(result, self, wrapped_scalar_tensor(Scalar(M_PI_180)));
-}
-Tensor deg2rad(const Tensor& self) {
-  // Note: int-> float promotion handled differently from other Unary ops,
-  // as it does not use the usual TensorIterator + Kernel Dispatch pattern.
-  auto options = self.options();
-  if (c10::isIntegralType(self.scalar_type(), /*includeBool=*/true)) {
-    options = options.dtype(c10::get_default_dtype());
-  }
-  auto result = at::empty_like(self, options);
-  at::deg2rad_out(result, self);
+  TORCH_CHECK(false, "deg2rad is disabled in EasyFHE");
   return result;
 }
-Tensor& deg2rad_(Tensor& self) { return unary_op_impl_(self, at::deg2rad_out); }
+Tensor deg2rad(const Tensor& self) {
+  TORCH_CHECK(false, "deg2rad is disabled in EasyFHE");
+  return self;
+}
+Tensor& deg2rad_(Tensor& self) {
+  TORCH_CHECK(false, "deg2rad is disabled in EasyFHE");
+  return self;
+}
 
 // arcsin, alias of asin
-Tensor& arcsin_out(const Tensor& self, Tensor& result) { return at::asin_out(result, self); }
-Tensor arcsin(const Tensor& self) { return self.asin(); }
-Tensor& arcsin_(Tensor& self) { return self.asin_(); }
+Tensor& arcsin_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arcsin is disabled in EasyFHE");
+  return result;
+}
+Tensor arcsin(const Tensor& self) {
+  TORCH_CHECK(false, "arcsin is disabled in EasyFHE");
+  return self;
+}
+Tensor& arcsin_(Tensor& self) {
+  TORCH_CHECK(false, "arcsin is disabled in EasyFHE");
+  return self;
+}
 
 // arctan, alias of atan
-Tensor& arctan_out(const Tensor& self, Tensor& result) { return at::atan_out(result, self); }
-Tensor arctan(const Tensor& self) { return self.atan(); }
-Tensor& arctan_(Tensor& self) { return self.atan_(); }
+Tensor& arctan_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arctan is disabled in EasyFHE");
+  return result;
+}
+Tensor arctan(const Tensor& self) {
+  TORCH_CHECK(false, "arctan is disabled in EasyFHE");
+  return self;
+}
+Tensor& arctan_(Tensor& self) {
+  TORCH_CHECK(false, "arctan is disabled in EasyFHE");
+  return self;
+}
 
 // Note [Complex abs and angle]
 // Complex inputs to abs and angle return float results by default.
@@ -543,19 +433,46 @@ TORCH_IMPL_FUNC(sgn_out) (const Tensor& self, const Tensor& result) {
 }
 
 // arccosh, alias for acosh
-Tensor& arccosh_out(const Tensor& self, Tensor& result) { return at::acosh_out(result, self); }
-Tensor arccosh(const Tensor& self) { return at::acosh(self); }
-Tensor& arccosh_(Tensor& self) { return at::acosh_(self); }
+Tensor& arccosh_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arccosh is disabled in EasyFHE");
+  return result;
+}
+Tensor arccosh(const Tensor& self) {
+  TORCH_CHECK(false, "arccosh is disabled in EasyFHE");
+  return self;
+}
+Tensor& arccosh_(Tensor& self) {
+  TORCH_CHECK(false, "arccosh is disabled in EasyFHE");
+  return self;
+}
 
 // arcsinh, alias for asinh
-Tensor& arcsinh_out(const Tensor& self, Tensor& result) { return at::asinh_out(result, self); }
-Tensor arcsinh(const Tensor& self) { return self.asinh(); }
-Tensor& arcsinh_(Tensor& self) { return self.asinh_(); }
+Tensor& arcsinh_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arcsinh is disabled in EasyFHE");
+  return result;
+}
+Tensor arcsinh(const Tensor& self) {
+  TORCH_CHECK(false, "arcsinh is disabled in EasyFHE");
+  return self;
+}
+Tensor& arcsinh_(Tensor& self) {
+  TORCH_CHECK(false, "arcsinh is disabled in EasyFHE");
+  return self;
+}
 
 // arctanh, alias for atanh
-Tensor& arctanh_out(const Tensor& self, Tensor& result) { return at::atanh_out(result, self); }
-Tensor arctanh(const Tensor& self) { return self.atanh(); }
-Tensor& arctanh_(Tensor& self) { return self.atanh_(); }
+Tensor& arctanh_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "arctanh is disabled in EasyFHE");
+  return result;
+}
+Tensor arctanh(const Tensor& self) {
+  TORCH_CHECK(false, "arctanh is disabled in EasyFHE");
+  return self;
+}
+Tensor& arctanh_(Tensor& self) {
+  TORCH_CHECK(false, "arctanh is disabled in EasyFHE");
+  return self;
+}
 
 Tensor& square_out(const Tensor& self, Tensor& result) { return at::pow_out(result, self, 2); }
 Tensor square(const Tensor& self) { return at::pow(self, 2); }
@@ -604,9 +521,18 @@ Tensor& nan_to_num_(
 }
 
 // Alias for trunc
-Tensor& fix_out(const Tensor& self, Tensor& result) { return at::trunc_out(result, self); }
-Tensor fix(const Tensor& self) { return self.trunc(); }
-Tensor& fix_(Tensor& self) { return self.trunc_(); }
+Tensor& fix_out(const Tensor& self, Tensor& result) {
+  TORCH_CHECK(false, "fix is disabled in EasyFHE");
+  return result;
+}
+Tensor fix(const Tensor& self) {
+  TORCH_CHECK(false, "fix is disabled in EasyFHE");
+  return self;
+}
+Tensor& fix_(Tensor& self) {
+  TORCH_CHECK(false, "fix is disabled in EasyFHE");
+  return self;
+}
 
 Tensor positive(const Tensor& self) {
   TORCH_CHECK(self.scalar_type() != kBool, "The `+` operator, on a bool tensor is not supported.");
@@ -618,55 +544,28 @@ Tensor negative(const Tensor& self) { return self.neg(); }
 Tensor& negative_(Tensor& self) { return self.neg_(); }
 
 Tensor logical_not(const Tensor& self) {
-  Tensor result = at::empty({0}, self.options().dtype(kBool));
-  return at::logical_not_out(result, self);
+  TORCH_CHECK(false, "logical_not is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& logical_not_(Tensor& self) {
-  return at::logical_not_out(self, self);
+  TORCH_CHECK(false, "logical_not is disabled in EasyFHE");
+  return self;
 }
 
 Tensor& logical_not_out(const Tensor& self, Tensor& result) {
-  TensorIterator iter = TensorIteratorConfig()
-    .check_all_same_dtype(false)
-    .add_output(result)
-    .add_const_input(self)
-    .build();
-  logical_not_stub(iter.device_type(), iter);
+  TORCH_CHECK(false, "logical_not is disabled in EasyFHE");
   return result;
 }
 
 std::tuple<Tensor, Tensor> frexp(const Tensor& self) {
-  Tensor mantissa = at::empty_like(self);
-  Tensor exponent = at::empty_like(self, self.options().dtype(at::kInt));
-
-  at::frexp_out(mantissa, exponent, self);
-  return std::tuple<Tensor, Tensor>(std::move(mantissa), std::move(exponent));
+  TORCH_CHECK(false, "frexp is disabled in EasyFHE");
+  return std::tuple<Tensor, Tensor>(self, self);
 }
 
 std::tuple<Tensor&, Tensor&> frexp_out(const Tensor& self,
                                        Tensor& mantissa, Tensor& exponent) {
-  // torch.frexp is implemented for floating-point dtypes for now,
-  // should add support for integral dtypes in the future.
-  TORCH_CHECK(at::isFloatingType(self.scalar_type()),
-              "torch.frexp() only supports floating-point dtypes");
-
-  TORCH_CHECK(mantissa.dtype() == self.dtype(),
-              "torch.frexp() expects mantissa to have dtype ", self.dtype(),
-              " but got ", mantissa.dtype());
-  TORCH_CHECK(exponent.dtype() == at::kInt,
-              "torch.frexp() expects exponent to have int dtype "
-              "but got ", exponent.dtype());
-
-  auto iter = TensorIteratorConfig()
-    .add_output(mantissa)
-    .add_output(exponent)
-    .add_const_input(self)
-    .check_all_same_dtype(false)
-    .set_check_mem_overlap(true)
-    .build();
-  frexp_stub(iter.device_type(), iter);
-
+  TORCH_CHECK(false, "frexp is disabled in EasyFHE");
   return std::tuple<Tensor&, Tensor&>(mantissa, exponent);
 }
 
