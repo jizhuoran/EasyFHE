@@ -44,7 +44,6 @@ include .ctags.d/*.ctags
 graft .devcontainer
 graft .vscode
 graft aten
-graft benchmarks
 graft binaries
 graft c10
 graft caffe2
