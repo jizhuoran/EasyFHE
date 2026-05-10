@@ -79,17 +79,19 @@
 #ifndef EASYFHE_DISABLE_DDP_BINDINGS
 #include <torch/csrc/distributed/python_placement.h>
 #endif
+#ifndef EASYFHE_DISABLE_DYNAMO_BINDINGS
 #include <torch/csrc/dynamo/init.h>
+#endif
 #ifndef EASYFHE_DISABLE_EXPORT_BINDINGS
 #include <torch/csrc/export/pybind.h>
 #endif
 #include <torch/csrc/functionalization/Module.h>
 #ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
-#ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
 #include <torch/csrc/functorch/init.h>
 #endif
-#endif
+#ifndef EASYFHE_DISABLE_FX_BINDINGS
 #include <torch/csrc/fx/node.h>
+#endif
 #ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
 #include <torch/csrc/inductor/aoti_package/pybind.h>
 #include <torch/csrc/inductor/aoti_runner/pybind.h>
@@ -202,7 +204,9 @@ TORCH_API size_t _get_cudnn_batch_norm_reserve_space_size(
 #include <torch/csrc/itt.h>
 #endif
 
+#ifndef EASYFHE_DISABLE_NATIVERT_BINDINGS
 #include <torch/nativert/python/Bindings.h>
+#endif
 
 namespace py = pybind11;
 
@@ -2489,8 +2493,10 @@ PyObject* initModule() {
   THPDevice_init(module);
   THPStream_init(module);
   THPEvent_init(module);
+#ifndef EASYFHE_DISABLE_FX_BINDINGS
   NodeBase_init(module);
   NodeIter_init(module);
+#endif
   ASSERT_TRUE(THPVariable_initModule(module));
   ASSERT_TRUE(THPFunction_initModule(module));
   ASSERT_TRUE(THPEngine_initModule(module));
@@ -3294,8 +3300,10 @@ Call this whenever a new thread is created in order to propagate values from
 #ifdef USE_KINETO
   torch::global_kineto_init();
 #endif
+#ifndef EASYFHE_DISABLE_NATIVERT_BINDINGS
   auto nativert_module = py_module.def_submodule("_nativert");
   torch::nativert::initModelRunnerPybind(nativert_module);
+#endif
   return module;
   END_HANDLE_TH_ERRORS
 }

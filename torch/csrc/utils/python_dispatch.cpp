@@ -19,7 +19,9 @@
 
 #include <c10/util/Synchronized.h>
 #include <c10/util/flat_hash_map.h>
+#ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
 #include <torch/csrc/inductor/aoti_eager/kernel_holder.h>
+#endif
 #include <torch/csrc/utils/python_raii.h>
 
 #include <iostream>

@@ -1,70 +1,28 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from typing import Any
-
-from .dynamic_shapes import (
-    AdditionalInputs,
-    Constraint,
-    Dim,
-    dims,
-    ShapesCollection,
-)
-from .exported_program import (
-    default_decompositions,
-    ExportedProgram,
-    ModuleCallEntry,
-    ModuleCallSignature,
-)
-from .graph_signature import ExportBackwardSignature, ExportGraphSignature
-from .unflatten import FlatArgsAdapter, unflatten, UnflattenedModule
-
-CustomDecompTable = dict
+"""Export stubs for EasyFHE."""
 
 
-def _disabled(*args: Any, **kwargs: Any) -> None:
+def _disabled(*args, **kwargs):
     raise RuntimeError("torch.export is disabled in EasyFHE")
 
 
-def export(*args: Any, **kwargs: Any) -> None:
-    _disabled()
+export = _disabled
+export_for_training = _disabled
+load = _disabled
+save = _disabled
 
 
-def draft_export(*args: Any, **kwargs: Any) -> None:
-    _disabled()
-
-
-def save(*args: Any, **kwargs: Any) -> None:
-    _disabled()
-
-
-def load(*args: Any, **kwargs: Any) -> None:
-    _disabled()
-
-
-def register_dataclass(cls: type[Any], *args: Any, **kwargs: Any) -> type[Any]:
+def register_dataclass(cls=None, **kwargs):
+    if cls is None:
+        return lambda inner: inner
     return cls
 
 
-__all__ = [
-    "AdditionalInputs",
-    "Constraint",
-    "CustomDecompTable",
-    "Dim",
-    "ExportBackwardSignature",
-    "ExportGraphSignature",
-    "ExportedProgram",
-    "FlatArgsAdapter",
-    "ModuleCallEntry",
-    "ModuleCallSignature",
-    "ShapesCollection",
-    "UnflattenedModule",
-    "default_decompositions",
-    "dims",
-    "draft_export",
-    "export",
-    "load",
-    "register_dataclass",
-    "save",
-    "unflatten",
-]
+class Dim:
+    def __init__(self, name, *, min=None, max=None):
+        self.name = name
+        self.min = min
+        self.max = max
+
+
+class ExportedProgram:
+    pass
