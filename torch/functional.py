@@ -980,6 +980,8 @@ def _unique_impl(
             dim=dim,
         )
 
+    raise RuntimeError("unique is not supported in EasyFHE fast build")
+
     if dim is not None:
         output, inverse_indices, counts = _VF.unique_dim(
             input,
@@ -1062,6 +1064,9 @@ def _unique_consecutive_impl(
             return_counts=return_counts,
             dim=dim,
         )
+
+    raise RuntimeError("unique_consecutive is not supported in EasyFHE fast build")
+
     output, inverse_indices, counts = _VF.unique_consecutive(  # type: ignore[attr-defined]
         input, return_inverse=return_inverse, return_counts=return_counts, dim=dim
     )
