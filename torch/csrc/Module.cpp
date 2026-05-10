@@ -76,7 +76,9 @@
 #endif
 #include <torch/csrc/autograd/python_variable.h>
 #include <torch/csrc/cpu/Module.h>
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
 #include <torch/csrc/distributed/python_placement.h>
+#endif
 #include <torch/csrc/dynamo/init.h>
 #ifndef EASYFHE_DISABLE_EXPORT_BINDINGS
 #include <torch/csrc/export/pybind.h>
@@ -2549,7 +2551,9 @@ PyObject* initModule() {
   THXPGraph_init(module);
 #endif
 
+#ifndef EASYFHE_DISABLE_DDP_BINDINGS
   torch::distributed::initPlacementBindings(module);
+#endif
 
   auto set_module_attr =
       [&](const char* name, PyObject* v, bool incref = true) {

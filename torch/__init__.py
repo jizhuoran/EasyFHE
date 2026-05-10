@@ -2682,6 +2682,7 @@ def compile(
     import sysconfig
 
     _C._log_api_usage_once("torch.compile")
+    raise RuntimeError("torch.compile is disabled in EasyFHE")
     if sys.version_info >= (3, 15):
         raise RuntimeError("torch.compile is not supported on Python 3.15+")
     elif sysconfig.get_config_var("Py_GIL_DISABLED") == 1 and sys.version_info < (

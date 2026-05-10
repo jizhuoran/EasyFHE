@@ -23,7 +23,7 @@
 #include <torch/csrc/jit/runtime/operator.h>
 #include <torch/csrc/utils/pybind.h>
 #include <torch/csrc/utils/python_arg_parser.h>
-#ifdef USE_DISTRIBUTED
+#ifdef USE_RPC
 #include <torch/csrc/distributed/rpc/py_rref.h>
 #include <torch/csrc/distributed/rpc/rref_impl.h>
 #endif

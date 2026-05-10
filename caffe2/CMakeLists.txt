@@ -129,6 +129,8 @@ function(easyfhe_filter_runtime_sources _srcs)
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(comm|default_comm_hooks|ParamCommsUtils|reducer|reducer_cuda)\\.(cpp|cu)$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(GlooDeviceFactory|ProcessGroupGloo|ProcessGroupGlooCuda|ProcessGroupMPI|ProcessGroupUCC|ProcessGroupWrapper|UCCTracing|UCCUtils)\\.cpp$")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/quantization/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/python_placement\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/rpc/")
     if("${_srcs}" STREQUAL "TORCH_SRCS" OR "${_srcs}" STREQUAL "Caffe2_CPU_SRCS")
       list(APPEND ${_srcs}

@@ -1,7 +1,4 @@
-"""
-APIs related to torch.compile which lazily import torch._dynamo to avoid
-circular dependencies.
-"""
+"""APIs related to torch.compile."""
 
 import functools
 from collections.abc import Callable
@@ -38,22 +35,7 @@ def _disable_dynamo(
     the invocation of the decorated function.
     """
     if fn is not None:
-
-        @functools.wraps(fn)
-        def inner(*args: _P.args, **kwargs: _P.kwargs) -> _T:
-            # cache this on the first invocation to avoid adding too much overhead.
-            disable_fn = getattr(fn, "__dynamo_disable", None)
-            if disable_fn is None:
-                import torch._dynamo
-
-                # We can safely turn off functools.wraps here because the inner
-                # already wraps fn in the outer scope.
-                disable_fn = torch._dynamo.disable(fn, recursive, wrapping=False)
-                fn.__dynamo_disable = disable_fn  # type: ignore[attr-defined]
-
-            return disable_fn(*args, **kwargs)
-
-        return inner
+        return fn
     else:
         # decorator usage like @_disable_dynamo(recursive=False). The resulting
         # object expects the original decorated function as the arg.
