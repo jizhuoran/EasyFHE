@@ -37,8 +37,6 @@ graft third_party
 graft tools
 graft torch
 graft torchgen
-# FIXME: torch-xla build during codegen will fail if include this file in wheel
-exclude torchgen/BUILD.bazel
 
 # The following exclusions omit parts from third-party dependencies that
 # contain invalid symlinks[1] and that are not needed for pytorch, such as

@@ -1,7 +1,7 @@
 #define TORCH_ASSERT_ONLY_METHOD_OPERATORS
 #include <ATen/native/TensorAdvancedIndexing.h>
 #include <ATen/native/IndexingUtils.h>
-#include <ATen/native/quantized/IndexKernel.h>
+#include <ATen/native/easyfhe_quantized_stubs.h>
 #include <ATen/native/cuda/KernelUtils.cuh>
 
 #include <ATen/core/Tensor.h>
@@ -38,7 +38,6 @@
 #include <ATen/cuda/detail/IntegerDivider.cuh>
 #include <c10/util/irange.h>
 #include <c10/core/QScheme.h>
-#include <ATen/native/quantized/AffineQuantizerBase.h>
 
 #include <limits>
 

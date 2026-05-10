@@ -21,7 +21,6 @@
 #include <ATen/native/IndexingUtils.h>
 #include <ATen/native/LinearAlgebraUtils.h>
 #include <ATen/native/SparseTensorUtils.h>
-#include <ATen/native/nested/NestedTensorUtils.h>
 #include <c10/core/TensorOptions.h>
 #include <c10/util/OptionalArrayRef.h>
 #include <c10/util/SmallBuffer.h>
@@ -1680,33 +1679,8 @@ Tensor _nested_split_with_sizes_backward(
     int64_t dim,
     const Tensor& nt_sizes,
     const at::TensorOptions& options) {
-  // add 1 to account for batch dim
-  dim = at::maybe_wrap_dim(dim, nt_sizes.size(1) + 1);
-  // it's possible some of the grads are not defined (represents tensors of all
-  // 0s). Since at::cat can't handle those, let's define them
-  std::vector<Tensor> grads_all_defined;
-  grads_all_defined.reserve(grads.size());
-  for (int64_t i : c10::irange(static_cast<int64_t>(grads.size()))) {
-    if (grads[i].defined()) {
-      grads_all_defined.push_back(static_cast<Tensor>(grads[i]));
-    } else {
-      const auto& length = split_sizes[i].guard_int(__FILE__, __LINE__);
-      auto nt_split_size = nt_sizes.clone();
-      auto nt_split_size_ptr = nt_split_size.data_ptr<int64_t>();
-      for (int64_t j : c10::irange(nt_sizes.size(0))) {
-        // subtract 1 to account for batch dim
-        nt_split_size_ptr[j * nt_sizes.size(1) + (dim - 1)] = length;
-      }
-      Tensor zeros_buffer = at::zeros(
-          {at::native::get_numel_from_nested_size_tensor(nt_split_size)},
-          options);
-      auto nt_split_grad = at::native::wrap_buffer(zeros_buffer, nt_split_size);
-      grads_all_defined.push_back(nt_split_grad);
-    }
-  }
-
-  auto ret = at::cat(grads_all_defined, dim);
-  return ret;
+  TORCH_CHECK(false, "Nested tensor ops not supported in EasyFHE");
+  return Tensor();
 }
 
 Tensor split_backward(

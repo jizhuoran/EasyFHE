@@ -1365,8 +1365,6 @@ aten_native_source_non_codegen_list = [
     "aten/src/ATen/native/quantized/cpu/RuyUtils.cpp",
     "aten/src/ATen/native/quantized/cpu/XnnpackUtils.cpp",
     "aten/src/ATen/native/quantized/qlinear_unpack.cpp",
-    "aten/src/ATen/quantized/QTensorImpl.cpp",
-    "aten/src/ATen/quantized/Quantizer.cpp",
     "aten/src/ATen/native/Activation.cpp",
     "aten/src/ATen/native/AdaptiveAveragePooling.cpp",
     "aten/src/ATen/native/AdaptiveAveragePooling3d.cpp",

@@ -1,5 +1,4 @@
-#include <ATen/native/quantized/AffineQuantizer.h>
-#include <ATen/native/quantized/IndexKernel.h>
+#include <ATen/native/easyfhe_quantized_stubs.h>
 #include <ATen/native/TensorAdvancedIndexing.h>
 #include <ATen/quantized/QTensorImpl.h>
 

@@ -126,7 +126,6 @@
 #include <torch/csrc/utils/tensor_qschemes.h>
 #include <torch/csrc/utils/verbose.h>
 
-#include <ATen/native/transformers/sdp_utils_cpp.h>
 #include <torch/csrc/profiler/combined_traceback.h>
 #include <torch/csrc/profiler/kineto_client_interface.h>
 #include <sstream>
@@ -135,16 +134,46 @@
 #include <ATen/ROCmFABackend.h>
 #include <ATen/cuda/CUDABlas.h>
 #include <ATen/cuda/CUDAConfig.h>
-#include <ATen/native/transformers/cuda/sdp_utils.h>
 #ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS
 #include <torch/csrc/inductor/static_launcher/cuda.h>
 #endif
-#ifdef __HIP_PLATFORM_AMD__
-#include <ATen/native/cudnn/hip/BatchNorm.h>
-#else
-#include <ATen/native/cudnn/BatchNorm.h>
 #endif
-#endif
+
+namespace sdp {
+using SDPBackend = at::SDPBackend;
+
+struct sdp_params {
+  at::Tensor query;
+  at::Tensor key;
+  at::Tensor value;
+  std::optional<at::Tensor> attn_mask;
+  double dropout;
+  bool is_causal;
+  bool enable_gqa;
+};
+
+inline bool is_flash_attention_available() {
+  return false;
+}
+
+inline bool can_use_flash_attention(const sdp_params&, bool) {
+  return false;
+}
+
+inline bool can_use_mem_efficient_attention(const sdp_params&, bool) {
+  return false;
+}
+
+inline bool can_use_cudnn_attention(const sdp_params&, bool) {
+  return false;
+}
+} // namespace sdp
+
+namespace at::native {
+TORCH_API size_t _get_cudnn_batch_norm_reserve_space_size(
+    const Tensor& input_t,
+    bool training);
+}
 
 #ifdef USE_XPU
 #if !defined(_WIN32) && !defined(EASYFHE_DISABLE_INDUCTOR_BINDINGS)

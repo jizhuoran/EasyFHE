@@ -4,7 +4,9 @@
 #endif
 #include <structmember.h>
 
+#ifdef USE_MPS
 #include <ATen/mps/MPSDevice.h>
+#endif
 #include <c10/core/CPUAllocator.h>
 #include <c10/core/RefcountedDeleter.h>
 #include <libshm.h>

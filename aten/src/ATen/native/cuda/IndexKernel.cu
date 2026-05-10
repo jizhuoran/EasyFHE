@@ -13,7 +13,7 @@
 #include <ATen/cuda/detail/OffsetCalculator.cuh>
 #include <ATen/native/cuda/Loops.cuh>
 #include <ATen/native/cuda/KernelUtils.cuh>
-#include <ATen/native/quantized/IndexKernel.h>
+#include <ATen/native/easyfhe_quantized_stubs.h>
 #include <ATen/native/cuda/MemoryAccess.cuh>
 #include <ATen/native/cuda/IndexKernelUtils.h>
 

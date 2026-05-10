@@ -113,7 +113,6 @@ if(USE_EASYFHE_FAST_BUILD)
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/functorch/easyfhe_functorch_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/easyfhe_conv_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/easyfhe_quantized_stubs.cpp
-      ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/native/transformers/easyfhe_sdp_stubs.cpp
       ${CMAKE_CURRENT_SOURCE_DIR}/../torch/csrc/jit/serialization/easyfhe_pickler_stub.cpp)
   list(APPEND Caffe2_GPU_SRCS
       ${CMAKE_CURRENT_SOURCE_DIR}/../aten/src/ATen/cuda/tunable/EasyFHETunableStub.cpp

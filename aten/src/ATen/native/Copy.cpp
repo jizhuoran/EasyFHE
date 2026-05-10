@@ -7,9 +7,12 @@
 #include <ATen/ExpandUtils.h>
 #include <ATen/FunctionalTensorWrapper.h>
 #include <ATen/TensorIterator.h>
-#include <ATen/native/quantized/Copy.h>
+#ifdef USE_MPS
 #include <ATen/native/mps/Copy.h>
+#endif
+#ifdef USE_VULKAN_API
 #include <ATen/native/vulkan/ops/Copy.h>
+#endif
 #include <ATen/native/TensorShape.h>
 #include <ATen/quantized/Quantizer.h>
 #include <ATen/vulkan/Context.h>
