@@ -9,7 +9,9 @@
 #include <torch/csrc/distributed/c10d/Utils.hpp>
 #include <torch/csrc/distributed/c10d/control_collectives/ControlCollectives.hpp>
 #include <torch/csrc/distributed/c10d/control_collectives/StoreCollectives.hpp>
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
 #include <torch/csrc/distributed/c10d/control_plane/WorkerServer.hpp>
+#endif
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -19,7 +21,9 @@
 #include <torch/csrc/distributed/c10d/FakeProcessGroup.hpp>
 #include <torch/csrc/distributed/c10d/ProcessGroup.hpp>
 #include <torch/csrc/distributed/c10d/PyProcessGroup.hpp>
+#ifndef EASYFHE_DISABLE_C10D_PYTHON_CALLBACK_WORK
 #include <torch/csrc/distributed/c10d/python_callback_work.hpp>
+#endif
 
 #ifdef USE_C10D_XCCL
 #include <torch/csrc/distributed/c10d/ProcessGroupXCCL.hpp>
@@ -335,6 +339,7 @@ class PythonStore : public ::c10d::Store {
   }
 };
 
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
 class PythonRequest : public ::c10d::control_plane::Request {
  public:
   const std::string& body() const override {
@@ -365,6 +370,7 @@ class PythonResponse : public ::c10d::control_plane::Response {
         void, ::c10d::control_plane::Response, "set_status", setStatus, status);
   }
 };
+#endif
 
 #ifndef EASYFHE_DISABLE_DDP_BINDINGS
 // Called from DDP's Python API to create a c10d Python comm hook object.
@@ -3852,6 +3858,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
           .def("wait", &::c10d::FakeWork::wait, py::arg("timeout") = kNoTimeout)
           .def("getFuture", &::c10d::FakeWork::getFuture);
 
+#ifndef EASYFHE_DISABLE_C10D_PYTHON_CALLBACK_WORK
   auto pythonCallbackWork =
       intrusive_ptr_no_gil_destructor_class_<::c10d::PythonCallbackWork>(
           module, "PythonCallbackWork", work)
@@ -3878,6 +3885,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
                 A ``torch.futures.Future`` object which is associated with the completion of
                 the ``PythonCallbackWork``.
            )");
+#endif
 
   py::class_<c10::DDPLoggingData>(module, "DDPLoggingData")
       .def(py::init<>())
@@ -4161,6 +4169,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
                 Default settings return everything.
         )");
 
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
   intrusive_ptr_class_<::c10d::control_plane::WorkerServer>(
       module, "_WorkerServer", R"(
 )")
@@ -4244,6 +4253,7 @@ such as `dist.all_reduce(tensor, async_op=True)`.
           "set_status",
           &::c10d::control_plane::Response::setStatus,
           py::arg("status"));
+#endif
 
   Py_RETURN_TRUE;
 }

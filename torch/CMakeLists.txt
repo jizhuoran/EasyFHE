@@ -317,6 +317,8 @@ endif()
 if(USE_EASYFHE_FAST_BUILD)
   list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/(dynamo|export|functorch|inductor|jit|lazy|onnx)/")
   list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/distributed/c10d/python_comm_hook\\.cpp$")
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/distributed/c10d/python_callback_work\\.cpp$")
+  list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/distributed/c10d/control_plane/")
   list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/distributed/python_placement\\.cpp$")
   list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/autograd/generated/python_(fft|linalg|nested|nn|sparse|special)_functions\\.cpp$")
   list(FILTER TORCH_PYTHON_SRCS EXCLUDE REGEX "/torch/csrc/autograd/python_nested_functions_manual\\.cpp$")
@@ -324,6 +326,8 @@ if(USE_EASYFHE_FAST_BUILD)
     ${TORCH_SRC_DIR}/csrc/jit/python/easyfhe_python_tracer_stub.cpp)
   list(APPEND TORCH_PYTHON_COMPILE_DEFINITIONS
     EASYFHE_DISABLE_DDP_BINDINGS
+    EASYFHE_DISABLE_C10D_CONTROL_PLANE
+    EASYFHE_DISABLE_C10D_PYTHON_CALLBACK_WORK
     EASYFHE_DISABLE_DYNAMO_BINDINGS
     EASYFHE_DISABLE_DOMAIN_PYTHON_BINDINGS
     EASYFHE_DISABLE_EXPORT_BINDINGS

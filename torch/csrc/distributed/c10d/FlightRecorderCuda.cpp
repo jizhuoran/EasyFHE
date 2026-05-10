@@ -9,9 +9,12 @@
 
 #include <torch/csrc/distributed/c10d/FlightRecorderDetail.hpp>
 #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
 #include <torch/csrc/distributed/c10d/control_plane/Handlers.hpp>
+#endif
 
 namespace c10d {
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
 control_plane::RegisterHandler dumpHandler{
     "dump_nccl_trace_pickle",
     [](const control_plane::Request& req, control_plane::Response& res) {
@@ -104,6 +107,7 @@ control_plane::RegisterHandler jsonDumpHandler{
               processedParams[onlyActiveStr]),
           "application/json");
     }};
+#endif
 
 /* Helper used by work::getDuration() and nccl flight recorder */
 template <>
