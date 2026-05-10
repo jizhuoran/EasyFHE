@@ -85,7 +85,9 @@
 #endif
 #include <torch/csrc/functionalization/Module.h>
 #ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
+#ifndef EASYFHE_DISABLE_FUNCTORCH_BINDINGS
 #include <torch/csrc/functorch/init.h>
+#endif
 #endif
 #include <torch/csrc/fx/node.h>
 #ifndef EASYFHE_DISABLE_INDUCTOR_BINDINGS

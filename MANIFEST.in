@@ -30,7 +30,6 @@ graft aten
 graft c10
 graft caffe2
 graft cmake
-graft functorch
 graft mypy_plugins
 graft scripts
 graft third_party

@@ -8,7 +8,6 @@
 #include <ATen/core/NestedIntSymNodeImpl.h>
 #include <ATen/core/dispatch/Dispatcher.h>
 
-#include <ATen/functorch/BatchedTensorImpl.h>
 #include <torch/library.h>
 
 #include <c10/core/SafePyObject.h>
@@ -811,7 +810,7 @@ void initDispatchBindings(PyObject* module) {
       py::cast(c10::autogradother_backends);
 
   m.attr("_additional_keys_to_prop_for_wrapper_tensors") =
-      py::cast(at::functorch::kKeysToPropagateToWrapper);
+      py::cast(c10::DispatchKeySet());
 
   m.attr("_after_autograd_keyset") = py::cast(c10::after_autograd_keyset);
   m.attr("_after_ADInplaceOrView_keyset") =

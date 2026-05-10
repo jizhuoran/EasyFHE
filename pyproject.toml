@@ -101,7 +101,7 @@ pyyaml = ["pyyaml"]
 # Linter tools #################################################################
 
 [tool.isort]
-src_paths = ["caffe2", "torch", "torchgen", "functorch", "test"]
+src_paths = ["caffe2", "torch", "torchgen", "test"]
 extra_standard_library = ["typing_extensions"]
 skip_gitignore = true
 skip_glob = ["third_party/*"]
@@ -119,12 +119,12 @@ preserve_inline_comments = true
 collapse_blank_lines_in_category = false
 
 [tool.usort.known]
-first_party = ["caffe2", "torch", "torchgen", "functorch", "test"]
+first_party = ["caffe2", "torch", "torchgen", "test"]
 standard_library = ["typing_extensions"]
 
 [tool.ruff]
 line-length = 88
-src = ["caffe2", "torch", "torchgen", "functorch", "test"]
+src = ["caffe2", "torch", "torchgen", "test"]
 extend-exclude = ["third_party", "test/dynamo/cpython"]
 
 [tool.ruff.per-file-target-version]
@@ -283,9 +283,6 @@ select = [
     "PYI011", # typed-argument-default-in-stub
     "PYI021", # docstring-in-stub
     "PYI053", # string-or-bytes-too-long
-]
-"functorch/docs/source/tutorials/**" = [
-    "F401",
 ]
 "test/export/**" = [
     "PGH004",
