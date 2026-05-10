@@ -1428,14 +1428,6 @@ else()
                   "shared libs.")
 endif()
 
-# ---[ Binaries Binaries will be built after the Caffe2 main libraries and the
-# modules are built. For the binaries, they will be linked to the Caffe2 main
-# libraries, as well as all the modules that are built with Caffe2 (the ones
-# built in the previous Modules section above).
-if(BUILD_BINARY)
-  add_subdirectory(binaries)
-endif()
-
 # ---[ JNI
 if(BUILD_JNI)
   if(NOT MSVC)

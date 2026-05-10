@@ -74,7 +74,6 @@ includes = [
     "caffe2/distributed/*",
     "caffe2/queue/*",
     "caffe2/contrib/aten/*",
-    "binaries/*",
     "caffe2/**/*_test*",
     "caffe2/core/*",
     "caffe2/db/*",
