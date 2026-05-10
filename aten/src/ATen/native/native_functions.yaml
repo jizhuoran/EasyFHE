@@ -144,27 +144,6 @@
   dispatch:
     CompositeExplicitAutograd: _has_same_storage_numel
 
-- func: rename_(Tensor(a!) self, Dimname[]? names) -> Tensor(a!)
-  variants: method
-  tags: inplace_view
-
-- func: rename(Tensor(a) self, Dimname[]? names) -> Tensor(a)
-  variants: method
-
-- func: align_to(Tensor(a) self, Dimname[] names) -> Tensor(a)
-  variants: method
-
-- func: align_to.ellipsis_idx(Tensor(a) self, Dimname[] order, int ellipsis_idx) -> Tensor(a)
-  variants: method
-
-- func: align_as(Tensor self, Tensor other) -> Tensor
-  variants: method
-
-- func: align_tensors(Tensor[] tensors) -> Tensor[]
-
-# Not assert because it's a keyword; not Assert because FX already
-# took that syntax
-# TODO: need to specify this is side-effectful somehow
 - func: _assert_async(Tensor self) -> ()
   dispatch:
     CPU: _assert_async_cpu
@@ -215,9 +194,6 @@
 - func: _make_dep_token(*, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor
   dispatch:
     CPU: _make_dep_token_cpu
-
-- func: refine_names(Tensor(a) self, Dimname[] names) -> Tensor(a)
-  variants: method
 
 - func: _debug_has_internal_overlap(Tensor self) -> int
   variants: function
@@ -978,9 +954,6 @@
     CUDA: cat_out_cuda
     MPS: cat_out_mps
 
-- func: cat.names(Tensor[] tensors, Dimname dim) -> Tensor
-
-- func: cat.names_out(Tensor[] tensors, Dimname dim, *, Tensor(a!) out) -> Tensor(a!)
 - func: block_diag(Tensor[] tensors) -> Tensor
   variants: function
   dispatch:
@@ -1364,9 +1337,6 @@
     CompositeExplicitAutograd: diagonal
   tags: core
 
-- func: diagonal.Dimname(Tensor(a) self, *, Dimname outdim, Dimname dim1, Dimname dim2, int offset=0) -> Tensor(a)
-  variants: function, method
-
 - func: diagonal_backward(Tensor grad_output, SymInt[] input_sizes, int offset, int dim1, int dim2) -> Tensor
   variants: function
   device_check: NoCheck
@@ -1497,13 +1467,6 @@
 - func: true_divide_.Scalar(Tensor(a!) self, Scalar other) -> Tensor(a!)
   device_check: NoCheck   # TensorIterator
   variants: method
-- func: empty.names(int[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: empty_names
-  autogen: empty.names_out
-
 - func: empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor
   dispatch:
     CPU: empty_cpu
@@ -1691,24 +1654,11 @@
 - func: flatten.using_ints(Tensor(a) self, int start_dim=0, int end_dim=-1) -> Tensor(a)
   variants: function, method
 
-- func: flatten.named_out_dim(Tensor(a) self, int start_dim, int end_dim, Dimname out_dim) -> Tensor(a)
-  variants: function, method
-
-- func: flatten.using_names(Tensor(a) self, Dimname start_dim, Dimname end_dim, Dimname out_dim) -> Tensor(a)
-  variants: function, method
-
-- func: flatten.DimnameList(Tensor(a) self, Dimname[] dims, Dimname out_dim) -> Tensor(a)
-  variants: function, method
-
 - func: unflatten.int(Tensor(a) self, int dim, SymInt[] sizes) -> Tensor(a)
   variants: function, method
   dispatch:
     CompositeImplicitAutograd: unflatten_symint
 
-- func: unflatten.Dimname(Tensor(a) self, Dimname dim, SymInt[] sizes, Dimname[] names) -> Tensor(a)
-  variants: function, method
-  dispatch:
-    CompositeImplicitAutograd: unflatten_dimname_symint
 - func: fill.Scalar(Tensor self, Scalar value) -> Tensor
   variants: function
   dispatch:
@@ -1806,13 +1756,6 @@
     CPU, CUDA: frac_out
     MPS: frac_out_mps
   tags: pointwise
-
-- func: full.names(int[] size, Scalar fill_value, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: full
-  autogen: full.names_out
 
 - func: full(SymInt[] size, Scalar fill_value, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   dispatch:
@@ -2520,13 +2463,6 @@
 
 - func: is_vulkan_available() -> bool
 
-- func: ones.names(int[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: ones
-  autogen: ones.names_out
-
 - func: ones(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   dispatch:
     CompositeExplicitAutograd: ones
@@ -2644,22 +2580,6 @@
     CompositeExplicitAutograd: scalar_tensor
   autogen: scalar_tensor.out
   tags: core
-
-- func: rand.names(SymInt[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: rand
-  autogen: rand.names_out
-  tags: nondeterministic_seeded
-
-- func: rand.generator_with_names(SymInt[] size, *, Generator? generator, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  tags: nondeterministic_seeded
-  dispatch:
-    CompositeExplicitAutograd: rand
-  autogen: rand.generator_with_names_out
 
 - func: rand(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   tags: [core, nondeterministic_seeded]
@@ -2790,22 +2710,6 @@
   tags: nondeterministic_seeded
   dispatch:
     CompositeExplicitAutograd: randn
-
-- func: randn.names(SymInt[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  tags: nondeterministic_seeded
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: randn
-  autogen: randn.names_out
-
-- func: randn.generator_with_names(SymInt[] size, *, Generator? generator, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  tags: nondeterministic_seeded
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: randn
-  autogen: randn.generator_with_names_out
 
 - func: randn.out(SymInt[] size, *, Tensor(a!) out) -> Tensor(a!)
   tags: nondeterministic_seeded
@@ -3036,11 +2940,6 @@
     CPU, CUDA, MPS, MTIA: rsqrt_out
   tags: pointwise
 
-- func: select.Dimname(Tensor(a) self, Dimname dim, int index) -> Tensor(a)
-  variants: function, method
-  device_check: NoCheck
-  device_guard: False
-
 - func: select.int(Tensor(a) self, int dim, SymInt index) -> Tensor(a)
   variants: function, method
   device_check: NoCheck
@@ -3074,23 +2973,6 @@
   structured_inherits: TensorIteratorBase
   dispatch:
     CPU, CUDA, MPS, MTIA: sin_out
-  tags: pointwise
-
-- func: sinc(Tensor self) -> Tensor
-  structured_delegate: sinc.out
-  variants: function, method
-  tags: pointwise
-
-- func: sinc_(Tensor(a!) self) -> Tensor(a!)
-  structured_delegate: sinc.out
-  variants: function, method
-  tags: pointwise
-
-- func: sinc.out(Tensor self, *, Tensor(a!) out) -> Tensor(a!)
-  structured: True
-  structured_inherits: TensorIteratorBase
-  dispatch:
-    CPU, CUDA, MPS: sinc_out
   tags: pointwise
 
 - func: sinh(Tensor self) -> Tensor
@@ -3143,11 +3025,6 @@
   device_check: NoCheck
   device_guard: False
   manual_cpp_binding: True
-
-- func: size.Dimname(Tensor self, Dimname dim) -> int
-  variants: function, method
-  device_check: NoCheck
-  device_guard: False
 
 - func: sym_size.int(Tensor self, int dim) -> SymInt
   variants: function
@@ -3315,12 +3192,6 @@
     CompositeExplicitAutograd: squeeze
   tags: core
 
-- func: squeeze.dimname(Tensor(a) self, Dimname dim) -> Tensor(a)
-  variants: function, method
-  device_check: NoCheck
-  device_guard: False
-
-
 - func: squeeze.dims(Tensor(a) self, int[] dim) -> Tensor(a)
   variants: function, method
   device_check: NoCheck
@@ -3352,12 +3223,6 @@
   tags: inplace_view
   dispatch:
     CompositeExplicitAutograd: squeeze_
-
-- func: squeeze_.dimname(Tensor(a!) self, Dimname dim) -> Tensor(a!)
-  variants: method
-  device_check: NoCheck
-  device_guard: False
-  tags: inplace_view
 
 - func: _chunk_cat(Tensor[] tensors, int dim, int num_chunks) -> Tensor
   dispatch:
@@ -3404,11 +3269,6 @@
   device_check: NoCheck
   device_guard: False
   manual_cpp_binding: True
-
-- func: stride.Dimname(Tensor self, Dimname dim) -> int
-  variants: function, method
-  device_check: NoCheck
-  device_guard: False
 
 - func: sym_stride.int(Tensor self, int dim) -> SymInt
   variants: function
@@ -3615,11 +3475,6 @@
   dispatch:
     CompositeExplicitAutograd: transpose
 
-- func: transpose.Dimname(Tensor(a) self, Dimname dim0, Dimname dim1) -> Tensor(a)
-  variants: function, method
-  device_check: NoCheck
-  device_guard: False
-
 - func: transpose_(Tensor(a!) self, int dim0, int dim1) -> Tensor(a!)
   variants: method
   device_check: NoCheck
@@ -3791,13 +3646,6 @@
 - func: where(Tensor condition) -> Tensor[]
   device_check: NoCheck   # TensorIterator
   variants: function
-
-- func: zeros.names(int[] size, *, Dimname[]? names, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
-  device_check: NoCheck
-  device_guard: False
-  dispatch:
-    CompositeExplicitAutograd: zeros
-  autogen: zeros.names_out
 
 - func: _efficientzerotensor(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None) -> Tensor
   dispatch:
@@ -4001,10 +3849,6 @@
   variants: function, method
   dispatch:
     CompositeExplicitAutograd: unbind
-
-- func: unbind.Dimname(Tensor(a -> *) self, Dimname dim) -> Tensor(a)[]
-  variants: function, method
-
 
 - func: _autocast_to_reduced_precision(Tensor(a) self, bool cuda_enabled, bool cpu_enabled, ScalarType cuda_dtype, ScalarType cpu_dtype) -> Tensor(a)
   variants: method

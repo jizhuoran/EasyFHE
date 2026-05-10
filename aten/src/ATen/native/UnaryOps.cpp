@@ -100,8 +100,6 @@
 #include <ATen/ops/sign_native.h>
 #include <ATen/ops/signbit_native.h>
 #include <ATen/ops/sin_native.h>
-#include <ATen/ops/sinc.h>
-#include <ATen/ops/sinc_native.h>
 #include <ATen/ops/sinh_native.h>
 #include <ATen/ops/sqrt_native.h>
 #include <ATen/ops/square_native.h>
@@ -141,7 +139,6 @@ CREATE_UNARY_FLOAT_META_FUNC(log2)
 CREATE_UNARY_FLOAT_META_FUNC(reciprocal)
 CREATE_UNARY_FLOAT_META_FUNC(rsqrt)
 CREATE_UNARY_FLOAT_META_FUNC(sin)
-CREATE_UNARY_FLOAT_META_FUNC(sinc)
 CREATE_UNARY_FLOAT_META_FUNC(sinh)
 CREATE_UNARY_FLOAT_META_FUNC(sqrt)
 CREATE_UNARY_FLOAT_META_FUNC(tan)
@@ -252,7 +249,6 @@ CREATE_UNARY_TORCH_IMPL_FUNC(reciprocal_out, reciprocal_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(rsqrt_out, rsqrt_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sign_out, sign_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sin_out, sin_stub)
-CREATE_UNARY_TORCH_IMPL_FUNC(sinc_out, sinc_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sinh_out, sinh_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(sqrt_out, sqrt_stub)
 CREATE_UNARY_TORCH_IMPL_FUNC(tan_out, tan_stub)
@@ -710,7 +706,6 @@ DEFINE_DISPATCH(sign_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-v
 DEFINE_DISPATCH(signbit_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sgn_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sin_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-DEFINE_DISPATCH(sinc_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sinh_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(sqrt_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 DEFINE_DISPATCH(tan_stub); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)

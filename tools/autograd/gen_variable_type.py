@@ -222,7 +222,6 @@ GRADIENT_IMPLEMENTED_FOR_COMPLEX = {
     "sin",
     "cos",
     "mul",
-    "sinc",
     "sinh",
     "cosh",
     "__rmul__",

@@ -983,10 +983,6 @@
   self: grad * self.cos().conj()
   result: auto_element_wise
 
-- name: sinc(Tensor self) -> Tensor
-  self: sinc_backward(grad, self)
-  result: auto_element_wise
-
 - name: sinh(Tensor self) -> Tensor
   self: grad * self.cosh().conj()
   result: auto_element_wise

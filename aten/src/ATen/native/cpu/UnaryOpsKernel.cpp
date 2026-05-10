@@ -344,22 +344,6 @@ static void sgn_kernel(TensorIteratorBase& iter) {
   }
 }
 
-static void sinc_kernel(TensorIteratorBase& iter) {
-  AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND2(kBFloat16, kHalf, iter.common_dtype(), "sinc_cpu", [&]() {
-    cpu_kernel(
-        iter,
-        [=](scalar_t a) -> scalar_t {
-          if (a == scalar_t(0)) {
-            return scalar_t(1);
-          } else {
-            using opmath_t = at::opmath_type<scalar_t>;
-            opmath_t product = c10::pi<opmath_t> * opmath_t{a};
-            return static_cast<scalar_t>(std::sin(product) / product);
-          }
-        });
-  });
-}
-
 static void sinh_kernel(TensorIteratorBase& iter) {
   AT_DISPATCH_FLOATING_AND_COMPLEX_TYPES_AND2(kBFloat16, kHalf, iter.dtype(), "sinh_cpu", [&]() {
     cpu_kernel_vec(
@@ -815,7 +799,6 @@ REGISTER_DISPATCH(abs_stub, &CPU_CAPABILITY::abs_kernel)
 REGISTER_DISPATCH(angle_stub, &CPU_CAPABILITY::angle_kernel)
 REGISTER_DISPATCH(neg_stub, &CPU_CAPABILITY::neg_kernel)
 REGISTER_DISPATCH(signbit_stub, &CPU_CAPABILITY::signbit_kernel)
-REGISTER_DISPATCH(sinc_stub, &CPU_CAPABILITY::sinc_kernel)
 REGISTER_DISPATCH(bitwise_not_stub, &CPU_CAPABILITY::bitwise_not_kernel)
 REGISTER_DISPATCH(logical_not_stub, &CPU_CAPABILITY::logical_not_kernel)
 REGISTER_DISPATCH(nan_to_num_stub, &CPU_CAPABILITY::nan_to_num_kernel)

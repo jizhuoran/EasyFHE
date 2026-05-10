@@ -99,7 +99,6 @@ static PyObject * THPVariable_size(PyObject* self, PyObject* args, PyObject* kwa
   HANDLE_TH_ERRORS
   static PythonArgParser parser({
     "size(int64_t? dim=None)",
-    "size(Dimname dim)",
   });
   auto& self_ = THPVariable_Unpack(self);
   ParsedArgs<3> parsed_args;
@@ -118,11 +117,6 @@ static PyObject * THPVariable_size(PyObject* self, PyObject* args, PyObject* kwa
     } else {
       return torch::toPyObject(self_.sym_size(r.toInt64(0)));
     }
-  } else if (r.idx == 1) {
-    if (jit::tracer::isTracing()) {
-      TORCH_INTERNAL_ASSERT(false, "NYI: Named tensors w/ JIT");
-    }
-    return wrap(self_.size(r.dimname(0)));
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS
@@ -133,7 +127,6 @@ static PyObject * THPVariable_stride(PyObject* self, PyObject* args, PyObject* k
   HANDLE_TH_ERRORS
   static PythonArgParser parser({
     "stride(int64_t? dim=None)",
-    "stride(Dimname dim)",
   });
   auto& self_ = THPVariable_Unpack(self);
   ParsedArgs<3> parsed_args;
@@ -160,8 +153,6 @@ static PyObject * THPVariable_stride(PyObject* self, PyObject* args, PyObject* k
       PyTuple_SET_ITEM(tuple.get(), i, s);
     }
     return tuple.release();
-  } else if (r.idx == 1) {
-    return wrap(self_.stride(r.dimname(0)));
   }
   Py_RETURN_NONE;
   END_HANDLE_TH_ERRORS

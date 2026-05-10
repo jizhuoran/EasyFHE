@@ -84,15 +84,11 @@ TORCH_LIBRARY_IMPL(aten, VmapMode, m) {
 
   m.impl("rand", unsupportedRandomOp<IntArrayRef, TENSOROPTIONS>);
   m.impl("rand.generator", unsupportedRandomOp<IntArrayRef, std::optional<Generator>, TENSOROPTIONS>);
-  m.impl("rand.names", unsupportedRandomOp<IntArrayRef, std::optional<DimnameList>, TENSOROPTIONS>);
-  m.impl("rand.generator_with_names", unsupportedRandomOp<IntArrayRef, std::optional<Generator>, std::optional<DimnameList>, TENSOROPTIONS>);
   m.impl("rand.out", unsupportedRandomOp_<IntArrayRef, Tensor&>);
   m.impl("rand.generator_out", unsupportedRandomOp_<IntArrayRef, std::optional<Generator>, Tensor&>);
 
   m.impl("randn", unsupportedRandomOp<IntArrayRef, TENSOROPTIONS>);
   m.impl("randn.generator", unsupportedRandomOp<IntArrayRef, std::optional<Generator>, TENSOROPTIONS>);
-  m.impl("randn.names", unsupportedRandomOp<IntArrayRef, std::optional<DimnameList>, TENSOROPTIONS>);
-  m.impl("randn.generator_with_names", unsupportedRandomOp<IntArrayRef, std::optional<Generator>, std::optional<DimnameList>, TENSOROPTIONS>);
   m.impl("randn.out", unsupportedRandomOp_<IntArrayRef, Tensor&>);
   m.impl("randn.generator_out", unsupportedRandomOp_<IntArrayRef, std::optional<Generator>, Tensor&>);
 
