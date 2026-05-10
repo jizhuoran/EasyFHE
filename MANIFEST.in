@@ -48,12 +48,10 @@ graft binaries
 graft c10
 graft caffe2
 graft cmake
-graft docs
 graft functorch
 graft ios
 graft mypy_plugins
 graft scripts
-graft test
 graft third_party
 graft tools
 graft torch
