@@ -3,16 +3,16 @@
 namespace torch::onnx {
 
 enum class OperatorExportTypes {
-  ONNX, // Strict ONNX export
-  ONNX_ATEN, // ONNX With ATen op everywhere
-  ONNX_ATEN_FALLBACK, // ONNX export with ATen fallback
-  ONNX_FALLTHROUGH, // Export supported ONNX ops. Pass through unsupported ops.
+  ONNX,
+  ONNX_ATEN,
+  ONNX_ATEN_FALLBACK,
+  ONNX_FALLTHROUGH,
 };
 
 enum class TrainingMode {
-  EVAL, // Inference mode
-  PRESERVE, // Preserve model state (eval/training)
-  TRAINING, // Training mode
+  EVAL,
+  PRESERVE,
+  TRAINING,
 };
 
 constexpr auto kOnnxNodeNameAttribute = "onnx_name";
