@@ -125,13 +125,7 @@ function(easyfhe_filter_runtime_sources _srcs)
   if(USE_EASYFHE_FAST_BUILD)
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(cuda/)?shim_common\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(dynamo|functorch|inductor|lazy)/")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/backends/nnapi/")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/jit_log\\.cpp$")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/(api|backends|codegen|mobile|operator_upgraders|passes|python|serialization|tensorexpr|testing)/")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/frontend/(builtin_functions|canonicalize_modified_loop|concrete_module_type|convert_to_ssa|edit_distance|exit_transforms|inline_loop_condition|ir_emitter|name_mangler|schema_matching|script_type_parser|sugared_value|tree_views|versioned_symbols)\\.cpp$")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/(autodiff|decomposition_registry|decomposition_registry_util|graph_executor|jit_trace|profiling_graph_executor_impl|profiling_record|register_c10_ops|register_cuda_ops|register_ops_utils|register_prim_ops|register_prim_ops_fulljit|register_special_ops|script_profile|serialized_shape_function_registry|simple_graph_executor_impl|symbolic_script|symbolic_shape_registry|symbolic_shape_registry_util)\\.cpp$")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/interpreter/preprocess_graph\\.cpp$")
-    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/runtime/static/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(comm|default_comm_hooks|ParamCommsUtils|reducer|reducer_cuda)\\.(cpp|cu)$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(GlooDeviceFactory|ProcessGroupGloo|ProcessGroupGlooCuda|ProcessGroupMPI|ProcessGroupUCC|ProcessGroupWrapper|UCCTracing|UCCUtils)\\.cpp$")
@@ -139,19 +133,18 @@ function(easyfhe_filter_runtime_sources _srcs)
     if("${_srcs}" STREQUAL "TORCH_SRCS" OR "${_srcs}" STREQUAL "Caffe2_CPU_SRCS")
       list(APPEND ${_srcs}
         ${TORCH_SRC_DIR}/csrc/dynamo/easyfhe_compiled_autograd_stub.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/api/function_impl.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/frontend/edit_distance.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/frontend/schema_matching.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/frontend/tracer.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/jit_log.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/passes/inliner.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/passes/utils/memory_dag.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/python/update_graph_executor_opt.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/error_report.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/function_schema_parser.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/lexer.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/schema_type_parser.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/source_range.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/frontend/strtod.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/ir/ir.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/ir/scope.cpp
+        ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_core_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_pass_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_jit_api_stubs.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/runtime/interpreter/preprocess_graph.cpp
         ${TORCH_SRC_DIR}/csrc/jit/serialization/easyfhe_pickler_stub.cpp
-        ${TORCH_SRC_DIR}/csrc/jit/serialization/python_print.cpp
         ${TORCH_SRC_DIR}/csrc/jit/runtime/easyfhe_graph_executor_stub.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/nn/easyfhe_module_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/api/src/serialize/input-archive.cpp
