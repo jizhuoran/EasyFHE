@@ -21,11 +21,6 @@
 #include <torch/csrc/distributed/c10d/PyProcessGroup.hpp>
 #include <torch/csrc/distributed/c10d/python_callback_work.hpp>
 
-#ifdef USE_C10D_GLOO
-#include <torch/csrc/distributed/c10d/ProcessGroupGloo.hpp>
-#include <torch/csrc/distributed/c10d/ProcessGroupWrapper.hpp>
-#endif
-
 #ifdef USE_C10D_XCCL
 #include <torch/csrc/distributed/c10d/ProcessGroupXCCL.hpp>
 #endif
@@ -34,14 +29,6 @@
 #include <torch/csrc/distributed/c10d/NCCLUtils.hpp>
 #include <torch/csrc/distributed/c10d/ProcessGroupNCCL.hpp>
 #include <torch/csrc/distributed/c10d/symm_mem/intra_node_comm.hpp>
-#endif
-
-#ifdef USE_C10D_MPI
-#include <torch/csrc/distributed/c10d/ProcessGroupMPI.hpp>
-#endif
-
-#ifdef USE_C10D_UCC
-#include <torch/csrc/distributed/c10d/ProcessGroupUCC.hpp>
 #endif
 
 #include <fmt/format.h>
@@ -3250,132 +3237,6 @@ options :class:`~torch.distributed.ProcessGroupNCCL.Options`).
               &::c10d::Backend::Options::global_ranks_in_group)
           .def_readwrite("group_name", &::c10d::Backend::Options::group_name);
 
-#ifdef USE_C10D_GLOO
-  auto processGroupGloo =
-      intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupGloo>(
-          module, "ProcessGroupGloo", backend);
-
-  // NOLINTNEXTLINE(bugprone-unused-raii)
-  shared_ptr_class_<::gloo::transport::Device>(processGroupGloo, "Device");
-
-  intrusive_ptr_class_<::c10d::ProcessGroupGloo::Options>(
-      processGroupGloo, "_Options", backendOptions)
-      .def(py::init<>())
-      .def_readwrite("_devices", &::c10d::ProcessGroupGloo::Options::devices)
-      .def_readwrite("_threads", &::c10d::ProcessGroupGloo::Options::threads);
-
-  processGroupGloo
-      .def_static(
-          "create_device",
-          [](const std::string& hostname,
-             const std::string& interface,
-             std::optional<bool> lazyInit_)
-              -> std::shared_ptr<::gloo::transport::Device> {
-            bool lazyInit =
-                lazyInit_.value_or(::c10d::getDefaultGlooLazyInit());
-
-            if (!hostname.empty()) {
-              return ::c10d::ProcessGroupGloo::createDeviceForHostname(
-                  hostname, lazyInit);
-            }
-            if (!interface.empty()) {
-              return ::c10d::ProcessGroupGloo::createDeviceForInterface(
-                  interface, lazyInit);
-            }
-            throw std::invalid_argument(
-                "Specify either `hostname` or `interface` argument.");
-          },
-          py::arg("hostname") = "",
-          py::arg("interface") = "",
-          py::arg("lazy_init") = std::nullopt)
-      .def_static(
-          "create_default_device",
-          [](std::optional<bool> lazyInit_) {
-            bool lazyInit =
-                lazyInit_.value_or(::c10d::getDefaultGlooLazyInit());
-
-            return ::c10d::ProcessGroupGloo::createDefaultDevice(lazyInit);
-          },
-          py::arg("lazy_init") = std::nullopt);
-
-  processGroupGloo
-      .def(
-          py::init(
-              [](const c10::intrusive_ptr<::c10d::Store>& store,
-                 int rank,
-                 int size,
-                 const c10::intrusive_ptr<::c10d::ProcessGroupGloo::Options>&
-                     options) {
-                // gil_scoped_release is not safe as a call_guard in init.
-                // https://github.com/pybind/pybind11/issues/5473
-                py::gil_scoped_release nogil{};
-
-                return c10::make_intrusive<::c10d::ProcessGroupGloo>(
-                    store, rank, size, options);
-              }),
-          py::arg("store"),
-          py::arg("rank"),
-          py::arg("size"),
-          py::arg("options"),
-          R"(Create a new ProcessGroupGloo instance.)")
-      .def(
-          py::init([](const c10::intrusive_ptr<::c10d::Store>& store,
-                      int rank,
-                      int size,
-                      std::chrono::milliseconds timeout) {
-            // gil_scoped_release is not safe as a call_guard in init.
-            // https://github.com/pybind/pybind11/issues/5473
-            py::gil_scoped_release nogil{};
-
-            return c10::make_intrusive<::c10d::ProcessGroupGloo>(
-                store,
-                rank,
-                size,
-                ::c10d::ProcessGroupGloo::Options::create_default(timeout));
-          }),
-          py::arg("store"),
-          py::arg("rank"),
-          py::arg("size"),
-          py::arg("timeout") = kProcessGroupDefaultTimeout,
-          R"(Create a new ProcessGroupGloo instance.)")
-      .def(
-          "_set_default_timeout",
-          &::c10d::ProcessGroupGloo::setTimeout,
-          py::arg("timeout"),
-          py::call_guard<py::gil_scoped_release>())
-      .def_property_readonly(
-          "options",
-          &::c10d::ProcessGroupGloo::getOptions,
-          R"(Return the options used to create this ProcessGroupGloo instance.)");
-
-  // ProcessGroupWrapper is a wrapper pg that includes a helper gloo process
-  // group. It can be used to validate collective calls across processes by
-  // checking the op type and input tensor shapes.
-  auto processGroupWrapper =
-      intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupWrapper>(
-          module, "_ProcessGroupWrapper", backend)
-          .def(
-              py::init(
-                  [](const c10::intrusive_ptr<::c10d::Backend>& backend,
-                     const c10::intrusive_ptr<::c10d::Backend>& gloo_backend) {
-                    // gil_scoped_release is not safe as a call_guard in init.
-                    // https://github.com/pybind/pybind11/issues/5473
-                    py::gil_scoped_release nogil{};
-                    return c10::make_intrusive<::c10d::ProcessGroupWrapper>(
-                        backend, gloo_backend);
-                  }),
-              py::arg("backend"),
-              py::arg("gloo_backend"))
-          .def_property_readonly(
-              "wrapped_pg", &::c10d::ProcessGroupWrapper::getWrappedPg)
-          .def_property_readonly(
-              "options", &::c10d::ProcessGroupWrapper::getBackendOptions)
-          .def(
-              "get_error",
-              &::c10d::ProcessGroupWrapper::getError,
-              py::call_guard<py::gil_scoped_release>());
-#endif
-
 #ifdef USE_C10D_NCCL
   auto processGroupNCCL =
       intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupNCCL>(
@@ -3646,22 +3507,6 @@ Example::
 
 #endif
 
-#ifdef USE_C10D_MPI
-  auto processGroupMPI =
-      intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupMPI>(
-          module, "ProcessGroupMPI", backend);
-
-  // Define static create function instead of a constructor, because
-  // this function may return null. This happens if this process is not
-  // part of a sub group that is to be created.
-  processGroupMPI.def_static(
-      "create",
-      [](std::vector<int> ranks) {
-        return ::c10d::ProcessGroupMPI::createProcessGroupMPI(std::move(ranks));
-      },
-      py::call_guard<py::gil_scoped_release>());
-#endif
-
 #ifdef USE_C10D_XCCL
   auto processGroupXCCL =
       intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupXCCL>(
@@ -3736,28 +3581,6 @@ Returns:
       )")
       .def("get_xccl_version", [] { return ::c10d::getXcclVersion(); });
 
-#endif
-
-#ifdef USE_C10D_UCC
-  auto processGroupUCC =
-      intrusive_ptr_no_gil_destructor_class_<::c10d::ProcessGroupUCC>(
-          module, "ProcessGroupUCC", backend)
-          .def(
-              py::init([](const c10::intrusive_ptr<::c10d::Store>& store,
-                          int rank,
-                          int size,
-                          const std::chrono::milliseconds& timeout) {
-                // gil_scoped_release is not safe as a call_guard in init.
-                // https://github.com/pybind/pybind11/issues/5473
-                py::gil_scoped_release nogil{};
-
-                return c10::make_intrusive<::c10d::ProcessGroupUCC>(
-                    store, rank, size, timeout);
-              }),
-              py::arg("store"),
-              py::arg("rank"),
-              py::arg("size"),
-              py::arg("timeout") = kProcessGroupDefaultTimeout);
 #endif
 
   py::enum_<::c10d::OpType>(module, "OpType")

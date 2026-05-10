@@ -5,10 +5,6 @@
 #include <torch/csrc/distributed/c10d/logger.hpp>
 #include <string>
 
-#ifdef USE_C10D_GLOO
-#include <torch/csrc/distributed/c10d/ProcessGroupGloo.hpp>
-#endif
-
 namespace c10d {
 
 #ifndef EASYFHE_DISABLE_DDP_BINDINGS
@@ -101,14 +97,6 @@ void Logger::set_env_variables() {
     ddp_logging_data_->strs_map["gloo_device_transport"] =
         getCvarString({"GLOO_DEVICE_TRANSPORT"}, "N/A");
 
-#ifdef USE_C10D_GLOO
-    auto gloo_pg = static_cast<c10d::ProcessGroupGloo*>(
-        reducer_->process_group_
-            ->getBackend(c10d::ProcessGroup::BackendType::GLOO)
-            .get());
-    auto n_threads = gloo_pg->getNumThreads();
-    ddp_logging_data_->ints_map["gloo_num_threads"] = n_threads;
-#endif
   }
 }
 

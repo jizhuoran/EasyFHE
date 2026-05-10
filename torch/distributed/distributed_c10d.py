@@ -137,10 +137,10 @@ __all__ = [
     "record_comm",
 ]
 
-_MPI_AVAILABLE = True
+_MPI_AVAILABLE = False
 _NCCL_AVAILABLE = True
-_GLOO_AVAILABLE = True
-_UCC_AVAILABLE = True
+_GLOO_AVAILABLE = False
+_UCC_AVAILABLE = False
 _XCCL_AVAILABLE = True
 
 try:
@@ -200,36 +200,12 @@ def _export_c_types() -> None:
 _export_c_types()
 
 try:
-    from torch._C._distributed_c10d import ProcessGroupMPI
-
-    ProcessGroupMPI.__module__ = "torch.distributed.distributed_c10d"
-    __all__ += ["ProcessGroupMPI"]
-except ImportError:
-    _MPI_AVAILABLE = False
-
-try:
     from torch._C._distributed_c10d import ProcessGroupNCCL
 
     ProcessGroupNCCL.__module__ = "torch.distributed.distributed_c10d"
     __all__ += ["ProcessGroupNCCL"]
 except ImportError:
     _NCCL_AVAILABLE = False
-
-try:
-    from torch._C._distributed_c10d import _ProcessGroupWrapper, ProcessGroupGloo
-
-    ProcessGroupGloo.__module__ = "torch.distributed.distributed_c10d"
-    __all__ += ["ProcessGroupGloo"]
-except ImportError:
-    _GLOO_AVAILABLE = False
-
-try:
-    from torch._C._distributed_c10d import ProcessGroupUCC
-
-    ProcessGroupUCC.__module__ = "torch.distributed.distributed_c10d"
-    __all__ += ["ProcessGroupUCC"]
-except ImportError:
-    _UCC_AVAILABLE = False
 
 try:
     from torch._C._distributed_c10d import ProcessGroupXCCL
@@ -892,14 +868,7 @@ def _get_object_coll_device(group: ProcessGroup | None = None) -> str:
             "of PyTorch Distributed instead.",
             stacklevel=2,
         )
-        # Provide backward compatibility to cases where `group` passed in is
-        # actually a Backend (like `ProcessGroupGloo`) rather than a
-        # `ProcessGroup` in PT 2.0 sense
-        if isinstance(group, ProcessGroupGloo):
-            # RPC uses Gloo for object collectives
-            return "cpu"
-        else:
-            raise ValueError(f"Expecting a ProcessGroup, but got a {type(group)}.")
+        raise ValueError(f"Expecting a ProcessGroup, but got a {type(group)}.")
 
     """
     ``group._device_types`` is a property pybind that returns the devices
@@ -1639,22 +1608,14 @@ def _set_pg_timeout(timeout: timedelta, group: ProcessGroup | None = None) -> No
         raise AssertionError(f"Expected ProcessGroup, got {type(group)}")
     devices = group._device_types
     backends = set()
-    if torch.device("cpu") in devices and is_gloo_available():
-        backend = group._get_backend(torch.device("cpu"))
-        if isinstance(backend, ProcessGroupGloo):
-            backends.add(backend)
     if torch.device("cuda") in devices:
         backend = group._get_backend(torch.device("cuda"))
         if is_nccl_available() and isinstance(backend, ProcessGroupNCCL):
             backends.add(backend)  # type: ignore[arg-type]
-        elif is_gloo_available() and isinstance(backend, ProcessGroupGloo):
-            backends.add(backend)  # type: ignore[arg-type]
         elif _use_torchcomms_enabled() and isinstance(backend, _BackendWrapper):
             backends.add(backend)  # type: ignore[arg-type]
     if len(backends) == 0:
-        warnings.warn(
-            "Set timeout is now only supported for either nccl or gloo.", stacklevel=2
-        )
+        warnings.warn("Set timeout is now only supported for NCCL.", stacklevel=2)
     for backend in backends:
         backend._set_default_timeout(timeout)
 
@@ -1971,11 +1932,6 @@ def _get_split_source(pg: ProcessGroup):
     if not split_from or not split_from.supports_splitting:
         return None
 
-    # If necessary, find a backend to split from by peeling process
-    # group wrappers from our potentially wrapped process group.
-    while _GLOO_AVAILABLE and isinstance(split_from, _ProcessGroupWrapper):
-        split_from = split_from.wrapped_pg
-
     return split_from
 
 
@@ -2140,40 +2096,12 @@ def _new_process_group_helper(
                 backend_str, ProcessGroup.BackendType.CUSTOM
             )
         elif backend_str == Backend.MPI:
-            if not is_mpi_available():
-                raise RuntimeError(
-                    "Distributed package doesn't have MPI built in."
-                    " MPI is only included if you build PyTorch from"
-                    " source on a host that has MPI installed."
-                )
-            backend_class = ProcessGroupMPI.create(global_ranks_in_group)
-            backend_type = ProcessGroup.BackendType.MPI
-            if not backend_class:
-                return GroupMember.NON_GROUP_MEMBER, None
-            # create new process group with accurate rank and size
-            if pg.rank() == -1 and pg.size() == -1:
-                pg = ProcessGroup(
-                    backend_prefix_store,
-                    backend_class.rank(),
-                    backend_class.size(),
-                )
-                pg._set_default_backend(backend_type)
-        elif backend_str == Backend.GLOO:
-            # TODO: remove this check after lazy initialization is supported
-            # if pg_options is not None:
-            #     raise RuntimeError("GLOO options not supported")
-            if not is_gloo_available():
-                raise RuntimeError("Distributed package doesn't have Gloo built in")
-            backend_class = ProcessGroupGloo(
-                backend_prefix_store,
-                group_rank,
-                group_size,
-                # pyrefly: ignore [bad-argument-type]
-                timeout=timeout,
+            raise RuntimeError(
+                "Distributed package doesn't have MPI built in."
+                " MPI is not part of EasyFHE's distributed runtime."
             )
-            backend_class.options.global_ranks_in_group = global_ranks_in_group
-            backend_class.options.group_name = group_name
-            backend_type = ProcessGroup.BackendType.GLOO
+        elif backend_str == Backend.GLOO:
+            raise RuntimeError("Distributed package doesn't have Gloo built in")
         elif backend_str == Backend.NCCL:
             if not is_nccl_available():
                 raise RuntimeError("Distributed package doesn't have NCCL built in")
@@ -2206,19 +2134,8 @@ def _new_process_group_helper(
                 backend_prefix_store, group_rank, group_size, backend_options
             )
             backend_type = ProcessGroup.BackendType.NCCL
-        elif backend_str == Backend.UCC and is_ucc_available():
-            # TODO: once UCC plugin is fully deprecated, remove
-            # is_ucc_available() from above elif-condition and raise
-            # RuntimeError if is_ucc_available() returns false.
-
-            backend_class = ProcessGroupUCC(
-                backend_prefix_store,
-                group_rank,
-                group_size,
-                # pyrefly: ignore [bad-argument-type]
-                timeout=timeout,
-            )
-            backend_type = ProcessGroup.BackendType.UCC
+        elif backend_str == Backend.UCC:
+            raise RuntimeError("Distributed package doesn't have UCC built in")
         elif backend_str == Backend.XCCL:
             if not is_xccl_available():
                 raise RuntimeError("Distributed package doesn't have XCCL built in")
@@ -2256,14 +2173,7 @@ def _new_process_group_helper(
 
                 backend_class = creator_fn(dist_backend_opts, backend_options)
 
-        # Set sequence numbers for gloo and nccl backends.
-        if backend_str == Backend.GLOO and not _use_torchcomms_enabled():
-            if not isinstance(backend_class, ProcessGroupGloo):
-                raise AssertionError(
-                    f"Expected ProcessGroupGloo, got {type(backend_class)}"
-                )
-            backend_class._set_sequence_number_for_group()
-        elif backend_str == Backend.NCCL and not _use_torchcomms_enabled():
+        if backend_str == Backend.NCCL and not _use_torchcomms_enabled():
             if not isinstance(backend_class, ProcessGroupNCCL):
                 raise AssertionError(
                     f"Expected ProcessGroupNCCL, got {type(backend_class)}"
@@ -5388,18 +5298,7 @@ def _create_process_group_wrapper(
     world_size: int,
     timeout: timedelta = default_pg_timeout,
 ):
-    if not _GLOO_AVAILABLE:
-        raise AssertionError("ProcessGroupWrapper unsupported without GLOO backend.")
-
-    # (whc) this appears to be just for the gloo backend? if so, `default_pg_timeout` is appropriate...
-
-    # Create a separate prefix store for the helper process group.
-    prefix = f"{PG_WRAPPER_STORE_PREFIX}:{store_prefix}"
-    store = PrefixStore(prefix, store)
-    helper_pg = ProcessGroupGloo(store, rank, world_size, timeout=timeout)
-    # Wrap the underlying pg with ProcessGroupWrapper.
-    wrapped_pg = _ProcessGroupWrapper(wrapped_pg, helper_pg)
-    return wrapped_pg
+    raise AssertionError("ProcessGroupWrapper unsupported without GLOO backend.")
 
 
 # helper function for deterministically hashing a list of ranks to a unique
