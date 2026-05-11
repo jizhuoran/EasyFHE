@@ -58,7 +58,7 @@ static PyObject* THPFFTVariableFunctionsModule = NULL;
 void initFFTFunctions(PyObject* module) {
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._fft",
+     "easyfhe._C._fft",
      NULL,
      -1,
      fft_functions

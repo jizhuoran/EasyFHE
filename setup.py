@@ -367,7 +367,7 @@ BUILD_PYTHON_ONLY = str2bool(os.getenv("BUILD_PYTHON_ONLY"))
 
 if BUILD_PYTHON_ONLY:
     os.environ["BUILD_LIBTORCHLESS"] = "ON"
-    os.environ["LIBTORCH_LIB_PATH"] = (_get_package_path("torch") / "lib").as_posix()
+    os.environ["LIBTORCH_LIB_PATH"] = (_get_package_path("easyfhe") / "lib").as_posix()
 
 ################################################################################
 # Parameters parsed from environment
@@ -446,7 +446,8 @@ else:
 
 # Constant known variables used throughout this file
 TORCH_DIR = CWD / "torch"
-TORCH_LIB_DIR = TORCH_DIR / "lib"
+EASYFHE_DIR = CWD / "easyfhe"
+TORCH_LIB_DIR = EASYFHE_DIR / "lib"
 THIRD_PARTY_DIR = CWD / "third_party"
 
 # CMAKE: full path to python library
@@ -473,7 +474,7 @@ else:
 # Version, create_version_file, and package_name
 ################################################################################
 
-TORCH_PACKAGE_NAME = os.getenv("TORCH_PACKAGE_NAME", "internal_version_DO_NOT_DISTRIBUTE")
+TORCH_PACKAGE_NAME = os.getenv("TORCH_PACKAGE_NAME", "easyfhe")
 LIBTORCH_PKG_NAME = os.getenv("LIBTORCH_PACKAGE_NAME", "torch_no_python")
 if BUILD_LIBTORCH_WHL:
     TORCH_PACKAGE_NAME = LIBTORCH_PKG_NAME
@@ -728,7 +729,7 @@ def download_and_extract_nightly_wheel(version: str) -> None:
                 raise RuntimeError("Could not find torch directory in extracted wheel")
 
             source_torch_dir = torch_dirs[0]
-            target_torch_dir = TORCH_DIR
+            target_torch_dir = EASYFHE_DIR
 
             report(
                 f"-- Extracting wheel contents from {source_torch_dir} to {target_torch_dir}"
@@ -946,8 +947,8 @@ class build_ext(setuptools.command.build_ext.build_ext):
     def _embed_libomp(self) -> None:
         # Copy libiomp5.dylib/libomp.dylib inside the wheel package on MacOS
         build_lib = Path(self.build_lib)
-        build_torch_lib_dir = build_lib / "torch" / "lib"
-        build_torch_include_dir = build_lib / "torch" / "include"
+        build_torch_lib_dir = build_lib / "easyfhe" / "lib"
+        build_torch_include_dir = build_lib / "easyfhe" / "include"
         libtorch_cpu_path = build_torch_lib_dir / "libtorch_cpu.dylib"
         if not libtorch_cpu_path.exists():
             return
@@ -1118,7 +1119,7 @@ class build_ext(setuptools.command.build_ext.build_ext):
 
         # Wrap headers with TORCH_STABLE_ONLY and TORCH_TARGET_VERSION guards
         build_lib = Path(self.build_lib)
-        build_torch_include_dir = build_lib / "torch" / "include"
+        build_torch_include_dir = build_lib / "easyfhe" / "include"
         if build_torch_include_dir.exists():
             report(
                 "-- Wrapping header files with if !defined(TORCH_STABLE_ONLY) && !defined(TORCH_TARGET_VERSION)"
@@ -1137,7 +1138,7 @@ class build_ext(setuptools.command.build_ext.build_ext):
             lib_filename = ".".join(ext_filename.split(".")[:-1]) + ".lib"
 
             export_lib = build_temp / "torch" / "csrc" / lib_filename
-            target_lib = build_lib / "torch" / "lib" / "_C.lib"
+            target_lib = build_lib / "easyfhe" / "lib" / "_C.lib"
 
             # Create "torch/lib" directory if not exists.
             # (It is not created yet in "develop" mode.)
@@ -1248,7 +1249,7 @@ class bdist_wheel(setuptools.command.bdist_wheel.bdist_wheel):
             for file in bdist_dir.rglob("*.py"):
                 file.unlink()
             # need an __init__.py file otherwise we wouldn't have a package
-            (bdist_dir / "torch" / "__init__.py").touch()
+            (bdist_dir / "easyfhe" / "__init__.py").touch()
 
 
 class clean(Command):
@@ -1395,7 +1396,7 @@ def configure_extension_build() -> tuple[
 
     ext_modules: list[Extension] = []
     # packages that we want to install into site-packages and include them in wheels
-    includes = ["torch", "torch.*", "torchgen", "torchgen.*"]
+    includes = ["easyfhe", "easyfhe.*", "torchgen", "torchgen.*"]
     # exclude folders that they look like Python packages but are not wanted in wheels
     excludes = ["tools", "tools.*", "caffe2", "caffe2.*"]
     if cmake_cache_vars["BUILD_FUNCTORCH"]:
@@ -1404,7 +1405,7 @@ def configure_extension_build() -> tuple[
         excludes.extend(["functorch", "functorch.*"])
     packages = find_packages(include=includes, exclude=excludes)
     C = Extension(
-        "torch._C",
+        "easyfhe._C",
         libraries=main_libraries,
         sources=main_sources,
         language="c",
@@ -1431,17 +1432,17 @@ def configure_extension_build() -> tuple[
 
     entry_points = {
         "console_scripts": [
-            "torchrun = torch.distributed.run:main",
+            "easyfherun = easyfhe.distributed.run:main",
         ],
-        "torchrun.logs_specs": [
-            "default = torch.distributed.elastic.multiprocessing:DefaultLogsSpecs",
+        "easyfherun.logs_specs": [
+            "default = easyfhe.distributed.elastic.multiprocessing:DefaultLogsSpecs",
         ],
     }
 
     if cmake_cache_vars["USE_DISTRIBUTED"]:
         # Only enable fr_trace command if distributed is enabled
         entry_points["console_scripts"].append(
-            "torchfrtrace = torch.distributed.flight_recorder.fr_trace:main",
+            "easyfhefrtrace = easyfhe.distributed.flight_recorder.fr_trace:main",
         )
     return ext_modules, cmdclass, packages, entry_points, extra_install_requires
 
@@ -1572,9 +1573,9 @@ def main() -> None:
             "lib/*.lib",
         ]
         # XXX: Why not use wildcards ["lib/aotriton.images/*", "lib/aotriton.images/**/*"] here?
-        aotriton_image_path = TORCH_DIR / "lib" / "aotriton.images"
+        aotriton_image_path = EASYFHE_DIR / "lib" / "aotriton.images"
         aks2_files = [
-            file.relative_to(TORCH_DIR).as_posix()
+            file.relative_to(EASYFHE_DIR).as_posix()
             for file in aotriton_image_path.rglob("*")
             if file.is_file()
         ]
@@ -1594,7 +1595,7 @@ def main() -> None:
         "packaged/**/*",
     ]
     package_data = {
-        "torch": torch_package_data,
+        "easyfhe": torch_package_data,
     }
     # some win libraries are excluded
     # these are statically linked
@@ -1606,7 +1607,7 @@ def main() -> None:
         "lib/libprotoc.lib",
     ]
     exclude_package_data = {
-        "torch": exclude_windows_libs,
+        "easyfhe": exclude_windows_libs,
     }
 
     if not BUILD_LIBTORCH_WHL:
@@ -1627,8 +1628,8 @@ def main() -> None:
         entry_points=entry_points,
         install_requires=install_requires,
         package_data=package_data,
-        url="https://pytorch.org/",
-        download_url="https://github.com/pytorch/pytorch/tags",
+        url="https://github.com/zrji/EasyFHE",
+        download_url="https://github.com/zrji/EasyFHE",
         author="Zhuoran Ji",
         author_email="jizhuoran.work@gmail.com",
         python_requires=f">={python_min_version_str}",

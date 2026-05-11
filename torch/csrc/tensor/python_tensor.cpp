@@ -260,7 +260,7 @@ static void set_name(PyTensorType& type_obj, const std::string& name) {
 }
 
 static THPObjectPtr get_tensor_dict() {
-  auto torch = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch)
     throw python_error();
 
@@ -306,7 +306,7 @@ static std::vector<PyTensorType*> tensor_types;
 static void set_default_storage_type(Backend backend, ScalarType dtype) {
   THPObjectPtr storage = get_storage_obj(backend, dtype);
 
-  auto torch_module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch_module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch_module)
     throw python_error();
 
@@ -392,7 +392,7 @@ void initialize_python_bindings() {
 
 static void py_bind_tensor_types(
     const std::vector<PyTensorType*>& tensor_types) {
-  auto torch_module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch_module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch_module)
     throw python_error();
 

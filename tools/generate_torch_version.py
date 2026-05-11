@@ -136,7 +136,7 @@ if __name__ == "__main__":
     args.xpu_version = None if args.xpu_version == "" else args.xpu_version
 
     pytorch_root = Path(__file__).parent.parent
-    version_path = pytorch_root / "torch" / "version.py"
+    version_path = pytorch_root / "easyfhe" / "version.py"
     # Attempt to get tag first, fall back to sha if a tag was not found
     tagged_version = get_tag(pytorch_root)
     sha = get_sha(pytorch_root)

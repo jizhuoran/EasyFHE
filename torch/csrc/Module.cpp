@@ -296,7 +296,7 @@ static PyObject* THPModule_initExtension(
   std::string path = THPUtils_unpackString(shm_manager_path);
   libshm_init(path.c_str());
 
-  auto module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!module)
     throw python_error(); // @allow-raw-throw
 
@@ -2463,7 +2463,7 @@ PyObject* initModule() {
 
   static struct PyModuleDef torchmodule = {
       PyModuleDef_HEAD_INIT,
-      "torch._C",
+      "easyfhe._C",
       nullptr,
       sizeof(TorchModuleState),
       methods.data(),

@@ -370,7 +370,7 @@ static PyMappingMethods THPStorage_mappingmethods = {
 // TODO: implement equality
 PyTypeObject THPStorageType = {
     PyVarObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type), 0)
-    "torch._C.StorageBase", /* tp_name */
+    "easyfhe._C.StorageBase", /* tp_name */
     sizeof(THPStorage), /* tp_basicsize */
     0, /* tp_itemsize */
     THPStorage_dealloc, /* tp_dealloc */

@@ -24,7 +24,7 @@ namespace {
 
 PyObject* multiprocessing_init(PyObject* _unused, PyObject* noargs) {
   auto multiprocessing_module =
-      THPObjectPtr(PyImport_ImportModule("torch.multiprocessing"));
+      THPObjectPtr(PyImport_ImportModule("easyfhe.multiprocessing"));
   if (!multiprocessing_module) {
     throw python_error();
   }

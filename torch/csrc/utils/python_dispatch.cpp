@@ -379,7 +379,7 @@ void initDispatchBindings(PyObject* module) {
              bool with_keyset) {
             HANDLE_TH_ERRORS
             auto& lib = self.cast<torch::Library&>();
-            if (func.is(py::module::import("torch.library")
+            if (func.is(py::module::import("easyfhe.library")
                             .attr("fallthrough_kernel"))) {
               lib.impl(
                   name,
@@ -443,7 +443,7 @@ void initDispatchBindings(PyObject* module) {
              bool with_keyset) {
             HANDLE_TH_ERRORS
             auto& lib = self.cast<torch::Library&>();
-            if (func.is(py::module::import("torch.library")
+            if (func.is(py::module::import("easyfhe.library")
                             .attr("fallthrough_kernel"))) {
               lib.fallback(
                   torch::dispatch(dispatch, CppFunction::makeFallthrough()));

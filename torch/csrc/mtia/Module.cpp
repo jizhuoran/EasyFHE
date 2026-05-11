@@ -58,7 +58,7 @@ void initModule(PyObject* module) {
     at::globalContext().lazyInitDevice(c10::DeviceType::MTIA);
 
     // Initialize default generators for each MTIA device
-    auto mtia_module = py::module_::import("torch.mtia");
+    auto mtia_module = py::module_::import("easyfhe.mtia");
 
     auto num_devices = at::detail::getMTIAHooks().deviceCount();
     py::tuple default_mtia_generators(num_devices);

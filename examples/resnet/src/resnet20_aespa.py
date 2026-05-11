@@ -7,7 +7,7 @@ sys.path.append("/".join(os.getcwd().split("/")[:-5]))
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 from termcolor import colored
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 from examples.resnet.src.convs import *
 from examples.utils.utils import *
 

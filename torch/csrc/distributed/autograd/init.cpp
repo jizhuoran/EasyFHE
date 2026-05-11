@@ -13,12 +13,12 @@ using shared_ptr_class_ = py::class_<T, std::shared_ptr<T>>;
 
 PyObject* dist_autograd_init(PyObject* _unused, PyObject* noargs) {
   auto autograd_module =
-      THPObjectPtr(PyImport_ImportModule("torch.distributed.autograd"));
+      THPObjectPtr(PyImport_ImportModule("easyfhe.distributed.autograd"));
   if (!autograd_module) {
     throw python_error();
   }
 
-  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
   if (!torch_C_module) {
     throw python_error();
   }

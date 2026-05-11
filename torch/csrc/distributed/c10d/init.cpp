@@ -443,7 +443,7 @@ PyTypeObject* GetReduceOpMetaclass() {
         {0},
     };
     PyType_Spec spec = {};
-    spec.name = "torch._C._distributed_c10d._ReduceOpMeta";
+    spec.name = "easyfhe._C._distributed_c10d._ReduceOpMeta";
     // NOLINTNEXTLINE(*-narrowing-conversions)
     spec.basicsize = base_metaclass->tp_basicsize;
     spec.flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE;
@@ -460,12 +460,12 @@ PyTypeObject* GetReduceOpMetaclass() {
 PyObject* c10d_init(PyObject* _unused, PyObject* noargs) {
   C10_LOG_API_USAGE_ONCE("c10d.python.import");
 
-  auto c10d_module = THPObjectPtr(PyImport_ImportModule("torch.distributed"));
+  auto c10d_module = THPObjectPtr(PyImport_ImportModule("easyfhe.distributed"));
   if (!c10d_module) {
     throw python_error();
   }
 
-  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
   if (!torch_C_module) {
     throw python_error();
   }
@@ -2148,7 +2148,7 @@ communication mechanism.
 
   // Use OpaqueBase as the metaclass to allow isinstance(fake_obj, ProcessGroup)
   // to work.
-  py::object opaque_base_module = py::module_::import("torch._opaque_base");
+  py::object opaque_base_module = py::module_::import("easyfhe._opaque_base");
   py::object opaque_base = opaque_base_module.attr("OpaqueBaseMeta");
 
   auto processGroup =

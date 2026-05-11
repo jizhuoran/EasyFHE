@@ -44,7 +44,7 @@ static PyObject* THPSparseVariableFunctionsModule = NULL;
 void initSparseFunctions(PyObject* module) {
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._sparse",
+     "easyfhe._C._sparse",
      NULL,
      -1,
      sparse_functions

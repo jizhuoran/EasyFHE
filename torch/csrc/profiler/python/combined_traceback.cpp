@@ -90,7 +90,7 @@ struct PythonTraceback : public CapturedTraceback::Python {
     py::str name_s = "name";
     py::str filename_s = "filename";
 
-    auto torch = py::module::import("torch");
+    auto torch = py::module::import("easyfhe");
     py::object stack_frames_for_code;
     if (py::hasattr(torch, "_inductor")) {
       py::object inductor = torch.attr("_inductor");

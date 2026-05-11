@@ -1,6 +1,6 @@
 import time
-import torch
-import torch.fhe as fhe
+import easyfhe as torch
+import easyfhe.fhe as fhe
 from examples.utils.comp.comp import *
 
 

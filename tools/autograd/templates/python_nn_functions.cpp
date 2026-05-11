@@ -90,7 +90,7 @@ static PyMethodDef nn_functions[] = {
 void initNNFunctions(PyObject* module) {
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._nn",
+     "easyfhe._C._nn",
      nullptr,
      -1,
      nn_functions

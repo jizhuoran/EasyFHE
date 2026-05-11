@@ -13,7 +13,7 @@ namespace torch::utils {
 static std::array<PyObject*, at::COMPILE_TIME_NUM_QSCHEMES> thp_qscheme_array;
 
 void initializeQSchemes() {
-  auto torch_module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch_module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch_module) {
     throw python_error();
   }

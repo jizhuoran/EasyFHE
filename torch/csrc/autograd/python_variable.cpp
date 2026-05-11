@@ -856,7 +856,7 @@ static PyObject* THPVariable_make_wrapper_subclass(
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_class_impl,
-    py::module::import("torch.distributed.tensor").attr("DTensor"))
+    py::module::import("easyfhe.distributed.tensor").attr("DTensor"))
 
 py::handle get_dtensor_class() {
   return get_dtensor_class_impl();
@@ -864,45 +864,45 @@ py::handle get_dtensor_class() {
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_spec_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("_dtensor_spec")
         .attr("DTensorSpec"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_replicate_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("placement_types")
         .attr("Replicate"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_tensor_meta_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("_dtensor_spec")
         .attr("TensorMeta"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_op_dispatcher,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("DTensor")
         .attr("_op_dispatcher"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_dispatch,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("DTensor")
         .attr("_op_dispatcher")
         .attr("_dispatch_fast_path_python_tail"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_dispatcher_wrap,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("DTensor")
         .attr("_op_dispatcher")
         .attr("wrap"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_dtensor_get_local_results_slow_path,
-    py::module::import("torch")
+    py::module::import("easyfhe")
         .attr("distributed")
         .attr("tensor")
         .attr("DTensor")
@@ -911,19 +911,19 @@ DEFINE_CACHING_PYTHON_IMPORT_GETTER(
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_output_sharding_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("_op_schema")
         .attr("OutputSharding"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_op_strategy_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("_op_schema")
         .attr("OpStrategy"))
 
 DEFINE_CACHING_PYTHON_IMPORT_GETTER(
     get_tuple_strategy_class,
-    py::module::import("torch.distributed.tensor")
+    py::module::import("easyfhe.distributed.tensor")
         .attr("_op_schema")
         .attr("TupleStrategy"))
 
@@ -3606,7 +3606,7 @@ static int THPVariableMetaType_init(
 
 static PyTypeObject THPVariableMetaType = {
     PyVarObject_HEAD_INIT(DEFERRED_ADDRESS(&PyType_Type), 0)
-    "torch._C._TensorMeta", /* tp_name */
+    "easyfhe._C._TensorMeta", /* tp_name */
     sizeof(THPVariableMeta), /* tp_basicsize */
     0, /* tp_itemsize */
     nullptr, /* tp_dealloc */
@@ -3652,7 +3652,7 @@ static int THPVariable_traverse(PyObject* self, visitproc visit, void* arg);
 
 static PyTypeObject THPVariableType = {
     PyVarObject_HEAD_INIT(&THPVariableMetaType, 0)
-    "torch._C.TensorBase", /* tp_name */
+    "easyfhe._C.TensorBase", /* tp_name */
     sizeof(THPVariable), /* tp_basicsize */
     0, /* tp_itemsize */
     THPVariable_dealloc, /* tp_dealloc */

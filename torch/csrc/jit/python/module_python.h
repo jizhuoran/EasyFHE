@@ -16,12 +16,12 @@ inline std::optional<Module> as_module(py::handle obj) {
   auto& ScriptModule =
       storage
           .call_once_and_store_result([]() -> py::object {
-            return py::module_::import("torch.jit").attr("ScriptModule");
+            return py::module_::import("easyfhe.jit").attr("ScriptModule");
           })
           .get_stored();
 #else
   static py::handle ScriptModule =
-      py::module::import("torch.jit").attr("ScriptModule");
+      py::module::import("easyfhe.jit").attr("ScriptModule");
 #endif
   if (py::isinstance(obj, ScriptModule)) {
     return py::cast<Module>(obj.attr("_c"));
@@ -39,17 +39,17 @@ inline std::optional<Object> as_object(py::handle obj) {
           .call_once_and_store_result(
               []() -> std::tuple<py::object, py::object> {
                 return {
-                    py::module_::import("torch").attr("ScriptObject"),
-                    py::module_::import("torch.jit")
+                    py::module_::import("easyfhe").attr("ScriptObject"),
+                    py::module_::import("easyfhe.jit")
                         .attr("RecursiveScriptClass")};
               })
           .get_stored();
 #else
   static py::handle ScriptObject =
-      py::module::import("torch").attr("ScriptObject");
+      py::module::import("easyfhe").attr("ScriptObject");
 
   static py::handle RecursiveScriptClass =
-      py::module::import("torch.jit").attr("RecursiveScriptClass");
+      py::module::import("easyfhe.jit").attr("RecursiveScriptClass");
 #endif
 
   if (py::isinstance(obj, ScriptObject)) {

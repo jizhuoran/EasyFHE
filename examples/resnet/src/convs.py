@@ -1,4 +1,4 @@
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 from utils import *
 
 

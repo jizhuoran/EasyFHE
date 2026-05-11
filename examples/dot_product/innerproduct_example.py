@@ -5,9 +5,9 @@ import sys, os, time
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 import numpy as np
-import torch
+import easyfhe as torch
 import os
 import math
 

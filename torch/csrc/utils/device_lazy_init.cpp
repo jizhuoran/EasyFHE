@@ -41,7 +41,7 @@ void device_lazy_init(at::DeviceType device_type) {
   // deadlocks if an instance throws an exception and Python _lazy_init()
   // functions are idempotent.
   pybind11::gil_scoped_acquire g;
-  std::string module_name = "torch." + at::DeviceTypeName(device_type, true);
+  std::string module_name = "easyfhe." + at::DeviceTypeName(device_type, true);
   auto module = THPObjectPtr(PyImport_ImportModule(module_name.c_str()));
   if (!module) {
     throw python_error();

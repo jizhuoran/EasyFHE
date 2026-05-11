@@ -17,10 +17,10 @@ nltk.download('omw-1.4')
 stopwords = set(stopwords.words('english'))
 
 # pytorch
-import torch
-from torch import nn
-from torch.optim import Adam
-from torch.utils.data import TensorDataset, DataLoader
+import easyfhe as torch
+from easyfhe import nn
+from easyfhe.optim import Adam
+from easyfhe.utils.data import TensorDataset, DataLoader
 from transformers import BertTokenizer, BertModel
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(device)

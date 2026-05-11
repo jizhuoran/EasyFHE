@@ -326,7 +326,7 @@ struct VISIBILITY_HIDDEN PythonAwaitWrapper
 // locations in libtorch code rather than user code.
 
 inline std::shared_ptr<CompilationUnit> get_python_cu() {
-  return py::module::import("torch.jit._state")
+  return py::module::import("easyfhe.jit._state")
       .attr("_python_cu")
       .cast<std::shared_ptr<CompilationUnit>>();
 }
@@ -441,7 +441,7 @@ inline InferredType tryToInferType(py::handle input) {
   if (py::cast<bool>(isEnumValue)) {
     auto enum_class = input.attr("__class__");
     auto enum_type = py::cast<TypePtr>(
-        py::module::import("torch.jit.annotations")
+        py::module::import("easyfhe.jit.annotations")
             .attr("try_ann_to_type")(enum_class, SourceRange()));
     return InferredType(std::move(enum_type));
   }
@@ -455,13 +455,13 @@ inline InferredType tryToInferType(py::handle input) {
 
     // Check if the type is already compiled.
     py::object existing_ty =
-        py::module::import("torch.jit._state")
+        py::module::import("easyfhe.jit._state")
             .attr("_get_script_class")(py::type::handle_of(input));
 
     if (existing_ty.is_none()) {
       // If not, try to compile it.
       py::bool_ can_compile =
-          py::module::import("torch._jit_internal")
+          py::module::import("easyfhe._jit_internal")
               .attr("can_compile_class")(py::type::handle_of(input));
 
       if (py::cast<bool>(can_compile)) {
@@ -470,7 +470,7 @@ inline InferredType tryToInferType(py::handle input) {
         // we want to defer to other attempts at type inference below rather
         // than fail compilation altogether.
         try {
-          py::module::import("torch.jit._script")
+          py::module::import("easyfhe.jit._script")
               .attr("_recursive_compile_class")(
                   py::type::handle_of(input), SourceRange());
         } catch (...) {
@@ -485,7 +485,7 @@ inline InferredType tryToInferType(py::handle input) {
     // qualified name and return it.
     if (class_compiled) {
       auto script_class =
-          py::module::import("torch.jit._state")
+          py::module::import("easyfhe.jit._state")
               .attr("_get_script_class")(py::type::handle_of(input));
 
       if (!script_class.is_none()) {
@@ -508,7 +508,7 @@ inline InferredType tryToInferType(py::handle input) {
 #endif
   }
 
-  auto await_type = py::module::import("torch._awaits").attr("_Await");
+  auto await_type = py::module::import("easyfhe._awaits").attr("_Await");
   py::bool_ is_await = py::isinstance(input, await_type);
   if (py::cast<bool>(is_await)) {
     auto awptr = input.cast<std::shared_ptr<PythonAwaitWrapper>>();
@@ -519,7 +519,7 @@ inline InferredType tryToInferType(py::handle input) {
     return InferredType("Cannot infer type of ScriptModule");
   }
 
-  auto module_type = py::module::import("torch.nn").attr("Module");
+  auto module_type = py::module::import("easyfhe.nn").attr("Module");
   py::bool_ is_module = py::isinstance(input, module_type);
   if (py::cast<bool>(is_module)) {
     return InferredType("Cannot infer concrete type of torch.nn.Module");
@@ -869,7 +869,7 @@ inline IValue returnToIValue(const TypePtr& type, py::handle object) {
 
 inline py::object getScriptedClassOrError(const c10::NamedTypePtr& classType) {
   auto py_class =
-      py::module::import("torch.jit._state")
+      py::module::import("easyfhe.jit._state")
           .attr("_get_python_class")(classType->name()->qualifiedName());
   if (py_class.is_none()) {
     std::stringstream err;
@@ -914,7 +914,7 @@ inline bool validateFakeScriptObjectSchema(
   auto argument = schema.arguments().at(argumentPosition);
   auto class_type = argument.real_type()->expect<c10::ClassType>();
   auto fake_class_registry =
-      py::module::import("torch._library.fake_class_registry");
+      py::module::import("easyfhe._library.fake_class_registry");
   auto fake_class = fake_class_registry.attr("find_fake_class")(
       class_type->name().value().qualifiedName());
   if (!py::isinstance(object.attr("wrapped_obj"), fake_class)) {
@@ -950,7 +950,7 @@ inline bool matchSchemaAllowFakeScriptObject(
 
   int64_t arg_idx = 0;
   auto fake_class_registry =
-      py::module::import("torch._library.fake_class_registry");
+      py::module::import("easyfhe._library.fake_class_registry");
 
   // First push all positional args.
   for (const auto& arg : args) {

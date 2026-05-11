@@ -58,7 +58,7 @@ void initNestedFunctions(PyObject* module) {
   nested_functions[0] = get_nested_functions_manual()[0];
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._nested",
+     "easyfhe._C._nested",
      NULL,
      -1,
      nested_functions

@@ -158,7 +158,7 @@ static PyMethodDef THCPStream_methods[] = {
 
 PyTypeObject THCPStreamType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._CudaStreamBase", /* tp_name */
+    "easyfhe._C._CudaStreamBase", /* tp_name */
     sizeof(THCPStream), /* tp_basicsize */
     0, /* tp_itemsize */
     (destructor)THCPStream_dealloc, /* tp_dealloc */

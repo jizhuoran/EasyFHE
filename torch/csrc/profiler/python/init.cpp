@@ -40,7 +40,7 @@ static void THPCapturedTraceback_dealloc(PyObject* self_) {
 
 static PyTypeObject THPCapturedTracebackType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._profiler.CapturedTraceback", /* tp_name */
+    "easyfhe._C._profiler.CapturedTraceback", /* tp_name */
     sizeof(THPCapturedTraceback), /* tp_basicsize */
     0, /* tp_itemsize */
     THPCapturedTraceback_dealloc, /* tp_dealloc */
@@ -87,7 +87,7 @@ struct type_caster<std::shared_ptr<torch::CapturedTraceback>> {
  public:
   PYBIND11_TYPE_CASTER(
       std::shared_ptr<torch::CapturedTraceback>,
-      _("torch._C._profiler.CapturedTraceback"));
+      _("easyfhe._C._profiler.CapturedTraceback"));
 
   bool load(handle src, bool /*unused*/) {
     if (Py_TYPE(src.ptr()) == &THPCapturedTracebackType) {
@@ -732,7 +732,7 @@ void initPythonBindings(PyObject* module) {
       PyVarObject_HEAD_INIT(nullptr, 0)
   };
 
-  RecordFunctionFast_Type.tp_name = "torch._C._profiler.RecordFunctionFast",
+  RecordFunctionFast_Type.tp_name = "easyfhe._C._profiler.RecordFunctionFast",
   RecordFunctionFast_Type.tp_basicsize = sizeof(RecordFunctionFast);
   RecordFunctionFast_Type.tp_dealloc = (destructor)RecordFunctionFast_dealloc;
   RecordFunctionFast_Type.tp_flags = Py_TPFLAGS_DEFAULT;

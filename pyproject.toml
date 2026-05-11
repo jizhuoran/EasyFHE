@@ -49,8 +49,8 @@ dev = [
 ]
 
 [project]
-name = "torch"
-description = "Tensors and Dynamic neural networks in Python with strong GPU acceleration"
+name = "easyfhe"
+description = "Tensor computation framework with Fully Homomorphic Encryption support"
 readme = "README.md"
 requires-python = ">=3.10"
 # TODO: change to `license = "BSD-3-Clause"` and enable PEP 639 after pinning setuptools>=77
@@ -58,8 +58,8 @@ requires-python = ">=3.10"
 # TOML-table-based license deprecated in setuptools>=77, and the deprecation warning will be changed
 # to an error on 2026.02.18. See also: https://github.com/pypa/setuptools/issues/4903
 license = { text = "BSD-3-Clause" }
-authors = [{ name = "PyTorch Team", email = "packages@pytorch.org" }]
-keywords = ["pytorch", "machine learning"]
+authors = [{ name = "Zhuoran Ji", email = "jizhuoran.work@gmail.com" }]
+keywords = ["fhe", "homomorphic encryption", "tensor"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -101,7 +101,7 @@ pyyaml = ["pyyaml"]
 # Linter tools #################################################################
 
 [tool.isort]
-src_paths = ["caffe2", "torch", "torchgen", "test"]
+src_paths = ["caffe2", "easyfhe", "torch", "torchgen"]
 extra_standard_library = ["typing_extensions"]
 skip_gitignore = true
 skip_glob = ["third_party/*"]
@@ -119,12 +119,12 @@ preserve_inline_comments = true
 collapse_blank_lines_in_category = false
 
 [tool.usort.known]
-first_party = ["caffe2", "torch", "torchgen", "test"]
+first_party = ["caffe2", "easyfhe", "torch", "torchgen"]
 standard_library = ["typing_extensions"]
 
 [tool.ruff]
 line-length = 88
-src = ["caffe2", "torch", "torchgen", "test"]
+src = ["caffe2", "easyfhe", "torch", "torchgen"]
 extend-exclude = ["third_party", "test/dynamo/cpython"]
 
 [tool.ruff.per-file-target-version]

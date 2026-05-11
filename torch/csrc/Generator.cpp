@@ -244,7 +244,7 @@ static PyObject* THPGenerator_reduce(PyObject* _self, PyObject* noargs) {
   if (!ret)
     throw python_error(); // @allow-raw-throw
 
-  py::object torch_module = py::module::import("torch");
+  py::object torch_module = py::module::import("easyfhe");
   py::object torch_generator = torch_module.attr("Generator");
   PyTuple_SET_ITEM(ret.get(), 0, torch_generator.release().ptr());
 
@@ -320,7 +320,7 @@ static struct PyMemberDef THPGenerator_members[] = {
 
 static PyTypeObject THPGeneratorType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C.Generator", /* tp_name */
+    "easyfhe._C.Generator", /* tp_name */
     sizeof(THPGenerator), /* tp_basicsize */
     0, /* tp_itemsize */
     THPGenerator_dealloc, /* tp_dealloc */
@@ -375,7 +375,7 @@ static PyObject* THPGenerator_pySetMetaclass(
   generatorMetaclassSet = true;
   // Swapping the metaclass changes __module__ (Python resolves it via the
   // metaclass). Reset it so pickle can find the class at torch._C.Generator.
-  auto module_name = THPObjectPtr(PyUnicode_FromString("torch._C"));
+  auto module_name = THPObjectPtr(PyUnicode_FromString("easyfhe._C"));
   if (!module_name)
     return nullptr;
   if (PyDict_SetItemString(

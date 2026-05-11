@@ -24,7 +24,7 @@ PyObject* getTHPMemoryFormat(at::MemoryFormat memory_format) {
 }
 
 void initializeMemoryFormats() {
-  auto torch_module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch_module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch_module) {
     throw python_error();
   }

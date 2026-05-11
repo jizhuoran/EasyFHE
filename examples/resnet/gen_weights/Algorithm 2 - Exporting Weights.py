@@ -1,7 +1,7 @@
 """
 本文件将notebooks中的同名文件转换为python代码并增加中文注释
 """
-import torch
+import easyfhe as torch
 import numpy as np
 import  os
 from HerPN import get_Aespa_MutalChannel_PAF_resnet18, get_Aespa_MutalChannel_PAF_resnet20, \

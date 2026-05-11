@@ -3,8 +3,8 @@ import sys,os
 import numpy as np
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-import torch.fhe as fhe
-import torch
+import easyfhe.fhe as fhe
+import easyfhe as torch
 from examples.utils.comp.comp import *
 from examples.utils.utils import *
 import datetime, time
@@ -15,7 +15,7 @@ DATA_DIR = os.environ["DATA_DIR"]
 import pickle
 def load_weight(encode_weight_path, cryptoContext):
     with open(encode_weight_path, 'rb') as f:
-        pre_encoded = pickle.load(f)
+        pre_encoded = fhe.utils.load_pickle(f)
     for key, _ in pre_encoded.items():
         if cryptoContext.pre_encode_type == "middle":
             pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")
@@ -924,4 +924,3 @@ if __name__ == "__main__":
     end_time = time.perf_counter()
     elapsed_time = end_time - start_time
     print(f"total execution time: {elapsed_time:.4f} seconds")
-

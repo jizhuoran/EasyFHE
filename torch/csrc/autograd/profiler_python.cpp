@@ -72,7 +72,7 @@ template <>
 PyCodeObject* getCode<CallType::PyModuleCall>() {
   static auto module_call_code = []() {
     pybind11::gil_scoped_acquire gil;
-    auto res = py::module::import("torch.nn")
+    auto res = py::module::import("easyfhe.nn")
                    .attr("Module")
                    .attr("__call__")
                    .attr("__code__")
@@ -87,7 +87,7 @@ template <>
 PyCodeObject* getCode<CallType::PyOptimizerCall>() {
   static auto optimizer_step_code = []() {
     pybind11::gil_scoped_acquire gil;
-    auto res = py::module::import("torch.optim")
+    auto res = py::module::import("easyfhe.optim")
                    .attr("Optimizer")
                    .attr("_optimizer_step_code")
                    .attr("__code__")
@@ -494,7 +494,7 @@ ExtraFields<EventType::PyCCall>::args_t ValueCache::load<CallType::PyCCall>(
 void ValueCache::trimPrefixes() {
   static const auto prefixes = []() {
     pybind11::gil_scoped_acquire gil;
-    return py::module::import("torch.profiler.python_tracer")
+    return py::module::import("easyfhe.profiler.python_tracer")
         .attr("_prefix_regex")()
         .cast<std::vector<std::string>>();
   }();
@@ -1516,7 +1516,7 @@ class PythonMemoryTracer final : public python_tracer::PythonMemoryTracerBase {
 static void toggle_memory_tracing(bool enable) {
   pybind11::gil_scoped_acquire gil;
   THPObjectPtr torch_cuda_memory_module(
-      PyImport_ImportModule("torch.cuda.memory"));
+      PyImport_ImportModule("easyfhe.cuda.memory"));
   if (!torch_cuda_memory_module) {
     return;
   }
@@ -1545,7 +1545,7 @@ void PythonMemoryTracer::start() {
 void PythonMemoryTracer::export_memory_history(const std::string& path) {
   pybind11::gil_scoped_acquire gil;
   THPObjectPtr torch_cuda_memory_module(
-      PyImport_ImportModule("torch.cuda.memory"));
+      PyImport_ImportModule("easyfhe.cuda.memory"));
   if (!torch_cuda_memory_module) {
     return;
   }

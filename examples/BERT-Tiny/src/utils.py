@@ -1,7 +1,7 @@
-import torch
+import easyfhe as torch
 import numpy as np
 import pickle
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 import examples.utils.approx as approx
 import os, csv
 import warnings
@@ -19,7 +19,7 @@ DIRECT_LOAD = False
 if DIRECT_LOAD:
     def load_weight(encode_weight_path, cryptoContext):
         with open(encode_weight_path, 'rb') as f:
-            pre_encoded = pickle.load(f)
+            pre_encoded = fhe.utils.load_pickle(f)
         for key, _ in pre_encoded.items():
             if cryptoContext.pre_encode_type == "middle":
                 pre_encoded[key].encoded_values = torch.tensor(pre_encoded[key].encoded_values, device="cuda")

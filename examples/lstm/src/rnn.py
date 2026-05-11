@@ -1,8 +1,8 @@
 import os, sys
 sys.path.append("/".join(os.getcwd().split("/")[:-4]))
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
-import torch
-import torch.fhe as fhe
+import easyfhe as torch
+import easyfhe.fhe as fhe
 import numpy as np
 import math
 

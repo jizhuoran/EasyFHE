@@ -402,7 +402,7 @@ c10::intrusive_ptr<c10::TensorImpl> ConcretePyInterpreterVTable::detach(
   auto out = torchDispatchFromTensorImpl(
       self,
       "detach",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("detach")
@@ -431,7 +431,7 @@ bool ConcretePyInterpreterVTable::is_contiguous(
     out = torchDispatchFromTensorImpl(
         self,
         "is_contiguous",
-        py::module::import("torch")
+        py::module::import("easyfhe")
             .attr("ops")
             .attr("aten")
             .attr("is_contiguous")
@@ -442,7 +442,7 @@ bool ConcretePyInterpreterVTable::is_contiguous(
     out = torchDispatchFromTensorImpl(
         self,
         "is_contiguous",
-        py::module::import("torch")
+        py::module::import("easyfhe")
             .attr("ops")
             .attr("aten")
             .attr("is_contiguous")
@@ -475,7 +475,7 @@ c10::SymBool ConcretePyInterpreterVTable::sym_is_contiguous(
   out = torchDispatchFromTensorImpl(
       self,
       "sym_is_contiguous",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("sym_is_contiguous")
@@ -501,7 +501,7 @@ bool ConcretePyInterpreterVTable::is_strides_like(
   auto out = torchDispatchFromTensorImpl(
       self,
       "is_strides_like",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           // NB: intentionally suffixed with _format to avoid
@@ -533,7 +533,7 @@ bool ConcretePyInterpreterVTable::is_non_overlapping_and_dense(
   auto out = torchDispatchFromTensorImpl(
       self,
       "is_non_overlapping_and_dense",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("is_non_overlapping_and_dense")
@@ -561,7 +561,7 @@ int64_t ConcretePyInterpreterVTable::dim(const c10::TensorImpl* self) const {
   auto out = torchDispatchFromTensorImpl(
       self,
       "dim",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("dim")
@@ -586,7 +586,7 @@ c10::Device ConcretePyInterpreterVTable::device(
   auto out = torchDispatchFromTensorImpl(
       self,
       "device",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("prim")
           .attr("device")
@@ -733,7 +733,7 @@ c10::IntArrayRef ConcretePyInterpreterVTable::strides(
   auto out = torchDispatchFromTensorImpl(
       self,
       "stride",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("stride")
@@ -763,7 +763,7 @@ c10::IntArrayRef ConcretePyInterpreterVTable::sizes(
   auto out = torchDispatchFromTensorImpl(
       self,
       "size",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("size")
@@ -794,7 +794,7 @@ c10::SymIntArrayRef ConcretePyInterpreterVTable::sym_sizes(
   auto out = torchDispatchFromTensorImpl(
       self,
       "sym_size",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("sym_size")
@@ -823,7 +823,7 @@ c10::Layout ConcretePyInterpreterVTable::layout(
   auto out = torchDispatchFromTensorImpl(
       self,
       "layout",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("prim")
           .attr("layout")
@@ -850,7 +850,7 @@ int64_t ConcretePyInterpreterVTable::numel(const c10::TensorImpl* self) const {
   auto out = torchDispatchFromTensorImpl(
       self,
       "numel",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("numel")
@@ -874,7 +874,7 @@ c10::SymInt ConcretePyInterpreterVTable::sym_numel(
   auto out = torchDispatchFromTensorImpl(
       self,
       "sym_numel",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("sym_numel")
@@ -896,7 +896,7 @@ c10::SymInt ConcretePyInterpreterVTable::sym_storage_offset(
   auto out = torchDispatchFromTensorImpl(
       self,
       "sym_storage_offset",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("sym_storage_offset")
@@ -919,7 +919,7 @@ c10::SymIntArrayRef ConcretePyInterpreterVTable::sym_strides(
   auto out = torchDispatchFromTensorImpl(
       self,
       "sym_stride",
-      py::module::import("torch")
+      py::module::import("easyfhe")
           .attr("ops")
           .attr("aten")
           .attr("sym_stride")
@@ -981,7 +981,7 @@ py::handle getTorchApiFunction(const c10::OperatorHandle& op) {
     const char* func_name = qualified_name.c_str() + pos + strlen("::");
 
     py::handle torch_api_function =
-        py::module::import("torch").attr("ops").attr(ns).attr(func_name);
+        py::module::import("easyfhe").attr("ops").attr(ns).attr(func_name);
     if (overload_name.empty()) {
       return torch_api_function.attr("default").ptr();
     } else {

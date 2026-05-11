@@ -283,13 +283,13 @@ static py::object maybe_get_registered_torch_dispatch_rule(
   py::object find_torch_dispatch_rule =
       storage
           .call_once_and_store_result([]() -> py::object {
-            return py::module_::import("torch._library.simple_registry")
+            return py::module_::import("easyfhe._library.simple_registry")
                 .attr("find_torch_dispatch_rule");
           })
           .get_stored();
 #else
   static const py::handle find_torch_dispatch_rule =
-      py::object(py::module_::import("torch._library.simple_registry")
+      py::object(py::module_::import("easyfhe._library.simple_registry")
                      .attr("find_torch_dispatch_rule"))
           .release();
 #endif

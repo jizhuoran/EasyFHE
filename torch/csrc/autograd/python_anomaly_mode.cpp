@@ -12,7 +12,7 @@ namespace torch::autograd {
 
 void PyAnomalyMetadata::store_stack() {
   pybind11::gil_scoped_acquire gil;
-  THPObjectPtr mod(PyImport_ImportModule("torch.fx.traceback"));
+  THPObjectPtr mod(PyImport_ImportModule("easyfhe.fx.traceback"));
   if (!mod) {
     throw python_error();
   }

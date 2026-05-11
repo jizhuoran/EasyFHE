@@ -270,7 +270,7 @@ class CMake:
             base_dir = os.path.relpath(
                 str(Path(__file__).resolve().parents[2]), self.build_dir
             )
-        install_dir = os.path.join(base_dir, "torch")
+        install_dir = os.path.join(base_dir, "easyfhe")
 
         _mkdir_p(install_dir)
         _mkdir_p(self.build_dir)

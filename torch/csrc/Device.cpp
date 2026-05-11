@@ -153,7 +153,7 @@ static PyObject* THPDevice_reduce(PyObject* _self, PyObject* noargs) {
   if (!ret)
     throw python_error();
 
-  py::object torch_module = py::module::import("torch");
+  py::object torch_module = py::module::import("easyfhe");
   py::object torch_device = torch_module.attr("device");
   PyTuple_SET_ITEM(ret.get(), 0, torch_device.release().ptr());
 
@@ -176,7 +176,7 @@ static PyObject* THPDevice_reduce(PyObject* _self, PyObject* noargs) {
 
 static PyObject* THPDevice_enter(PyObject* self, PyObject* noargs) {
   HANDLE_TH_ERRORS
-  py::object mode = py::module::import("torch.utils._device")
+  py::object mode = py::module::import("easyfhe.utils._device")
                         .attr("DeviceContext")(py::handle(self));
   at::impl::PythonTorchFunctionTLS::push_onto_stack(
       std::make_shared<c10::SafePyObject>(
@@ -205,7 +205,7 @@ static PyObject* THPDevice_call(
     PyObject* kwargs) {
   HANDLE_TH_ERRORS
   py::object deco =
-      py::module::import("torch.utils._device").attr("device_decorator");
+      py::module::import("easyfhe.utils._device").attr("device_decorator");
   return deco(py::handle(self), *py::handle(args), **py::handle(kwargs))
       .release()
       .ptr();

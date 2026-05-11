@@ -102,7 +102,7 @@ struct EnablePreDispatch {
 PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject* unused) {
   using namespace torch::autograd::profiler;
   using namespace torch::profiler::impl;
-  auto tensor_module = THPObjectPtr(PyImport_ImportModule("torch._tensor"));
+  auto tensor_module = THPObjectPtr(PyImport_ImportModule("easyfhe._tensor"));
   if (!tensor_module)
     return nullptr;
 
@@ -111,7 +111,7 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject* unused) {
   if (!THPVariableClass)
     return nullptr;
 
-  auto autograd_module = THPObjectPtr(PyImport_ImportModule("torch.autograd"));
+  auto autograd_module = THPObjectPtr(PyImport_ImportModule("easyfhe.autograd"));
   if (!autograd_module)
     return nullptr;
 
@@ -122,20 +122,20 @@ PyObject* THPAutograd_initExtension(PyObject* _unused, PyObject* unused) {
 
   // NOTE: "leaks" GradientEdge
   auto autograd_graph_mod =
-      THPObjectPtr(PyImport_ImportModule("torch.autograd.graph"));
+      THPObjectPtr(PyImport_ImportModule("easyfhe.autograd.graph"));
   THPGradientEdgeClass =
       PyObject_GetAttrString(autograd_graph_mod, "GradientEdge");
   if (!THPGradientEdgeClass)
     return nullptr;
 
-  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+  auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
   if (!torch_C_module)
     return nullptr;
   auto _C_m = py::handle(torch_C_module).cast<py::module>();
   auto m = _C_m.def_submodule("_autograd", "autograd bindings");
 
   auto parameter_module =
-      THPObjectPtr(PyImport_ImportModule("torch.nn.parameter"));
+      THPObjectPtr(PyImport_ImportModule("easyfhe.nn.parameter"));
   if (!parameter_module)
     return nullptr;
 
@@ -1036,9 +1036,9 @@ static PyObject* set_grad_enabled(
   auto r = parser.parse(args, kwargs, parsed_args);
 
   if (at::impl::torch_function_mode_enabled()) {
-    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
     return handle_torch_function(
-        r, args, kwargs, torch_C_module, "torch._C", "_set_grad_enabled");
+        r, args, kwargs, torch_C_module, "easyfhe._C", "_set_grad_enabled");
   }
   auto grad_enabled = r.toBool(0);
   GradMode::set_enabled(grad_enabled);
@@ -1217,13 +1217,13 @@ static PyObject* set_multithreading_enabled(
   auto r = parser.parse(args, kwargs, parsed_args);
 
   if (at::impl::torch_function_mode_enabled()) {
-    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
     return handle_torch_function(
         r,
         args,
         kwargs,
         torch_C_module,
-        "torch._C",
+        "easyfhe._C",
         "_set_multithreading_enabled");
   }
   auto multithreading_enabled = r.toBool(0);
@@ -1255,13 +1255,13 @@ static PyObject* set_view_replay_enabled(
   auto r = parser.parse(args, kwargs, parsed_args);
 
   if (at::impl::torch_function_mode_enabled()) {
-    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
     return handle_torch_function(
         r,
         args,
         kwargs,
         torch_C_module,
-        "torch._C",
+        "easyfhe._C",
         "_set_view_replay_enabled");
   }
   auto view_replay_enabled = r.toBool(0);
@@ -1293,13 +1293,13 @@ static PyObject* set_grad_layout_enforcement_enabled(
   auto r = parser.parse(args, kwargs, parsed_args);
 
   if (at::impl::torch_function_mode_enabled()) {
-    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("torch._C"));
+    auto torch_C_module = THPObjectPtr(PyImport_ImportModule("easyfhe._C"));
     return handle_torch_function(
         r,
         args,
         kwargs,
         torch_C_module,
-        "torch._C",
+        "easyfhe._C",
         "_set_grad_layout_enforcement_enabled");
   }
   auto enabled = r.toBool(0);

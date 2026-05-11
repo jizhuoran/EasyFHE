@@ -1,4 +1,4 @@
-import torch
+import easyfhe as torch
 
 pth_path = './ResNet18_Aespa.pth'         # 你的 .pth 文件路径
 state_dict = torch.load(pth_path, map_location="cpu")  # dict: {name: tensor}

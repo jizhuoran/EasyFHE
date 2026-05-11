@@ -56,7 +56,7 @@ static PyObject* THPSpecialVariableFunctionsModule = NULL;
 void initSpecialFunctions(PyObject* module) {
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._special",
+     "easyfhe._C._special",
      NULL,
      -1,
      special_functions

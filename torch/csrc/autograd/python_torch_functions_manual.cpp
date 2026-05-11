@@ -528,7 +528,7 @@ static void gatherTorchFunctions(std::vector<PyMethodDef>& torch_functions) {
 
 static PyTypeObject THPVariableFunctions = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._VariableFunctionsClass", /* tp_name */
+    "easyfhe._C._VariableFunctionsClass", /* tp_name */
     0, /* tp_basicsize */
     0, /* tp_itemsize */
     nullptr, /* tp_dealloc */
@@ -596,7 +596,7 @@ void initTorchFunctions(PyObject* module) {
 
   // pybind registrations to torch module
   // TODO: move these from torch.* to torch._C.*
-  auto py_module = py::module::import("torch");
+  auto py_module = py::module::import("easyfhe");
 
   py_module.def(
       "_functionalize_are_all_mutations_under_no_grad_or_inference_mode",

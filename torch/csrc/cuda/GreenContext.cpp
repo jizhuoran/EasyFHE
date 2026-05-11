@@ -52,7 +52,7 @@ void THCPGreenContext_init(PyObject* module) {
         cudaStream_t raw = s.stream();
         auto ptr_val = reinterpret_cast<uintptr_t>(raw);
 
-        py::object torch_cuda = py::module::import("torch.cuda");
+        py::object torch_cuda = py::module::import("easyfhe.cuda");
         py::object ExternalStream = torch_cuda.attr("ExternalStream");
 
         return ExternalStream(ptr_val, py::int_(s.device_index()));

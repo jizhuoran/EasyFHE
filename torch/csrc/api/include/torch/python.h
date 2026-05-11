@@ -52,7 +52,7 @@ void bind_cpp_module_wrapper(
   // Grab the `torch.nn.cpp.ModuleWrapper` class, which we'll subclass
   // with a dynamically created class below.
   py::object cpp_module =
-      py::module::import("torch.nn.cpp").attr("ModuleWrapper");
+      py::module::import("easyfhe.nn.cpp").attr("ModuleWrapper");
 
   // Grab the `type` class which we'll use as a metaclass to create a new class
   // dynamically.

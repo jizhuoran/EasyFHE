@@ -856,7 +856,7 @@ def gen_nn_functional(fm: FileManager) -> None:
         "selu_",
     ]
     imported_hints = [
-        "from torch import (",
+        "from easyfhe import (",
         *sorted(f"    {name} as {name}," for name in torch_imports),
         ")",
     ]
@@ -880,7 +880,7 @@ def gen_nn_functional(fm: FileManager) -> None:
     ]
     renamed = {"log_sigmoid": "logsigmoid"}
     imported_hints += [
-        "from torch._C._nn import (",
+        "from easyfhe._C._nn import (",
         *sorted(f"    {name} as {renamed.get(name, name)}," for name in c_nn_imports),
         ")",
     ]
@@ -940,8 +940,8 @@ def gen_nn_functional(fm: FileManager) -> None:
     ]
 
     fm.write_with_template(
-        "torch/nn/functional.pyi",
-        "torch/nn/functional.pyi.in",
+        "easyfhe/nn/functional.pyi",
+        "easyfhe/nn/functional.pyi.in",
         lambda: {
             "imported_hints": imported_hints,
             "dispatched_hints": dispatched_hints,
@@ -949,8 +949,8 @@ def gen_nn_functional(fm: FileManager) -> None:
         },
     )
     fm.write_with_template(
-        "torch/_C/_nn.pyi",
-        "torch/_C/_nn.pyi.in",
+        "easyfhe/_C/_nn.pyi",
+        "easyfhe/_C/_nn.pyi.in",
         lambda: {
             "c_nn_function_hints": c_nn_function_hints,
         },
@@ -972,16 +972,16 @@ def gather_docstrs() -> dict[str, str]:
         docstrs[func._extract_mock_name()] = docstr.strip()
 
     # sys.modules and sys.path are restored after the context manager exits
-    with patch.dict(sys.modules), patch.object(sys, "path", sys.path + ["torch"]):
+    with patch.dict(sys.modules), patch.object(sys, "path", sys.path + ["easyfhe"]):
         # mock the torch module and torch._C._add_docstr
-        sys.modules["torch"] = Mock(name="torch")
-        sys.modules["torch._C"] = Mock(_add_docstr=mock_add_docstr)
+        sys.modules["easyfhe"] = Mock(name="easyfhe")
+        sys.modules["easyfhe._C"] = Mock(_add_docstr=mock_add_docstr)
 
         try:
             # manually import torch._torch_docs and torch._tensor_docs to trigger
             # the mocked _add_docstr and collect docstrings
-            sys.modules["torch._torch_docs"] = importlib.import_module("_torch_docs")
-            sys.modules["torch._tensor_docs"] = importlib.import_module("_tensor_docs")
+            sys.modules["easyfhe._torch_docs"] = importlib.import_module("_torch_docs")
+            sys.modules["easyfhe._tensor_docs"] = importlib.import_module("_tensor_docs")
         except ModuleNotFoundError:
             # Gracefully fail if these modules are not importable
             warn(
@@ -2065,23 +2065,23 @@ def gen_pyi(
         "tag_attributes": tag_attributes,
     }
     fm.write_with_template(
-        "torch/_C/__init__.pyi",
-        "torch/_C/__init__.pyi.in",
+        "easyfhe/_C/__init__.pyi",
+        "easyfhe/_C/__init__.pyi.in",
         lambda: env,
     )
     fm.write_with_template(
-        "torch/_C/_VariableFunctions.pyi",
-        "torch/_C/_VariableFunctions.pyi.in",
+        "easyfhe/_C/_VariableFunctions.pyi",
+        "easyfhe/_C/_VariableFunctions.pyi.in",
         lambda: env,
     )
     fm.write_with_template(
-        "torch/_VF.pyi",
-        "torch/_C/_VariableFunctions.pyi.in",
+        "easyfhe/_VF.pyi",
+        "easyfhe/_C/_VariableFunctions.pyi.in",
         lambda: env,
     )
     fm.write_with_template(
-        "torch/return_types.pyi",
-        "torch/_C/return_types.pyi.in",
+        "easyfhe/return_types.pyi",
+        "easyfhe/_C/return_types.pyi.in",
         lambda: env,
     )
     gen_nn_functional(fm)

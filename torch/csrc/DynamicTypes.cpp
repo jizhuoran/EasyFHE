@@ -58,7 +58,7 @@ PyObject* createPyObject(const at::Storage& storage) {
 }
 
 static PyTypeObject* loadTypedStorageTypeObject() {
-  PyObject* storage_module = PyImport_ImportModule("torch.storage");
+  PyObject* storage_module = PyImport_ImportModule("easyfhe.storage");
   TORCH_INTERNAL_ASSERT(storage_module && PyModule_Check(storage_module));
 
   PyObject* typed_storage_obj =

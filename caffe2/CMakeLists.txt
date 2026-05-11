@@ -304,7 +304,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 # Generate files
 set(TOOLS_PATH "${TORCH_ROOT}/tools")
 
-configure_file("${TORCH_SRC_DIR}/_utils_internal.py"
+configure_file("${TORCH_ROOT}/easyfhe/_utils_internal.py"
   "${TOOLS_PATH}/shared/_utils_internal.py"
   COPYONLY)
 

@@ -1,7 +1,7 @@
 import itertools
 import subprocess
 from pathlib import Path
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 import os,time, datetime
 from utils import *
 from examples.utils.approx import eval_chebyshev_function

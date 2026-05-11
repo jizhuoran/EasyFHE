@@ -1581,7 +1581,7 @@ static PyObject* THCPModule_initExtension(PyObject* self, PyObject* noargs) {
   torch::utils::register_fork_handler_for_device_init(at::kCUDA);
   at::globalContext().lazyInitDevice(c10::DeviceType::CUDA);
 
-  auto m = THPObjectPtr(PyImport_ImportModule("torch.cuda"));
+  auto m = THPObjectPtr(PyImport_ImportModule("easyfhe.cuda"));
   if (!m)
     throw python_error();
 

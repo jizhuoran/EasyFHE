@@ -346,7 +346,7 @@ Tensor internal_new_from_data(
 
   if (PyObject_HasAttrString(data, "__dlpack__")) {
     py::object tensor_o =
-        py::module::import("torch").attr("utils").attr("dlpack").attr(
+        py::module::import("easyfhe").attr("utils").attr("dlpack").attr(
             "from_dlpack")(py::handle(data));
     Tensor tensor = py::cast<Tensor>(tensor_o);
     const auto& inferred_scalar_type =

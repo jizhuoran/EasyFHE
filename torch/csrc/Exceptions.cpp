@@ -34,7 +34,7 @@ bool THPException_init(PyObject* module) {
   // NOLINTNEXTLINE(bugprone-assignment-in-if-condition)
   ASSERT_TRUE(
       THPException_LinAlgError = PyErr_NewExceptionWithDoc(
-          "torch._C._LinAlgError",
+          "easyfhe._C._LinAlgError",
           "Error raised by torch.linalg function when the cause of error is a numerical inconsistency in the data.\n \
 For example, you can the torch.linalg.inv function will raise torch.linalg.LinAlgError when it finds that \
 a matrix is not invertible.\n \

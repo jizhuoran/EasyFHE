@@ -1,5 +1,5 @@
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
-import torch
+import easyfhe as torch
 import sys
 import numpy as np
 import shutil

@@ -1,8 +1,8 @@
 import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
-import torch
-import torch.fhe.utils as utils
+import easyfhe as torch
+import easyfhe.fhe.utils as utils
 import numpy as np
 from termcolor import colored
 

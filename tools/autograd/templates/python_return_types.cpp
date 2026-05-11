@@ -34,7 +34,7 @@ static void addReturnType(
 
 void initReturnTypes(PyObject* module) {
   static struct PyModuleDef def = {
-      PyModuleDef_HEAD_INIT, "torch._C._return_types", nullptr, -1, {}};
+      PyModuleDef_HEAD_INIT, "easyfhe._C._return_types", nullptr, -1, {}};
   PyObject* return_types_module = PyModule_Create(&def);
   if (!return_types_module) {
     throw python_error();

@@ -1,5 +1,5 @@
 import math
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 import numpy as np
 
 

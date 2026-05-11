@@ -34,6 +34,6 @@ install(DIRECTORY
 # --- Symlink-replacement copies ---
 # Copy files that were previously handled via symlinks in setup.py.
 install(FILES
-  "${PROJECT_SOURCE_DIR}/torch/_utils_internal.py"
+  "${PROJECT_SOURCE_DIR}/easyfhe/_utils_internal.py"
   DESTINATION "${SKBUILD_PLATLIB_DIR}/tools/shared"
 )

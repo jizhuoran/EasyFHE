@@ -114,7 +114,7 @@ static PyObject* THPVariable_pynew(
 
 static PyTypeObject THPLegacyVariableType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._LegacyVariableBase", /* tp_name */
+    "easyfhe._C._LegacyVariableBase", /* tp_name */
     0, /* tp_basicsize */
     0, /* tp_itemsize */
     nullptr, /* tp_dealloc */

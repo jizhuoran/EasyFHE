@@ -14,7 +14,7 @@ using namespace at;
 namespace torch::utils {
 
 static const char* parse_privateuseone_backend(bool is_sparse = false) {
-  static std::string backend_name = "torch." + get_privateuse1_backend();
+  static std::string backend_name = "easyfhe." + get_privateuse1_backend();
   static std::string sparse_backend_name = backend_name + ".sparse";
   return is_sparse == false ? backend_name.c_str()
                             : sparse_backend_name.c_str();
@@ -23,39 +23,39 @@ static const char* parse_privateuseone_backend(bool is_sparse = false) {
 const char* backend_to_string(const at::Backend& backend) {
   switch (backend) {
     case at::Backend::CPU:
-      return "torch";
+      return "easyfhe";
     case at::Backend::CUDA:
-      return "torch.cuda";
+      return "easyfhe.cuda";
     case at::Backend::XPU:
-      return "torch.xpu";
+      return "easyfhe.xpu";
     case at::Backend::IPU:
-      return "torch.ipu";
+      return "easyfhe.ipu";
     case at::Backend::SparseCPU:
-      return "torch.sparse";
+      return "easyfhe.sparse";
     case at::Backend::SparseCUDA:
-      return "torch.cuda.sparse";
+      return "easyfhe.cuda.sparse";
     case at::Backend::SparseXPU:
-      return "torch.xpu.sparse";
+      return "easyfhe.xpu.sparse";
     case at::Backend::SparseMPS:
-      return "torch.mps.sparse";
+      return "easyfhe.mps.sparse";
     case at::Backend::QuantizedCPU:
-      return "torch.quantized";
+      return "easyfhe.quantized";
     case at::Backend::HPU:
-      return "torch.hpu";
+      return "easyfhe.hpu";
     case at::Backend::MPS:
-      return "torch.mps";
+      return "easyfhe.mps";
     case at::Backend::MTIA:
-      return "torch.mtia";
+      return "easyfhe.mtia";
     case at::Backend::PrivateUse1:
       return parse_privateuseone_backend();
     case at::Backend::SparsePrivateUse1:
       return parse_privateuseone_backend(true);
     case at::Backend::Lazy:
-      return "torch.lazy";
+      return "easyfhe.lazy";
     case at::Backend::XLA:
-      return "torch.xla";
+      return "easyfhe.xla";
     case at::Backend::Meta:
-      return "torch.meta";
+      return "easyfhe.meta";
     default:
       TORCH_CHECK(false, "Unimplemented backend ", backend);
   }
@@ -91,14 +91,14 @@ at::TensorOptions options_from_string(const std::string& str) {
       std::string(parse_privateuseone_backend()) + ".";
   const TypeMap* map = nullptr;
 
-  if (str == "torch.Tensor") {
+  if (str == "easyfhe.Tensor" || str == "torch.Tensor") {
     auto backend =
         dispatchKeyToBackend(torch::tensors::get_default_dispatch_key());
     auto scalar_type = torch::tensors::get_default_scalar_type();
     return getDeprecatedTypeProperties(backend, scalar_type).options();
   }
 
-  if (str.starts_with("torch.cuda.")) {
+  if (str.starts_with("easyfhe.cuda.") || str.starts_with("torch.cuda.")) {
     static const auto cuda_map =
         build_type_map(autograd::VariableType::allCUDATypes());
     map = &cuda_map;

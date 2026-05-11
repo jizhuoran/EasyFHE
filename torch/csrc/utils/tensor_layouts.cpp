@@ -19,7 +19,7 @@ static void registerLayout(
 }
 
 void initializeLayouts() {
-  auto torch_module = THPObjectPtr(PyImport_ImportModule("torch"));
+  auto torch_module = THPObjectPtr(PyImport_ImportModule("easyfhe"));
   if (!torch_module)
     throw python_error();
 

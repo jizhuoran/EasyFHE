@@ -222,7 +222,7 @@ static PyMethodDef THCPEvent_methods[] = {
 
 PyTypeObject THCPEventType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._CudaEventBase", /* tp_name */
+    "easyfhe._C._CudaEventBase", /* tp_name */
     sizeof(THCPEvent), /* tp_basicsize */
     0, /* tp_itemsize */
     (destructor)THCPEvent_dealloc, /* tp_dealloc */

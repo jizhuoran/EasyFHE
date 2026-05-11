@@ -1124,9 +1124,9 @@ void _trace_post_record(
     }
   }
   py::object onnx_globals =
-      py::module::import("torch.onnx._internal.torchscript_exporter._globals");
+      py::module::import("easyfhe.onnx._internal.torchscript_exporter._globals");
   py::bool_ is_in_onnx_export =
-      py::module::import("torch.onnx.__init__").attr("is_in_onnx_export");
+      py::module::import("easyfhe.onnx.__init__").attr("is_in_onnx_export");
   py::bool_ is_autograd_inlining_enabled =
       py::cast<bool>(onnx_globals.attr("GLOBALS").attr("autograd_inlining"));
 
@@ -1324,7 +1324,7 @@ static PyObject* get_base_setup_context() {
     return setup_context;
   }
 
-  auto module = THPObjectPtr(PyImport_ImportModule("torch.autograd.function"));
+  auto module = THPObjectPtr(PyImport_ImportModule("easyfhe.autograd.function"));
   if (!module)
     return nullptr;
 
@@ -1896,7 +1896,7 @@ static struct PyMethodDef THPFunction_methods[] = {
 
 PyTypeObject THPFunctionType = {
     PyVarObject_HEAD_INIT(nullptr, 0)
-    "torch._C._FunctionBase", /* tp_name */
+    "easyfhe._C._FunctionBase", /* tp_name */
     sizeof(THPFunction), /* tp_basicsize */
     0, /* tp_itemsize */
     (destructor)THPFunction_dealloc, /* tp_dealloc */

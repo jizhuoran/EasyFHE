@@ -1,10 +1,10 @@
-from torch.hub import load_state_dict_from_url
-import torch
-import torch.nn as nn
+from easyfhe.hub import load_state_dict_from_url
+import easyfhe as torch
+import easyfhe.nn as nn
 from typing import Any, Callable, List, Optional, Type, Union
-from torch import Tensor
+from easyfhe import Tensor
 from math import pi, sqrt
-from torch.autograd import Function
+from easyfhe.autograd import Function
 
 def get_resnet20_HerPN(num_classes):
     return ResNet20_HerPN(block=BasicBlock_HerPN,num_classes=num_classes)

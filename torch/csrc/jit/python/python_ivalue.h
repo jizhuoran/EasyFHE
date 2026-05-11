@@ -56,13 +56,13 @@ struct C10_EXPORT ConcretePyObjectHolder final : PyObjectHolder {
       auto& extractorFn =
           storage
               .call_once_and_store_result([]() -> py::object {
-                return py::module_::import("torch._jit_internal")
+                return py::module_::import("easyfhe._jit_internal")
                     .attr("_extract_tensors");
               })
               .get_stored();
 #else
       static py::object& extractorFn = *new py::object(
-          py::module::import("torch._jit_internal").attr("_extract_tensors"));
+          py::module::import("easyfhe._jit_internal").attr("_extract_tensors"));
 #endif
 
       return extractorFn(py_obj_).cast<std::vector<at::Tensor>>();

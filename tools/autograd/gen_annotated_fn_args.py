@@ -51,11 +51,11 @@ def gen_annotated(
         native_yaml_path, tags_yaml_path
     ).native_functions
     mappings = (
-        (is_py_torch_function, "torch._C._VariableFunctions"),
-        (is_py_nn_function, "torch._C._nn"),
-        (is_py_linalg_function, "torch._C._linalg"),
-        (is_py_special_function, "torch._C._special"),
-        (is_py_fft_function, "torch._C._fft"),
+        (is_py_torch_function, "easyfhe._C._VariableFunctions"),
+        (is_py_nn_function, "easyfhe._C._nn"),
+        (is_py_linalg_function, "easyfhe._C._linalg"),
+        (is_py_special_function, "easyfhe._C._special"),
+        (is_py_fft_function, "easyfhe._C._fft"),
         (is_py_variable_method, "torch.Tensor"),
     )
     annotated_args: list[str] = []

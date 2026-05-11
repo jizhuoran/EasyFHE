@@ -5,8 +5,8 @@ import time
 
 import numpy as np
 
-import torch
-import torch.fhe as fhe
+import easyfhe as torch
+import easyfhe.fhe as fhe
 
 DATA_DIR = os.environ["DATA_DIR"]
 
@@ -49,7 +49,7 @@ def log2_int(x):
 def load_weight(encode_weight_path, cryptoContext):
     if cryptoContext.DIRECT_LOAD:
         with open(encode_weight_path, 'rb') as f:
-            pre_encoded = pickle.load(f)
+            pre_encoded = fhe.utils.load_pickle(f)
         # print("pre_encoded", pre_encoded)
         load_checkpoint = getattr(cryptoContext, "LOAD_CHECKPOINT", False) # mainly for debugging
 

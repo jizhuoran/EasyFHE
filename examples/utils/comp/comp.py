@@ -2,7 +2,7 @@ import numpy as np
 import math
 from .MinicompFunc import num_one
 from .program import * # therefore we dont need to import it when using the miniMax_relu
-import torch.fhe as fhe
+import easyfhe.fhe as fhe
 
 def geneT0T1(cipher, cryptoContext):
     """

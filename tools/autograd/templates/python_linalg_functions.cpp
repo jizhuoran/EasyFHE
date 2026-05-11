@@ -45,7 +45,7 @@ static PyObject* THPLinalgVariableFunctionsModule = NULL;
 void initLinalgFunctions(PyObject* module) {
   static struct PyModuleDef def = {
      PyModuleDef_HEAD_INIT,
-     "torch._C._linalg",
+     "easyfhe._C._linalg",
      NULL,
      -1,
      linalg_functions

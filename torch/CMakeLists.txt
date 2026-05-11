@@ -15,6 +15,7 @@ endif()
 
 set(TORCH_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(TORCH_ROOT "${TORCH_SRC_DIR}/..")
+set(EASYFHE_SRC_DIR "${TORCH_ROOT}/easyfhe")
 
 if(NOT TORCH_INSTALL_LIB_DIR)
   set(TORCH_INSTALL_LIB_DIR lib)
@@ -220,9 +221,9 @@ endif()
 # )
 # list(TRANSFORM Modules PREPEND "${TORCH_SRC_DIR}/nn/modules/")
 add_custom_target(torch_python_stubs DEPENDS
-    "${TORCH_SRC_DIR}/_C/__init__.pyi"
-    "${TORCH_SRC_DIR}/_C/_VariableFunctions.pyi"
-    "${TORCH_SRC_DIR}/nn/functional.pyi"
+    "${EASYFHE_SRC_DIR}/_C/__init__.pyi"
+    "${EASYFHE_SRC_DIR}/_C/_VariableFunctions.pyi"
+    "${EASYFHE_SRC_DIR}/nn/functional.pyi"
 )
 
 file(GLOB_RECURSE torchgen_python CONFIGURE_DEPENDS "${PROJECT_SOURCE_DIR}/torchgen/*.py")
@@ -230,23 +231,23 @@ file(GLOB_RECURSE autograd_python CONFIGURE_DEPENDS "${TOOLS_PATH}/autograd/*.py
 file(GLOB_RECURSE pyi_python CONFIGURE_DEPENDS "${TOOLS_PATH}/pyi/*.py")
 add_custom_command(
     OUTPUT
-    "${TORCH_SRC_DIR}/_C/__init__.pyi"
-    "${TORCH_SRC_DIR}/_C/_VariableFunctions.pyi"
-    "${TORCH_SRC_DIR}/nn/functional.pyi"
+    "${EASYFHE_SRC_DIR}/_C/__init__.pyi"
+    "${EASYFHE_SRC_DIR}/_C/_VariableFunctions.pyi"
+    "${EASYFHE_SRC_DIR}/nn/functional.pyi"
     COMMAND
     "${Python_EXECUTABLE}" -mtools.pyi.gen_pyi
       --native-functions-path "aten/src/ATen/native/native_functions.yaml"
       --tags-path "aten/src/ATen/native/tags.yaml"
       --deprecated-functions-path "tools/autograd/deprecated.yaml"
     DEPENDS
-      "${TORCH_SRC_DIR}/_C/__init__.pyi.in"
-      "${TORCH_SRC_DIR}/_C/_VariableFunctions.pyi.in"
-      "${TORCH_SRC_DIR}/nn/functional.pyi.in"
+      "${EASYFHE_SRC_DIR}/_C/__init__.pyi.in"
+      "${EASYFHE_SRC_DIR}/_C/_VariableFunctions.pyi.in"
+      "${EASYFHE_SRC_DIR}/nn/functional.pyi.in"
       "${TORCH_ROOT}/aten/src/ATen/native/native_functions.yaml"
       "${TORCH_ROOT}/aten/src/ATen/native/tags.yaml"
       "${TORCH_ROOT}/tools/autograd/deprecated.yaml"
-      "${TORCH_ROOT}/torch/_torch_docs.py"
-      "${TORCH_ROOT}/torch/_tensor_docs.py"
+      "${TORCH_ROOT}/easyfhe/_torch_docs.py"
+      "${TORCH_ROOT}/easyfhe/_tensor_docs.py"
       ${pyi_python}
       ${autograd_python}
       ${torchgen_python}
@@ -493,7 +494,7 @@ add_custom_target(
     --hip-version=${HIP_VERSION_CLEAN}
     --rocm-version=${ROCM_VERSION_DEV}
     --xpu-version=${SYCL_COMPILER_VERSION}
-  BYPRODUCTS ${TORCH_SRC_DIR}/version.py
+  BYPRODUCTS ${EASYFHE_SRC_DIR}/version.py
   COMMENT "Regenerating version file..."
   WORKING_DIRECTORY ${TORCH_ROOT}
 )
