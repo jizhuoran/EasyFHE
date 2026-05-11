@@ -669,14 +669,6 @@ if(USE_CUDA)
       )
     endif()
 
-    set(ASYNC_MM_FILE "${TORCH_SRC_DIR}/csrc/distributed/c10d/cuda/AsyncMM.cu")
-    # Disable the warning to make cutlass warp-specialized cooperative kernel build for gcc-9
-    if(CMAKE_COMPILER_IS_GNUCXX)
-      set_source_files_properties(${ASYNC_MM_FILE} PROPERTIES COMPILE_FLAGS "-Wno-unused-but-set-variable")
-    endif()
-    if(CUDA_NVCC_FLAGS MATCHES ".*compute_90.*")
-      set_source_files_properties(${ASYNC_MM_FILE} PROPERTIES COMPILE_FLAGS "-gencode arch=compute_90a,code=sm_90a")
-    endif()
   endif()
   if(NOT WIN32)
     set_source_files_properties(
@@ -1315,9 +1307,6 @@ target_include_directories(torch_cpu PRIVATE
   ${TORCH_ROOT}/third_party/miniz-3.0.2)
 
 target_include_directories(torch_cpu PRIVATE
-  ${TORCH_ROOT}/third_party/cpp-httplib)
-
-target_include_directories(torch_cpu PRIVATE
   ${TORCH_ROOT}/third_party/nlohmann/include)
 
 install(DIRECTORY
@@ -1771,9 +1760,6 @@ if(APPLE AND USE_PYTORCH_METAL)
     target_link_libraries(torch_cpu PUBLIC ${metal} ${mps} ${foundation} ${accelerate})
   endif()
 endif()
-
-
-target_link_libraries(torch_cpu PRIVATE flatbuffers)
 
 # Note [Global dependencies]
 # Some libraries (e.g. OpenMPI) like to dlopen plugins after they're initialized,

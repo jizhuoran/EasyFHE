@@ -345,6 +345,7 @@ option(USE_ROCM_KERNEL_ASSERT "Use Kernel Assert for ROCm" OFF)
 # Ensure that an ITT build is the default for x86 CPUs
 cmake_dependent_option(USE_ITT "Use Intel(R) VTune Profiler ITT functionality"
                        ON "CPU_INTEL" OFF)
+set(USE_ITT OFF CACHE BOOL "ITT is disabled in EasyFHE" FORCE)
 set(USE_MKLDNN OFF CACHE BOOL "MKLDNN is disabled in EasyFHE" FORCE)
 set(USE_MKLDNN_ACL OFF CACHE BOOL "MKLDNN ACL is disabled in EasyFHE" FORCE)
 set(USE_MKLDNN_CBLAS OFF CACHE BOOL "MKLDNN CBLAS is disabled in EasyFHE" FORCE)
@@ -477,24 +478,8 @@ endif()
 cmake_dependent_option(USE_PRIORITIZED_TEXT_FOR_LD "Use prioritized text linker for ld."
   "${USE_PRIORITIZED_TEXT_DEFAULT}" "CPU_INTEL OR CPU_AARCH64 OR CPU_POWER" OFF)
 
-option(USE_MIMALLOC "Use mimalloc" OFF)
-# Enable third party mimalloc library to improve memory allocation performance
-# on Windows and AArch64.
-option(USE_MIMALLOC_ON_MKL "Use mimalloc on MKL" OFF)
-if(WIN32 OR (CPU_AARCH64 AND NOT APPLE))
-  set(USE_MIMALLOC ON)
-  # Disable OPT flags for mimalloc on aarch64 as it breaks ARMv8.0
-  # See https://github.com/pytorch/pytorch/issues/174344
-  if(CPU_AARCH64)
-    set(MI_NO_OPT_ARCH ON)
-  endif()
-
-  # Not enable USE_MIMALLOC_ON_MKL due to it caused issue:
-  # https://github.com/pytorch/pytorch/issues/138994
-  # Will turn on when we can fix USE_STATIC_MKL lost functionality:
-  # https://github.com/pytorch/pytorch/pull/138996
-  # set(USE_MIMALLOC_ON_MKL ON)
-endif()
+set(USE_MIMALLOC OFF CACHE BOOL "mimalloc is disabled in EasyFHE" FORCE)
+set(USE_MIMALLOC_ON_MKL OFF CACHE BOOL "mimalloc is disabled in EasyFHE" FORCE)
 
 if(USE_CCACHE)
   find_program(CCACHE_PROGRAM ccache)
@@ -1324,20 +1309,6 @@ include_directories(BEFORE ${PROJECT_BINARY_DIR})
 
 include_directories(BEFORE ${PROJECT_SOURCE_DIR}/aten/src/)
 include_directories(BEFORE ${CMAKE_BINARY_DIR}/aten/src/)
-
-if(USE_MIMALLOC)
-  set(MI_OVERRIDE OFF)
-  set(MI_BUILD_SHARED OFF)
-  set(MI_BUILD_OBJECT OFF)
-  set(MI_BUILD_TESTS OFF)
-  add_definitions(-DUSE_MIMALLOC)
-  add_subdirectory(third_party/mimalloc)
-  include_directories(third_party/mimalloc/include)
-endif()
-
-if(USE_MIMALLOC AND USE_MIMALLOC_ON_MKL)
-  add_definitions(-DUSE_MIMALLOC_ON_MKL)
-endif()
 
 # ---[ Main build
 add_subdirectory(torch/headeronly)  # headeronly headers

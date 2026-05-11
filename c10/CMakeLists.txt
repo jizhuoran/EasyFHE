@@ -94,7 +94,6 @@ if(NOT BUILD_LIBTORCHLESS)
   target_link_libraries(c10 PUBLIC headeronly)
   target_link_libraries(c10 PRIVATE fmt::fmt-header-only)
   target_link_libraries(c10 PRIVATE nlohmann)
-  target_link_libraries(c10 PRIVATE moodycamel)
 
   if(C10_USE_NUMA)
     message(STATUS "NUMA paths:")

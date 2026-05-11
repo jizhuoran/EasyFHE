@@ -15,7 +15,6 @@
 #include <ATen/ops/empty_like.h>
 #endif
 
-#include <torch/csrc/distributed/c10d/cuda/AsyncMM.cuh>
 #include <torch/csrc/distributed/c10d/GroupRegistry.hpp>
 #include <torch/csrc/distributed/c10d/ParamCommsUtils.hpp>
 #include <torch/csrc/distributed/c10d/symm_mem/CUDASymmetricMemory-inl.cuh>
@@ -1316,8 +1315,6 @@ TORCH_LIBRARY_IMPL(symm_mem, CUDA, m) {
   m.impl("two_shot_all_reduce_", ::two_shot_all_reduce_);
   m.impl("two_shot_all_reduce_out", ::two_shot_all_reduce_out);
   m.impl("reduce_scatter_out", ::reduce_scatter_out);
-
-  m.impl("_async_input_mm", c10d::cuda::detail::async_input_mm);
 #endif
 #if defined(CUDART_VERSION)
   m.impl("multimem_all_reduce_", ::multimem_all_reduce_);

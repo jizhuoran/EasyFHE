@@ -315,17 +315,6 @@ endif()
 
 # --- [ PocketFFT
 set(AT_POCKETFFT_ENABLED 0)
-if(NOT AT_MKL_ENABLED)
-  set(POCKETFFT_INCLUDE_DIR "${Torch_SOURCE_DIR}/third_party/pocketfft/")
-  if(NOT EXISTS "${POCKETFFT_INCLUDE_DIR}")
-    message(FATAL_ERROR "pocketfft directory not found, expected ${POCKETFFT_INCLUDE_DIR}")
-  elseif(NOT EXISTS "${POCKETFFT_INCLUDE_DIR}/pocketfft_hdronly.h")
-    message(FATAL_ERROR "pocketfft headers not found in ${POCKETFFT_INCLUDE_DIR}")
-  endif()
-
-  set(AT_POCKETFFT_ENABLED 1)
-  message(STATUS "Using pocketfft in directory: ${POCKETFFT_INCLUDE_DIR}")
-endif()
 
 # ---[ Disabled EasyFHE NN/quantized CPU backends
 caffe2_update_option(USE_NNPACK OFF)
@@ -701,7 +690,10 @@ if(USE_CUDNN)
 endif()
 
 # ---[ nvtx
-if(USE_SYSTEM_NVTX)
+if(DEFINED nvtx3_dir AND NOT EXISTS "${nvtx3_dir}")
+  unset(nvtx3_dir CACHE)
+endif()
+if(USE_SYSTEM_NVTX OR NOT EXISTS "${PROJECT_SOURCE_DIR}/third_party/NVTX/c/include")
   find_path(nvtx3_dir NAMES nvtx3 PATHS ${CUDA_INCLUDE_DIRS})
 else()
   find_path(nvtx3_dir NAMES nvtx3 PATHS "${PROJECT_SOURCE_DIR}/third_party/NVTX/c/include" NO_DEFAULT_PATH)
@@ -941,7 +933,6 @@ if(USE_DISTRIBUTED AND USE_TENSORPIPE)
 
     list(APPEND Caffe2_DEPENDENCY_LIBS tensorpipe)
     list(APPEND Caffe2_DEPENDENCY_LIBS nlohmann)
-    list(APPEND Caffe2_DEPENDENCY_LIBS moodycamel)
     if(USE_CUDA)
       list(APPEND Caffe2_CUDA_DEPENDENCY_LIBS tensorpipe_cuda)
     elseif(USE_ROCM)
@@ -1332,17 +1323,6 @@ unset(_fmt_no_unique_address)
 list(APPEND Caffe2_DEPENDENCY_LIBS fmt::fmt-header-only)
 set(BUILD_SHARED_LIBS ${TEMP_BUILD_SHARED_LIBS} CACHE BOOL "Build shared libs" FORCE)
 
-# Include google/FlatBuffers
-include(${CMAKE_CURRENT_LIST_DIR}/FlatBuffers.cmake)
-
-# Include cpp-httplib
-add_library(httplib INTERFACE IMPORTED)
-target_include_directories(httplib SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/third_party/cpp-httplib)
-
 # Include nlohmann-json
 add_library(nlohmann INTERFACE IMPORTED)
 include_directories(nlohmann SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/third_party/nlohmann/include)
-
-# Include moodycamel
-add_library(moodycamel INTERFACE IMPORTED)
-include_directories(moodycamel SYSTEM INTERFACE ${PROJECT_SOURCE_DIR}/third_party/concurrentqueue)

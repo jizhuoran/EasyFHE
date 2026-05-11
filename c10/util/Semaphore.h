@@ -21,31 +21,31 @@
 #ifdef C10_SEMAPHORE_USE_STL
 #include <semaphore>
 #else
-// To use moodycamel semaphore, we need to include the header file
-// for concurrentqueue first. Hiding implementation detail here.
-#ifdef BLOCK_SIZE
-#pragma push_macro("BLOCK_SIZE")
-#undef BLOCK_SIZE
-#include <moodycamel/concurrentqueue.h> // @manual
-#pragma pop_macro("BLOCK_SIZE")
-#else
-#include <moodycamel/concurrentqueue.h> // @manual
-#endif
-
-#include <moodycamel/lightweightsemaphore.h> // @manual
+#include <condition_variable>
+#include <mutex>
 #endif
 
 namespace c10 {
 
 class Semaphore {
  public:
-  Semaphore(int32_t initial_count = 0) : impl_(initial_count) {}
+  Semaphore(int32_t initial_count = 0)
+#ifdef C10_SEMAPHORE_USE_STL
+      : impl_(initial_count)
+#else
+      : count_(initial_count)
+#endif
+  {}
 
   void release(int32_t n = 1) {
 #ifdef C10_SEMAPHORE_USE_STL
     impl_.release(n);
 #else
-    impl_.signal(n);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      count_ += n;
+    }
+    cv_.notify_all();
 #endif
   }
 
@@ -53,7 +53,9 @@ class Semaphore {
 #ifdef C10_SEMAPHORE_USE_STL
     impl_.acquire();
 #else
-    impl_.wait();
+    std::unique_lock<std::mutex> lock(mutex_);
+    cv_.wait(lock, [this] { return count_ > 0; });
+    --count_;
 #endif
   }
 
@@ -61,7 +63,12 @@ class Semaphore {
 #ifdef C10_SEMAPHORE_USE_STL
     return impl_.try_acquire();
 #else
-    return impl_.tryWait();
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (count_ == 0) {
+      return false;
+    }
+    --count_;
+    return true;
 #endif
   }
 
@@ -69,7 +76,9 @@ class Semaphore {
 #ifdef C10_SEMAPHORE_USE_STL
   std::counting_semaphore<> impl_;
 #else
-  moodycamel::LightweightSemaphore impl_;
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  int32_t count_;
 #endif
 };
 } // namespace c10

@@ -1,4 +1,8 @@
 #ifdef USE_C10D_NCCL
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
+#define EASYFHE_DISABLE_C10D_CONTROL_PLANE
+#endif
+
 #include <ATen/cuda/CUDAEvent.h>
 #include <cuda_runtime.h>
 

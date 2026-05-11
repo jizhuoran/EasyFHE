@@ -1,5 +1,9 @@
 #include <torch/csrc/python_headers.h>
 
+#ifndef EASYFHE_DISABLE_C10D_CONTROL_PLANE
+#define EASYFHE_DISABLE_C10D_CONTROL_PLANE
+#endif
+
 #include <c10/util/intrusive_ptr.h>
 #include <torch/csrc/distributed/c10d/FileStore.hpp>
 #include <torch/csrc/distributed/c10d/FlightRecorder.hpp>
