@@ -1,1 +1,4 @@
-from .tensor import *  # noqa: F403
+from .tensor import Resize
+
+
+__all__ = ["Resize"]

@@ -618,7 +618,10 @@ def _private_register_pytree_node(
     for the Python pytree only. End-users should use :func:`register_pytree_node`
     instead.
     """
-    from torch._library.opaque_object import is_opaque_type
+    try:
+        from torch._library.opaque_object import is_opaque_type
+    except (ImportError, AttributeError):
+        is_opaque_type = lambda _cls: False
 
     if isinstance(cls, type) and is_opaque_type(cls):
         # TODO: remove this allowance once downstream callers stop calling

@@ -125,6 +125,7 @@ function(easyfhe_filter_runtime_sources _srcs)
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(cuda/)?shim_common\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/(dynamo|functorch|inductor|lazy)/")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/jit/")
+    list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/autograd/autograd\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/api/src/jit\\.cpp$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(comm|default_comm_hooks|ParamCommsUtils|reducer|reducer_cuda)\\.(cpp|cu)$")
     list(FILTER ${_srcs} EXCLUDE REGEX "/torch/csrc/distributed/c10d/(GlooDeviceFactory|ProcessGroupGloo|ProcessGroupGlooCuda|ProcessGroupMPI|ProcessGroupUCC|ProcessGroupWrapper|UCCTracing|UCCUtils)\\.cpp$")
@@ -138,6 +139,7 @@ function(easyfhe_filter_runtime_sources _srcs)
     if("${_srcs}" STREQUAL "TORCH_SRCS" OR "${_srcs}" STREQUAL "Caffe2_CPU_SRCS")
       list(APPEND ${_srcs}
         ${TORCH_SRC_DIR}/csrc/dynamo/easyfhe_compiled_autograd_stub.cpp
+        ${TORCH_SRC_DIR}/csrc/autograd/easyfhe_autograd_core_stubs.cpp
         ${TORCH_SRC_DIR}/csrc/jit/frontend/error_report.cpp
         ${TORCH_SRC_DIR}/csrc/jit/frontend/function_schema_parser.cpp
         ${TORCH_SRC_DIR}/csrc/jit/frontend/lexer.cpp
