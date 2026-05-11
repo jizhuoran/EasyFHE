@@ -412,8 +412,9 @@ android/pytorch_android_torchvision/.cxx
 !GPU-FHE/examples/*.bin
 
 # Claude Code local configuration
+/.claude/
+/CLAUDE.md
 CLAUDE.local.md
 /test_*.py
 /debug_*.py
 CLAUDE_CONTEXT/
-/.claude/settings.local.json
