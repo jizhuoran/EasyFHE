@@ -6,7 +6,6 @@
 #include <torch/csrc/autograd/grad_mode.h>
 #include <torch/csrc/jit/frontend/tracer.h>
 #include <torch/csrc/jit/ir/ir.h>
-#include <torch/csrc/jit/passes/shape_analysis.h>
 #include <torch/csrc/jit/resource_guard.h>
 #include <torch/csrc/jit/runtime/argument_spec.h>
 #include <torch/csrc/jit/runtime/autodiff.h>
@@ -57,9 +56,7 @@ const size_t autodiffSubgraphInlineThreshold = 5;
 struct GraphExecutorImplBase {
   static std::shared_ptr<Graph> prepareGraph(
       const std::shared_ptr<Graph>& graph) {
-    auto copy = graph->copy();
-    EraseShapeInformation(copy);
-    return copy;
+    return graph->copy();
   }
 
   GraphExecutorImplBase(

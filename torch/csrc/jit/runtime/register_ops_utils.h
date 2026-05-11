@@ -11,7 +11,6 @@
 #include <torch/csrc/jit/api/module.h>
 #include <torch/csrc/jit/frontend/error_report.h>
 #include <torch/csrc/jit/ir/ir.h>
-#include <torch/csrc/jit/mobile/register_ops_common_utils.h>
 #include <torch/csrc/jit/runtime/custom_operator.h>
 #include <torch/csrc/jit/runtime/graph_executor.h>
 #include <torch/csrc/jit/runtime/jit_exception.h>
@@ -34,6 +33,8 @@
 #include <c10/util/irange.h>
 
 namespace torch::jit {
+int64_t normalizeIndex(int64_t idx, int64_t list_size);
+
 constexpr inline c10::AliasAnalysisKind aliasAnalysisFromSchema() {
   return c10::AliasAnalysisKind::FROM_SCHEMA;
 }

@@ -4,12 +4,17 @@
 #include <c10/util/flat_hash_map.h>
 #include <torch/csrc/jit/ir/ir.h>
 #include <torch/csrc/jit/ir/type_hashing.h>
-#include <torch/csrc/jit/passes/create_functional_graphs.h>
-#include <torch/csrc/jit/passes/utils/memory_dag.h>
+
+#include <unordered_set>
 
 namespace torch::jit {
 
 class ValueAndMemoryLocationSet;
+class Element;
+class MemoryDAG;
+class MemoryDAGBuilder;
+using MemoryLocations = std::unordered_set<Element*>;
+using AliasTypeSet = std::unordered_set<TypePtr, HashType, EqualType>;
 
 /**
  * Alias analysis pass.

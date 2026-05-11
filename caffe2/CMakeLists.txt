@@ -519,19 +519,11 @@ endif()
 # Mobile backend delegate srcs
 if(INTERN_BUILD_MOBILE)
   set(DELEGATE_SRCS
-    ${TORCH_SRC_DIR}/csrc/jit/backends/backend_debug_info.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/backends/backend_interface.cpp
   )
   list(APPEND TORCH_SRCS ${DELEGATE_SRCS})
   if(IOS AND USE_COREML_DELEGATE)
     set(COREML_DELEGATE_SRCS
-      ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/cpp/context.cpp
-      ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/objc/PTMCoreMLBackend.mm
-      ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/objc/PTMCoreMLExecutor.mm
-      ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/objc/PTMCoreMLCompiler.mm
-      ${TORCH_SRC_DIR}/csrc/jit/backends/coreml/objc/PTMCoreMLFeatureProvider.mm
     )
-    set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/backends/coreml/objc/PTMCoreMLBackend.mm PROPERTIES COMPILE_FLAGS "-fno-objc-arc")
     include_directories(${TORCH_ROOT}/third_party/nlohmann/single_include)
     list(APPEND TORCH_SRCS ${COREML_DELEGATE_SRCS})
   endif()
@@ -539,13 +531,10 @@ endif()
 
 # Required workaround for LLVM 9 includes.
 if(NOT MSVC)
-  set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/tensorexpr/llvm_jit.cpp PROPERTIES COMPILE_FLAGS -Wno-noexcept-type)
 endif()
 # Disable certain warnings for GCC-9.X
 if(CMAKE_COMPILER_IS_GNUCXX)
   # See https://github.com/pytorch/pytorch/issues/38856
-  set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/tensorexpr/llvm_jit.cpp PROPERTIES COMPILE_FLAGS "-Wno-redundant-move -Wno-noexcept-type")
-  set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/tensorexpr/llvm_codegen.cpp PROPERTIES COMPILE_FLAGS "-Wno-init-list-lifetime")
 endif()
 
 # Enable conditional FP16 arithmetic intrinsics
@@ -556,23 +545,6 @@ endif()
 
 if(NOT INTERN_DISABLE_MOBILE_INTERP)
   set(MOBILE_SRCS
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/function.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/import.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/import_data.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/interpreter.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/compatibility/model_compatibility.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/module.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/flatbuffer_loader.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/observer.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/parse_bytecode.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/parse_operators.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/quantization.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/train/export_data.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/train/optim/sgd.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/train/random.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/train/sequential.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/mobile/upgrader_mobile.cpp
-     ${TORCH_SRC_DIR}/csrc/jit/serialization/flatbuffer_serializer.cpp
      )
   list(APPEND TORCH_SRCS ${MOBILE_SRCS})
   list(APPEND TORCH_SRCS ${LITE_EAGER_SYMOBLICATION_SRCS})
@@ -607,14 +579,9 @@ endif()
 if(NOT INTERN_BUILD_MOBILE AND NOT BUILD_LITE_INTERPRETER)
   list(APPEND TORCH_SRCS
     ${TORCH_SRC_DIR}/csrc/api/src/jit.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/mobile/compatibility/backport.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/mobile/compatibility/backport_manager.cpp
     ${TORCH_SRC_DIR}/csrc/jit/serialization/onnx.cpp
     ${TORCH_SRC_DIR}/csrc/jit/serialization/export.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/serialization/export_bytecode.cpp
     ${TORCH_SRC_DIR}/csrc/jit/serialization/export_module.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/serialization/flatbuffer_serializer.cpp
-    ${TORCH_SRC_DIR}/csrc/jit/codegen/fuser/cpu/fused_kernel.cpp
     ${TORCH_SRC_DIR}/csrc/jit/api/module_save.cpp
     ${TORCH_SRC_DIR}/csrc/utils/byte_order.cpp
   )
@@ -680,8 +647,6 @@ if(USE_CUDA)
     ${TORCH_ROOT}/aten/src/ATen/cuda/detail/LazyNVRTC.cpp
     PROPERTIES COMPILE_DEFINITIONS "NVRTC_SHORTHASH=${CUDA_NVRTC_SHORTHASH}"
   )
-  set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/passes/frozen_conv_add_relu_fusion.cpp PROPERTIES COMPILE_FLAGS "-DUSE_CUDA=1")
-  set_source_files_properties(${TORCH_SRC_DIR}/csrc/jit/codegen/cuda/interface.cpp PROPERTIES COMPILE_FLAGS "-DUSE_CUDA=1")
 endif()
 
 if(USE_ROCM)
@@ -1208,7 +1173,6 @@ endif()
 # Build model tracer for tracing-based selective build
 if(TRACING_BASED AND NOT BUILD_LITE_INTERPRETER AND NOT INTERN_BUILD_MOBILE)
   add_subdirectory(
-    ${TORCH_ROOT}/torch/csrc/jit/mobile/model_tracer
     ${CMAKE_BINARY_DIR}/model_tracer
   )
   string(APPEND CMAKE_CXX_FLAGS " -DENABLE_RECORD_KERNEL_FUNCTION_DTYPE")
@@ -1395,8 +1359,6 @@ if(USE_ROCM)
     USE_ROCM
     __HIP_PLATFORM_AMD__
     )
-  # NB: Massive hack.  torch/csrc/jit/codegen/fuser/codegen.cpp includes
-  # torch/csrc/jit/codegen/fuser/cuda/resource_strings.h which changes the
   # strings depending on if you're __HIP_PLATFORM_AMD__ or not.
   # But that file is in torch_cpu!  So, against all odds, this macro
   # has to be set on torch_cpu too.  I also added it to torch for

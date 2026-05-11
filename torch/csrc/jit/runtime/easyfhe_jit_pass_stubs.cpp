@@ -1,24 +1,24 @@
-#include <torch/csrc/jit/passes/autocast.h>
-#include <torch/csrc/jit/passes/bailout_graph.h>
-#include <torch/csrc/jit/passes/constant_pooling.h>
-#include <torch/csrc/jit/passes/constant_propagation.h>
-#include <torch/csrc/jit/passes/dead_code_elimination.h>
-#include <torch/csrc/jit/passes/fixup_trace_scope_blocks.h>
-#include <torch/csrc/jit/passes/lower_tuples.h>
-#include <torch/csrc/jit/passes/normalize_ops.h>
-#include <torch/csrc/jit/passes/peephole.h>
-#include <torch/csrc/jit/codegen/fuser/interface.h>
 #include <torch/csrc/jit/frontend/builtin_functions.h>
 #include <torch/csrc/jit/frontend/versioned_symbols.h>
-#include <torch/csrc/jit/mobile/prim_ops_registery.h>
-#include <torch/csrc/jit/mobile/promoted_prim_ops.h>
-#include <torch/csrc/jit/operator_upgraders/utils.h>
 #include <torch/csrc/jit/runtime/profiling_record.h>
 #include <torch/csrc/jit/runtime/script_profile.h>
 #include <torch/csrc/jit/serialization/pickle.h>
 #include <torch/csrc/jit/serialization/type_name_uniquer.h>
 
 namespace torch::jit {
+
+enum class DCESideEffectPolicy { LIVENESS };
+
+struct UpgraderEntry {
+  std::string upgrader_name;
+  std::string old_schema;
+  std::string new_schema;
+};
+
+struct UpgraderRange {
+  size_t min_version = 0;
+  size_t max_version = 0;
+};
 
 void NormalizeOps(const std::shared_ptr<Graph>&) {}
 
