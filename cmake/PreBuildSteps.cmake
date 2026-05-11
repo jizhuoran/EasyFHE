@@ -97,7 +97,16 @@ if(NOT USE_SYSTEM_NCCL)
 
   if(NOT _skip_nccl)
     set(_nccl_dir "${PROJECT_SOURCE_DIR}/third_party/nccl")
-    if(NOT EXISTS "${_nccl_dir}")
+    set(_need_nccl_checkout TRUE)
+    if(EXISTS "${_nccl_dir}" AND IS_DIRECTORY "${_nccl_dir}")
+      file(GLOB _nccl_contents "${_nccl_dir}/*")
+      if(_nccl_contents)
+        set(_need_nccl_checkout FALSE)
+      else()
+        file(REMOVE_RECURSE "${_nccl_dir}")
+      endif()
+    endif()
+    if(_need_nccl_checkout)
       # Select pin file: try a CUDA-version-specific pin (e.g. nccl-cu126.txt)
       # first, fall back to nccl.txt.  Adding a new pin file is sufficient to
       # support a new CUDA version — no CMake changes needed.
@@ -126,17 +135,19 @@ if(NOT USE_SYSTEM_NCCL)
       if(EXISTS "${_nccl_pin_file}")
         file(READ "${_nccl_pin_file}" _nccl_tag)
         string(STRIP "${_nccl_tag}" _nccl_tag)
-        message(STATUS "Checking out NCCL release tag: ${_nccl_tag} (from ${_nccl_pin_name})")
-        include(FetchContent)
-        FetchContent_Declare(
-          nccl
-          GIT_REPOSITORY https://github.com/NVIDIA/nccl
-          GIT_TAG        "${_nccl_tag}"
-          GIT_SHALLOW    TRUE
-          SOURCE_DIR     "${_nccl_dir}"
-        )
-        FetchContent_Populate(nccl)
+      else()
+        set(_nccl_tag "v2.29.7-1")
       endif()
+      message(STATUS "Checking out NCCL release tag: ${_nccl_tag}")
+      include(FetchContent)
+      FetchContent_Declare(
+        nccl
+        GIT_REPOSITORY https://github.com/NVIDIA/nccl
+        GIT_TAG        "${_nccl_tag}"
+        GIT_SHALLOW    TRUE
+        SOURCE_DIR     "${_nccl_dir}"
+      )
+      FetchContent_Populate(nccl)
     endif()
   endif()
 endif()

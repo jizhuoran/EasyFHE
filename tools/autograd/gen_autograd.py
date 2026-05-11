@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from pathlib import Path
 
 from torchgen.api import cpp
 from torchgen.api.autograd import (
@@ -75,7 +76,27 @@ def gen_autograd(
     )
 
     # Generate VariableType.h/cpp
-    if not disable_autograd:
+    if disable_autograd:
+        Path(os.path.join(out, "VariableType.h")).write_text(
+            """\
+#pragma once
+
+#include <ATen/core/DeprecatedTypeProperties.h>
+#include <torch/csrc/Export.h>
+
+#include <vector>
+
+namespace torch::autograd::VariableType {
+
+TORCH_API std::vector<at::DeprecatedTypeProperties*> allCPUTypes();
+TORCH_API std::vector<at::DeprecatedTypeProperties*> allCUDATypes();
+TORCH_API std::vector<at::DeprecatedTypeProperties*> allXPUTypes();
+TORCH_API std::vector<at::DeprecatedTypeProperties*> allPrivateUser1Types();
+
+} // namespace torch::autograd::VariableType
+"""
+        )
+    else:
         gen_variable_type(
             out,
             native_functions_path,

@@ -51,10 +51,14 @@ $ops_headers
 #endif
 
 using at::device_of;
+using at::Device;
+using at::MemoryFormat;
 using at::OptionalDeviceGuard;
 using at::Scalar;
 using at::ScalarType;
+using at::Storage;
 using at::Tensor;
+using at::TensorOptions;
 using c10::Stream;
 using namespace torch::autograd::utils;
 
