@@ -1,0 +1,906 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="EasyFHE install selector for CUDA wheels and FHE tensor runtime builds.">
+  <title>EasyFHE</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #161616;
+      --muted: #5b6068;
+      --line: #d8dde5;
+      --panel: #ffffff;
+      --paper: #f7f5ef;
+      --teal: #027d75;
+      --teal-dark: #075f5a;
+      --coral: #e05f47;
+      --yellow: #f2b84b;
+      --blue: #3267c5;
+      --code: #101318;
+      --code-line: #303845;
+      --shadow: 0 18px 50px rgba(25, 31, 38, 0.12);
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(180deg, rgba(247, 245, 239, 0.98), rgba(246, 248, 249, 1) 34rem),
+        var(--paper);
+      color: var(--ink);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .shell {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid rgba(22, 22, 22, 0.08);
+      background: rgba(247, 245, 239, 0.82);
+      backdrop-filter: blur(16px);
+    }
+
+    .topbar .shell {
+      display: flex;
+      min-height: 64px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 780;
+      letter-spacing: 0;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid rgba(2, 125, 117, 0.34);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--teal);
+      box-shadow: 0 8px 18px rgba(2, 125, 117, 0.14);
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    nav a:hover {
+      color: var(--ink);
+    }
+
+    .hero {
+      min-height: calc(100vh - 64px);
+      display: grid;
+      align-items: center;
+      padding: 62px 0 34px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 520px);
+      align-items: center;
+      gap: 56px;
+    }
+
+    .eyebrow {
+      width: max-content;
+      max-width: 100%;
+      padding: 7px 11px;
+      border: 1px solid rgba(2, 125, 117, 0.24);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.66);
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    h1 {
+      margin: 22px 0 18px;
+      font-size: clamp(52px, 8vw, 92px);
+      line-height: 0.93;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 670px;
+      margin: 0;
+      color: #40454d;
+      font-size: clamp(18px, 2.3vw, 23px);
+      line-height: 1.45;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+      margin-top: 30px;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 0 18px;
+      font-size: 15px;
+      font-weight: 760;
+      cursor: pointer;
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button.primary {
+      background: var(--teal);
+      color: #fff;
+      box-shadow: 0 14px 24px rgba(2, 125, 117, 0.2);
+    }
+
+    .button.secondary {
+      border-color: rgba(22, 22, 22, 0.14);
+      background: rgba(255, 255, 255, 0.68);
+      color: var(--ink);
+    }
+
+    .visual {
+      overflow: hidden;
+      border: 1px solid rgba(22, 22, 22, 0.1);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: var(--shadow);
+    }
+
+    .visual-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(22, 22, 22, 0.08);
+      padding: 14px 16px;
+      color: #48505b;
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    .status-lights {
+      display: flex;
+      gap: 7px;
+    }
+
+    .status-lights span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--line);
+    }
+
+    .status-lights span:nth-child(1) {
+      background: var(--coral);
+    }
+
+    .status-lights span:nth-child(2) {
+      background: var(--yellow);
+    }
+
+    .status-lights span:nth-child(3) {
+      background: var(--teal);
+    }
+
+    #pipeline {
+      display: block;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1.1 / 1;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(242, 184, 75, 0.2), transparent 30%),
+        linear-gradient(135deg, #fdfdfb, #f0f4f5);
+    }
+
+    .next-hint {
+      margin-top: 34px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 680;
+    }
+
+    section {
+      padding: 78px 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 28px;
+      margin-bottom: 26px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(30px, 4vw, 46px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .section-head p {
+      max-width: 490px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .installer {
+      display: grid;
+      grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+      gap: 22px;
+      align-items: stretch;
+    }
+
+    .panel {
+      border: 1px solid rgba(22, 22, 22, 0.1);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 12px 34px rgba(25, 31, 38, 0.08);
+    }
+
+    .controls {
+      padding: 20px;
+    }
+
+    .field {
+      display: grid;
+      gap: 9px;
+      margin-bottom: 18px;
+    }
+
+    label {
+      color: #353b43;
+      font-size: 13px;
+      font-weight: 760;
+    }
+
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+      font-weight: 650;
+      padding: 0 12px;
+    }
+
+    .summary {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+      padding-top: 18px;
+      border-top: 1px solid rgba(22, 22, 22, 0.1);
+    }
+
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .summary-row strong {
+      color: var(--ink);
+      text-align: right;
+    }
+
+    .command-panel {
+      overflow: hidden;
+      background: var(--code);
+      color: #f8fafc;
+    }
+
+    .command-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--code-line);
+      padding: 14px 16px;
+      color: #bdc5d2;
+      font-size: 13px;
+      font-weight: 720;
+    }
+
+    .copy {
+      min-height: 34px;
+      border-color: #526071;
+      background: #19202a;
+      color: #fff;
+      font-size: 13px;
+      padding: 0 12px;
+    }
+
+    pre {
+      min-height: 176px;
+      margin: 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      padding: 20px;
+      color: #f4f7fb;
+      font: 650 16px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .note {
+      border-top: 1px solid var(--code-line);
+      padding: 14px 20px 18px;
+      color: #cad2df;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .info-card {
+      min-height: 180px;
+      padding: 20px;
+    }
+
+    .info-card h3 {
+      margin: 0 0 12px;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .info-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .stripe {
+      width: 44px;
+      height: 5px;
+      margin-bottom: 22px;
+      border-radius: 999px;
+      background: var(--teal);
+    }
+
+    .info-card:nth-child(2) .stripe {
+      background: var(--coral);
+    }
+
+    .info-card:nth-child(3) .stripe {
+      background: var(--blue);
+    }
+
+    .publish {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+      gap: 24px;
+      align-items: start;
+    }
+
+    .steps {
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 14px;
+      align-items: start;
+      padding: 16px 0;
+      border-bottom: 1px solid rgba(22, 22, 22, 0.1);
+    }
+
+    .step:last-child {
+      border-bottom: 0;
+    }
+
+    .step-number {
+      display: grid;
+      width: 36px;
+      height: 36px;
+      place-items: center;
+      border-radius: 50%;
+      background: #fff;
+      color: var(--teal-dark);
+      font-weight: 850;
+      box-shadow: inset 0 0 0 1px rgba(2, 125, 117, 0.24);
+    }
+
+    .step h3 {
+      margin: 0 0 6px;
+      font-size: 17px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .mini-code {
+      overflow: hidden;
+      border-radius: 14px;
+      background: var(--code);
+      color: #f8fafc;
+    }
+
+    .mini-code pre {
+      min-height: 0;
+      font-size: 13px;
+    }
+
+    footer {
+      border-top: 1px solid rgba(22, 22, 22, 0.1);
+      padding: 28px 0 42px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    footer .shell {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 900px) {
+      .hero {
+        min-height: auto;
+        padding-top: 38px;
+      }
+
+      .hero-grid,
+      .installer,
+      .publish {
+        grid-template-columns: 1fr;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+
+      .section-head {
+        align-items: start;
+        flex-direction: column;
+      }
+
+      nav {
+        display: none;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        width: min(100% - 24px, 1160px);
+      }
+
+      h1 {
+        font-size: 48px;
+      }
+
+      .hero-actions {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="#top" aria-label="EasyFHE home">
+        <span class="brand-mark">E</span>
+        <span>EasyFHE</span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a href="#install">Install</a>
+        <a href="#wheels">Wheels</a>
+        <a href="#publish">Publish</a>
+        <a href="https://github.com/jizhuoran/EasyFHE">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="shell hero-grid">
+        <div>
+          <div class="eyebrow">CUDA wheels for the EasyFHE tensor runtime</div>
+          <h1>EasyFHE</h1>
+          <p class="lede">
+            A PyTorch-derived tensor runtime for fully homomorphic encryption,
+            with GPU accelerated CKKS operators, rotations, rescaling, and
+            bootstrapping.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#install">Get install command</a>
+            <a class="button secondary" href="https://github.com/jizhuoran/EasyFHE">View repository</a>
+          </div>
+          <p class="next-hint">First public wheels target Linux x86_64, Python 3.12, CUDA 12.4 and CUDA 13.2.</p>
+        </div>
+
+        <div class="visual" aria-label="EasyFHE encrypted tensor pipeline visualization">
+          <div class="visual-head">
+            <span>encrypted tensor pipeline</span>
+            <div class="status-lights" aria-hidden="true"><span></span><span></span><span></span></div>
+          </div>
+          <canvas id="pipeline" width="900" height="820"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <section id="install">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Install Selector</h2>
+          <p>Choose the CUDA wheel channel and copy the exact pip command. The command keeps PyPI available for normal Python dependencies.</p>
+        </div>
+
+        <div class="installer">
+          <div class="panel controls">
+            <div class="field">
+              <label for="pythonVersion">Python</label>
+              <select id="pythonVersion">
+                <option value="3.12">Python 3.12</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="platform">Platform</label>
+              <select id="platform">
+                <option value="linux-x86_64">Linux x86_64</option>
+              </select>
+            </div>
+
+            <div class="field">
+              <label for="cuda">CUDA</label>
+              <select id="cuda"></select>
+            </div>
+
+            <div class="summary" aria-live="polite">
+              <div class="summary-row">
+                <span>Wheel</span>
+                <strong id="wheelName">Loading</strong>
+              </div>
+              <div class="summary-row">
+                <span>Ubuntu</span>
+                <strong id="ubuntuRange">Loading</strong>
+              </div>
+              <div class="summary-row">
+                <span>Status</span>
+                <strong id="channelStatus">Loading</strong>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel command-panel">
+            <div class="command-toolbar">
+              <span>pip command</span>
+              <button class="button copy" id="copyCommand" type="button">Copy</button>
+            </div>
+            <pre id="commandText">Loading install matrix...</pre>
+            <div class="note" id="channelNote">Loading channel notes...</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="wheels">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Wheel Policy</h2>
+          <p>EasyFHE follows a PyTorch-like release shape: one package name, separate CUDA channels, and manylinux wheels for modern Ubuntu systems.</p>
+        </div>
+
+        <div class="cards">
+          <article class="panel info-card">
+            <div class="stripe"></div>
+            <h3>One package name</h3>
+            <p>Users install `easyfhe`. CUDA selection happens through the wheel channel instead of package names like `easyfhe-cu132`.</p>
+          </article>
+          <article class="panel info-card">
+            <div class="stripe"></div>
+            <h3>CUDA channels</h3>
+            <p>Each CUDA runtime gets its own wheel index. The first two channels are CUDA 13.2 and CUDA 12.4.</p>
+          </article>
+          <article class="panel info-card">
+            <div class="stripe"></div>
+            <h3>Ubuntu coverage</h3>
+            <p>The current baseline is `manylinux_2_28_x86_64`, suitable for the Ubuntu 22.04 and 24.04 line.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="publish">
+      <div class="shell">
+        <div class="section-head">
+          <h2>Publish Flow</h2>
+          <p>The page is static, so releases are easy to audit. Build wheels, upload assets, update the matrix, then test a fresh install.</p>
+        </div>
+
+        <div class="publish">
+          <div class="steps">
+            <div class="step">
+              <div class="step-number">1</div>
+              <div>
+                <h3>Build the wheel matrix</h3>
+                <p>Use the manylinux build scripts to create CUDA-specific wheels under `wheelhouse/`.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-number">2</div>
+              <div>
+                <h3>Upload release assets</h3>
+                <p>Put the large `.whl` files on GitHub Releases or a stable download domain. Do not commit them to `docs/`.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-number">3</div>
+              <div>
+                <h3>Update the install matrix</h3>
+                <p>Edit `docs/install-matrix.json` and the tiny wheel index pages under `docs/whl/`.</p>
+              </div>
+            </div>
+            <div class="step">
+              <div class="step-number">4</div>
+              <div>
+                <h3>Test from a clean venv</h3>
+                <p>Install from the public page URL before announcing the release.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="mini-code">
+            <pre>CUDA_VERSIONS="12.4 13.2" \
+PYTHON_TAG=cp312-cp312 \
+TORCH_CUDA_ARCH_LIST=8.0 \
+packaging/manylinux/build_all_cuda_wheels.sh</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell">
+      <span>EasyFHE is an alpha research system.</span>
+      <a href="PUBLISHING.md">Publishing notes</a>
+    </div>
+  </footer>
+
+  <script>
+    const fallbackMatrix = {
+      project: {
+        package: "easyfhe",
+        defaultChannel: "cu132"
+      },
+      channels: [
+        {
+          id: "cu132",
+          label: "CUDA 13.2",
+          status: "preview",
+          ubuntu: "Ubuntu 22.04, 24.04",
+          version: "2.13.0a0+cu132.git6e869e1",
+          wheel: "easyfhe-2.13.0a0+cu132.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu132",
+          notes: "Best match for current CUDA 13.x developer machines."
+        },
+        {
+          id: "cu124",
+          label: "CUDA 12.4",
+          status: "preview",
+          ubuntu: "Ubuntu 22.04, 24.04",
+          version: "2.13.0a0+cu124.git6e869e1",
+          wheel: "easyfhe-2.13.0a0+cu124.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu124",
+          notes: "Good default for CUDA 12.x environments."
+        }
+      ]
+    };
+
+    const els = {
+      cuda: document.getElementById("cuda"),
+      wheelName: document.getElementById("wheelName"),
+      ubuntuRange: document.getElementById("ubuntuRange"),
+      channelStatus: document.getElementById("channelStatus"),
+      commandText: document.getElementById("commandText"),
+      channelNote: document.getElementById("channelNote"),
+      copy: document.getElementById("copyCommand")
+    };
+
+    let matrix = fallbackMatrix;
+
+    function commandFor(channel) {
+      return [
+        `python -m pip install "easyfhe==${channel.version}" \\`,
+        `  --find-links ${channel.findLinks}`
+      ].join("\n");
+    }
+
+    function renderChannel(channelId) {
+      const channel = matrix.channels.find((item) => item.id === channelId) || matrix.channels[0];
+      els.wheelName.textContent = channel.wheel;
+      els.ubuntuRange.textContent = channel.ubuntu;
+      els.channelStatus.textContent = channel.status;
+      els.commandText.textContent = commandFor(channel);
+      els.channelNote.textContent = channel.notes;
+    }
+
+    function hydrateInstaller(data) {
+      matrix = data;
+      els.cuda.innerHTML = "";
+      matrix.channels.forEach((channel) => {
+        const option = document.createElement("option");
+        option.value = channel.id;
+        option.textContent = channel.label;
+        els.cuda.appendChild(option);
+      });
+      els.cuda.value = matrix.project.defaultChannel || matrix.channels[0].id;
+      renderChannel(els.cuda.value);
+    }
+
+    fetch("install-matrix.json")
+      .then((response) => response.ok ? response.json() : fallbackMatrix)
+      .then(hydrateInstaller)
+      .catch(() => hydrateInstaller(fallbackMatrix));
+
+    els.cuda.addEventListener("change", () => renderChannel(els.cuda.value));
+    els.copy.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(els.commandText.textContent);
+      const original = els.copy.textContent;
+      els.copy.textContent = "Copied";
+      window.setTimeout(() => {
+        els.copy.textContent = original;
+      }, 1400);
+    });
+
+    const canvas = document.getElementById("pipeline");
+    const ctx = canvas.getContext("2d");
+    const nodes = [
+      { x: 145, y: 190, r: 54, label: "tensor", color: "#027d75" },
+      { x: 450, y: 158, r: 64, label: "encode", color: "#3267c5" },
+      { x: 710, y: 292, r: 58, label: "rotate", color: "#e05f47" },
+      { x: 520, y: 548, r: 72, label: "bootstrap", color: "#f2b84b" },
+      { x: 208, y: 610, r: 58, label: "result", color: "#027d75" }
+    ];
+
+    function drawPipeline(time) {
+      const t = time * 0.001;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(22, 22, 22, 0.12)";
+
+      for (let i = 0; i < nodes.length; i += 1) {
+        const a = nodes[i];
+        const b = nodes[(i + 1) % nodes.length];
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.bezierCurveTo((a.x + b.x) / 2, a.y - 90, (a.x + b.x) / 2, b.y + 90, b.x, b.y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < nodes.length; i += 1) {
+        const a = nodes[i];
+        const b = nodes[(i + 1) % nodes.length];
+        const phase = (t * 0.24 + i / nodes.length) % 1;
+        const x = cubic(a.x, (a.x + b.x) / 2, (a.x + b.x) / 2, b.x, phase);
+        const y = cubic(a.y, a.y - 90, b.y + 90, b.y, phase);
+        ctx.beginPath();
+        ctx.arc(x, y, 7, 0, Math.PI * 2);
+        ctx.fillStyle = i % 2 ? "#e05f47" : "#027d75";
+        ctx.fill();
+      }
+
+      nodes.forEach((node, index) => {
+        const pulse = Math.sin(t * 1.8 + index) * 5;
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r + pulse, 0, Math.PI * 2);
+        ctx.fillStyle = hexToRgba(node.color, 0.14);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.r, 0, Math.PI * 2);
+        ctx.fillStyle = "#ffffff";
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = node.color;
+        ctx.stroke();
+
+        drawGrid(node);
+
+        ctx.fillStyle = "#171a1f";
+        ctx.font = "700 24px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(node.label, node.x, node.y + node.r + 34);
+      });
+
+      requestAnimationFrame(drawPipeline);
+    }
+
+    function drawGrid(node) {
+      const count = 4;
+      const size = 10;
+      const gap = 8;
+      const start = -((count * size + (count - 1) * gap) / 2);
+      ctx.fillStyle = hexToRgba(node.color, 0.9);
+      for (let row = 0; row < count; row += 1) {
+        for (let col = 0; col < count; col += 1) {
+          const shade = 0.55 + ((row + col) % 3) * 0.16;
+          ctx.globalAlpha = shade;
+          ctx.fillRect(node.x + start + col * (size + gap), node.y + start + row * (size + gap), size, size);
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function cubic(a, b, c, d, t) {
+      const q = 1 - t;
+      return q * q * q * a + 3 * q * q * t * b + 3 * q * t * t * c + t * t * t * d;
+    }
+
+    function hexToRgba(hex, alpha) {
+      const value = hex.replace("#", "");
+      const red = parseInt(value.slice(0, 2), 16);
+      const green = parseInt(value.slice(2, 4), 16);
+      const blue = parseInt(value.slice(4, 6), 16);
+      return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+    }
+
+    requestAnimationFrame(drawPipeline);
+  </script>
+</body>
+</html>
