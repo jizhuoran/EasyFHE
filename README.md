@@ -117,12 +117,12 @@ python3 examples/easyfhe_benchmark/cli.py --help
 - `examples/resnet20_aespa/`: self-contained AESPA ResNet-20 example.
 - `examples/easyfhe_benchmark/`: profiling and benchmark harness.
 - `packaging/`: manylinux wheel and container packaging scripts.
-- `website/`: static project website for GitHub Pages.
+- `index.html` and `styles.css`: static project website for GitHub Pages.
 
 ## Website
 
-The project website lives in `website/`. The `docs` branch also includes a root
-`index.html` redirect so GitHub Pages can serve the site from the branch root.
+The project website lives at the root of the `docs` branch so GitHub Pages can
+serve it directly.
 
 Local preview:
 
@@ -133,7 +133,7 @@ python3 -m http.server 8765
 Then open:
 
 ```text
-http://127.0.0.1:8765/website/
+http://127.0.0.1:8765/
 ```
 
 For GitHub Pages, set:
