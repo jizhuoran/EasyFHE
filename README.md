@@ -1,40 +1,32 @@
 # EasyFHE
 
-EasyFHE is a tensor runtime for Fully Homomorphic Encryption (FHE). It began as
-a PyTorch fork, but it is being narrowed into something more specific: a compact
-runtime for encrypted tensor programs, CKKS-style homomorphic operators, CUDA
-kernels, native key material generation, and FHE-oriented examples.
+EasyFHE is a tensor runtime for Fully Homomorphic Encryption (FHE). See the [homepage and installation guide](https://jizhuoran.github.io/EasyFHE/) for CUDA wheel selection and installation commands. EasyFHE keeps the parts of a PyTorch-derived runtime that encrypted tensor programs need: dispatch, storage, CUDA execution, Python bindings, profiling hooks, and selected NCCL-oriented infrastructure. Around that runtime, EasyFHE adds a CKKS-oriented FHE layer with native key material generation and GPU accelerated homomorphic operators.
 
 ```python
 import easyfhe
 import easyfhe.fhe as fhe
 ```
 
-EasyFHE keeps the tensor infrastructure that encrypted workloads need and
-removes large parts of the training stack that do not serve FHE execution.
+EasyFHE is not intended to be a full PyTorch replacement. The goal is narrower: make FHE programs easier to express while keeping the implementation close enough to the encrypted data layout, RNS levels, key material, and GPU kernels to optimize end-to-end execution.
+
+## Design
+
+The design philosophy follows the framework described in [A Framework for Developing and Optimizing Fully Homomorphic Encryption Programs on GPUs](https://doi.org/10.1145/3779212.3790120). EasyFHE treats FHE programs as tensor programs, but exposes enough runtime structure for GPU-oriented optimization: ciphertext layout, modulus levels, precomputed material, rotation keys, bootstrapping constants, and fused homomorphic kernels are all first-class parts of the system.
 
 ## Highlights
 
-- `easyfhe.fhe` frontend for CKKS context specs, ciphertext state, plaintext
-  preparation, arithmetic, rotation, rescale, fused ops, and bootstrapping.
-- Native sampler and material generation for CKKS keys and rotation keys.
-- CUDA accelerated FHE kernels for encoding, NTT, automorphism, key switching,
-  modulus movement, ciphertext arithmetic, and bootstrapping paths.
-- A PyTorch-derived tensor core with storage, dispatch, CUDA runtime, Python
-  bindings, selected profiling, and selected NCCL-oriented infrastructure.
-- Self-contained research examples and benchmarking tools under `examples/`.
+- `easyfhe.fhe` frontend for CKKS context specs, ciphertext state, plaintext preparation, arithmetic, rotation, rescale, fused ops, and bootstrapping.
+- Native sampler and material generation for CKKS public keys, multiplication keys, rotation keys, and encryption/decryption material.
+- CUDA accelerated FHE kernels for encoding, NTT, automorphism, key switching, modulus movement, ciphertext arithmetic, and bootstrapping paths.
+- A PyTorch-derived tensor core with storage, dispatch, CUDA runtime, Python bindings, selected profiling, and selected NCCL-oriented infrastructure.
 
 ## Install
 
-EasyFHE is intended to install with one pip command. Use the docs page to
-choose the CUDA wheel channel for your machine:
-
-<https://jizhuoran.github.io/EasyFHE/>
+EasyFHE is intended to install with one pip command. Use the [EasyFHE install page](https://jizhuoran.github.io/EasyFHE/) to choose the CUDA wheel channel for your machine.
 
 ## Minimal Example
 
-This computes `x^32 + 3.14*x^16 + 1` on encrypted CKKS slots and performs one
-bootstrap after `x^16`.
+This computes `x^32 + 3.14*x^16 + 1` on encrypted CKKS slots and performs one bootstrap after `x^16`.
 
 ```python
 import numpy as np
@@ -101,103 +93,33 @@ result = fhe.homo_add_scalar_double(fhe.homo_add(x32, term, ctx), 1.0, ctx)
 print(ctx.decrypt(result)[:8])
 ```
 
-## Examples
+## Reference Application
 
-Self-contained ResNet-20 AESPA example:
+The ResNet-20 AESPA reference application is maintained separately:
 
-```bash
-python3 examples/resnet20_aespa/main.py
-```
-
-Legacy ResNet-20 AESPA smoke program:
-
-```bash
-python3 examples/resnet/src/resnet20_aespa.py
-```
-
-Dot product example:
-
-```bash
-python3 examples/dot_product/innerproduct_example.py
-```
-
-Benchmark harness:
-
-```bash
-python3 examples/easyfhe_benchmark/cli.py --help
-```
+- [jizhuoran/easyfhe-resnet20-aespa](https://github.com/jizhuoran/easyfhe-resnet20-aespa)
 
 ## Repository Map
 
 - `easyfhe/`: Python package and retained tensor runtime surface.
-- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, runtime
-  options, and material handling.
+- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, runtime options, and material handling.
 - `aten/src/ATen/native/fhe/`: native FHE kernels and native sampler.
-- `examples/resnet20_aespa/`: self-contained AESPA ResNet-20 example.
-- `examples/easyfhe_benchmark/`: profiling and benchmark harness.
 - `packaging/`: manylinux wheel and container packaging scripts.
-- `index.html` and `styles.css`: static project website for GitHub Pages.
-
-## Website
-
-The project website lives at the root of the `docs` branch so GitHub Pages can
-serve it directly.
-
-Local preview:
-
-```bash
-python3 -m http.server 8765
-```
-
-Then open:
-
-```text
-http://127.0.0.1:8765/
-```
-
-For GitHub Pages, set:
-
-```text
-Source: Deploy from a branch
-Branch: docs
-Folder: /
-```
-
-The public page will be:
-
-```text
-https://jizhuoran.github.io/EasyFHE/
-```
 
 ## Current Status
 
-EasyFHE is an alpha research system. APIs, build flags, ciphertext layout, and
-packaging details may change quickly. Do not treat it as a production
-cryptographic library without independent review.
+EasyFHE is an alpha research system. APIs, build flags, ciphertext layout, and packaging details may change quickly. Do not treat it as a production cryptographic library without independent review.
 
 ## Direction
 
-EasyFHE is not trying to remain a full PyTorch clone. The long-term direction is
-to keep tensor storage, dispatch, CUDA execution, selected profiling, selected
-NCCL runtime pieces, and FHE operators, while removing model-training,
-optimizer, export, mobile, quantization, and other general ML surfaces.
+EasyFHE is being reduced from a general PyTorch fork into an FHE-focused tensor runtime. The long-term direction is to keep tensor storage, dispatch, CUDA execution, selected profiling, selected NCCL runtime pieces, and FHE operators, while removing model-training, optimizer, export, mobile, quantization, and other general machine-learning surfaces.
 
 ## Contributors
 
 EasyFHE is primarily developed by contributors from Shandong University.
 
-- [Zhuoran Ji](https://github.com/jizhuoran)
-- [Honghui You](https://github.com/youhonghui)
-- [Wenzhe Wang](https://github.com/Kelly-Zhe)
-- [Haoping Yang](https://github.com/er1ciac)
-- [Kanyu Ye](https://github.com/kanyuYe)
-- [Yuhang Fan](https://github.com/Azathoth13)
-- [Yusi Chen](https://github.com/chenyusii)
-
 ## License
 
 EasyFHE is distributed under the GPL-3.0 license.
 
-EasyFHE is derived from PyTorch and keeps portions of the PyTorch runtime. See
-the repository license files and retained third-party notices for upstream
-license information.
+EasyFHE is derived from PyTorch and keeps portions of the PyTorch runtime. See the repository license files and retained third-party notices for upstream license information.

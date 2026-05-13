@@ -199,7 +199,7 @@ h3 {
 .selector-panel,
 .command-panel,
 .feature-grid article,
-.example-list a {
+.reference-card a {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -334,7 +334,7 @@ code {
 }
 
 .feature-grid p,
-.example-list code,
+.reference-card code,
 .split p {
   color: var(--muted);
 }
@@ -372,25 +372,24 @@ code {
   font-size: 18px;
 }
 
-.example-list {
+.reference-card {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  max-width: 620px;
 }
 
-.example-list a {
+.reference-card a {
   display: grid;
   gap: 8px;
   min-height: 112px;
   padding: 22px;
 }
 
-.example-list span {
+.reference-card span {
   font-size: 19px;
   font-weight: 850;
 }
 
-.example-list code {
+.reference-card code {
   white-space: normal;
   overflow-wrap: anywhere;
 }
@@ -448,7 +447,7 @@ footer a {
   .feature-grid,
   .split,
   .pipeline,
-  .example-list {
+  .reference-card {
     grid-template-columns: 1fr;
   }
 
