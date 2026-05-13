@@ -427,6 +427,10 @@ android/pytorch_android_torchvision/.cxx
 # GPU-FHE pickle files
 *.pkl
 
+# EasyFHE local release artifacts
+/wheelhouse/
+/=*[0-9]*
+
 # app data
 !GPU-FHE/
 !GPU-FHE/examples/

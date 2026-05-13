@@ -3,89 +3,123 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>EasyFHE - Encrypted Tensor Computation</title>
+    <title>EasyFHE - Encrypted Tensor Runtime</title>
     <meta
       name="description"
-      content="EasyFHE is a compact tensor runtime for Fully Homomorphic Encryption workloads."
+      content="EasyFHE is a compact tensor runtime for GPU-accelerated Fully Homomorphic Encryption workloads."
     />
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <header class="site-header" aria-label="Primary navigation">
-      <a class="brand" href="#top">EasyFHE</a>
+      <a class="brand" href="#top" aria-label="EasyFHE home">
+        <span class="brand-mark">E</span>
+        <span>EasyFHE</span>
+      </a>
       <nav>
+        <a href="#install">Install</a>
         <a href="#runtime">Runtime</a>
-        <a href="#build">Build</a>
         <a href="#examples">Examples</a>
-        <a href="#roadmap">Roadmap</a>
+        <a href="#publish">Publish</a>
+        <a href="https://github.com/jizhuoran/EasyFHE">GitHub</a>
       </nav>
     </header>
 
     <main id="top">
       <section class="hero">
-        <div class="hero-scene" aria-hidden="true">
-          <div class="rail rail-a"></div>
-          <div class="rail rail-b"></div>
-          <div class="matrix matrix-a">
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-          </div>
-          <div class="matrix matrix-b">
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-            <span></span><span></span><span></span><span></span>
-          </div>
-          <div class="kernel kernel-a">NTT</div>
-          <div class="kernel kernel-b">KS</div>
-          <div class="kernel kernel-c">BOOT</div>
-        </div>
-
+        <canvas id="hero-canvas" width="1440" height="820" aria-hidden="true"></canvas>
         <div class="hero-copy">
-          <p class="eyebrow">Encrypted tensor computation</p>
+          <p class="eyebrow">GPU accelerated encrypted tensor computation</p>
           <h1>EasyFHE</h1>
           <p>
-            A compact PyTorch-derived runtime for Fully Homomorphic Encryption:
-            tensor-style Python, native CKKS material generation, CUDA FHE
-            kernels, and a codebase trimmed around encrypted workloads.
+            A PyTorch-derived runtime shaped around Fully Homomorphic
+            Encryption: tensor-style Python, native CKKS material generation,
+            CUDA FHE kernels, rotations, rescaling, and bootstrapping.
           </p>
           <div class="hero-actions">
-            <a class="button primary" href="#build">Build from source</a>
-            <a class="button secondary" href="#examples">View examples</a>
+            <a class="button primary" href="#install">Get install command</a>
+            <a class="button secondary" href="#runtime">Explore runtime</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="install" class="section install-section">
+        <div class="section-heading">
+          <p class="eyebrow">Install</p>
+          <h2>Choose a CUDA wheel channel</h2>
+          <p>
+            EasyFHE keeps one Python package name and separates CUDA variants
+            by wheel channel. The current preview targets Linux x86_64,
+            Python 3.12, and modern Ubuntu systems.
+          </p>
+        </div>
+
+        <div class="install-grid">
+          <div class="selector-panel">
+            <label for="cuda-channel">CUDA runtime</label>
+            <select id="cuda-channel"></select>
+
+            <dl class="channel-facts">
+              <div>
+                <dt>Python</dt>
+                <dd id="fact-python">3.12</dd>
+              </div>
+              <div>
+                <dt>Platform</dt>
+                <dd id="fact-platform">Linux x86_64</dd>
+              </div>
+              <div>
+                <dt>Ubuntu</dt>
+                <dd id="fact-ubuntu">Ubuntu 22.04, 24.04</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd id="fact-status">preview</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="command-panel">
+            <div class="command-head">
+              <span>pip command</span>
+              <button id="copy-command" type="button">Copy</button>
+            </div>
+            <pre><code id="install-command"></code></pre>
+            <p id="channel-note"></p>
           </div>
         </div>
       </section>
 
       <section id="runtime" class="section">
         <div class="section-heading">
-          <p class="eyebrow">Runtime shape</p>
+          <p class="eyebrow">Runtime</p>
           <h2>Tensor infrastructure, narrowed for FHE</h2>
         </div>
         <div class="feature-grid">
           <article>
+            <span class="stripe"></span>
             <h3>FHE frontend</h3>
             <p>
-              `easyfhe.fhe` provides context specs, native key material,
-              plaintext preparation, ciphertext arithmetic, rotation, rescale,
-              fused ops, and bootstrapping entry points.
+              `easyfhe.fhe` exposes context specs, ciphertext state,
+              plaintext preparation, arithmetic, rotation, rescale, fused ops,
+              and bootstrapping entry points.
             </p>
           </article>
           <article>
+            <span class="stripe"></span>
+            <h3>Native material</h3>
+            <p>
+              CKKS contexts, ciphertext material, and rotation keys can be
+              generated through the native EasyFHE path, including fast
+              development modes for benchmark iteration.
+            </p>
+          </article>
+          <article>
+            <span class="stripe"></span>
             <h3>CUDA kernels</h3>
             <p>
               Native kernels cover encoding, NTT, automorphism, key switching,
-              modulus movement, ciphertext arithmetic, and fused homomorphic
-              compute paths.
-            </p>
-          </article>
-          <article>
-            <h3>Lean core</h3>
-            <p>
-              EasyFHE keeps dispatch, storage, CUDA runtime, selected profiling,
-              and selected NCCL-oriented infrastructure while removing most
-              model-training machinery.
+              modulus movement, ciphertext arithmetic, and bootstrapping.
             </p>
           </article>
         </div>
@@ -107,45 +141,23 @@
           </div>
           <div>
             <span>Device</span>
-            <strong>CUDA + NCCL path</strong>
+            <strong>CUDA and NCCL path</strong>
           </div>
         </div>
-      </section>
-
-      <section id="build" class="section split">
-        <div>
-          <p class="eyebrow">Build</p>
-          <h2>Editable CUDA development build</h2>
-          <p>
-            EasyFHE is currently built from source. The fast build flags keep
-            the runtime focused on CUDA FHE development and avoid unused
-            training or mobile surfaces.
-          </p>
-        </div>
-        <pre><code>python3 setup.py clean
-
-USE_EASYFHE_FAST_BUILD=1 \
-USE_EASYFHE_FAST_INFERENCE=1 \
-USE_CUDA=1 USE_DISTRIBUTED=1 USE_NCCL=1 \
-USE_GLOO=0 USE_TENSORPIPE=0 USE_MPI=0 USE_UCC=0 \
-USE_CUDNN=0 USE_MKLDNN=0 BUILD_TEST=0 \
-BUILD_FUNCTORCH=0 USE_NINJA=1 \
-CMAKE_BUILD_TYPE=Release TORCH_CUDA_ARCH_LIST=8.0 \
-MAX_JOBS=24 python3 setup.py develop</code></pre>
       </section>
 
       <section id="examples" class="section">
         <div class="section-heading">
           <p class="eyebrow">Examples</p>
-          <h2>Start with smoke programs</h2>
+          <h2>Run a concrete FHE program</h2>
+          <p>
+            The examples are kept outside the wheel package, but they live in
+            the repository as research and validation targets.
+          </p>
         </div>
         <div class="example-list">
-          <a href="../examples/resnet/src/resnet20_aespa.py">
-            <span>ResNet-20 AESPA</span>
-            <code>examples/resnet/src/resnet20_aespa.py</code>
-          </a>
           <a href="../examples/resnet20_aespa/">
-            <span>Self-contained ResNet-20</span>
+            <span>Self-contained ResNet-20 AESPA</span>
             <code>examples/resnet20_aespa/</code>
           </a>
           <a href="../examples/easyfhe_benchmark/">
@@ -156,31 +168,221 @@ MAX_JOBS=24 python3 setup.py develop</code></pre>
             <span>Dot product</span>
             <code>examples/dot_product/innerproduct_example.py</code>
           </a>
+          <a href="../packaging/manylinux/README.md">
+            <span>Wheel packaging</span>
+            <code>packaging/manylinux/README.md</code>
+          </a>
         </div>
       </section>
 
-      <section id="roadmap" class="section split">
+      <section id="publish" class="section split">
         <div>
-          <p class="eyebrow">Direction</p>
-          <h2>Not a full PyTorch clone</h2>
+          <p class="eyebrow">Publish</p>
+          <h2>Static pages, release assets, simple wheel indexes</h2>
           <p>
-            EasyFHE keeps the tensor pieces that encrypted programs need and
-            removes the rest. The result should be smaller, easier to audit,
-            and better shaped for FHE systems research.
+            The docs branch can be served directly by GitHub Pages. Large wheel
+            files should stay out of Git and be uploaded as GitHub Release
+            assets or moved later to a dedicated download domain.
           </p>
         </div>
-        <ul class="roadmap">
-          <li>Keep tensor storage, dispatch, CUDA runtime, and FHE ops.</li>
-          <li>Keep selected profiling and NCCL-oriented runtime pieces.</li>
-          <li>Remove neural-network, optimizer, export, mobile, and quantized surfaces.</li>
-          <li>Make `easyfhe` the primary user-facing import path.</li>
-        </ul>
+        <pre><code>Source: Deploy from a branch
+Branch: docs
+Folder: /
+
+python -m pip install "easyfhe==2.13.0a0+cu132.git6e869e1" \
+  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu132</code></pre>
       </section>
     </main>
 
     <footer>
-      <span>EasyFHE</span>
-      <span>GPL-3.0, derived from PyTorch runtime components.</span>
+      <span>EasyFHE is an alpha research system.</span>
+      <a href="https://github.com/jizhuoran/EasyFHE">github.com/jizhuoran/EasyFHE</a>
     </footer>
+
+    <script>
+      const channels = [
+        {
+          id: "cu132",
+          label: "CUDA 13.2",
+          version: "2.13.0a0+cu132.git6e869e1",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu132",
+          python: "3.12",
+          platform: "Linux x86_64",
+          ubuntu: "Ubuntu 22.04, 24.04",
+          status: "preview",
+          note: "Best match for CUDA 13.x development machines."
+        },
+        {
+          id: "cu124",
+          label: "CUDA 12.4",
+          version: "2.13.0a0+cu124.git6e869e1",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu124",
+          python: "3.12",
+          platform: "Linux x86_64",
+          ubuntu: "Ubuntu 22.04, 24.04",
+          status: "preview",
+          note: "Good default for CUDA 12.x environments."
+        }
+      ];
+
+      const select = document.getElementById("cuda-channel");
+      const command = document.getElementById("install-command");
+      const note = document.getElementById("channel-note");
+      const copy = document.getElementById("copy-command");
+
+      for (const channel of channels) {
+        const option = document.createElement("option");
+        option.value = channel.id;
+        option.textContent = channel.label;
+        select.appendChild(option);
+      }
+
+      function renderChannel() {
+        const channel = channels.find((item) => item.id === select.value) || channels[0];
+        document.getElementById("fact-python").textContent = channel.python;
+        document.getElementById("fact-platform").textContent = channel.platform;
+        document.getElementById("fact-ubuntu").textContent = channel.ubuntu;
+        document.getElementById("fact-status").textContent = channel.status;
+        command.textContent = [
+          `python -m pip install "easyfhe==${channel.version}" \\`,
+          `  --find-links ${channel.findLinks}`
+        ].join("\n");
+        note.textContent = channel.note;
+      }
+
+      select.value = "cu132";
+      select.addEventListener("change", renderChannel);
+      copy.addEventListener("click", async () => {
+        await navigator.clipboard.writeText(command.textContent);
+        copy.textContent = "Copied";
+        window.setTimeout(() => {
+          copy.textContent = "Copy";
+        }, 1300);
+      });
+      renderChannel();
+
+      const canvas = document.getElementById("hero-canvas");
+      const ctx = canvas.getContext("2d");
+      const nodes = [
+        { x: 0.18, y: 0.35, label: "tensor", color: "#0f766e" },
+        { x: 0.46, y: 0.22, label: "encode", color: "#2563eb" },
+        { x: 0.72, y: 0.38, label: "rotate", color: "#d94835" },
+        { x: 0.56, y: 0.68, label: "bootstrap", color: "#b45309" },
+        { x: 0.26, y: 0.72, label: "result", color: "#0f766e" }
+      ];
+
+      function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(900, Math.floor(rect.width * ratio));
+        canvas.height = Math.max(620, Math.floor(rect.height * ratio));
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      }
+
+      function draw(time) {
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        const t = time * 0.001;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.strokeStyle = "rgba(16, 24, 32, 0.08)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x < w; x += 36) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y < h; y += 36) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y);
+          ctx.stroke();
+        }
+
+        const points = nodes.map((node) => ({
+          ...node,
+          px: node.x * w,
+          py: node.y * h
+        }));
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(16, 24, 32, 0.22)";
+        for (let i = 0; i < points.length; i += 1) {
+          const a = points[i];
+          const b = points[(i + 1) % points.length];
+          ctx.beginPath();
+          ctx.moveTo(a.px, a.py);
+          ctx.bezierCurveTo((a.px + b.px) / 2, a.py - 90, (a.px + b.px) / 2, b.py + 90, b.px, b.py);
+          ctx.stroke();
+        }
+
+        for (let i = 0; i < points.length; i += 1) {
+          const a = points[i];
+          const b = points[(i + 1) % points.length];
+          const phase = (t * 0.2 + i / points.length) % 1;
+          const x = cubic(a.px, (a.px + b.px) / 2, (a.px + b.px) / 2, b.px, phase);
+          const y = cubic(a.py, a.py - 90, b.py + 90, b.py, phase);
+          ctx.beginPath();
+          ctx.arc(x, y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = i % 2 ? "#d94835" : "#0f766e";
+          ctx.fill();
+        }
+
+        for (const node of points) {
+          const radius = Math.max(46, Math.min(w, h) * 0.07);
+          ctx.beginPath();
+          ctx.arc(node.px, node.py, radius + Math.sin(t * 2) * 5, 0, Math.PI * 2);
+          ctx.fillStyle = hexToRgba(node.color, 0.13);
+          ctx.fill();
+
+          ctx.beginPath();
+          ctx.arc(node.px, node.py, radius, 0, Math.PI * 2);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+          ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = node.color;
+          ctx.stroke();
+
+          drawMatrix(node.px, node.py, node.color);
+
+          ctx.fillStyle = "#101820";
+          ctx.font = "700 18px ui-sans-serif, system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(node.label, node.px, node.py + radius + 30);
+        }
+
+        requestAnimationFrame(draw);
+      }
+
+      function drawMatrix(x, y, color) {
+        const size = 8;
+        const gap = 7;
+        const start = -((4 * size + 3 * gap) / 2);
+        ctx.fillStyle = color;
+        for (let row = 0; row < 4; row += 1) {
+          for (let col = 0; col < 4; col += 1) {
+            ctx.globalAlpha = 0.48 + ((row + col) % 3) * 0.17;
+            ctx.fillRect(x + start + col * (size + gap), y + start + row * (size + gap), size, size);
+          }
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      function cubic(a, b, c, d, t) {
+        const q = 1 - t;
+        return q * q * q * a + 3 * q * q * t * b + 3 * q * t * t * c + t * t * t * d;
+      }
+
+      function hexToRgba(hex, alpha) {
+        const value = hex.replace("#", "");
+        return `rgba(${parseInt(value.slice(0, 2), 16)}, ${parseInt(value.slice(2, 4), 16)}, ${parseInt(value.slice(4, 6), 16)}, ${alpha})`;
+      }
+
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+      requestAnimationFrame(draw);
+    </script>
   </body>
 </html>
