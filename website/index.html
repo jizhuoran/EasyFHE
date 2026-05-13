@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EasyFHE - Encrypted Tensor Computation</title>
+    <meta
+      name="description"
+      content="EasyFHE is a compact tensor runtime for Fully Homomorphic Encryption workloads."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#top">EasyFHE</a>
+      <nav>
+        <a href="#runtime">Runtime</a>
+        <a href="#build">Build</a>
+        <a href="#examples">Examples</a>
+        <a href="#roadmap">Roadmap</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="hero-scene" aria-hidden="true">
+          <div class="rail rail-a"></div>
+          <div class="rail rail-b"></div>
+          <div class="matrix matrix-a">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="matrix matrix-b">
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span>
+          </div>
+          <div class="kernel kernel-a">NTT</div>
+          <div class="kernel kernel-b">KS</div>
+          <div class="kernel kernel-c">BOOT</div>
+        </div>
+
+        <div class="hero-copy">
+          <p class="eyebrow">Encrypted tensor computation</p>
+          <h1>EasyFHE</h1>
+          <p>
+            A compact PyTorch-derived runtime for Fully Homomorphic Encryption:
+            tensor-style Python, native CKKS material generation, CUDA FHE
+            kernels, and a codebase trimmed around encrypted workloads.
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#build">Build from source</a>
+            <a class="button secondary" href="#examples">View examples</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="runtime" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Runtime shape</p>
+          <h2>Tensor infrastructure, narrowed for FHE</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>FHE frontend</h3>
+            <p>
+              `easyfhe.fhe` provides context specs, native key material,
+              plaintext preparation, ciphertext arithmetic, rotation, rescale,
+              fused ops, and bootstrapping entry points.
+            </p>
+          </article>
+          <article>
+            <h3>CUDA kernels</h3>
+            <p>
+              Native kernels cover encoding, NTT, automorphism, key switching,
+              modulus movement, ciphertext arithmetic, and fused homomorphic
+              compute paths.
+            </p>
+          </article>
+          <article>
+            <h3>Lean core</h3>
+            <p>
+              EasyFHE keeps dispatch, storage, CUDA runtime, selected profiling,
+              and selected NCCL-oriented infrastructure while removing most
+              model-training machinery.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="band" aria-label="Architecture overview">
+        <div class="pipeline">
+          <div>
+            <span>Python</span>
+            <strong>easyfhe.fhe</strong>
+          </div>
+          <div>
+            <span>Runtime</span>
+            <strong>Context, keys, layout</strong>
+          </div>
+          <div>
+            <span>Native</span>
+            <strong>ATen FHE ops</strong>
+          </div>
+          <div>
+            <span>Device</span>
+            <strong>CUDA + NCCL path</strong>
+          </div>
+        </div>
+      </section>
+
+      <section id="build" class="section split">
+        <div>
+          <p class="eyebrow">Build</p>
+          <h2>Editable CUDA development build</h2>
+          <p>
+            EasyFHE is currently built from source. The fast build flags keep
+            the runtime focused on CUDA FHE development and avoid unused
+            training or mobile surfaces.
+          </p>
+        </div>
+        <pre><code>python3 setup.py clean
+
+USE_EASYFHE_FAST_BUILD=1 \
+USE_EASYFHE_FAST_INFERENCE=1 \
+USE_CUDA=1 USE_DISTRIBUTED=1 USE_NCCL=1 \
+USE_GLOO=0 USE_TENSORPIPE=0 USE_MPI=0 USE_UCC=0 \
+USE_CUDNN=0 USE_MKLDNN=0 BUILD_TEST=0 \
+BUILD_FUNCTORCH=0 USE_NINJA=1 \
+CMAKE_BUILD_TYPE=Release TORCH_CUDA_ARCH_LIST=8.0 \
+MAX_JOBS=24 python3 setup.py develop</code></pre>
+      </section>
+
+      <section id="examples" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Examples</p>
+          <h2>Start with smoke programs</h2>
+        </div>
+        <div class="example-list">
+          <a href="../examples/resnet/src/resnet20_aespa.py">
+            <span>ResNet-20 AESPA</span>
+            <code>examples/resnet/src/resnet20_aespa.py</code>
+          </a>
+          <a href="../examples/resnet20_aespa/">
+            <span>Self-contained ResNet-20</span>
+            <code>examples/resnet20_aespa/</code>
+          </a>
+          <a href="../examples/easyfhe_benchmark/">
+            <span>Benchmark harness</span>
+            <code>examples/easyfhe_benchmark/</code>
+          </a>
+          <a href="../examples/dot_product/innerproduct_example.py">
+            <span>Dot product</span>
+            <code>examples/dot_product/innerproduct_example.py</code>
+          </a>
+        </div>
+      </section>
+
+      <section id="roadmap" class="section split">
+        <div>
+          <p class="eyebrow">Direction</p>
+          <h2>Not a full PyTorch clone</h2>
+          <p>
+            EasyFHE keeps the tensor pieces that encrypted programs need and
+            removes the rest. The result should be smaller, easier to audit,
+            and better shaped for FHE systems research.
+          </p>
+        </div>
+        <ul class="roadmap">
+          <li>Keep tensor storage, dispatch, CUDA runtime, and FHE ops.</li>
+          <li>Keep selected profiling and NCCL-oriented runtime pieces.</li>
+          <li>Remove neural-network, optimizer, export, mobile, and quantized surfaces.</li>
+          <li>Make `easyfhe` the primary user-facing import path.</li>
+        </ul>
+      </section>
+    </main>
+
+    <footer>
+      <span>EasyFHE</span>
+      <span>GPL-3.0, derived from PyTorch runtime components.</span>
+    </footer>
+  </body>
+</html>

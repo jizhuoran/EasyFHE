@@ -1,76 +1,50 @@
 # EasyFHE
 
-EasyFHE is a tensor computation framework for Fully Homomorphic Encryption
-(FHE). It is forked from PyTorch, but its goal is different: EasyFHE keeps the
-general tensor runtime and adds encrypted tensor operators, while removing
-neural-network-specific infrastructure that is not needed for FHE workloads.
+EasyFHE is a tensor computation runtime for Fully Homomorphic Encryption
+(FHE). It started as a PyTorch fork, but it is not trying to be a full PyTorch
+replacement. The goal is narrower: keep the tensor runtime pieces that FHE
+programs need, remove neural-network-specific machinery, and expose encrypted
+tensor operations through a familiar Python interface.
 
-The project is designed for writing FHE programs in a familiar Python tensor
-style. Users describe computations over tensors, and EasyFHE handles the
-cryptographic representation, homomorphic operators, CUDA kernels, key
-switching, rescaling, rotations, and bootstrapping machinery underneath.
-
-## What EasyFHE Provides
-
-- **Tensor-style FHE programming**
-  Use Python tensor code to express encrypted computation without manually
-  managing ciphertext layout in every program.
-
-- **GPU-accelerated homomorphic operators**
-  EasyFHE includes CUDA implementations for core FHE primitives such as NTT,
-  encoding, modulus switching, automorphism, ciphertext arithmetic, and fused
-  homomorphic kernels.
-
-- **OpenFHE-inspired CKKS behavior**
-  The FHE layer follows the structure of mature CKKS implementations while
-  adapting the execution path to a GPU tensor runtime.
-
-- **Multi-GPU and NCCL-oriented runtime work**
-  The repository keeps selected distributed and NCCL infrastructure for future
-  multi-GPU FHE execution, while stripping distributed training algorithms that
-  are not relevant to EasyFHE.
-
-- **Lean PyTorch-derived core**
-  EasyFHE retains the tensor, dispatch, CUDA, storage, serialization, and Python
-  binding infrastructure needed by encrypted tensor workloads. Large PyTorch
-  subsystems such as neural network modules, optimizers, TorchScript,
-  functorch, ONNX/export, quantization, mobile, and most upstream test/CI/docs
-  assets are being removed.
-
-## Status
-
-EasyFHE is an alpha research system. APIs and build options may change quickly.
-The current repository is actively being reduced from a full PyTorch fork into
-an FHE-focused tensor runtime.
-
-Do not treat this project as a production cryptographic library yet. The FHE
-scheme is intended to protect encrypted data, but the implementation is still
-under active development and should be reviewed carefully before security
-critical use.
-
-## Examples
-
-Example programs live under `examples/`. Current and historical examples
-include:
-
-- dot product
-- bootstrapping
-- logistic regression
-- ResNet-20
-- BERT Tiny
-- sorting
-- LSTM
-
-A common smoke test is:
-
-```bash
-python3 examples/resnet/src/resnet20_aespa.py
+```python
+import easyfhe as torch
+import easyfhe.fhe as fhe
 ```
 
-## Building From Source
+## Why EasyFHE Exists
 
-EasyFHE currently builds as an editable Python package. A typical CUDA/NCCL
-development build is:
+FHE systems need high-performance tensor infrastructure, CUDA kernels, memory
+management, dispatch, serialization, profiling, and eventually multi-GPU
+communication. They do not need most of the training stack: neural network
+layers, optimizers, TorchScript, ONNX export, mobile runtimes, quantization, or
+large upstream test and CI surfaces.
+
+EasyFHE trims the runtime toward encrypted tensor execution.
+
+## What Is Included
+
+- CKKS-oriented FHE frontend under `easyfhe.fhe`
+- Native context generation for keys, ciphertext material, and rotation keys
+- CUDA accelerated FHE kernels for encoding, NTT, automorphism, key switching,
+  modulus movement, ciphertext arithmetic, fused kernels, and bootstrapping
+- Tensor storage, dispatch, CUDA runtime, Python bindings, and selected
+  profiling/runtime infrastructure inherited from PyTorch
+- Selected distributed/NCCL primitives for future multi-GPU FHE work
+- Research examples and smoke tests under `examples/`
+
+## Current Status
+
+EasyFHE is an alpha research system. APIs, build flags, and ciphertext layout
+may change quickly. It should not be treated as a production cryptographic
+library without independent review.
+
+The repository has already been heavily reduced from upstream PyTorch. The
+remaining code is being shaped around FHE tensor execution rather than general
+machine learning.
+
+## Quick Build
+
+A typical local CUDA/NCCL editable build is:
 
 ```bash
 python3 setup.py clean
@@ -95,32 +69,55 @@ MAX_JOBS=24 \
 python3 setup.py develop
 ```
 
-For a fully clean build, remove the build directory first:
+For a fully clean rebuild:
 
 ```bash
 rm -rf build
 ```
 
-Then rerun the build command above.
+Then rerun the build command.
 
-## Repository Direction
+## Smoke Test
 
-EasyFHE is intentionally not a drop-in replacement for full PyTorch. The long
-term target is:
+```bash
+python3 examples/resnet/src/resnet20_aespa.py
+```
 
-- keep tensor storage, dispatch, CUDA runtime, selected autograd/runtime
-  infrastructure, profiling hooks, distributed/NCCL primitives, and FHE ops
-- remove neural network layers, optimizers, training-specific distributed
-  algorithms, model export/compile stacks, mobile runtimes, quantization, and
-  other general PyTorch features that do not serve FHE tensor execution
+The self-contained ResNet-20 AESPA example lives in:
 
-This makes the codebase smaller, easier to audit, and better aligned with FHE
-systems work.
+```bash
+examples/resnet20_aespa/
+```
 
-## Project Team
+## Repository Map
+
+- `easyfhe/`: Python package and retained tensor runtime surface
+- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, runtime
+  options, and material handling
+- `aten/src/ATen/native/fhe/`: native FHE kernels and native sampler
+- `examples/`: research examples, benchmarks, and smoke programs
+- `packaging/`: optional wheel/container packaging scripts
+- `third_party/`: retained third-party dependencies required by the runtime
+
+## Website
+
+A small static website is in `website/`. Open `website/index.html` directly in
+a browser, or serve it with any static file server.
+
+## Project Direction
+
+EasyFHE should become a compact tensor runtime for encrypted computation:
+
+- keep tensor infrastructure, CUDA execution, selected profiling, selected
+  distributed/NCCL primitives, and the FHE layer
+- remove training-specific and model-authoring features that do not serve FHE
+  programs
+- make the Python surface `easyfhe` first, while keeping only the compatibility
+  shims needed by the current runtime
+
+## Contributors
 
 EasyFHE is primarily developed by contributors from Shandong University.
-Maintainers and contributors include:
 
 - [Zhuoran Ji](https://github.com/jizhuoran)
 - [Honghui You](https://github.com/youhonghui)
