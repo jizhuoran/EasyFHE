@@ -26,13 +26,10 @@ removes large parts of the training stack that do not serve FHE execution.
 
 ## Install
 
-Use the docs page to choose a CUDA wheel channel and copy the matching pip
-command:
+EasyFHE is intended to install with one pip command. Use the docs page to
+choose the CUDA wheel channel for your machine:
 
 <https://jizhuoran.github.io/EasyFHE/>
-
-The wheel links become usable after the corresponding GitHub Release assets are
-uploaded. Until then, use the source build path below.
 
 ## Minimal Example
 
@@ -103,41 +100,6 @@ result = fhe.homo_add_scalar_double(fhe.homo_add(x32, term, ctx), 1.0, ctx)
 
 print(ctx.decrypt(result)[:8])
 ```
-
-## Build From Source
-
-A typical local CUDA/NCCL editable build is:
-
-```bash
-python3 setup.py clean
-
-USE_EASYFHE_FAST_BUILD=1 \
-USE_EASYFHE_FAST_INFERENCE=1 \
-USE_CUDA=1 \
-USE_DISTRIBUTED=1 \
-USE_NCCL=1 \
-USE_GLOO=0 \
-USE_TENSORPIPE=0 \
-USE_MPI=0 \
-USE_UCC=0 \
-USE_CUDNN=0 \
-USE_MKLDNN=0 \
-BUILD_TEST=0 \
-BUILD_FUNCTORCH=0 \
-USE_NINJA=1 \
-CMAKE_BUILD_TYPE=Release \
-TORCH_CUDA_ARCH_LIST=8.0 \
-MAX_JOBS=24 \
-python3 setup.py develop
-```
-
-For a fully clean rebuild:
-
-```bash
-rm -rf build
-```
-
-Then rerun the build command.
 
 ## Examples
 
