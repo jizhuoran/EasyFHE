@@ -6,7 +6,7 @@ runtime for encrypted tensor programs, CKKS-style homomorphic operators, CUDA
 kernels, native key material generation, and FHE-oriented examples.
 
 ```python
-import easyfhe as torch
+import easyfhe
 import easyfhe.fhe as fhe
 ```
 
