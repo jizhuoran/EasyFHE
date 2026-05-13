@@ -26,26 +26,83 @@ removes large parts of the training stack that do not serve FHE execution.
 
 ## Install
 
-Prebuilt wheels are being prepared for Linux x86_64, Python 3.12, and CUDA
-runtime variants. The intended public install shape is PyTorch-like: keep the
-package name as `easyfhe`, then choose a CUDA wheel channel.
+Use the docs page to choose a CUDA wheel channel and copy the matching pip
+command:
 
-CUDA 13.2:
-
-```bash
-python -m pip install "easyfhe==2.13.0a0+cu132.git6e869e1" \
-  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu132
-```
-
-CUDA 12.4:
-
-```bash
-python -m pip install "easyfhe==2.13.0a0+cu124.git6e869e1" \
-  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu124
-```
+<https://jizhuoran.github.io/EasyFHE/>
 
 The wheel links become usable after the corresponding GitHub Release assets are
 uploaded. Until then, use the source build path below.
+
+## Minimal Example
+
+This computes `x^32 + 3.14*x^16 + 1` on encrypted CKKS slots and performs one
+bootstrap after `x^16`.
+
+```python
+import numpy as np
+import easyfhe
+import easyfhe.fhe as fhe
+
+
+device = "cuda"
+slots = 1 << 12
+max_levels_after_bootstrap = 6
+input_limbs = 6
+bootstrap = fhe.BootstrapSpec(log_bs_slots=12, level_budget=(3, 3))
+
+ctx = fhe.generate_context(
+    fhe.CKKSContextSpec(
+        depth=fhe.bootstrap_depth(max_levels_after_bootstrap, [bootstrap]),
+        log_n=16,
+        dnum=3,
+        dcrt_bits=58,
+        first_mod=60,
+        secret_key_dist="SPARSE_TERNARY",
+        rescale_tech="FIXEDMANUAL",
+    ),
+    device=device,
+)
+
+bootstrap_constants = fhe.generate_bootstrap_constants(
+    ctx,
+    log_bs_slots=bootstrap.log_bs_slots,
+    level_budget=bootstrap.level_budget,
+    maxLevelsRemaining=max_levels_after_bootstrap,
+)
+
+
+def square(cipher):
+    return fhe.rescale_one_level(fhe.homo_square(cipher, ctx), ctx)
+
+
+values = np.full(slots, 0.2, dtype=np.float64)
+x = ctx.encrypt(
+    values,
+    device=device,
+    scale_deg=1,
+    level=ctx.L - input_limbs,
+    slots=slots,
+)
+
+x2 = square(x)
+x4 = square(x2)
+x8 = square(x4)
+x16 = square(x8)
+
+x16 = fhe.homo_bootstrap(
+    x16,
+    ctx,
+    bootstrap_constants,
+    L0=max_levels_after_bootstrap,
+)
+
+x32 = square(x16)
+term = fhe.rescale_one_level(fhe.homo_mul_scalar_double(x16, 3.14, ctx), ctx)
+result = fhe.homo_add_scalar_double(fhe.homo_add(x32, term, ctx), 1.0, ctx)
+
+print(ctx.decrypt(result)[:8])
+```
 
 ## Build From Source
 
