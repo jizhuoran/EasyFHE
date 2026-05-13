@@ -1,12 +1,14 @@
 from huggingface_hub import hf_hub_download
 import zipfile
 import os
+from pathlib import Path
 
 
 
 
 def read_image(index):
-    filePath = "/home/zrji/EasyFHE/examples/resnet/cifar10/test_batch.bin"
+    default_path = Path(__file__).resolve().parents[1] / "resnet" / "cifar10" / "test_batch.bin"
+    filePath = os.environ.get("EASYFHE_CIFAR10_TEST_BATCH", str(default_path))
     IMAGE_SIZE = 3072
     LABEL_SIZE = 1
     RECORD_SIZE = LABEL_SIZE + IMAGE_SIZE
@@ -35,14 +37,3 @@ def read_image(index):
         return imageVector, label, index
     except FileNotFoundError:
         print(f"Failed to open the file: {filePath}")
-
-
-def decrypt_and_encrypt(input, cryptoContext):
-    slots = input.slots
-    temp = cryptoContext.openfhe_context.decrypt(input).cpu().numpy().reshape(-1)
-    assert len(temp) == slots
-    print('len:',len(temp))
-    print('max',max(temp))
-    print('min',min(temp))
-    res = cryptoContext.openfhe_context.encrypt(temp, 1, 0, slots)
-    return res

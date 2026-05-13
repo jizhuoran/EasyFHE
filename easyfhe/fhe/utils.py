@@ -1,10 +1,7 @@
-from datetime import datetime
-import time, os, pickle, math
+import time, pickle, math
 import numpy as np
 import functools
 import atexit
-from .client import client as client
-from .client.gen_context import gen_contexts
 from .context import *
 import easyfhe as torch
 
@@ -13,6 +10,13 @@ execution_times = {}
 
 # Registry to keep track of function call counts
 call_registry = {}
+
+
+def _openfhe_client_removed():
+    raise RuntimeError(
+        "The legacy OpenFHE client/context path has been removed from EasyFHE. "
+        "Use easyfhe.fhe.generate_context(...) for native EasyFHE context generation."
+    )
 
 
 class _EasyFHEUnpickler(pickle.Unpickler):
@@ -123,103 +127,7 @@ def try_load_context(
     save_dir,
     config
 ):
-
-    NO_BS=False
-    if logBsSlots_list is None or logBsSlots_list == []:
-        assert (logBsSlots_list is None or logBsSlots_list == []) == (levelBudget_list is None or levelBudget_list == []), \
-            "ERROR: logBsSlots_list and levelBudget_list must be both None or both not None!"
-        logBsSlots_list = [0]
-        levelBudget_list = [[0, 0]]
-        NO_BS = True
-    else:
-        assert len(logBsSlots_list) == len(levelBudget_list), \
-            "ERROR: logBsSlots_list and levelBudget_list must have the same length!"
-        sorted_pairs = sorted(
-            zip(logBsSlots_list, levelBudget_list), key=lambda x: x[0]
-        )
-        logBsSlots_list, levelBudget_list = zip(*sorted_pairs)
-        logBsSlots_list = list(logBsSlots_list)
-        levelBudget_list = list(levelBudget_list)
-
-    load_path = save_dir + "/GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-        maxLevelsRemaining,
-        "-".join(map(str, logBsSlots_list)),
-        "-".join("-".join(map(str, levelBudget)) for levelBudget in levelBudget_list),
-        logN,
-        dnum,
-        dcrtBits,
-        firstMod,
-        secretKeyDist,
-        rescaleTech,
-        config.label(),
-    )
-
-    debug_load_path = (
-        save_dir
-        + "/DEBUG-GPU-FHE-CONTEXT_{}_{}_{}_{}_{}_{}_{}_{}_{}_{}.pkl".format(
-            maxLevelsRemaining,
-            "-".join(map(str, logBsSlots_list)),
-            "-".join(
-                "-".join(map(str, levelBudget)) for levelBudget in levelBudget_list
-            ),
-            logN,
-            dnum,
-            dcrtBits,
-            firstMod,
-            secretKeyDist,
-            rescaleTech,
-            config.label(),
-        )
-    )
-
-    if (not os.path.exists(load_path)) or (
-        not os.path.exists(debug_load_path) and config.COMPARE_WITH_OPENFHE == True
-    ):
-        gen_contexts(
-            maxLevelsRemaining=maxLevelsRemaining,
-            rotIndex_list=rotIndex_list,
-            logBsSlots_list=logBsSlots_list,
-            logN=logN,
-            dnum=dnum,
-            dcrtBits=dcrtBits,
-            firstMod=firstMod,
-            levelBudget_list=levelBudget_list,
-            secretKeyDist=secretKeyDist,
-            rescaleTech=rescaleTech,
-            save_dir=save_dir,
-            config=config,
-        )
-
-    with open(load_path, "rb") as file:
-        gpufheMembers, openfheMembers = load_pickle(file)
-
-    cryptoContext = parse_content_map(gpufheMembers, device, config)
-
-    openfhe_context = client.OpenFHEContext(openfheMembers)
-    openfhe_context.config = cryptoContext.config
-    cryptoContext.openfhe_context = openfhe_context
-
-    if config.COMPARE_WITH_OPENFHE:
-        if not os.path.exists(debug_load_path):
-            print("ERROR: There is no debug context file! Please regenerate context!")
-        with open(debug_load_path, "rb") as file:
-            debug_keys = load_pickle(file)
-
-    if config.COMPARE_WITH_OPENFHE:
-        openfhe_boot_contexts = {}
-        if NO_BS == False:
-            for logBsSlots, level_budget in zip(logBsSlots_list, levelBudget_list):
-                openfhe_boot_contexts[str(logBsSlots)] = client.OpenFHEContext(
-                    openfheMembers
-                )
-                openfhe_boot_contexts[str(logBsSlots)].setup_for_debug(
-                    debug_keys, 1 << logBsSlots, level_budget
-                )
-        else:
-            openfhe_context.setup_for_debug(debug_keys, None, None)
-        return cryptoContext, openfhe_context, openfhe_boot_contexts
-    else:
-        return cryptoContext, openfhe_context
+    _openfhe_client_removed()
 
 
 def compare_gpufhe_ct_with_openfhe(bs_cipher, openfhe_cipher):

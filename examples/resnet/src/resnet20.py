@@ -1,3 +1,4 @@
+import argparse
 import datetime
 import os
 import sys
@@ -14,6 +15,17 @@ from examples.utils import approx
 
 DATA_DIR = os.environ["DATA_DIR"]
 
+
+def _parse_args():
+    parser = argparse.ArgumentParser()
+    fhe.add_runtime_args(parser, default_device=os.environ.get("EASYFHE_DEVICE", "cuda"))
+    fhe.add_output_args(parser)
+    parser.add_argument("--total", type=int, default=int(os.environ.get("EASYFHE_TOTAL", "10")))
+    return parser.parse_known_args()[0]
+
+
+ARGS = _parse_args()
+
 # # config1
 # total=1000
 # SAVE_END=False
@@ -23,9 +35,9 @@ DATA_DIR = os.environ["DATA_DIR"]
 
 # # config2
 LOAD_CHECKPOINT = False
-total = 10
-SAVE_END = False
-SAVE_MIDDLE = False
+total = ARGS.total
+SAVE_END = ARGS.save_end
+SAVE_MIDDLE = ARGS.save_middle
 DIRECT_LOAD = True
 pre_encode_type = "middle"
 pkl_path = "/data/yhh/data//encode_20250730_095921.pkl"
@@ -55,7 +67,7 @@ firstMod = 60
 levelBudget_list = [[4, 4]]  # [[4, 4], [4, 4], [4, 4]]
 secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
 rescaleTech = "FIXEDMANUAL" # only support FLEXIBLEAUTO for now # "FLEXIBLEAUTO" # "FIXEDMANUAL" # "FIXEDAUTO"
-device = "cuda"
+device = ARGS.device
 
 relu_degree = 59
 
@@ -75,6 +87,18 @@ print("DIRECT_LOAD: ", DIRECT_LOAD)
 print("pre_encode_type: ", pre_encode_type)
 print("pkl_path=", pkl_path)
 
+BOOTSTRAP_CONSTANTS = {}
+
+
+def homo_bootstrap(cipher, L0, log_bs_slots, level_budget, cryptoContext):
+    return fhe.homo_bootstrap(
+        cipher,
+        cryptoContext,
+        BOOTSTRAP_CONSTANTS[int(log_bs_slots)],
+        L0=L0,
+    )
+
+
 def homo_relu(ciphertext, scale, degree, cryptoContext):
     def scaled_relu_function(x):
         return 0 if x < 0 else (1 / scale) * x
@@ -86,7 +110,7 @@ def homo_relu(ciphertext, scale, degree, cryptoContext):
 def initial_layer(input, cryptoContext):
     scale = normalized_deltas[0][0]
     res = conv_initial(input, 32, 1, 16, scale, cryptoContext)
-    res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res = fhe.align_to(res, fhe.CipherState(res.cur_limbs - (1), res.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file("conv1bn1-bias", cryptoContext.L - res.cur_limbs, res.slots, cryptoContext, scale)
     res = fhe.homo_add_pt(res, bias, cryptoContext)
     res = homo_relu(res, scale, relu_degree, cryptoContext)
@@ -97,11 +121,11 @@ def layer1(input, cryptoContext):
     scale = normalized_deltas[1][0]
 
     res1 = conv(input, 32, 1, 16, -1024, 1, 1, 0, scale, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (1), res1.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{1}-conv{1}bn{1}-bias", cryptoContext.L - res1.cur_limbs, res1.slots,
                                  cryptoContext, scale)
     res1 = fhe.homo_add_pt(res1, bias, cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res1 = homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1 = homo_relu(res1, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][1]
@@ -109,59 +133,57 @@ def layer1(input, cryptoContext):
     res1 = fhe.homo_add(
         res1, fhe.homo_mul_scalar_double(input, scale, cryptoContext), cryptoContext
     )
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (1), res1.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{1}-conv{2}bn{2}-bias", cryptoContext.L - res1.cur_limbs, res1.slots,
                                  cryptoContext, scale)
     res1 = fhe.homo_add_pt(res1, bias, cryptoContext)
-    res1 = fhe.homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res1 = homo_bootstrap(res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res1 = homo_relu(res1, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][2]
     res2 = conv(res1, 32, 1, 16, -1024, 2, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{2}-conv{1}bn{1}-bias", cryptoContext.L - res2.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res2 = homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][3]
     res2 = conv(res2, 32, 1, 16, -1024, 2, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+        res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (res1.cur_limbs - res2.cur_limbs), res1.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{2}-conv{2}bn{2}-bias", cryptoContext.L - res2.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res2 = homo_bootstrap(res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][4]
     res3 = conv(res2, 32, 1, 16, -1024, 3, 1, 0, scale, cryptoContext)
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{3}-conv{1}bn{1}-bias", cryptoContext.L - res3.cur_limbs, res3.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res3 = homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[1][5]
     res3 = conv(res3, 32, 1, 16, -1024, 3, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+        res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (res2.cur_limbs - res3.cur_limbs), res2.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{3}-conv{2}bn{2}-bias", cryptoContext.L - res3.cur_limbs, res3.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
+    res3 = homo_bootstrap(res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
 
     return res3
@@ -170,92 +192,90 @@ def layer1(input, cryptoContext):
 def layer2(input, cryptoContext):
     scaleSx = normalized_deltas[2][0]
     scaleDx = normalized_deltas[2][1]
-    boot_in = fhe.homo_bootstrap(
+    boot_in = homo_bootstrap(
         input, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext
     )
 
     res1sx0 = conv(boot_in, 32, 1, 16, -1024, 4, 1, 0, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx0 = fhe.align_to(res1sx0, fhe.CipherState(res1sx0.cur_limbs - (1), res1sx0.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{4}-conv{1}bn{1}-bias{1}", cryptoContext.L - res1sx0.cur_limbs, res1sx0.slots,
                                  cryptoContext, scaleSx)
     res1sx0 = fhe.homo_add_pt(res1sx0, bias, cryptoContext)
     res1sx1 = conv(boot_in, 32, 1, 16, -1024, 4, 1, 16, scaleSx, cryptoContext)
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx1 = fhe.align_to(res1sx1, fhe.CipherState(res1sx1.cur_limbs - (1), res1sx1.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{4}-conv{1}bn{1}-bias{2}", cryptoContext.L - res1sx1.cur_limbs, res1sx1.slots,
                                  cryptoContext, scaleSx)
     res1sx1 = fhe.homo_add_pt(res1sx1, bias, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # RESCALE ADD BY ZRJI
+        boot_in = fhe.align_to(boot_in, fhe.CipherState(boot_in.cur_limbs - (2), boot_in.noise_deg), cryptoContext)  # RESCALE ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 16, -1024, 4, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 16, -1024, 4, 1, 16, "2", scaleDx, cryptoContext)
 
     fullpackSx = downsample1024to256(res1sx0, res1sx1, 16, 1, cryptoContext)
     fullpackDx = downsample1024to256(res1dx0, res1dx1, 16, 1, cryptoContext)
-    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    fullpackSx = fhe.align_to(fullpackSx, fhe.CipherState(fullpackSx.cur_limbs - (1), fullpackSx.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
 
-    fullpackSx = fhe.homo_bootstrap(
+    fullpackSx = homo_bootstrap(
         fullpackSx, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     fullpackSx = homo_relu(fullpackSx, scaleSx, relu_degree, cryptoContext)
     fullpackSx = conv(fullpackSx, 16, 1, 32, -256, 4, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)
+    res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (1), res1.noise_deg - (1)), cryptoContext)
     bias = read_values_from_file(f"layer{4}-conv{2}bn{2}-bias", cryptoContext.L - res1.cur_limbs,
                                  res1.slots, cryptoContext, scaleDx)
     res1 = fhe.homo_add_pt(res1, bias, cryptoContext)
-    res1 = fhe.homo_bootstrap(
+    res1 = homo_bootstrap(
         res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     res1 = homo_relu(res1, scaleDx, relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][2]
     res2 = conv(res1, 16, 1, 32, -256, 5, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{5}-conv{1}bn{1}-bias", cryptoContext.L - res2.cur_limbs, res1.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(
+    res2 = homo_bootstrap(
         res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][3]
     res2 = conv(res2, 16, 1, 32, -256, 5, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+        res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (res1.cur_limbs - res2.cur_limbs), res1.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{5}-conv{2}bn{2}-bias", cryptoContext.L - res2.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(
+    res2 = homo_bootstrap(
         res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][4]
     res3 = conv(res2, 16, 1, 32, -256, 6, 1, 0, scale, cryptoContext)
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{6}-conv{1}bn{1}-bias", cryptoContext.L - res3.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(
+    res3 = homo_bootstrap(
         res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[2][5]
     res3 = conv(res3, 16, 1, 32, -256, 6, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+        res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (res2.cur_limbs - res3.cur_limbs), res2.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{6}-conv{2}bn{2}-bias", cryptoContext.L - res3.cur_limbs, res3.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(
+    res3 = homo_bootstrap(
         res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
 
@@ -266,93 +286,92 @@ def layer3(input, cryptoContext):
     scaleSx = normalized_deltas[3][0]
     scaleDx = normalized_deltas[3][1]
 
-    boot_in = fhe.homo_bootstrap(
+    boot_in = homo_bootstrap(
         input, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 13
 
     res1sx0 = conv(boot_in, 16, 1, 32, -256, 7, 1, 0, scaleSx, cryptoContext)
-    res1sx0 = fhe.homo_rescale(res1sx0, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx0 = fhe.align_to(res1sx0, fhe.CipherState(res1sx0.cur_limbs - (1), res1sx0.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{7}-conv{1}bn{1}-bias{1}", cryptoContext.L - res1sx0.cur_limbs, res1sx0.slots,
                                  cryptoContext, scaleSx)
     res1sx0 = fhe.homo_add_pt(res1sx0, bias, cryptoContext)
     res1sx1 = conv(boot_in, 16, 1, 32, -256, 7, 1, 32, scaleSx, cryptoContext)
-    res1sx1 = fhe.homo_rescale(res1sx1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1sx1 = fhe.align_to(res1sx1, fhe.CipherState(res1sx1.cur_limbs - (1), res1sx1.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{7}-conv{1}bn{1}-bias{2}", cryptoContext.L - res1sx1.cur_limbs, res1sx1.slots,
                                  cryptoContext, scaleSx)
     res1sx1 = fhe.homo_add_pt(res1sx1, bias, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        boot_in = fhe.drop_last_elements(boot_in, 2, cryptoContext)  # drop_last_elements ADD BY ZRJI
+        boot_in = fhe.align_to(boot_in, fhe.CipherState(boot_in.cur_limbs - (2), boot_in.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res1dx0 = convbn_dx(boot_in, 32, -256, 7, 1, 0, "1", scaleDx, cryptoContext)
 
     res1dx1 = convbn_dx(boot_in, 32, -256, 7, 1, 32, "2", scaleDx, cryptoContext)
 
     fullpackSx = downsample256to64(res1sx0, res1sx1, 32, cryptoContext)
     fullpackDx = downsample256to64(res1dx0, res1dx1, 32, cryptoContext)
-    fullpackSx = fhe.homo_rescale(fullpackSx, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    fullpackSx = fhe.align_to(fullpackSx, fhe.CipherState(fullpackSx.cur_limbs - (1), fullpackSx.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
 
-    fullpackSx = fhe.homo_bootstrap(
+    fullpackSx = homo_bootstrap(
         fullpackSx, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     fullpackSx = homo_relu(fullpackSx, scaleSx, relu_degree, cryptoContext)
     fullpackSx = conv(fullpackSx, 8, 1, 64, -64, 7, 2, 0, scaleDx, cryptoContext)
     res1 = fhe.homo_add(fullpackSx, fullpackDx, cryptoContext)
-    res1 = fhe.homo_rescale(res1, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (1), res1.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{7}-conv{2}bn{2}-bias", cryptoContext.L - fullpackSx.cur_limbs,
                                  fullpackSx.slots, cryptoContext, scaleDx)
     res1 = fhe.homo_add_pt(res1, bias, cryptoContext)
-    res1 = fhe.homo_bootstrap(
+    res1 = homo_bootstrap(
         res1, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     res1 = homo_relu(res1, scaleDx, relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][2]
     res2 = conv(res1, 8, 1, 64, -64, 8, 1, 0, scale, cryptoContext)
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{8}-conv{1}bn{1}-bias", cryptoContext.L - res2.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(
+    res2 = homo_bootstrap(
         res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][3]
     res2 = conv(res2, 8, 1, 64, -64, 8, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res1 = fhe.drop_last_elements(res1, res1.cur_limbs - res2.cur_limbs,
-                                      cryptoContext)  # drop_last_elements ADD BY ZRJI
+        res1 = fhe.align_to(res1, fhe.CipherState(res1.cur_limbs - (res1.cur_limbs - res2.cur_limbs), res1.noise_deg), cryptoContext)  # drop_last_elements ADD BY ZRJI
     res2 = fhe.homo_add(
         res2, fhe.homo_mul_scalar_double(res1, scale, cryptoContext), cryptoContext
     )
-    res2 = fhe.homo_rescale(res2, 1, cryptoContext) # RESCALE ADD BY ZRJI
+    res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (1), res2.noise_deg - (1)), cryptoContext) # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{8}-conv{2}bn{2}-bias", cryptoContext.L - res2.cur_limbs, res2.slots,
                                  cryptoContext, scale)
     res2 = fhe.homo_add_pt(res2, bias, cryptoContext)
-    res2 = fhe.homo_bootstrap(
+    res2 = homo_bootstrap(
         res2, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     res2 = homo_relu(res2, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][4]
     res3 = conv(res2, 8, 1, 64, -64, 9, 1, 0, scale, cryptoContext)
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     bias = read_values_from_file(f"layer{9}-conv{1}bn{1}-bias", cryptoContext.L - res3.cur_limbs, res3.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(
+    res3 = homo_bootstrap(
         res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
 
     scale = normalized_deltas[3][5]
     res3 = conv(res3, 8, 1, 64, -64, 9, 2, 0, scale, cryptoContext)
     if cryptoContext.rescaleTech == "FIXEDMANUAL":
-        res2 = fhe.drop_last_elements(res2, res2.cur_limbs - res3.cur_limbs, cryptoContext)
+        res2 = fhe.align_to(res2, fhe.CipherState(res2.cur_limbs - (res2.cur_limbs - res3.cur_limbs), res2.noise_deg), cryptoContext)
     res3 = fhe.homo_add(
         res3, fhe.homo_mul_scalar_double(res2, scale, cryptoContext), cryptoContext
     )
-    res3 = fhe.homo_rescale(res3, 1, cryptoContext)
+    res3 = fhe.align_to(res3, fhe.CipherState(res3.cur_limbs - (1), res3.noise_deg - (1)), cryptoContext)
     bias = read_values_from_file(f"layer{9}-conv{2}bn{2}-bias", cryptoContext.L - res3.cur_limbs, res3.slots,
                                  cryptoContext, scale)
     res3 = fhe.homo_add_pt(res3, bias, cryptoContext)
-    res3 = fhe.homo_bootstrap(
+    res3 = homo_bootstrap(
         res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     res3 = homo_relu(res3, scale, relu_degree, cryptoContext)
-    res3 = fhe.homo_bootstrap(
+    res3 = homo_bootstrap(
         res3, cryptoContext.L, logBsSlots_list[0], levelBudget_list[0], cryptoContext)  # 12
     return res3
 
@@ -365,10 +384,10 @@ def final_layer(input, cryptoContext):
         cryptoContext,
     )
     res = repeat(res, 16, cryptoContext)
-    res = fhe.homo_rescale(res, 1, cryptoContext)  # RESCALE ADD BY ZRJI
+    res = fhe.align_to(res, fhe.CipherState(res.cur_limbs - (1), res.noise_deg - (1)), cryptoContext)  # RESCALE ADD BY ZRJI
     weight = read_fc_weight(64, 64, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
     res = fhe.homo_mul_pt(res, weight, cryptoContext)
-    res = fhe.force_rescale(res, 1, cryptoContext)
+    res = fhe.align_to(res, fhe.CipherState(res.cur_limbs - (1), res.noise_deg - (1)), cryptoContext)
     res = rotsum_padded(res, 64, 64, cryptoContext)
 
     bias = read_fc_bias(64, 16, cryptoContext.L - res.cur_limbs, res.slots, cryptoContext)
@@ -378,15 +397,14 @@ def final_layer(input, cryptoContext):
 
 
 def executeResNet20(cryptoContext):
-    openfhe_context = cryptoContext.openfhe_context
-    cryptoContext.zero_32K = openfhe_context.encrypt(np.zeros(2 ** 15), cryptoContext.device, 2, 0, 2 ** 15)
-    cryptoContext.zero_16K = openfhe_context.encrypt(np.zeros(2 ** 14), cryptoContext.device, 2, 0, 2 ** 14)
+    cryptoContext.zero_32K = cryptoContext.encrypt(np.zeros(2 ** 15), cryptoContext.device, 2, 0, 2 ** 15)
+    cryptoContext.zero_16K = cryptoContext.encrypt(np.zeros(2 ** 14), cryptoContext.device, 2, 0, 2 ** 14)
 
     print("=====================================================")
     correct = 0
     for i in range(total):
         image_vector, label, index = read_image(i)
-        in_ct = openfhe_context.encrypt(
+        in_ct = cryptoContext.encrypt(
             image_vector,
             cryptoContext.device,
             1,
@@ -404,7 +422,7 @@ def executeResNet20(cryptoContext):
         print("after processing image ", i, "time: ", datetime.datetime.now())
         print("time: ", time.time() - start_time)
         try:
-            clear_result = openfhe_context.decrypt(finalRes)
+            clear_result = cryptoContext.decrypt(finalRes)
             clear_result = clear_result.cpu().numpy().reshape(-1)
             clear_result = clear_result[:10]
             print('clear_result', clear_result)
@@ -440,15 +458,30 @@ def resnet20():
     #     diff = approx.get_relu_depth(59)-approx.get_relu_depth(max_relu_degree)
     #     maxLevelsRemaining +=diff
 
-    config = torch.fhe.config.Config(AUTO_LOAD_KEYS=True,
-                                     SAVE_MIDDLE=SAVE_MIDDLE,
-                                     SAVE_END=SAVE_END,
-                                     )
+    options = fhe.runtime_options_from_args(ARGS)
     start = time.time()
-    cryptoContext, openfhe_context = (
-        fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
-                             config=config))
+    bootstrap_specs = tuple(
+        fhe.BootstrapSpec(log_bs_slots, tuple(level_budget))
+        for log_bs_slots, level_budget in zip(logBsSlots_list, levelBudget_list)
+    )
+    cryptoContext = fhe.generate_context(
+        fhe.CKKSContextSpec(
+            depth=fhe.bootstrap_depth(maxLevelsRemaining, bootstrap_specs, secretKeyDist),
+            log_n=logN,
+            dnum=dnum,
+            dcrt_bits=dcrtBits,
+            first_mod=firstMod,
+            secret_key_dist=secretKeyDist,
+            rescale_tech=rescaleTech,
+            rotations=tuple(rotate_index_list),
+        ),
+        device=device,
+        options=options,
+    )
+    for log_bs_slots, level_budget in zip(logBsSlots_list, levelBudget_list):
+        BOOTSTRAP_CONSTANTS[int(log_bs_slots)] = fhe.generate_bootstrap_constants(
+            cryptoContext, log_bs_slots, level_budget, maxLevelsRemaining
+        )
 
     end=time.time()
     print("cryptoContext: ", cryptoContext)
@@ -462,7 +495,6 @@ def resnet20():
     load_weight(pkl_path, cryptoContext)
 
     print("start executeResNet20")
-    cryptoContext.openfhe_context = openfhe_context
     executeResNet20(cryptoContext)
 
 

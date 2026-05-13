@@ -1,0 +1,30 @@
+ARG CUDA_BASE_IMAGE=nvidia/cuda:12.4.1-devel-rockylinux8
+ARG MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64
+
+FROM ${CUDA_BASE_IMAGE} AS cuda
+FROM ${MANYLINUX_IMAGE}
+
+ARG CUDA_VERSION=12.4
+ARG MANYLINUX_PLAT=manylinux_2_28_x86_64
+
+ENV CUDA_HOME=/usr/local/cuda-${CUDA_VERSION}
+ENV CUDA_PATH=/usr/local/cuda-${CUDA_VERSION}
+ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:/opt/rh/gcc-toolset-13/root/usr/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-${CUDA_VERSION}/lib64:/opt/rh/gcc-toolset-13/root/usr/lib64:${LD_LIBRARY_PATH}
+ENV AUDITWHEEL_PLAT=${MANYLINUX_PLAT}
+ENV CC=/opt/rh/gcc-toolset-13/root/usr/bin/gcc
+ENV CXX=/opt/rh/gcc-toolset-13/root/usr/bin/g++
+ENV CUDAHOSTCXX=/opt/rh/gcc-toolset-13/root/usr/bin/g++
+
+COPY --from=cuda /usr/local/cuda-${CUDA_VERSION} /usr/local/cuda-${CUDA_VERSION}
+COPY --from=cuda /opt/nvidia/nsight-compute/2024.1.1/host/target-linux-x64/nvtx/include/nvtx3 /usr/local/cuda-${CUDA_VERSION}/targets/x86_64-linux/include/nvtx3
+RUN ln -sfn /usr/local/cuda-${CUDA_VERSION} /usr/local/cuda \
+    && dnf --setopt=retries=10 --setopt=timeout=60 install -y git git-lfs make ninja-build patchelf which findutils rsync protobuf-compiler protobuf-devel gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+COPY build_inside_container.sh /usr/local/bin/easyfhe-build-manylinux-wheel
+RUN chmod +x /usr/local/bin/easyfhe-build-manylinux-wheel
+
+WORKDIR /io
+CMD ["/usr/local/bin/easyfhe-build-manylinux-wheel"]

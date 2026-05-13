@@ -37,6 +37,8 @@ graft tools
 graft torch
 graft torchgen
 
+prune examples
+
 # The following exclusions omit parts from third-party dependencies that
 # contain invalid symlinks[1] and that are not needed for pytorch, such as
 # bindings for unused languages

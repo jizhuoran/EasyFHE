@@ -1,0 +1,27 @@
+ARG MANYLINUX_IMAGE=quay.io/pypa/manylinux_2_28_x86_64
+FROM ${MANYLINUX_IMAGE}
+
+ARG CUDA_RHEL_REPO=https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+ARG CUDA_VERSION=12.9
+ARG CUDA_PACKAGE_SUFFIX=12-9
+ARG CUDA_DNF_PACKAGES=cuda-toolkit-${CUDA_PACKAGE_SUFFIX}
+ARG MANYLINUX_PLAT=manylinux_2_28_x86_64
+
+ENV CUDA_HOME=/usr/local/cuda-${CUDA_VERSION}
+ENV CUDA_PATH=/usr/local/cuda-${CUDA_VERSION}
+ENV PATH=/usr/local/cuda-${CUDA_VERSION}/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda-${CUDA_VERSION}/lib64:${LD_LIBRARY_PATH}
+ENV AUDITWHEEL_PLAT=${MANYLINUX_PLAT}
+
+RUN dnf --setopt=retries=10 --setopt=timeout=60 install -y dnf-plugins-core git git-lfs make ninja-build patchelf which findutils rsync \
+    && dnf config-manager --add-repo "${CUDA_RHEL_REPO}" \
+    && dnf clean expire-cache \
+    && dnf --setopt=retries=10 --setopt=timeout=60 install -y ${CUDA_DNF_PACKAGES} \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+COPY build_inside_container.sh /usr/local/bin/easyfhe-build-manylinux-wheel
+RUN chmod +x /usr/local/bin/easyfhe-build-manylinux-wheel
+
+WORKDIR /io
+CMD ["/usr/local/bin/easyfhe-build-manylinux-wheel"]

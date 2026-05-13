@@ -39,7 +39,7 @@ class Cipher:
             self.is_ext if is_ext == None else is_ext,
             self.cipher_id if cipher_id == "copy" else cipher_id,
         )
-        if 'ptx_twin' in self.__dict__:
+        if "ptx_twin" in self.__dict__:
             res.ptx_twin = np.copy(self.ptx_twin)
         return res
 
@@ -70,7 +70,7 @@ class Cipher:
 
 Plaintext = Cipher
 
-class PreEncodeValues:
+class PreparedPlaintext:
     def __init__(self, values, slots, encoded_values, max_encoded_value):
         self.values = values
         self.slots = slots
@@ -78,9 +78,16 @@ class PreEncodeValues:
         self.max_encoded_value = max_encoded_value
     
     def deep_copy(self):
-        return PreEncodeValues(
+        if torch.is_tensor(self.encoded_values):
+            encoded_values = self.encoded_values.clone()
+        else:
+            encoded_values = np.array(self.encoded_values, copy=True)
+        return PreparedPlaintext(
             self.values.copy(),
             self.slots,
-            self.encoded_values.clone(),
+            encoded_values,
             self.max_encoded_value,
         )
+
+
+PreEncodeValues = PreparedPlaintext

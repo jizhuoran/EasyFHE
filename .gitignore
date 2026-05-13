@@ -275,6 +275,7 @@ build_ios
 distribute/*
 *.testbin
 *.bin
+!examples/resnet20_aespa/data/cifar10/test_batch.bin
 cmake_build
 .cmake_build
 gen

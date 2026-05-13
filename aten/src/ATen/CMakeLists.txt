@@ -138,7 +138,10 @@ file(GLOB native_sparse_cpp CONFIGURE_DEPENDS "native/sparse/*.cpp")
 set(native_quantized_cpp)
 set(native_nested_cpp)
 set(native_transformers_cpp)
-file(GLOB_RECURSE native_fhe_cpp CONFIGURE_DEPENDS "native/fhe/cpu/*.cpp")
+file(GLOB_RECURSE native_fhe_cpp CONFIGURE_DEPENDS
+  "native/fhe/cpu/*.cpp"
+  "native/fhe/sampler/*.cpp"
+  "native/fhe/sampler/third_party/blake2/utils/prng/*.c")
 
 file(GLOB native_h CONFIGURE_DEPENDS "native/*.h")
 set(native_ao_sparse_h)

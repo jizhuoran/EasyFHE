@@ -21,7 +21,7 @@ def evalT(Tm, Tn, Tmminusn, cryptoContext):
     """
     temp = fhe.homo_mul(Tm, Tn, cryptoContext)         # Tm * Tn
     temp = fhe.homo_add(temp, temp, cryptoContext)     # 2 * Tm * Tn
-    temp = fhe.homo_rescale(temp, 1, cryptoContext)
+    temp = fhe.align_to(temp, fhe.CipherState(temp.cur_limbs - (1), temp.noise_deg - (1)), cryptoContext)
     Tmplusn = fhe.homo_sub(temp, Tmminusn, cryptoContext)
     return Tmplusn
 
@@ -94,7 +94,7 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                         pt[j] = fhe.homo_add(pt[j], term, cryptoContext)  # Lazy scaling
                         temp_idx += 2
 
-                    pt[j] = fhe.homo_rescale(pt[j], 1, cryptoContext)
+                    pt[j] = fhe.align_to(pt[j], fhe.CipherState(pt[j].cur_limbs - (1), pt[j].noise_deg - (1)), cryptoContext)
 
             # Evaluate at internal intersections (odd indices, tree.tree[j] > 0)
             for j in range(1, 2 ** (tree.depth + 1)):
@@ -110,7 +110,7 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                         pt[j] = fhe.homo_add(pt[j], term, cryptoContext)
                         k *= 2
 
-                    pt[j] = fhe.homo_rescale(pt[j], 1, cryptoContext)
+                    pt[j] = fhe.align_to(pt[j], fhe.CipherState(pt[j].cur_limbs - (1), pt[j].noise_deg - (1)), cryptoContext)
                     pt[j] = fhe.homo_add(pt[j], pt[k], cryptoContext)
 
             # Evaluate T powers needed for next stage
@@ -137,7 +137,7 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                             term = fhe.homo_mul_scalar_double(T[k], coeff, cryptoContext)
                             pt[j] = fhe.homo_add(pt[j], term, cryptoContext)
                         temp_idx += 1
-                    pt[j] = fhe.homo_rescale(pt[j], 1, cryptoContext)
+                    pt[j] = fhe.align_to(pt[j], fhe.CipherState(pt[j].cur_limbs - (1), pt[j].noise_deg - (1)), cryptoContext)
 
             # Evaluate inner intersections (avoid redundant recomputation via ancestry check)
             seen = set()
@@ -165,7 +165,7 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                         term = fhe.homo_mul(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
                         pt[j] = fhe.homo_add(pt[j], term, cryptoContext)
                         k *= 2
-                    pt[j] = fhe.homo_rescale(pt[j], 1, cryptoContext)
+                    pt[j] = fhe.align_to(pt[j], fhe.CipherState(pt[j].cur_limbs - (1), pt[j].noise_deg - (1)), cryptoContext)
                     pt[j] = fhe.homo_add(pt[j], pt[k], cryptoContext)
 
             # Evaluate needed T_g terms
@@ -237,7 +237,7 @@ def show_failure_relu(cipher, ground_truth_vec, precision, cryptoContext):
     """
 
     bound = 2 ** (-precision)
-    output = cryptoContext.openfhe_context.decrypt(cipher).cpu().numpy().reshape(-1)
+    output = cryptoContext.decrypt(cipher).cpu().numpy().reshape(-1)
     failure = 0
 
     for i in range(len(ground_truth_vec)):
@@ -263,7 +263,7 @@ def minimax_relu(comp_no, deg_list, alpha, tree_list, scaled_val, cipher_in, cry
         tree_list: list of Tree objects for each component.
         scaled_val: final scaling adjustment (typically 1.0).
         cipher_in: input ciphertext.
-        cryptoContext: context holding HE parameters and openfhe_context.
+        cryptoContext: context holding HE parameters and client-side key material.
     Returns:
         Ciphertext representing approximate ReLU(x).
     """
@@ -369,13 +369,10 @@ def minimax_relu(comp_no, deg_list, alpha, tree_list, scaled_val, cipher_in, cry
     # fixme: should check whether or not slots here can be hardcoded to Nh
     # slots = cipher_x.slots
     # half_vec = np.full(slots, 0.5, dtype=np.float64)
-    # cipher_half = cryptoContext.openfhe_context.encrypt(half_vec, 1, cryptoContext.L - cipher_x.cur_limbs, slots)
     cipher_half = cryptoContext.cipher_half
 
     temp = fhe.homo_add(cipher_x, cipher_half, cryptoContext)
     result = fhe.homo_mul(temp, cipher_in, cryptoContext)
-    result = fhe.homo_rescale(result, 1, cryptoContext)
+    result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (1), result.noise_deg - (1)), cryptoContext)
 
     return result
-
-

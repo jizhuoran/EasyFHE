@@ -10,6 +10,7 @@ from typing import Any
 
 import easyfhe as torch
 
+from . import forward_ad as forward_ad
 from . import function as function
 from . import graph as graph
 from .function import (
@@ -42,6 +43,7 @@ __all__ = [
     "detect_anomaly",
     "enable_grad",
     "enforce_grad_layout_policy",
+    "forward_ad",
     "grad",
     "gradcheck",
     "gradgradcheck",

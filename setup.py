@@ -1398,7 +1398,16 @@ def configure_extension_build() -> tuple[
     # packages that we want to install into site-packages and include them in wheels
     includes = ["easyfhe", "easyfhe.*", "torchgen", "torchgen.*"]
     # exclude folders that they look like Python packages but are not wanted in wheels
-    excludes = ["tools", "tools.*", "caffe2", "caffe2.*"]
+    excludes = [
+        "tools",
+        "tools.*",
+        "caffe2",
+        "caffe2.*",
+        "examples",
+        "examples.*",
+        "easyfhe.fhe.client",
+        "easyfhe.fhe.client.*",
+    ]
     if cmake_cache_vars["BUILD_FUNCTORCH"]:
         includes.extend(["functorch", "functorch.*"])
     else:
@@ -1478,14 +1487,10 @@ def main() -> None:
         )
 
     install_requires = [
-        "filelock",
         "typing-extensions>=4.10.0",
         "setuptools<82",
         "sympy>=1.13.3",
-        "networkx>=2.5.1",
-        "jinja2",
-        "fsspec>=0.8.5",
-        "gpufhe-wrapper==0.0.5"
+        "numpy",
     ]
     if BUILD_PYTHON_ONLY:
         install_requires += [f"{LIBTORCH_PKG_NAME}=={TORCH_VERSION}"]
