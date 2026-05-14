@@ -11,28 +11,28 @@
     {
       "id": "cu132",
       "label": "CUDA 13.2",
-      "status": "preview",
+      "status": "alpha",
       "python": "3.12",
       "platform": "Linux x86_64",
       "ubuntu": "Ubuntu 22.04, 24.04",
-      "version": "2.13.0a0+cu132.git6e869e1",
-      "wheel": "easyfhe-2.13.0a0+cu132.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "version": "0.0.1+cu132",
+      "wheel": "easyfhe-0.0.1+cu132-cp312-cp312-manylinux_2_28_x86_64.whl",
       "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu132",
-      "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v2.13.0a0/easyfhe-2.13.0a0+cu132.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Best match for CUDA 13.x development machines."
+      "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.0.1/easyfhe-0.0.1+cu132-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "notes": "Use this channel for CUDA 13.2 environments."
     },
     {
       "id": "cu124",
       "label": "CUDA 12.4",
-      "status": "preview",
+      "status": "alpha",
       "python": "3.12",
       "platform": "Linux x86_64",
       "ubuntu": "Ubuntu 22.04, 24.04",
-      "version": "2.13.0a0+cu124.git6e869e1",
-      "wheel": "easyfhe-2.13.0a0+cu124.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "version": "0.0.1+cu124",
+      "wheel": "easyfhe-0.0.1+cu124-cp312-cp312-manylinux_2_28_x86_64.whl",
       "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu124",
-      "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v2.13.0a0/easyfhe-2.13.0a0+cu124.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Good default for CUDA 12.x environments."
+      "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.0.1/easyfhe-0.0.1+cu124-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "notes": "Use this channel for CUDA 12.4 environments."
     }
   ]
 }
