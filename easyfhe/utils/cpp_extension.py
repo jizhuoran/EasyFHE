@@ -817,8 +817,6 @@ class BuildExtension(build_ext):
         # by compiler. Here we introduce a torch level convention that SYCL sources
         # should have .sycl file extension.
         self.compiler.src_extensions += ['.cu', '.cuh', '.hip', '.sycl']
-        if torch.backends.mps.is_built():
-            self.compiler.src_extensions += ['.mm']
         # Save the original _compile method for later.
         if self.compiler.compiler_type == 'msvc':
             self.compiler._cpp_extensions += ['.cu', '.cuh']

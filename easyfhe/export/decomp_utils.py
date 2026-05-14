@@ -1,1 +1,0 @@
-CustomDecompTable = dict

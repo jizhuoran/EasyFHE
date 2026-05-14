@@ -1,0 +1,157 @@
+# codeclean-2.0 easyfhe directory inventory
+
+This is a top-level inventory for `easyfhe/`. It explains what each directory
+appears to be, how it relates to the FHE runtime, and what cleanup posture makes
+sense after the current Python-surface pruning.
+
+Legend:
+
+- Keep: needed for the current runtime or explicitly wanted.
+- Keep narrow: keep for now, but it should eventually be narrowed.
+- Candidate: likely removable, but test as a separate batch.
+- Removed: already deleted in this branch.
+- Build payload: installed headers/libs/share data; shrink through build rules.
+
+## Current Core
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `fhe/` | Keep | EasyFHE public FHE runtime: CKKS context, ciphertext state, bootstrap, runtime CLI/options, material/key helpers, FHE ops. | This is the project center. |
+| `cuda/` | Keep | CUDA runtime bindings, streams/events, memory, NCCL Python wrapper, CUDA device helpers. | Needed by GPU AESPA ResNet. Preserve `cuda/nccl.py` even while NCCL build support is fixed separately. |
+| `cpu/` | Keep | CPU runtime helpers. | Keep unless CPU support is intentionally dropped. The deprecated `cpu/amp/` compatibility subpackage has been removed. |
+| `autograd/` | Keep narrow | Autograd/profiler utilities and native autograd bindings. | FHE inference may not need full autograd, but native import and profiler still touch this area. |
+| `_C/` | Keep | Python typing/stub package for native `_C` extension submodules. | Do not prune casually; native extension import depends on `_C`. |
+| `_C_flatbuffer/` | Candidate | Flatbuffer typing/stub surface. | Likely tied to export/serialization/compiler features; test separately. |
+| `profiler/` | Keep | Kineto/profiler API for runtime/performance traces. | User wants this. Optimizer-step hook was removed when `optim/` was deleted. |
+| `distributed/` | Keep | ProcessGroup/c10d/distributed Python surface. | Keep because NCCL/broadcast/all-reduce primitives are wanted. Current build has `USE_NCCL=OFF`; enabling NCCL is separate. |
+| `futures/` | Keep narrow | Future wrapper used by distributed/RPC-style APIs. | Keep while distributed is kept. |
+| `multiprocessing/` | Keep narrow | PyTorch multiprocessing/reductions helpers. | Keep while serialization/distributed compatibility is unresolved. |
+
+## Tensor Runtime Compatibility
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `_ops/` | Keep | Not a directory, but top-level `easyfhe._ops` is important: operator namespace and dispatch plumbing. | Mentioned here because many dirs depend on it. |
+| `_library/` | Keep narrow | Custom op/library registration, fake impls, schema inference, Triton helpers. | Needed for some operator plumbing. Export-related paths inside can be narrowed later. |
+| `_dispatch/` | Keep narrow | Python dispatch/TorchDispatch helper surface. | Shared tensor runtime plumbing. |
+| `_prims/` | Keep narrow | Primitive operator definitions/context/debug/rng prims. | Runtime/compiler-adjacent; prune with op tests. |
+| `_prims_common/` | Keep | Common primitive/type utilities. | Many tensor paths depend on it. |
+| `_refs/` | Keep narrow | Reference implementations for ATen-style ops, including internal FFT/linalg/special refs. | Public `easyfhe.fft/linalg/special` are gone, but internal refs may still be used by decomposition/runtime code. |
+| `_subclasses/` | Keep narrow | Fake/functional/complex tensor subclass support. | Often pulled in by dispatch/compiler paths; prune after compiler stack decisions. |
+| `_numpy/` | Candidate | NumPy-compatible namespace helpers. | Not needed by AESPA ResNet. Could be a later Python-only deletion batch. |
+| `_native/` | Candidate | Python helpers for native/Triton custom ops. | Includes `bmm_outer_product`; inspect before deleting. |
+| `nested/` | Candidate | NestedTensor compatibility. | Not FHE-specific; depends on `nn.functional` in places. |
+| `masked/` | Candidate | MaskedTensor compatibility. | Not FHE-specific. |
+| `sparse/` | Candidate | Public sparse namespace. | Imports today, but FHE path does not seem to need public sparse. Native sparse/layout references are wider. |
+
+## Compiler, Export, and Transform Stack
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `_dynamo/` | Candidate | TorchDynamo-style config/decorator surface. | Compiler stack, likely removable if `compile` support is out. |
+| `_inductor/` | Candidate | Inductor/kernel template surface. | Compiler stack, likely removable with `_dynamo/_export/compiler`. |
+| `_export/` | Candidate | Internal export implementation. | Public `export/` has already been deleted; this is a follow-up candidate. |
+| `compiler/` | Candidate | Public compiler/cache/config surface. | Likely removable if compile/export is out. |
+| `fx/` | Candidate | FX graph tooling. | Usually compiler/export/tracing support. Test as a separate batch. |
+| `_decomp/` | Candidate | Operator decomposition tables. | Currently references deleted `easyfhe.export` paths and missing functorch native pieces; likely part of compiler-stack cleanup. |
+| `_functorch/` | Candidate | Functorch/vmap/autograd-function compatibility. | Public `func/` is deleted. |
+| `_higher_order_ops/` | Candidate | Higher-order operator implementations/passes. | Compiler/functorch-related; not current FHE surface. |
+| `_custom_op/` | Candidate | Custom op API compatibility. | May be tied to library/compiler features; test separately. |
+| `_lazy/` | Candidate | Lazy tensor backend compatibility. | Not current FHE surface. |
+| `_awaits/` | Candidate | JIT awaitable helpers. | JIT package is deleted; likely removable if no runtime import remains. |
+
+## Device/Backend Surfaces
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `backends/` | Keep narrow | Backend feature flags and backend-specific helpers. | Trimmed to the backends still useful for the CUDA/FHE runtime: `cuda`, `cpu`, and `openmp`. |
+| `accelerator/` | Keep narrow | Generic accelerator abstraction. | Runtime may use generic device helpers. |
+| `amp/` | Removed | Autocast/GradScaler surface. | Training/mixed precision compatibility, not FHE-specific. Removed along with `cuda/amp/` and `cpu/amp/`. |
+| `mps/` | Removed | Apple MPS compatibility. | Removed for Linux/CUDA-focused runtime. |
+| `mtia/` | Removed | MTIA accelerator compatibility. | Removed. |
+| `numa/` | Removed | NUMA binding helpers. | Removed. |
+| `monitor/` | Candidate | Native monitor/wait-counter surface. | Profiler/distributed may touch monitor concepts; inspect before deleting. |
+| `signal/` | Removed | Signal/window helper surface. | Removed. |
+
+## User-Facing PyTorch Compatibility
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `nn/` | Keep narrow | Minimal `Module`, `Parameter`, and disabled layer facade. | Many compatibility paths still import `nn`. Delete later only after serialization/JIT/package paths are settled. |
+| `testing/` | Candidate | PyTorch testing utilities. | Not needed by runtime examples. |
+| `package/` | Candidate | PyTorch package importer/exporter support. | Likely removable with JIT/serialization cleanup. |
+| `utils/` | Keep narrow | Large utility namespace: pytree, data, serialization helpers, benchmarking, tensorboard, etc. | Do not delete wholesale; split by subdir later. |
+| `contrib/` | Candidate | Contributed helpers such as tensorboard visualization. | Likely removable unless profiler UX needs it. |
+| `legacy/` | Candidate | Legacy README placeholder. | Likely removable. |
+| `bin/` | Keep narrow | Installed executable payload such as `torch_shm_manager`. | Related to multiprocessing/shared memory. Keep while multiprocessing is kept. |
+| `futures/` | Keep narrow | Future API compatibility. | Listed above too because distributed depends on it. |
+
+## Logging and Vendor
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `_logging/` | Keep narrow | Structured/logging registrations. | Some runtime logging imports distributed; can be narrowed. |
+| `_strobelight/` | Candidate | Compile-time profiling/diagnostic tooling. | Not FHE runtime. |
+| `_vendor/` | Keep | Vendored packaging helpers. | Small and low-risk; remove only if imports prove dead. |
+
+## Build Payload
+
+| Directory | Posture | What it is | Notes |
+| --- | --- | --- | --- |
+| `include/` | Build payload | Installed C++ headers: ATen, c10, torch/csrc, pybind11, FHE native headers. | Do not delete manually. Shrink by changing install/build rules. |
+| `lib/` | Build payload | Installed libraries/cmake/pkgconfig payload. | Do not delete manually. |
+| `lib64/` | Build payload | Installed lib64/cmake/pkgconfig payload. | Do not delete manually. |
+| `share/` | Build payload | Installed CMake/share data. | Do not delete manually. |
+
+## Already Removed In This Branch
+
+| Directory | Status | Why |
+| --- | --- | --- |
+| `ao/` | Removed | Model optimization/quantization facade; disabled stubs. |
+| `amp/` | Removed | Autocast/GradScaler compatibility surface; deleted with `cuda/amp/` and `cpu/amp/`. |
+| `backends/_coreml/` | Removed | CoreML conversion support not needed. |
+| `backends/cudnn/` | Removed | cuDNN compatibility surface not needed by current EasyFHE runtime. |
+| `backends/cusparselt/` | Removed | cuSPARSELt backend query not needed by current FHE runtime. |
+| `backends/kleidiai/` | Removed | ARM KleidiAI backend query not needed by current CUDA runtime. |
+| `backends/mha/` | Removed | Multi-head attention fastpath flag not needed after model-training surfaces were removed. |
+| `backends/miopen/` | Removed | ROCm/MIOpen compatibility surface not needed. |
+| `backends/mkl/` | Removed | MKL backend query/verbose support not needed by current CUDA runtime. |
+| `backends/mkldnn/` | Removed | MKLDNN compatibility surface not needed. |
+| `backends/mps/` | Removed | MPS backend compatibility surface not needed. |
+| `backends/nnpack/` | Removed | NNPACK compatibility surface not needed. |
+| `backends/opt_einsum/` | Removed | Optional einsum contraction-path optimizer not needed. |
+| `backends/python_native/` | Removed | Python-native DSL backend controls not needed. |
+| `backends/quantized/` | Removed | Quantized backend compatibility not needed. |
+| `backends/xeon/` | Removed | Xeon CPU launcher tooling not needed. |
+| `backends/xnnpack/` | Removed | XNNPACK compatibility surface not needed. |
+| `distributions/` | Removed | Probability distributions are outside encrypted inference runtime. |
+| `export/` | Removed | Public export/PT2 archive workflows are not used. |
+| `fft/` | Removed | Public FFT namespace outside FHE surface; internal refs remain. |
+| `func/` | Removed | Public `torch.func` surface disabled. |
+| `jit/` | Removed | TorchScript/JIT package removed. A tiny top-level `easyfhe.jit` stub remains for runtime checks. |
+| `linalg/` | Removed | Public namespace already failed because `_C._linalg` was absent. |
+| `mps/` | Removed | Apple MPS backend surface not needed for Linux/CUDA-focused runtime. |
+| `mtia/` | Removed | MTIA accelerator surface not needed. |
+| `numa/` | Removed | NUMA helper surface not needed by current runtime. |
+| `onnx/` | Removed | ONNX export disabled and not used. |
+| `optim/` | Removed | Training optimizers are outside inference runtime. |
+| `quantization/` | Removed | Public quantization facade disabled. |
+| `signal/` | Removed | Signal/window helpers not needed by current runtime. |
+| `special/` | Removed | Public namespace already failed because `_C._special` was absent. |
+
+## Suggested Next Batches
+
+1. Low-risk Python-only candidates: `_awaits`, `_numpy`, `legacy`, `contrib`, `testing`.
+2. Compiler stack batch: `_dynamo`, `_inductor`, `_export`, `compiler`, `fx`, `_decomp`, `_functorch`, `_higher_order_ops`.
+3. Compatibility runtime batch: `sparse`, `masked`, `nested`, `package`.
+4. Backend trimming batch: most unsupported `backends/*` have already been removed. Remaining backend surface is `cuda`, `cpu`, and `openmp`.
+5. Build payload trimming: adjust install rules for `include/`, `lib/`, `lib64/`, and `share/` after native dependency mapping is clear.
+
+Minimum verification after each batch:
+
+```bash
+python3 -X faulthandler -c "import easyfhe; print(easyfhe.__version__)"
+python3 -X faulthandler -c "import easyfhe.fhe as fhe; print(len(fhe.__all__))"
+python3 -X faulthandler -c "import easyfhe.profiler; print('profiler ok')"
+CUDA_VISIBLE_DEVICES=0 EASYFHE_DEVICE=cuda python3 -m examples.resnet20_aespa.main
+```

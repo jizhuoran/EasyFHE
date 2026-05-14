@@ -67,16 +67,10 @@ def _manual_seed_impl(seed) -> torch._C.Generator:
     if not torch.cuda._is_in_bad_fork():
         torch.cuda.manual_seed_all(seed)
 
-    import easyfhe as torch
-    import easyfhe.mps
-
-    if not torch.mps._is_in_bad_fork():
+    if hasattr(torch, "mps") and not torch.mps._is_in_bad_fork():
         torch.mps.manual_seed(seed)
 
-    import easyfhe as torch
-    import easyfhe.mtia
-
-    if not torch.mtia._is_in_bad_fork():
+    if hasattr(torch, "mtia") and not torch.mtia._is_in_bad_fork():
         torch.mtia.manual_seed_all(seed)
 
     _seed_custom_device(seed)
@@ -95,16 +89,10 @@ def seed() -> int:
     if not torch.cuda._is_in_bad_fork():
         torch.cuda.manual_seed_all(seed)
 
-    import easyfhe as torch
-    import easyfhe.mps
-
-    if not torch.mps._is_in_bad_fork():
+    if hasattr(torch, "mps") and not torch.mps._is_in_bad_fork():
         torch.mps.manual_seed(seed)
 
-    import easyfhe as torch
-    import easyfhe.mtia
-
-    if not torch.mtia._is_in_bad_fork():
+    if hasattr(torch, "mtia") and not torch.mtia._is_in_bad_fork():
         torch.mtia.manual_seed_all(seed)
 
     _seed_custom_device(seed)

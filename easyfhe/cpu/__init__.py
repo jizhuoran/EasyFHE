@@ -13,9 +13,6 @@ from typing import Any
 import easyfhe as torch
 
 from .. import device as _device
-from . import amp
-
-
 __all__ = [
     "is_available",
     "is_initialized",

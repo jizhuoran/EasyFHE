@@ -1342,42 +1342,19 @@ def einsum(*operands, out=None, dtype=None, order="K", casting="safe", optimize=
 
     tensors = _util.typecast_tensors(tensors, target_dtype, casting)
 
-    from easyfhe.backends import opt_einsum
+    if sublist_format:
+        # recombine operands
+        sublists = operands[1::2]
+        has_sublistout = len(operands) % 2 == 1
+        if has_sublistout:
+            sublistout = operands[-1]
+        operands = list(itertools.chain.from_iterable(zip(tensors, sublists)))
+        if has_sublistout:
+            operands.append(sublistout)
 
-    try:
-        # set the global state to handle the optimize=... argument, restore on exit
-        if opt_einsum.is_available():
-            old_strategy = torch.backends.opt_einsum.strategy
-            old_enabled = torch.backends.opt_einsum.enabled
-
-            # torch.einsum calls opt_einsum.contract_path, which runs into
-            # https://github.com/dgasmith/opt_einsum/issues/219
-            # for strategy={True, False}
-            if optimize is True:
-                optimize = "auto"
-            elif optimize is False:
-                torch.backends.opt_einsum.enabled = False
-
-            torch.backends.opt_einsum.strategy = optimize
-
-        if sublist_format:
-            # recombine operands
-            sublists = operands[1::2]
-            has_sublistout = len(operands) % 2 == 1
-            if has_sublistout:
-                sublistout = operands[-1]
-            operands = list(itertools.chain.from_iterable(zip(tensors, sublists)))
-            if has_sublistout:
-                operands.append(sublistout)
-
-            result = torch.einsum(*operands)
-        else:
-            result = torch.einsum(subscripts, *tensors)
-
-    finally:
-        if opt_einsum.is_available():
-            torch.backends.opt_einsum.strategy = old_strategy
-            torch.backends.opt_einsum.enabled = old_enabled
+        result = torch.einsum(*operands)
+    else:
+        result = torch.einsum(subscripts, *tensors)
 
     result = maybe_copy_to(out, result)
     return wrap_tensors(result)

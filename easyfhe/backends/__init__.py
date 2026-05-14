@@ -124,17 +124,5 @@ sys.modules[__name__] = GenericModule(sys.modules[__name__], __name__)
 from easyfhe.backends import (
     cpu as cpu,
     cuda as cuda,
-    cudnn as cudnn,
-    cusparselt as cusparselt,
-    kleidiai as kleidiai,
-    mha as mha,
-    miopen as miopen,
-    mkl as mkl,
-    mkldnn as mkldnn,
-    mps as mps,
-    nnpack as nnpack,
     openmp as openmp,
-    opt_einsum as opt_einsum,
-    python_native as python_native,
-    quantized as quantized,
 )

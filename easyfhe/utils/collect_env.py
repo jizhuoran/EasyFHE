@@ -679,13 +679,7 @@ def get_cuda_module_loading_config():
 
 
 def is_xnnpack_available():
-    if TORCH_AVAILABLE:
-        import easyfhe as torch
-        import easyfhe.backends.xnnpack
-
-        return str(torch.backends.xnnpack.enabled)  # type: ignore[attr-defined]
-    else:
-        return "N/A"
+    return "N/A"
 
 
 def get_env_info():

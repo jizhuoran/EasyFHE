@@ -1,6 +1,7 @@
 import importlib
 
 import easyfhe as torch
+from easyfhe._unavailable import feature_unavailable
 
 from easyfhe.nn.parameter import (
     Buffer as Buffer,
@@ -13,7 +14,7 @@ from easyfhe.nn.modules.module import Module as Module
 
 class _DisabledNNBindings:
     def __getattr__(self, name):
-        raise AttributeError(f"torch._C._nn.{name} is disabled in EasyFHE")
+        raise AttributeError(f"easyfhe._C._nn.{name} is disabled in EasyFHE")
 
 
 if not hasattr(torch._C, "_nn"):
@@ -22,7 +23,10 @@ if not hasattr(torch._C, "_nn"):
 
 class _DisabledNNModule(Module):
     def __init__(self, *args, **kwargs):
-        raise RuntimeError(f"torch.nn.{type(self).__name__} is disabled in EasyFHE")
+        feature_unavailable(
+            f"easyfhe.nn.{type(self).__name__}",
+            suggestion="EasyFHE keeps tensor runtime pieces but omits training layers",
+        )
 
 
 _DISABLED_MODULE_NAMES = {
@@ -42,7 +46,7 @@ for _name in _DISABLED_MODULE_NAMES:
 
 def __getattr__(name):
     if name in {"functional", "init", "modules"}:
-        module = importlib.import_module(f"torch.nn.{name}")
+        module = importlib.import_module(f"easyfhe.nn.{name}")
         globals()[name] = module
         return module
     if name in {
@@ -54,7 +58,7 @@ def __getattr__(name):
         *_DISABLED_MODULE_NAMES,
     }:
         return globals()[name]
-    raise AttributeError(f"torch.nn.{name} is disabled in EasyFHE")
+    raise AttributeError(f"easyfhe.nn.{name} is disabled in EasyFHE")
 
 
 def factory_kwargs(kwargs):

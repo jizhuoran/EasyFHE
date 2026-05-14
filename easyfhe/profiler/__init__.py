@@ -8,15 +8,9 @@ examine their input shapes and stack traces, study device kernel activity and vi
 
 """
 
-import os
-from typing import Any
-from typing_extensions import TypeVarTuple, Unpack
-
 from easyfhe._C._autograd import _supported_activities, DeviceType, kineto_available
 from easyfhe._C._profiler import _ExperimentalConfig, ProfilerActivity, RecordScope
-from easyfhe._environment import is_fbcode
-from easyfhe.autograd.profiler import KinetoStepTracker, record_function
-from easyfhe.optim.optimizer import Optimizer, register_optimizer_step_post_hook
+from easyfhe.autograd.profiler import record_function
 
 from .profiler import (
     _KinetoProfile,
@@ -43,18 +37,3 @@ __all__ = [
 ]
 
 from . import itt
-
-
-_Ts = TypeVarTuple("_Ts")
-
-
-def _optimizer_post_hook(
-    optimizer: Optimizer, args: tuple[Unpack[_Ts]], kwargs: dict[str, Any]
-) -> None:
-    KinetoStepTracker.increment_step("Optimizer")
-
-
-if os.environ.get("KINETO_USE_DAEMON", "") or (
-    is_fbcode() and os.environ.get("KINETO_FORCE_OPTIMIZER_HOOK", "")
-):
-    _ = register_optimizer_step_post_hook(_optimizer_post_hook)

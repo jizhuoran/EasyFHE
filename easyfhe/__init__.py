@@ -1,11 +1,11 @@
 """
-The torch package contains data structures for multi-dimensional
-tensors and defines mathematical operations over these tensors.
-Additionally, it provides many utilities for efficient serialization of
-Tensors and arbitrary types, and other useful utilities.
+EasyFHE provides a PyTorch-derived tensor runtime for Fully Homomorphic
+Encryption programs.
 
-It has a CUDA counterpart, that enables you to run your tensor computations
-on an NVIDIA GPU with compute capability >= 3.0.
+The public focus is ``easyfhe.fhe`` plus the retained tensor, storage,
+dispatch, CUDA, serialization, and profiling pieces needed by encrypted tensor
+programs. General PyTorch model-training surfaces are compatibility stubs or
+legacy internals while the project is reduced into an FHE-focused runtime.
 """
 
 # mypy: allow-untyped-defs
@@ -76,7 +76,6 @@ __all__ = [
     "DoubleTensor",
     "FloatStorage",
     "FloatTensor",
-    "GradScaler",
     "IntStorage",
     "IntTensor",
     "LongStorage",
@@ -90,12 +89,11 @@ __all__ = [
     "TypedStorage",
     "UntypedStorage",
     "are_deterministic_algorithms_enabled",
-    "autocast",
     "chunk",
     "compile",
     "cond",
     "enable_grad",
-    "export",
+    "fhe",
     "get_default_device",
     "get_deterministic_debug_mode",
     "get_device_module",
@@ -2195,9 +2193,8 @@ _storage_classes: set[type[TypedStorage | UntypedStorage]] = {
 _tensor_classes: set[type["torch.Tensor"]] = set()
 
 # If you edit these imports, please update torch/__init__.py.in as well
-from easyfhe import amp as amp, random as random, serialization as serialization
+from easyfhe import random as random, serialization as serialization
 from easyfhe._tensor_str import set_printoptions
-from easyfhe.amp import autocast, GradScaler
 from easyfhe.random import (
     get_rng_state,
     initial_seed,
@@ -2347,9 +2344,64 @@ from easyfhe.autograd import (  # usort: skip
     set_grad_enabled as set_grad_enabled,
 )
 
-# EasyFHE: pre-import jit to avoid circular imports during lazy loading
-import easyfhe.jit as jit  # noqa: F811
 import types as _easyfhe_types
+
+
+class _EasyFHEJitDisabled(RuntimeError):
+    pass
+
+
+class _EasyFHEScriptModule:
+    pass
+
+
+class _EasyFHERecursiveScriptModule(_EasyFHEScriptModule):
+    pass
+
+
+class _EasyFHEScriptFunction:
+    pass
+
+
+class TracerWarning(Warning):
+    pass
+
+
+def _jit_disabled(*args, **kwargs):
+    raise _EasyFHEJitDisabled("easyfhe.jit has been removed from this build")
+
+
+def _jit_identity_decorator(fn=None, *args, **kwargs):
+    if fn is None:
+        return lambda inner: inner
+    return fn
+
+
+def _jit_annotate(the_type, value):
+    return value
+
+
+jit = _easyfhe_types.SimpleNamespace(
+    CompilationUnit=_jit_disabled,
+    RecursiveScriptModule=_EasyFHERecursiveScriptModule,
+    ScriptFunction=_EasyFHEScriptFunction,
+    ScriptModule=_EasyFHEScriptModule,
+    TracerWarning=TracerWarning,
+    _builtins=_easyfhe_types.SimpleNamespace(_register_builtin=lambda *args, **kwargs: None),
+    _overload=_jit_identity_decorator,
+    annotate=_jit_annotate,
+    export=_jit_identity_decorator,
+    freeze=_jit_disabled,
+    ignore=_jit_identity_decorator,
+    is_scripting=lambda: False,
+    is_tracing=lambda: False,
+    isinstance=builtins.isinstance,
+    load=_jit_disabled,
+    save=_jit_disabled,
+    script=_jit_disabled,
+    trace=_jit_disabled,
+    unused=_jit_identity_decorator,
+)
 _jit_internal = _easyfhe_types.SimpleNamespace(is_scripting=lambda: False)
 del _easyfhe_types
 
@@ -2868,10 +2920,6 @@ if "TORCH_CUDA_SANITIZER" in os.environ:
 
     csan.enable_cuda_sanitizer()
 
-# Register MPS specific decomps
-torch.backends.mps._init()
-
-
 class _TritonLibrary:
     ops_table: dict = {}
 
@@ -2883,10 +2931,7 @@ class _TritonLibrary:
 
 # Deprecated attributes
 _deprecated_attrs = {
-    "has_mps": torch.backends.mps.is_built,
     "has_cuda": torch.backends.cuda.is_built,
-    "has_cudnn": torch.backends.cudnn.is_available,
-    "has_mkldnn": torch.backends.mkldnn.is_available,
 }
 
 if TYPE_CHECKING:
@@ -2897,7 +2942,6 @@ if TYPE_CHECKING:
         _dynamo as _dynamo,
         _inductor as _inductor,
         _subclasses as _subclasses,
-        onnx as onnx,
     )
 
 else:
@@ -2905,26 +2949,16 @@ else:
         "_dynamo",
         "_inductor",
         "_export",
-        # ONNX must be imported after _dynamo, _ops, _subclasses, fx, func and jit
-        "onnx",
         # EasyFHE: modules not in bulk import but needed lazily
         "distributed",
-        "distributions",
-        "fft",
-        "func",
+        "fhe",
         "fx",
-        "jit",
         "library",
-        "linalg",
         "masked",
-        "mps",
-        "mtia",
         "multiprocessing",
         "nested",
         "nn",
-        "optim",
         "profiler",
-        "special",
         "sparse",
         "testing",
     }

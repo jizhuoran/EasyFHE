@@ -53,18 +53,16 @@ name = "easyfhe"
 description = "Tensor computation framework with Fully Homomorphic Encryption support"
 readme = "README.md"
 requires-python = ">=3.10"
-# TODO: change to `license = "BSD-3-Clause"` and enable PEP 639 after pinning setuptools>=77
-# FIXME: As of 2025.06.20, it is hard to ensure the minimum version of setuptools in our CI environment.
-# TOML-table-based license deprecated in setuptools>=77, and the deprecation warning will be changed
-# to an error on 2026.02.18. See also: https://github.com/pypa/setuptools/issues/4903
-license = { text = "BSD-3-Clause" }
+# TODO: use an SPDX license expression after pinning setuptools>=77.
+license = { text = "GPL-3.0-only; includes BSD-3-Clause PyTorch-derived components" }
 authors = [{ name = "Zhuoran Ji", email = "jizhuoran.work@gmail.com" }]
 keywords = ["fhe", "homomorphic encryption", "tensor"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Education",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
     "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Mathematics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
@@ -87,11 +85,10 @@ dynamic = [
 ]
 
 [project.urls]
-Homepage = "https://pytorch.org"
-Repository = "https://github.com/pytorch/pytorch"
-Documentation = "https://pytorch.org/docs"
-"Issue Tracker" = "https://github.com/pytorch/pytorch/issues"
-Forum = "https://discuss.pytorch.org"
+Homepage = "https://jizhuoran.github.io/EasyFHE/"
+Repository = "https://github.com/jizhuoran/EasyFHE"
+Documentation = "https://jizhuoran.github.io/EasyFHE/"
+"Issue Tracker" = "https://github.com/jizhuoran/EasyFHE/issues"
 
 [project.optional-dependencies]
 optree = ["optree>=0.13.0"]

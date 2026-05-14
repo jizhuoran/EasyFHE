@@ -1934,7 +1934,7 @@ def _compile_kernel(
         return getattr(result, mangled_name)
 
 
-from . import amp, jiterator, nvtx, profiler, sparse, tunable
+from . import jiterator, nvtx, profiler, sparse, tunable
 
 
 _POOL_HANDLE = NewType("_POOL_HANDLE", tuple[int, int])

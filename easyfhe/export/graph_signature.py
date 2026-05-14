@@ -1,2 +1,0 @@
-class ExportGraphSignature:
-    pass

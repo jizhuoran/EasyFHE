@@ -25,10 +25,12 @@ install(FILES
 install(DIRECTORY
   "${PROJECT_SOURCE_DIR}/aten/src/ATen/templates/"
   DESTINATION "${SKBUILD_PLATLIB_DIR}/torchgen/packaged/ATen/templates"
+  PATTERN "__pycache__" EXCLUDE
 )
 install(DIRECTORY
   "${PROJECT_SOURCE_DIR}/tools/autograd/"
   DESTINATION "${SKBUILD_PLATLIB_DIR}/torchgen/packaged/autograd"
+  PATTERN "__pycache__" EXCLUDE
 )
 
 # --- Symlink-replacement copies ---

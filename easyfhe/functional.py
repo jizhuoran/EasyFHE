@@ -246,24 +246,9 @@ def einsum(*args: Any) -> Tensor:
 
     .. note::
 
-        Please install opt-einsum (https://optimized-einsum.readthedocs.io/en/stable/) in order to enroll into a more
-        performant einsum. You can install when installing torch like so: `pip install torch[opt-einsum]` or by itself
-        with `pip install opt-einsum`.
+        EasyFHE does not include the optional opt-einsum backend. Multi-input
+        contractions use the default contraction order.
 
-        If opt-einsum is available, this function will automatically speed up computation and/or consume less memory
-        by optimizing contraction order through our opt_einsum backend :mod:`torch.backends.opt_einsum` (The _ vs - is
-        confusing, I know). This optimization occurs when there are at least three inputs, since the order does not matter
-        otherwise. Note that finding `the` optimal path is an NP-hard problem, thus, opt-einsum relies on different
-        heuristics to achieve near-optimal results. If opt-einsum is not available, the default order is to contract
-        from left to right.
-
-        To bypass this default behavior, add the following to disable opt_einsum and skip path calculation:
-        ``torch.backends.opt_einsum.enabled = False``
-
-        To specify which strategy you'd like for opt_einsum to compute the contraction path, add the following line:
-        ``torch.backends.opt_einsum.strategy = 'auto'``. The default strategy is 'auto', and we also support 'greedy' and
-        'optimal'. Disclaimer that the runtime of 'optimal' is factorial in the number of inputs! See more details in
-        the opt_einsum documentation (https://optimized-einsum.readthedocs.io/en/stable/path_finding.html).
 
     .. note::
 
@@ -339,8 +324,6 @@ def einsum(*args: Any) -> Tensor:
         tensor([[-0.3430, -5.2405,  0.4494],
                 [ 0.3311,  5.5201, -3.0356]])
     """
-    import easyfhe.backends.opt_einsum as opt_einsum
-
     # This wrapper exists to support variadic args.
     if len(args) < 2:
         raise ValueError(
@@ -390,20 +373,7 @@ def einsum(*args: Any) -> Tensor:
         # in the original implementation this line is omitted
         return einsum(equation, *_operands)
 
-    if len(operands) <= 2 or not opt_einsum.enabled:
-        # the path for contracting 0 or 1 time(s) is already optimized
-        # or the user has disabled using opt_einsum
-        return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
-
-    path = None
-    if opt_einsum.is_available():
-        _opt_einsum = opt_einsum.get_opt_einsum()
-        tupled_path = _opt_einsum.contract_path(
-            equation, *operands, optimize=opt_einsum.strategy
-        )[0]
-        # flatten path for dispatching to C++
-        path = [*itertools.chain.from_iterable(tupled_path)]
-    return _VF.einsum(equation, operands, path=path)  # type: ignore[attr-defined]
+    return _VF.einsum(equation, operands)  # type: ignore[attr-defined]
 
 
 # This wrapper exists to support variadic args.
