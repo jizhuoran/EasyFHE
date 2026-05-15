@@ -22,7 +22,7 @@ Legend:
 | `cpu/` | Keep | CPU runtime helpers. | Keep unless CPU support is intentionally dropped. The deprecated `cpu/amp/` compatibility subpackage has been removed. |
 | `autograd/` | Keep narrow | Autograd/profiler utilities and native autograd bindings. | FHE inference may not need full autograd, but native import and profiler still touch this area. |
 | `_C/` | Keep | Python typing/stub package for native `_C` extension submodules. | Do not prune casually; native extension import depends on `_C`. |
-| `_C_flatbuffer/` | Candidate | Flatbuffer typing/stub surface. | Likely tied to export/serialization/compiler features; test separately. |
+| `_C_flatbuffer/` | Removed | Flatbuffer typing/stub surface. | Removed after public JIT/export/mobile serialization surfaces were deleted. Remaining flatbuffer names live in `_C` typing/native JIT serialization anchors and should be handled with the native stub audit. |
 | `profiler/` | Keep | Kineto/profiler API for runtime/performance traces. | User wants this. Optimizer-step hook was removed when `optim/` was deleted. |
 | `distributed/` | Keep | ProcessGroup/c10d/distributed Python surface. | Keep because NCCL/broadcast/all-reduce primitives are wanted. Current build has `USE_NCCL=OFF`; enabling NCCL is separate. |
 | `futures/` | Keep narrow | Future wrapper used by distributed/RPC-style APIs. | Keep while distributed is kept. |
@@ -109,6 +109,7 @@ Legend:
 | Directory | Status | Why |
 | --- | --- | --- |
 | `_awaits/` | Removed | JIT awaitable helpers after the JIT package was removed. |
+| `_C_flatbuffer/` | Removed | Flatbuffer typing stub package removed after JIT/export/mobile serialization surfaces were deleted. |
 | `_decomp/` | Removed | Decomposition tables were compiler/meta/functorch-adjacent and already broken through missing native functorch pieces. |
 | `_dynamo/` | Removed | TorchDynamo graph-capture stack is outside EasyFHE runtime. |
 | `_export/` | Removed | Internal export implementation after public `export/` was removed. |
@@ -171,11 +172,12 @@ Legend:
 
 ## Suggested Next Batches
 
-1. Native/typing stub audit: inspect `_C_flatbuffer/` and stale `_C/*.pyi` references left by removed public surfaces.
-2. Tensor-runtime narrowing only, no wholesale deletes: inspect `_subclasses/`, `_refs/`, `_prims/`, and `_library/` for now-broken compiler/functorch/sparse/nested hooks.
-3. Utility narrowing: keep profiling/visualization (`profiler/`, `monitor/`, `utils/tensorboard/`, `utils/viz/`, `utils/benchmark/`, `_strobelight/`, `utils/_strobelight/`, `contrib/`), but inspect remaining non-core utility files one by one.
-4. Distributed/NCCL follow-up: keep `distributed/`, `futures/`, `multiprocessing/`, `bin/`, and `cuda/nccl.py`; separately fix/re-enable NCCL build support.
-5. Build payload trimming: adjust install rules for `include/`, `lib/`, `lib64/`, and `share/` after native dependency mapping is clear.
+1. Backward/forward/autograd narrowing: keep profiler/no-grad/inference helpers, but remove disabled training-gradient, forward-mode AD, gradcheck, anomaly, and custom autograd-function compatibility surfaces in separate tested batches.
+2. Native/typing stub audit: inspect stale `_C/*.pyi` JIT/export/flatbuffer references left by removed public surfaces.
+3. Tensor-runtime narrowing only, no wholesale deletes: inspect `_subclasses/`, `_refs/`, `_prims/`, and `_library/` for now-broken compiler/functorch/sparse/nested hooks.
+4. Utility narrowing: keep profiling/visualization (`profiler/`, `monitor/`, `utils/tensorboard/`, `utils/viz/`, `utils/benchmark/`, `_strobelight/`, `utils/_strobelight/`, `contrib/`), but inspect remaining non-core utility files one by one.
+5. Distributed/NCCL follow-up: keep `distributed/`, `futures/`, `multiprocessing/`, `bin/`, and `cuda/nccl.py`; separately fix/re-enable NCCL build support.
+6. Build payload trimming: adjust install rules for `include/`, `lib/`, `lib64/`, and `share/` after native dependency mapping is clear.
 
 Minimum verification after each batch:
 
