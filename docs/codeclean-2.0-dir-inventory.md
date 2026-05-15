@@ -38,7 +38,7 @@ Legend:
 | `_prims_common/` | Keep | Common primitive/type utilities. | Many tensor paths depend on it. |
 | `_refs/` | Keep narrow | Reference implementations for ATen-style ops, including internal FFT/linalg/special refs. | Public `easyfhe.fft/linalg/special` are gone, but internal refs may still be used by decomposition/runtime code. |
 | `_subclasses/` | Keep narrow | Fake/functional/complex tensor subclass support. | Often pulled in by dispatch/compiler paths; prune after compiler stack decisions. |
-| `_numpy/` | Candidate | NumPy-compatible namespace helpers. | Not needed by AESPA ResNet. Could be a later Python-only deletion batch. |
+| `_numpy/` | Removed | NumPy-compatible namespace helpers. | Removed. Core `torch.from_numpy`, `Tensor.numpy()`, and `Tensor.__array__` are native tensor conversion paths and remain available. |
 | `_native/` | Candidate | Python helpers for native/Triton custom ops. | Includes `bmm_outer_product`; inspect before deleting. |
 | `nested/` | Candidate | NestedTensor compatibility. | Not FHE-specific; depends on `nn.functional` in places. |
 | `masked/` | Candidate | MaskedTensor compatibility. | Not FHE-specific. |
