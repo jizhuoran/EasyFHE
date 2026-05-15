@@ -2,6 +2,7 @@
 import contextlib
 import dataclasses
 import math
+import sys
 import textwrap
 from typing import Any
 
@@ -729,4 +730,88 @@ def _functorch_wrapper_str_intern(tensor, *, tensor_contents=None):
 def _str(self, *, tensor_contents=None):
     with torch.no_grad(), torch.utils._python_dispatch._disable_current_modes():
         guard = torch._C._DisableFuncTorch()  # noqa: F841
-        return _str_intern(self, tensor_contents=tensor_contents)
+        try:
+            return _str_intern(self, tensor_contents=tensor_contents)
+        except AttributeError as exc:
+            if not _is_missing_print_op_error(exc):
+                raise
+            return _str_intern_numpy(self, tensor_contents=tensor_contents)
+
+
+def _is_missing_print_op_error(exc):
+    message = str(exc)
+    return (
+        "module 'easyfhe' has no attribute 'masked_select'" in message
+        or "module 'easyfhe' has no attribute 'isfinite'" in message
+        or "module 'easyfhe' has no attribute 'ceil'" in message
+    )
+
+
+def _str_intern_numpy(inp, *, tensor_contents=None):
+    import numpy as np
+
+    is_plain_tensor = type(inp) is torch.Tensor or type(inp) is torch.nn.Parameter
+    prefix = "tensor(" if is_plain_tensor else f"{type(inp).__name__}("
+    indent = len(prefix)
+    suffixes = []
+
+    self, tangent = torch.autograd.forward_ad.unpack_dual(inp)
+
+    if self.layout != torch.strided or self.is_sparse or self.is_quantized:
+        raise RuntimeError("NumPy tensor printing fallback only supports dense tensors")
+
+    if tensor_contents is None:
+        tensor_for_numpy = self.detach()
+        if tensor_for_numpy.device.type != "cpu":
+            tensor_for_numpy = tensor_for_numpy.cpu()
+        array = tensor_for_numpy.numpy()
+        threshold = (
+            sys.maxsize
+            if PRINT_OPTS.threshold == inf
+            else int(PRINT_OPTS.threshold)
+        )
+        tensor_str = np.array2string(
+            array,
+            precision=PRINT_OPTS.precision,
+            threshold=threshold,
+            edgeitems=PRINT_OPTS.edgeitems,
+            max_line_width=max(1, PRINT_OPTS.linewidth - indent),
+            prefix=prefix,
+            separator=", ",
+        )
+    else:
+        tensor_str = tensor_contents
+
+    if self.device.type != torch._C._get_default_device() or (
+        self.device.type == "cuda" and torch.cuda.current_device() != self.device.index
+    ):
+        suffixes.append("device='" + str(self.device) + "'")
+
+    if self.numel() == 0 and self.dim() != 1:
+        suffixes.append("size=" + str(tuple(self.shape)))
+
+    if not _has_default_print_dtype(self):
+        suffixes.append("dtype=" + str(self.dtype))
+
+    if inp.requires_grad:
+        suffixes.append("requires_grad=True")
+
+    if self.has_names():
+        suffixes.append(f"names={self.names}")
+
+    if tangent is not None:
+        suffixes.append(f"tangent={tangent}")
+
+    return _add_suffixes(prefix + tensor_str, suffixes, indent, force_newline=False)
+
+
+def _has_default_print_dtype(tensor):
+    default_complex_dtype = (
+        torch.cdouble if torch.get_default_dtype() == torch.double else torch.cfloat
+    )
+    return tensor.dtype in (
+        torch.get_default_dtype(),
+        default_complex_dtype,
+        torch.int64,
+        torch.bool,
+    )
