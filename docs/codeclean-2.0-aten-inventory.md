@@ -60,7 +60,7 @@ Approximate tracked-source sizes for useful deletion accounting:
 | Path | Size | Current build status | Notes |
 | --- | ---: | --- | --- |
 | `aten/src/ATen/native/cpu/**` | 716 KiB | selected `.cpp` files compile through generated CPU-capability wrappers | Keep for now; fresh build disproved the earlier source-only deletion idea. |
-| `aten/src/ATen/native/cuda/**` | 1.3 MiB | 33 compiled, 15 not compiled | Do this by op family, not wholesale. |
+| `aten/src/ATen/native/cuda/**` | 1.3 MiB | 33 compiled, 13 not compiled | Do this by op family, not wholesale. |
 | `aten/src/ATen/cpu/vec/**` | 1.5 MiB | headers only | Dense CPU/vector utility headers; keep until CPU support is intentionally dropped. |
 | `aten/src/ATen/native/cuda/linalg/**` | 68 KiB | removed | Deleted in the first native-source cleanup batch. |
 | `aten/src/ATen/native/kleidiai/**` | 44 KiB | removed | Deleted in the first native-source cleanup batch. |
@@ -76,6 +76,7 @@ Approximate tracked-source sizes for useful deletion accounting:
 | `aten/src/ATen/native/cuda/{airy_ai,bessel_*,spherical_bessel_j0,modified_bessel_*,scaled_modified_bessel_*,chebyshev_polynomial_*,shifted_chebyshev_polynomial_*,hermite_polynomial_*,laguerre_polynomial_l,legendre_polynomial_p}.cu` | Public `easyfhe.special` was removed and the EasyFHE fast build already filtered these CUDA special/math kernels out of all compiled source lists. | Removed after `rm -rf build`; sm80-only fast build passed, deleted paths were absent from `compile_commands.json`/`build.ninja`, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
 | `aten/src/ATen/native/cuda/{BinaryGeometricKernels,GcdLcmKernel,IGammaKernel,LogAddExpKernel,UnaryFractionKernels,UnaryGammaKernels,UnaryGeometric*,UnaryLogKernels,UnarySpecialOpsKernel,ZetaKernel}.cu` | Follow-up CUDA special/math kernels for removed public `easyfhe.special`; all were already excluded from the fast-build CUDA source list. | Removed after `rm -rf build`; sm80-only fast build passed, deleted paths were absent from `compile_commands.json`/`build.ninja`, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
 | `aten/src/ATen/native/cuda/{Distribution*,Distributions,PhiloxDistribution}.{cu,cpp}` | Public distributions surface is gone; current fast build keeps compiled generator pieces such as `PhiloxKeySplit.cu`/`Randperm.cu` but excludes these CUDA distribution kernels. | Removed after `rm -rf build`; sm80-only fast build passed, deleted paths were absent from `compile_commands.json`/`build.ninja`, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
+| `aten/src/ATen/native/cuda/{Dropout,BinaryMiscBackwardOpsKernels}.cu` | Training/backward CUDA kernels; user does not need backward/forward training, and current fast build already excludes these CUDA sources. | Removed after `rm -rf build`; sm80-only fast build passed, deleted paths were absent from `compile_commands.json`/`build.ninja`, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
 
 ## Keep
 
@@ -98,7 +99,7 @@ build or match Python surfaces already removed.
 
 | Candidate | Why | Test requirement |
 | --- | --- | --- |
-| Uncompiled training/autograd CUDA kernels: `Dropout.cu` and `BinaryMiscBackwardOpsKernels.cu` | User does not need backward/forward training, and current fast build excludes these CUDA sources. | Delete as its own batch; rebuild from `rm -rf build`; run import/NumPy/NCCL/profiler and CUDA ResNet20 AESPA. |
+| Remaining uncompiled top-level CUDA sources: `AmpKernels.cu`, `BinaryBitwiseOpsKernels.cu`, `BinaryDivTrueKernel.cu`, `BinaryDivTruncKernel.cu`, `BinaryLogicalOpsKernels.cu`, `BinaryShiftOpsKernels.cu`, `FlattenIndicesKernel.cu`, `MaxMinElementwiseKernel.cu`, `RenormKernel.cu`, `ScatterGatherKernel.cu`, `StepKernel.cu`, `SummaryOps.cu`, `ValidateCompressedIndicesKernel.cu` | These are currently not compiled, but their names map to tensor runtime/indexing/reduction/shape-ish behavior. | Do not delete as a simple source-only batch. First map generated registrations and runtime op usage. |
 | `aten/src/ATen/native/sparse/cuda/cuSPARSELtOps.h` plus `torch/csrc/cuda/shared/cusparselt.cpp` follow-up | Python `backends/cusparselt` was removed and `USE_CUSPARSELT=OFF`. | Check include references first; delete only with CMake/build validation. |
 | Generated Python binding remnants for public `fft/linalg/special/sparse/nested/masked/quantized` modules | Python packages were removed or trimmed to anchors. | Prefer generator/config changes over deleting generated files by hand. Run codegen + build. |
 
@@ -125,7 +126,7 @@ core/type infrastructure too early.
    - Kept compiled generator/runtime pieces such as `PhiloxKeySplit.cu`,
      `Randperm.cu`, and `CUDAGeneratorImpl.cpp`.
 3. **Training/autograd CUDA source-only pass**
-   - Next batch: delete `Dropout.cu` and
+   - Deleted `Dropout.cu` and
      `BinaryMiscBackwardOpsKernels.cu`.
 4. **cuSPARSE/cuSPARSELt crumbs**
    - Delete uncompiled `aten/src/ATen/cuda/CUDASparse*.cpp`,
