@@ -1022,18 +1022,18 @@ class Tensor(torch._C.TensorBase):
     def resize(self, *sizes):
         if has_torch_function_unary(self):
             return handle_torch_function(Tensor.resize, (self,), self, *sizes)
-        warnings.warn("non-inplace resize is deprecated", stacklevel=2)
-        from easyfhe.autograd._functions import Resize
-
-        return Resize.apply(self, sizes)
+        raise RuntimeError(
+            "Tensor.resize(...) is disabled in EasyFHE; use Tensor.resize_(...) "
+            "only when in-place resizing is intentional."
+        )
 
     def resize_as(self, tensor):
         if has_torch_function_variadic(self, tensor):
             return handle_torch_function(Tensor.resize_as, (self, tensor), self, tensor)
-        warnings.warn("non-inplace resize_as is deprecated", stacklevel=2)
-        from easyfhe.autograd._functions import Resize
-
-        return Resize.apply(self, tensor.size())
+        raise RuntimeError(
+            "Tensor.resize_as(...) is disabled in EasyFHE; use Tensor.resize_as_(...) "
+            "only when in-place resizing is intentional."
+        )
 
     def split(self, split_size, dim=0):
         r"""See :func:`torch.split`"""

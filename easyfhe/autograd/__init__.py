@@ -10,7 +10,6 @@ from typing import Any
 
 import easyfhe as torch
 
-from . import forward_ad as forward_ad
 from . import function as function
 from . import graph as graph
 from .function import (
@@ -29,7 +28,6 @@ from .grad_mode import (
     set_grad_enabled,
     set_multithreading_enabled,
 )
-from .variable import Variable
 
 
 __all__ = [
@@ -63,6 +61,16 @@ def _disabled(*args: Any, **kwargs: Any) -> Any:
     )
 
 
+class _DisabledForwardAD:
+    def unpack_dual(self, tensor: Any, *args: Any, **kwargs: Any) -> tuple[Any, None]:
+        return tensor, None
+
+    def __getattr__(self, name: str) -> Any:
+        return _disabled
+
+
+forward_ad = _DisabledForwardAD()
+Variable = torch.Tensor
 backward = _disabled
 grad = _disabled
 gradcheck = _disabled

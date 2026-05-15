@@ -20,7 +20,7 @@ Legend:
 | `fhe/` | Keep | EasyFHE public FHE runtime: CKKS context, ciphertext state, bootstrap, runtime CLI/options, material/key helpers, FHE ops. | This is the project center. |
 | `cuda/` | Keep | CUDA runtime bindings, streams/events, memory, NCCL Python wrapper, CUDA device helpers. | Needed by GPU AESPA ResNet. Preserve `cuda/nccl.py` even while NCCL build support is fixed separately. |
 | `cpu/` | Keep | CPU runtime helpers. | Keep unless CPU support is intentionally dropped. The deprecated `cpu/amp/` compatibility subpackage has been removed. |
-| `autograd/` | Keep narrow | Autograd/profiler utilities and native autograd bindings. | FHE inference may not need full autograd, but native import and profiler still touch this area. |
+| `autograd/` | Keep minimal | Profiler/no-grad/inference-mode utilities plus small disabled compatibility anchors. | Backward engine, forward-mode AD, functional autograd, gradcheck, anomaly detection, Variable module, and autograd `_functions` were removed. Keep `grad_mode.py`, profiler files, `function.py`, and `graph.py` for native/profiler/tensor-runtime references. |
 | `_C/` | Keep | Python typing/stub package for native `_C` extension submodules. | Do not prune casually; native extension import depends on `_C`. |
 | `_C_flatbuffer/` | Removed | Flatbuffer typing/stub surface. | Removed after public JIT/export/mobile serialization surfaces were deleted. Remaining flatbuffer names live in `_C` typing/native JIT serialization anchors and should be handled with the native stub audit. |
 | `profiler/` | Keep | Kineto/profiler API for runtime/performance traces. | User wants this. Optimizer-step hook was removed when `optim/` was deleted. |
@@ -110,6 +110,12 @@ Legend:
 | --- | --- | --- |
 | `_awaits/` | Removed | JIT awaitable helpers after the JIT package was removed. |
 | `_C_flatbuffer/` | Removed | Flatbuffer typing stub package removed after JIT/export/mobile serialization surfaces were deleted. |
+| `autograd/_functions/` | Removed | Disabled autograd Function helpers removed; deprecated non-inplace `Tensor.resize/resize_as` now raise directly. |
+| `autograd/anomaly_mode.py` | Removed | Disabled anomaly-detection compatibility module removed. |
+| `autograd/forward_ad.py` | Removed | Disabled forward-mode AD module removed; `torch.autograd.forward_ad.unpack_dual` remains a tiny tensor-printing compatibility method. |
+| `autograd/functional.py` | Removed | Disabled functional autograd namespace removed. |
+| `autograd/gradcheck.py` | Removed | Disabled gradcheck helpers removed. |
+| `autograd/variable.py` | Removed | Legacy `Variable` module removed; `torch.autograd.Variable` remains an alias for `Tensor`. |
 | `_decomp/` | Removed | Decomposition tables were compiler/meta/functorch-adjacent and already broken through missing native functorch pieces. |
 | `_dynamo/` | Removed | TorchDynamo graph-capture stack is outside EasyFHE runtime. |
 | `_export/` | Removed | Internal export implementation after public `export/` was removed. |
