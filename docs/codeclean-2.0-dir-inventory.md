@@ -39,7 +39,7 @@ Legend:
 | `_refs/` | Keep narrow | Reference implementations for ATen-style ops, including internal FFT/linalg/special refs. | Public `easyfhe.fft/linalg/special` are gone, but internal refs may still be used by decomposition/runtime code. |
 | `_subclasses/` | Keep narrow | Fake/functional/complex tensor subclass support. | Often pulled in by dispatch/compiler paths; prune after compiler stack decisions. |
 | `_numpy/` | Removed | NumPy-compatible namespace helpers. | Removed. Core `torch.from_numpy`, `Tensor.numpy()`, and `Tensor.__array__` are native tensor conversion paths and remain available. |
-| `_native/` | Candidate | Python helpers for native/Triton custom ops. | Includes `bmm_outer_product`; inspect before deleting. |
+| `_native/` | Removed | Python helpers for native/Triton custom ops. | Removed after no project references were found and import failed through Triton/xpu compatibility paths. |
 | `nested/` | Removed | NestedTensor compatibility. | Removed after import was found broken through missing native `_C._nested`. |
 | `masked/` | Removed | MaskedTensor compatibility. | Removed after import was found broken through missing ATen masked-op registrations. |
 | `sparse/` | Candidate | Public sparse namespace. | Imports today, but FHE path does not seem to need public sparse. Native sparse/layout references are wider. |
