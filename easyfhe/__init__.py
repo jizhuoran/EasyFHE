@@ -3024,13 +3024,10 @@ else:
         "fhe",
         "fx",
         "library",
-        "masked",
         "multiprocessing",
-        "nested",
         "nn",
         "profiler",
         "sparse",
-        "testing",
     }
 
     def __getattr__(name):
