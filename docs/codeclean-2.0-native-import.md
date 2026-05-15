@@ -27,11 +27,11 @@ Reconfigure and rebuild the native extension for the active Python runtime:
 
 ```bash
 rm -f build/.ninja_log build/.ninja_deps
-CMAKE_ONLY=1 BUILD_CUSTOM_PROTOBUF=OFF USE_NCCL=0 MAX_JOBS=4 tools/easyfhe_fast_build.sh
-CMAKE_FRESH=0 BUILD_CUSTOM_PROTOBUF=OFF USE_NCCL=0 MAX_JOBS=4 tools/easyfhe_fast_build.sh
+CMAKE_ONLY=1 BUILD_CUSTOM_PROTOBUF=OFF MAX_JOBS=4 tools/easyfhe_fast_build.sh
+CMAKE_FRESH=0 BUILD_CUSTOM_PROTOBUF=OFF MAX_JOBS=4 tools/easyfhe_fast_build.sh
 ```
 
-The fast build profile avoids optional third-party submodules that are not present in this checkout. `cmake/FileMirroring.cmake` also excludes `__pycache__` directories during install so stale root-owned `.pyc` files do not block the editable wheel install.
+The fast build profile avoids optional third-party submodules that are not present in this checkout and now enables NCCL by default. `cmake/FileMirroring.cmake` also excludes `__pycache__` directories during install so stale root-owned `.pyc` files do not block the editable wheel install.
 
 ## Verification
 

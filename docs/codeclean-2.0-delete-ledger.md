@@ -113,7 +113,7 @@ error.
 | Custom-op edge | `easyfhe/_custom_op/**`, `easyfhe/_custom_ops.py` | Imports successfully and is closer to operator/library infrastructure than compiler/export. Keep unless a later operator-infra pass explicitly retires Python custom op registration. |
 | NN training surface | `easyfhe/nn/**` | Layers are disabled, but `Module`, `Parameter`, serialization, JIT, and weight-generation examples still import `easyfhe.nn`. This should be stubbed narrower before deletion. |
 | Sparse surface | `easyfhe/sparse/__init__.py`, sparse internals | It imports today and some tensor/runtime code still knows about sparse layout. Native cleanup touches generated sparse bindings and ATen sparse kernels. |
-| Distributed/futures/multiprocessing | `easyfhe/distributed/**`, `easyfhe/futures/**`, `easyfhe/multiprocessing/**` | Fast build can disable distributed, but Python pieces still exist and some profiler/pickler guards reference distributed macros. Remove after locking build flags to `USE_DISTRIBUTED=0`, `USE_NCCL=0`. |
+| Distributed/futures/multiprocessing | `easyfhe/distributed/**`, `easyfhe/futures/**`, `easyfhe/multiprocessing/**` | Keep: distributed/NCCL primitives are wanted. Revisit only if the project later drops NCCL/broadcast/all-reduce support. |
 | Package/testing | `easyfhe/package/**`, `easyfhe/testing/**` | Large PyTorch compatibility area. Native stubs already exist in places, but imports are cross-linked with serialization and `_C` initialization. |
 
 ## Keep for now
@@ -122,7 +122,7 @@ error.
 | --- | --- |
 | `easyfhe/fhe/**` | Current project surface. |
 | `easyfhe/profiler/**` | Keep: project needs profiler support for runtime/performance investigation. The optimizer-step hook was removed when `easyfhe/optim/**` was deleted. |
-| `easyfhe/distributed/**`, `easyfhe/cuda/nccl.py`, `torch/csrc/cuda/python_nccl.cpp`, `torch/csrc/cuda/comm.cpp`, `torch/csrc/distributed/c10d/**` | Keep: NCCL/broadcast/all-reduce primitives are needed. Current build has `USE_NCCL=OFF`, so enabling this path is a separate build task. |
+| `easyfhe/distributed/**`, `easyfhe/cuda/nccl.py`, `torch/csrc/cuda/python_nccl.cpp`, `torch/csrc/cuda/comm.cpp`, `torch/csrc/distributed/c10d/**` | Keep: NCCL/broadcast/all-reduce primitives are needed. Fast build now defaults to `USE_NCCL=ON` and `USE_C10D_NCCL=ON` unless `USE_NCCL=0` is set explicitly. |
 | `easyfhe/cuda/**`, `easyfhe/cpu/**`, `easyfhe/autograd/**`, `easyfhe/_C*`, `easyfhe/_prims*`, `easyfhe/_refs/**` | Tensor runtime support; prune only with focused import/runtime tests. |
 | `easyfhe/include/**`, `easyfhe/lib/**`, `easyfhe/lib64/**`, `easyfhe/share/**` | Installed header/library/share payload. Shrink through build/install rules first, not by ad hoc Python package deletion. |
 

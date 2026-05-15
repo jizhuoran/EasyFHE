@@ -10,7 +10,8 @@ From `build/CMakeCache.txt`:
 
 - `USE_CUDA=1`
 - `USE_DISTRIBUTED=ON`
-- `USE_NCCL=OFF`
+- `USE_NCCL=ON`
+- `USE_C10D_NCCL=ON`
 - `USE_CUDNN=OFF`
 - `USE_CUSPARSELT=OFF`
 - `USE_MKLDNN=OFF`
@@ -21,6 +22,12 @@ From `build/CMakeCache.txt`:
 - `BUILD_LAZY_CUDA_LINALG=OFF`
 
 From `build/compile_commands.json`:
+
+NCCL note: the fast build defaults to `USE_NCCL=ON` and `USE_C10D_NCCL=ON`
+unless `USE_NCCL=0` is set explicitly. After changing the CMake cache, run the
+incremental develop step so `easyfhe/lib/libtorch_python.so` is refreshed; a
+plain `torch_python` target build leaves Python importing the previous installed
+library.
 
 - `aten/src/ATen/native/fhe/**` is actively compiled. Keep.
 - `aten/src/ATen/native/cuda/*.cu` is heavily compiled. Treat as tensor/CUDA infrastructure.

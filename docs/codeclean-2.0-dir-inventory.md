@@ -18,13 +18,13 @@ Legend:
 | Directory | Posture | What it is | Notes |
 | --- | --- | --- | --- |
 | `fhe/` | Keep | EasyFHE public FHE runtime: CKKS context, ciphertext state, bootstrap, runtime CLI/options, material/key helpers, FHE ops. | This is the project center. |
-| `cuda/` | Keep | CUDA runtime bindings, streams/events, memory, NCCL Python wrapper, CUDA device helpers. | Needed by GPU AESPA ResNet. Preserve `cuda/nccl.py` even while NCCL build support is fixed separately. |
+| `cuda/` | Keep | CUDA runtime bindings, streams/events, memory, NCCL Python wrapper, CUDA device helpers. | Needed by GPU AESPA ResNet. Preserve `cuda/nccl.py`; fast build now enables NCCL by default. |
 | `cpu/` | Keep | CPU runtime helpers. | Keep unless CPU support is intentionally dropped. The deprecated `cpu/amp/` compatibility subpackage has been removed. |
 | `autograd/` | Keep minimal | Profiler/no-grad/inference-mode utilities plus small disabled compatibility anchors. | Backward engine, forward-mode AD, functional autograd, gradcheck, anomaly detection, Variable module, and autograd `_functions` were removed. Keep `grad_mode.py`, profiler files, `function.py`, and `graph.py` for native/profiler/tensor-runtime references. |
 | `_C/` | Keep | Python typing/stub package for native `_C` extension submodules. | Do not prune casually; native extension import depends on `_C`. |
 | `_C_flatbuffer/` | Removed | Flatbuffer typing/stub surface. | Removed after public JIT/export/mobile serialization surfaces were deleted. Remaining flatbuffer names live in `_C` typing/native JIT serialization anchors and should be handled with the native stub audit. |
 | `profiler/` | Keep | Kineto/profiler API for runtime/performance traces. | User wants this. Optimizer-step hook was removed when `optim/` was deleted. |
-| `distributed/` | Keep | ProcessGroup/c10d/distributed Python surface. | Keep because NCCL/broadcast/all-reduce primitives are wanted. Current build has `USE_NCCL=OFF`; enabling NCCL is separate. |
+| `distributed/` | Keep | ProcessGroup/c10d/distributed Python surface. | Keep because NCCL/broadcast/all-reduce primitives are wanted. Current fast build has `USE_NCCL=ON` and `USE_C10D_NCCL=ON`. |
 | `futures/` | Keep narrow | Future wrapper used by distributed/RPC-style APIs. | Keep while distributed is kept. |
 | `multiprocessing/` | Keep narrow | PyTorch multiprocessing/reductions helpers. | Keep while serialization/distributed compatibility is unresolved. |
 
@@ -182,7 +182,7 @@ Legend:
 2. Native/typing stub audit: inspect stale `_C/*.pyi` JIT/export/flatbuffer references left by removed public surfaces.
 3. Tensor-runtime narrowing only, no wholesale deletes: inspect `_subclasses/`, `_refs/`, `_prims/`, and `_library/` for now-broken compiler/functorch/sparse/nested hooks.
 4. Utility narrowing: keep profiling/visualization (`profiler/`, `monitor/`, `utils/tensorboard/`, `utils/viz/`, `utils/benchmark/`, `_strobelight/`, `utils/_strobelight/`, `contrib/`), but inspect remaining non-core utility files one by one.
-5. Distributed/NCCL follow-up: keep `distributed/`, `futures/`, `multiprocessing/`, `bin/`, and `cuda/nccl.py`; separately fix/re-enable NCCL build support.
+5. Distributed/NCCL follow-up: keep `distributed/`, `futures/`, `multiprocessing/`, `bin/`, and `cuda/nccl.py`; NCCL is now enabled in fast builds, so future cleanup should preserve these bindings.
 6. Build payload trimming: adjust install rules for `include/`, `lib/`, `lib64/`, and `share/` after native dependency mapping is clear.
 
 Minimum verification after each batch:
