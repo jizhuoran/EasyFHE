@@ -80,9 +80,9 @@ Legend:
 | `nn/` | Keep narrow | Minimal `Module`, `Parameter`, and disabled layer facade. | Many compatibility paths still import `nn`. Delete later only after serialization/JIT/package paths are settled. |
 | `testing/` | Candidate | PyTorch testing utilities. | Not needed by runtime examples. |
 | `package/` | Candidate | PyTorch package importer/exporter support. | Likely removable with JIT/serialization cleanup. |
-| `utils/` | Keep narrow | Large utility namespace: pytree, data, serialization helpers, benchmarking, tensorboard, etc. | Do not delete wholesale; split by subdir later. |
-| `contrib/` | Candidate | Contributed helpers such as tensorboard visualization. | Likely removable unless profiler UX needs it. |
-| `legacy/` | Candidate | Legacy README placeholder. | Likely removable. |
+| `utils/` | Keep narrow | Large utility namespace: pytree, data, serialization helpers, benchmarking, tensorboard, visualization, etc. | Do not delete wholesale. Keep `tensorboard`, `viz`, `benchmark`, `_strobelight`, serialization/data/core helpers; `utils/_debug_mode` and `utils/jit` were removed as compiler/JIT leftovers. |
+| `contrib/` | Keep narrow | Contributed helpers such as tensorboard visualization. | Keep because TensorBoard/profiling visualization is wanted. |
+| `legacy/` | Removed | Legacy README placeholder. | Removed. |
 | `bin/` | Keep narrow | Installed executable payload such as `torch_shm_manager`. | Related to multiprocessing/shared memory. Keep while multiprocessing is kept. |
 | `futures/` | Keep narrow | Future API compatibility. | Listed above too because distributed depends on it. |
 
