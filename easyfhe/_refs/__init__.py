@@ -50,7 +50,8 @@ from easyfhe._prims_common.wrappers import (
     elementwise_unary_scalar_wrapper,
     out_wrapper,
 )
-from easyfhe.testing._internal.common_dtype import highest_precision_float
+
+highest_precision_float = torch.float64
 
 
 # Experimental module containing prototype Python references for existing

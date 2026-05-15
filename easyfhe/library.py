@@ -1895,14 +1895,4 @@ def opcheck(
         >>>     torch.library.opcheck(numpy_mul, args)
 
     """
-    import easyfhe.testing._internal.optests as optests
-
-    return optests.opcheck(
-        op,
-        args,
-        kwargs,
-        test_utils=test_utils,
-        raise_exception=raise_exception,
-        rtol=rtol,
-        atol=atol,
-    )
+    raise RuntimeError("torch.library.opcheck is not available in EasyFHE")

@@ -78,8 +78,8 @@ Legend:
 | Directory | Posture | What it is | Notes |
 | --- | --- | --- | --- |
 | `nn/` | Keep narrow | Minimal `Module`, `Parameter`, and disabled layer facade. | Many compatibility paths still import `nn`. Delete later only after serialization/JIT/package paths are settled. |
-| `testing/` | Candidate | PyTorch testing utilities. | Not needed by runtime examples. |
-| `package/` | Candidate | PyTorch package importer/exporter support. | Likely removable with JIT/serialization cleanup. |
+| `testing/` | Removed | PyTorch testing utilities. | Removed; `_refs` now owns its tiny `float64` precision constant and `library.opcheck` reports unavailable. |
+| `package/` | Removed | PyTorch package importer/exporter support. | Removed; `_jit_internal` keeps a local mangled-name predicate so TorchScript compatibility helpers do not import package machinery. |
 | `utils/` | Keep narrow | Large utility namespace: pytree, data, serialization helpers, benchmarking, tensorboard, visualization, etc. | Do not delete wholesale. Keep `tensorboard`, `viz`, `benchmark`, `_strobelight`, serialization/data/core helpers; `utils/_debug_mode` and `utils/jit` were removed as compiler/JIT leftovers. |
 | `contrib/` | Keep narrow | Contributed helpers such as tensorboard visualization. | Keep because TensorBoard/profiling visualization is wanted. |
 | `legacy/` | Removed | Legacy README placeholder. | Removed. |

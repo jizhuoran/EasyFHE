@@ -47,7 +47,15 @@ import easyfhe as torch
 # Otherwise, "AttributeError: module 'torch' has no attribute 'distributed'" is raised.
 import easyfhe as torch
 import easyfhe.distributed.rpc
-import easyfhe.package._mangling as package_mangling
+
+
+class _PackageMangling:
+    @staticmethod
+    def is_mangled(name: str) -> bool:
+        return name.startswith("<") and ">" in name
+
+
+package_mangling = _PackageMangling()
 
 
 class _Await:
