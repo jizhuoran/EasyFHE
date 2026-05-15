@@ -48,7 +48,12 @@ import easyfhe as torch
 import easyfhe as torch
 import easyfhe.distributed.rpc
 import easyfhe.package._mangling as package_mangling
-from easyfhe._awaits import _Await
+
+
+class _Await:
+    pass
+
+
 CAwait = getattr(torch._C, "_Await", object)
 CFuture = getattr(torch._C, "Future", object)
 from easyfhe._sources import fake_range, get_source_lines_and_file, parse_def

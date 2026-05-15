@@ -1317,8 +1317,11 @@ class ExecutionTraceObserver(_ITraceObserver):
             if not resource_dir:
                 return
 
-            # Save the kernel paths for the generated kernels
-            from easyfhe._inductor.codecache import PyCodeCache
+            # Compiler-generated Triton kernels are absent in EasyFHE's trimmed runtime.
+            try:
+                from easyfhe._inductor.codecache import PyCodeCache
+            except ModuleNotFoundError:
+                return
 
             kernel_files = [
                 v.__file__

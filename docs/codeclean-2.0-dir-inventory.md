@@ -48,17 +48,17 @@ Legend:
 
 | Directory | Posture | What it is | Notes |
 | --- | --- | --- | --- |
-| `_dynamo/` | Candidate | TorchDynamo-style config/decorator surface. | Compiler stack, likely removable if `compile` support is out. |
-| `_inductor/` | Candidate | Inductor/kernel template surface. | Compiler stack, likely removable with `_dynamo/_export/compiler`. |
-| `_export/` | Candidate | Internal export implementation. | Public `export/` has already been deleted; this is a follow-up candidate. |
-| `compiler/` | Candidate | Public compiler/cache/config surface. | Likely removable if compile/export is out. |
+| `_dynamo/` | Removed | TorchDynamo-style config/decorator surface. | Removed with a top-level `easyfhe.compiler` object that returns non-compiling state for internal runtime checks. |
+| `_inductor/` | Removed | Inductor/kernel template surface. | Removed; profiler/cudagraph config paths now tolerate the missing compiler backend. |
+| `_export/` | Removed | Internal export implementation. | Removed after public `export/` was already deleted. |
+| `compiler/` | Removed | Public compiler/cache/config surface. | Removed as an importable package; `easyfhe.compiler` remains a small in-memory disabled namespace for CUDA/profiler guards. |
 | `fx/` | Candidate | FX graph tooling. | Usually compiler/export/tracing support. Test as a separate batch. |
 | `_decomp/` | Candidate | Operator decomposition tables. | Currently references deleted `easyfhe.export` paths and missing functorch native pieces; likely part of compiler-stack cleanup. |
 | `_functorch/` | Candidate | Functorch/vmap/autograd-function compatibility. | Public `func/` is deleted. |
 | `_higher_order_ops/` | Candidate | Higher-order operator implementations/passes. | Compiler/functorch-related; not current FHE surface. |
 | `_custom_op/` | Candidate | Custom op API compatibility. | May be tied to library/compiler features; test separately. |
-| `_lazy/` | Candidate | Lazy tensor backend compatibility. | Not current FHE surface. |
-| `_awaits/` | Candidate | JIT awaitable helpers. | JIT package is deleted; likely removable if no runtime import remains. |
+| `_lazy/` | Removed | Lazy tensor backend compatibility. | Removed; not current FHE surface. |
+| `_awaits/` | Removed | JIT awaitable helpers. | Removed; `_jit_internal` keeps a local placeholder class for retained compatibility code. |
 
 ## Device/Backend Surfaces
 

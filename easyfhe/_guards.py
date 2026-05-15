@@ -163,9 +163,14 @@ class GuardSource(enum.Enum):
         return self in (GuardSource.GLOBAL_FSDP_MODULE, GuardSource.LOCAL_FSDP_MODULE)
 
     def is_specialized_nn_module(self) -> bool:
-        import easyfhe._dynamo.config as config
+        try:
+            import easyfhe._dynamo.config as config
+        except ModuleNotFoundError:
+            unsafe_skip_fsdp_module_guards = False
+        else:
+            unsafe_skip_fsdp_module_guards = config._unsafe_skip_fsdp_module_guards
 
-        if config._unsafe_skip_fsdp_module_guards:
+        if unsafe_skip_fsdp_module_guards:
             return (
                 self
                 in (

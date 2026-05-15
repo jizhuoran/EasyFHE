@@ -2,7 +2,6 @@
 import contextlib
 import math
 import sys
-import warnings
 from typing import Any, cast, TYPE_CHECKING
 
 import easyfhe as torch
@@ -21,18 +20,8 @@ except ImportError:
     from easyfhe.utils._pytree import tree_map_only  # type: ignore[no-redef]
 
 
-try:
-    from easyfhe.compiler import is_dynamo_compiling as is_torchdynamo_compiling
-except Exception:
-    warnings.warn(
-        "Unable to import torchdynamo util `is_torchdynamo_compiling`, so won't support torchdynamo correctly",
-        stacklevel=2,
-    )
-
-    def is_torchdynamo_compiling():  # type: ignore[misc]
-        return False
-        # pyrefly: ignore [unreachable]
-        return False
+def is_torchdynamo_compiling():
+    return torch.compiler.is_dynamo_compiling()
 
 
 """

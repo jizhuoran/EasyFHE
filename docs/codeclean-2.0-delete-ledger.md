@@ -22,6 +22,7 @@ exist only to support that namespace.
 | Deleted | `easyfhe/mps/**`, `easyfhe/mtia/**`, `easyfhe/numa/**`, `easyfhe/signal/**` | Non-CUDA backend surfaces and signal/window helpers are outside the current Linux/CUDA-focused runtime. | `easyfhe/random.py` no longer imports `mps`/`mtia` during seeding; top-level lazy imports for `mps`/`mtia` were removed. |
 | Deleted | `easyfhe/backends/cudnn/**`, `easyfhe/backends/mkldnn/**`, `easyfhe/backends/nnpack/**`, `easyfhe/backends/mps/**`, `easyfhe/backends/miopen/**`, `easyfhe/backends/quantized/**`, `easyfhe/backends/_coreml/**`, `easyfhe/backends/xeon/**`, `easyfhe/backends/xnnpack/**`, `easyfhe/backends/python_native/**` | Unsupported or unused backend compatibility surfaces. | `easyfhe/backends/__init__.py` no longer imports them; `easyfhe.__init__` no longer calls `torch.backends.mps._init()` or exposes deprecated `has_mps/has_cudnn/has_mkldnn`; `_utils`, `cpp_extension`, and `collect_env` no longer hard-reference MPS/XNNPACK backend modules. |
 | Deleted | `easyfhe/backends/cusparselt/**`, `easyfhe/backends/kleidiai/**`, `easyfhe/backends/mha/**`, `easyfhe/backends/mkl/**`, `easyfhe/backends/opt_einsum/**` | Remaining optional backend compatibility surfaces not needed by the current FHE runtime. | `_meta_registrations.py` treats MKL/KleidiAI backend checks as unavailable; `functional.py` and `_numpy/_funcs_impl.py` no longer use the opt-einsum backend and fall back to default `einsum` behavior. |
+| Deleted | `easyfhe/_dynamo/**`, `easyfhe/_inductor/**`, `easyfhe/_export/**`, `easyfhe/compiler/**`, `easyfhe/_lazy/**`, `easyfhe/_awaits/**` | First compiler-stack cleanup batch. These are graph capture, export, compile backend, lazy backend, and JIT awaitable surfaces outside the current tensor/CUDA/FHE runtime. | `easyfhe.__init__` removed lazy imports for `_dynamo/_inductor/_export`, keeps a small in-memory `easyfhe.compiler` namespace for `is_compiling()` and CUDA graph config checks, and keeps `compile()` disabled. `easyfhe._jit_internal` keeps a local `_Await` placeholder. Native follow-up anchors: `torch/csrc/dynamo/**`, `torch/csrc/jit/python/pybind_utils.h` await import, generated `_C/_dynamo/*.pyi`, Inductor/AOTInductor CMake or packaging references, export serde/PT2 archive references. |
 | Deleted | `easyfhe/linalg/__init__.py`, `easyfhe/special/__init__.py` | These public namespaces already failed on import because `_C._linalg` and `_C._special` are not present. | `tools/autograd/gen_python_functions.py`, `tools/autograd/templates/python_linalg_functions.cpp`, `tools/autograd/templates/python_special_functions.cpp`, `torch/csrc/autograd/python_{linalg,special}_functions.h`, `torch/csrc/autograd/generated/python_{linalg,special}_functions.cpp`, `torch/csrc/Module.cpp`, `aten/src/ATen/native/cuda/linalg/**`, `aten/src/ATen/native/*special*`, `aten/src/ATen/native/cuda/*bessel*`, `aten/src/ATen/native/cuda/*chebyshev*`. |
 | Removed lazy imports | `easyfhe.__init__` entries for `onnx`, `distributions`, `func`, `linalg`, `special` | Prevents top-level `easyfhe` attribute lookup from advertising deleted modules. | Same anchors as the deleted modules above. |
 
@@ -43,12 +44,18 @@ After the Python 3.12 native rebuild:
 | `easyfhe.ao` | `ModuleNotFoundError` | Deleted. |
 | `easyfhe.func` | `ModuleNotFoundError` | Deleted. |
 | `easyfhe.onnx` | `ModuleNotFoundError` | Deleted. |
-| `easyfhe.optim` | imports | Optimizer classes disabled, but `Optimizer` base still exists. Medium risk. |
-| `easyfhe.export` | imports | Public functions disabled, but internal export files remain referenced by decomposition/compiler code. Medium risk. |
+| `easyfhe.optim` | `ModuleNotFoundError` | Deleted. |
+| `easyfhe.export` | `ModuleNotFoundError` | Deleted. |
 | `easyfhe.nn` | imports | Training layers disabled, but `Module` and `Parameter` are used by serialization/JIT/examples. Medium to high risk. |
 | `easyfhe.linalg` | `ModuleNotFoundError` | Deleted after it was found broken. |
 | `easyfhe.sparse` | imports | C-backed sparse surface with fallbacks. Medium risk. |
 | `easyfhe.special` | `ModuleNotFoundError` | Deleted after it was found broken. |
+| `easyfhe.compiler` | `ModuleNotFoundError` | Deleted as an importable package; top-level `easyfhe.compiler` remains a disabled namespace for runtime guards. |
+| `easyfhe._dynamo` | `ModuleNotFoundError` | Deleted. |
+| `easyfhe._inductor` | `ModuleNotFoundError` | Deleted. |
+| `easyfhe._export` | `ModuleNotFoundError` | Deleted. |
+| `easyfhe._lazy` | `ModuleNotFoundError` | Deleted. |
+| `easyfhe._awaits` | `ModuleNotFoundError` | Deleted. |
 
 ## Deleted Python batch verification
 
@@ -88,7 +95,8 @@ error.
 
 | Candidate | Python paths | Why not first |
 | --- | --- | --- |
-| Export/compiler internals | `easyfhe/_export/**`, `easyfhe/compiler/**`, `easyfhe/_dynamo/**`, `easyfhe/_inductor/**` | Public `easyfhe/export/**` has been deleted. The remaining compiler stack still references export concepts and should be handled as a separate batch. |
+| FX/functorch transform internals | `easyfhe/fx/**`, `easyfhe/_functorch/**`, `easyfhe/_higher_order_ops/**` | They sit above tensor dispatch but below public compiler APIs. Delete as the next separate batch because distributed functional collectives and fake tensor helpers still reference them. |
+| Decomposition/custom-op edge | `easyfhe/_decomp/**`, `easyfhe/_custom_op/**` | These are compiler-adjacent but closer to operator/library infrastructure. Inspect separately so tensor/op registration is not accidentally damaged. |
 | NN training surface | `easyfhe/nn/**` | Layers are disabled, but `Module`, `Parameter`, serialization, JIT, and weight-generation examples still import `easyfhe.nn`. This should be stubbed narrower before deletion. |
 | Sparse surface | `easyfhe/sparse/__init__.py`, sparse internals | It imports today and some tensor/runtime code still knows about sparse layout. Native cleanup touches generated sparse bindings and ATen sparse kernels. |
 | Distributed/futures/multiprocessing | `easyfhe/distributed/**`, `easyfhe/futures/**`, `easyfhe/multiprocessing/**` | Fast build can disable distributed, but Python pieces still exist and some profiler/pickler guards reference distributed macros. Remove after locking build flags to `USE_DISTRIBUTED=0`, `USE_NCCL=0`. |

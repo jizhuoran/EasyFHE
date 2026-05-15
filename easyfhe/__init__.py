@@ -11,6 +11,7 @@ legacy internals while the project is reduced into an FHE-focused runtime.
 # mypy: allow-untyped-defs
 
 import builtins
+import contextlib
 import ctypes
 import functools
 import glob
@@ -1571,9 +1572,6 @@ def use_deterministic_algorithms(
         ...
         RuntimeError: avg_pool3d_backward_cuda does not have a deterministic implementation...
     """
-    import easyfhe._inductor.config as inductor_config
-
-    inductor_config.deterministic = mode
     _C._set_deterministic_algorithms(mode, warn_only=warn_only)
 
 
@@ -2408,7 +2406,6 @@ del _easyfhe_types
 from easyfhe import (
     __config__ as __config__,
     __future__ as __future__,
-    _awaits as _awaits,
     accelerator as accelerator,
     autograd as autograd,
     backends as backends,
@@ -2889,6 +2886,84 @@ def compile(
     )(model)  # type: ignore[return-value]
 
 
+class _CompilerConfig:
+    force_cudagraph_gc = False
+
+
+class _CompilerNamespace:
+    config = _CompilerConfig()
+
+    def compile(self, *args, **kwargs):
+        return compile(*args, **kwargs)
+
+    def reset(self):
+        return None
+
+    def allow_in_graph(self, fn):
+        return fn
+
+    def assume_constant_result(self, fn):
+        return fn
+
+    def substitute_in_graph(self, original_fn, **kwargs):
+        def decorator(fn):
+            return fn
+
+        return decorator
+
+    def disable(self, fn=None, **kwargs):
+        if fn is None:
+            return lambda inner: inner
+        return fn
+
+    def list_backends(self, *args, **kwargs):
+        return []
+
+    def set_default_backend(self, *args, **kwargs):
+        return None
+
+    def get_default_backend(self):
+        return "eager"
+
+    def set_stance(self, *args, **kwargs):
+        return contextlib.nullcontext()
+
+    def set_enable_guard_collectives(self, *args, **kwargs):
+        return None
+
+    def cudagraph_mark_step_begin(self):
+        return None
+
+    def load_compiled_function(self, *args, **kwargs):
+        raise RuntimeError("torch.compile is disabled in EasyFHE")
+
+    def wrap_numpy(self, fn=None):
+        if fn is None:
+            return lambda inner: inner
+        return fn
+
+    def is_compiling(self):
+        return False
+
+    def is_dynamo_compiling(self):
+        return False
+
+    def is_exporting(self):
+        return False
+
+    def save_cache_artifacts(self, *args, **kwargs):
+        return None
+
+    def load_cache_artifacts(self, *args, **kwargs):
+        return None
+
+    def nested_compile_region(self, *args, **kwargs):
+        return contextlib.nullcontext()
+
+
+compiler = _CompilerNamespace()
+
+
 def _register_device_module(device_type, module):
     r"""Register an external runtime module of the specific :attr:`device_type`
     supported by torch.
@@ -2939,16 +3014,11 @@ if TYPE_CHECKING:
     # such as auto-completion in tools like pylance, even when these modules are not explicitly
     # imported in user code.
     from easyfhe import (
-        _dynamo as _dynamo,
-        _inductor as _inductor,
         _subclasses as _subclasses,
     )
 
 else:
     _lazy_modules = {
-        "_dynamo",
-        "_inductor",
-        "_export",
         # EasyFHE: modules not in bulk import but needed lazily
         "distributed",
         "fhe",
