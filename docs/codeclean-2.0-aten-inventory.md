@@ -18,6 +18,7 @@ From `build/CMakeCache.txt`:
 - `USE_MPS=OFF`
 - `USE_ROCM=0`
 - `USE_MSLK=OFF`
+- `USE_EASYFHE_CPU_AVX=OFF`
 - `BUILD_FUNCTORCH=OFF`
 - `BUILD_LAZY_CUDA_LINALG=OFF`
 
@@ -40,6 +41,13 @@ library.
   `build/aten/src/ATen/native/cpu/*.cpp.{DEFAULT,AVX2,AVX512}.cpp` wrappers.
   Do not delete CPU kernel sources based on stale direct-path compile database
   checks.
+- The EasyFHE fast build now defaults `USE_EASYFHE_CPU_AVX=OFF`, so those CPU
+  wrappers should only be generated as `.DEFAULT.cpp`; SLEEF AVX2 and AVX512F
+  dispatcher targets are disabled in the same profile. SLEEF's scalar purecfma
+  fallback still compiles with `-mavx2 -mfma`; attempting to remove only
+  `-mavx2` fails on GCC because that SLEEF mode requires `FP_FAST_FMA/FMAF`.
+  Re-enable with `USE_EASYFHE_CPU_AVX=1` if a later CPU performance experiment
+  needs ATen CPU capability wrappers.
 - `aten/src/ATen/native/cuda/linalg/**` was deleted after a clean build proved it
   is not needed by the fast build.
 - `aten/src/ATen/native/kleidiai/**` was deleted after a clean build proved it is

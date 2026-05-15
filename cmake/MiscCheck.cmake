@@ -3,7 +3,10 @@ include(CheckCXXCompilerFlag)
 include(CMakePushCheckState)
 
 # ---[ Check if the compiler has AVX/AVX2 support. We only check AVX2.
-if(NOT INTERN_BUILD_MOBILE)
+if(NOT DEFINED USE_EASYFHE_CPU_AVX)
+  set(USE_EASYFHE_CPU_AVX ON)
+endif()
+if(NOT INTERN_BUILD_MOBILE AND USE_EASYFHE_CPU_AVX)
   find_package(AVX) # checks AVX and AVX2
   if(CXX_AVX2_FOUND)
     message(STATUS "Current compiler supports avx2 extension. Will build perfkernels.")
@@ -11,6 +14,9 @@ if(NOT INTERN_BUILD_MOBILE)
     set(CAFFE2_PERF_WITH_AVX 1)
     set(CAFFE2_PERF_WITH_AVX2 1)
   endif()
+else()
+  set(CAFFE2_PERF_WITH_AVX 0)
+  set(CAFFE2_PERF_WITH_AVX2 0)
 endif()
 
 # ---[ Checks if compiler supports -fvisibility=hidden
