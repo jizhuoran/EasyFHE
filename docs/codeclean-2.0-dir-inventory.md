@@ -53,10 +53,10 @@ Legend:
 | `_export/` | Removed | Internal export implementation. | Removed after public `export/` was already deleted. |
 | `compiler/` | Removed | Public compiler/cache/config surface. | Removed as an importable package; `easyfhe.compiler` remains a small in-memory disabled namespace for CUDA/profiler guards. |
 | `fx/` | Keep narrow | FX graph tooling plus symbolic-shape helpers. | Do not delete wholesale: `SymInt/SymBool`, `_refs`, `_prims_common`, meta registrations, and tensor subclass helpers depend on `fx.experimental.symbolic_shapes`, `sym_node`, traceback, and schema utilities. Public tracing/graph pieces can be inspected later for narrowing. |
-| `_decomp/` | Candidate | Operator decomposition tables. | Currently references deleted `easyfhe.export` paths and missing functorch native pieces; likely part of compiler-stack cleanup. |
+| `_decomp/` | Removed | Operator decomposition tables. | Removed after it was found to be unusable in the fast build path because importing it pulls FakeTensor/functorch native pieces that are absent. |
 | `_functorch/` | Removed | Functorch/vmap/autograd-function compatibility. | Public `func/` is deleted; `_ops` keeps a disabled fallback for transform dispatch state. |
 | `_higher_order_ops/` | Removed | Higher-order operator implementations/passes. | Compiler/functorch-related; small `new_token_tensor` and `autograd_not_implemented` helpers were inlined into `_prims`/`rng_prims`. |
-| `_custom_op/` | Candidate | Custom op API compatibility. | May be tied to library/compiler features; test separately. |
+| `_custom_op/` | Keep narrow | Custom op API compatibility. | Imports successfully and is closer to `torch.library`/operator registration infrastructure than graph compiler. Keep unless a later operator-infra pass proves it unused. |
 | `_lazy/` | Removed | Lazy tensor backend compatibility. | Removed; not current FHE surface. |
 | `_awaits/` | Removed | JIT awaitable helpers. | Removed; `_jit_internal` keeps a local placeholder class for retained compatibility code. |
 
