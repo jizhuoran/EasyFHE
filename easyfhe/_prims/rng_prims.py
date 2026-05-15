@@ -5,7 +5,6 @@ import easyfhe as torch
 import easyfhe.utils._pytree as pytree
 from easyfhe import _prims
 from easyfhe._C import DispatchKey
-from easyfhe._higher_order_ops.utils import autograd_not_implemented
 from easyfhe._ops import HigherOrderOperator
 from easyfhe._prims_common import CUDARngStateHelper, make_contiguous_strides_for
 from easyfhe._subclasses.fake_tensor import FakeTensorMode
@@ -15,6 +14,13 @@ from easyfhe.fx.experimental.proxy_tensor import (
     track_tensor_tree,
 )
 from easyfhe.types import _device, _dtype
+
+
+def autograd_not_implemented(*args, **kwargs):
+    def decorator(fn):
+        return fn
+
+    return decorator
 
 
 def throw_on_non_cuda(device):

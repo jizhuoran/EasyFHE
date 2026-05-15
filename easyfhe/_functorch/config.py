@@ -1,7 +1,0 @@
-autograd_cache_allow_custom_autograd_functions = False
-check_custom_op_aliasing = False
-fake_tensor_allow_meta = True
-fake_tensor_allow_unsafe_data_ptr_access = False
-fake_tensor_prefer_device_type = None
-fake_tensor_propagate_real_tensors = False
-generate_fake_kernels_from_real_mismatches = False

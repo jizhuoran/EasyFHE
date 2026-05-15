@@ -11,7 +11,6 @@ import easyfhe as torch
 import easyfhe.library
 from easyfhe import sym_float, Tensor
 from easyfhe._C import _get_default_device
-from easyfhe._higher_order_ops.effects import new_token_tensor
 from easyfhe._library.utils import is_functional_schema
 from easyfhe._prims.debug_prims import register_debug_prims
 from easyfhe._prims.rng_prims import register_rng_prims
@@ -33,6 +32,10 @@ from easyfhe._prims_common.wrappers import backwards_not_supported
 from easyfhe._subclasses.fake_tensor import FakeTensor, FakeTensorMode
 from easyfhe.overrides import handle_torch_function, has_torch_function
 from easyfhe.utils._pytree import tree_flatten, tree_map, tree_unflatten
+
+
+def new_token_tensor(*args, **kwargs):
+    return torch.empty((), dtype=torch.uint8)
 
 
 prim = torch.library.Library("prims", "DEF")
