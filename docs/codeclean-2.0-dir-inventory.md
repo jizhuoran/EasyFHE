@@ -42,7 +42,7 @@ Legend:
 | `_native/` | Removed | Python helpers for native/Triton custom ops. | Removed after no project references were found and import failed through Triton/xpu compatibility paths. |
 | `nested/` | Removed | NestedTensor compatibility. | Removed after import was found broken through missing native `_C._nested`. |
 | `masked/` | Removed | MaskedTensor compatibility. | Removed after import was found broken through missing ATen masked-op registrations. |
-| `sparse/` | Candidate | Public sparse namespace. | Imports today, but FHE path does not seem to need public sparse. Native sparse/layout references are wider. |
+| `sparse/` | Keep minimal | Native sparse tensor class anchor. | Python sparse API implementation was removed, but tiny `easyfhe.sparse` and `easyfhe.cuda.sparse` modules must remain because `_C._initExtension()` imports them while installing sparse tensor classes. Native sparse/layout concepts were not touched. |
 
 ## Compiler, Export, and Transform Stack
 

@@ -1934,7 +1934,7 @@ def _compile_kernel(
         return getattr(result, mangled_name)
 
 
-from . import jiterator, nvtx, profiler, sparse, tunable
+from . import jiterator, nvtx, profiler, tunable
 
 
 _POOL_HANDLE = NewType("_POOL_HANDLE", tuple[int, int])
@@ -2070,7 +2070,6 @@ __all__ = [
     "set_rng_state_all",
     "set_stream",
     "set_sync_debug_mode",
-    "sparse",
     "stream",
     "streams",
     "synchronize",

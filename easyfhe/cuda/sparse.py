@@ -1,1 +1,1 @@
-# The Tensor classes are added to this module by python_tensor.cpp
+"""Minimal native anchor for CUDA sparse tensor classes."""

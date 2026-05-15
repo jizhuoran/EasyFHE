@@ -3027,7 +3027,6 @@ else:
         "multiprocessing",
         "nn",
         "profiler",
-        "sparse",
     }
 
     def __getattr__(name):
