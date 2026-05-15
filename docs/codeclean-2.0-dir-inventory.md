@@ -8,6 +8,7 @@ Legend:
 
 - Keep: needed for the current runtime or explicitly wanted.
 - Keep narrow: keep for now, but it should eventually be narrowed.
+- Keep minimal: keep only a tiny compatibility/native-initialization anchor.
 - Candidate: likely removable, but test as a separate batch.
 - Removed: already deleted in this branch.
 - Build payload: installed headers/libs/share data; shrink through build rules.
@@ -70,7 +71,7 @@ Legend:
 | `mps/` | Removed | Apple MPS compatibility. | Removed for Linux/CUDA-focused runtime. |
 | `mtia/` | Removed | MTIA accelerator compatibility. | Removed. |
 | `numa/` | Removed | NUMA binding helpers. | Removed. |
-| `monitor/` | Candidate | Native monitor/wait-counter surface. | Profiler/distributed may touch monitor concepts; inspect before deleting. |
+| `monitor/` | Keep | Native monitor/wait-counter surface with TensorBoard event handling. | Keep: profiling/monitoring and TensorBoard integration are wanted. |
 | `signal/` | Removed | Signal/window helper surface. | Removed. |
 
 ## User-Facing PyTorch Compatibility
@@ -91,7 +92,7 @@ Legend:
 | Directory | Posture | What it is | Notes |
 | --- | --- | --- | --- |
 | `_logging/` | Keep narrow | Structured/logging registrations. | Some runtime logging imports distributed; can be narrowed. |
-| `_strobelight/` | Candidate | Compile-time profiling/diagnostic tooling. | Not FHE runtime. |
+| `_strobelight/` | Keep narrow | Compile-time/function profiling diagnostic tooling. | Keep for now because profiling tooling is wanted; can be narrowed after profiler UX is mapped. |
 | `_vendor/` | Keep | Vendored packaging helpers. | Small and low-risk; remove only if imports prove dead. |
 
 ## Build Payload
@@ -107,6 +108,16 @@ Legend:
 
 | Directory | Status | Why |
 | --- | --- | --- |
+| `_awaits/` | Removed | JIT awaitable helpers after the JIT package was removed. |
+| `_decomp/` | Removed | Decomposition tables were compiler/meta/functorch-adjacent and already broken through missing native functorch pieces. |
+| `_dynamo/` | Removed | TorchDynamo graph-capture stack is outside EasyFHE runtime. |
+| `_export/` | Removed | Internal export implementation after public `export/` was removed. |
+| `_functorch/` | Removed | Functorch/vmap transform stack is outside runtime; public `func/` was already removed. |
+| `_higher_order_ops/` | Removed | Higher-order operator compiler/functorch support removed with the transform stack. |
+| `_inductor/` | Removed | Inductor compiler backend is outside runtime. |
+| `_lazy/` | Removed | LazyTensor backend compatibility not needed. |
+| `_native/` | Removed | PyTorch/Triton native prototype surface was unused and import-broken; not EasyFHE's `_C` native extension. |
+| `_numpy/` | Removed | NumPy namespace emulation removed; native tensor/NumPy conversion remains. |
 | `ao/` | Removed | Model optimization/quantization facade; disabled stubs. |
 | `amp/` | Removed | Autocast/GradScaler compatibility surface; deleted with `cuda/amp/` and `cpu/amp/`. |
 | `backends/_coreml/` | Removed | CoreML conversion support not needed. |
@@ -124,27 +135,46 @@ Legend:
 | `backends/quantized/` | Removed | Quantized backend compatibility not needed. |
 | `backends/xeon/` | Removed | Xeon CPU launcher tooling not needed. |
 | `backends/xnnpack/` | Removed | XNNPACK compatibility surface not needed. |
+| `compiler/` | Removed | Public compiler/cache surface removed; top-level `easyfhe.compiler` disabled namespace remains for runtime guards. |
 | `distributions/` | Removed | Probability distributions are outside encrypted inference runtime. |
 | `export/` | Removed | Public export/PT2 archive workflows are not used. |
 | `fft/` | Removed | Public FFT namespace outside FHE surface; internal refs remain. |
 | `func/` | Removed | Public `torch.func` surface disabled. |
 | `jit/` | Removed | TorchScript/JIT package removed. A tiny top-level `easyfhe.jit` stub remains for runtime checks. |
+| `legacy/` | Removed | Legacy placeholder removed. |
 | `linalg/` | Removed | Public namespace already failed because `_C._linalg` was absent. |
+| `masked/` | Removed | MaskedTensor compatibility surface was not FHE-specific and import-broken. |
 | `mps/` | Removed | Apple MPS backend surface not needed for Linux/CUDA-focused runtime. |
 | `mtia/` | Removed | MTIA accelerator surface not needed. |
+| `nested/` | Removed | NestedTensor compatibility surface was not FHE-specific and import-broken. |
 | `numa/` | Removed | NUMA helper surface not needed by current runtime. |
 | `onnx/` | Removed | ONNX export disabled and not used. |
 | `optim/` | Removed | Training optimizers are outside inference runtime. |
+| `package/` | Removed | PyTorch package importer/exporter support removed with JIT/export cleanup. |
 | `quantization/` | Removed | Public quantization facade disabled. |
 | `signal/` | Removed | Signal/window helpers not needed by current runtime. |
 | `special/` | Removed | Public namespace already failed because `_C._special` was absent. |
+| `testing/` | Removed | PyTorch testing utilities removed; tiny constants/fallbacks were moved to local runtime code. |
+| `utils/_debug_mode/` | Removed | Debug mode stack was compiler/functorch-related and import-broken. |
+| `utils/bundled_inputs.py` | Removed | TorchScript bundled-input helper removed with JIT/package cleanup. |
+| `utils/checkpoint.py` | Removed | Training activation checkpointing was outside runtime and already import-broken. |
+| `utils/hipify/` | Removed | ROCm hipify compatibility removed. |
+| `utils/jit/` | Removed | JIT log/IR benchmarking helpers removed with JIT. |
+| `utils/mkldnn.py` | Removed | MKLDNN conversion helper removed after MKLDNN backend compatibility was removed. |
+| `utils/mobile_optimizer.py` | Removed | Mobile/JIT optimizer helper removed. |
+
+## Trimmed To Anchors
+
+| Directory | Status | Why |
+| --- | --- | --- |
+| `sparse/` | Keep minimal | Public sparse API implementation was removed, but `easyfhe.sparse` and `easyfhe.cuda.sparse` anchor modules remain because `_C._initExtension()` imports them while installing native sparse tensor classes. |
 
 ## Suggested Next Batches
 
-1. Low-risk Python-only candidates: `_awaits`, `_numpy`, `legacy`, `contrib`, `testing`.
-2. Compiler stack batch: `_dynamo`, `_inductor`, `_export`, `compiler`, `fx`, `_decomp`, `_functorch`, `_higher_order_ops`.
-3. Compatibility runtime batch: `sparse`, `masked`, `nested`, `package`.
-4. Backend trimming batch: most unsupported `backends/*` have already been removed. Remaining backend surface is `cuda`, `cpu`, and `openmp`.
+1. Native/typing stub audit: inspect `_C_flatbuffer/` and stale `_C/*.pyi` references left by removed public surfaces.
+2. Tensor-runtime narrowing only, no wholesale deletes: inspect `_subclasses/`, `_refs/`, `_prims/`, and `_library/` for now-broken compiler/functorch/sparse/nested hooks.
+3. Utility narrowing: keep profiling/visualization (`profiler/`, `monitor/`, `utils/tensorboard/`, `utils/viz/`, `utils/benchmark/`, `_strobelight/`, `utils/_strobelight/`, `contrib/`), but inspect remaining non-core utility files one by one.
+4. Distributed/NCCL follow-up: keep `distributed/`, `futures/`, `multiprocessing/`, `bin/`, and `cuda/nccl.py`; separately fix/re-enable NCCL build support.
 5. Build payload trimming: adjust install rules for `include/`, `lib/`, `lib64/`, and `share/` after native dependency mapping is clear.
 
 Minimum verification after each batch:
