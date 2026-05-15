@@ -60,7 +60,7 @@ Approximate tracked-source sizes for useful deletion accounting:
 | Path | Size | Current build status | Notes |
 | --- | ---: | --- | --- |
 | `aten/src/ATen/native/cpu/**` | 716 KiB | selected `.cpp` files compile through generated CPU-capability wrappers | Keep for now; fresh build disproved the earlier source-only deletion idea. |
-| `aten/src/ATen/native/cuda/**` | 1.6 MiB | 33 compiled, 77 not compiled | Do this by op family, not wholesale. |
+| `aten/src/ATen/native/cuda/**` | 1.5 MiB | 33 compiled, 47 not compiled | Do this by op family, not wholesale. |
 | `aten/src/ATen/cpu/vec/**` | 1.5 MiB | headers only | Dense CPU/vector utility headers; keep until CPU support is intentionally dropped. |
 | `aten/src/ATen/native/cuda/linalg/**` | 68 KiB | removed | Deleted in the first native-source cleanup batch. |
 | `aten/src/ATen/native/kleidiai/**` | 44 KiB | removed | Deleted in the first native-source cleanup batch. |
@@ -73,6 +73,7 @@ Approximate tracked-source sizes for useful deletion accounting:
 | --- | --- | --- |
 | `aten/src/ATen/native/cuda/linalg/**` | Public `easyfhe.linalg` had already been removed, fast build had `BUILD_LAZY_CUDA_LINALG=OFF`, and fresh configure/build did not require these sources. | Removed after `rm -rf build`; full `tools/easyfhe_fast_build.sh` passed, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
 | `aten/src/ATen/native/kleidiai/**` | Public `easyfhe.backends.kleidiai` had already been removed and current fast build does not compile the KleidiAI CPU int4 path. | Same clean-build and runtime smoke as above. Note: `aten/src/ATen/native/cpu/int4mm_kernel.cpp` still contains a stale include and should be handled with the later CPU/int4 cleanup, not by restoring KleidiAI. |
+| `aten/src/ATen/native/cuda/{airy_ai,bessel_*,spherical_bessel_j0,modified_bessel_*,scaled_modified_bessel_*,chebyshev_polynomial_*,shifted_chebyshev_polynomial_*,hermite_polynomial_*,laguerre_polynomial_l,legendre_polynomial_p}.cu` | Public `easyfhe.special` was removed and the EasyFHE fast build already filtered these CUDA special/math kernels out of all compiled source lists. | Removed after `rm -rf build`; sm80-only fast build passed, deleted paths were absent from `compile_commands.json`/`build.ninja`, import/NumPy/NCCL/profiler smoke passed, and CUDA ResNet20 AESPA passed. |
 
 ## Keep
 
@@ -105,8 +106,10 @@ These batches are ordered to keep rollback small and to avoid touching Tensor
 core/type infrastructure too early.
 
 1. **Special/math CUDA source-only pass**
-   - Delete filtered CUDA special/math families by small groups:
-     bessel/chebyshev/hermite/laguerre/legendre/modified_bessel,
+   - Deleted first group: airy, bessel, modified/scaled bessel,
+     spherical bessel, chebyshev/shifted chebyshev, hermite, laguerre,
+     and legendre CUDA kernels.
+   - Remaining filtered CUDA special/math families to try in later groups:
      `UnaryGeometric*`, `UnaryGamma*`, `UnaryLog*`, `ZetaKernel.cu`,
      `IGammaKernel.cu`, `GcdLcmKernel.cu`.
    - Keep currently compiled CUDA tensor basics such as `AbsKernel.cu`,
