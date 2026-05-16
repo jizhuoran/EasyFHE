@@ -19,7 +19,7 @@ def key_counter_detailed(func):
         if func.__name__ == "homo_rotate":
             limbs = args[0].cur_limbs
             index = args[1]
-        elif func.__name__ == "eval_fast_rotate":
+        elif func.__name__ == "fast_rotate":
             limbs = args[0].cur_limbs
             index = args[1]
         elif func.__name__ == "eval_fast_rotate_and_add_batch":

@@ -50,12 +50,13 @@ def _read_bsgs_kernel_rows(prefix, cipher, b_step, b_idx, scale, cryptoContext, 
 
 
 def rot_input(input, img_width, padding, cryptoContext):
-    digits = fhe.modup_to_ext(input.cipher_like([input.cv[1]]), cryptoContext)
     c_rotations = []
-    digits_neg_padding = fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext)
-    digits_padding = fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext)
-    digits_neg_img_width = fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext)
-    digits_img_width = fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext)
+    (
+        digits_neg_padding,
+        digits_padding,
+        digits_neg_img_width,
+        digits_img_width,
+    ) = fhe.fast_rotate(input, [-padding, padding, -img_width, img_width], cryptoContext)
 
     c_rotations.append(fhe.homo_rotate(digits_neg_padding, -img_width, cryptoContext))
     c_rotations.append(digits_neg_img_width)

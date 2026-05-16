@@ -17,6 +17,12 @@ Run from the repository root:
 python -m examples.resnet20_aespa.main
 ```
 
+The default device is CUDA. To run the same path on CPU:
+
+```bash
+python -m examples.resnet20_aespa.main --device cpu
+```
+
 Override the weight artifact with:
 
 ```bash

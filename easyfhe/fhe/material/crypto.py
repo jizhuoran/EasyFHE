@@ -116,7 +116,7 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
 def encrypt_with_key_arrays(x, device, scale_deg, level, slots, public_key_b, public_key_a, context):
     if not isinstance(x, np.ndarray):
         x = np.asarray(x)
-    ptx = encode(x, "encrypt", level, slots, False, context)
+    _, ptx = encode(x, context, level=level, slots=slots, is_ext=False)
     ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
     cur_limbs = ptx.cur_limbs
     pk0 = torch.as_tensor(public_key_b[:cur_limbs], device=device, dtype=torch.uint64)

@@ -4,7 +4,7 @@ from functools import lru_cache
 import numpy as np
 import easyfhe as torch
 
-from ..ciphertext import Plaintext, PreparedPlaintext
+from ..ciphertext import Cipher, Plaintext, PreparedPlaintext
 from ..runtime.instrumentation import run_instrumented_op
 
 MAX_ENCODED_BITS = 61
@@ -156,13 +156,12 @@ def make_plaintext(prepared, level, slots, is_ext, cryptoContext):
     )
 
 
-def encode(x, name, level, slots, is_ext, cryptoContext):
+def encode(x, cryptoContext, *, level, slots, is_ext=False):
     return run_instrumented_op(
         cryptoContext,
         "encode",
         _encode,
         x,
-        name,
         level,
         slots,
         is_ext,
@@ -170,7 +169,13 @@ def encode(x, name, level, slots, is_ext, cryptoContext):
     )
 
 
-def _encode(x, name, level, slots, is_ext, cryptoContext):
+def _encode(x, level, slots, is_ext, cryptoContext):
+    level = int(level)
+    slots = int(slots)
+    is_ext = bool(is_ext)
+    if isinstance(x, Cipher):
+        _validate_plaintext_metadata(x, level, slots, is_ext, cryptoContext)
+        return None, x
     if isinstance(x, np.ndarray):
         middle_value = prepare_plaintext(x, slots, cryptoContext.N)
     elif isinstance(x, PreparedPlaintext):
@@ -179,7 +184,20 @@ def _encode(x, name, level, slots, is_ext, cryptoContext):
     else:
         raise TypeError(f"Invalid plaintext source type: {type(x)}")
 
-    return _make_plaintext(middle_value, level, slots, is_ext, cryptoContext)
+    return middle_value, _make_plaintext(middle_value, level, slots, is_ext, cryptoContext)
+
+
+def _validate_plaintext_metadata(plaintext, level, slots, is_ext, cryptoContext):
+    expected_cur_limbs = int(cryptoContext.L) - int(level)
+    if int(plaintext.slots) != int(slots):
+        raise ValueError(f"Plaintext slots [{plaintext.slots}] do not match requested slots [{slots}]")
+    if bool(plaintext.is_ext) != bool(is_ext):
+        raise ValueError(f"Plaintext is_ext [{plaintext.is_ext}] does not match requested is_ext [{is_ext}]")
+    if int(plaintext.cur_limbs) != expected_cur_limbs:
+        raise ValueError(
+            f"Plaintext cur_limbs [{plaintext.cur_limbs}] do not match requested level [{level}] "
+            f"for context L [{cryptoContext.L}]"
+        )
 
 
 def _make_plaintext(middle_value, level, slots, is_ext, cryptoContext):

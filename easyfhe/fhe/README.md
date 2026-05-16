@@ -16,14 +16,28 @@ import easyfhe.fhe as fhe
 
 The main entry points are:
 
-- `CKKSContextSpec`, `BootstrapSpec`, `bootstrap_depth`, and `generate_context`
-  for context construction.
-- `Context`, `CipherState`, and `PreparedPlaintext` for runtime state.
+- `CKKSContextSpec` and `generate_context` for context construction. Use
+  `easyfhe.bs.openfhe` to plan bootstrap extra depth and bootstrap rotation keys
+  before constructing the context.
+- `Context`, `CipherState`, `PreparedPlaintext`, and `ConstantBundle` for
+  runtime state and reusable scalar/vector constant packs.
 - `prepare_plaintext`, `make_plaintext`, `encode`, and ciphertext slot helpers.
 - `homo_add`, `homo_sub`, `homo_mul`, `homo_square`, scalar/plaintext variants,
-  rotations, rescale, and noise-level alignment helpers.
-- `generate_bootstrap_constants` and `homo_bootstrap` for bootstrapping.
-- `RuntimeOptions`, `profile`, and CLI helpers for runtime control.
+  rotations, and `align_to` for explicit ciphertext state alignment.
+- `RuntimeOptions` and `profile` for runtime control and instrumentation.
+
+The supported external API is the allowlist in `easyfhe.fhe.__all__`, sourced
+from `easyfhe.fhe._public_api.PUBLIC_API`. Importable submodules are
+implementation details unless their symbols are re-exported by the package root.
+
+Bootstrap APIs live in concrete sibling packages such as `easyfhe.bs.openfhe`.
+New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
+construction and add it to the application's remaining-depth budget when
+choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
+directly. After context construction, call `bs.generate(ctx, ...)` to generate
+bootstrap constants as a `ConstantBundle`, then call
+`bs.register_rotation_keys(ctx, constants)` and
+`bs.bootstrap(cipher, ctx, constants, L0=...)` at runtime.
 
 ## Package Map
 
@@ -33,8 +47,8 @@ The main entry points are:
   state containers.
 - `ops/`: homomorphic arithmetic, encoding, key switching, rotation, alignment,
   fused operations, and thin native-kernel wrappers.
-- `bootstrap/`: bootstrapping plans, constants, rotations, approximation, and
-  runtime execution.
+- `../bs/`: public bootstrapping specs, planning, constants, runtime helpers,
+  and OpenFHE-specific internal implementation code.
 - `material/`: native sampler integration, CKKS key material, context material,
   rotation plans, and sample arithmetic.
 - `dev_tools/` and `logger/`: debugging and instrumentation helpers used by

@@ -1,11 +1,11 @@
 import math
 import easyfhe as torch
-from ..ops import kernels as F
-from ..ops import alignment
-from ..ops import homo
+from easyfhe.fhe.ops import kernels as F
+from easyfhe.fhe.ops import alignment
+from easyfhe.fhe.ops import homo
+from easyfhe.fhe.ops import rotation
 from . import approx as bootstrap_approx
-from ..ops import keyswitch
-from ..runtime.instrumentation import run_instrumented_op
+from easyfhe.fhe.runtime.instrumentation import run_instrumented_op
 
 
 Tensor = torch.Tensor
@@ -78,18 +78,74 @@ def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
     return ciphertext
 
 
-def _validate_transform_plan(plan, constants_table):
-    if constants_table is None:
+def _validate_transform_plan(plan, constants):
+    if constants is None:
         raise ValueError(f"{plan.direction} conversion requires explicit bootstrap constants")
-    if len(constants_table) != int(plan.level_budget):
-        raise ValueError(
-            f"{plan.direction} constants have {len(constants_table)} levels, "
-            f"but plan expects {plan.level_budget}."
-        )
 
 
-def coeffs_slots_conversion(ciphertext, transform_plan, constants_table, cryptoContext):
-    _validate_transform_plan(transform_plan, constants_table)
+def _constant_name(constants, plan, level, index):
+    try:
+        names = constants.info["plaintext_names"][plan.direction]
+        return names[int(level)][int(index)]
+    except (AttributeError, KeyError, IndexError):
+        return "{}_{}_{}_{}".format(plan.direction, int(math.log2(plan.slots)), int(level), int(index))
+
+
+def _constant_vector(constants, plan, level, index):
+    name = _constant_name(constants, plan, level, index)
+    try:
+        return constants.vector(name)
+    except AttributeError:
+        return constants.get(plan.direction, level, index)
+
+
+def _constant_plaintext(constants, plan, level, index, encode_level, cryptoContext):
+    name = _constant_name(constants, plan, level, index)
+    try:
+        constant = constants.vector(name)
+        return constants.plaintext(name, encode_level, constant.slots, cryptoContext, is_ext=True)
+    except AttributeError:
+        constant = constants.get(plan.direction, level, index)
+        return homo.encode(
+            constant,
+            cryptoContext,
+            level=encode_level,
+            slots=constant.slots,
+            is_ext=True,
+        )[1]
+
+
+def _constant_info(constants, name):
+    try:
+        return constants.info[name]
+    except AttributeError:
+        return getattr(constants, name)
+
+
+def _constant_scalar(constants, name):
+    try:
+        scalar_name = constants.info.get("scalar_names", {}).get(name, name)
+        return constants.scalar(scalar_name)
+    except AttributeError:
+        return getattr(constants, name)
+
+
+def _homo_conjugate(cipher, cryptoContext):
+    return run_instrumented_op(
+        cryptoContext,
+        "bs_homo_conjugate",
+        _homo_conjugate_impl,
+        cipher,
+        cryptoContext,
+    )
+
+
+def _homo_conjugate_impl(cipher, cryptoContext):
+    return homo.homo_rotate(cipher, 2 * cryptoContext.N - 1, cryptoContext)
+
+
+def coeffs_slots_conversion(ciphertext, transform_plan, constants, cryptoContext):
+    _validate_transform_plan(transform_plan, constants)
     plan = transform_plan
     result = ciphertext
 
@@ -105,90 +161,49 @@ def coeffs_slots_conversion(ciphertext, transform_plan, constants_table, cryptoC
             baby_step = plan.baby_step
             num_rotations = plan.num_rotations
 
-        digits_ext = keyswitch.modup_to_ext(
-            homo.extract_cv(result, 1, cryptoContext), cryptoContext
+        fast_rotation_ext = rotation.fast_rotate_ext(
+            result,
+            plan.rot_in[s][:giant_step],
+            cryptoContext,
         )
 
-        fast_rotation_ext = []
-
-        for j in range(giant_step):
-            if plan.rot_in[s][j] != 0:
-                fast_rotation_ext.append(
-                    homo.eval_fast_rotate(
-                        digits_ext, result, plan.rot_in[s][j], True, False, cryptoContext
-                    )
-                )
-            else:
-                fast_rotation_ext.append(
-                    keyswitch.key_switch_P_ext(result, cryptoContext)
-                )
-
+        inner_exts = []
         for i in range(baby_step):
             G = giant_step * i
-            constant = constants_table[s][G]
-            name = "{}_{}_{}_{}".format(plan.direction, int(math.log2(plan.slots)), s, G)
-            constant_slots = constant.slots
-            inner_ext = homo.homo_mul_pt(
-                fast_rotation_ext[0].cipher_like(fast_rotation_ext[0].cv, slots=constant_slots),
-                homo.encode(constant, name, cryptoContext.L - fast_rotation_ext[0].cur_limbs, constant.slots, True, cryptoContext),
-                cryptoContext
-            )
-            for j in range(1, giant_step):
-                if (G + j) != num_rotations:
-                    constant = constants_table[s][G + j]
-                    name = "{}_{}_{}_{}".format(plan.direction, int(math.log2(plan.slots)), s, G+j)
-                    constant_slots = constant.slots
-                    tmp_ext = homo.homo_mul_pt(
-                        fast_rotation_ext[j].cipher_like(fast_rotation_ext[j].cv, slots=constant_slots),
-                        homo.encode(constant, name, cryptoContext.L - fast_rotation_ext[j].cur_limbs, constant.slots, True, cryptoContext),
-                        cryptoContext
+            rotated_exts = []
+            plaintexts = []
+            for j in range(giant_step):
+                index = G + j
+                constant = _constant_vector(constants, plan, s, index)
+                constant_slots = constant.slots
+                rotated_exts.append(fast_rotation_ext[j].cipher_like(fast_rotation_ext[j].cv, slots=constant_slots))
+                plaintexts.append(
+                    _constant_plaintext(
+                        constants,
+                        plan,
+                        s,
+                        index,
+                        cryptoContext.L - fast_rotation_ext[j].cur_limbs,
+                        cryptoContext,
                     )
-                    inner_ext = homo.homo_add(inner_ext, tmp_ext, cryptoContext)
-
-            if i == 0:
-                inner_ext_cv0 = homo.extract_cv(inner_ext, 0, cryptoContext)
-                first_acc = keyswitch.moddown_from_ext(
-                    inner_ext_cv0, cryptoContext
                 )
-                outer_ext = homo.extract_cv(inner_ext, 1, cryptoContext, append_zeros=True)
-            else:
-                if plan.rot_out[s][i] != 0:
-                    inner = keyswitch.moddown_from_ext(inner_ext, cryptoContext)
-                    inner_cv0 = homo.extract_cv(inner, 0, cryptoContext)
-                    inner_cv1 = homo.extract_cv(inner, 1, cryptoContext)
 
-                    first = homo.cipher_automorphism(
-                        inner_cv0, plan.rot_out[s][i], cryptoContext
-                    )
-                    first_acc = homo.homo_add(first_acc, first, cryptoContext)
+            inner_exts.append(homo.fused_pairwise_mac(rotated_exts, plaintexts, cryptoContext))
 
-                    inner_digits = keyswitch.modup_to_ext(
-                        inner_cv1, cryptoContext
-                    )
-                    inner_ext = homo.eval_fast_rotate(
-                        inner_digits, None, plan.rot_out[s][i], False, None, cryptoContext
-                    )
-                    outer_ext = homo.homo_add(outer_ext, inner_ext, cryptoContext)
-                else:
-                    inner_ext_cv0 = homo.extract_cv(inner_ext, 0, cryptoContext)
-                    first = keyswitch.moddown_from_ext(
-                        inner_ext_cv0, cryptoContext
-                    )
-                    first_acc = homo.homo_add(first_acc, first, cryptoContext)
-                    inner_ext = homo.extract_cv(inner_ext, 1, cryptoContext, append_zeros=True)
-                    outer_ext = homo.homo_add(outer_ext, inner_ext, cryptoContext)
-        outer = keyswitch.moddown_from_ext(outer_ext, cryptoContext)
-        first_full_cv = homo.extract_cv(first_acc, 0, cryptoContext, append_zeros=True)
-        result = homo.homo_add(outer, first_full_cv, cryptoContext)
+        result = rotation.double_hoist_rotate_sum(
+            inner_exts,
+            plan.rot_out[s][:baby_step],
+            cryptoContext,
+        )
     return result
 
 
 def eval_coeffs_to_slots(ctxt, cryptoContext, bootstrap_constants):
-    return coeffs_slots_conversion(ctxt, bootstrap_constants.c2s_plan, bootstrap_constants.c2s, cryptoContext)
+    return coeffs_slots_conversion(ctxt, _constant_info(bootstrap_constants, "c2s_plan"), bootstrap_constants, cryptoContext)
 
 
 def eval_slots_to_coeffs(ctxt, cryptoContext, bootstrap_constants):
-    return coeffs_slots_conversion(ctxt, bootstrap_constants.s2c_plan, bootstrap_constants.s2c, cryptoContext)
+    return coeffs_slots_conversion(ctxt, _constant_info(bootstrap_constants, "s2c_plan"), bootstrap_constants, cryptoContext)
 
 
 def eval_linear_transform(ct, scheme):
@@ -233,20 +248,20 @@ def _mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
 # @utils.profile_pytorch_function
 def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
     if bootstrap_constants is None:
-        raise ValueError("homo_bootstrap requires bootstrap_constants generated by easyfhe.fhe.generate_bootstrap_constants(...)")
+        raise ValueError("homo_bootstrap requires bootstrap_constants generated by easyfhe.bs.openfhe.generate(ctx, ...)")
 
     if L0 is None:
         L0 = ciphertext.cur_limbs
-    logBsSlots = int(bootstrap_constants.log_bs_slots)
-    level_budgets = list(bootstrap_constants.level_budget)
+    logBsSlots = int(_constant_info(bootstrap_constants, "log_bs_slots"))
+    level_budgets = list(_constant_info(bootstrap_constants, "level_budget"))
     M = cryptoContext.M
     N = cryptoContext.N
     slots = 1 << logBsSlots
     rescaleTech = cryptoContext.rescaleTech
 
-    deg = bootstrap_constants.deg
-    correctionFactor = bootstrap_constants.correction_factor
-    correction = bootstrap_constants.correction
+    deg = _constant_scalar(bootstrap_constants, "degree")
+    correctionFactor = _constant_scalar(bootstrap_constants, "correction_factor")
+    correction = _constant_scalar(bootstrap_constants, "correction")
 
     if deg > correctionFactor:
         print(
@@ -257,8 +272,8 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
             "].",
         )
 
-    pre = bootstrap_constants.pre
-    scalar = bootstrap_constants.scalar
+    pre = _constant_scalar(bootstrap_constants, "pre")
+    scalar = _constant_scalar(bootstrap_constants, "post_scalar")
 
     # -------------------
     # raising the modulus
@@ -277,7 +292,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
     # CKKS bootstrapping faster.
     raised = mod_raise(tmp, L0, cryptoContext)
 
-    constantEvalMult = bootstrap_constants.constant_eval_mult
+    constantEvalMult = _constant_scalar(bootstrap_constants, "constant_eval_mult")
 
     raised = homo.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
 
@@ -293,7 +308,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
         else:
             ctxtEnc = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants)
 
-        conj = homo.homo_conjugate(ctxtEnc, cryptoContext)
+        conj = _homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEncI = homo.homo_sub(ctxtEnc, conj, cryptoContext)
         ctxtEnc = homo.homo_add(ctxtEnc, conj, cryptoContext)
         ctxtEncI = mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
@@ -345,7 +360,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
         else:
             ctxtEnc = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants)
 
-        conj = homo.homo_conjugate(ctxtEnc, cryptoContext)
+        conj = _homo_conjugate(ctxtEnc, cryptoContext)
         ctxtEnc = homo.homo_add(ctxtEnc, conj, cryptoContext)
         if ctxtEnc.noise_deg ==2 :
             ctxtEnc = _rescale(ctxtEnc, 1, cryptoContext)
@@ -374,7 +389,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
         ctxtDec = ctxtDec.cipher_like(ctxtDec.cv, slots=ciphertext.slots)
 
     # 64-bit only: scale back the message to its original scale.
-    ctxtDec = homo.homo_mul_scalar_int(ctxtDec, bootstrap_constants.cor_factor, cryptoContext)
+    ctxtDec = homo.homo_mul_scalar_int(ctxtDec, _constant_scalar(bootstrap_constants, "cor_factor"), cryptoContext)
 
     return ctxtDec.cipher_like(ctxtDec.cv, slots=ciphertext.slots)
 

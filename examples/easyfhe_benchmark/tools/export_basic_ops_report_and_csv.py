@@ -27,7 +27,7 @@ DEFAULT_LATENCY_US = {
     "moddown_from_ext": 5.5,
     "square": 120.0,
     "rotate": 80.0,
-    "eval_fast_rotate": 45.0,
+    "fast_rotate": 45.0,
     "bootstrap": 900.0,
 }
 

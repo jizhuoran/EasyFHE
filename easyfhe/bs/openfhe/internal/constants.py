@@ -3,6 +3,11 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import numpy as np
+
+from easyfhe.fhe.ciphertext import PreparedPlaintext
+from easyfhe.fhe.constants import ConstantBundle
+from easyfhe.fhe.ops import prepare_plaintext
 from .rotations import bootstrap_auto_index_map, bootstrap_rotation_indices, linear_transform_plan
 from .precompute_context import BsContext
 
@@ -28,35 +33,7 @@ class BootstrapPlan:
         return 1 << self.log_bs_slots
 
 
-@dataclass(frozen=True)
-class BootstrapConstants:
-    log_bs_slots: int
-    level_budget: list[int]
-    dim1: list[int]
-    max_levels_remaining: int
-    c2s: list[list[object]]
-    s2c: list[list[object]]
-    c2s_plan: object
-    s2c_plan: object
-    required_rotations: list[int]
-    # precomputed scalars
-    deg: int
-    correction_factor: int
-    correction: int
-    pre: float
-    scalar: int
-    constant_eval_mult: float
-    cor_factor: int
-
-    def get(self, direction: str, level: int, index: int):
-        direction = direction.upper()
-        if direction == "C2S":
-            table = self.c2s
-        elif direction == "S2C":
-            table = self.s2c
-        else:
-            raise ValueError(f"Unknown bootstrap constant direction: {direction}")
-        return table[int(level)][int(index)]
+BootstrapConstants = ConstantBundle
 
 
 def _normalize_level_budget(level_budget):
@@ -78,7 +55,8 @@ def _resolve_max_levels_remaining(crypto_context, maxLevelsRemaining):
         return int(maxLevelsRemaining)
     raise ValueError(
         "generate_bootstrap_constants requires maxLevelsRemaining. "
-        "Use fhe.bootstrap_depth(maxLevelsRemaining, bootstrap_specs, secret_key_dist) "
+        "Use easyfhe.bs.openfhe.generate(...) without a context to get extra depth, "
+        "then add it to maxLevelsRemaining "
         "when creating CKKSContextSpec(depth=...)."
     )
 
@@ -189,24 +167,98 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
 
 def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context):
     scalars = _compute_bootstrap_scalars(crypto_context, plan, bs_context.k)
-    return BootstrapConstants(
-        log_bs_slots=plan.log_bs_slots,
-        level_budget=plan.level_budget,
-        dim1=plan.dim1,
-        max_levels_remaining=plan.max_levels_remaining,
-        c2s=bs_context.m_U0hatTPreFFT,
-        s2c=bs_context.m_U0PreFFT,
-        c2s_plan=linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0]),
-        s2c_plan=linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1]),
-        required_rotations=required_rotations,
-        deg=scalars["deg"],
-        correction_factor=scalars["correction_factor"],
-        correction=scalars["correction"],
-        pre=scalars["pre"],
-        scalar=scalars["scalar"],
-        constant_eval_mult=scalars["constant_eval_mult"],
-        cor_factor=scalars["cor_factor"],
+    c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
+    s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
+    plaintext_names = {
+        "C2S": _name_table(c2s_plan),
+        "S2C": _name_table(s2c_plan),
+    }
+    return ConstantBundle(
+        info={
+            "kind": "openfhe.bootstrap",
+            "log_bs_slots": plan.log_bs_slots,
+            "level_budget": plan.level_budget,
+            "dim1": plan.dim1,
+            "max_levels_remaining": plan.max_levels_remaining,
+            "c2s_plan": c2s_plan,
+            "s2c_plan": s2c_plan,
+            "scalar_names": {
+                "degree": "deg",
+                "correction_factor": "correction_factor",
+                "correction": "correction",
+                "pre": "pre",
+                "post_scalar": "scalar",
+                "constant_eval_mult": "constant_eval_mult",
+                "cor_factor": "cor_factor",
+            },
+            "plaintext_names": plaintext_names,
+            "required_rotations": required_rotations,
+        },
+        scalars=scalars,
+        vectors={
+            **_flatten_table(plaintext_names["C2S"], bs_context.m_U0hatTPreFFT, bs_context.N, plan.slots),
+            **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
+        },
     )
+
+
+def _flatten_table(name_table, table, ring_dim, default_slots):
+    vectors = {}
+    zero_cache = {}
+    for level, row in enumerate(table):
+        row_slots = _row_slots(row, default_slots)
+        for index, name in enumerate(name_table[level]):
+            value = row[index] if index < len(row) else None
+            if value is None:
+                value = _zero_plaintext(row_slots, ring_dim, zero_cache)
+            vectors[name] = value
+    return vectors
+
+
+def _row_slots(row, default_slots):
+    for value in row:
+        if value is not None:
+            return _value_slots(value, default_slots)
+    return int(default_slots)
+
+
+def _value_slots(value, default_slots):
+    if isinstance(value, PreparedPlaintext):
+        return int(value.slots)
+    try:
+        return int(np.asarray(value).reshape(-1).size)
+    except Exception:
+        return int(default_slots)
+
+
+def _zero_plaintext(slots, ring_dim, zero_cache):
+    slots = int(slots)
+    key = (slots, int(ring_dim))
+    if key not in zero_cache:
+        zero_cache[key] = prepare_plaintext(np.zeros(slots, dtype=np.complex128), slots, ring_dim)
+    return zero_cache[key]
+
+
+def _name_table(plan):
+    names = [[] for _ in range(int(plan.level_budget))]
+    log_slots = int(plan.slots).bit_length() - 1
+    for level, row_size in _plan_row_sizes(plan):
+        names[int(level)] = [
+            f"{plan.direction}_{log_slots}_{int(level)}_{int(index)}"
+            for index in range(row_size)
+        ]
+    return names
+
+
+def _plan_row_sizes(plan):
+    rows = []
+    for loop_pos, level in enumerate(plan.loop_range):
+        if loop_pos == len(plan.loop_range) - 1 and plan.rem:
+            row_size = int(plan.num_rotations_rem) + 1
+        else:
+            row_size = int(plan.num_rotations) + 1
+        rows.append((level, row_size))
+    return rows
 
 
 def generate_bootstrap_constants(
@@ -215,12 +267,9 @@ def generate_bootstrap_constants(
     level_budget,
     maxLevelsRemaining=None,
     dim1=None,
-    ensure_rotation_keys=True,
 ):
     plan = _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1)
     required_rotations = _bootstrap_rotation_indices(crypto_context, plan)
-    if ensure_rotation_keys:
-        crypto_context.ensure_rotation_keys([required_rotations])
 
     bs_context = _run_bootstrap_setup(crypto_context, plan)
     constants = _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)

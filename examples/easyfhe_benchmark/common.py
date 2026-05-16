@@ -17,10 +17,10 @@ except ImportError:
 ensure_repo_on_path()
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe import homo_ops
+from easyfhe.fhe.ops import homo as homo_ops
 
 
-KEYSWITCH_LIKE_OPS = {"mul", "square", "rotate", "eval_fast_rotate", "bootstrap"}
+KEYSWITCH_LIKE_OPS = {"mul", "square", "rotate", "fast_rotate", "bootstrap"}
 CONTEXT_CACHE_MODES = {"persistent", "transient", "memory"}
 
 MIN_SUPPORTED_CUR_LIMBS = {
@@ -36,7 +36,7 @@ MIN_SUPPORTED_CUR_LIMBS = {
     "moddown_from_ext": 1,
     "square": 2,
     "rotate": 1,
-    "eval_fast_rotate": 1,
+    "fast_rotate": 1,
     "bootstrap": 2,
 }
 
@@ -261,7 +261,13 @@ def make_plain_from_middle(crypto_context: Any, values: List[float], cur_limbs: 
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
     middle_value = homo_ops.prepare_plaintext(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
-    return homo_ops.encode(middle_value, name, level, slots, False, crypto_context)
+    return homo_ops.encode(
+        middle_value,
+        crypto_context,
+        level=level,
+        slots=slots,
+        is_ext=False,
+    )[1]
 
 
 def case_context_kwargs(case: BenchmarkCase) -> Dict[str, Any]:
@@ -272,7 +278,7 @@ def case_context_kwargs(case: BenchmarkCase) -> Dict[str, Any]:
             "log_bs_slots_list": [int(case.extra["logBsSlots"])],
             "level_budget_list": [[int(x) for x in case.extra["level_budget"]]],
         }
-    if case.op in {"rotate", "eval_fast_rotate"}:
+    if case.op in {"rotate", "fast_rotate"}:
         return {
             "need_bootstrap": False,
             "app_rot_indices": [int(case.extra["step"])],

@@ -326,6 +326,29 @@ class Context:
 
         return ensure_rotation_keys(self, rotation_groups)
 
+    def add_keys(self, key_requirements):
+        return self.ensure_rotation_keys(self._rotation_groups_from_key_requirements(key_requirements))
+
+    def addkeys(self, key_requirements):
+        return self.add_keys(key_requirements)
+
+    @staticmethod
+    def _rotation_groups_from_key_requirements(key_requirements):
+        if key_requirements is None:
+            return ()
+
+        info = getattr(key_requirements, "info", None)
+        if info is not None and "required_rotations" in info:
+            return (tuple(info["required_rotations"]),)
+
+        if _looks_like_generate_result(key_requirements):
+            return Context._rotation_groups_from_key_requirements(key_requirements[0])
+
+        if _looks_like_requirements_result(key_requirements):
+            return Context._rotation_groups_from_key_requirements(key_requirements[1])
+
+        return key_requirements
+
 
     def __repr__(self):
         s = []
@@ -341,3 +364,28 @@ class Context:
         s.append(f"{'secretKeyDist:':20} {self.secretKeyDist}")
         s.append(f"{'device:':20} {self.device}")
         return "<Context>\n" + "\n".join(s)
+
+
+def _looks_like_generate_result(value):
+    if not isinstance(value, tuple) or len(value) != 2:
+        return False
+    constants = value[1]
+    info = getattr(constants, "info", None)
+    return info is not None and "required_rotations" in info
+
+
+def _looks_like_requirements_result(value):
+    if not isinstance(value, tuple) or len(value) != 3:
+        return False
+    extra_depth, rotations, plaintexts = value
+    return isinstance(extra_depth, int) and _is_sequence(rotations) and _is_sequence(plaintexts)
+
+
+def _is_sequence(value):
+    if isinstance(value, (str, bytes)):
+        return False
+    try:
+        iter(value)
+    except TypeError:
+        return False
+    return True

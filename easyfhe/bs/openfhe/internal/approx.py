@@ -2,11 +2,11 @@ import math
 
 import numpy as np
 
-from ..ops import alignment
-from ..ops import homo
-from ..ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
+from easyfhe.fhe.ops import alignment
+from easyfhe.fhe.ops import homo
+from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 from .approx_plan import ChebyshevPSNode, degree, get_bootstrap_approx_plan
-from ..context import Context
+from easyfhe.fhe.context import Context
 
 BASE_NUM_LEVELS_TO_DROP = 1
 MAX_BITS_IN_WORD = 61

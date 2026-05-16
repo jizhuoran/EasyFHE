@@ -51,7 +51,7 @@ cmd=(
   --csv-out "$FULL_CSV_OUT"
   --pipeline-summary-json "$PIPELINE_SUMMARY_JSON"
   --repeats "${FULL_REPEATS:-1}"
-  --ops ${FULL_OPS:-encode add add_pt mul_pt mul rescale force_rescale drop_last_elements modup_to_ext moddown_from_ext square rotate eval_fast_rotate}
+  --ops ${FULL_OPS:-encode add add_pt mul_pt mul rescale force_rescale drop_last_elements modup_to_ext moddown_from_ext square rotate fast_rotate}
   --limb-min "${FULL_LIMB_MIN:-1}"
   --limb-max "${FULL_LIMB_MAX:-40}"
   --basic-slots "${FULL_BASIC_SLOTS:-4096}"

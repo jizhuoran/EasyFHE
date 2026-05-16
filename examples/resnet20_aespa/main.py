@@ -8,13 +8,16 @@ import numpy as np
 
 from termcolor import colored
 import easyfhe as torch
+import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 try:
     from .data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
+    from .fhe_state import runtime_options_from_args
     from .model import AespaRuntime, infer_one
     from .weight_pack import WeightPack
 except ImportError:
     from data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
+    from fhe_state import runtime_options_from_args
     from model import AespaRuntime, infer_one
     from weight_pack import WeightPack
 
@@ -47,8 +50,26 @@ class AespaConfig:
 
 def _parse_args():
     parser = argparse.ArgumentParser()
-    fhe.add_runtime_args(parser, default_device=os.environ.get("EASYFHE_DEVICE", "cpu"))
-    fhe.add_output_args(parser)
+    parser.add_argument("--device", choices=("cpu", "cuda"), default=os.environ.get("EASYFHE_DEVICE", "cuda"))
+    key_group = parser.add_mutually_exclusive_group()
+    key_group.add_argument("--auto-load-keys", dest="auto_load_keys", action="store_true", default=None)
+    key_group.add_argument("--no-auto-load-keys", dest="auto_load_keys", action="store_false")
+    parser.add_argument("--count-ops", action="store_true")
+    parser.add_argument("--profile", "--time-ops", dest="time_ops", action="store_true")
+    parser.add_argument("--auto-sync", action="store_true")
+    parser.add_argument(
+        "--rotation-random-mode",
+        choices=("fresh", "reuse_by_shape"),
+        default="fresh",
+    )
+    parser.add_argument(
+        "--rot-key-limb-limit",
+        action="append",
+        default=[],
+        metavar="ROT:LIMBS",
+    )
+    parser.add_argument("--save-middle", action="store_true")
+    parser.add_argument("--save-end", action="store_true")
     parser.add_argument("--total", type=int, default=int(os.environ.get("EASYFHE_TOTAL", "1")))
     return parser.parse_known_args()[0]
 
@@ -223,14 +244,15 @@ def resnet20(config=None, args=None):
         raise ValueError(f"CIFAR-10 test batch {test_batch_path} does not exist!")
 
     _print_config(config)
-    options = fhe.runtime_options_from_args(args)
-    bootstrap_specs = tuple(
-        fhe.BootstrapSpec(log_bs_slots, tuple(level_budget))
-        for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets)
+    options = runtime_options_from_args(args)
+    bootstrap_extra_depth = bs.depth(
+        log_bs_slots=config.log_bs_slots,
+        level_budget=config.level_budgets,
+        secret_key_dist=config.secret_key_dist,
     )
     cryptoContext = fhe.generate_context(
         fhe.CKKSContextSpec(
-            depth=fhe.bootstrap_depth(config.max_levels_remaining, bootstrap_specs, config.secret_key_dist),
+            depth=config.max_levels_remaining + bootstrap_extra_depth,
             log_n=config.log_n,
             dnum=config.dnum,
             dcrt_bits=config.dcrt_bits,
@@ -244,9 +266,14 @@ def resnet20(config=None, args=None):
     )
     bootstrap_constants = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
-        bootstrap_constants[int(log_bs_slots)] = fhe.generate_bootstrap_constants(
-            cryptoContext, log_bs_slots, level_budget, config.max_levels_remaining
+        bs_keys, constants = bs.generate(
+            cryptoContext,
+            log_bs_slots=log_bs_slots,
+            level_budget=level_budget,
+            max_levels_remaining=config.max_levels_remaining,
         )
+        cryptoContext.addkeys(bs_keys)
+        bootstrap_constants[int(log_bs_slots)] = constants
     print("cryptoContext: ", cryptoContext)
     weights = WeightPack.from_npz(config.weights_path, cache_mode=config.weight_cache_mode)
     print("weights loaded:", len(weights))

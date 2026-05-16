@@ -28,7 +28,7 @@ DATA_DIR = os.environ.get("DATA_DIR", str(SCRIPT_DIR.parent / "data"))
 
 def _parse_args():
     parser = argparse.ArgumentParser()
-    fhe.add_runtime_args(parser, default_device=os.environ.get("EASYFHE_DEVICE", "cpu"))
+    fhe.add_runtime_args(parser, default_device=os.environ.get("EASYFHE_DEVICE", "cuda"))
     fhe.add_output_args(parser)
     parser.add_argument("--total", type=int, default=int(os.environ.get("EASYFHE_TOTAL", "1")))
     return parser.parse_known_args()[0]

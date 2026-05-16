@@ -17,7 +17,8 @@ ensure_repo_on_path()
 
 import easyfhe as torch
 import easyfhe.fhe as fhe
-from easyfhe.fhe import homo_ops
+from easyfhe.fhe.ops import homo as homo_ops
+from easyfhe.fhe.ops import rotation
 
 from easyfhe_benchmark import common as bench
 from easyfhe_benchmark import profile_core
@@ -36,7 +37,7 @@ PROFILED_OPS = [
     "moddown_from_ext",
     "square",
     "rotate",
-    "eval_fast_rotate",
+    "fast_rotate",
 ]
 
 CHEAP_OPS = {
@@ -55,8 +56,17 @@ MEDIUM_OPS = {
     "modup_to_ext",
     "moddown_from_ext",
     "square",
-    "eval_fast_rotate",
+    "fast_rotate",
 }
+
+
+def _rescale_one_level(cipher, crypto_context):
+    return fhe.align_to(
+        cipher,
+        fhe.CipherState(cipher.cur_limbs - 1, cipher.noise_deg - 1),
+        crypto_context,
+    )
+
 
 def _parse_ops(values: Sequence[str]) -> List[str]:
     ops = bench.parse_ops(values)
@@ -104,7 +114,7 @@ def _make_cases(args: argparse.Namespace) -> List[bench.BenchmarkCase]:
                                 extra={},
                             )
                         )
-        elif op in {"rotate", "eval_fast_rotate"}:
+        elif op in {"rotate", "fast_rotate"}:
             for step in [int(value) for value in args.rotate_steps]:
                 for cur_limbs in range(int(args.limb_min), int(args.limb_max) + 1):
                     for dnum in dnum_values:
@@ -214,10 +224,14 @@ def _build_encode_target(case: bench.BenchmarkCase, crypto_context: Any, _openfh
     values = bench.vector_values(case.slots)
     middle_value = homo_ops.prepare_plaintext(np.asarray(values, dtype=np.float64), case.slots, crypto_context.N)
     level = bench.level_for_cur_limbs(crypto_context, case.cur_limbs)
-    name = f"profile_encode_{case.cur_limbs}_{case.slots}"
-
     def op():
-        return homo_ops.encode(middle_value, name, level, case.slots, False, crypto_context)
+        return homo_ops.encode(
+            middle_value,
+            crypto_context,
+            level=level,
+            slots=case.slots,
+            is_ext=False,
+        )[1]
 
     probe = op()
     return op, {
@@ -299,7 +313,7 @@ def _build_rescale_target(case: bench.BenchmarkCase, crypto_context: Any, openfh
     mul_result = fhe.homo_mul_pt(lhs, plain, crypto_context)
 
     def op():
-        return fhe.rescale_one_level(mul_result, crypto_context)
+        return _rescale_one_level(mul_result, crypto_context)
 
     probe = op()
     return op, {
@@ -314,7 +328,7 @@ def _build_force_rescale_target(case: bench.BenchmarkCase, crypto_context: Any, 
     mul_result = fhe.homo_mul_pt(lhs, plain, crypto_context)
 
     def op():
-        return fhe.rescale_one_level(mul_result, crypto_context)
+        return _rescale_one_level(mul_result, crypto_context)
 
     probe = op()
     return op, {
@@ -344,10 +358,9 @@ def _build_drop_last_elements_target(case: bench.BenchmarkCase, crypto_context: 
 
 def _build_modup_to_ext_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
-    half = fhe.extract_cv(cipher, 1, crypto_context)
 
     def op():
-        return fhe.modup_to_ext(half, crypto_context)
+        return rotation._modup_to_ext(cipher, crypto_context)
 
     probe = op()
     return op, {
@@ -358,7 +371,7 @@ def _build_modup_to_ext_target(case: bench.BenchmarkCase, crypto_context: Any, o
 
 def _build_moddown_from_ext_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
-    ext_cipher = fhe.key_switch_P_ext(cipher, crypto_context)
+    ext_cipher = rotation._key_switch_P_ext(cipher, crypto_context)
 
     def op():
         return fhe.moddown_from_ext(ext_cipher, crypto_context)
@@ -402,13 +415,12 @@ def _build_rotate_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe
     }
 
 
-def _build_eval_fast_rotate_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
+def _build_fast_rotate_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     step = int(case.extra["step"])
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
-    digits = fhe.modup_to_ext(fhe.extract_cv(cipher, 1, crypto_context), crypto_context)
 
     def op():
-        return fhe.eval_fast_rotate(digits, cipher, step, True, False, crypto_context)
+        return fhe.fast_rotate(cipher, [step], crypto_context)[0]
 
     probe = op()
     return op, {
@@ -431,7 +443,7 @@ TARGET_BUILDERS: Dict[str, Callable[[bench.BenchmarkCase, Any, Any], tuple[Calla
     "moddown_from_ext": _build_moddown_from_ext_target,
     "square": _build_square_target,
     "rotate": _build_rotate_target,
-    "eval_fast_rotate": _build_eval_fast_rotate_target,
+    "fast_rotate": _build_fast_rotate_target,
 }
 
 

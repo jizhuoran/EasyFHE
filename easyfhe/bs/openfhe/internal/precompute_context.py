@@ -2,7 +2,7 @@ import numpy as np
 import math
 from math import log2
 from .approx_plan import get_bootstrap_approx_plan
-from ..ciphertext import Plaintext
+from easyfhe.fhe.ciphertext import Plaintext
 from .rotations import (
     bootstrap_auto_index_map,
     bootstrap_core_rotation_indices,
@@ -11,7 +11,7 @@ from .rotations import (
     reduce_rotation,
     slots_to_coeffs_rotation_indices,
 )
-from ..ops.encoding import prepare_plaintext
+from easyfhe.fhe.ops.encoding import prepare_plaintext
 
 class CKKS_Boot_Params:
     def __init__(

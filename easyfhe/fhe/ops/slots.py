@@ -22,13 +22,12 @@ def _slot_resize(x, slots, cryptoContext):
         res = x.deep_copy()
     else:
         mask_name = "slot_conversion_mask_{}to{}".format(x.slots, slots)
-        mask = encode(
+        _, mask = encode(
             cryptoContext.encode_values[mask_name],
-            mask_name,
-            cryptoContext.L - x.cur_limbs,
-            x.slots,
-            x.is_ext,
             cryptoContext,
+            level=cryptoContext.L - x.cur_limbs,
+            slots=x.slots,
+            is_ext=x.is_ext,
         )
         res = homo_mul_pt(x, mask, cryptoContext)
         for i in range(int(math.log2(slots)), int(math.log2(x.slots))):

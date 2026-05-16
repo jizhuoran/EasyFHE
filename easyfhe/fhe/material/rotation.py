@@ -6,7 +6,7 @@ from dataclasses import replace
 import numpy as np
 import easyfhe as torch
 
-from ..bootstrap.rotations import bootstrap_auto_index_map
+from easyfhe.bs.openfhe.internal.rotations import bootstrap_auto_index_map
 from .native_sampler import NativeCppSampleProvider
 
 

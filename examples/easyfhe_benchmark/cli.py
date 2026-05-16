@@ -42,7 +42,7 @@ BASIC_PROFILED_OPS: List[str] = [
     "moddown_from_ext",
     "square",
     "rotate",
-    "eval_fast_rotate",
+    "fast_rotate",
 ]
 
 FULL_PROFILING_OPS: List[str] = list(BASIC_PROFILED_OPS)

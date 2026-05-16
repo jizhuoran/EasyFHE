@@ -1,5 +1,10 @@
 import easyfhe.fhe as fhe
 
+try:
+    from .fhe_state import reduce_noise_to_one, rescale_one_level
+except ImportError:
+    from fhe_state import reduce_noise_to_one, rescale_one_level
+
 __all__ = [
     "aespa_add_shortcut",
     "aespa_nonlinear",
@@ -28,11 +33,12 @@ def _read_kernel_rows(prefix, cipher, scale, cryptoContext, weights):
 
 
 def _rot_input(input, img_width, padding, cryptoContext):
-    digits = fhe.modup_to_ext(input.cipher_like([input.cv[1]]), cryptoContext)
-    digits_neg_padding = fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext)
-    digits_padding = fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext)
-    digits_neg_img_width = fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext)
-    digits_img_width = fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext)
+    (
+        digits_neg_padding,
+        digits_padding,
+        digits_neg_img_width,
+        digits_img_width,
+    ) = fhe.fast_rotate(input, [-padding, padding, -img_width, img_width], cryptoContext)
 
     return [
         fhe.homo_rotate(digits_neg_padding, -img_width, cryptoContext),
@@ -51,7 +57,7 @@ def _conv3x3(input, prefixes, img_width, padding, rot_offset, scale, cryptoConte
     if not prefixes:
         raise ValueError("conv3x3 requires at least one kernel prefix")
 
-    input = fhe.reduce_noise_to_one(input, cryptoContext)
+    input = reduce_noise_to_one(input, cryptoContext)
     rotations = _rot_input(input, img_width, padding, cryptoContext)
 
     for idx, prefix in enumerate(prefixes):
@@ -64,7 +70,7 @@ def _conv3x3(input, prefixes, img_width, padding, rot_offset, scale, cryptoConte
 
 
 def _initial_conv_postprocess(partial_sum, cryptoContext, weights):
-    partial_sum = fhe.rescale_one_level(partial_sum, cryptoContext)
+    partial_sum = rescale_one_level(partial_sum, cryptoContext)
     sum_rot = fhe.homo_rotate(partial_sum, 1024, cryptoContext)
     partial_sum = fhe.homo_add(partial_sum, sum_rot, cryptoContext)
     partial_sum = fhe.homo_add(partial_sum, fhe.homo_rotate(sum_rot, 1024, cryptoContext), cryptoContext)
@@ -111,7 +117,7 @@ def pointwise_conv(input, kernel_keys, bias_key, rot_offset, scale, cryptoContex
     if not kernel_keys:
         raise ValueError("pointwise_conv requires at least one kernel key")
 
-    input = fhe.reduce_noise_to_one(input, cryptoContext)
+    input = reduce_noise_to_one(input, cryptoContext)
 
     for idx, kernel_key in enumerate(kernel_keys):
         encoded = weights.plaintext_for_cipher(kernel_key, input, cryptoContext, scale)
@@ -119,17 +125,17 @@ def pointwise_conv(input, kernel_keys, bias_key, rot_offset, scale, cryptoContex
         finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
         finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
 
-    finalsum = fhe.rescale_one_level(finalsum, cryptoContext)
+    finalsum = rescale_one_level(finalsum, cryptoContext)
     bias = weights.plaintext_for_cipher(bias_key, finalsum, cryptoContext, scale)
     return fhe.homo_add_pt(finalsum, bias, cryptoContext)
 
 
 def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
-    x = fhe.reduce_noise_to_one(x, cryptoContext)
+    x = reduce_noise_to_one(x, cryptoContext)
     n1 = weights.plaintext_for_cipher(f"{prefix}-n1", x, cryptoContext, scale)
     shifted = fhe.homo_add_pt(x, n1, cryptoContext)
     squared = fhe.homo_square(shifted, cryptoContext)
-    squared = fhe.rescale_one_level(squared, cryptoContext)
+    squared = rescale_one_level(squared, cryptoContext)
     n2 = weights.plaintext_for_cipher(f"{prefix}-n2", squared, cryptoContext, scale)
     return fhe.homo_add_pt(squared, n2, cryptoContext)
 

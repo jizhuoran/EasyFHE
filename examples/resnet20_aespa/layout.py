@@ -3,6 +3,11 @@ from dataclasses import dataclass
 
 import easyfhe.fhe as fhe
 
+try:
+    from .fhe_state import reduce_noise_to_one, rescale_one_level
+except ImportError:
+    from fhe_state import reduce_noise_to_one, rescale_one_level
+
 __all__ = [
     "broadcast_slot_sum",
     "downsample1024to256",
@@ -73,14 +78,14 @@ def _masked_reduce(cipher, mask_n, rotated, cryptoContext, weights):
         ),
         cryptoContext,
     )
-    return fhe.rescale_one_level(cipher, cryptoContext)
+    return rescale_one_level(cipher, cryptoContext)
 
 
 def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_rescale):
     if initial_rescale == "always":
-        fullpack = fhe.rescale_one_level(fullpack, cryptoContext)
+        fullpack = rescale_one_level(fullpack, cryptoContext)
     else:
-        fullpack = fhe.reduce_noise_to_one(fullpack, cryptoContext)
+        fullpack = reduce_noise_to_one(fullpack, cryptoContext)
     fullpack = _masked_reduce(fullpack, 2, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext, weights)
     fullpack = _masked_reduce(fullpack, 4, _double_rotate(fullpack, cryptoContext), cryptoContext, weights)
     if include_gen8:
@@ -105,7 +110,7 @@ def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, ro
         rows = masked if rows is None else fhe.homo_add(rows, masked, cryptoContext)
         if i < row_count - 1:
             fullpack = fhe.homo_rotate(fullpack, row_rotate, cryptoContext)
-    return fhe.rescale_one_level(rows, cryptoContext)
+    return rescale_one_level(rows, cryptoContext)
 
 
 def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoContext, weights):
@@ -158,10 +163,10 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
     )
     channels = _pack_channels(rows, num_channel, spec.spatial_size, spec.out_spatial_size, cryptoContext, weights)
     if spec.rescale_before_fold:
-        channels = fhe.rescale_one_level(channels, cryptoContext)
+        channels = rescale_one_level(channels, cryptoContext)
     channels = _fold_quarters(channels, cryptoContext)
     if spec.rescale_after_fold:
-        channels = fhe.rescale_one_level(channels, cryptoContext)
+        channels = rescale_one_level(channels, cryptoContext)
     return fhe.slot_resize(channels, channels.slots // 4, cryptoContext)
 
 

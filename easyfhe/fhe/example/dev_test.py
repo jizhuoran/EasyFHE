@@ -2,13 +2,58 @@ import sys, os, warnings
 sys.path.append("/".join(os.getcwd().split("/")[:-3]))
 sys.path.append("/".join(os.getcwd().split("/")[:-2]))
 import easyfhe as torch
-import easyfhe.fhe.homo_ops as homo_ops
-from easyfhe.fhe.bootstrapping import eval_bootstrap, homo_double_bootstrap, homo_bootstrap
+from easyfhe.fhe.ops import homo as homo_ops
+import easyfhe.bs.openfhe as bs
 import easyfhe.fhe.utils as utils
 import numpy as np
 from termcolor import colored
 import time
 DATA_DIR = os.environ["DATA_DIR"]
+
+
+def _bootstrap_constants(cryptoContext, logBsSlots, level_budgets):
+    bs_keys, constants = bs.generate(
+        cryptoContext,
+        log_bs_slots=logBsSlots,
+        level_budget=level_budgets,
+        max_levels_remaining=cryptoContext.maxLevelsRemaining,
+    )
+    cryptoContext.addkeys(bs_keys)
+    return constants
+
+
+def eval_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext):
+    from easyfhe.bs.openfhe.internal.runtime import eval_bootstrap as _eval_bootstrap
+
+    return _eval_bootstrap(
+        cipher,
+        cryptoContext,
+        _bootstrap_constants(cryptoContext, logBsSlots, level_budgets),
+        L0=L0,
+    )
+
+
+def homo_bootstrap(cipher, L0, logBsSlots, level_budgets, cryptoContext):
+    return bs.bootstrap(
+        cipher,
+        cryptoContext,
+        _bootstrap_constants(cryptoContext, logBsSlots, level_budgets),
+        L0=L0,
+    )
+
+
+def homo_double_bootstrap(cipher, L0, logBsSlots, level_budgets, precision, cryptoContext):
+    from easyfhe.bs.openfhe.internal.runtime import homo_double_bootstrap as _homo_double_bootstrap
+
+    return _homo_double_bootstrap(
+        cipher,
+        L0,
+        logBsSlots,
+        level_budgets,
+        precision,
+        cryptoContext,
+        _bootstrap_constants(cryptoContext, logBsSlots, level_budgets),
+    )
 
 def print_failed(message):
     print(colored(message, "red"))
