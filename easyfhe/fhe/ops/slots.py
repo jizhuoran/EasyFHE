@@ -3,7 +3,6 @@ import math
 import easyfhe as torch
 
 from ..ciphertext import Cipher
-from ..runtime.instrumentation import run_instrumented_op
 from .arithmetic import homo_add
 from .encoding import encode
 from .plaintext import homo_mul_pt
@@ -11,7 +10,7 @@ from .rotation import homo_rotate
 
 
 def slot_resize(x, slots, cryptoContext):
-    return run_instrumented_op(cryptoContext, "slot_resize", _slot_resize, x, slots, cryptoContext)
+    return _slot_resize(x, slots, cryptoContext)
 
 
 def _slot_resize(x, slots, cryptoContext):
@@ -37,7 +36,7 @@ def _slot_resize(x, slots, cryptoContext):
 
 
 def extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):
-    return run_instrumented_op(cryptoContext, "extract_cv", _extract_cv, cipher, index, cryptoContext, append_zeros=append_zeros)
+    return _extract_cv(cipher, index, cryptoContext, append_zeros=append_zeros)
 
 
 def _extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):

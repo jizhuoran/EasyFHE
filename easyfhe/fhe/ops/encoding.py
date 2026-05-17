@@ -5,7 +5,6 @@ import numpy as np
 import easyfhe as torch
 
 from ..ciphertext import Cipher, Plaintext, PreparedPlaintext
-from ..runtime.instrumentation import run_instrumented_op
 
 MAX_ENCODED_BITS = 61
 ZERO_THRESHOLD = 1e-20
@@ -144,29 +143,15 @@ def prepare_plaintext(x, slots, ring_dim):
 
 
 def make_plaintext(prepared, level, slots, is_ext, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "make_plaintext",
-        _make_plaintext,
-        prepared,
-        level,
-        slots,
-        is_ext,
-        cryptoContext,
-    )
+    return _make_plaintext(prepared, level, slots, is_ext, cryptoContext)
+
+
+def make_plaintext_batch(prepared_values, level, slots, is_ext, cryptoContext):
+    return _make_plaintext_batch(prepared_values, level, slots, is_ext, cryptoContext)
 
 
 def encode(x, cryptoContext, *, level, slots, is_ext=False):
-    return run_instrumented_op(
-        cryptoContext,
-        "encode",
-        _encode,
-        x,
-        level,
-        slots,
-        is_ext,
-        cryptoContext,
-    )
+    return _encode(x, level, slots, is_ext, cryptoContext)
 
 
 def _encode(x, level, slots, is_ext, cryptoContext):
@@ -225,3 +210,41 @@ def _make_plaintext(middle_value, level, slots, is_ext, cryptoContext):
     )
     gpufhe_cipher = Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)
     return gpufhe_cipher
+
+
+def _make_plaintext_batch(middle_values, level, slots, is_ext, cryptoContext):
+    middle_values = tuple(middle_values)
+    if not middle_values:
+        raise ValueError("make_plaintext_batch requires at least one prepared plaintext")
+    level = int(level)
+    slots = int(slots)
+    is_ext = bool(is_ext)
+    cur_limbs = cryptoContext.L - level
+    scaling_factor = cryptoContext.scale_at(cur_limbs)
+
+    for idx, middle_value in enumerate(middle_values):
+        if not isinstance(middle_value, PreparedPlaintext):
+            raise TypeError(f"Invalid prepared plaintext type at batch index {idx}: {type(middle_value)}")
+        _validate_prepared_slots(middle_value, slots)
+        _validate_scaled_range(middle_value, scaling_factor)
+
+    encoded_values = np.stack(
+        [middle_value.encoded_values for middle_value in middle_values],
+        axis=0,
+    )
+    pt_encode = torch.encode(
+        input=torch.as_tensor(encoded_values, dtype=torch.float64, device=cryptoContext.device),
+        N=cryptoContext.N,
+        cur_limbs=cur_limbs,
+        slots=slots,
+        scaling_factor=scaling_factor,
+        is_ext=is_ext,
+        sizeP=cryptoContext.primes.shape[0] - cryptoContext.L,
+        primes=cryptoContext.QplusP_map[cur_limbs],
+        max_int_diffs=cryptoContext.QmaxdiffplusPmaxdiff_map[cur_limbs],
+        barret_ratio=cryptoContext.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        barret_k=cryptoContext.QbarretKplusPbarretK_map[cur_limbs],
+        power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
+        power_of_roots=cryptoContext.power_of_roots,
+    )
+    return Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext, batch_size=len(middle_values))

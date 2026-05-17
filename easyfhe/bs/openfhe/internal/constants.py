@@ -7,7 +7,7 @@ import numpy as np
 
 from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.constants import ConstantBundle
-from .rotations import bootstrap_auto_index_map, bootstrap_rotation_indices, linear_transform_plan
+from .rotations import linear_transform_plan
 from .precompute_context import BsContext
 
 
@@ -25,6 +25,7 @@ class BootstrapPlan:
     log_bs_slots: int
     level_budget: list[int]
     dim1: list[int]
+    strategy: str
     max_levels_remaining: int
 
     @property
@@ -49,6 +50,26 @@ def _normalize_dim1(dim1):
     return [int(dim1[0]), int(dim1[1])]
 
 
+def _normalize_strategy(strategy):
+    strategy = str(strategy or "double_hoist").lower()
+    aliases = {
+        "double_hoist": "double_hoist",
+        "double-hoist": "double_hoist",
+        "ext_double_hoist": "double_hoist",
+        "normal_giant": "normal_giant",
+        "normal-giant": "normal_giant",
+        "ext_normal_giant": "normal_giant",
+        "normal_bsgs": "normal_bsgs",
+        "normal-bsgs": "normal_bsgs",
+    }
+    try:
+        return aliases[strategy]
+    except KeyError as exc:
+        raise ValueError(
+            "bootstrap strategy must be one of: double_hoist, normal_giant, normal_bsgs"
+        ) from exc
+
+
 def _resolve_max_levels_remaining(crypto_context, maxLevelsRemaining):
     if maxLevelsRemaining is not None:
         return int(maxLevelsRemaining)
@@ -60,11 +81,12 @@ def _resolve_max_levels_remaining(crypto_context, maxLevelsRemaining):
     )
 
 
-def _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1):
+def _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1, strategy):
     return BootstrapPlan(
         log_bs_slots=int(log_bs_slots),
         level_budget=_normalize_level_budget(level_budget),
         dim1=_normalize_dim1(dim1),
+        strategy=_normalize_strategy(strategy),
         max_levels_remaining=_resolve_max_levels_remaining(crypto_context, maxLevelsRemaining),
     )
 
@@ -78,17 +100,6 @@ def _make_bs_context(crypto_context, log_bs_slots):
     )
 
 
-def _bootstrap_auto_index_map(crypto_context, plan):
-    auto_idx_to_rot_idx = bootstrap_auto_index_map(
-        crypto_context.N,
-        plan.log_bs_slots,
-        plan.level_budget,
-        crypto_context.secretKeyDist,
-        plan.dim1,
-    )
-    return {int(auto_idx): int(rot_idx) for auto_idx, rot_idx in auto_idx_to_rot_idx.items()}
-
-
 def _unique_preserve_order(values):
     seen = set()
     result = []
@@ -100,16 +111,48 @@ def _unique_preserve_order(values):
     return result
 
 
-def _bootstrap_rotation_indices(crypto_context, plan):
-    return _unique_preserve_order(
-        bootstrap_rotation_indices(
-            crypto_context.N,
-            plan.log_bs_slots,
-            plan.level_budget,
-            crypto_context.secretKeyDist,
-            plan.dim1,
-        )
-    )
+def _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan):
+    rotations = []
+    for transform_plan in (c2s_plan, s2c_plan):
+        rotations.extend(_transform_required_rotations(transform_plan, plan.strategy, crypto_context.N))
+    rotations.extend(_sparse_bootstrap_rotations(crypto_context.N, plan.slots))
+    rotations.append((int(crypto_context.N) << 1) - 1)
+    return _unique_preserve_order(rotations)
+
+
+def _transform_required_rotations(transform_plan, strategy, ring_dim):
+    rotations = []
+    for loop_pos, level in enumerate(transform_plan.loop_range):
+        if loop_pos == len(transform_plan.loop_range) - 1 and transform_plan.rem:
+            giant_step = transform_plan.giant_step_rem
+            baby_step = transform_plan.baby_step_rem
+        else:
+            giant_step = transform_plan.giant_step
+            baby_step = transform_plan.baby_step
+
+        rotations.extend(transform_plan.rot_in[level][:giant_step])
+        rot_out = transform_plan.rot_out[level][:baby_step]
+        if strategy == "double_hoist":
+            rotations.extend(rot_out)
+        else:
+            rotations.extend(_single_giant_rotation_key(rot_out, ring_dim))
+    return [int(rotation) for rotation in rotations if int(rotation) != 0]
+
+
+def _single_giant_rotation_key(offsets, ring_dim):
+    offsets = tuple(int(offset) for offset in offsets)
+    if len(offsets) <= 1:
+        return ()
+    modulus = int(ring_dim) // 2
+    step = (offsets[1] - offsets[0]) % modulus
+    return () if step == 0 else (step,)
+
+
+def _sparse_bootstrap_rotations(ring_dim, slots):
+    ring_dim = int(ring_dim)
+    slots = int(slots)
+    count = int(math.log2(ring_dim // (2 * slots)))
+    return [(1 << step) * slots for step in range(count)]
 
 
 def _run_bootstrap_setup(crypto_context, plan):
@@ -172,12 +215,21 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
         "C2S": _name_table(c2s_plan),
         "S2C": _name_table(s2c_plan),
     }
+    vectors = {
+        **_flatten_table(plaintext_names["C2S"], bs_context.m_U0hatTPreFFT, bs_context.N, plan.slots),
+        **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
+    }
+    plaintext_batches = {
+        "C2S": _plaintext_batch_specs(c2s_plan, plaintext_names["C2S"], vectors),
+        "S2C": _plaintext_batch_specs(s2c_plan, plaintext_names["S2C"], vectors),
+    }
     return ConstantBundle(
         info={
             "kind": "openfhe.bootstrap",
             "log_bs_slots": plan.log_bs_slots,
             "level_budget": plan.level_budget,
             "dim1": plan.dim1,
+            "strategy": plan.strategy,
             "max_levels_remaining": plan.max_levels_remaining,
             "c2s_plan": c2s_plan,
             "s2c_plan": s2c_plan,
@@ -191,13 +243,11 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
                 "cor_factor": "cor_factor",
             },
             "plaintext_names": plaintext_names,
+            "plaintext_batches": plaintext_batches,
             "required_rotations": required_rotations,
         },
         scalars=scalars,
-        vectors={
-            **_flatten_table(plaintext_names["C2S"], bs_context.m_U0hatTPreFFT, bs_context.N, plan.slots),
-            **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
-        },
+        vectors=vectors,
     )
 
 
@@ -255,6 +305,36 @@ def _name_table(plan):
     return names
 
 
+def _plaintext_batch_specs(plan, name_table, vectors):
+    specs = {}
+    for loop_pos, level in enumerate(plan.loop_range):
+        if loop_pos == len(plan.loop_range) - 1 and plan.rem:
+            giant_step = int(plan.giant_step_rem)
+            baby_step = int(plan.baby_step_rem)
+        else:
+            giant_step = int(plan.giant_step)
+            baby_step = int(plan.baby_step)
+
+        names = tuple(
+            name_table[int(level)][group * giant_step + index]
+            for group in range(baby_step)
+            for index in range(giant_step)
+        )
+        slots = {
+            int(np.asarray(vectors[name]).reshape(-1).size)
+            for name in names
+        }
+        if len(slots) != 1:
+            raise ValueError(f"{plan.direction} constants have mixed slots at level {level}: {sorted(slots)}")
+        specs[int(level)] = {
+            "names": names,
+            "slots": slots.pop(),
+            "baby_step": baby_step,
+            "giant_step": giant_step,
+        }
+    return specs
+
+
 def _plan_row_sizes(plan):
     rows = []
     for loop_pos, level in enumerate(plan.loop_range):
@@ -272,11 +352,13 @@ def generate_bootstrap_constants(
     level_budget,
     maxLevelsRemaining=None,
     dim1=None,
+    strategy="double_hoist",
 ):
-    plan = _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1)
-    required_rotations = _bootstrap_rotation_indices(crypto_context, plan)
-
+    plan = _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1, strategy)
     bs_context = _run_bootstrap_setup(crypto_context, plan)
+    c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
+    s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
+    required_rotations = _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan)
     constants = _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)
 
     return constants

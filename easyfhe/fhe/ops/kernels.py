@@ -343,39 +343,6 @@ def cv_innerproduct_write(
     )
 
 
-def cv_innerproduct_write_pair(
-    out_bx: Tensor,
-    out_ax: Tensor,
-    x: Tensor,
-    curr_limbs: int,
-    special_mod_start: int,
-    swk_bx: Tensor,
-    swk_ax: Tensor,
-    context: Context,
-) -> tuple[Tensor, Tensor]:
-    if x.dim() == 1:
-        x_4d = x.reshape(1, 1, -1, context.N)
-    else:
-        x_4d = _to_4d(x)
-    res = torch.innerproduct_write_pair(
-        out_bx,
-        out_ax,
-        x_4d,
-        bx=swk_bx,
-        ax=swk_ax,
-        curr_limbs=curr_limbs,
-        alpha=context.alpha,
-        special_mod_start=special_mod_start,
-        L=context.L,
-        N=context.N,
-        primes=context.primes,
-        barret_ratio=context.barret_ratio,
-        barret_k=context.barret_k,
-        workspace=context.inner_workspace,
-    )
-    return res[0], res[1]
-
-
 def cv_fast_rotate_ext_batch_finalize(key_products, pc0, pc1, precomp_maps, offsets, cur_limbs, context):
     active_limbs = key_products.shape[2]
     return torch.fast_rotate_ext_batch_finalize(
@@ -389,32 +356,6 @@ def cv_fast_rotate_ext_batch_finalize(key_products, pc0, pc1, precomp_maps, offs
         active_limbs,
         context.N,
     )
-
-
-def cv_fast_rotate_ext_batch_finalize_pair(
-    key_product_bx,
-    key_product_ax,
-    pc0,
-    pc1,
-    precomp_maps,
-    offsets,
-    cur_limbs,
-    context,
-):
-    active_limbs = key_product_bx.shape[1]
-    res = torch.fast_rotate_ext_batch_finalize_pair(
-        key_product_bx,
-        key_product_ax,
-        pc0,
-        pc1,
-        precomp_maps,
-        offsets,
-        context.primes,
-        cur_limbs,
-        active_limbs,
-        context.N,
-    )
-    return res[0], res[1]
 
 
 def cv_fast_rotate_batch_finalize(moddown_products, c0, c1, precomp_maps, offsets, context):

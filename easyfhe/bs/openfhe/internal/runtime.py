@@ -5,7 +5,6 @@ from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import homo
 from easyfhe.fhe.ops import rotation
 from . import approx as bootstrap_approx
-from easyfhe.fhe.runtime.instrumentation import run_instrumented_op
 
 
 Tensor = torch.Tensor
@@ -31,7 +30,7 @@ def _rescale(ciphertext, levels, cryptoContext):
     )
 
 def assign_scaling_factor(cipher, target_sf, cryptoContext):
-    return run_instrumented_op(cryptoContext, "assign_scaling_factor", _assign_scaling_factor, cipher, target_sf, cryptoContext)
+    return _assign_scaling_factor(cipher, target_sf, cryptoContext)
 
 
 def _assign_scaling_factor(cipher, target_sf, cryptoContext):
@@ -83,89 +82,6 @@ def _validate_transform_plan(plan, constants):
         raise ValueError(f"{plan.direction} conversion requires explicit bootstrap constants")
 
 
-def _constant_name(constants, plan, level, index):
-    try:
-        names = constants.info["plaintext_names"][plan.direction]
-        return names[int(level)][int(index)]
-    except (AttributeError, KeyError, IndexError):
-        return "{}_{}_{}_{}".format(plan.direction, int(math.log2(plan.slots)), int(level), int(index))
-
-
-def _constant_vector(constants, plan, level, index):
-    name = _constant_name(constants, plan, level, index)
-    try:
-        return constants.vector(name)
-    except AttributeError:
-        return constants.get(plan.direction, level, index)
-
-
-def _constant_plaintext(constants, plan, level, index, encode_level, cryptoContext):
-    name = _constant_name(constants, plan, level, index)
-    try:
-        return constants.plaintext(name, encode_level, constants.slots(name), cryptoContext, is_ext=True)
-    except AttributeError:
-        constant = constants.get(plan.direction, level, index)
-        return homo.encode(
-            constant,
-            cryptoContext,
-            level=encode_level,
-            slots=constant.slots,
-            is_ext=True,
-        )[1]
-
-
-def _constant_plaintext_batch(constants, plan, level, start, count, encode_level, slots, cryptoContext):
-    try:
-        names = [
-            _constant_name(constants, plan, level, start + index)
-            for index in range(count)
-        ]
-        return constants.plaintext_batch(
-            names,
-            encode_level,
-            slots,
-            cryptoContext,
-            is_ext=True,
-        )
-    except AttributeError:
-        plaintexts = [
-            _constant_plaintext(constants, plan, level, start + index, encode_level, cryptoContext)
-            for index in range(count)
-        ]
-        return rotation._pack_ciphers(plaintexts)
-
-
-def _constant_plaintext_group_batch(constants, plan, level, groups, group_size, encode_level, slots, cryptoContext):
-    try:
-        names = [
-            _constant_name(constants, plan, level, group * group_size + index)
-            for group in range(groups)
-            for index in range(group_size)
-        ]
-        return constants.plaintext_batch(
-            names,
-            encode_level,
-            slots,
-            cryptoContext,
-            is_ext=True,
-        )
-    except AttributeError:
-        plaintexts = [
-            _constant_plaintext(constants, plan, level, group * group_size + index, encode_level, cryptoContext)
-            for group in range(groups)
-            for index in range(group_size)
-        ]
-        return rotation._pack_ciphers(plaintexts)
-
-
-def _constant_slots(constants, plan, level, index):
-    name = _constant_name(constants, plan, level, index)
-    try:
-        return constants.slots(name)
-    except AttributeError:
-        return constants.get(plan.direction, level, index).slots
-
-
 def _constant_info(constants, name):
     try:
         return constants.info[name]
@@ -182,136 +98,63 @@ def _constant_scalar(constants, name):
 
 
 def _homo_conjugate(cipher, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "bs_homo_conjugate",
-        _homo_conjugate_impl,
-        cipher,
-        cryptoContext,
-    )
-
-
-def _homo_conjugate_impl(cipher, cryptoContext):
     return homo.homo_rotate(cipher, 2 * cryptoContext.N - 1, cryptoContext)
 
 
 def coeffs_slots_conversion(ciphertext, transform_plan, constants, cryptoContext):
     _validate_transform_plan(transform_plan, constants)
     plan = transform_plan
-    direction = str(plan.direction).lower()
     result = ciphertext
+    strategy = _constant_info(constants, "strategy")
+    hoist_strategy = {
+        "normal_bsgs": "normal",
+        "normal_giant": "ext_normal",
+    }.get(strategy, "ext_double_hoist")
+    is_ext = strategy != "normal_bsgs"
+    batch_specs = constants.info["plaintext_batches"][plan.direction]
 
-    for loop_pos, s in enumerate(plan.loop_range):
+    for loop_pos, level in enumerate(plan.loop_range):
         if loop_pos != 0:
             result = _rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+
         if loop_pos == len(plan.loop_range) - 1 and plan.rem:
-            giant_step = plan.giant_step_rem
-            baby_step = plan.baby_step_rem
-            num_rotations = plan.num_rotations_rem
+            giant_step = int(plan.giant_step_rem)
+            baby_step = int(plan.baby_step_rem)
         else:
-            giant_step = plan.giant_step
-            baby_step = plan.baby_step
-            num_rotations = plan.num_rotations
+            giant_step = int(plan.giant_step)
+            baby_step = int(plan.baby_step)
 
-        def fast_rotate_for_direction():
-            previous_prefix = getattr(cryptoContext, "_fast_rotate_ext_profile_prefix", None)
-            cryptoContext._fast_rotate_ext_profile_prefix = f"bs_{direction}_"
-            try:
-                return rotation.fast_rotate_ext_batch(
-                    result,
-                    plan.rot_in[s][:giant_step],
-                    cryptoContext,
-                )
-            finally:
-                if previous_prefix is None:
-                    delattr(cryptoContext, "_fast_rotate_ext_profile_prefix")
-                else:
-                    cryptoContext._fast_rotate_ext_profile_prefix = previous_prefix
+        spec = batch_specs[int(level)]
+        if int(spec["baby_step"]) != baby_step or int(spec["giant_step"]) != giant_step:
+            raise ValueError(
+                f"{plan.direction} plaintext batch metadata mismatch at level {level}: "
+                f"got baby={spec['baby_step']} giant={spec['giant_step']}, "
+                f"expected baby={baby_step} giant={giant_step}"
+            )
 
-        fast_rotation_ext = run_instrumented_op(
+        giant_offsets = plan.rot_out[level][:baby_step]
+        giant_offset = int(giant_offsets[1]) - int(giant_offsets[0]) if len(giant_offsets) > 1 else 0
+        plaintext_batch = constants.plaintext_batch(
+            spec["names"],
+            cryptoContext.L - result.cur_limbs,
+            spec["slots"],
             cryptoContext,
-            f"bs_{direction}_fast_rotate_ext_batch",
-            fast_rotate_for_direction,
+            is_ext=is_ext,
         )
-
-        group_slots = [
-            _constant_slots(constants, plan, s, giant_step * i)
-            for i in range(baby_step)
-        ]
-        if len(set(group_slots)) == 1:
-            constant_slots = group_slots[0]
-            plaintext_batch = run_instrumented_op(
-                cryptoContext,
-                "bs_constant_plaintext_group_batch",
-                _constant_plaintext_group_batch,
-                constants,
-                plan,
-                s,
-                baby_step,
-                giant_step,
-                cryptoContext.L - fast_rotation_ext.cur_limbs,
-                constant_slots,
-                cryptoContext,
-            )
-            inner_ext_batch = run_instrumented_op(
-                cryptoContext,
-                f"bs_{direction}_fused_grouped_pairwise_mac",
-                homo.fused_grouped_pairwise_mac,
-                fast_rotation_ext.cipher_like(fast_rotation_ext.cv, slots=constant_slots),
-                plaintext_batch,
-                baby_step,
-                cryptoContext,
-            )
-            inner_exts = [
-                rotation._batch_item(inner_ext_batch, i)
-                for i in range(baby_step)
-            ]
-        else:
-            inner_exts = []
-            for i in range(baby_step):
-                G = giant_step * i
-                constant_slots = group_slots[i]
-                plaintext_batch = run_instrumented_op(
-                    cryptoContext,
-                    "bs_constant_plaintext_batch",
-                    _constant_plaintext_batch,
-                    constants,
-                    plan,
-                    s,
-                    G,
-                    giant_step,
-                    cryptoContext.L - fast_rotation_ext.cur_limbs,
-                    constant_slots,
-                    cryptoContext,
-                )
-
-                inner_exts.append(
-                    run_instrumented_op(
-                        cryptoContext,
-                        f"bs_{direction}_fused_pairwise_mac",
-                        homo.fused_pairwise_mac,
-                        fast_rotation_ext.cipher_like(fast_rotation_ext.cv, slots=constant_slots),
-                        plaintext_batch,
-                        cryptoContext,
-                    )
-                )
-
-        result = run_instrumented_op(
+        result = rotation.hoisted_mac_sum(
+            result,
+            plan.rot_in[level][:giant_step],
+            plaintext_batch,
+            giant_offset,
+            baby_step,
             cryptoContext,
-            f"bs_{direction}_double_hoist_rotate_sum",
-            rotation.double_hoist_rotate_sum,
-            inner_exts,
-            plan.rot_out[s][:baby_step],
-            cryptoContext,
+            strategy=hoist_strategy,
         )
     return result
 
 
 def eval_coeffs_to_slots(ctxt, cryptoContext, bootstrap_constants):
-    return run_instrumented_op(
-        cryptoContext,
-        "bs_c2s",
-        coeffs_slots_conversion,
+    return coeffs_slots_conversion(
         ctxt,
         _constant_info(bootstrap_constants, "c2s_plan"),
         bootstrap_constants,
@@ -320,10 +163,7 @@ def eval_coeffs_to_slots(ctxt, cryptoContext, bootstrap_constants):
 
 
 def eval_slots_to_coeffs(ctxt, cryptoContext, bootstrap_constants):
-    return run_instrumented_op(
-        cryptoContext,
-        "bs_s2c",
-        coeffs_slots_conversion,
+    return coeffs_slots_conversion(
         ctxt,
         _constant_info(bootstrap_constants, "s2c_plan"),
         bootstrap_constants,
@@ -337,7 +177,7 @@ def eval_linear_transform(ct, scheme):
 
 
 def mod_raise(cipher, L0, cryptoContext):
-    return run_instrumented_op(cryptoContext, "mod_raise", _mod_raise, cipher, L0, cryptoContext)
+    return _mod_raise(cipher, L0, cryptoContext)
 
 
 def _mod_raise(cipher, L0, cryptoContext):
@@ -360,7 +200,7 @@ def _mod_raise(cipher, L0, cryptoContext):
 
 
 def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
-    return run_instrumented_op(cryptoContext, "mult_by_monomial_inplace", _mult_by_monomial_inplace, cipher, monomial_degree, cryptoContext)
+    return _mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext)
 
 
 def _mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
@@ -442,20 +282,8 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
             ctxtEnc = _rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
             ctxtEncI = _rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
 
-        ctxtEnc = run_instrumented_op(
-            cryptoContext,
-            "bs_eval_mod",
-            bootstrap_approx.eval_bootstrap_approx_mod,
-            ctxtEnc,
-            cryptoContext,
-        )
-        ctxtEncI = run_instrumented_op(
-            cryptoContext,
-            "bs_eval_mod",
-            bootstrap_approx.eval_bootstrap_approx_mod,
-            ctxtEncI,
-            cryptoContext,
-        )
+        ctxtEnc = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEnc, cryptoContext)
+        ctxtEncI = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEncI, cryptoContext)
 
         mult_by_monomial_inplace(ctxtEncI, M // 4, cryptoContext)
         ctxtEnc = homo.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
@@ -502,13 +330,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
         if ctxtEnc.noise_deg ==2 :
             ctxtEnc = _rescale(ctxtEnc, 1, cryptoContext)
 
-        ctxtEnc = run_instrumented_op(
-            cryptoContext,
-            "bs_eval_mod",
-            bootstrap_approx.eval_bootstrap_approx_mod,
-            ctxtEnc,
-            cryptoContext,
-        )
+        ctxtEnc = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEnc, cryptoContext)
 
         # scale the message back up after Chebyshev interpolation
         ctxtEnc = homo.homo_mul_scalar_int(ctxtEnc, scalar, cryptoContext)
@@ -538,15 +360,7 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, L0=None):
 
 
 def homo_bootstrap(cipher, cryptoContext, bootstrap_constants, L0=None):
-    return run_instrumented_op(
-        cryptoContext,
-        "homo_bootstrap",
-        _homo_bootstrap,
-        cipher,
-        cryptoContext,
-        bootstrap_constants,
-        L0=L0,
-    )
+    return _homo_bootstrap(cipher, cryptoContext, bootstrap_constants, L0=L0)
 
 
 def _homo_bootstrap(cipher, cryptoContext, bootstrap_constants, L0=None):

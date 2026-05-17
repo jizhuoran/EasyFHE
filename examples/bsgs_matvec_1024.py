@@ -41,7 +41,7 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
             plaintexts.append(plaintext)
         inner_exts.append(fhe.fused_pairwise_mac(baby_exts, rotation._pack_ciphers(plaintexts), crypto_context))
 
-    return fhe.double_hoist_rotate_sum(inner_exts, giant_offsets, crypto_context)
+    return fhe.giant_rotate_sum(inner_exts, baby_step, crypto_context, strategy="ext_double_hoist")
 
 
 def main():

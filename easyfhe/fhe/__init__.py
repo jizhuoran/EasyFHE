@@ -2,17 +2,17 @@
 
 from ._public_api import PUBLIC_API as _PUBLIC_API
 from . import config, utils
-from .ciphertext import PreparedPlaintext
 from .constants import ConstantBundle
 from .context import Context
 from .ops import (
     CipherState,
     align_to,
-    double_hoist_rotate_sum,
     encode,
     fast_rotate,
     fast_rotate_batch,
     fast_rotate_ext_batch,
+    giant_rotate_sum,
+    hoisted_mac_sum,
     fused_broadcast_mac,
     fused_grouped_pairwise_mac,
     fused_pairwise_mac,
@@ -27,12 +27,11 @@ from .ops import (
     homo_rotate,
     homo_square,
     homo_sub,
-    moddown_from_ext,
     make_plaintext,
+    make_plaintext_batch,
     prepare_plaintext,
     slot_resize,
 )
-from .runtime.instrumentation import NullInstrumentation, OpInstrumentation, profile
 from .runtime.options import RuntimeOptions
 from .runtime.spec import (
     CKKSContextSpec,

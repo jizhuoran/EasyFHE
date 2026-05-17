@@ -15,6 +15,8 @@ def generate(
     level_budget,
     max_levels_remaining=None,
     dim1=None,
+    baby_step=None,
+    strategy="double_hoist",
 ):
     if max_levels_remaining is None:
         raise ValueError("generate requires max_levels_remaining when crypto_context is provided")
@@ -24,6 +26,8 @@ def generate(
         level_budget,
         max_levels_remaining=max_levels_remaining,
         dim1=dim1,
+        baby_step=baby_step,
+        strategy=strategy,
     )
     return _resolve_rotations(constants), constants
 

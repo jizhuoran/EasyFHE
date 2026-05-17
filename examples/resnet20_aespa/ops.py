@@ -14,40 +14,14 @@ __all__ = [
 ]
 
 
-def _pairwise_mac(ctxs, ptxs, cryptoContext):
-    if hasattr(ctxs, "batch_size") and int(ctxs.batch_size) > 1:
-        if not hasattr(ptxs, "batch_size"):
-            raise TypeError("batched _pairwise_mac requires batched plaintexts")
-        return fhe.fused_pairwise_mac(ctxs, ptxs, cryptoContext)
-
-    if len(ctxs) != len(ptxs) or len(ctxs) == 0:
-        raise ValueError(f"ctxs and ptxs must have the same non-zero length, but got {len(ctxs)} and {len(ptxs)}")
-
-    partial_sum = fhe.homo_mul_pt(ctxs[0], ptxs[0], cryptoContext)
-    for ctx, ptx in zip(ctxs[1:], ptxs[1:]):
-        partial_sum = fhe.homo_add(partial_sum, fhe.homo_mul_pt(ctx, ptx, cryptoContext), cryptoContext)
-    return partial_sum
-
-
-def _read_kernel_rows(prefix, cipher, scale, cryptoContext, weights):
-    level = cryptoContext.L - cipher.cur_limbs
-    names = [f"{prefix}-k{k + 1}" for k in range(9)]
-    if hasattr(cipher, "batch_size") and int(cipher.batch_size) > 1:
-        return weights.plaintext_batch(names, level, cipher.slots, cryptoContext, scale)
-    return [
-        weights.plaintext(name, level, cipher.slots, cryptoContext, scale)
-        for name in names
-    ]
-
-
-def _read_kernel_groups(prefixes, cipher, scale, cryptoContext, weights):
+def _read_kernel_groups(prefixes, cipher, scale, cryptoContext, weights, is_ext=False, cache=True):
     level = cryptoContext.L - cipher.cur_limbs
     names = [
         f"{prefix}-k{k + 1}"
         for prefix in prefixes
         for k in range(9)
     ]
-    return weights.plaintext_batch(names, level, cipher.slots, cryptoContext, scale)
+    return weights.plaintext_batch(names, level, cipher.slots, cryptoContext, scale, is_ext=is_ext, cache=cache)
 
 
 def _conv3x3_offsets(img_width, padding):
@@ -64,63 +38,49 @@ def _conv3x3_offsets(img_width, padding):
     ]
 
 
-def _rot_input(input, img_width, padding, cryptoContext):
-    return fhe.fast_rotate_batch(input, _conv3x3_offsets(img_width, padding), cryptoContext)
-
-
 def _validate_conv3x3_prefixes(prefixes):
     if not prefixes:
         raise ValueError("conv3x3 requires at least one kernel prefix")
 
 
-def _batch_item(cipher, index):
-    if int(getattr(cipher, "batch_size", 1)) <= 1 and cipher.cv[0].dim() == 2:
-        if int(index) != 0:
-            raise IndexError(f"batch index {index} out of range")
-        return cipher
-    batch_size = int(getattr(cipher, "batch_size", cipher.cv[0].shape[0]))
-    index = int(index)
-    if index < 0 or index >= batch_size:
-        raise IndexError(f"batch index {index} out of range for batch_size={batch_size}")
-    return cipher.cipher_like([cv[index] for cv in cipher.cv], batch_size=1, cipher_id="assign")
-
-
 def _conv3x3(input, prefixes, img_width, padding, rot_offset, scale, cryptoContext, weights):
     _validate_conv3x3_prefixes(prefixes)
     input = reduce_noise_to_one(input, cryptoContext)
-    rotations = _rot_input(input, img_width, padding, cryptoContext)
-    partial_sums = fhe.fused_grouped_pairwise_mac(
-        rotations,
-        _read_kernel_groups(prefixes, rotations, scale, cryptoContext, weights),
+    plaintexts = _read_kernel_groups(
+        tuple(reversed(prefixes)),
+        input,
+        scale,
+        cryptoContext,
+        weights,
+    )
+    result = fhe.hoisted_mac_sum(
+        input,
+        _conv3x3_offsets(img_width, padding),
+        plaintexts,
+        rot_offset,
         len(prefixes),
         cryptoContext,
+        strategy="normal",
     )
-
-    finalsum = None
-    for idx in range(len(prefixes)):
-        partial_sum = _batch_item(partial_sums, idx)
-        finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
-        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
-    return finalsum
+    return fhe.homo_rotate(result, rot_offset, cryptoContext)
 
 
 def _initial_conv3x3(input, prefixes, img_width, padding, rot_offset, scale, cryptoContext, weights):
     _validate_conv3x3_prefixes(prefixes)
     input = reduce_noise_to_one(input, cryptoContext)
-    rotations = _rot_input(input, img_width, padding, cryptoContext)
+    rotations = fhe.fast_rotate_batch(input, _conv3x3_offsets(img_width, padding), cryptoContext)
     partial_sums = fhe.fused_grouped_pairwise_mac(
         rotations,
-        _read_kernel_groups(prefixes, rotations, scale, cryptoContext, weights),
+        _read_kernel_groups(tuple(reversed(prefixes)), rotations, scale, cryptoContext, weights),
         len(prefixes),
         cryptoContext,
     )
-    finalsum = None
-    for idx in range(len(prefixes)):
-        partial_sum = _batch_item(partial_sums, idx)
-        partial_sum = _initial_conv_postprocess(partial_sum, cryptoContext, weights)
-        finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
-        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
-    return finalsum
+    partial_sums = [
+        _initial_conv_postprocess(partial_sum, cryptoContext, weights)
+        for partial_sum in partial_sums
+    ]
+    result = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
+    return fhe.homo_rotate(result, rot_offset, cryptoContext)
 
 
 def _initial_conv_postprocess(partial_sum, cryptoContext, weights):

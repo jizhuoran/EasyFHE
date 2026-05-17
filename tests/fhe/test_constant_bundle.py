@@ -80,6 +80,38 @@ def test_constant_bundle_plaintext_batch_cache(monkeypatch):
     assert bundle.cache_info()["plain_batch_misses"] == 1
 
 
+def test_constant_bundle_plaintext_batch_matches_individual_encoding():
+    ctx = fhe.generate_context(
+        fhe.CKKSContextSpec(
+            depth=3,
+            log_n=5,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=(),
+        ),
+        device="cpu",
+    )
+    bundle = fhe.ConstantBundle(
+        vectors={
+            "a": np.asarray([1.0, 2.0], dtype=np.double),
+            "b": np.asarray([3.0, 4.0], dtype=np.double),
+        },
+        cache_mode="none",
+    )
+
+    batch = bundle.plaintext_batch(["a", "b"], 1, 4, ctx, is_ext=True)
+    packed = bundle._pack_plaintexts([
+        bundle.plaintext("a", 1, 4, ctx, is_ext=True),
+        bundle.plaintext("b", 1, 4, ctx, is_ext=True),
+    ])
+
+    assert batch.batch_size == 2
+    assert batch.is_ext is True
+    assert tuple(batch.cv[0].shape) == tuple(packed.cv[0].squeeze(1).shape)
+    assert np.array_equal(batch.cv[0].numpy(), packed.cv[0].squeeze(1).numpy())
+
+
 def test_resnet_weight_pack_reuses_constant_bundle():
     weights = WeightPack({"w": np.asarray([1.0], dtype=np.double)}, cache_mode="middle")
 

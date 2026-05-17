@@ -95,7 +95,6 @@ def plaintext_twin(func):
             "homo_add_scalar_double",
             "homo_rotate",
             "fast_rotate",
-            "cipher_automorphism",
             "mult_rot_key_and_sum_ext",
             "slot_resize",
             "fused_pairwise_mac",
@@ -112,7 +111,7 @@ def plaintext_twin(func):
                 res.ptx_twin = args[0].ptx_twin * args[1]
             elif func.__name__ == "homo_add_scalar_double":
                 res.ptx_twin = args[0].ptx_twin + args[1]
-            elif func.__name__ in ["homo_rotate", "cipher_automorphism", "mult_rot_key_and_sum_ext"]:
+            elif func.__name__ in ["homo_rotate", "mult_rot_key_and_sum_ext"]:
                 res.ptx_twin = np.array(args[0].ptx_twin[args[1] :].tolist() + args[0].ptx_twin[: args[1]].tolist())
             elif func.__name__ == "fast_rotate":
                 for item, offset in zip(res, args[1]):

@@ -371,14 +371,18 @@ def _build_modup_to_ext_target(case: bench.BenchmarkCase, crypto_context: Any, o
 
 def _build_moddown_from_ext_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
-    ext_cipher = rotation._key_switch_P_ext(cipher, crypto_context)
+    ext_cipher = cipher.cipher_like(
+        [rotation._scale_to_P_ext(cv, cipher, crypto_context) for cv in cipher.cv],
+        is_ext=True,
+        cipher_id="assign",
+    )
 
     def op():
-        return fhe.moddown_from_ext(ext_cipher, crypto_context)
+        return rotation.moddown_from_ext(ext_cipher, crypto_context)
 
     probe = op()
     return op, {
-        "input_contract": "key_switch_P_ext_then_moddown_from_ext",
+        "input_contract": "scale_to_P_ext_then_moddown_from_ext",
         "ext_cur_limbs": int(ext_cipher.cur_limbs),
         "ext_is_ext": bool(ext_cipher.is_ext),
         "result_cur_limbs": int(probe.cur_limbs),

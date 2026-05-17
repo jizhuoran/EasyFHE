@@ -6,24 +6,21 @@ Python implementation details, but they are outside the stable API contract
 unless they are re-exported here.
 """
 
-CONFIG_API = (
+CONTEXT_API = (
     "CKKSContextSpec",
-    "RuntimeOptions",
-)
-
-RUNTIME_API = (
-    "ConstantBundle",
     "Context",
-    "PreparedPlaintext",
+    "RuntimeOptions",
+    "generate_context",
 )
 
-CONSTRUCTION_API = (
-    "generate_context",
+CONSTANT_API = (
+    "ConstantBundle",
 )
 
 ENCODING_API = (
     "encode",
     "make_plaintext",
+    "make_plaintext_batch",
     "prepare_plaintext",
 )
 
@@ -32,14 +29,7 @@ ALIGNMENT_API = (
     "align_to",
 )
 
-HOMOMORPHIC_OPS_API = (
-    "double_hoist_rotate_sum",
-    "fast_rotate",
-    "fast_rotate_batch",
-    "fast_rotate_ext_batch",
-    "fused_broadcast_mac",
-    "fused_grouped_pairwise_mac",
-    "fused_pairwise_mac",
+BASIC_OPS_API = (
     "homo_add",
     "homo_add_pt",
     "homo_add_scalar_double",
@@ -51,14 +41,21 @@ HOMOMORPHIC_OPS_API = (
     "homo_rotate",
     "homo_square",
     "homo_sub",
-    "moddown_from_ext",
-    "slot_resize",
 )
 
-INSTRUMENTATION_API = (
-    "NullInstrumentation",
-    "OpInstrumentation",
-    "profile",
+HOISTED_OPS_API = (
+    "fast_rotate",
+    "fast_rotate_batch",
+    "fast_rotate_ext_batch",
+    "fused_broadcast_mac",
+    "fused_grouped_pairwise_mac",
+    "fused_pairwise_mac",
+    "giant_rotate_sum",
+    "hoisted_mac_sum",
+)
+
+SHAPE_API = (
+    "slot_resize",
 )
 
 MODULE_API = (
@@ -67,12 +64,12 @@ MODULE_API = (
 )
 
 PUBLIC_API = (
-    *CONFIG_API,
-    *RUNTIME_API,
-    *CONSTRUCTION_API,
+    *CONTEXT_API,
+    *CONSTANT_API,
     *ENCODING_API,
     *ALIGNMENT_API,
-    *HOMOMORPHIC_OPS_API,
-    *INSTRUMENTATION_API,
+    *BASIC_OPS_API,
+    *HOISTED_OPS_API,
+    *SHAPE_API,
     *MODULE_API,
 )

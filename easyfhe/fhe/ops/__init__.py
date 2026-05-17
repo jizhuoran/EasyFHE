@@ -1,6 +1,6 @@
 from .alignment import CipherState, align_to
 from .arithmetic import homo_add, homo_mul, homo_square, homo_sub
-from .encoding import encode, make_plaintext, prepare_plaintext
+from .encoding import encode, make_plaintext, make_plaintext_batch, prepare_plaintext
 from .fused import fused_broadcast_mac, fused_grouped_pairwise_mac, fused_pairwise_mac
 from .plaintext import (
     homo_add_pt,
@@ -10,19 +10,28 @@ from .plaintext import (
     homo_mul_scalar_double,
     homo_mul_scalar_int,
 )
-from .rotation import double_hoist_rotate_sum, fast_rotate, fast_rotate_batch, fast_rotate_ext_batch, homo_rotate, moddown_from_ext
+from .rotation import (
+    fast_rotate,
+    fast_rotate_batch,
+    fast_rotate_ext_batch,
+    giant_rotate_sum,
+    hoisted_mac_sum,
+    homo_rotate,
+)
 from .slots import slot_resize
 
 __all__ = [
     "CipherState",
     "align_to",
-    "double_hoist_rotate_sum",
     "encode",
     "make_plaintext",
+    "make_plaintext_batch",
     "prepare_plaintext",
     "fast_rotate",
     "fast_rotate_batch",
     "fast_rotate_ext_batch",
+    "giant_rotate_sum",
+    "hoisted_mac_sum",
     "fused_broadcast_mac",
     "fused_grouped_pairwise_mac",
     "fused_pairwise_mac",
@@ -35,7 +44,6 @@ __all__ = [
     "homo_mul_scalar_double",
     "homo_mul_scalar_int",
     "homo_rotate",
-    "moddown_from_ext",
     "homo_square",
     "homo_sub",
     "slot_resize",

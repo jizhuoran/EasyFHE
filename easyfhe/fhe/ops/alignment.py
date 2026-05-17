@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 from . import kernels as F
-from ..runtime.instrumentation import run_instrumented_op
 
 
 @dataclass(frozen=True)
@@ -63,7 +62,7 @@ def plan_reduce_noise_to_one(cipher_or_state, context) -> CipherState:
 
 
 def align_to(cipher, target: CipherState, context):
-    return run_instrumented_op(context, "align_to", _align_to, cipher, target, context)
+    return _align_to(cipher, target, context)
 
 
 def reduce_noise_to_one(cipher, context):

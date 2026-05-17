@@ -1,7 +1,6 @@
 from . import kernels as F
 from ..ciphertext import Cipher
 from ..runtime import validation
-from ..runtime.instrumentation import run_instrumented_op
 from . import alignment
 from .primitives import _cipher_add, _cipher_add_ext, _cipher_mul, _cipher_square, _cipher_sub, _cipher_sub_ext
 
@@ -17,7 +16,7 @@ def _align_for_mul(ct1: Cipher, ct2: Cipher, cryptoContext):
 
 
 def homo_add(in0, in1, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_add", _homo_add, in0, in1, cryptoContext)
+    return _homo_add(in0, in1, cryptoContext)
 
 
 def _homo_add(in0, in1, cryptoContext):
@@ -29,7 +28,7 @@ def _homo_add(in0, in1, cryptoContext):
 
 
 def homo_sub(in0, in1, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_sub", _homo_sub, in0, in1, cryptoContext)
+    return _homo_sub(in0, in1, cryptoContext)
 
 
 def _homo_sub(in0, in1, cryptoContext):
@@ -41,7 +40,7 @@ def _homo_sub(in0, in1, cryptoContext):
 
 
 def homo_mul(in0, in1, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_mul", _homo_mul, in0, in1, cryptoContext)
+    return _homo_mul(in0, in1, cryptoContext)
 
 
 def _homo_mul(in0, in1, cryptoContext):
@@ -63,7 +62,7 @@ def _homo_mul(in0, in1, cryptoContext):
 
 
 def homo_square(in0, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_square", _homo_square, in0, cryptoContext)
+    return _homo_square(in0, cryptoContext)
 
 
 def _homo_square(in0, cryptoContext):

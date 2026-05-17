@@ -91,7 +91,9 @@ def collapsed_fft_params(slots, level_budget, dim1):
     giant_step_rem = 0
 
     if flag_rem:
-        if num_rotations_rem > 7:
+        if dim1 != 0 and dim1 <= num_rotations_rem:
+            giant_step_rem = dim1
+        elif num_rotations_rem > 7:
             giant_step_rem = 1 << (int(rem_collapse / 2) + 2)
         else:
             giant_step_rem = 1 << (int(rem_collapse / 2) + 1)

@@ -6,6 +6,7 @@ import numpy as np
 
 from .ciphertext import Cipher, PreparedPlaintext
 from .ops import encode as encode_plaintext
+from .ops import make_plaintext_batch
 from .ops import prepare_plaintext
 
 
@@ -193,7 +194,7 @@ class ConstantBundle:
             self._plain_cache[plain_key] = plaintext
         return plaintext
 
-    def plaintext_batch(self, names, level, slots, cryptoContext, scale=1.0, is_ext=False):
+    def plaintext_batch(self, names, level, slots, cryptoContext, scale=1.0, is_ext=False, cache=True):
         names = tuple(names)
         if not names:
             raise ValueError("ConstantBundle.plaintext_batch requires at least one name")
@@ -202,17 +203,13 @@ class ConstantBundle:
         is_ext = bool(is_ext)
         scales = self._normalize_scales(scale, len(names))
         batch_key = self._plain_batch_key(names, level, slots, cryptoContext, scales, is_ext)
-        if self.cache_mode != "none" and batch_key in self._plain_batch_cache:
+        if cache and self.cache_mode != "none" and batch_key in self._plain_batch_cache:
             self._cache_stats["plain_batch_hits"] += 1
             return self._plain_batch_cache[batch_key]
 
         self._cache_stats["plain_batch_misses"] += 1
-        plaintexts = [
-            self._plaintext_for_batch_item(name, level, slots, cryptoContext, item_scale, is_ext)
-            for name, item_scale in zip(names, scales)
-        ]
-        batch = self._pack_plaintexts(plaintexts)
-        if self._cache_plain():
+        batch = self._materialize_plaintext_batch(names, level, slots, cryptoContext, scales, is_ext)
+        if cache and self._cache_plain():
             self._plain_batch_cache[batch_key] = batch
         return batch
 
@@ -275,6 +272,25 @@ class ConstantBundle:
             self._cache_stats["plain_hits"] += 1
             return self._plain_cache[plain_key]
         return self._materialize_plaintext(name, level, slots, cryptoContext, scale, is_ext)
+
+    def _materialize_plaintext_batch(self, names, level, slots, cryptoContext, scales, is_ext):
+        if self._can_batch_encode_plaintexts(names, cryptoContext):
+            middle_values = [
+                self.prepared_plaintext(name, slots, cryptoContext, item_scale)
+                for name, item_scale in zip(names, scales)
+            ]
+            return make_plaintext_batch(middle_values, level, slots, is_ext, cryptoContext)
+
+        plaintexts = [
+            self._plaintext_for_batch_item(name, level, slots, cryptoContext, item_scale, is_ext)
+            for name, item_scale in zip(names, scales)
+        ]
+        return self._pack_plaintexts(plaintexts)
+
+    def _can_batch_encode_plaintexts(self, names, cryptoContext):
+        if not all(not isinstance(self.vector(name), Cipher) for name in names):
+            return False
+        return all(hasattr(cryptoContext, attr) for attr in ("N", "L", "scale_at"))
 
     def _normalize_scales(self, scale, count):
         if isinstance(scale, (tuple, list)):

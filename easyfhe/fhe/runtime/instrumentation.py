@@ -129,13 +129,3 @@ def profile(ctx, *, sync=False, include=None):
         yield profiler
     finally:
         ctx.instrumentation = previous
-
-
-def run_instrumented_op(crypto_context, op_name, impl, *args, **kwargs):
-    runtime = getattr(crypto_context, "runtime", None)
-    if runtime is None:
-        runtime = getattr(crypto_context, "instrumentation", None)
-    if runtime is None:
-        runtime = NullInstrumentation()
-        crypto_context.instrumentation = runtime
-    return runtime.run(op_name, impl, *args, **kwargs)

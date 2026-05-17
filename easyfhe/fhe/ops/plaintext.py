@@ -2,7 +2,6 @@ import math
 
 from ..ciphertext import Cipher, Plaintext
 from ..runtime import validation
-from ..runtime.instrumentation import run_instrumented_op
 from .primitives import (
     _cipher_add_plain,
     _cipher_add_scalar,
@@ -25,7 +24,7 @@ def _encode_double_for_scalar_op(constant, cur_limbs, cryptoContext):
 
 
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_add_pt", _homo_add_pt, cipher, plaintext, cryptoContext)
+    return _homo_add_pt(cipher, plaintext, cryptoContext)
 
 
 def _homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
@@ -41,7 +40,7 @@ def _homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_mul_pt", _homo_mul_pt, cipher, plaintext, cryptoContext)
+    return _homo_mul_pt(cipher, plaintext, cryptoContext)
 
 
 def _homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
@@ -56,14 +55,7 @@ def _homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_add_scalar_double(cipher, constant, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "homo_add_scalar_double",
-        _homo_add_scalar_double,
-        cipher,
-        constant,
-        cryptoContext,
-    )
+    return _homo_add_scalar_double(cipher, constant, cryptoContext)
 
 
 def _homo_add_scalar_double(cipher, constant, cryptoContext):
@@ -86,7 +78,7 @@ def _homo_add_scalar_double(cipher, constant, cryptoContext):
 
 
 def homo_add_scalar_int(cipher, scalar, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_add_scalar_int", _homo_add_scalar_int, cipher, scalar, cryptoContext)
+    return _homo_add_scalar_int(cipher, scalar, cryptoContext)
 
 
 def _homo_add_scalar_int(cipher, scalar, cryptoContext):
@@ -100,7 +92,7 @@ def _homo_add_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_int(cipher, scalar, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_mul_scalar_int", _homo_mul_scalar_int, cipher, scalar, cryptoContext)
+    return _homo_mul_scalar_int(cipher, scalar, cryptoContext)
 
 
 def _homo_mul_scalar_int(cipher, scalar, cryptoContext):
@@ -116,7 +108,7 @@ def _homo_mul_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_double(cipher, constant, cryptoContext):
-    return run_instrumented_op(cryptoContext, "homo_mul_scalar_double", _homo_mul_scalar_double, cipher, constant, cryptoContext)
+    return _homo_mul_scalar_double(cipher, constant, cryptoContext)
 
 
 def _homo_mul_scalar_double(cipher, constant, cryptoContext):

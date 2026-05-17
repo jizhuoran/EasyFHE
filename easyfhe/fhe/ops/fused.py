@@ -1,17 +1,9 @@
-from ..runtime.instrumentation import run_instrumented_op
 from ..ciphertext import Cipher
 from . import kernels as F
 
 
 def fused_broadcast_mac(cipher, plaintexts, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "fused_broadcast_mac",
-        _fused_broadcast_mac,
-        cipher,
-        plaintexts,
-        cryptoContext,
-    )
+    return _fused_broadcast_mac(cipher, plaintexts, cryptoContext)
 
 
 def _fused_broadcast_mac(cipher, plaintexts, cryptoContext):
@@ -24,26 +16,11 @@ def _fused_broadcast_mac(cipher, plaintexts, cryptoContext):
 
 
 def fused_pairwise_mac(ciphers, plaintexts, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "fused_pairwise_mac",
-        _fused_pairwise_mac,
-        ciphers,
-        plaintexts,
-        cryptoContext,
-    )
+    return _fused_pairwise_mac(ciphers, plaintexts, cryptoContext)
 
 
 def fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "fused_grouped_pairwise_mac",
-        _fused_grouped_pairwise_mac,
-        ciphers,
-        plaintexts,
-        groups,
-        cryptoContext,
-    )
+    return _fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext)
 
 
 def _fused_pairwise_mac(ciphers, plaintexts, cryptoContext):
@@ -75,7 +52,7 @@ def _fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
         )
     _validate_cipher_plain_batch("fused_grouped_pairwise_mac", cipher_batch, plaintext_batch)
     cv = F.cipher_fused_grouped_pairwise_mac(cipher_batch, plaintext_batch, groups, cryptoContext)
-    return _mac_result_like(cipher_batch, plaintext_batch, cv, batch_size=groups)
+    return _mac_result_list(cipher_batch, plaintext_batch, cv, groups)
 
 
 def _fused_pairwise_mac_batch(ciphers, plaintexts, cryptoContext):
@@ -121,3 +98,16 @@ def _mac_result_like(cipher, plaintext, cv, batch_size):
         batch_size=batch_size,
         cipher_id="assign",
     )
+
+
+def _mac_result_list(cipher, plaintext, cv, count):
+    return [
+        cipher.cipher_like(
+            [component[index] for component in cv],
+            scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
+            noise_deg=cipher.noise_deg + plaintext.noise_deg,
+            batch_size=1,
+            cipher_id="assign",
+        )
+        for index in range(int(count))
+    ]
