@@ -13,12 +13,12 @@ import easyfhe.fhe as fhe
 try:
     from .data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
     from .fhe_state import runtime_options_from_args
-    from .model import AespaRuntime, infer_one
+    from .model import AespaRuntime, encrypt_input, infer_encrypted
     from .weight_pack import WeightPack
 except ImportError:
     from data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
     from fhe_state import runtime_options_from_args
-    from model import AespaRuntime, infer_one
+    from model import AespaRuntime, encrypt_input, infer_encrypted
     from weight_pack import WeightPack
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -80,8 +80,9 @@ def build_config(args):
         data_dir=DATA_DIR,
         weights_path=WEIGHTS_PATH,
         rotate_indices=(
-            -8192, -4096, -1024, -768, -256, -192, -64, -32, -16, -15, -8, -1,
-            1, 2, 4, 8, 16, 24, 32, 48, 64, 128, 256, 512, 1024, 2048, 12288, 24576,
+            -8192, -4096, -1024, -768, -256, -192, -64, -33, -32, -31, -17, -16,
+            -15, -9, -8, -7, -1, 1, 2, 4, 7, 8, 9, 15, 16, 17, 24, 31, 32, 33,
+            48, 64, 128, 256, 512, 1024, 2048, 12288, 24576,
         ),
         max_levels_remaining=12,
         log_bs_slots=(14,),
@@ -148,23 +149,27 @@ def _format_bytes(num_bytes):
         value /= 1024.0
 
 
-def _print_timing_summary(infer_times, total_seconds, correct, total):
+def _print_time_series(label, times):
+    if not times:
+        return
+    avg = sum(times) / len(times)
+    print(
+        f"{label}:",
+        f"avg={_format_seconds(avg)}",
+        f"min={_format_seconds(min(times))}",
+        f"max={_format_seconds(max(times))}",
+    )
+    if len(times) > 1:
+        warm_avg = sum(times[1:]) / (len(times) - 1)
+        print(f"{label} excluding first image: avg={_format_seconds(warm_avg)}")
+
+
+def _print_timing_summary(encrypt_times, infer_times, total_seconds, correct, total):
     print("\n================ dataset summary ================")
     print(f"accuracy: {_format_accuracy(correct, total)}")
     print(f"wall time: {_format_seconds(total_seconds)}")
-    if not infer_times:
-        return
-
-    avg = sum(infer_times) / len(infer_times)
-    print(
-        "inference time:",
-        f"avg={_format_seconds(avg)}",
-        f"min={_format_seconds(min(infer_times))}",
-        f"max={_format_seconds(max(infer_times))}",
-    )
-    if len(infer_times) > 1:
-        warm_avg = sum(infer_times[1:]) / (len(infer_times) - 1)
-        print(f"inference time excluding first image: avg={_format_seconds(warm_avg)}")
+    _print_time_series("encrypt time", encrypt_times)
+    _print_time_series("inference time", infer_times)
 
 
 def _print_weight_cache_summary(weights):
@@ -176,8 +181,11 @@ def _print_weight_cache_summary(weights):
         f"mode={info['mode']}",
         f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])})",
         f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])})",
+        f"plain_batch={info.get('plain_batch_entries', 0)}({_format_bytes(info.get('plain_batch_bytes', 0))})",
         f"plain_hits={info['plain_hits']}",
         f"plain_misses={info['plain_misses']}",
+        f"plain_batch_hits={info.get('plain_batch_hits', 0)}",
+        f"plain_batch_misses={info.get('plain_batch_misses', 0)}",
         f"middle_hits={info['middle_hits']}",
         f"middle_misses={info['middle_misses']}",
     )
@@ -185,6 +193,7 @@ def _print_weight_cache_summary(weights):
 
 def run_dataset(rt):
     total = rt.config.total
+    encrypt_times = []
     infer_times = []
     correct = 0
     dataset_start = time.perf_counter()
@@ -198,8 +207,14 @@ def run_dataset(rt):
         item_start = time.perf_counter()
 
         _sync_device(rt)
+        encrypt_start = time.perf_counter()
+        input_cipher = encrypt_input(image_vector, rt)
+        _sync_device(rt)
+        encrypt_seconds = time.perf_counter() - encrypt_start
+        encrypt_times.append(encrypt_seconds)
+
         infer_start = time.perf_counter()
-        final_res = infer_one(image_vector, rt)
+        final_res = infer_encrypted(input_cipher, rt)
         _sync_device(rt)
         infer_seconds = time.perf_counter() - infer_start
         infer_times.append(infer_seconds)
@@ -220,6 +235,7 @@ def run_dataset(rt):
         )
         print(
             "    "
+            f"encrypt={_format_seconds(encrypt_seconds)} "
             f"infer={_format_seconds(infer_seconds)} "
             f"decrypt={_format_seconds(decrypt_seconds)} "
             f"total={_format_seconds(item_seconds)} "
@@ -229,7 +245,7 @@ def run_dataset(rt):
             print("    logits=", np.array2string(logits, precision=6, separator=", "))
 
     total_seconds = time.perf_counter() - dataset_start
-    _print_timing_summary(infer_times, total_seconds, correct, total)
+    _print_timing_summary(encrypt_times, infer_times, total_seconds, correct, total)
     _print_weight_cache_summary(rt.weights)
 
 

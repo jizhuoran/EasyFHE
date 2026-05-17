@@ -3330,11 +3330,26 @@
     CPU: moddown_cpu
     CUDA: moddown_cuda
 
+- func: moddown_write(Tensor out, Tensor input, *, int curr_limbs, int L, int sizeP, int N, int logN, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: moddown_write_cuda
+
 - func: innerproduct(Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
   dispatch:
     CPU: innerproduct_cpu
     CUDA: innerproduct_cuda
+
+- func: innerproduct_write(Tensor out, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_write_cuda
+
+- func: innerproduct_write_pair(Tensor out_bx, Tensor out_ax, Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_write_pair_cuda
 
 - func: innerproduct_broadcast_cipher(Tensor in_modup, *, Tensor[] swk, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
   device_check: NoCheck
@@ -3352,6 +3367,21 @@
   dispatch:
     CPU: automorphism_transform_cpu
     CUDA: automorphism_transform_cuda
+
+- func: fast_rotate_ext_batch_finalize(Tensor key_products, Tensor pc0, Tensor pc1, Tensor precomp_maps, Tensor offsets, Tensor primes, int curr_limbs, int active_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fast_rotate_ext_batch_finalize_cuda
+
+- func: fast_rotate_ext_batch_finalize_pair(Tensor key_product_bx, Tensor key_product_ax, Tensor pc0, Tensor pc1, Tensor precomp_maps, Tensor offsets, Tensor primes, int curr_limbs, int active_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fast_rotate_ext_batch_finalize_pair_cuda
+
+- func: fast_rotate_batch_finalize(Tensor moddown_products, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor offsets, Tensor primes, int curr_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fast_rotate_batch_finalize_cuda
 
 - func: mod_raise(Tensor input, *, int N, int L0, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
@@ -3401,6 +3431,13 @@
   device_check: NoCheck
   dispatch:
     CPU: batched_pairwise_mac_cpu
+    CUDA: batched_pairwise_mac_cuda
+
+- func: fused_broadcast_mac(Tensor cipher, Tensor plaintext, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_plain, int curr_limbs, int N) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: fused_broadcast_mac_cpu
+    CUDA: fused_broadcast_mac_cuda
 
 - func: cpmul_broadcast_pt(Tensor cipher, Tensor plaintext, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor
   device_check: NoCheck

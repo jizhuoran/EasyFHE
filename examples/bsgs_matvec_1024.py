@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 import easyfhe.fhe as fhe
+from easyfhe.fhe.ops import rotation
 
 
 def _diagonal_values(matrix, offset):
@@ -22,24 +23,23 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
     giant_count = slots // baby_step
     baby_offsets = list(range(baby_step))
     giant_offsets = [giant * baby_step for giant in range(giant_count)]
-    baby_exts = fhe.fast_rotate_ext(cipher, baby_offsets, crypto_context)
+    baby_exts = fhe.fast_rotate_ext_batch(cipher, baby_offsets, crypto_context)
 
     inner_exts = []
     for giant_offset in giant_offsets:
-        inner = None
-        for baby_offset, baby_ext in zip(baby_offsets, baby_exts):
+        plaintexts = []
+        for baby_offset in baby_offsets:
             diagonal = _diagonal_values(matrix, giant_offset + baby_offset)
             plaintext_values = np.roll(diagonal, giant_offset)
             plaintext = fhe.encode(
                 plaintext_values,
                 crypto_context,
-                level=crypto_context.L - baby_ext.cur_limbs,
+                level=crypto_context.L - baby_exts.cur_limbs,
                 slots=slots,
                 is_ext=True,
             )[1]
-            term = fhe.homo_mul_pt(baby_ext, plaintext, crypto_context)
-            inner = term if inner is None else fhe.homo_add(inner, term, crypto_context)
-        inner_exts.append(inner)
+            plaintexts.append(plaintext)
+        inner_exts.append(fhe.fused_pairwise_mac(baby_exts, rotation._pack_ciphers(plaintexts), crypto_context))
 
     return fhe.double_hoist_rotate_sum(inner_exts, giant_offsets, crypto_context)
 

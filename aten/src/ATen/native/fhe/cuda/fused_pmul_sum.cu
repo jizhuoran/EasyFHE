@@ -144,6 +144,41 @@ __global__ void cpmulBroadcastPTKernel(
   }
 }
 
+__global__ void fusedBroadcastMACKernel(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mod_ptr,
+    const uint64_t* __restrict__ barret_ratio_ptr,
+    const uint64_t* __restrict__ barret_k_ptr,
+    const int64_t num_plain,
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t L_PTN) {
+  auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  auto bid_y = blockIdx.y;
+
+  auto mod = mod_ptr[bid_y];
+  auto barret_ratio = barret_ratio_ptr[bid_y];
+  auto barret_k = barret_k_ptr[bid_y];
+  auto cipher_val_bx = cipher_ptr[bid_y * N + tid_x];
+  auto cipher_val_ax = cipher_ptr[L_CTN + bid_y * N + tid_x];
+
+  uint128_t sum_bx = {0, 0};
+  uint128_t sum_ax = {0, 0};
+  for (int64_t i = 0; i < num_plain; ++i) {
+    auto plain_val = plain_ptr[i * L_PTN + bid_y * N + tid_x];
+    inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
+    inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
+  }
+
+  res_ptr[bid_y * N + tid_x] =
+      barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+  res_ptr[cur_limbs * N + bid_y * N + tid_x] =
+      barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+}
+
 __global__ void cpmulBroadcastCipherKernel(
     uint64_t* __restrict__ res_ptr,
     const uint64_t* __restrict__ cipher_ptr,
@@ -272,6 +307,42 @@ Tensor cpmul_broadcast_pt_cuda(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   return res;
 
+}
+
+Tensor fused_broadcast_mac_cuda(
+    const Tensor& cipher,
+    const Tensor& plaintext,
+    const Tensor& param_primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    int64_t num_plain,
+    int64_t cur_limbs,
+    int64_t N) {
+
+  auto res = at::empty({2, cur_limbs, N}, cipher.options());
+
+  dim3 block(BLOCK_SIZE);
+  dim3 grid(N / BLOCK_SIZE, cur_limbs);
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+  auto L_CTN = cipher.size(1) * N;
+  auto L_PTN = plaintext.size(2) * N;
+
+  fhe::fusedBroadcastMACKernel<<<grid, block, 0, stream>>>(
+      res.data_ptr<uint64_t>(),
+      cipher.data_ptr<uint64_t>(),
+      plaintext.data_ptr<uint64_t>(),
+      param_primes.data_ptr<uint64_t>(),
+      barret_ratio.data_ptr<uint64_t>(),
+      barret_k.data_ptr<uint64_t>(),
+      num_plain,
+      cur_limbs,
+      N,
+      L_CTN,
+      L_PTN);
+
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+  return res;
 }
 
 Tensor cpmul_broadcast_cipher_cuda(

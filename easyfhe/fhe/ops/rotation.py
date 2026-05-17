@@ -1,4 +1,5 @@
 import easyfhe as torch
+import numpy as np
 
 from . import kernels as F
 from ..runtime.instrumentation import run_instrumented_op
@@ -66,10 +67,7 @@ def _key_switch_P_ext_impl(cipher, cryptoContext):
     if cipher.is_ext:
         raise ValueError("key_switch_P_ext: expected non-ext cipher")
     cv = [
-        torch.cat((
-            F.cv_mul_scalar(cv, cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-            torch.zeros((cryptoContext.K << cryptoContext.logN), dtype=torch.uint64, device=cryptoContext.device).reshape(-1, cryptoContext.N)
-        ), dim=0)
+        _scale_to_P_ext(cv, cipher, cryptoContext)
         for cv in cipher.cv
     ]
     return cipher.cipher_like(cv, is_ext=True)
@@ -129,28 +127,185 @@ def fast_rotate(cipher, offsets, cryptoContext):
     )
 
 
-def fast_rotate_ext(cipher, offsets, cryptoContext):
+def fast_rotate_batch(cipher, offsets, cryptoContext):
     return run_instrumented_op(
         cryptoContext,
-        "fast_rotate_ext",
-        _fast_rotate_ext_public,
+        "fast_rotate_batch",
+        _fast_rotate_batch,
         cipher,
         offsets,
         cryptoContext,
     )
 
 
-def _fast_rotate_ext_public(cipher, offsets, cryptoContext):
+def fast_rotate_ext_batch(cipher, offsets, cryptoContext):
+    return run_instrumented_op(
+        cryptoContext,
+        "fast_rotate_ext_batch",
+        _fast_rotate_ext_batch,
+        cipher,
+        offsets,
+        cryptoContext,
+    )
+
+
+def _fast_rotate_ext_batch(cipher, offsets, cryptoContext):
     if cipher is None or cipher.is_ext:
-        raise ValueError("fast_rotate_ext: expected a non-ext cipher")
+        raise ValueError("fast_rotate_ext_batch: expected a non-ext cipher")
     offsets = tuple(int(offset) for offset in offsets)
     if not offsets:
-        return []
+        raise ValueError("fast_rotate_ext_batch: expected at least one offset")
+    if cryptoContext.device == "cuda":
+        return _fast_rotate_ext_batch_cuda(cipher, offsets, cryptoContext)
+    return _fast_rotate_ext_batch_slow(cipher, offsets, cryptoContext)
+
+
+def _fast_rotate_ext_batch_slow(cipher, offsets, cryptoContext):
     digits = _modup_to_ext(cipher, cryptoContext)
-    return [
+    return _pack_ciphers([
         _fast_rotate_ext(digits, cipher, index, cryptoContext)
         for index in offsets
-    ]
+    ])
+
+
+def _fast_rotate_ext_profile_name(cryptoContext, suffix):
+    prefix = getattr(cryptoContext, "_fast_rotate_ext_profile_prefix", "")
+    return f"{prefix}fast_rotate_ext_batch_{suffix}"
+
+
+def _fast_rotate_ext_batch_cuda(cipher, offsets, cryptoContext):
+    digits = run_instrumented_op(
+        cryptoContext,
+        _fast_rotate_ext_profile_name(cryptoContext, "modup"),
+        _modup_to_ext,
+        cipher,
+        cryptoContext,
+    )
+    active_limbs = cipher.cur_limbs + cryptoContext.K
+    batch_size = len(offsets)
+    key_product_bx = torch.empty(
+        (batch_size, active_limbs, cryptoContext.N),
+        dtype=torch.uint64,
+        device=cryptoContext.device,
+    )
+    key_product_ax = torch.empty(
+        (batch_size, active_limbs, cryptoContext.N),
+        dtype=torch.uint64,
+        device=cryptoContext.device,
+    )
+
+    def key_product_loop():
+        for batch_idx, index in enumerate(offsets):
+            if index == 0:
+                continue
+            norm_index = cryptoContext.norm_rot_index(index)
+            swk = cryptoContext.get_rotation_key(norm_index)
+            special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(index, cryptoContext.L)
+            F.cv_innerproduct_write_pair(
+                key_product_bx[batch_idx:batch_idx + 1, :, :],
+                key_product_ax[batch_idx:batch_idx + 1, :, :],
+                digits.cv[0],
+                digits.cur_limbs,
+                special_mod_start,
+                swk[0],
+                swk[1],
+                cryptoContext,
+            )
+
+    run_instrumented_op(
+        cryptoContext,
+        _fast_rotate_ext_profile_name(cryptoContext, "key_products"),
+        key_product_loop,
+    )
+
+    def scale_pc():
+        return (
+            _scale_to_P_ext(cipher.cv[0], cipher, cryptoContext),
+            _scale_to_P_ext(cipher.cv[1], cipher, cryptoContext),
+        )
+
+    pc0, pc1 = run_instrumented_op(
+        cryptoContext,
+        _fast_rotate_ext_profile_name(cryptoContext, "scale_pc"),
+        scale_pc,
+    )
+    precomp_maps, offsets_tensor = run_instrumented_op(
+        cryptoContext,
+        _fast_rotate_ext_profile_name(cryptoContext, "precompute_maps"),
+        _batch_precompute_auto,
+        offsets,
+        cryptoContext,
+    )
+    cv = run_instrumented_op(
+        cryptoContext,
+        _fast_rotate_ext_profile_name(cryptoContext, "finalize"),
+        F.cv_fast_rotate_ext_batch_finalize_pair,
+        key_product_bx,
+        key_product_ax,
+        pc0,
+        pc1,
+        precomp_maps,
+        offsets_tensor,
+        cipher.cur_limbs,
+        cryptoContext,
+    )
+    return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size, cipher_id="assign")
+
+
+def _fast_rotate_batch_cuda(cipher, offsets, cryptoContext):
+    if cipher is None or cipher.is_ext:
+        raise ValueError("fast_rotate_batch: expected a non-ext cipher")
+    offsets = tuple(int(offset) for offset in offsets)
+    if not offsets:
+        raise ValueError("fast_rotate_batch: expected at least one offset")
+
+    digits = _modup_to_ext(cipher, cryptoContext)
+    active_limbs = cipher.cur_limbs + cryptoContext.K
+    batch_size = len(offsets)
+    key_products = torch.empty(
+        (2, batch_size, active_limbs, cryptoContext.N),
+        dtype=torch.uint64,
+        device=cryptoContext.device,
+    )
+
+    for batch_idx, index in enumerate(offsets):
+        if index == 0:
+            continue
+        norm_index = cryptoContext.norm_rot_index(index)
+        swk = cryptoContext.get_rotation_key(norm_index)
+        special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(index, cryptoContext.L)
+        F.cv_innerproduct_write(
+            key_products[:, batch_idx:batch_idx + 1, :, :],
+            digits.cv[0],
+            digits.cur_limbs,
+            special_mod_start,
+            swk[0],
+            swk[1],
+            cryptoContext,
+        )
+
+    moddown_products = torch.empty(
+        (2, batch_size, cipher.cur_limbs, cryptoContext.N),
+        dtype=torch.uint64,
+        device=cryptoContext.device,
+    )
+    F.cv_moddown_write(moddown_products, key_products, cipher.cur_limbs, cryptoContext)
+    precomp_maps, offsets_tensor = _batch_precompute_auto(offsets, cryptoContext)
+    cv = F.cv_fast_rotate_batch_finalize(
+        moddown_products,
+        cipher.cv[0],
+        cipher.cv[1],
+        precomp_maps,
+        offsets_tensor,
+        cryptoContext,
+    )
+    return cipher.cipher_like(list(cv), batch_size=batch_size, cipher_id="assign")
+
+
+def _fast_rotate_batch(cipher, offsets, cryptoContext):
+    if cipher is not None and not cipher.is_ext and cryptoContext.device == "cuda":
+        return _fast_rotate_batch_cuda(cipher, offsets, cryptoContext)
+    return _pack_ciphers(_fast_rotate(cipher, offsets, cryptoContext))
 
 
 def _fast_rotate(cipher, offsets, cryptoContext):
@@ -164,6 +319,75 @@ def _fast_rotate(cipher, offsets, cryptoContext):
         _fast_rotate_from_digits(digits, cipher, index, cryptoContext)
         for index in offsets
     ]
+
+
+def _pack_ciphers(ciphers):
+    ciphers = tuple(ciphers)
+    if not ciphers:
+        raise ValueError("cannot pack an empty cipher batch")
+    first = ciphers[0]
+    for idx, cipher in enumerate(ciphers):
+        if len(cipher.cv) != len(first.cv):
+            raise ValueError(f"cipher batch component count mismatch at index {idx}")
+        for field in ("cur_limbs", "scaling_factor", "noise_deg", "slots", "is_ext"):
+            if getattr(cipher, field) != getattr(first, field):
+                raise ValueError(
+                    f"cipher batch {field} mismatch at index {idx}: "
+                    f"{getattr(cipher, field)} != {getattr(first, field)}"
+                )
+    cv = [
+        torch.stack([cipher.cv[component] for cipher in ciphers], dim=0)
+        for component in range(len(first.cv))
+    ]
+    return first.cipher_like(cv, batch_size=len(ciphers), cipher_id="assign")
+
+
+def _scale_to_P_ext(cv, cipher, cryptoContext):
+    return torch.cat((
+        F.cv_mul_scalar(cv, cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
+        torch.zeros(
+            (cryptoContext.K << cryptoContext.logN),
+            dtype=torch.uint64,
+            device=cryptoContext.device,
+        ).reshape(-1, cryptoContext.N),
+    ), dim=0)
+
+
+def _batch_precompute_auto(offsets, cryptoContext):
+    cache = getattr(cryptoContext, "_precompute_auto_batch_cache", None)
+    if cache is None:
+        cache = {}
+        cryptoContext._precompute_auto_batch_cache = cache
+    key = (tuple(offsets), cryptoContext.device)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    zero_map = None
+    maps = []
+    for index in offsets:
+        if index == 0:
+            if zero_map is None:
+                zero_map = torch.from_numpy(np.zeros(cryptoContext.N, dtype=np.int32)).to(cryptoContext.device)
+            maps.append(zero_map)
+        else:
+            maps.append(cryptoContext.get_precompute_auto(cryptoContext.norm_rot_index(index)))
+    precomp_maps = torch.stack(maps, dim=0)
+    offsets_tensor = torch.from_numpy(np.array(offsets, dtype=np.int64)).to(cryptoContext.device)
+    cache[key] = (precomp_maps, offsets_tensor)
+    return cache[key]
+
+
+def _batch_item(cipher, index):
+    if int(getattr(cipher, "batch_size", 1)) <= 1 and cipher.cv[0].dim() == 2:
+        if int(index) != 0:
+            raise IndexError(f"batch index {index} out of range")
+        return cipher
+    batch_size = int(getattr(cipher, "batch_size", cipher.cv[0].shape[0]))
+    index = int(index)
+    if index < 0 or index >= batch_size:
+        raise IndexError(f"batch index {index} out of range for batch_size={batch_size}")
+    return cipher.cipher_like([cv[index] for cv in cipher.cv], batch_size=1, cipher_id="assign")
 
 
 def _fast_rotate_from_digits(digits, cipher, index, cryptoContext):

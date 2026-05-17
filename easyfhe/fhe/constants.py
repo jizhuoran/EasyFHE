@@ -22,11 +22,14 @@ class ConstantBundle:
         self.cache_mode = self._validate_cache_mode(cache_mode)
         self._middle_cache = {}
         self._plain_cache = {}
+        self._plain_batch_cache = {}
         self._cache_stats = {
             "middle_hits": 0,
             "middle_misses": 0,
             "plain_hits": 0,
             "plain_misses": 0,
+            "plain_batch_hits": 0,
+            "plain_batch_misses": 0,
         }
 
     @classmethod
@@ -61,14 +64,17 @@ class ConstantBundle:
     def clear_cache(self):
         self._middle_cache.clear()
         self._plain_cache.clear()
+        self._plain_batch_cache.clear()
 
     def cache_info(self):
         return {
             "mode": self.cache_mode,
             "middle_entries": len(self._middle_cache),
             "plain_entries": len(self._plain_cache),
+            "plain_batch_entries": len(self._plain_batch_cache),
             "middle_bytes": self._cache_nbytes(self._middle_cache),
             "plain_bytes": self._cache_nbytes(self._plain_cache),
+            "plain_batch_bytes": self._cache_nbytes(self._plain_batch_cache),
             **self._cache_stats,
         }
 
@@ -109,6 +115,8 @@ class ConstantBundle:
         )
 
     def _scale_key(self, scale):
+        if isinstance(scale, (tuple, list)):
+            return tuple(float(value) for value in scale)
         return float(scale)
 
     def _middle_key(self, name, slots, ring_dim, scale):
@@ -124,15 +132,21 @@ class ConstantBundle:
             self._context_key(cryptoContext),
         )
 
+    def _plain_batch_key(self, names, level, slots, cryptoContext, scales, is_ext):
+        return (
+            tuple(names),
+            level,
+            slots,
+            tuple(float(scale) for scale in scales),
+            is_ext,
+            self._context_key(cryptoContext),
+        )
+
     def values(self, name, slots=None, scale=1.0):
         if name not in self.vectors:
             raise KeyError(f"constant vector {name!r} is missing")
 
-        vector = self.vectors[name]
-        if isinstance(vector, PreparedPlaintext):
-            values = np.asarray(vector.values, dtype=np.double).reshape(-1)
-        else:
-            values = np.asarray(vector, dtype=np.double).reshape(-1)
+        values = self._raw_values(self.vectors[name])
 
         if slots is not None:
             slots = int(slots)
@@ -143,6 +157,13 @@ class ConstantBundle:
         if scale != 1.0:
             values = values * scale
         return values
+
+    def slots(self, name, default=None):
+        if name not in self.vectors:
+            if default is None:
+                raise KeyError(f"constant vector {name!r} is missing")
+            return int(default)
+        return self._resolve_slots(self.vectors[name], None)
 
     def prepared_plaintext(self, name, slots=None, cryptoContext=None, scale=1.0, ring_dim=None):
         ring_dim = self._resolve_ring_dim(cryptoContext, ring_dim)
@@ -167,29 +188,33 @@ class ConstantBundle:
             return self._plain_cache[plain_key]
 
         self._cache_stats["plain_misses"] += 1
-        vector = self.vector(name)
-        if isinstance(vector, Cipher):
-            if scale != 1.0:
-                raise ValueError("ConstantBundle cannot apply scale to an already encoded plaintext")
-            _, plaintext = encode_plaintext(
-                vector,
-                cryptoContext,
-                level=level,
-                slots=slots,
-                is_ext=is_ext,
-            )
-        else:
-            middle = self.prepared_plaintext(name, slots, cryptoContext, scale)
-            _, plaintext = encode_plaintext(
-                middle,
-                cryptoContext,
-                level=level,
-                slots=slots,
-                is_ext=is_ext,
-            )
+        plaintext = self._materialize_plaintext(name, level, slots, cryptoContext, scale, is_ext)
         if self._cache_plain():
             self._plain_cache[plain_key] = plaintext
         return plaintext
+
+    def plaintext_batch(self, names, level, slots, cryptoContext, scale=1.0, is_ext=False):
+        names = tuple(names)
+        if not names:
+            raise ValueError("ConstantBundle.plaintext_batch requires at least one name")
+        slots = int(slots)
+        level = int(level)
+        is_ext = bool(is_ext)
+        scales = self._normalize_scales(scale, len(names))
+        batch_key = self._plain_batch_key(names, level, slots, cryptoContext, scales, is_ext)
+        if self.cache_mode != "none" and batch_key in self._plain_batch_cache:
+            self._cache_stats["plain_batch_hits"] += 1
+            return self._plain_batch_cache[batch_key]
+
+        self._cache_stats["plain_batch_misses"] += 1
+        plaintexts = [
+            self._plaintext_for_batch_item(name, level, slots, cryptoContext, item_scale, is_ext)
+            for name, item_scale in zip(names, scales)
+        ]
+        batch = self._pack_plaintexts(plaintexts)
+        if self._cache_plain():
+            self._plain_batch_cache[batch_key] = batch
+        return batch
 
     def plaintext_for_cipher(self, name, cipher, cryptoContext, scale=1.0, is_ext=False):
         return self.plaintext(
@@ -219,7 +244,64 @@ class ConstantBundle:
             return int(slots)
         if isinstance(vector, PreparedPlaintext):
             return int(vector.slots)
-        return int(np.asarray(vector).reshape(-1).size)
+        return int(self._raw_values(vector).size)
+
+    def _materialize_plaintext(self, name, level, slots, cryptoContext, scale, is_ext):
+        vector = self.vector(name)
+        if isinstance(vector, Cipher):
+            if scale != 1.0:
+                raise ValueError("ConstantBundle cannot apply scale to an already encoded plaintext")
+            _, plaintext = encode_plaintext(
+                vector,
+                cryptoContext,
+                level=level,
+                slots=slots,
+                is_ext=is_ext,
+            )
+        else:
+            middle = self.prepared_plaintext(name, slots, cryptoContext, scale)
+            _, plaintext = encode_plaintext(
+                middle,
+                cryptoContext,
+                level=level,
+                slots=slots,
+                is_ext=is_ext,
+            )
+        return plaintext
+
+    def _plaintext_for_batch_item(self, name, level, slots, cryptoContext, scale, is_ext):
+        plain_key = self._plain_key(name, level, slots, cryptoContext, scale, is_ext)
+        if self.cache_mode != "none" and plain_key in self._plain_cache:
+            self._cache_stats["plain_hits"] += 1
+            return self._plain_cache[plain_key]
+        return self._materialize_plaintext(name, level, slots, cryptoContext, scale, is_ext)
+
+    def _normalize_scales(self, scale, count):
+        if isinstance(scale, (tuple, list)):
+            if len(scale) != count:
+                raise ValueError(f"scale length [{len(scale)}] does not match batch size [{count}]")
+            return tuple(float(value) for value in scale)
+        return tuple(float(scale) for _ in range(count))
+
+    def _pack_plaintexts(self, plaintexts):
+        import easyfhe as torch
+
+        plaintexts = tuple(plaintexts)
+        first = plaintexts[0]
+        for idx, plaintext in enumerate(plaintexts):
+            if len(plaintext.cv) != len(first.cv):
+                raise ValueError(f"plaintext batch component count mismatch at index {idx}")
+            for field in ("cur_limbs", "scaling_factor", "noise_deg", "slots", "is_ext"):
+                if getattr(plaintext, field) != getattr(first, field):
+                    raise ValueError(
+                        f"plaintext batch {field} mismatch at index {idx}: "
+                        f"{getattr(plaintext, field)} != {getattr(first, field)}"
+                    )
+        cv = [
+            torch.stack([plaintext.cv[component] for plaintext in plaintexts], dim=0)
+            for component in range(len(first.cv))
+        ]
+        return first.cipher_like(cv, batch_size=len(plaintexts), cipher_id="assign")
 
     def _prepare_vector(self, vector, slots, ring_dim, scale):
         if isinstance(vector, PreparedPlaintext):
@@ -239,7 +321,7 @@ class ConstantBundle:
         return prepare_plaintext(self.values_for_vector(vector, slots, scale), slots, ring_dim)
 
     def values_for_vector(self, vector, slots, scale=1.0):
-        values = np.asarray(vector, dtype=np.double).reshape(-1)
+        values = self._raw_values(vector)
         slots = int(slots)
         if values.size < slots:
             values = np.pad(values, (0, slots - values.size))
@@ -248,3 +330,11 @@ class ConstantBundle:
         if scale != 1.0:
             values = values * scale
         return values
+
+    def _raw_values(self, vector):
+        if isinstance(vector, PreparedPlaintext):
+            vector = vector.values
+        values = np.asarray(vector).reshape(-1)
+        if np.iscomplexobj(values):
+            return np.asarray(values, dtype=np.complex128).reshape(-1)
+        return np.asarray(values, dtype=np.double).reshape(-1)

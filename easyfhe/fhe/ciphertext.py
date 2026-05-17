@@ -8,13 +8,14 @@ class Cipher:
         Cipher._id_counter += 1
         return Cipher._id_counter
 
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, cipher_id = "assign"):
+    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, cipher_id="assign", batch_size=1):
         self.cv = cv
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
         self.noise_deg = noise_deg
         self.slots = slots
         self.is_ext = is_ext
+        self.batch_size = int(batch_size)
         if cipher_id == "assign":
             self.cipher_id = Cipher.get_next_id()
         else:
@@ -29,6 +30,7 @@ class Cipher:
         slots=None,
         is_ext=None,
         cipher_id="copy",
+        batch_size=None,
     ):
         res = Cipher(
             cv,
@@ -38,6 +40,7 @@ class Cipher:
             self.slots if slots == None else slots,
             self.is_ext if is_ext == None else is_ext,
             self.cipher_id if cipher_id == "copy" else cipher_id,
+            self.batch_size if batch_size is None else batch_size,
         )
         if "ptx_twin" in self.__dict__:
             res.ptx_twin = np.copy(self.ptx_twin)
@@ -65,6 +68,7 @@ class Cipher:
         s += f"scaling_factor={self.scaling_factor}\n"
         s += f"noise_deg={self.noise_deg}\n"
         s += f"slots={self.slots}\n"
+        s += f"batch_size={self.batch_size}\n"
         s += ")"
         return s
 

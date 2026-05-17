@@ -7,7 +7,6 @@ import numpy as np
 
 from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.constants import ConstantBundle
-from easyfhe.fhe.ops import prepare_plaintext
 from .rotations import bootstrap_auto_index_map, bootstrap_rotation_indices, linear_transform_plan
 from .precompute_context import BsContext
 
@@ -210,8 +209,8 @@ def _flatten_table(name_table, table, ring_dim, default_slots):
         for index, name in enumerate(name_table[level]):
             value = row[index] if index < len(row) else None
             if value is None:
-                value = _zero_plaintext(row_slots, ring_dim, zero_cache)
-            vectors[name] = value
+                value = _zero_vector(row_slots, zero_cache)
+            vectors[name] = _raw_vector(value)
     return vectors
 
 
@@ -231,12 +230,18 @@ def _value_slots(value, default_slots):
         return int(default_slots)
 
 
-def _zero_plaintext(slots, ring_dim, zero_cache):
+def _zero_vector(slots, zero_cache):
     slots = int(slots)
-    key = (slots, int(ring_dim))
+    key = slots
     if key not in zero_cache:
-        zero_cache[key] = prepare_plaintext(np.zeros(slots, dtype=np.complex128), slots, ring_dim)
+        zero_cache[key] = np.zeros(slots, dtype=np.complex128)
     return zero_cache[key]
+
+
+def _raw_vector(value):
+    if isinstance(value, PreparedPlaintext):
+        value = value.values
+    return np.asarray(value, dtype=np.complex128).reshape(-1)
 
 
 def _name_table(plan):

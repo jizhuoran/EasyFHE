@@ -359,4 +359,60 @@ Tensor moddown_cuda(
   return out;
 }
 
+Tensor moddown_write_cuda(
+    const Tensor& out,
+    const Tensor& in,
+    int64_t curr_limbs,
+    int64_t L,
+    int64_t sizeP,
+    int64_t N,
+    int64_t log_degree,
+    const Tensor& hat_inverse_vec_moddown,
+    const Tensor& hat_inverse_vec_shoup_moddown,
+    const Tensor& prod_q_i_mod_q_j_moddown,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(out.dim() == 4);
+  TORCH_INTERNAL_ASSERT(in.sizes()[2] == (curr_limbs + sizeP));
+  TORCH_INTERNAL_ASSERT(out.sizes()[0] == in.sizes()[0]);
+  TORCH_INTERNAL_ASSERT(out.sizes()[1] == in.sizes()[1]);
+  TORCH_INTERNAL_ASSERT(out.sizes()[2] == curr_limbs);
+  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N);
+
+  auto mutable_out = out;
+  auto workspace =
+      at::empty({in.sizes()[0], in.sizes()[1], curr_limbs + sizeP, N}, in.options());
+
+  moddown_cuda_template(
+      mutable_out,
+      in,
+      curr_limbs,
+      L,
+      sizeP,
+      N,
+      log_degree,
+      hat_inverse_vec_moddown,
+      hat_inverse_vec_shoup_moddown,
+      prod_q_i_mod_q_j_moddown,
+      prod_inv_moddown,
+      prod_inv_shoup_moddown,
+      primes,
+      barret_ratio,
+      barret_k,
+      power_of_roots_shoup,
+      power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      workspace);
+  return out;
+}
+
 } // namespace at::native

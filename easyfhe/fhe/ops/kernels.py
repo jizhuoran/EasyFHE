@@ -187,6 +187,31 @@ def cv_moddown(
     ).reshape(-1, context.N)
 
 
+def cv_moddown_write(out: Tensor, x: Tensor, curr_limbs: int, context: Context) -> Tensor:
+    x_4d = _to_4d(x)
+    return torch.moddown_write(
+        out,
+        x_4d,
+        curr_limbs=curr_limbs,
+        L=context.L,
+        sizeP=context.K,
+        N=context.N,
+        logN=context.logN,
+        hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
+        hat_inverse_vec_shoup_moddown=context.hat_inverse_vec_shoup_moddown,
+        prod_q_i_mod_q_j_moddown=context.prod_q_i_mod_q_j_moddown,
+        prod_inv_moddown=context.prod_inv_moddown,
+        prod_inv_shoup_moddown=context.prod_inv_shoup_moddown,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
+        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+    )
+
+
 # def NTT(
 #     x: Tensor,
 #     start_prime_idx: int,
@@ -286,6 +311,123 @@ def cv_innerproduct(
         workspace=context.inner_workspace,
     )
     return res.reshape(2, -1, context.N)
+
+
+def cv_innerproduct_write(
+    out: Tensor,
+    x: Tensor,
+    curr_limbs: int,
+    special_mod_start: int,
+    swk_bx: Tensor,
+    swk_ax: Tensor,
+    context: Context,
+) -> Tensor:
+    if x.dim() == 1:
+        x_4d = x.reshape(1, 1, -1, context.N)
+    else:
+        x_4d = _to_4d(x)
+    return torch.innerproduct_write(
+        out,
+        x_4d,
+        bx=swk_bx,
+        ax=swk_ax,
+        curr_limbs=curr_limbs,
+        alpha=context.alpha,
+        special_mod_start=special_mod_start,
+        L=context.L,
+        N=context.N,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        workspace=context.inner_workspace,
+    )
+
+
+def cv_innerproduct_write_pair(
+    out_bx: Tensor,
+    out_ax: Tensor,
+    x: Tensor,
+    curr_limbs: int,
+    special_mod_start: int,
+    swk_bx: Tensor,
+    swk_ax: Tensor,
+    context: Context,
+) -> tuple[Tensor, Tensor]:
+    if x.dim() == 1:
+        x_4d = x.reshape(1, 1, -1, context.N)
+    else:
+        x_4d = _to_4d(x)
+    res = torch.innerproduct_write_pair(
+        out_bx,
+        out_ax,
+        x_4d,
+        bx=swk_bx,
+        ax=swk_ax,
+        curr_limbs=curr_limbs,
+        alpha=context.alpha,
+        special_mod_start=special_mod_start,
+        L=context.L,
+        N=context.N,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        workspace=context.inner_workspace,
+    )
+    return res[0], res[1]
+
+
+def cv_fast_rotate_ext_batch_finalize(key_products, pc0, pc1, precomp_maps, offsets, cur_limbs, context):
+    active_limbs = key_products.shape[2]
+    return torch.fast_rotate_ext_batch_finalize(
+        key_products,
+        pc0,
+        pc1,
+        precomp_maps,
+        offsets,
+        context.primes,
+        cur_limbs,
+        active_limbs,
+        context.N,
+    )
+
+
+def cv_fast_rotate_ext_batch_finalize_pair(
+    key_product_bx,
+    key_product_ax,
+    pc0,
+    pc1,
+    precomp_maps,
+    offsets,
+    cur_limbs,
+    context,
+):
+    active_limbs = key_product_bx.shape[1]
+    res = torch.fast_rotate_ext_batch_finalize_pair(
+        key_product_bx,
+        key_product_ax,
+        pc0,
+        pc1,
+        precomp_maps,
+        offsets,
+        context.primes,
+        cur_limbs,
+        active_limbs,
+        context.N,
+    )
+    return res[0], res[1]
+
+
+def cv_fast_rotate_batch_finalize(moddown_products, c0, c1, precomp_maps, offsets, context):
+    return torch.fast_rotate_batch_finalize(
+        moddown_products,
+        c0,
+        c1,
+        precomp_maps,
+        offsets,
+        context.primes,
+        moddown_products.shape[2],
+        context.N,
+    )
 
 
 def cv_keyswitch(
@@ -389,18 +531,88 @@ def cv_mul_by_monomial(
         power_of_roots=context.power_of_roots,
     )
 
-def cipher_fused_pairwise_mac(
-    ctx_bxs, ctx_axs, ptx_bxs, primes, barret_mu, len_ctxs, cur_limb, N
-):
-    res = torch.fused_pairwise_mac(
-        ctx_bxs,
-        ctx_axs,
-        ptx_bxs,
-        primes,
-        barret_mu,
-        len_ctxs,
-        cur_limb,
-        N
-    )
+def _native_plaintext_batch(plaintext):
+    values = plaintext.cv[0]
+    if values.dim() == 3:
+        values = values.unsqueeze(1)
+    return values
 
-    return res[0].reshape(-1, N), res[1].reshape(-1, N)
+
+def cipher_fused_grouped_pairwise_mac(cipher, plaintext, groups, context):
+    active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
+    cipher_values = torch.stack(cipher.cv, dim=0)
+    plaintext_values = _native_plaintext_batch(plaintext)
+    if _grouped_pairwise_mac_needs_cuda_fallback(cipher_values, cipher.batch_size, groups):
+        return _cipher_fused_grouped_pairwise_mac_loop(
+            cipher,
+            plaintext_values,
+            groups,
+            active_limbs,
+            context,
+        )
+    res = torch.batched_pairwise_mac(
+        cipher_values,
+        plaintext_values,
+        context.QplusP_map[cipher.cur_limbs],
+        context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
+        context.QbarretKplusPbarretK_map[cipher.cur_limbs],
+        groups,
+        cipher.batch_size,
+        active_limbs,
+        context.N,
+    )
+    return res[0], res[1]
+
+
+def _grouped_pairwise_mac_needs_cuda_fallback(cipher_values, cipher_batch_size, groups):
+    if not cipher_values.is_cuda or int(groups) <= 1:
+        return False
+    block_size = 256
+    bytes_per_uint64 = 8
+    shared_bytes = int(cipher_batch_size) * block_size * bytes_per_uint64 * 2
+    return shared_bytes > 48 * 1024
+
+
+def _cipher_fused_grouped_pairwise_mac_loop(cipher, plaintext_values, groups, active_limbs, context):
+    cipher_values = torch.stack(cipher.cv, dim=0)
+    outputs = []
+    for group in range(int(groups)):
+        start = group * cipher.batch_size
+        stop = start + cipher.batch_size
+        outputs.append(
+            torch.batched_pairwise_mac(
+                cipher_values,
+                plaintext_values[start:stop].contiguous(),
+                context.QplusP_map[cipher.cur_limbs],
+                context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
+                context.QbarretKplusPbarretK_map[cipher.cur_limbs],
+                1,
+                cipher.batch_size,
+                active_limbs,
+                context.N,
+            )[:, 0]
+        )
+    res = torch.stack(outputs, dim=1)
+    return res[0], res[1]
+
+
+def cipher_fused_pairwise_mac(cipher, plaintext, context):
+    res = cipher_fused_grouped_pairwise_mac(cipher, plaintext, 1, context)
+    return res[0][0], res[1][0]
+
+
+def cipher_fused_broadcast_mac(cipher, plaintext, context):
+    active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
+    cipher_values = torch.stack(cipher.cv, dim=0)
+    plaintext_values = _native_plaintext_batch(plaintext)
+    res = torch.fused_broadcast_mac(
+        cipher_values,
+        plaintext_values,
+        context.QplusP_map[cipher.cur_limbs],
+        context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
+        context.QbarretKplusPbarretK_map[cipher.cur_limbs],
+        plaintext.batch_size,
+        active_limbs,
+        context.N,
+    )
+    return res[0], res[1]

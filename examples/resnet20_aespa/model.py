@@ -361,18 +361,27 @@ def final_layer(input, rt):
     return fhe.homo_add_pt(res, bias, rt.ctx)
 
 
-def infer_one(image_vector, rt):
-    in_ct = rt.ctx.encrypt(image_vector, rt.ctx.device, 1, 19, 16 * 32 * 32)
-    first_layer = initial_layer(in_ct, rt)
+def encrypt_input(image_vector, rt):
+    return rt.ctx.encrypt(image_vector, rt.ctx.device, 1, 19, 16 * 32 * 32)
+
+
+def infer_encrypted(input_cipher, rt):
+    first_layer = initial_layer(input_cipher, rt)
     res_layer1 = layer1(first_layer, rt)
     res_layer2 = layer2(res_layer1, rt)
     res_layer3 = layer3(res_layer2, rt)
     return final_layer(res_layer3, rt)
 
 
+def infer_one(image_vector, rt):
+    return infer_encrypted(encrypt_input(image_vector, rt), rt)
+
+
 __all__ = [
     "AespaRuntime",
+    "encrypt_input",
     "final_layer",
+    "infer_encrypted",
     "infer_one",
     "initial_layer",
     "layer1",

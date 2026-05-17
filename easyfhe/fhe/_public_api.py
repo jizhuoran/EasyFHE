@@ -35,8 +35,10 @@ ALIGNMENT_API = (
 HOMOMORPHIC_OPS_API = (
     "double_hoist_rotate_sum",
     "fast_rotate",
-    "fast_rotate_ext",
+    "fast_rotate_batch",
+    "fast_rotate_ext_batch",
     "fused_broadcast_mac",
+    "fused_grouped_pairwise_mac",
     "fused_pairwise_mac",
     "homo_add",
     "homo_add_pt",

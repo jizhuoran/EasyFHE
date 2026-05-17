@@ -37,16 +37,20 @@ class OpInstrumentation:
         time_ops=False,
         sync=False,
         print_at_exit=False,
+        include=None,
     ):
         self.count_ops = count
         self.time_ops = time_ops
         self.sync = sync
+        self.include = None if include is None else set(include)
         self.records: Dict[str, OpStats] = {}
         self._atexit_registered = False
         if print_at_exit:
             self.register_atexit()
 
     def run(self, op_name, impl, *args, **kwargs):
+        if self.include is not None and op_name not in self.include:
+            return impl(*args, **kwargs)
         if self.sync:
             _sync_device()
         start = time.perf_counter() if self.time_ops else None
@@ -117,9 +121,9 @@ def instrumentation_from_config(config):
 
 
 @contextmanager
-def profile(ctx, *, sync=False):
+def profile(ctx, *, sync=False, include=None):
     previous = getattr(ctx, "instrumentation", NullInstrumentation())
-    profiler = OpInstrumentation(count=True, time_ops=True, sync=sync)
+    profiler = OpInstrumentation(count=True, time_ops=True, sync=sync, include=include)
     ctx.instrumentation = profiler
     try:
         yield profiler

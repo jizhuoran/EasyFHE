@@ -63,10 +63,6 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
     )
 
 
-def _double_rotate(cipher, cryptoContext):
-    return fhe.homo_rotate(fhe.homo_rotate(cipher, 1, cryptoContext), 1, cryptoContext)
-
-
 def _masked_reduce(cipher, mask_n, rotated, cryptoContext, weights):
     cipher = fhe.homo_mul_pt(
         fhe.homo_add(cipher, rotated, cryptoContext),
@@ -87,7 +83,7 @@ def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_resc
     else:
         fullpack = reduce_noise_to_one(fullpack, cryptoContext)
     fullpack = _masked_reduce(fullpack, 2, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext, weights)
-    fullpack = _masked_reduce(fullpack, 4, _double_rotate(fullpack, cryptoContext), cryptoContext, weights)
+    fullpack = _masked_reduce(fullpack, 4, fhe.homo_rotate(fullpack, 2, cryptoContext), cryptoContext, weights)
     if include_gen8:
         fullpack = _masked_reduce(fullpack, 8, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext, weights)
         return fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)

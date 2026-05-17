@@ -11,7 +11,6 @@ from .rotations import (
     reduce_rotation,
     slots_to_coeffs_rotation_indices,
 )
-from easyfhe.fhe.ops.encoding import prepare_plaintext
 
 class CKKS_Boot_Params:
     def __init__(
@@ -494,7 +493,7 @@ class BsContext:
                                     coeff[s][g * i + j][k] *= scale
 
                             rotate_temp = self.rotate(coeff[s][g * i + j], rot)
-                            result[s][g * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 - s,
+                            result[s][g * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 - s,
 
             if flag_rem:
                 for i in range(b_rem):
@@ -505,7 +504,7 @@ class BsContext:
                                 coeff[stop][g_rem * i + j][k] *= scale
 
                             rotate_temp = self.rotate(coeff[stop][g_rem * i + j], rot)
-                            result[stop][g_rem * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0,
+                            result[stop][g_rem * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0,
 
         else:
             coeff = self.coeff_encoding_collapse(encode_params_ksiPows, encode_params_rotGroup, level_budget, False)
@@ -522,7 +521,7 @@ class BsContext:
                                     clear_temp[k] *= scale
 
                             rotate_temp = self.rotate(clear_temp, rot)
-                            result[s][g * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 - s,
+                            result[s][g * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 - s,
 
             if flag_rem:
                 for i in range(b_rem):
@@ -534,7 +533,7 @@ class BsContext:
                                 clear_temp[k] *= scale
 
                             rotate_temp = self.rotate(clear_temp, rot)
-                            result[stop][g_rem * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0
+                            result[stop][g_rem * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0
         return result
 
 
@@ -739,7 +738,7 @@ class BsContext:
                                     coeff[s][g * i + j][k] *= scale
 
                             rotate_temp = self.rotate(coeff[s][g * i + j], rot)
-                            result[s][g * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 + s,
+                            result[s][g * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 + s,
 
             if flag_rem:
                 s = level_budget - flag_rem
@@ -751,7 +750,7 @@ class BsContext:
                                 coeff[s][g_rem * i + j][k] *= scale
 
                             rotate_temp = self.rotate(coeff[s][g_rem * i + j], rot)
-                            result[s][g_rem * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 + s,
+                            result[s][g_rem * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 + s,
 
         else:
             coeff = self.coeff_decoding_collapse(encode_params_ksiPows, encode_params_rotGroup, level_budget, False)
@@ -769,7 +768,7 @@ class BsContext:
 
                             rotate_temp = self.rotate(clear_temp, rot)
 
-                            result[s][g * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 + s,
+                            result[s][g * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 + s,
 
             if flag_rem:
                 s = level_budget - flag_rem
@@ -783,7 +782,7 @@ class BsContext:
                                 clear_temp[k] *= scale
 
                             rotate_temp = self.rotate(clear_temp, rot)
-                            result[s][g_rem * i + j] = prepare_plaintext(rotate_temp, len(rotate_temp), self.N) #level0 + s,
+                            result[s][g_rem * i + j] = np.asarray(rotate_temp, dtype=np.complex128).reshape(-1) #level0 + s,
         return result
 
 

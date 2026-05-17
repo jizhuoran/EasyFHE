@@ -1,6 +1,7 @@
 import numpy as np
 
 import easyfhe.fhe as fhe
+from easyfhe.fhe.ops import rotation
 
 
 def _mac_down_each(cipher, offsets, plain_values, context):
@@ -19,18 +20,18 @@ def _mac_down_each(cipher, offsets, plain_values, context):
 
 
 def _mac_down_once(cipher, offsets, plain_values, context):
-    rotated_ext = fhe.fast_rotate_ext(cipher, offsets, context)
-    total_ext = None
-    for rot_ext, values in zip(rotated_ext, plain_values):
+    rotated_ext = fhe.fast_rotate_ext_batch(cipher, offsets, context)
+    plaintexts = []
+    for values in plain_values:
         plaintext_ext = fhe.encode(
             values,
             context,
-            level=context.L - rot_ext.cur_limbs,
-            slots=rot_ext.slots,
+            level=context.L - rotated_ext.cur_limbs,
+            slots=rotated_ext.slots,
             is_ext=True,
         )[1]
-        term_ext = fhe.homo_mul_pt(rot_ext, plaintext_ext, context)
-        total_ext = term_ext if total_ext is None else fhe.homo_add(total_ext, term_ext, context)
+        plaintexts.append(plaintext_ext)
+    total_ext = fhe.fused_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), context)
     return fhe.double_hoist_rotate_sum([total_ext], [0], context)
 
 
@@ -67,3 +68,31 @@ def test_fast_rotate_ext_mac_can_defer_moddown_once():
         rtol=1e-4,
         atol=1e-4,
     )
+
+
+def test_fast_rotate_batch_shapes_match_offsets():
+    slots = 16
+    offsets = [0, 1, 2, 3]
+    context = fhe.generate_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=6,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=tuple(offset for offset in offsets if offset),
+        ),
+        device="cpu",
+    )
+    values = np.linspace(0.0, 1.5, slots, dtype=np.double)
+    cipher = context.encrypt(values, "cpu", 1, 0, slots)
+
+    normal_batch = fhe.fast_rotate_batch(cipher, offsets, context)
+    ext_batch = fhe.fast_rotate_ext_batch(cipher, offsets, context)
+
+    assert normal_batch.batch_size == len(offsets)
+    assert ext_batch.batch_size == len(offsets)
+    assert normal_batch.cv[0].shape[0] == len(offsets)
+    assert ext_batch.cv[0].shape[0] == len(offsets)
+    assert normal_batch.is_ext is False
+    assert ext_batch.is_ext is True

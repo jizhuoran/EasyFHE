@@ -10,6 +10,8 @@
 #include <ATen/ops/stack.h>
 #include <ATen/ops/zeros.h>
 
+#include <vector>
+
 #include "ATen/native/fhe/cuda/Utils.cuh"
 
 __constant__ const uint64_t*  c_eval_swks[64];
@@ -573,6 +575,88 @@ static void innerproduct_template(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+static void innerproduct_write_pair_template(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    const Tensor& in,
+    const Tensor& bx,
+    const Tensor& ax,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t special_mod_start,
+    int64_t L,
+    int64_t N,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  const int length = (curr_limbs + sizeP);
+  const int mult_length = (special_mod_start + sizeP);
+  TORCH_CHECK(special_mod_start >= curr_limbs, "special_mod_start must be >= curr_limbs");
+  TORCH_CHECK(special_mod_start <= L, "special_mod_start must be <= L");
+  TORCH_CHECK(out_bx.dim() == 3, "out_bx must be [batch, length, N]");
+  TORCH_CHECK(out_ax.dim() == 3, "out_ax must be [batch, length, N]");
+  TORCH_CHECK(out_bx.sizes() == out_ax.sizes(), "out_bx and out_ax must have identical shapes");
+  TORCH_CHECK(out_bx.size(1) == length, "innerproduct_write_pair output limb dimension mismatch");
+  TORCH_CHECK(out_bx.size(2) == N, "innerproduct_write_pair output N mismatch");
+  TORCH_CHECK(bx.dim() == 3, "bx must be [beta, mult_length, N]");
+  TORCH_CHECK(ax.dim() == 3, "ax must be [beta, mult_length, N]");
+  TORCH_CHECK(bx.sizes() == ax.sizes(), "bx and ax must have identical shapes");
+  TORCH_CHECK(
+      bx.size(0) >= beta,
+      "bx/ax beta dimension must be >= ceil(curr_limbs / alpha)");
+  TORCH_CHECK(
+      bx.size(1) >= mult_length,
+      "bx/ax modulus dimension must be >= special_mod_start + sizeP");
+  TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
+  const int prime_gap = L - curr_limbs;
+
+  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+  auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
+  auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
+  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out_bx.data_ptr<uint64_t>());
+  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out_ax.data_ptr<uint64_t>());
+  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
+  auto barret_ratio_ptr =
+      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
+  auto barret_k_ptr =
+      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
+  auto gridDim = dim3(N / BLOCK_SIZE, length);
+  auto blockDim = BLOCK_SIZE;
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+  cudaFuncSetAttribute(
+      fhe::sum_reduce_fused_broadcast_key,
+      cudaFuncAttributeMaxDynamicSharedMemorySize,
+      BLOCK_SIZE * beta * sizeof(uint64_t) * 2);
+
+  fhe::sum_reduce_fused_broadcast_key<<<
+      gridDim,
+      blockDim,
+      BLOCK_SIZE * beta * sizeof(uint64_t) * 2,
+      stream>>>(
+      out_ax_ptr,
+      out_bx_ptr,
+      in_ptr,
+      ax_ptr,
+      bx_ptr,
+      N,
+      out_bx.sizes()[0],
+      length,
+      mult_length,
+      beta,
+      curr_limbs,
+      prime_gap,
+      special_mod_start,
+      primes_ptr,
+      barret_k_ptr,
+      barret_ratio_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 Tensor innerproduct_cuda(
     const Tensor& in,
     const Tensor& bx,
@@ -609,6 +693,85 @@ Tensor innerproduct_cuda(
       barret_k,
       workspace);
   return out;
+}
+
+Tensor innerproduct_write_cuda(
+    const Tensor& out,
+    const Tensor& in,
+    const Tensor& bx,
+    const Tensor& ax,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t special_mod_start,
+    int64_t L,
+    int64_t N,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(out.dim() == 4);
+  TORCH_INTERNAL_ASSERT(out.sizes()[0] == 2, "innerproduct_write expects out num_cv == 2");
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  TORCH_INTERNAL_ASSERT(
+      out.sizes()[2] == curr_limbs + sizeP,
+      "innerproduct_write output limb dimension mismatch");
+  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N, "innerproduct_write output N mismatch");
+
+  auto mutable_out = out;
+  innerproduct_template(
+      mutable_out,
+      in,
+      bx,
+      ax,
+      curr_limbs,
+      alpha,
+      special_mod_start,
+      L,
+      N,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace);
+  return out;
+}
+
+std::vector<Tensor> innerproduct_write_pair_cuda(
+    const Tensor& out_bx,
+    const Tensor& out_ax,
+    const Tensor& in,
+    const Tensor& bx,
+    const Tensor& ax,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t special_mod_start,
+    int64_t L,
+    int64_t N,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+
+  auto mutable_out_bx = out_bx;
+  auto mutable_out_ax = out_ax;
+  innerproduct_write_pair_template(
+      mutable_out_bx,
+      mutable_out_ax,
+      in,
+      bx,
+      ax,
+      curr_limbs,
+      alpha,
+      special_mod_start,
+      L,
+      N,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace);
+  return {out_bx, out_ax};
 }
 
 } // namespace at::native
