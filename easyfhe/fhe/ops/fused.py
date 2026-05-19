@@ -3,10 +3,6 @@ from . import kernels as F
 
 
 def fused_broadcast_mac(cipher, plaintexts, cryptoContext):
-    return _fused_broadcast_mac(cipher, plaintexts, cryptoContext)
-
-
-def _fused_broadcast_mac(cipher, plaintexts, cryptoContext):
     plaintext_batch = _require_cipher(plaintexts, "plaintexts")
     if _batch_size(plaintext_batch) == 0:
         raise ValueError("fused_broadcast_mac: expected at least one plaintext")
@@ -15,28 +11,10 @@ def _fused_broadcast_mac(cipher, plaintexts, cryptoContext):
     return _mac_result_like(cipher, plaintext_batch, cv, batch_size=1)
 
 
-def fused_pairwise_mac(ciphers, plaintexts, cryptoContext):
-    return _fused_pairwise_mac(ciphers, plaintexts, cryptoContext)
-
-
 def fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
-    return _fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext)
-
-
-def _fused_pairwise_mac(ciphers, plaintexts, cryptoContext):
-    cipher_batch = _require_cipher(ciphers, "ciphers")
-    plaintext_batch = _require_cipher(plaintexts, "plaintexts")
-    if _batch_size(cipher_batch) == 0:
-        raise ValueError("fused_pairwise_mac: expected at least one cipher/plaintext pair")
-    if _batch_size(cipher_batch) != _batch_size(plaintext_batch):
-        raise ValueError(
-            "fused_pairwise_mac: cipher and plaintext lengths must match, "
-            f"got {_batch_size(cipher_batch)} and {_batch_size(plaintext_batch)}"
-        )
-    return _fused_pairwise_mac_batch(cipher_batch, plaintext_batch, cryptoContext)
-
-
-def _fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
+    # TODO(perf): The grouped CUDA kernel is currently slower than the old
+    # per-group pairwise_mac loop in bootstrapping c2s/s2c. Revisit the kernel
+    # layout and compare against a fallback loop before relying on it broadly.
     cipher_batch = _require_cipher(ciphers, "ciphers")
     plaintext_batch = _require_cipher(plaintexts, "plaintexts")
     groups = int(groups)
@@ -53,12 +31,6 @@ def _fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
     _validate_cipher_plain_batch("fused_grouped_pairwise_mac", cipher_batch, plaintext_batch)
     cv = F.cipher_fused_grouped_pairwise_mac(cipher_batch, plaintext_batch, groups, cryptoContext)
     return _mac_result_list(cipher_batch, plaintext_batch, cv, groups)
-
-
-def _fused_pairwise_mac_batch(ciphers, plaintexts, cryptoContext):
-    _validate_cipher_plain_batch("fused_pairwise_mac", ciphers, plaintexts)
-    cv = F.cipher_fused_pairwise_mac(ciphers, plaintexts, cryptoContext)
-    return _mac_result_like(ciphers, plaintexts, cv, batch_size=1)
 
 
 def _require_cipher(value, name):

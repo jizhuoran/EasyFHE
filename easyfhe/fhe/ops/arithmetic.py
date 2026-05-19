@@ -16,10 +16,6 @@ def _align_for_mul(ct1: Cipher, ct2: Cipher, cryptoContext):
 
 
 def homo_add(in0, in1, cryptoContext):
-    return _homo_add(in0, in1, cryptoContext)
-
-
-def _homo_add(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_add", in0, in1, require_same_metadata=("slots",))
     in0, in1 = _align_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
@@ -28,10 +24,6 @@ def _homo_add(in0, in1, cryptoContext):
 
 
 def homo_sub(in0, in1, cryptoContext):
-    return _homo_sub(in0, in1, cryptoContext)
-
-
-def _homo_sub(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_sub", in0, in1, require_same_metadata=("slots",))
     in0, in1 = _align_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
@@ -40,10 +32,6 @@ def _homo_sub(in0, in1, cryptoContext):
 
 
 def homo_mul(in0, in1, cryptoContext):
-    return _homo_mul(in0, in1, cryptoContext)
-
-
-def _homo_mul(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_mul", in0, in1, require_ext=False, require_same_metadata=("slots",))
     in0, in1 = _align_for_mul(in0, in1, cryptoContext)
     res = _cipher_mul(in0, in1, cryptoContext)
@@ -62,10 +50,6 @@ def _homo_mul(in0, in1, cryptoContext):
 
 
 def homo_square(in0, cryptoContext):
-    return _homo_square(in0, cryptoContext)
-
-
-def _homo_square(in0, cryptoContext):
     validation.validate_cipher_op("homo_square", in0, require_ext=False)
     in0 = alignment.align_to(in0, alignment.plan_reduce_noise_to_one(in0, cryptoContext), cryptoContext)
     res = _cipher_square(in0, cryptoContext)

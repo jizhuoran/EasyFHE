@@ -23,11 +23,11 @@ def _encode_double_for_scalar_op(constant, cur_limbs, cryptoContext):
     return _reduce_scalar_to_crt(encoded, cur_limbs, cryptoContext.moduliQ_scalar)
 
 
+def _is_encoded_scalar(value):
+    return hasattr(value, "to") and hasattr(value, "dim")
+
+
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    return _homo_add_pt(cipher, plaintext, cryptoContext)
-
-
-def _homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     validation.validate_cipher_plain_op(
         "homo_add_pt",
         cipher,
@@ -40,10 +40,6 @@ def _homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
-    return _homo_mul_pt(cipher, plaintext, cryptoContext)
-
-
-def _homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     validation.validate_cipher_plain_op(
         "homo_mul_pt",
         cipher,
@@ -55,21 +51,16 @@ def _homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_add_scalar_double(cipher, constant, cryptoContext):
-    return _homo_add_scalar_double(cipher, constant, cryptoContext)
-
-
-def _homo_add_scalar_double(cipher, constant, cryptoContext):
     validation.validate_cipher_scalar_op(
         "homo_add_scalar_double",
         cipher,
         require_ext=False,
         require_noise_deg=1,
     )
-    encoded_constant = _encode_double_for_scalar_op(
-        math.fabs(constant),
-        cipher.cur_limbs,
-        cryptoContext,
-    )
+    if _is_encoded_scalar(constant):
+        return _cipher_add_scalar(cipher, constant, cryptoContext)
+
+    encoded_constant = _encode_double_for_scalar_op(math.fabs(constant), cipher.cur_limbs, cryptoContext)
     if constant < 0:
         result = _cipher_sub_scalar(cipher, encoded_constant, cryptoContext)
     else:
@@ -78,10 +69,6 @@ def _homo_add_scalar_double(cipher, constant, cryptoContext):
 
 
 def homo_add_scalar_int(cipher, scalar, cryptoContext):
-    return _homo_add_scalar_int(cipher, scalar, cryptoContext)
-
-
-def _homo_add_scalar_int(cipher, scalar, cryptoContext):
     validation.validate_cipher_scalar_op(
         "homo_add_scalar_int",
         cipher,
@@ -92,15 +79,14 @@ def _homo_add_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_int(cipher, scalar, cryptoContext):
-    return _homo_mul_scalar_int(cipher, scalar, cryptoContext)
-
-
-def _homo_mul_scalar_int(cipher, scalar, cryptoContext):
     validation.validate_cipher_scalar_op(
         "homo_mul_scalar_int",
         cipher,
         require_ext=False,
     )
+    if _is_encoded_scalar(scalar):
+        return _cipher_mul_scalar_int(cipher, scalar, cryptoContext)
+
     result = _cipher_mul_scalar_int(cipher, abs(scalar), cryptoContext)
     if scalar < 0:
         result = _cipher_neg(result, cryptoContext)
@@ -108,16 +94,15 @@ def _homo_mul_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_double(cipher, constant, cryptoContext):
-    return _homo_mul_scalar_double(cipher, constant, cryptoContext)
-
-
-def _homo_mul_scalar_double(cipher, constant, cryptoContext):
     validation.validate_cipher_scalar_op(
         "homo_mul_scalar_double",
         cipher,
         require_ext=False,
         require_noise_deg=1,
     )
-    encoded_constant = _encode_double_for_scalar_op(constant, cipher.cur_limbs, cryptoContext)
+    if _is_encoded_scalar(constant):
+        encoded_constant = constant
+    else:
+        encoded_constant = _encode_double_for_scalar_op(constant, cipher.cur_limbs, cryptoContext)
     result = _cipher_mul_scalar_double(cipher, encoded_constant, cryptoContext)
     return result

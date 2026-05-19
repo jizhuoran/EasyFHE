@@ -1,6 +1,12 @@
 from . import kernels as F
 
 
+def _scalar_tensor(scalar, cryptoContext, cur_limbs, device):
+    if hasattr(scalar, "to") and hasattr(scalar, "dim"):
+        return scalar.to(device)
+    return F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, cur_limbs).to(device)
+
+
 def _cipher_add(in0, in1, cryptoContext):
     cv = [F.cv_add(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs) for cv0, cv1 in zip(in0.cv, in1.cv)]
     return in0.cipher_like(cv)
@@ -92,8 +98,7 @@ def _cipher_square(in0, cryptoContext):
 
 
 def _cipher_add_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
     return in0.cipher_like([
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -101,8 +106,7 @@ def _cipher_add_scalar(in0, scalar, cryptoContext):
 
 
 def _cipher_sub_scalar(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
     return in0.cipher_like([
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -110,8 +114,7 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext):
 
 
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(cv0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs)
         for cv0 in in0.cv
@@ -121,8 +124,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
 
 
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext):
-    scalar_mod = F.gen_scalar_tensor(scalar, cryptoContext.moduliQ_scalar, in0.cur_limbs)
-    scalar_mod = scalar_mod.to(in0.cv[0].device)
+    scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
     cv = [
         F.cv_mul_scalar(cv0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu, in0.cur_limbs)
         for cv0 in in0.cv

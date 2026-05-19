@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .constants import generate_bootstrap_constants
+from .internal.constants import BootstrapPlan
 from .requirements import bootstrap_depth
 
 
@@ -20,7 +21,7 @@ def generate(
 ):
     if max_levels_remaining is None:
         raise ValueError("generate requires max_levels_remaining when crypto_context is provided")
-    constants = generate_bootstrap_constants(
+    constants, plan = generate_bootstrap_constants(
         crypto_context,
         log_bs_slots,
         level_budget,
@@ -29,17 +30,10 @@ def generate(
         baby_step=baby_step,
         strategy=strategy,
     )
-    return _resolve_rotations(constants), constants
+    return tuple(plan.required_rotations), constants, plan
 
 
-def _resolve_rotations(constants_or_rotations):
-    info = getattr(constants_or_rotations, "info", None)
-    if info is not None and "required_rotations" in info:
-        return tuple(info["required_rotations"])
-    return tuple(int(rotation) for rotation in (constants_or_rotations or ()))
-
-
-def bootstrap(cipher, crypto_context, constants, *, L0):
+def bootstrap(cipher, crypto_context, constants, plan, *, L0):
     from .internal.runtime import homo_bootstrap
 
-    return homo_bootstrap(cipher, crypto_context, constants, L0=L0)
+    return homo_bootstrap(cipher, crypto_context, constants, plan, L0=L0)

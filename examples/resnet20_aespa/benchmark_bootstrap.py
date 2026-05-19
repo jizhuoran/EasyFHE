@@ -65,11 +65,11 @@ def _format_cache(constants):
         f"mode={info['mode']} "
         f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])}) "
         f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])}) "
-        f"plain_batch={info['plain_batch_entries']}({_format_bytes(info['plain_batch_bytes'])}) "
+        f"scalar={info['scalar_entries']}({_format_bytes(info['scalar_bytes'])}) "
         f"plain_hits={info['plain_hits']} "
         f"plain_misses={info['plain_misses']} "
-        f"plain_batch_hits={info['plain_batch_hits']} "
-        f"plain_batch_misses={info['plain_batch_misses']} "
+        f"scalar_hits={info['scalar_hits']} "
+        f"scalar_misses={info['scalar_misses']} "
         f"middle_hits={info['middle_hits']} "
         f"middle_misses={info['middle_misses']}"
     )
@@ -107,11 +107,11 @@ def _build_bootstrap_runtime(args):
     )
     setup_seconds = time.perf_counter() - setup_start
 
-    constants_by_slots = {}
+    bootstrap_material = {}
     constant_seconds = []
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
         constant_start = time.perf_counter()
-        bs_keys, constants = bs.generate(
+        bs_keys, constants, plan = bs.generate(
             ctx,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
@@ -119,9 +119,9 @@ def _build_bootstrap_runtime(args):
         )
         ctx.addkeys(bs_keys)
         constant_seconds.append(time.perf_counter() - constant_start)
-        constants_by_slots[int(log_bs_slots)] = constants
+        bootstrap_material[int(log_bs_slots)] = (constants, plan)
 
-    return config, ctx, constants_by_slots, setup_seconds, constant_seconds
+    return config, ctx, bootstrap_material, setup_seconds, constant_seconds
 
 
 def _make_cipher(ctx, log_bs_slots, seed):
@@ -131,13 +131,13 @@ def _make_cipher(ctx, log_bs_slots, seed):
     return ctx.encrypt(values, ctx.device, 1, 0, slots)
 
 
-def _run_timed_bootstrap(ctx, cipher, constants, iters):
+def _run_timed_bootstrap(ctx, cipher, constants, plan, iters):
     times = []
     out = None
     for _ in range(iters):
         _sync(ctx)
         start = time.perf_counter()
-        out = bs.bootstrap(cipher, ctx, constants, L0=cipher.cur_limbs)
+        out = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.cur_limbs)
         _sync(ctx)
         times.append(time.perf_counter() - start)
     return out, times
@@ -195,9 +195,9 @@ def main():
     if args.iters < 0 or args.warmup < 0:
         raise ValueError("--iters and --warmup must be non-negative")
 
-    config, ctx, constants_by_slots, setup_seconds, constant_seconds = _build_bootstrap_runtime(args)
+    config, ctx, bootstrap_material, setup_seconds, constant_seconds = _build_bootstrap_runtime(args)
     log_bs_slots = int(config.log_bs_slots[0])
-    constants = constants_by_slots[log_bs_slots]
+    constants, plan = bootstrap_material[log_bs_slots]
     cipher = _make_cipher(ctx, log_bs_slots, args.seed)
 
     print("================ ResNet20 AESPA bootstrap benchmark ================")
@@ -210,7 +210,7 @@ def main():
 
     if args.warmup:
         print(f"warmup: {args.warmup}")
-        _run_timed_bootstrap(ctx, cipher, constants, args.warmup)
+        _run_timed_bootstrap(ctx, cipher, constants, plan, args.warmup)
         print("constant cache after warmup:", _format_cache(constants))
 
     if args.time_ops:
@@ -221,67 +221,66 @@ def main():
             include = {
                 "homo_bootstrap",
                 "bs_s2c",
-                "bs_s2c_fast_rotate_ext_batch",
+                "bs_s2c_fast_rotate_ext",
                 "bs_s2c_fused_grouped_pairwise_mac",
-                "bs_s2c_fused_pairwise_mac",
-                "bs_s2c_double_hoist_rotate_sum",
+                                "bs_s2c_double_hoist_rotate_sum",
             }
         elif args.profile_detail == "c2s-fastrot":
             include = {
                 "homo_bootstrap",
                 "bs_c2s",
-                "bs_c2s_fast_rotate_ext_batch",
-                "bs_c2s_fast_rotate_ext_batch_modup",
-                "bs_c2s_fast_rotate_ext_batch_key_products",
-                "bs_c2s_fast_rotate_ext_batch_scale_pc",
-                "bs_c2s_fast_rotate_ext_batch_precompute_maps",
-                "bs_c2s_fast_rotate_ext_batch_finalize",
+                "bs_c2s_fast_rotate_ext",
+                "bs_c2s_fast_rotate_ext_modup",
+                "bs_c2s_fast_rotate_ext_key_products",
+                "bs_c2s_fast_rotate_ext_scale_pc",
+                "bs_c2s_fast_rotate_ext_precompute_maps",
+                "bs_c2s_fast_rotate_ext_finalize",
             }
         elif args.profile_detail == "s2c-fastrot":
             include = {
                 "homo_bootstrap",
                 "bs_s2c",
-                "bs_s2c_fast_rotate_ext_batch",
-                "bs_s2c_fast_rotate_ext_batch_modup",
-                "bs_s2c_fast_rotate_ext_batch_key_products",
-                "bs_s2c_fast_rotate_ext_batch_scale_pc",
-                "bs_s2c_fast_rotate_ext_batch_precompute_maps",
-                "bs_s2c_fast_rotate_ext_batch_finalize",
+                "bs_s2c_fast_rotate_ext",
+                "bs_s2c_fast_rotate_ext_modup",
+                "bs_s2c_fast_rotate_ext_key_products",
+                "bs_s2c_fast_rotate_ext_scale_pc",
+                "bs_s2c_fast_rotate_ext_precompute_maps",
+                "bs_s2c_fast_rotate_ext_finalize",
             }
         elif args.profile_detail == "fastrot":
             include = {
                 "homo_bootstrap",
                 "bs_c2s",
                 "bs_s2c",
-                "bs_c2s_fast_rotate_ext_batch",
-                "bs_s2c_fast_rotate_ext_batch",
-                "fast_rotate_ext_batch",
-                "bs_c2s_fast_rotate_ext_batch_modup",
-                "bs_c2s_fast_rotate_ext_batch_key_products",
-                "bs_c2s_fast_rotate_ext_batch_scale_pc",
-                "bs_c2s_fast_rotate_ext_batch_precompute_maps",
-                "bs_c2s_fast_rotate_ext_batch_finalize",
-                "bs_s2c_fast_rotate_ext_batch_modup",
-                "bs_s2c_fast_rotate_ext_batch_key_products",
-                "bs_s2c_fast_rotate_ext_batch_scale_pc",
-                "bs_s2c_fast_rotate_ext_batch_precompute_maps",
-                "bs_s2c_fast_rotate_ext_batch_finalize",
+                "bs_c2s_fast_rotate_ext",
+                "bs_s2c_fast_rotate_ext",
+                "fast_rotate_ext",
+                "bs_c2s_fast_rotate_ext_modup",
+                "bs_c2s_fast_rotate_ext_key_products",
+                "bs_c2s_fast_rotate_ext_scale_pc",
+                "bs_c2s_fast_rotate_ext_precompute_maps",
+                "bs_c2s_fast_rotate_ext_finalize",
+                "bs_s2c_fast_rotate_ext_modup",
+                "bs_s2c_fast_rotate_ext_key_products",
+                "bs_s2c_fast_rotate_ext_scale_pc",
+                "bs_s2c_fast_rotate_ext_precompute_maps",
+                "bs_s2c_fast_rotate_ext_finalize",
             }
         elif args.profile_detail == "fastrot-inner":
             include = {
                 "homo_bootstrap",
-                "fast_rotate_ext_batch_modup",
-                "fast_rotate_ext_batch_key_products",
-                "fast_rotate_ext_batch_scale_pc",
-                "fast_rotate_ext_batch_precompute_maps",
-                "fast_rotate_ext_batch_finalize",
+                "fast_rotate_ext_modup",
+                "fast_rotate_ext_key_products",
+                "fast_rotate_ext_scale_pc",
+                "fast_rotate_ext_precompute_maps",
+                "fast_rotate_ext_finalize",
             }
         with profile(ctx, sync=bool(args.auto_sync), include=include) as profiler:
-            _, times = _run_timed_bootstrap(ctx, cipher, constants, args.iters)
+            _, times = _run_timed_bootstrap(ctx, cipher, constants, plan, args.iters)
         _print_bootstrap_phase_summary(profiler)
         profiler.print_summary(limit=args.profile_limit)
     else:
-        _, times = _run_timed_bootstrap(ctx, cipher, constants, args.iters)
+        _, times = _run_timed_bootstrap(ctx, cipher, constants, plan, args.iters)
 
     _print_timing(times)
     print("constant cache after:", _format_cache(constants))

@@ -1,21 +1,16 @@
 """Public CKKS-oriented FHE frontend for EasyFHE."""
 
 from ._public_api import PUBLIC_API as _PUBLIC_API
-from . import config, utils
 from .constants import ConstantBundle
 from .context import Context
 from .ops import (
     CipherState,
     align_to,
-    encode,
     fast_rotate,
-    fast_rotate_batch,
-    fast_rotate_ext_batch,
     giant_rotate_sum,
     hoisted_mac_sum,
     fused_broadcast_mac,
     fused_grouped_pairwise_mac,
-    fused_pairwise_mac,
     homo_add,
     homo_add_pt,
     homo_add_scalar_double,
@@ -27,9 +22,6 @@ from .ops import (
     homo_rotate,
     homo_square,
     homo_sub,
-    make_plaintext,
-    make_plaintext_batch,
-    prepare_plaintext,
     slot_resize,
 )
 from .runtime.options import RuntimeOptions

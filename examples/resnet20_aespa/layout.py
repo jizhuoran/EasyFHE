@@ -32,12 +32,12 @@ class _DownsampleSpec:
 
 
 def _merge_fullpack(c1, c2, cryptoContext, weights):
+    if c2 is None:
+        return c1
     old_slots = c1.slots
     c1 = fhe.slot_resize(c1, c1.slots * 2, cryptoContext)
     c2 = fhe.slot_resize(c2, c2.slots * 2, cryptoContext)
     second_mask_key = f"mask_second_n_{old_slots}_{c2.slots}"
-    if not weights.has(second_mask_key):
-        second_mask_key = f"mask_scecond_n_{old_slots}_{c2.slots}"
     return fhe.homo_add(
         fhe.homo_mul_pt(
             c1,
@@ -139,6 +139,18 @@ def _fold_quarters(cipher, cryptoContext):
 
 
 def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
+    trace = getattr(cryptoContext, "aespa_state_trace", None)
+    if trace is not None:
+        trace.append(
+            {
+                "op": f"downsample{spec.spatial_size}to{spec.out_spatial_size}",
+                "cur_limbs": int(c1.cur_limbs),
+                "noise_deg": int(c1.noise_deg),
+                "slots": int(c1.slots),
+                "is_ext": bool(c1.is_ext),
+                "second_cipher": c2 is not None,
+            }
+        )
     fullpack = _merge_fullpack(c1, c2, cryptoContext, weights)
     fullpack = _spatial_reduce(
         fullpack,
@@ -203,7 +215,7 @@ def downsample256to64(c1, c2, num_channel, cryptoContext, weights):
             row_count=32,
             row_rotate=24,
             include_gen8=False,
-            initial_rescale="always",
+            initial_rescale="if_needed",
             rescale_before_fold=False,
             rescale_after_fold=True,
         ),

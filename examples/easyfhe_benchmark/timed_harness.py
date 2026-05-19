@@ -18,6 +18,7 @@ ensure_repo_on_path()
 import easyfhe as torch
 import easyfhe.fhe as fhe
 from easyfhe.fhe.ops import homo as homo_ops
+from easyfhe.fhe.ops.encoding import encode_stage1, encode_stage2
 from easyfhe.fhe.ops import rotation
 
 from easyfhe_benchmark import common as bench
@@ -222,16 +223,16 @@ def _make_mul_pt_input(case: bench.BenchmarkCase, crypto_context: Any, openfhe_c
 
 def _build_encode_target(case: bench.BenchmarkCase, crypto_context: Any, _openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     values = bench.vector_values(case.slots)
-    middle_value = homo_ops.prepare_plaintext(np.asarray(values, dtype=np.float64), case.slots, crypto_context.N)
+    middle_value = encode_stage1(np.asarray(values, dtype=np.float64), case.slots, crypto_context.N)
     level = bench.level_for_cur_limbs(crypto_context, case.cur_limbs)
     def op():
-        return homo_ops.encode(
+        return encode_stage2(
             middle_value,
-            crypto_context,
             level=level,
             slots=case.slots,
             is_ext=False,
-        )[1]
+            cryptoContext=crypto_context,
+        )
 
     probe = op()
     return op, {
@@ -424,7 +425,7 @@ def _build_fast_rotate_target(case: bench.BenchmarkCase, crypto_context: Any, op
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
 
     def op():
-        return fhe.fast_rotate(cipher, [step], crypto_context)[0]
+        return fhe.fast_rotate(cipher, [step], crypto_context)
 
     probe = op()
     return op, {

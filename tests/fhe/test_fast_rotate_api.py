@@ -11,47 +11,58 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+def _plaintext(values, context, *, level, slots, is_ext=False):
+    return fhe.ConstantBundle(vectors={"pt": values}, cache_mode="none").plaintext(
+        "pt",
+        level,
+        slots,
+        context,
+        is_ext=is_ext,
+    )
+
+
 def _mac_down_each(cipher, offsets, plain_values, context):
     rotated = fhe.fast_rotate(cipher, offsets, context)
     total = None
-    for rot, values in zip(rotated, plain_values):
-        plaintext = fhe.encode(
+    for index, values in enumerate(plain_values):
+        rot = rotation._batch_item(rotated, index)
+        plaintext = _plaintext(
             values,
             context,
             level=context.L - rot.cur_limbs,
             slots=rot.slots,
-        )[1]
+        )
         term = fhe.homo_mul_pt(rot, plaintext, context)
         total = term if total is None else fhe.homo_add(total, term, context)
     return total
 
 
 def _mac_down_once(cipher, offsets, plain_values, context):
-    rotated_ext = fhe.fast_rotate_ext_batch(cipher, offsets, context)
+    rotated_ext = fhe.fast_rotate(cipher, offsets, context, output_ext=True)
     plaintexts = []
     for values in plain_values:
-        plaintext_ext = fhe.encode(
+        plaintext_ext = _plaintext(
             values,
             context,
             level=context.L - rotated_ext.cur_limbs,
             slots=rotated_ext.slots,
             is_ext=True,
-        )[1]
+        )
         plaintexts.append(plaintext_ext)
-    total_ext = fhe.fused_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), context)
+    total_ext = fhe.fused_grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)[0]
     return fhe.giant_rotate_sum([total_ext], 0, context, strategy="ext_double_hoist")
 
 
 def _hoisted_mac(cipher, offsets, plain_values, context):
     plaintexts = []
     for values in plain_values:
-        plaintext_ext = fhe.encode(
+        plaintext_ext = _plaintext(
             values,
             context,
             level=context.L - cipher.cur_limbs,
             slots=cipher.slots,
             is_ext=True,
-        )[1]
+        )
         plaintexts.append(plaintext_ext)
     return fhe.hoisted_mac_sum(
         cipher,
@@ -69,12 +80,12 @@ def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
     for group in groups:
         for values in group:
             plaintexts.append(
-                fhe.encode(
+                _plaintext(
                     values,
                     context,
                     level=context.L - cipher.cur_limbs,
                     slots=cipher.slots,
-                )[1]
+                )
             )
     return fhe.hoisted_mac_sum(
         cipher,
@@ -92,13 +103,14 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
     partial_sums = []
     for group in groups:
         total = None
-        for rotated, values in zip(rotations, group):
-            plaintext = fhe.encode(
+        for index, values in enumerate(group):
+            rotated = rotation._batch_item(rotations, index)
+            plaintext = _plaintext(
                 values,
                 context,
                 level=context.L - rotated.cur_limbs,
                 slots=rotated.slots,
-            )[1]
+            )
             term = fhe.homo_mul_pt(rotated, plaintext, context)
             total = term if total is None else fhe.homo_add(total, term, context)
         partial_sums.append(total)
@@ -182,7 +194,7 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
     )
 
 
-def test_fast_rotate_batch_shapes_match_offsets():
+def test_fast_rotate_shapes_match_offsets():
     slots = 1024
     offsets = [0, 1, 2, 3]
     context = fhe.generate_context(
@@ -199,8 +211,8 @@ def test_fast_rotate_batch_shapes_match_offsets():
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
     cipher = context.encrypt(values, "cuda", 1, 0, slots)
 
-    normal_batch = fhe.fast_rotate_batch(cipher, offsets, context)
-    ext_batch = fhe.fast_rotate_ext_batch(cipher, offsets, context)
+    normal_batch = fhe.fast_rotate(cipher, offsets, context)
+    ext_batch = fhe.fast_rotate(cipher, offsets, context, output_ext=True)
 
     assert normal_batch.batch_size == len(offsets)
     assert ext_batch.batch_size == len(offsets)

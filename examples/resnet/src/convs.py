@@ -1,6 +1,7 @@
 import numpy as np
 
 import easyfhe.fhe as fhe
+from easyfhe.fhe.ops import rotation
 try:
     from examples.resnet.src.utils import *
 except ImportError:
@@ -51,12 +52,11 @@ def _read_bsgs_kernel_rows(prefix, cipher, b_step, b_idx, scale, cryptoContext, 
 
 def rot_input(input, img_width, padding, cryptoContext):
     c_rotations = []
-    (
-        digits_neg_padding,
-        digits_padding,
-        digits_neg_img_width,
-        digits_img_width,
-    ) = fhe.fast_rotate(input, [-padding, padding, -img_width, img_width], cryptoContext)
+    rotated = fhe.fast_rotate(input, [-padding, padding, -img_width, img_width], cryptoContext)
+    digits_neg_padding = rotation._batch_item(rotated, 0)
+    digits_padding = rotation._batch_item(rotated, 1)
+    digits_neg_img_width = rotation._batch_item(rotated, 2)
+    digits_img_width = rotation._batch_item(rotated, 3)
 
     c_rotations.append(fhe.homo_rotate(digits_neg_padding, -img_width, cryptoContext))
     c_rotations.append(digits_neg_img_width)

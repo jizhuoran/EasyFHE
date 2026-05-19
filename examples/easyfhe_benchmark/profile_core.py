@@ -14,6 +14,7 @@ ensure_repo_on_path()
 
 import easyfhe as torch
 import easyfhe.fhe as fhe
+import easyfhe.bs.openfhe as bs
 
 from easyfhe_benchmark import common as bench
 
@@ -88,19 +89,22 @@ def build_bootstrap_target(case: bench.BenchmarkCase, crypto_context: Any, openf
     level_budget = [int(x) for x in case.extra["level_budget"]]
     target_limbs = int(case.extra["target_limbs"])
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
-    bootstrap_constants = getattr(crypto_context, "benchmark_bootstrap_constants", {}).get(
+    bootstrap_material = getattr(crypto_context, "benchmark_bootstrap_constants", {}).get(
         (log_bs_slots, tuple(level_budget))
     )
-    if bootstrap_constants is None:
-        bootstrap_constants = fhe.generate_bootstrap_constants(
+    if bootstrap_material is None:
+        bs_keys, constants, plan = bs.generate(
             crypto_context,
-            log_bs_slots,
-            level_budget,
-            int(getattr(crypto_context, "maxLevelsRemaining", target_limbs)),
+            log_bs_slots=log_bs_slots,
+            level_budget=level_budget,
+            max_levels_remaining=int(getattr(crypto_context, "maxLevelsRemaining", target_limbs)),
         )
+        crypto_context.addkeys(bs_keys)
+    else:
+        constants, plan = bootstrap_material
 
     def op():
-        return fhe.homo_bootstrap(cipher, crypto_context, bootstrap_constants, L0=target_limbs)
+        return bs.bootstrap(cipher, crypto_context, constants, plan, L0=target_limbs)
 
     probe = op()
     return op, {

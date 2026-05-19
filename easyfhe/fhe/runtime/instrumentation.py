@@ -102,21 +102,21 @@ class OpInstrumentation:
         return self
 
 
-def instrumentation_from_config(config):
-    if config is None:
+def instrumentation_from_options(options):
+    if options is None:
         return NullInstrumentation()
     enabled = (
-        getattr(config, "count_ops", False)
-        or getattr(config, "time_ops", False)
-        or getattr(config, "auto_sync", False)
+        getattr(options, "count_ops", False)
+        or getattr(options, "time_ops", False)
+        or getattr(options, "auto_sync", False)
     )
     if not enabled:
         return NullInstrumentation()
     return OpInstrumentation(
-        count=getattr(config, "count_ops", False) or getattr(config, "time_ops", False),
-        time_ops=getattr(config, "time_ops", False),
-        sync=getattr(config, "auto_sync", False),
-        print_at_exit=getattr(config, "count_ops", False) or getattr(config, "time_ops", False),
+        count=getattr(options, "count_ops", False) or getattr(options, "time_ops", False),
+        time_ops=getattr(options, "time_ops", False),
+        sync=getattr(options, "auto_sync", False),
+        print_at_exit=getattr(options, "count_ops", False) or getattr(options, "time_ops", False),
     )
 
 

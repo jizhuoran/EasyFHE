@@ -52,10 +52,10 @@ def mask_first_n(n: int, slots: int) -> tuple[str, np.ndarray]:
     return f"mask_first_n_{n}_{slots}", values
 
 
-def mask_scecond_n(n: int, slots: int) -> tuple[str, np.ndarray]:
+def mask_second_n(n: int, slots: int) -> tuple[str, np.ndarray]:
     values = np.zeros(slots, dtype=np.float64)
     values[n:] = 1.0
-    return f"mask_scecond_n_{n}_{slots}", values
+    return f"mask_second_n_{n}_{slots}", values
 
 
 def mask_from_to(from_: int, to: int, slots: int) -> tuple[str, np.ndarray]:
@@ -124,6 +124,60 @@ def packed_bias(source: np.ndarray, num_channel: int, spatial_size: int, slots: 
     return f"bias_{slots}", pad_to_slots(np.asarray(packed, dtype=np.float64), slots)
 
 
+def conv3x3_kernel_group(
+    raw: dict[str, np.ndarray],
+    base: str,
+    channel_offset: int,
+    channels: int,
+    slots: int,
+) -> tuple[str, np.ndarray]:
+    rows = []
+    for channel in reversed(range(channel_offset, channel_offset + channels)):
+        for kernel in range(1, 10):
+            rows.append(pad_to_slots(raw[f"{base}-ch{channel}-k{kernel}"], slots))
+    return f"{base}-ch{channel_offset}-{channel_offset + channels - 1}-k", np.stack(rows, axis=0)
+
+
+def conv_sx_kernel_group(
+    raw: dict[str, np.ndarray],
+    base: str,
+    loop_size: int,
+    num_kernels: int,
+    slots: int,
+    abs_rot_offset: int,
+) -> tuple[str, np.ndarray]:
+    rows = []
+    for index in reversed(range(loop_size)):
+        for kernel in range(1, num_kernels + 1):
+            first = np.asarray(raw[f"{base}-ch{index}-k{kernel}"], dtype=np.float64).reshape(-1)
+            second = np.asarray(raw[f"{base}-ch{index + loop_size}-k{kernel}"], dtype=np.float64).reshape(-1)
+            pivot = int(index * abs_rot_offset)
+            rows.append(np.concatenate([second[:pivot], first[pivot:], first[:pivot], second[pivot:]]))
+    return f"{base}-sx", np.stack([pad_to_slots(row, slots) for row in rows], axis=0)
+
+
+def pointwise_sx_kernel_group(
+    raw: dict[str, np.ndarray],
+    base: str,
+    loop_size: int,
+    slots: int,
+    abs_rot_offset: int,
+) -> tuple[str, np.ndarray]:
+    rows = []
+    for index in reversed(range(loop_size)):
+        first = np.asarray(raw[f"{base}-ch{index}-k1"], dtype=np.float64).reshape(-1)
+        second = np.asarray(raw[f"{base}-ch{index + loop_size}-k1"], dtype=np.float64).reshape(-1)
+        pivot = int(index * abs_rot_offset)
+        rows.append(np.concatenate([second[:pivot], first[pivot:], first[:pivot], second[pivot:]]))
+    return f"{base}-sx", np.stack([pad_to_slots(row, slots) for row in rows], axis=0)
+
+
+def pointwise_sx_bias(raw: dict[str, np.ndarray], base: str, slots: int) -> tuple[str, np.ndarray]:
+    first = np.asarray(raw[f"{base}-bias1"], dtype=np.float64).reshape(-1)
+    second = np.asarray(raw[f"{base}-bias2"], dtype=np.float64).reshape(-1)
+    return f"{base}-bias-sx", pad_to_slots(np.concatenate([first, second]), slots)
+
+
 def add_generated_resnet20_aespa_plaintexts(raw: dict[str, np.ndarray]) -> None:
     generated = []
 
@@ -133,7 +187,7 @@ def add_generated_resnet20_aespa_plaintexts(raw: dict[str, np.ndarray]) -> None:
     generated.append(mask_from_to(0, 1024, 16384))
 
     generated.append(mask_first_n(16384, 32768))
-    generated.append(mask_scecond_n(16384, 32768))
+    generated.append(mask_second_n(16384, 32768))
     for n in (2, 4, 8):
         generated.append(gen_mask(n, 32768))
     for pos in range(16):
@@ -143,7 +197,7 @@ def add_generated_resnet20_aespa_plaintexts(raw: dict[str, np.ndarray]) -> None:
     generated.append(slot_conversion_mask(32768, 8192))
 
     generated.append(mask_first_n(8192, 16384))
-    generated.append(mask_scecond_n(8192, 16384))
+    generated.append(mask_second_n(8192, 16384))
     for n in (2, 4):
         generated.append(gen_mask(n, 16384))
     for pos in range(32):
@@ -153,6 +207,30 @@ def add_generated_resnet20_aespa_plaintexts(raw: dict[str, np.ndarray]) -> None:
     generated.append(slot_conversion_mask(16384, 4096))
 
     generated.append(mask_mod(64, 1.0 / 64.0, 4096))
+
+    generated.append(conv3x3_kernel_group(raw, "conv1bn1", channel_offset=0, channels=16, slots=16384))
+    for block_id in range(1, 4):
+        for conv_id in (1, 2):
+            generated.append(conv3x3_kernel_group(raw, f"layer{block_id}-conv{conv_id}bn{conv_id}", 0, 16, 16384))
+    generated.append(conv3x3_kernel_group(raw, "layer4-conv1bn1", 0, 16, 16384))
+    generated.append(conv3x3_kernel_group(raw, "layer4-conv1bn1", 16, 16, 16384))
+    generated.append(conv3x3_kernel_group(raw, "layer4-conv2bn2", 0, 32, 8192))
+    for block_id in range(5, 7):
+        for conv_id in (1, 2):
+            generated.append(conv3x3_kernel_group(raw, f"layer{block_id}-conv{conv_id}bn{conv_id}", 0, 32, 8192))
+    generated.append(conv3x3_kernel_group(raw, "layer7-conv1bn1", 0, 32, 8192))
+    generated.append(conv3x3_kernel_group(raw, "layer7-conv1bn1", 32, 32, 8192))
+    generated.append(conv3x3_kernel_group(raw, "layer7-conv2bn2", 0, 64, 4096))
+    for block_id in range(8, 10):
+        for conv_id in (1, 2):
+            generated.append(conv3x3_kernel_group(raw, f"layer{block_id}-conv{conv_id}bn{conv_id}", 0, 64, 4096))
+
+    generated.append(conv_sx_kernel_group(raw, "layer4-conv1bn1", loop_size=16, num_kernels=9, slots=32768, abs_rot_offset=1024))
+    generated.append(pointwise_sx_kernel_group(raw, "layer4dx-conv1bn1", loop_size=16, slots=32768, abs_rot_offset=1024))
+    generated.append(pointwise_sx_bias(raw, "layer4dx-conv1bn1", slots=32768))
+    generated.append(conv_sx_kernel_group(raw, "layer7-conv1bn1", loop_size=32, num_kernels=9, slots=16384, abs_rot_offset=256))
+    generated.append(pointwise_sx_kernel_group(raw, "layer7dx-conv1bn1", loop_size=32, slots=16384, abs_rot_offset=256))
+    generated.append(pointwise_sx_bias(raw, "layer7dx-conv1bn1", slots=16384))
 
     for name, values in generated:
         if name in raw:

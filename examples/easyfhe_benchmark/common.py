@@ -17,7 +17,9 @@ except ImportError:
 ensure_repo_on_path()
 
 import easyfhe.fhe as fhe
+import easyfhe.bs.openfhe as bs
 from easyfhe.fhe.ops import homo as homo_ops
+from easyfhe.fhe.ops.encoding import encode_stage1, encode_stage2
 
 
 KEYSWITCH_LIKE_OPS = {"mul", "square", "rotate", "fast_rotate", "bootstrap"}
@@ -178,10 +180,6 @@ class ContextCache:
             save_dir = save_dir / f"with_rotkeys_{rot_sig}"
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        bootstrap_specs = tuple(
-            fhe.BootstrapSpec(log_bs_slots, tuple(level_budget))
-            for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list)
-        )
         options = fhe.RuntimeOptions(
             auto_load_keys=bool(need_bootstrap or app_rot_indices),
             rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
@@ -189,10 +187,11 @@ class ContextCache:
         )
         crypto_context = fhe.generate_context(
             fhe.CKKSContextSpec(
-                depth=fhe.bootstrap_depth(
-                    int(self.args.max_levels_remaining),
-                    bootstrap_specs,
-                    str(self.args.secret_key_dist),
+                depth=int(self.args.max_levels_remaining)
+                + bs.depth(
+                    log_bs_slots=log_bs_slots_list,
+                    level_budget=level_budget_list,
+                    secret_key_dist=str(self.args.secret_key_dist),
                 ),
                 log_n=int(self.args.logN),
                 dnum=int(dnum),
@@ -207,14 +206,17 @@ class ContextCache:
         )
         bootstrap_constants = {}
         for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list):
+            bs_keys, constants, plan = bs.generate(
+                crypto_context,
+                log_bs_slots=int(log_bs_slots),
+                level_budget=[int(x) for x in level_budget],
+                max_levels_remaining=int(self.args.max_levels_remaining),
+            )
+            crypto_context.addkeys(bs_keys)
             bootstrap_constants[(int(log_bs_slots), tuple(int(x) for x in level_budget))] = (
-                fhe.generate_bootstrap_constants(
-                    crypto_context,
-                    int(log_bs_slots),
-                    [int(x) for x in level_budget],
-                    int(self.args.max_levels_remaining),
-                )
-        )
+                constants,
+                plan,
+            )
         crypto_context.benchmark_bootstrap_constants = bootstrap_constants
         crypto_context.maxLevelsRemaining = int(self.args.max_levels_remaining)
         crypto_context.DIRECT_LOAD = False
@@ -260,14 +262,14 @@ def make_plain_from_middle(crypto_context: Any, values: List[float], cur_limbs: 
     level = level_for_cur_limbs(crypto_context, cur_limbs)
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
-    middle_value = homo_ops.prepare_plaintext(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
-    return homo_ops.encode(
+    middle_value = encode_stage1(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
+    return encode_stage2(
         middle_value,
-        crypto_context,
         level=level,
         slots=slots,
         is_ext=False,
-    )[1]
+        cryptoContext=crypto_context,
+    )
 
 
 def case_context_kwargs(case: BenchmarkCase) -> Dict[str, Any]:

@@ -7,7 +7,7 @@ import easyfhe as torch
 
 from ..ciphertext import Cipher
 from ..ops import kernels as F
-from ..ops.encoding import encode
+from ..ops.encoding import encode_stage1, encode_stage2
 from .key_material import ContextKeyMaterial
 from .sample_arithmetic import (
     CipherArrays,
@@ -116,7 +116,13 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
 def encrypt_with_key_arrays(x, device, scale_deg, level, slots, public_key_b, public_key_a, context):
     if not isinstance(x, np.ndarray):
         x = np.asarray(x)
-    _, ptx = encode(x, context, level=level, slots=slots, is_ext=False)
+    ptx = encode_stage2(
+        encode_stage1(x, slots, context.N),
+        level=level,
+        slots=slots,
+        is_ext=False,
+        cryptoContext=context,
+    )
     ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
     cur_limbs = ptx.cur_limbs
     pk0 = torch.as_tensor(public_key_b[:cur_limbs], device=device, dtype=torch.uint64)

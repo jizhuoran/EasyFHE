@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-
-_BOOTSTRAP_APPROX_DEPTH = {
-    "SPARSE_TERNARY": 14,
-}
+from .internal.approx_plan import bootstrap_approx_depth as _bootstrap_approx_depth_from_plan
 
 
 def context_requirements(
@@ -44,11 +41,7 @@ def bootstrap_depth(log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"
 
 
 def bootstrap_approx_depth(secret_key_dist="SPARSE_TERNARY"):
-    secret_key_dist = str(secret_key_dist)
-    try:
-        return _BOOTSTRAP_APPROX_DEPTH[secret_key_dist]
-    except KeyError as exc:
-        raise RuntimeError(f"unsupported bootstrap secretKeyDist: {secret_key_dist}") from exc
+    return _bootstrap_approx_depth_from_plan(str(secret_key_dist))
 
 
 def required_rotations(

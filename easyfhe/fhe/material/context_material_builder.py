@@ -5,7 +5,7 @@ from functools import lru_cache
 
 import numpy as np
 
-from ..ops.encoding import prepare_plaintext
+from ..ops.encoding import encode_stage1
 from .rotation import bit_reverse_indices, compute_auto_map
 from ..runtime.scale_policy import split_rescale_tech
 
@@ -662,7 +662,7 @@ class ContextMaterialBuilder:
                     [1] * (1 << j) + [0] * ((1 << i) - (1 << j)),
                     dtype=np.float64,
                 )
-                mask = prepare_plaintext(mask, 1 << i, self.N)
+                mask = encode_stage1(mask, 1 << i, self.N)
                 self.encode_values["slot_conversion_mask_{}to{}".format(1 << i, 1 << j)] = mask
 
     def compute_auto_map(self, k, N):

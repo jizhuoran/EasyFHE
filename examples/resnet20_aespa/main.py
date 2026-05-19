@@ -181,11 +181,11 @@ def _print_weight_cache_summary(weights):
         f"mode={info['mode']}",
         f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])})",
         f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])})",
-        f"plain_batch={info.get('plain_batch_entries', 0)}({_format_bytes(info.get('plain_batch_bytes', 0))})",
+        f"scalar={info.get('scalar_entries', 0)}({_format_bytes(info.get('scalar_bytes', 0))})",
         f"plain_hits={info['plain_hits']}",
         f"plain_misses={info['plain_misses']}",
-        f"plain_batch_hits={info.get('plain_batch_hits', 0)}",
-        f"plain_batch_misses={info.get('plain_batch_misses', 0)}",
+        f"scalar_hits={info.get('scalar_hits', 0)}",
+        f"scalar_misses={info.get('scalar_misses', 0)}",
         f"middle_hits={info['middle_hits']}",
         f"middle_misses={info['middle_misses']}",
     )
@@ -280,21 +280,21 @@ def resnet20(config=None, args=None):
         device=config.device,
         options=options,
     )
-    bootstrap_constants = {}
+    bootstrap_material = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
-        bs_keys, constants = bs.generate(
+        bs_keys, constants, plan = bs.generate(
             cryptoContext,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
         )
         cryptoContext.addkeys(bs_keys)
-        bootstrap_constants[int(log_bs_slots)] = constants
+        bootstrap_material[int(log_bs_slots)] = (constants, plan)
     print("cryptoContext: ", cryptoContext)
     weights = WeightPack.from_npz(config.weights_path, cache_mode=config.weight_cache_mode)
     print("weights loaded:", len(weights))
 
-    run_dataset(AespaRuntime(cryptoContext, weights, config, bootstrap_constants))
+    run_dataset(AespaRuntime(cryptoContext, weights, config, bootstrap_material))
 
 
 if __name__ == "__main__":

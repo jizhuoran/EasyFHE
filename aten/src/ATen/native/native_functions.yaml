@@ -3439,6 +3439,12 @@
     CPU: fused_broadcast_mac_cpu
     CUDA: fused_broadcast_mac_cuda
 
+- func: scalar_weighted_acc(Tensor cipher, Tensor scalars, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_cipher, int curr_limbs, int N) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CPU: scalar_weighted_acc_cpu
+    CUDA: scalar_weighted_acc_cuda
+
 - func: cpmul_broadcast_pt(Tensor cipher, Tensor plaintext, Tensor param_primes, Tensor barret_mu, int num_cipher, int curr_limbs, int N) -> Tensor
   device_check: NoCheck
   dispatch:

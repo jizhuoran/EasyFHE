@@ -424,7 +424,7 @@ def get_bootstrap_approx_plan(secretKeyDist):
             ]
         )
         double_angle_iterations = 6
-        depth = 14
+        depth = 13
         message_scaling_factor = 512.0
     else:
         raise RuntimeError(f"unsupported bootstrap secretKeyDist: {secretKeyDist}")

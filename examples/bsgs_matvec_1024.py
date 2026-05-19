@@ -13,6 +13,16 @@ def _diagonal_values(matrix, offset):
     return matrix[rows, cols]
 
 
+def _plaintext(values, crypto_context, *, level, slots, is_ext=False):
+    return fhe.ConstantBundle(vectors={"pt": values}, cache_mode="none").plaintext(
+        "pt",
+        level,
+        slots,
+        crypto_context,
+        is_ext=is_ext,
+    )
+
+
 def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
     slots = int(matrix.shape[0])
     if matrix.shape != (slots, slots):
@@ -23,7 +33,7 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
     giant_count = slots // baby_step
     baby_offsets = list(range(baby_step))
     giant_offsets = [giant * baby_step for giant in range(giant_count)]
-    baby_exts = fhe.fast_rotate_ext_batch(cipher, baby_offsets, crypto_context)
+    baby_exts = fhe.fast_rotate(cipher, baby_offsets, crypto_context, output_ext=True)
 
     inner_exts = []
     for giant_offset in giant_offsets:
@@ -31,15 +41,22 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
         for baby_offset in baby_offsets:
             diagonal = _diagonal_values(matrix, giant_offset + baby_offset)
             plaintext_values = np.roll(diagonal, giant_offset)
-            plaintext = fhe.encode(
+            plaintext = _plaintext(
                 plaintext_values,
                 crypto_context,
                 level=crypto_context.L - baby_exts.cur_limbs,
                 slots=slots,
                 is_ext=True,
-            )[1]
+            )
             plaintexts.append(plaintext)
-        inner_exts.append(fhe.fused_pairwise_mac(baby_exts, rotation._pack_ciphers(plaintexts), crypto_context))
+        inner_exts.append(
+            fhe.fused_grouped_pairwise_mac(
+                baby_exts,
+                rotation._pack_ciphers(plaintexts),
+                1,
+                crypto_context,
+            )[0]
+        )
 
     return fhe.giant_rotate_sum(inner_exts, baby_step, crypto_context, strategy="ext_double_hoist")
 

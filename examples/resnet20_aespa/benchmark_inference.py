@@ -37,6 +37,7 @@ def _parse_args():
     parser.add_argument("--rotation-random-mode", choices=("fresh", "reuse_by_shape"), default="fresh")
     parser.add_argument("--rot-key-limb-limit", action="append", default=[], metavar="ROT:LIMBS")
     parser.add_argument("--total", type=int, default=1)
+    parser.add_argument("--trace-states", action="store_true")
     return parser.parse_args()
 
 
@@ -68,18 +69,18 @@ def _build_runtime(args):
         device=config.device,
         options=options,
     )
-    bootstrap_constants = {}
+    bootstrap_material = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
-        bs_keys, constants = bs.generate(
+        bs_keys, constants, plan = bs.generate(
             ctx,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
         )
         ctx.addkeys(bs_keys)
-        bootstrap_constants[int(log_bs_slots)] = constants
+        bootstrap_material[int(log_bs_slots)] = (constants, plan)
     weights = WeightPack.from_npz(config.weights_path, cache_mode=config.weight_cache_mode)
-    return AespaRuntime(ctx, weights, config, bootstrap_constants)
+    return AespaRuntime(ctx, weights, config, bootstrap_material)
 
 
 @contextmanager
@@ -89,10 +90,10 @@ def _profile_wrappers(rt, records, block_records, op_records, state):
     original_down = model._downsample_residual_block
     originals = {}
 
-    def timed_bootstrap(cipher, crypto_context, constants, *, L0):
+    def timed_bootstrap(cipher, crypto_context, constants, plan, *, L0):
         _sync(rt.ctx)
         start = time.perf_counter()
-        result = original_bootstrap(cipher, crypto_context, constants, L0=L0)
+        result = original_bootstrap(cipher, crypto_context, constants, plan, L0=L0)
         _sync(rt.ctx)
         records.append(
             {
@@ -173,7 +174,9 @@ def _profile_wrappers(rt, records, block_records, op_records, state):
     for name in (
         "initial_conv3x3",
         "conv3x3",
+        "conv3x3_sx",
         "pointwise_conv",
+        "pointwise_conv_sx",
         "aespa_nonlinear",
         "aespa_add_shortcut",
         "downsample1024to256",
@@ -225,6 +228,22 @@ def _infer_profile(image_vector, rt, bootstrap_records, block_records, op_record
     return final_res, timings
 
 
+def _print_state_trace(trace):
+    if not trace:
+        return
+    print("\nCipher states before conv/downsample ops:")
+    for idx, row in enumerate(trace, 1):
+        label = row["op"]
+        if "kernel_group" in row:
+            label += f" {row['kernel_group']}"
+        elif "bias_key" in row:
+            label += f" {row['bias_key']}"
+        print(
+            f"{idx:02d}. {label:48s} "
+            f"limbs={row['cur_limbs']:2d} noise={row['noise_deg']} slots={row['slots']:5d}"
+        )
+
+
 def _sum_rows(rows, key):
     totals = {}
     for row in rows:
@@ -257,9 +276,11 @@ def _print_cache(weights):
         f"mode={info['mode']}",
         f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])})",
         f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])})",
-        f"plain_batch={info.get('plain_batch_entries', 0)}({_format_bytes(info.get('plain_batch_bytes', 0))})",
+        f"scalar={info.get('scalar_entries', 0)}({_format_bytes(info.get('scalar_bytes', 0))})",
         f"plain_hits={info['plain_hits']}",
         f"plain_misses={info['plain_misses']}",
+        f"scalar_hits={info.get('scalar_hits', 0)}",
+        f"scalar_misses={info.get('scalar_misses', 0)}",
         f"middle_hits={info['middle_hits']}",
         f"middle_misses={info['middle_misses']}",
     )
@@ -283,7 +304,12 @@ def main():
         bootstrap_records = []
         block_records = []
         op_records = []
+        if args.trace_states:
+            rt.ctx.aespa_state_trace = []
         _, timings = _infer_profile(image_vector, rt, bootstrap_records, block_records, op_records)
+        state_trace = getattr(rt.ctx, "aespa_state_trace", None)
+        if args.trace_states:
+            rt.ctx.aespa_state_trace = None
         is_warmup = idx < args.warmup
         tag = "warmup" if is_warmup else "measure"
         print(
@@ -323,6 +349,8 @@ def main():
                 for op, seconds in sorted(_sum_rows(op_records, "op").items(), key=lambda item: item[1], reverse=True)
             ),
         )
+        if args.trace_states and not is_warmup:
+            _print_state_trace(state_trace)
         if not is_warmup:
             measured_timings.append(timings)
             measured_bootstraps.extend(bootstrap_records)

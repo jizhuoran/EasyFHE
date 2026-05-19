@@ -120,6 +120,55 @@ Tensor fused_broadcast_mac_cpu(
   return res;
 }
 
+Tensor scalar_weighted_acc_cpu(
+    const Tensor& cipher,
+    const Tensor& scalars,
+    const Tensor& param_primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    int64_t num_cipher,
+    int64_t cur_limbs,
+    int64_t N) {
+  auto res = at::empty({2, cur_limbs, N}, cipher.options());
+
+  auto* res_ptr = res.data_ptr<uint64_t>();
+  const auto* cipher_ptr = cipher.data_ptr<uint64_t>();
+  const auto* scalar_ptr = scalars.data_ptr<uint64_t>();
+  const auto* mods = param_primes.data_ptr<uint64_t>();
+  const auto* ratios = barret_ratio.data_ptr<uint64_t>();
+  const auto* ks = barret_k.data_ptr<uint64_t>();
+
+  const int64_t L_CTN = cipher.size(2) * N;
+  const int64_t BL_CTN = cipher.size(1) * L_CTN;
+
+  const int max_threads = omp_get_max_threads();
+#pragma omp parallel for collapse(2) schedule(static) num_threads(max_threads)
+  for (int64_t limb = 0; limb < cur_limbs; ++limb) {
+    for (int64_t n = 0; n < N; ++n) {
+      __uint128_t sum_bx{0};
+      __uint128_t sum_ax{0};
+      for (int64_t i = 0; i < num_cipher; ++i) {
+        const uint64_t scalar_val = scalar_ptr[i * cur_limbs + limb];
+        const int64_t cipher_off = i * L_CTN + limb * N + n;
+        const uint64_t cipher_val_bx = cipher_ptr[cipher_off];
+        const uint64_t cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+        sum_bx += static_cast<__uint128_t>(cipher_val_bx) * scalar_val;
+        sum_ax += static_cast<__uint128_t>(cipher_val_ax) * scalar_val;
+      }
+
+      const uint64_t mod = mods[limb];
+      const uint64_t ratio = ratios[limb];
+      const unsigned k = static_cast<unsigned>(ks[limb]);
+      res_ptr[limb * N + n] =
+          fhe::barret_reduction_128_64(sum_bx, mod, ratio, k);
+      res_ptr[cur_limbs * N + limb * N + n] =
+          fhe::barret_reduction_128_64(sum_ax, mod, ratio, k);
+    }
+  }
+
+  return res;
+}
+
 Tensor cpmul_broadcast_pt_cpu(
     const Tensor& cipher,
     const Tensor& plaintext,

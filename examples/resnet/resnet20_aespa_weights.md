@@ -21,9 +21,9 @@ Generated keys currently include:
 - `bias_4096`
 - `mask_from_to_0_1024_16384`
 - `mask_first_n_16384_32768`
-- `mask_scecond_n_16384_32768`
+- `mask_second_n_16384_32768`
 - `mask_first_n_8192_16384`
-- `mask_scecond_n_8192_16384`
+- `mask_second_n_8192_16384`
 - `gen_mask_{2,4,8}_32768`
 - `gen_mask_{2,4}_16384`
 - `mask_first_n_mod_16_1024_{0..15}_32768`

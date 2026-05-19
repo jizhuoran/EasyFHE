@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import Optional
 
+import easyfhe as torch
+
 from . import kernels as F
 
 
@@ -62,7 +64,12 @@ def plan_reduce_noise_to_one(cipher_or_state, context) -> CipherState:
 
 
 def align_to(cipher, target: CipherState, context):
-    return _align_to(cipher, target, context)
+    _validate_alignment_request(cipher, target)
+    if context.scale_mode == "fixed":
+        return _align_fixed(cipher, target, context)
+    if context.scale_mode == "flexible":
+        return _align_flexible(cipher, target, context)
+    raise ValueError(f"Unsupported scale mode: {context.scale_mode}")
 
 
 def reduce_noise_to_one(cipher, context):
@@ -75,15 +82,6 @@ def rescale_one_level(cipher, context):
     if cipher.noise_deg <= 1:
         raise ValueError(f"rescale_one_level: noise_deg must be > 1, got {cipher.noise_deg}")
     return align_to(cipher, CipherState(cipher.cur_limbs - 1, cipher.noise_deg - 1), context)
-
-
-def _align_to(cipher, target: CipherState, context):
-    _validate_alignment_request(cipher, target)
-    if context.scale_mode == "fixed":
-        return _align_fixed(cipher, target, context)
-    if context.scale_mode == "flexible":
-        return _align_flexible(cipher, target, context)
-    raise ValueError(f"Unsupported scale mode: {context.scale_mode}")
 
 
 def _coerce_state(cipher_or_state) -> CipherState:
@@ -132,7 +130,18 @@ def _drop_to_limbs(cipher, target_limbs, context):
             f"_drop_to_limbs: target_limbs must be between 0 and cur_limbs, got "
             f"target_limbs={target_limbs}, cur_limbs={cipher.cur_limbs}"
         )
-    return cipher.cipher_like(cipher.cv, cur_limbs=target_limbs)
+    target_limbs = int(target_limbs)
+    if target_limbs == cipher.cur_limbs:
+        return cipher.shallow_copy()
+
+    if cipher.is_ext:
+        cv = [
+            torch.cat((component[..., :target_limbs, :], component[..., cipher.cur_limbs:, :]), dim=-2)
+            for component in cipher.cv
+        ]
+    else:
+        cv = [component[..., :target_limbs, :] for component in cipher.cv]
+    return cipher.cipher_like(cv, cur_limbs=target_limbs)
 
 
 def _rescale_one_level(cipher, context):
@@ -200,58 +209,18 @@ def _pre_rescale_target_scale(target: CipherState, context):
 
 
 def _align_fixed(cipher, target, context):
-    if cipher.cur_limbs == target.cur_limbs:
-        return _align_same_limbs_fixed(cipher, target, context)
-
-    transition = (cipher.noise_deg, target.noise_deg)
-    if transition == (2, 2):
-        return _align_fixed_2_to_2(cipher, target, context)
-    if transition == (1, 1):
-        return _align_fixed_1_to_1(cipher, target, context)
-    if transition == (2, 1):
-        return _align_fixed_2_to_1(cipher, target, context)
-    if transition == (1, 2):
-        return _align_fixed_1_to_2(cipher, target, context)
-    raise ValueError(f"_align_fixed: unsupported noise transition {transition[0]} -> {transition[1]}")
-
-
-def _align_same_limbs_fixed(cipher, target, context):
     if cipher.noise_deg < target.noise_deg:
-        return _multiply_by_scale_correction(cipher, 1.0, context)
-    if cipher.noise_deg != target.noise_deg:
-        raise ValueError(f"_align_fixed: noise_deg mismatch: {cipher.noise_deg} != {target.noise_deg}")
-    return cipher.shallow_copy()
+        raise ValueError(
+            "_align_fixed: cannot increase noise_deg: "
+            f"{cipher.noise_deg} -> {target.noise_deg}"
+        )
 
+    while cipher.noise_deg > target.noise_deg:
+        cipher = _rescale_one_level(cipher, context)
 
-def _align_fixed_2_to_2(cipher, target, context):
-    cipher = _multiply_by_scale_correction(cipher, 1.0, context)
-    cipher = _rescale_one_level(cipher, context)
     if cipher.cur_limbs > target.cur_limbs:
         cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
-    return cipher
-
-
-def _align_fixed_1_to_1(cipher, target, context):
-    cipher = _multiply_by_scale_correction(cipher, 1.0, context)
-    if cipher.cur_limbs > target.cur_limbs + 1:
-        cipher = _drop_to_limbs(cipher, target.cur_limbs + 1, context)
-    return _rescale_one_level(cipher, context)
-
-
-def _align_fixed_2_to_1(cipher, target, context):
-    if cipher.cur_limbs == target.cur_limbs + 1:
-        return _rescale_one_level(cipher, context)
-
-    cipher = _multiply_by_scale_correction(cipher, 1.0, context)
-    cipher = _rescale_one_level(cipher, context)
-    if cipher.cur_limbs > target.cur_limbs + 1:
-        cipher = _drop_to_limbs(cipher, target.cur_limbs + 1, context)
-    return _rescale_one_level(cipher, context)
-
-
-def _align_fixed_1_to_2(cipher, target, context):
-    cipher = _multiply_by_scale_correction(cipher, 1.0, context)
-    return _drop_to_limbs(cipher, target.cur_limbs, context)
+    return cipher.shallow_copy()
 
 
 def _align_flexible(cipher, target, context):

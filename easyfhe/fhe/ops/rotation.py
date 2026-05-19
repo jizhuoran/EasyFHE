@@ -25,29 +25,17 @@ def homo_rotate(cipher, offset, cryptoContext):
     return _cipher_automorphism(result, offset, cryptoContext)
 
 
-def fast_rotate(cipher, offsets, cryptoContext):
-    offsets = tuple(int(offset) for offset in offsets)
-    if not offsets:
-        return []
-    batch = _fast_rotate_batch_impl(cipher, offsets, cryptoContext, output_ext=False)
-    return [_batch_item(batch, index) for index in range(len(offsets))]
-
-
-def fast_rotate_batch(cipher, offsets, cryptoContext):
-    return _fast_rotate_batch_impl(cipher, offsets, cryptoContext, output_ext=False)
-
-
-def fast_rotate_ext_batch(cipher, offsets, cryptoContext):
-    return _fast_rotate_batch_impl(cipher, offsets, cryptoContext, output_ext=True)
+def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
+    return _fast_rotate_impl(cipher, _normalize_offsets(offsets), cryptoContext, output_ext=bool(output_ext))
 
 
 def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count, cryptoContext, *, strategy):
     from .fused import fused_grouped_pairwise_mac
 
     if strategy == "normal":
-        baby_rotations = fast_rotate_batch(cipher, baby_offsets, cryptoContext)
+        baby_rotations = fast_rotate(cipher, baby_offsets, cryptoContext)
     elif strategy in ("ext_normal", "ext_double_hoist"):
-        baby_rotations = fast_rotate_ext_batch(cipher, baby_offsets, cryptoContext)
+        baby_rotations = fast_rotate(cipher, baby_offsets, cryptoContext, output_ext=True)
     else:
         raise ValueError(f"unknown hoisted_mac_sum strategy: {strategy}")
 
@@ -83,15 +71,13 @@ def moddown_from_ext(cipher, cryptoContext):
     return cipher.cipher_like(cv, is_ext=False)
 
 
-def _fast_rotate_batch_impl(cipher, offsets, cryptoContext, *, output_ext):
+def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
     if cipher.is_ext:
-        name = "fast_rotate_ext_batch" if output_ext else "fast_rotate_batch"
-        raise ValueError(f"{name}: expected a non-ext cipher")
+        raise ValueError("fast_rotate: expected a non-ext cipher")
 
     offsets = tuple(int(offset) for offset in offsets)
     if not offsets:
-        name = "fast_rotate_ext_batch" if output_ext else "fast_rotate_batch"
-        raise ValueError(f"{name}: expected at least one offset")
+        raise ValueError("fast_rotate: expected at least one offset")
 
     batch_size = len(offsets)
     digits = _modup_to_ext(cipher, cryptoContext)
@@ -145,6 +131,15 @@ def _fast_rotate_batch_impl(cipher, offsets, cryptoContext, *, output_ext):
         cryptoContext,
     )
     return cipher.cipher_like(list(cv), batch_size=batch_size, cipher_id="assign")
+
+
+def _normalize_offsets(offsets):
+    if isinstance(offsets, (int, np.integer)):
+        return (int(offsets),)
+    offsets = tuple(int(offset) for offset in offsets)
+    if not offsets:
+        raise ValueError("fast_rotate: expected at least one offset")
+    return offsets
 
 
 def _normal_giant_rotate_sum(ciphers, offset, cryptoContext):

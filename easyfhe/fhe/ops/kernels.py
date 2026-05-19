@@ -483,14 +483,6 @@ def cipher_fused_grouped_pairwise_mac(cipher, plaintext, groups, context):
     active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
     cipher_values = torch.stack(cipher.cv, dim=0)
     plaintext_values = _native_plaintext_batch(plaintext)
-    if _grouped_pairwise_mac_needs_cuda_fallback(cipher_values, cipher.batch_size, groups):
-        return _cipher_fused_grouped_pairwise_mac_loop(
-            cipher,
-            plaintext_values,
-            groups,
-            active_limbs,
-            context,
-        )
     res = torch.batched_pairwise_mac(
         cipher_values,
         plaintext_values,
@@ -503,15 +495,6 @@ def cipher_fused_grouped_pairwise_mac(cipher, plaintext, groups, context):
         context.N,
     )
     return res[0], res[1]
-
-
-def _grouped_pairwise_mac_needs_cuda_fallback(cipher_values, cipher_batch_size, groups):
-    if not cipher_values.is_cuda or int(groups) <= 1:
-        return False
-    block_size = 256
-    bytes_per_uint64 = 8
-    shared_bytes = int(cipher_batch_size) * block_size * bytes_per_uint64 * 2
-    return shared_bytes > 48 * 1024
 
 
 def _cipher_fused_grouped_pairwise_mac_loop(cipher, plaintext_values, groups, active_limbs, context):
@@ -537,11 +520,6 @@ def _cipher_fused_grouped_pairwise_mac_loop(cipher, plaintext_values, groups, ac
     return res[0], res[1]
 
 
-def cipher_fused_pairwise_mac(cipher, plaintext, context):
-    res = cipher_fused_grouped_pairwise_mac(cipher, plaintext, 1, context)
-    return res[0][0], res[1][0]
-
-
 def cipher_fused_broadcast_mac(cipher, plaintext, context):
     active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
     cipher_values = torch.stack(cipher.cv, dim=0)
@@ -554,6 +532,33 @@ def cipher_fused_broadcast_mac(cipher, plaintext, context):
         context.QbarretKplusPbarretK_map[cipher.cur_limbs],
         plaintext.batch_size,
         active_limbs,
+        context.N,
+    )
+    return res[0], res[1]
+
+
+def cipher_scalar_weighted_acc(cipher, scalars, context):
+    if cipher.is_ext:
+        raise ValueError("cipher_scalar_weighted_acc expects a non-ext cipher batch")
+    if int(scalars.shape[0]) != int(cipher.batch_size):
+        raise ValueError(
+            "cipher_scalar_weighted_acc scalar batch mismatch: "
+            f"{int(scalars.shape[0])} != {cipher.batch_size}"
+        )
+    if int(scalars.shape[1]) != int(cipher.cur_limbs):
+        raise ValueError(
+            "cipher_scalar_weighted_acc scalar limb mismatch: "
+            f"{int(scalars.shape[1])} != {cipher.cur_limbs}"
+        )
+    cipher_values = torch.stack(cipher.cv, dim=0)
+    res = torch.scalar_weighted_acc(
+        cipher_values,
+        scalars,
+        context.moduliQ,
+        context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
+        context.QbarretKplusPbarretK_map[cipher.cur_limbs],
+        cipher.batch_size,
+        cipher.cur_limbs,
         context.N,
     )
     return res[0], res[1]

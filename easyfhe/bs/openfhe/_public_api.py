@@ -1,4 +1,5 @@
 CORE_API = (
+    "BootstrapPlan",
     "bootstrap",
     "depth",
     "generate",

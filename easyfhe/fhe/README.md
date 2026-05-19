@@ -7,6 +7,9 @@ runtime options, and native key material generation.
 
 ## Public Entry Points
 
+For the application-facing API contract, see
+[`docs/application-api.md`](../../docs/application-api.md).
+
 Use the package root for stable FHE workflows:
 
 ```python
@@ -19,12 +22,13 @@ The main entry points are:
 - `CKKSContextSpec` and `generate_context` for context construction. Use
   `easyfhe.bs.openfhe` to plan bootstrap extra depth and bootstrap rotation keys
   before constructing the context.
-- `Context`, `CipherState`, `PreparedPlaintext`, and `ConstantBundle` for
-  runtime state and reusable scalar/vector constant packs.
-- `prepare_plaintext`, `make_plaintext`, `encode`, and ciphertext slot helpers.
+- `Context`, `CipherState`, and `ConstantBundle` for runtime state and reusable
+  scalar/vector constant packs. Plaintext materialization should go through
+  `ConstantBundle.plaintext(...)`; raw encoding stages are internal helpers.
+- ciphertext slot helpers.
 - `homo_add`, `homo_sub`, `homo_mul`, `homo_square`, scalar/plaintext variants,
   rotations, and `align_to` for explicit ciphertext state alignment.
-- `RuntimeOptions` and `profile` for runtime control and instrumentation.
+- `RuntimeOptions` for runtime control.
 
 The supported external API is the allowlist in `easyfhe.fhe.__all__`, sourced
 from `easyfhe.fhe._public_api.PUBLIC_API`. Importable submodules are
@@ -35,9 +39,9 @@ New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
 construction and add it to the application's remaining-depth budget when
 choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
 directly. After context construction, call `bs.generate(ctx, ...)` to generate
-bootstrap constants as a `ConstantBundle`, then call
-`bs.register_rotation_keys(ctx, constants)` and
-`bs.bootstrap(cipher, ctx, constants, L0=...)` at runtime.
+bootstrap rotation keys, constants, and a bootstrap plan, then call
+`ctx.add_keys(keys)` and `bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at
+runtime.
 
 ## Package Map
 
@@ -51,8 +55,6 @@ bootstrap constants as a `ConstantBundle`, then call
   and OpenFHE-specific internal implementation code.
 - `material/`: native sampler integration, CKKS key material, context material,
   rotation plans, and sample arithmetic.
-- `dev_tools/` and `logger/`: debugging and instrumentation helpers used by
-  development workflows.
 
 ## Refactor Direction
 

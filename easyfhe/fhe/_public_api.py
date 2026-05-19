@@ -17,13 +17,6 @@ CONSTANT_API = (
     "ConstantBundle",
 )
 
-ENCODING_API = (
-    "encode",
-    "make_plaintext",
-    "make_plaintext_batch",
-    "prepare_plaintext",
-)
-
 ALIGNMENT_API = (
     "CipherState",
     "align_to",
@@ -45,11 +38,8 @@ BASIC_OPS_API = (
 
 HOISTED_OPS_API = (
     "fast_rotate",
-    "fast_rotate_batch",
-    "fast_rotate_ext_batch",
     "fused_broadcast_mac",
     "fused_grouped_pairwise_mac",
-    "fused_pairwise_mac",
     "giant_rotate_sum",
     "hoisted_mac_sum",
 )
@@ -58,18 +48,11 @@ SHAPE_API = (
     "slot_resize",
 )
 
-MODULE_API = (
-    "config",
-    "utils",
-)
-
 PUBLIC_API = (
     *CONTEXT_API,
     *CONSTANT_API,
-    *ENCODING_API,
     *ALIGNMENT_API,
     *BASIC_OPS_API,
     *HOISTED_OPS_API,
     *SHAPE_API,
-    *MODULE_API,
 )

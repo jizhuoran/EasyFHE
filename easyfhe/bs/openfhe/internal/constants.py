@@ -7,6 +7,7 @@ import numpy as np
 
 from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.constants import ConstantBundle
+from .approx_plan import degree, get_bootstrap_approx_plan
 from .rotations import linear_transform_plan
 from .precompute_context import BsContext
 
@@ -21,7 +22,7 @@ def _round_half_away_from_zero(number, ndigits=0):
 
 
 @dataclass(frozen=True)
-class BootstrapPlan:
+class _BootstrapConfig:
     log_bs_slots: int
     level_budget: list[int]
     dim1: list[int]
@@ -33,7 +34,24 @@ class BootstrapPlan:
         return 1 << self.log_bs_slots
 
 
-BootstrapConstants = ConstantBundle
+@dataclass(frozen=True)
+class BootstrapPlan:
+    log_bs_slots: int
+    level_budget: tuple[int, int]
+    dim1: tuple[int, int]
+    strategy: str
+    max_levels_remaining: int
+    c2s_plan: object
+    s2c_plan: object
+    scalar_names: dict[str, str]
+    approx_scalar_names: dict[tuple[str, ...], tuple[str, ...]]
+    double_angle_scalar_names: tuple[str, ...]
+    plaintext_batches: dict[str, dict[int, dict[str, object]]]
+    required_rotations: tuple[int, ...]
+
+    @property
+    def slots(self):
+        return 1 << self.log_bs_slots
 
 
 def _normalize_level_budget(level_budget):
@@ -82,7 +100,7 @@ def _resolve_max_levels_remaining(crypto_context, maxLevelsRemaining):
 
 
 def _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1, strategy):
-    return BootstrapPlan(
+    return _BootstrapConfig(
         log_bs_slots=int(log_bs_slots),
         level_budget=_normalize_level_budget(level_budget),
         dim1=_normalize_dim1(dim1),
@@ -209,6 +227,8 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
 
 def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context):
     scalars = _compute_bootstrap_scalars(crypto_context, plan, bs_context.k)
+    approx_scalar_names = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
+    double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
     c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
     s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
     plaintext_names = {
@@ -220,35 +240,82 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
         **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
     }
     plaintext_batches = {
-        "C2S": _plaintext_batch_specs(c2s_plan, plaintext_names["C2S"], vectors),
-        "S2C": _plaintext_batch_specs(s2c_plan, plaintext_names["S2C"], vectors),
+        "C2S": _pack_plaintext_batch_specs(c2s_plan, plaintext_names["C2S"], vectors),
+        "S2C": _pack_plaintext_batch_specs(s2c_plan, plaintext_names["S2C"], vectors),
     }
-    return ConstantBundle(
-        info={
-            "kind": "openfhe.bootstrap",
-            "log_bs_slots": plan.log_bs_slots,
-            "level_budget": plan.level_budget,
-            "dim1": plan.dim1,
-            "strategy": plan.strategy,
-            "max_levels_remaining": plan.max_levels_remaining,
-            "c2s_plan": c2s_plan,
-            "s2c_plan": s2c_plan,
-            "scalar_names": {
-                "degree": "deg",
-                "correction_factor": "correction_factor",
-                "correction": "correction",
-                "pre": "pre",
-                "post_scalar": "scalar",
-                "constant_eval_mult": "constant_eval_mult",
-                "cor_factor": "cor_factor",
-            },
-            "plaintext_names": plaintext_names,
-            "plaintext_batches": plaintext_batches,
-            "required_rotations": required_rotations,
-        },
-        scalars=scalars,
-        vectors=vectors,
+    scalar_names = {
+        "degree": "deg",
+        "correction_factor": "correction_factor",
+        "correction": "correction",
+        "pre": "pre",
+        "post_scalar": "scalar",
+        "constant_eval_mult": "constant_eval_mult",
+        "cor_factor": "cor_factor",
+    }
+    bootstrap_plan = BootstrapPlan(
+        log_bs_slots=plan.log_bs_slots,
+        level_budget=tuple(plan.level_budget),
+        dim1=tuple(plan.dim1),
+        strategy=plan.strategy,
+        max_levels_remaining=plan.max_levels_remaining,
+        c2s_plan=c2s_plan,
+        s2c_plan=s2c_plan,
+        scalar_names=scalar_names,
+        approx_scalar_names=approx_scalar_names,
+        double_angle_scalar_names=double_angle_scalar_names,
+        plaintext_batches=plaintext_batches,
+        required_rotations=tuple(required_rotations),
     )
+    constants = ConstantBundle(scalars=scalars, vectors=vectors)
+    return constants, bootstrap_plan
+
+
+def _register_approx_scalars(scalars, secret_key_dist):
+    names = {}
+    approx_plan = get_bootstrap_approx_plan(secret_key_dist)
+
+    def add(path, coefficients, size=None):
+        path = tuple(path)
+        deg = _coeff_degree(coefficients, size)
+        item_names = []
+        for index, value in enumerate(coefficients[1 : deg + 1], start=1):
+            name = "approx." + ".".join((*path, str(index)))
+            scalars[name] = float(value)
+            item_names.append(name)
+        names[path] = tuple(item_names)
+
+    def walk(node, path):
+        add((*path, "c"), node.divcs_q)
+        add((*path, "q"), node.divqr_q, node.k)
+        add((*path, "s"), node.s2, node.k)
+        if node.q_node is not None:
+            walk(node.q_node, (*path, "q_node"))
+        if node.s_node is not None:
+            walk(node.s_node, (*path, "s_node"))
+
+    walk(approx_plan.ps_root, ("root",))
+    return names
+
+
+def _register_double_angle_scalars(scalars, secret_key_dist):
+    approx_plan = get_bootstrap_approx_plan(secret_key_dist)
+    names = []
+    for j in range(1, approx_plan.double_angle_iterations + 1):
+        name = f"approx.double_angle.{j}"
+        scalars[name] = -1.0 / math.pow(
+            2.0 * math.pi,
+            math.pow(2.0, j - approx_plan.double_angle_iterations),
+        )
+        names.append(name)
+    return tuple(names)
+
+
+def _coeff_degree(coefficients, size=None):
+    if size is None:
+        return degree(coefficients)
+    truncated = np.copy(coefficients[: int(size)])
+    truncated.resize(int(size), refcheck=False)
+    return degree(truncated)
 
 
 def _flatten_table(name_table, table, ring_dim, default_slots):
@@ -305,8 +372,9 @@ def _name_table(plan):
     return names
 
 
-def _plaintext_batch_specs(plan, name_table, vectors):
+def _pack_plaintext_batch_specs(plan, name_table, vectors):
     specs = {}
+    log_slots = int(plan.slots).bit_length() - 1
     for loop_pos, level in enumerate(plan.loop_range):
         if loop_pos == len(plan.loop_range) - 1 and plan.rem:
             giant_step = int(plan.giant_step_rem)
@@ -326,8 +394,10 @@ def _plaintext_batch_specs(plan, name_table, vectors):
         }
         if len(slots) != 1:
             raise ValueError(f"{plan.direction} constants have mixed slots at level {level}: {sorted(slots)}")
+        batch_name = f"{plan.direction}_{log_slots}_{int(level)}_batch"
+        vectors[batch_name] = np.stack([vectors.pop(name) for name in names], axis=0)
         specs[int(level)] = {
-            "names": names,
+            "name": batch_name,
             "slots": slots.pop(),
             "baby_step": baby_step,
             "giant_step": giant_step,
@@ -359,6 +429,4 @@ def generate_bootstrap_constants(
     c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
     s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
     required_rotations = _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan)
-    constants = _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)
-
-    return constants
+    return _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)

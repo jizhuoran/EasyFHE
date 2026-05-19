@@ -4,16 +4,12 @@ import easyfhe as torch
 
 from ..ciphertext import Cipher
 from .arithmetic import homo_add
-from .encoding import encode
+from .encoding import encode_stage2
 from .plaintext import homo_mul_pt
 from .rotation import homo_rotate
 
 
 def slot_resize(x, slots, cryptoContext):
-    return _slot_resize(x, slots, cryptoContext)
-
-
-def _slot_resize(x, slots, cryptoContext):
     if x.is_ext:
         raise ValueError("slot_resize: expected non-ext cipher")
 
@@ -21,12 +17,12 @@ def _slot_resize(x, slots, cryptoContext):
         res = x.deep_copy()
     else:
         mask_name = "slot_conversion_mask_{}to{}".format(x.slots, slots)
-        _, mask = encode(
+        mask = encode_stage2(
             cryptoContext.encode_values[mask_name],
-            cryptoContext,
             level=cryptoContext.L - x.cur_limbs,
             slots=x.slots,
             is_ext=x.is_ext,
+            cryptoContext=cryptoContext,
         )
         res = homo_mul_pt(x, mask, cryptoContext)
         for i in range(int(math.log2(slots)), int(math.log2(x.slots))):
@@ -36,10 +32,6 @@ def _slot_resize(x, slots, cryptoContext):
 
 
 def extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):
-    return _extract_cv(cipher, index, cryptoContext, append_zeros=append_zeros)
-
-
-def _extract_cv(cipher: Cipher, index, cryptoContext, append_zeros=False):
     if index not in (0, 1):
         raise ValueError(f"extract_cv: index must be 0 or 1, got {index}")
     if append_zeros:

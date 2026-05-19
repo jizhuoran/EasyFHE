@@ -2,7 +2,7 @@ from dataclasses import fields
 
 from .ciphertext import Plaintext, PreparedPlaintext
 from .runtime.scale_policy import split_rescale_tech
-from .runtime.instrumentation import instrumentation_from_config
+from .runtime.instrumentation import instrumentation_from_options
 from .material.context_material import RuntimeContextMaterial, runtime_material_from_builder
 
 
@@ -89,7 +89,7 @@ class Context:
 
         self.device = device
         self.options = options
-        self.instrumentation = instrumentation_from_config(options)
+        self.instrumentation = instrumentation_from_options(options)
         self.inBS = inBS
 
         # common params
@@ -198,7 +198,6 @@ class Context:
                 self.encode_values[key].cv = [cv.to(device) for cv in self.encode_values[key].cv]
             elif isinstance(value, PreparedPlaintext):
                 self.encode_values[key] = value.deep_copy()
-                self.encode_values[key].encoded_values = self.encode_values[key].encoded_values.to(device)
             else:
                 raise ValueError("Unknown type in encode_values")
             
@@ -337,9 +336,9 @@ class Context:
         if key_requirements is None:
             return ()
 
-        info = getattr(key_requirements, "info", None)
-        if info is not None and "required_rotations" in info:
-            return (tuple(info["required_rotations"]),)
+        required_rotations = getattr(key_requirements, "required_rotations", None)
+        if required_rotations is not None:
+            return (tuple(required_rotations),)
 
         if _looks_like_generate_result(key_requirements):
             return Context._rotation_groups_from_key_requirements(key_requirements[0])
@@ -367,11 +366,9 @@ class Context:
 
 
 def _looks_like_generate_result(value):
-    if not isinstance(value, tuple) or len(value) != 2:
+    if not isinstance(value, tuple) or len(value) != 3:
         return False
-    constants = value[1]
-    info = getattr(constants, "info", None)
-    return info is not None and "required_rotations" in info
+    return _is_sequence(value[0]) and getattr(value[2], "required_rotations", None) is not None
 
 
 def _looks_like_requirements_result(value):
