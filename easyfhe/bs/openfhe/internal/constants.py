@@ -35,18 +35,33 @@ class _BootstrapConfig:
 
 
 @dataclass(frozen=True)
+class BootstrapTransformStep:
+    level: int
+    input_offsets: tuple[int, ...]
+    plaintext_name: str
+    plaintext_slots: int
+    giant_offset: int
+    baby_step: int
+    giant_step: int
+
+
+@dataclass(frozen=True)
+class BootstrapTransformPlan:
+    direction: str
+    steps: tuple[BootstrapTransformStep, ...]
+
+
+@dataclass(frozen=True)
 class BootstrapPlan:
     log_bs_slots: int
     level_budget: tuple[int, int]
     dim1: tuple[int, int]
     strategy: str
     max_levels_remaining: int
-    c2s_plan: object
-    s2c_plan: object
-    scalar_names: dict[str, str]
+    c2s_plan: BootstrapTransformPlan
+    s2c_plan: BootstrapTransformPlan
     approx_scalar_names: dict[tuple[str, ...], tuple[str, ...]]
     double_angle_scalar_names: tuple[str, ...]
-    plaintext_batches: dict[str, dict[int, dict[str, object]]]
     required_rotations: tuple[int, ...]
 
     @property
@@ -208,9 +223,10 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
         correction_factor = 9
 
     correction = correction_factor - deg
+    correction_scale = 2.0**(-correction)
     post = 2.0**deg
     pre = 1.0 / post
-    scalar = round(post)
+    post_scalar = round(post)
     constant_eval_mult = pre * (1.0 / (k * N))
     cor_factor = 1 << round(correction)
 
@@ -218,8 +234,9 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
         deg=deg,
         correction_factor=correction_factor,
         correction=correction,
+        correction_scale=correction_scale,
         pre=pre,
-        scalar=scalar,
+        post_scalar=post_scalar,
         constant_eval_mult=constant_eval_mult,
         cor_factor=cor_factor,
     )
@@ -239,31 +256,18 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
         **_flatten_table(plaintext_names["C2S"], bs_context.m_U0hatTPreFFT, bs_context.N, plan.slots),
         **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
     }
-    plaintext_batches = {
-        "C2S": _pack_plaintext_batch_specs(c2s_plan, plaintext_names["C2S"], vectors),
-        "S2C": _pack_plaintext_batch_specs(s2c_plan, plaintext_names["S2C"], vectors),
-    }
-    scalar_names = {
-        "degree": "deg",
-        "correction_factor": "correction_factor",
-        "correction": "correction",
-        "pre": "pre",
-        "post_scalar": "scalar",
-        "constant_eval_mult": "constant_eval_mult",
-        "cor_factor": "cor_factor",
-    }
+    c2s_runtime_plan = _build_runtime_transform_plan(c2s_plan, plaintext_names["C2S"], vectors)
+    s2c_runtime_plan = _build_runtime_transform_plan(s2c_plan, plaintext_names["S2C"], vectors)
     bootstrap_plan = BootstrapPlan(
         log_bs_slots=plan.log_bs_slots,
         level_budget=tuple(plan.level_budget),
         dim1=tuple(plan.dim1),
         strategy=plan.strategy,
         max_levels_remaining=plan.max_levels_remaining,
-        c2s_plan=c2s_plan,
-        s2c_plan=s2c_plan,
-        scalar_names=scalar_names,
+        c2s_plan=c2s_runtime_plan,
+        s2c_plan=s2c_runtime_plan,
         approx_scalar_names=approx_scalar_names,
         double_angle_scalar_names=double_angle_scalar_names,
-        plaintext_batches=plaintext_batches,
         required_rotations=tuple(required_rotations),
     )
     constants = ConstantBundle(scalars=scalars, vectors=vectors)
@@ -372,8 +376,8 @@ def _name_table(plan):
     return names
 
 
-def _pack_plaintext_batch_specs(plan, name_table, vectors):
-    specs = {}
+def _build_runtime_transform_plan(plan, name_table, vectors):
+    steps = []
     log_slots = int(plan.slots).bit_length() - 1
     for loop_pos, level in enumerate(plan.loop_range):
         if loop_pos == len(plan.loop_range) - 1 and plan.rem:
@@ -396,13 +400,20 @@ def _pack_plaintext_batch_specs(plan, name_table, vectors):
             raise ValueError(f"{plan.direction} constants have mixed slots at level {level}: {sorted(slots)}")
         batch_name = f"{plan.direction}_{log_slots}_{int(level)}_batch"
         vectors[batch_name] = np.stack([vectors.pop(name) for name in names], axis=0)
-        specs[int(level)] = {
-            "name": batch_name,
-            "slots": slots.pop(),
-            "baby_step": baby_step,
-            "giant_step": giant_step,
-        }
-    return specs
+        giant_offsets = tuple(int(offset) for offset in plan.rot_out[level][:baby_step])
+        giant_offset = int(giant_offsets[1]) - int(giant_offsets[0]) if len(giant_offsets) > 1 else 0
+        steps.append(
+            BootstrapTransformStep(
+                level=int(level),
+                input_offsets=tuple(int(offset) for offset in plan.rot_in[level][:giant_step]),
+                plaintext_name=batch_name,
+                plaintext_slots=slots.pop(),
+                giant_offset=giant_offset,
+                baby_step=baby_step,
+                giant_step=giant_step,
+            )
+        )
+    return BootstrapTransformPlan(direction=plan.direction, steps=tuple(steps))
 
 
 def _plan_row_sizes(plan):

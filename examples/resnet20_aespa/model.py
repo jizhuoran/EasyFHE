@@ -116,14 +116,14 @@ def _bootstrap_material(rt):
     return rt.bootstrap_material[log_bs_slots]
 
 
-def _bootstrap(rt, input, L0=None):
+def _bootstrap(rt, input, L0):
     constants, plan = _bootstrap_material(rt)
     return bs.bootstrap(
         input,
         rt.ctx,
         constants,
         plan,
-        L0=rt.ctx.L if L0 is None else L0,
+        L0=L0,
     )
 
 

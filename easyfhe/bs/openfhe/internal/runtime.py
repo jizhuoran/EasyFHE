@@ -1,4 +1,5 @@
 import math
+
 import easyfhe as torch
 from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import alignment
@@ -7,101 +8,7 @@ from easyfhe.fhe.ops import rotation
 from . import approx as bootstrap_approx
 
 
-Tensor = torch.Tensor
-NORMAL_CIPHER_SIZE = 2
-BASE_NUM_LEVELS_TO_DROP = 1
-
-
-def _match_state(ciphertext, cur_limbs, noise_deg, scaling_factor, cryptoContext):
-    return alignment.align_to(
-        ciphertext,
-        alignment.CipherState(cur_limbs, noise_deg, scaling_factor),
-        cryptoContext,
-    )
-
-
-def _rescale(ciphertext, levels, cryptoContext):
-    return _match_state(
-        ciphertext,
-        ciphertext.cur_limbs - levels,
-        ciphertext.noise_deg - levels,
-        None,
-        cryptoContext,
-    )
-
-def assign_scaling_factor(cipher, target_sf, cryptoContext):
-    return _assign_scaling_factor(cipher, target_sf, cryptoContext)
-
-
-def _assign_scaling_factor(cipher, target_sf, cryptoContext):
-    cipher.scaling_factor = target_sf
-    return cipher
-
-
-def adjust_ciphertext(ciphertext, correction, L0, cryptoContext):
-    rescale_tech = cryptoContext.rescaleTech
-
-    if rescale_tech == "FLEXIBLEAUTO":
-        lvl = 0
-        if cryptoContext.L != L0:
-            # Print error message and raise an exception to stop the program
-            print("cryptoContext.L != L0")
-            raise Exception("Error: cryptoContext.L != L0")
-        target_sf = cryptoContext.scale_at(cur_limbs=(L0 - lvl))
-        source_sf = ciphertext.scaling_factor
-        num_towers = ciphertext.cur_limbs
-        mod_to_drop = float(cryptoContext.moduliQ_scalar[num_towers - 1])
-        # in the case of FLEXIBLEAUTO, we need to bring the ciphertext to the right scale using a
-        # a scaling multiplication. Note the at currently FLEXIBLEAUTO is only supported for NATIVEINT = 64.
-        # So the other branch is for future purposes (in case we decide to add add the FLEXIBLEAUTO support
-        # for NATIVEINT = 128.
-        # Scaling down the message by a correction factor to emulate using a larger q0.
-        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
-        adjustment_factor = (
-                (target_sf / source_sf)
-                * (mod_to_drop / source_sf)
-                * math.pow(2, -correction)
-        )  # if NATIVEINT != 128
-        ciphertext = homo.homo_mul_scalar_double(
-            ciphertext, adjustment_factor, cryptoContext
-        )
-        ciphertext = _rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-        ciphertext = assign_scaling_factor(ciphertext, target_sf, cryptoContext)
-
-    else:
-        # Scaling down the message by a correction factor to emulate using a larger q0.
-        # This step is needed so we could use a scaling factor of up to 2^59 with q9 ~= 2^60.
-        cnst = math.pow(2, -correction)
-        ciphertext = homo.homo_mul_scalar_double(ciphertext, cnst, cryptoContext)
-        ciphertext = _rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-    return ciphertext
-
-
-def _validate_transform_plan(plan, constants, bootstrap_plan):
-    if constants is None:
-        raise ValueError(f"{plan.direction} conversion requires explicit bootstrap constants")
-    if bootstrap_plan is None:
-        raise ValueError(f"{plan.direction} conversion requires explicit bootstrap plan")
-
-
-def _constant_scalar(constants, bootstrap_plan, name):
-    scalar_name = bootstrap_plan.scalar_names.get(name, name)
-    return constants.scalar(scalar_name)
-
-
-def _constant_encoded_scalar(constants, bootstrap_plan, name, cipher, cryptoContext, mode):
-    scalar_name = bootstrap_plan.scalar_names.get(name, name)
-    noise_deg = 1 if mode == "double" else 0
-    return constants.encoded_scalars(scalar_name, cipher.cur_limbs, noise_deg, cryptoContext, mode=mode)[0]
-
-
-def _homo_conjugate(cipher, cryptoContext):
-    return homo.homo_rotate(cipher, 2 * cryptoContext.N - 1, cryptoContext)
-
-
 def coeffs_slots_conversion(ciphertext, transform_plan, constants, bootstrap_plan, cryptoContext):
-    _validate_transform_plan(transform_plan, constants, bootstrap_plan)
-    plan = transform_plan
     result = ciphertext
     strategy = bootstrap_plan.strategy
     hoist_strategy = {
@@ -109,42 +16,24 @@ def coeffs_slots_conversion(ciphertext, transform_plan, constants, bootstrap_pla
         "normal_giant": "ext_normal",
     }.get(strategy, "ext_double_hoist")
     is_ext = strategy != "normal_bsgs"
-    batch_specs = bootstrap_plan.plaintext_batches[plan.direction]
 
-    for loop_pos, level in enumerate(plan.loop_range):
+    for loop_pos, step in enumerate(transform_plan.steps):
         if loop_pos != 0:
-            result = _rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+            result = alignment.reduce_noise_to_one(result, cryptoContext)
 
-        if loop_pos == len(plan.loop_range) - 1 and plan.rem:
-            giant_step = int(plan.giant_step_rem)
-            baby_step = int(plan.baby_step_rem)
-        else:
-            giant_step = int(plan.giant_step)
-            baby_step = int(plan.baby_step)
-
-        spec = batch_specs[int(level)]
-        if int(spec["baby_step"]) != baby_step or int(spec["giant_step"]) != giant_step:
-            raise ValueError(
-                f"{plan.direction} plaintext batch metadata mismatch at level {level}: "
-                f"got baby={spec['baby_step']} giant={spec['giant_step']}, "
-                f"expected baby={baby_step} giant={giant_step}"
-            )
-
-        giant_offsets = plan.rot_out[level][:baby_step]
-        giant_offset = int(giant_offsets[1]) - int(giant_offsets[0]) if len(giant_offsets) > 1 else 0
         plaintext_batch = constants.plaintext(
-            spec["name"],
+            step.plaintext_name,
             cryptoContext.L - result.cur_limbs,
-            spec["slots"],
+            step.plaintext_slots,
             cryptoContext,
             is_ext=is_ext,
         )
         result = rotation.hoisted_mac_sum(
             result,
-            plan.rot_in[level][:giant_step],
+            step.input_offsets,
             plaintext_batch,
-            giant_offset,
-            baby_step,
+            step.giant_offset,
+            step.baby_step,
             cryptoContext,
             strategy=hoist_strategy,
         )
@@ -171,13 +60,9 @@ def eval_slots_to_coeffs(ctxt, cryptoContext, bootstrap_constants, bootstrap_pla
     )
 
 
-def eval_linear_transform(ct, scheme):
-    # TODO: to be implemented
-    pass
-
-
-def mod_raise(cipher, L0, cryptoContext):
-    return _mod_raise(cipher, L0, cryptoContext)
+def _require_supported_transform_mode(level_budget):
+    if int(level_budget[0]) == 1 and int(level_budget[1]) == 1:
+        raise NotImplementedError("linear-transform bootstrap with level_budget=(1, 1) is not implemented")
 
 
 def _mod_raise(cipher, L0, cryptoContext):
@@ -199,240 +84,142 @@ def _mod_raise(cipher, L0, cryptoContext):
     return cipher.cipher_like(cv, L0)
 
 
-def mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
-    return _mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext)
-
-
-def _mult_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
+def _mul_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
     F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
     return cipher
 
 
-# note: EvalBootstrap in ckksrns-fhe.cpp
-# @utils.profile_pytorch_function
-def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan, L0=None):
+def _validate_bootstrap_inputs(bootstrap_constants, bootstrap_plan):
     if bootstrap_constants is None:
         raise ValueError("homo_bootstrap requires bootstrap_constants generated by easyfhe.bs.openfhe.generate(ctx, ...)")
     if bootstrap_plan is None:
         raise ValueError("homo_bootstrap requires bootstrap_plan generated by easyfhe.bs.openfhe.generate(ctx, ...)")
 
+
+def _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
+    correction_scale = bootstrap_constants.scalar("correction_scale")
+    result = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
+        if cryptoContext.L != L0:
+            raise ValueError("FLEXIBLEAUTO bootstrap currently requires cryptoContext.L == L0")
+        target_sf = cryptoContext.scale_at(cur_limbs=L0)
+        source_sf = result.scaling_factor
+        mod_to_drop = float(cryptoContext.moduliQ_scalar[result.cur_limbs - 1])
+        correction_scale *= (target_sf / source_sf) * (mod_to_drop / source_sf)
+
+    result = homo.homo_mul_scalar_double(result, correction_scale, cryptoContext)
+    result = alignment.rescale_one_level(result, cryptoContext)
+    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
+        result.scaling_factor = target_sf
+
+    result = _mod_raise(result, L0, cryptoContext)
+    scalar = bootstrap_constants.encoded_scalars(
+        "constant_eval_mult", result.cur_limbs, 1, cryptoContext, mode="double"
+    )[0]
+    return homo.homo_mul_scalar_double(result, scalar, cryptoContext)
+
+
+def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
+    scalar = bootstrap_constants.encoded_scalars(
+        "post_scalar", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
+    )[0]
+    return homo.homo_mul_scalar_int(
+        ciphertext,
+        scalar,
+        cryptoContext,
+    )
+
+
+def _scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
+    scalar = bootstrap_constants.encoded_scalars(
+        "cor_factor", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
+    )[0]
+    return homo.homo_mul_scalar_int(
+        ciphertext,
+        scalar,
+        cryptoContext,
+    )
+
+
+def _eval_bootstrap_approx(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan):
+    return bootstrap_approx.eval_bootstrap_approx_mod(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan)
+
+
+def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan):
+    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
+    encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
+
+    conjugate = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
+    imag = homo.homo_sub(encoded, conjugate, cryptoContext)
+    real = homo.homo_add(encoded, conjugate, cryptoContext)
+    imag = _mul_by_monomial_inplace(imag, 3 * cryptoContext.M // 4, cryptoContext)
+
+    real = alignment.reduce_noise_to_one(real, cryptoContext)
+    imag = alignment.reduce_noise_to_one(imag, cryptoContext)
+
+    real = _eval_bootstrap_approx(real, cryptoContext, bootstrap_constants, bootstrap_plan)
+    imag = _eval_bootstrap_approx(imag, cryptoContext, bootstrap_constants, bootstrap_plan)
+
+    imag = _mul_by_monomial_inplace(imag, cryptoContext.M // 4, cryptoContext)
+    encoded = homo.homo_add(real, imag, cryptoContext)
+    encoded = _scale_after_approx(encoded, cryptoContext, bootstrap_constants)
+    encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
+    return eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+
+
+def _replicate_sparse_slots(raised, slots, cryptoContext):
+    for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
+        raised = homo.homo_add(
+            raised,
+            homo.homo_rotate(raised, (1 << step) * slots, cryptoContext),
+            cryptoContext,
+        )
+    return raised.cipher_like(raised.cv, slots=slots)
+
+
+def _restore_sparse_slots(decoded, slots, original_slots, cryptoContext):
+    decoded = homo.homo_add(decoded, homo.homo_rotate(decoded, slots, cryptoContext), cryptoContext)
+    decoded = decoded.cipher_like(decoded.cv, slots=slots)
+    return decoded.cipher_like(decoded.cv, slots=original_slots)
+
+
+def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan):
+    raised = _replicate_sparse_slots(raised, slots, cryptoContext)
+    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
+
+    encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
+    conjugate = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
+    encoded = homo.homo_add(encoded, conjugate, cryptoContext)
+    encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
+
+    encoded = _eval_bootstrap_approx(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+    encoded = _scale_after_approx(encoded, cryptoContext, bootstrap_constants)
+    encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
+
+    decoded = eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+    return _restore_sparse_slots(decoded, slots, original_slots, cryptoContext)
+
+
+# note: EvalBootstrap in ckksrns-fhe.cpp
+def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan, L0):
+    _validate_bootstrap_inputs(bootstrap_constants, bootstrap_plan)
+
     if L0 is None:
-        L0 = ciphertext.cur_limbs
-    logBsSlots = int(bootstrap_plan.log_bs_slots)
-    level_budgets = list(bootstrap_plan.level_budget)
-    M = cryptoContext.M
-    N = cryptoContext.N
-    slots = 1 << logBsSlots
-    rescaleTech = cryptoContext.rescaleTech
+        raise ValueError("bootstrap L0 must be explicit")
+    _require_supported_transform_mode(bootstrap_plan.level_budget)
 
-    deg = _constant_scalar(bootstrap_constants, bootstrap_plan, "degree")
-    correctionFactor = _constant_scalar(bootstrap_constants, bootstrap_plan, "correction_factor")
-    correction = _constant_scalar(bootstrap_constants, bootstrap_plan, "correction")
+    slots = bootstrap_plan.slots
+    raised = _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0)
+    if slots == cryptoContext.M // 4:
+        decoded = _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
+    else:
+        decoded = _bootstrap_sparse(raised, ciphertext.slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan)
 
-    if deg > correctionFactor:
-        print(
-            "Warning: Degree [",
-            deg,
-            "] must be less than or equal to the correction factor[",
-            correctionFactor,
-            "].",
-        )
-
-    # -------------------
-    # raising the modulus
-    # -------------------
-    # In FLEXIBLEAUTO, raising the ciphertext to a larger number
-    # of towers is a bit more complex, because we need to adjust
-    # it's scaling factor to the one that corresponds to the level
-    # it's being raised to.
-    # Increasing the modulus
-
-    tmp = ciphertext
-    tmp = _rescale(tmp, tmp.noise_deg - 1, cryptoContext)
-    tmp = adjust_ciphertext(tmp, correction, L0, cryptoContext)
-
-    # We only use the level 0 ciphertext here. All other towers are automatically ignored to make
-    # CKKS bootstrapping faster.
-    raised = mod_raise(tmp, L0, cryptoContext)
-
-    constantEvalMult = _constant_encoded_scalar(
-        bootstrap_constants,
-        bootstrap_plan,
-        "constant_eval_mult",
-        raised,
-        cryptoContext,
-        mode="double",
-    )
-
-    raised = homo.homo_mul_scalar_double(raised, constantEvalMult, cryptoContext)
-
-    ctxtDec = None  # Initialize decrypted ciphertext
-    isLTBootstrap = level_budgets[0] == 1 and level_budgets[1] == 1
-
-    if slots == M // 4:  # FULLY PACKED CASE
-        # need to call internal modular reduction so it also works for FLEXIBLEAUTO
-        raised = _rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-        conj = _homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEncI = homo.homo_sub(ctxtEnc, conj, cryptoContext)
-        ctxtEnc = homo.homo_add(ctxtEnc, conj, cryptoContext)
-        ctxtEncI = mult_by_monomial_inplace(ctxtEncI, 3 * M // 4, cryptoContext)
-
-        if ctxtEnc.noise_deg == 2: # noise_deg of ctxtEnc and ctxtEncI should be the same
-            ctxtEnc = _rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-            ctxtEncI = _rescale(ctxtEncI, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        ctxtEnc = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEnc, cryptoContext, bootstrap_constants, bootstrap_plan)
-        ctxtEncI = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEncI, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-        mult_by_monomial_inplace(ctxtEncI, M // 4, cryptoContext)
-        ctxtEnc = homo.homo_add(ctxtEnc, ctxtEncI, cryptoContext)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo.homo_mul_scalar_int(
-            ctxtEnc,
-            _constant_encoded_scalar(bootstrap_constants, bootstrap_plan, "post_scalar", ctxtEnc, cryptoContext, mode="int"),
-            cryptoContext,
-        )
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = _rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(ctxtEnc, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-    else:  # SPARSELY PACKED CASE
-        # -------------------
-        # Running PartialSum
-        # -------------------
-
-        for step in range(int(math.log2(N // (2 * slots)))):
-            temp = homo.homo_rotate(raised, (1 << step) * slots, cryptoContext)
-            raised = homo.homo_add(raised, temp, cryptoContext)
-
-        raised = raised.cipher_like(raised.cv, slots=slots)
-
-        # ---------------------
-        # Running CoeffsToSlots
-        # ---------------------
-        raised = _rescale(raised, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtEnc = eval_linear_transform(precom.m_U0hatTPre, raised, cryptoContext)
-        else:
-            ctxtEnc = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-        conj = _homo_conjugate(ctxtEnc, cryptoContext)
-        ctxtEnc = homo.homo_add(ctxtEnc, conj, cryptoContext)
-        if ctxtEnc.noise_deg ==2 :
-            ctxtEnc = _rescale(ctxtEnc, 1, cryptoContext)
-
-        ctxtEnc = bootstrap_approx.eval_bootstrap_approx_mod(ctxtEnc, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-        # scale the message back up after Chebyshev interpolation
-        ctxtEnc = homo.homo_mul_scalar_int(
-            ctxtEnc,
-            _constant_encoded_scalar(bootstrap_constants, bootstrap_plan, "post_scalar", ctxtEnc, cryptoContext, mode="int"),
-            cryptoContext,
-        )
-
-        # --------------------
-        # Running SlotToCoeff
-        # --------------------
-        # In the case of FLEXIBLEAUTO, we need one extra tower
-        if rescaleTech != "FIXEDMANUAL":
-            ctxtEnc = _rescale(ctxtEnc, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-        if isLTBootstrap:
-            ctxtDec = eval_linear_transform(precom.m_U0Pre, ctxtEnc, cryptoContext)
-        else:
-            ctxtDec = eval_slots_to_coeffs(ctxtEnc, cryptoContext, bootstrap_constants, bootstrap_plan)
+    decoded = _scale_to_original_message(decoded, cryptoContext, bootstrap_constants)
+    return decoded.cipher_like(decoded.cv, slots=ciphertext.slots)
 
 
-        ctxtDec_rot = homo.homo_rotate(ctxtDec, slots, cryptoContext)
-        ctxtDec = homo.homo_add(ctxtDec, ctxtDec_rot, cryptoContext)
-        ctxtDec = ctxtDec.cipher_like(ctxtDec.cv, slots=slots)
-        ctxtDec = ctxtDec.cipher_like(ctxtDec.cv, slots=ciphertext.slots)
-
-    # 64-bit only: scale back the message to its original scale.
-    ctxtDec = homo.homo_mul_scalar_int(
-        ctxtDec,
-        _constant_encoded_scalar(bootstrap_constants, bootstrap_plan, "cor_factor", ctxtDec, cryptoContext, mode="int"),
-        cryptoContext,
-    )
-
-    return ctxtDec.cipher_like(ctxtDec.cv, slots=ciphertext.slots)
-
-
-def homo_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0=None):
-    return _homo_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0=L0)
-
-
-def _homo_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0=None):
+def homo_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0):
     result = eval_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0=L0)
-
-    # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-    result = _rescale(result, result.noise_deg - 1, cryptoContext)
-
-    return result
-
-def homo_double_bootstrap(cipher, L0, logBsSlots, level_budgets, precision, cryptoContext, bootstrap_constants, bootstrap_plan):
-    initSizeQ = cipher.cur_limbs
-
-    # Step 1: Get the input.
-    powerOfTwoModulus = 1 << precision
-
-    # Step 2: Scale up by powerOfTwoModulus, and extend the modulus to powerOfTwoModulus * q.
-    # Note that we extend the modulus implicitly without any code calls because the value always stays 0.
-    ctScaledUp = cipher.deep_copy()
-    # We multiply by powerOfTwoModulus, and leave the last CRT value to be 0 (mod powerOfTwoModulus). #todp:??
-    ctScaledUp = homo.homo_mul_scalar_int(ctScaledUp, powerOfTwoModulus, cryptoContext)
-
-
-    # Step 3: Bootstrap the initial ciphertext.
-    ctInitialBootstrap = eval_bootstrap(cipher, cryptoContext, bootstrap_constants, bootstrap_plan, L0=L0)
-    ctInitialBootstrap = _rescale(ctInitialBootstrap, ctInitialBootstrap.noise_deg - 1, cryptoContext)
-
-    # Step 4: Scale up by powerOfTwoModulus.
-    ctInitialBootstrap = homo.homo_mul_scalar_int(ctInitialBootstrap, powerOfTwoModulus, cryptoContext)
-
-    # Step 5: Mod-down to powerOfTwoModulus * q
-    # We mod down, and leave the last CRT value to be 0 because it's divisible by powerOfTwoModulus.
-    ctBootstrappedScaledDown = ctInitialBootstrap.deep_copy()
-    bootstrappingSizeQ = ctBootstrappedScaledDown.cur_limbs
-    # If we start with more towers, than we obtain from bootstrapping, return the original ciphertext.
-    if bootstrappingSizeQ <= initSizeQ:
-        return cipher.deep_copy()
-    ctBootstrappedScaledDown.cur_limbs = cipher.cur_limbs # note: hard adjust, drop limbs regardless of the rescaleTech
-
-
-    # Step 6 and 7: Calculate the bootstrapping error by subtracting the original ciphertext from the bootstrapped ciphertext. Mod down to q is done implicitly.
-    ctBootstrappingError = homo.homo_sub(ctBootstrappedScaledDown, ctScaledUp, cryptoContext)
-
-    # Step 8: Bootstrap the error.
-    ctBootstrappingError = eval_bootstrap(ctBootstrappingError, cryptoContext, bootstrap_constants, bootstrap_plan, L0=L0)
-    ctBootstrappingError = _rescale(ctBootstrappingError, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
-
-    # Step 9: Subtract the bootstrapped error from the initial bootstrap to get even lower error.
-    finalCiphertext = homo.homo_sub(ctInitialBootstrap, ctBootstrappingError, cryptoContext)
-
-    # Step 10: Scale back down by powerOfTwoModulus to get the original message.
-    finalCiphertext = homo.homo_mul_scalar_double(finalCiphertext, 1.0 / powerOfTwoModulus, cryptoContext)
-
-    # added by yhh. FLEXIBLEAUTO can handle noise_deg=2, therefore no need to rescale
-    finalCiphertext = _rescale(finalCiphertext, finalCiphertext.noise_deg - 1, cryptoContext)
-
-    return finalCiphertext
+    return alignment.reduce_noise_to_one(result, cryptoContext)

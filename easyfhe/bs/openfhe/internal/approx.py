@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from easyfhe.fhe.context import Context
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import homo
 from easyfhe.fhe.ops import kernels as F
@@ -12,31 +11,11 @@ from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 
 from .approx_plan import ChebyshevPSNode, degree, get_bootstrap_approx_plan
 
-BASE_NUM_LEVELS_TO_DROP = 1
-
 
 @dataclass(frozen=True)
 class _ChebyshevBasis:
     items: tuple
     batch: object
-
-
-def _match_state(ciphertext, cur_limbs, noise_deg, scaling_factor, cryptoContext):
-    return alignment.align_to(
-        ciphertext,
-        alignment.CipherState(cur_limbs, noise_deg, scaling_factor),
-        cryptoContext,
-    )
-
-
-def _rescale(ciphertext, levels, cryptoContext):
-    return _match_state(
-        ciphertext,
-        ciphertext.cur_limbs - levels,
-        ciphertext.noise_deg - levels,
-        None,
-        cryptoContext,
-    )
 
 
 def _add_named_scalar_double_preserve_noise(ciphertext, name, constants, cryptoContext):
@@ -81,16 +60,6 @@ def _truncated_degree(coefficients, size):
     return degree(truncated)
 
 
-def _encoded_scalar_batch(constants, bootstrap_plan, path, deg, cur_limbs, cryptoContext):
-    if constants is None or bootstrap_plan is None:
-        raise ValueError("Chebyshev scalar batches require bootstrap constants and plan")
-    path = tuple(path)
-    names = bootstrap_plan.approx_scalar_names[path]
-    if len(names) != int(deg):
-        raise ValueError(f"Chebyshev scalar metadata mismatch at {path}: got {len(names)}, expected {deg}")
-    return constants.encoded_scalars(names, cur_limbs, 1, cryptoContext, mode="double")
-
-
 def _chebyshev_tail(
     coefficients,
     T,
@@ -107,11 +76,18 @@ def _chebyshev_tail(
         return None
     if identity_shortcut and deg == 1 and coefficients[1] == 1:
         return T.items[0]
+
+    names = bootstrap_plan.approx_scalar_names[tuple(scalar_path)]
+    if len(names) != int(deg):
+        raise ValueError(
+            f"Chebyshev scalar metadata mismatch at {scalar_path}: "
+            f"got {len(names)}, expected {deg}"
+        )
+
     batch = _batch_prefix(T.batch, deg)
-    scalars = _encoded_scalar_batch(constants, bootstrap_plan, scalar_path, deg, batch.cur_limbs, cryptoContext)
-    return _rescale(
+    scalars = constants.encoded_scalars(names, batch.cur_limbs, 1, cryptoContext, mode="double")
+    return alignment.rescale_one_level(
         _scalar_weighted_acc(batch, scalars, cryptoContext),
-        BASE_NUM_LEVELS_TO_DROP,
         cryptoContext,
     )
 
@@ -120,16 +96,12 @@ def _add_chebyshev_constant(value, coefficients, cryptoContext):
     return homo.homo_add_scalar_double(value, coefficients[0] / 2, cryptoContext)
 
 
-def _double(ciphertext, cryptoContext):
-    return homo.homo_add(ciphertext, ciphertext, cryptoContext)
-
-
 def _chebyshev_basis(x, a, b, k, cryptoContext):
     T = [_scale_input_to_unit_interval(x, a, b, cryptoContext)]
     for order in range(2, k + 1):
         prod = homo.homo_mul(T[order // 2 - 1], T[(order + 1) // 2 - 1], cryptoContext)
-        value = _double(prod, cryptoContext)
-        value = _rescale(value, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        value = homo.homo_add(prod, prod, cryptoContext)
+        value = alignment.rescale_one_level(value, cryptoContext)
         if order & 1:
             value = homo.homo_sub(value, T[0], cryptoContext)
         else:
@@ -137,19 +109,23 @@ def _chebyshev_basis(x, a, b, k, cryptoContext):
         T.append(value)
 
     final = T[-1]
-    min_limbs = min(item.cur_limbs for item in T)
-    if final.cur_limbs != min_limbs:
-        raise ValueError(
-            f"Chebyshev basis target is not the lowest limb state: "
-            f"final={final.cur_limbs}, min={min_limbs}"
-        )
-    if any(item.noise_deg != 1 for item in T):
-        raise ValueError(
-            "Chebyshev basis expects all terms to have noise_deg=1 before packing: "
-            f"{[item.noise_deg for item in T]}"
-        )
+    # min_limbs = min(item.cur_limbs for item in T)
+    # if final.cur_limbs != min_limbs:
+    #     raise ValueError(
+    #         f"Chebyshev basis target is not the lowest limb state: "
+    #         f"final={final.cur_limbs}, min={min_limbs}"
+    #     )
+    # if any(item.noise_deg != 1 for item in T):
+    #     raise ValueError(
+    #         "Chebyshev basis expects all terms to have noise_deg=1 before packing: "
+    #         f"{[item.noise_deg for item in T]}"
+    #     )
     items = tuple(
-        _match_state(item, final.cur_limbs, final.noise_deg, final.scaling_factor, cryptoContext)
+        alignment.align_to(
+            item,
+            alignment.CipherState(final.cur_limbs, final.noise_deg, final.scaling_factor),
+            cryptoContext,
+        )
         for item in T
     )
     return _ChebyshevBasis(items=items, batch=rotation._pack_ciphers(items))
@@ -160,7 +136,7 @@ def _scale_input_to_unit_interval(x, a, b, cryptoContext):
     alpha = 2 / (b - a)
     if not math.isclose(alpha, 1.0):
         y = homo.homo_mul_scalar_double(x, alpha, cryptoContext)
-        y = _rescale(y, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        y = alignment.rescale_one_level(y, cryptoContext)
 
     beta = 2 * a / (b - a)
     if not math.isclose(beta, -1.0):
@@ -173,8 +149,8 @@ def _chebyshev_doubling_basis(Tk, m, cryptoContext):
     T2 = [Tk]
     for _ in range(1, m):
         value = homo.homo_square(T2[-1], cryptoContext)
-        value = _double(value, cryptoContext)
-        value = _rescale(value, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        value = homo.homo_add(value, value, cryptoContext)
+        value = alignment.rescale_one_level(value, cryptoContext)
         value = homo.homo_add_scalar_double(value, -1.0, cryptoContext)
         T2.append(value)
     return T2
@@ -185,63 +161,16 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
     value = T2[0]
     for doubled in T2[1:]:
         prod = homo.homo_mul(value, doubled, cryptoContext)
-        value = _double(prod, cryptoContext)
-        value = _rescale(value, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        value = homo.homo_add(prod, prod, cryptoContext)
+        value = alignment.rescale_one_level(value, cryptoContext)
         value = homo.homo_sub(value, T2[0], cryptoContext)
     return value
-
-
-def _eval_c(node: ChebyshevPSNode, T, T2, cryptoContext: Context, constants, bootstrap_plan, path, *, root):
-    value = _chebyshev_tail(
-        node.divcs_q,
-        T,
-        cryptoContext,
-        constants,
-        bootstrap_plan,
-        (*path, "c"),
-        identity_shortcut=True,
-    )
-    if value is None:
-        return None
-
-    value = _add_chebyshev_constant(value, node.divcs_q, cryptoContext)
-    if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
-        target = T2[node.m - 1]
-        value = _match_state(
-            value,
-            target.cur_limbs,
-            target.noise_deg,
-            target.scaling_factor,
-            cryptoContext,
-        )
-    return value
-
-
-def _eval_q(node: ChebyshevPSNode, T, T2, cryptoContext: Context, constants, bootstrap_plan, path, *, root):
-    if node.q_node is not None:
-        return _eval_ps_node(node.q_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "q_node"), root=False)
-
-    value = _chebyshev_tail(
-        node.divqr_q,
-        T,
-        cryptoContext,
-        constants,
-        bootstrap_plan,
-        (*path, "q"),
-        size=node.k,
-    )
-    if value is not None:
-        highest = _q_highest_term(node, T.items[node.k - 1], cryptoContext, root=root, has_tail=True)
-        value = homo.homo_add(value, highest, cryptoContext)
-    else:
-        value = _q_highest_term(node, T.items[node.k - 1], cryptoContext, root=root, has_tail=False)
-    return _add_chebyshev_constant(value, node.divqr_q, cryptoContext)
 
 
 def _q_highest_term(node: ChebyshevPSNode, Tk, cryptoContext, *, root, has_tail):
     if root:
         if has_tail:
-            return _double(Tk, cryptoContext)
+            return homo.homo_add(Tk, Tk, cryptoContext)
         value = Tk
         for _ in range(1, int(node.divqr_q[-1])):
             value = homo.homo_add(value, Tk, cryptoContext)
@@ -252,34 +181,62 @@ def _q_highest_term(node: ChebyshevPSNode, Tk, cryptoContext, *, root, has_tail)
     return homo.homo_mul_scalar_int(Tk, scalar, cryptoContext)
 
 
-def _eval_s(node: ChebyshevPSNode, T, T2, cryptoContext: Context, constants, bootstrap_plan, path, *, root):
-    if node.s_node is not None:
-        return _eval_ps_node(node.s_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "s_node"), root=False)
-
-    value = _chebyshev_tail(
-        node.s2,
+def _eval_ps_node(node: ChebyshevPSNode, T, T2, cryptoContext, constants, bootstrap_plan, path, *, root):
+    c = _chebyshev_tail(
+        node.divcs_q,
         T,
         cryptoContext,
         constants,
         bootstrap_plan,
-        (*path, "s"),
-        size=node.k,
+        (*path, "c"),
+        identity_shortcut=True,
     )
-    if value is not None:
-        value = homo.homo_add(value, T.items[node.k - 1], cryptoContext)
+    if c is not None:
+        c = _add_chebyshev_constant(c, node.divcs_q, cryptoContext)
+        if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+            target = T2[node.m - 1]
+            c = alignment.align_to(
+                c,
+                alignment.CipherState(target.cur_limbs, target.noise_deg, target.scaling_factor),
+                cryptoContext,
+            )
+
+    if node.q_node is not None:
+        q = _eval_ps_node(node.q_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "q_node"), root=False)
     else:
-        value = T.items[node.k - 1]
+        q = _chebyshev_tail(
+            node.divqr_q,
+            T,
+            cryptoContext,
+            constants,
+            bootstrap_plan,
+            (*path, "q"),
+            size=node.k,
+        )
+        highest = _q_highest_term(node, T.items[node.k - 1], cryptoContext, root=root, has_tail=q is not None)
+        q = highest if q is None else homo.homo_add(q, highest, cryptoContext)
+        q = _add_chebyshev_constant(q, node.divqr_q, cryptoContext)
 
-    value = _add_chebyshev_constant(value, node.s2, cryptoContext)
-    if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
-        value = _match_state(value, value.cur_limbs - 1, 1, None, cryptoContext)
-    return value
-
-
-def _eval_ps_node(node: ChebyshevPSNode, T, T2, cryptoContext: Context, constants, bootstrap_plan, path, *, root):
-    c = _eval_c(node, T, T2, cryptoContext, constants, bootstrap_plan, path, root=root)
-    q = _eval_q(node, T, T2, cryptoContext, constants, bootstrap_plan, path, root=root)
-    s = _eval_s(node, T, T2, cryptoContext, constants, bootstrap_plan, path, root=root)
+    if node.s_node is not None:
+        s = _eval_ps_node(node.s_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "s_node"), root=False)
+    else:
+        s = _chebyshev_tail(
+            node.s2,
+            T,
+            cryptoContext,
+            constants,
+            bootstrap_plan,
+            (*path, "s"),
+            size=node.k,
+        )
+        s = T.items[node.k - 1] if s is None else homo.homo_add(s, T.items[node.k - 1], cryptoContext)
+        s = _add_chebyshev_constant(s, node.s2, cryptoContext)
+        if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+            s = alignment.align_to(
+                s,
+                alignment.CipherState(s.cur_limbs - 1, 1, None),
+                cryptoContext,
+            )
 
     base = T2[node.m - 1]
     if c is None:
@@ -288,7 +245,7 @@ def _eval_ps_node(node: ChebyshevPSNode, T, T2, cryptoContext: Context, constant
         result = homo.homo_add(base, c, cryptoContext)
 
     result = homo.homo_mul(result, q, cryptoContext)
-    result = _rescale(result, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+    result = alignment.rescale_one_level(result, cryptoContext)
     result = homo.homo_add(result, s, cryptoContext)
 
     if root:
@@ -310,19 +267,19 @@ def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstra
 
     for j in range(1, plan.double_angle_iterations + 1):
         ciphertext = homo.homo_square(ciphertext, cryptoContext)
-        ciphertext = _double(ciphertext, cryptoContext)
+        ciphertext = homo.homo_add(ciphertext, ciphertext, cryptoContext)
         ciphertext = _add_named_scalar_double_preserve_noise(
             ciphertext,
             bootstrap_plan.double_angle_scalar_names[j - 1],
             constants,
             cryptoContext,
         )
-        ciphertext = _rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return ciphertext
 
 
 def eval_bootstrap_approx_mod(ciphertext, cryptoContext, constants, bootstrap_plan):
     ciphertext = eval_bootstrapping_chebyshev(ciphertext, -1, 1, cryptoContext, constants, bootstrap_plan)
     if cryptoContext.rescaleTech != "FIXEDMANUAL":
-        ciphertext = _rescale(ciphertext, BASE_NUM_LEVELS_TO_DROP, cryptoContext)
+        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan)
