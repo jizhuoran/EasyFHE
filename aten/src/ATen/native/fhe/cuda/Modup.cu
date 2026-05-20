@@ -225,45 +225,20 @@ static void modup_cuda_template(
         barret_ratio,
         barret_k);
 
-    if (begin_idx > 0) {
-      NTT_impl(
-          to_ptr_,
-          begin_idx,
-          N,
-          L_OUT,
-          1, // num_cv
-          num_cipher,
-          primes.data_ptr<uint64_t>(),
-          power_of_roots_shoup.data_ptr<uint64_t>(),
-          power_of_roots.data_ptr<uint64_t>());
-    }
-    if (cur_limbs - begin_idx - in_C_L_len > 0) {
-      NTT_impl(
-          to_ptr_ + (begin_idx + in_C_L_len) * N,
-          cur_limbs - begin_idx - in_C_L_len,
-          N,
-          L_OUT,
-          1, // num_cv
-          num_cipher,
-
-          primes.data_ptr<uint64_t>() + begin_idx + in_C_L_len,
-          power_of_roots_shoup.data_ptr<uint64_t>() +
-              (begin_idx + in_C_L_len) * N,
-          power_of_roots.data_ptr<uint64_t>() + (begin_idx + in_C_L_len) * N);
-    }
-    if (sizeP > 0) {
-      NTT_impl(
-          to_ptr_ + cur_limbs * N,
-          sizeP,
-          N,
-          L_OUT,
-          1, // num_cv
-          num_cipher,
-
-          primes.data_ptr<uint64_t>() + L,
-          power_of_roots_shoup.data_ptr<uint64_t>() + L * N,
-          power_of_roots.data_ptr<uint64_t>() + L * N);
-    }
+    NTT_modup_masked_impl(
+        to_ptr_,
+        num_moduli_after_modup,
+        cur_limbs,
+        N,
+        L,
+        begin_idx,
+        in_C_L_len,
+        L_OUT,
+        1, // num_cv
+        num_cipher,
+        primes.data_ptr<uint64_t>(),
+        power_of_roots_shoup.data_ptr<uint64_t>(),
+        power_of_roots.data_ptr<uint64_t>());
 
     C10_CUDA_CHECK(cudaMemcpy2DAsync(
         to_ptr_ + N * begin_idx,

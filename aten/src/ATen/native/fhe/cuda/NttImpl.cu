@@ -447,6 +447,104 @@ __global__ void NTT64PointPhase1(
   }
 }
 
+template <size_t LOG_N, size_t NUM_GROUPS>
+__global__ void NTT64PointPhase1ModupMasked(
+    uint64_t __restrict__* inout_ptr,
+    const size_t LOG_CV,
+    const size_t LN,
+    const size_t BLN,
+    const uint64_t __restrict__* base_inv,
+    const uint64_t __restrict__* base_inv_,
+    const uint64_t __restrict__* primes,
+    const size_t curr_limbs,
+    const size_t L,
+    const size_t begin_idx,
+    const size_t group_size) {
+  const uint32_t limb_idx = blockIdx.y;
+  if (limb_idx >= begin_idx && limb_idx < begin_idx + group_size) {
+    return;
+  }
+
+  static_assert(NUM_GROUPS == 8);
+  const int GROUP_SIZE = 8;
+
+  auto cipher_id = blockIdx.z >> LOG_CV;
+  auto cv_id = blockIdx.z & ((1 << LOG_CV) - 1);
+  inout_ptr += cv_id * BLN + cipher_id * LN;
+
+  const uint32_t prime_idx =
+      limb_idx < curr_limbs ? limb_idx : L + (limb_idx - curr_limbs);
+  const int groupID = threadIdx.x / GROUP_SIZE;
+  const int laneID = threadIdx.x % GROUP_SIZE;
+  const int C_N = 1 << LOG_N;
+  base_inv += prime_idx * C_N;
+  base_inv_ += prime_idx * C_N;
+
+  const uint64_t* W = base_inv;
+  const uint64_t* W_ = base_inv_;
+  const uint64_t prime = primes[prime_idx];
+  const uint64_t two_p = prime << 1;
+
+  auto inout_matrix =
+      reinterpret_cast<uint64_t(*)[8][GROUP_SIZE][C_N / (8 * GROUP_SIZE)]>(inout_ptr);
+
+  const int N_init = NUM_GROUPS * blockIdx.x + laneID;
+
+  uint64_t local[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    local[j] = inout_matrix[limb_idx][j][groupID][N_init];
+  }
+
+  LOCAL_NTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      1,
+      W,
+      W_,
+      prime,
+      two_p);
+
+  __shared__ uint64_t transpose_matrix[NUM_GROUPS][GROUP_SIZE + 1][8 + 1];
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    transpose_matrix[laneID][j][groupID] = local[j];
+  }
+  __syncthreads();
+
+#pragma unroll
+  for (int l = 0; l < 8; ++l) {
+    local[l] = transpose_matrix[laneID][groupID][l];
+  }
+
+  LOCAL_NTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      8 + groupID,
+      W,
+      W_,
+      prime,
+      two_p);
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    inout_matrix[limb_idx][groupID][j][N_init] = local[j];
+  }
+}
+
 template <int NUM_ROUNDS>
 __device__ __forceinline__ void warp_butterfly(
     uint64_t& i1,
@@ -511,6 +609,113 @@ __global__ void NTTXPointPhase2(
   base_inv += poly_idx * (R1_RADIX * DATA_SIZE);
   base_inv_ += poly_idx * (R1_RADIX * DATA_SIZE);
   const uint64_t prime = primes[poly_idx];
+  const uint64_t two_p = prime << 1;
+
+  auto g_row = reinterpret_cast<uint64_t(*)[R1_RADIX][DATA_SIZE]>(inout_ptr);
+  __shared__ uint64_t tile[2][NUM_WARP][WARP_SIZE + 1];
+
+  uint32_t stage_off = R1_RADIX + blockIdx.x;
+
+  uint64_t i1 = g_row[poly_idx][blockIdx.x][threadIdx.x];
+  uint64_t i2 = g_row[poly_idx][blockIdx.x][threadIdx.x + kBLOCK_SIZE];
+
+  tile[0][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i1;
+  tile[1][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i2;
+  __syncthreads();
+
+  uint32_t laneID = threadIdx.x % WARP_SIZE;
+  uint32_t groupID = threadIdx.x / WARP_SIZE;
+
+  i1 = tile[0][groupID][laneID];
+  i2 = tile[1][groupID][laneID];
+
+  warp_butterfly<6>(
+      i1,
+      i2,
+      stage_off,
+      laneID,
+      base_inv,
+      base_inv_,
+      prime,
+      two_p);
+
+  tile[0][groupID][laneID] = i1;
+  tile[1][groupID][laneID] = i2;
+
+  __syncthreads();
+
+  const int SECOND_GROUP_SIZE = DATA_SIZE / WARP_SIZE / 4;
+
+  laneID = threadIdx.x % SECOND_GROUP_SIZE;
+  groupID = threadIdx.x / SECOND_GROUP_SIZE;
+
+  const uint32_t half_group = groupID >> 1;
+  if ((groupID & 1) == 0) {
+    i1 = tile[0][laneID][half_group];
+    i2 = tile[0][laneID + SECOND_GROUP_SIZE][half_group];
+  } else {
+    i1 = tile[1][laneID][half_group];
+    i2 = tile[1][laneID + SECOND_GROUP_SIZE][half_group];
+  }
+
+  stage_off = stage_off * 2 + groupID;
+  warp_butterfly<LOG_RADIX - 6>(
+      i1,
+      i2,
+      stage_off,
+      laneID,
+      base_inv,
+      base_inv_,
+      prime,
+      two_p);
+
+  for (int k = 0; k < 3; k++) {
+    if (i1 >= prime)
+      i1 -= prime;
+    if (i2 >= prime)
+      i2 -= prime;
+  }
+
+  auto g_row_out =
+      reinterpret_cast<ulonglong2(*)[R1_RADIX][DATA_SIZE / 2]>(inout_ptr);
+  ulonglong2 i12 = {i1, i2};
+  g_row_out[poly_idx][blockIdx.x][threadIdx.x] = i12;
+}
+
+template <size_t LOG_N>
+__global__ void NTTXPointPhase2ModupMasked(
+    uint64_t* __restrict__ inout_ptr,
+    const size_t LOG_CV,
+    const size_t LN,
+    const size_t BLN,
+    const uint64_t* __restrict__ base_inv,
+    const uint64_t* __restrict__ base_inv_,
+    const uint64_t* __restrict__ primes,
+    const size_t curr_limbs,
+    const size_t L,
+    const size_t begin_idx,
+    const size_t group_size) {
+  const uint32_t poly_idx = blockIdx.y;
+  if (poly_idx >= begin_idx && poly_idx < begin_idx + group_size) {
+    return;
+  }
+
+  constexpr size_t LOG_RADIX = LOG_N - 6;
+  static_assert(LOG_RADIX >= 8);
+  const int R1_RADIX = 64;
+  const int DATA_SIZE = 1u << LOG_RADIX;
+  const int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
+  const int NUM_WARP = kBLOCK_SIZE / WARP_SIZE;
+
+  auto batch_id = blockIdx.z >> LOG_CV;
+  auto cv_id = blockIdx.z & ((1 << LOG_CV) - 1);
+  inout_ptr += cv_id * BLN + batch_id * LN;
+
+  const uint32_t prime_idx =
+      poly_idx < curr_limbs ? poly_idx : L + (poly_idx - curr_limbs);
+  base_inv += prime_idx * (R1_RADIX * DATA_SIZE);
+  base_inv_ += prime_idx * (R1_RADIX * DATA_SIZE);
+  const uint64_t prime = primes[prime_idx];
   const uint64_t two_p = prime << 1;
 
   auto g_row = reinterpret_cast<uint64_t(*)[R1_RADIX][DATA_SIZE]>(inout_ptr);
@@ -695,6 +900,63 @@ void launch_NTT_impl(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+template <size_t LOG_N>
+void launch_NTT_modup_masked_impl(
+    uint64_t* inout_ptr,
+    size_t num_batch,
+    size_t curr_limbs,
+    size_t L,
+    size_t begin_idx,
+    size_t group_size,
+    size_t log_cv,
+    size_t LN,
+    size_t BLN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* param_power_of_roots_shoup_ptr,
+    const uint64_t* param_power_of_roots_ptr,
+    cudaStream_t stream) {
+  constexpr size_t N = size_t{1} << LOG_N;
+  constexpr size_t RADIX = 64;
+
+  fhe::NTT64PointPhase1ModupMasked<LOG_N, kNttNumGroups>
+      <<<dim3(N / (kNttNumGroups * 8) / 8, num_batch, num_cv * num_cipher),
+         kNttNumGroups * 8,
+         0,
+         stream>>>(
+          inout_ptr,
+          log_cv,
+          LN,
+          BLN,
+          param_power_of_roots_ptr,
+          param_power_of_roots_shoup_ptr,
+          param_primes_ptr,
+          curr_limbs,
+          L,
+          begin_idx,
+          group_size);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+  fhe::NTTXPointPhase2ModupMasked<LOG_N>
+      <<<dim3(RADIX, num_batch, num_cv * num_cipher),
+         N / RADIX / 2,
+         0,
+         stream>>>(
+          inout_ptr,
+          log_cv,
+          LN,
+          BLN,
+          param_power_of_roots_ptr,
+          param_power_of_roots_shoup_ptr,
+          param_primes_ptr,
+          curr_limbs,
+          L,
+          begin_idx,
+          group_size);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 } // namespace
 
 void iNTT_impl(
@@ -843,6 +1105,98 @@ void NTT_impl(
     launch_NTT_impl<14>(
         inout_ptr,
         num_batch,
+        LOG_CV,
+        LN,
+        BLN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else {
+    TORCH_INTERNAL_ASSERT(false, "Unsupported NTT size");
+  }
+}
+
+void NTT_modup_masked_impl(
+    uint64_t* inout_ptr,
+    size_t num_batch,
+    size_t curr_limbs,
+    size_t N,
+    size_t L,
+    size_t begin_idx,
+    size_t group_size,
+    size_t L_OUT,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* param_power_of_roots_shoup_ptr,
+    const uint64_t* param_power_of_roots_ptr) {
+  auto stream = at::cuda::getCurrentCUDAStream();
+
+  auto LOG_CV = log_cv_for(num_cv);
+  auto LN = L_OUT * N;
+  auto BLN = LN * num_cipher;
+  if (N == (size_t{1} << 17)) {
+    launch_NTT_modup_masked_impl<17>(
+        inout_ptr,
+        num_batch,
+        curr_limbs,
+        L,
+        begin_idx,
+        group_size,
+        LOG_CV,
+        LN,
+        BLN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 16)) {
+    launch_NTT_modup_masked_impl<16>(
+        inout_ptr,
+        num_batch,
+        curr_limbs,
+        L,
+        begin_idx,
+        group_size,
+        LOG_CV,
+        LN,
+        BLN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 15)) {
+    launch_NTT_modup_masked_impl<15>(
+        inout_ptr,
+        num_batch,
+        curr_limbs,
+        L,
+        begin_idx,
+        group_size,
+        LOG_CV,
+        LN,
+        BLN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 14)) {
+    launch_NTT_modup_masked_impl<14>(
+        inout_ptr,
+        num_batch,
+        curr_limbs,
+        L,
+        begin_idx,
+        group_size,
         LOG_CV,
         LN,
         BLN,

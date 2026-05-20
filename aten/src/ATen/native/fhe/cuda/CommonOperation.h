@@ -27,6 +27,21 @@ void NTT_impl(
     const uint64_t* param_power_of_roots_shoup,
     const uint64_t* param_power_of_roots);
 
+void NTT_modup_masked_impl(
+    uint64_t* inout_ptr,
+    const size_t num_batch,
+    const size_t curr_limbs,
+    const size_t N,
+    const size_t L,
+    const size_t begin_idx,
+    const size_t group_size,
+    const size_t L_OUT,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const uint64_t* param_primes,
+    const uint64_t* param_power_of_roots_shoup,
+    const uint64_t* param_power_of_roots);
+
 void switch_modulus(
     uint64_t* out_ptr,
     uint64_t* in_ptr,

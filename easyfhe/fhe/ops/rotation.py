@@ -7,21 +7,7 @@ from . import kernels as F
 def homo_rotate(cipher, offset, cryptoContext):
     if offset == 0:
         return cipher.deep_copy()
-    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
-    key_switched = F.cv_keyswitch(
-        cipher.cv[1],
-        cipher.cur_limbs,
-        special_mod_start,
-        swk_bx,
-        swk_ax,
-        cryptoContext,
-    )
-    cv = [
-        F.cv_add(cipher.cv[0], key_switched[0], cryptoContext.moduliQ, cipher.cur_limbs),
-        key_switched[1],
-    ]
-    result = cipher.cipher_like(cv)
-    return _cipher_automorphism(result, offset, cryptoContext)
+    return _batch_item(fast_rotate(cipher, (offset,), cryptoContext), 0)
 
 
 def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
