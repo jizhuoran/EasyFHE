@@ -4,9 +4,22 @@ import numpy as np
 from . import kernels as F
 
 
-def homo_rotate(cipher, offset, cryptoContext):
+def homo_rotate(cipher, offset, cryptoContext, addend=None):
     if offset == 0:
+        if addend is not None:
+            from .arithmetic import homo_add
+
+            return homo_add(addend, cipher, cryptoContext)
         return cipher.deep_copy()
+    if addend is not None:
+        if addend.is_ext:
+            raise ValueError("homo_rotate(addend=...): expected a non-ext addend")
+        if addend.cur_limbs != cipher.cur_limbs:
+            raise ValueError(
+                "homo_rotate(addend=...): addend cur_limbs must match the rotated cipher"
+            )
+        if len(addend.cv) != 2:
+            raise ValueError("homo_rotate(addend=...): expected two ciphertext components")
     swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
     cv = F.cv_hrot(
         cipher.cv[0],
@@ -17,6 +30,8 @@ def homo_rotate(cipher, offset, cryptoContext):
         swk_ax,
         cryptoContext.get_precompute_auto(cryptoContext.norm_rot_index(offset)),
         cryptoContext,
+        add_bx=None if addend is None else addend.cv[0],
+        add_ax=None if addend is None else addend.cv[1],
     )
     return cipher.cipher_like(list(cv), cipher_id="assign")
 
@@ -245,8 +260,9 @@ def _normal_giant_rotate_sum(ciphers, offset, cryptoContext):
     result = ciphers[-1]
     for index in range(len(ciphers) - 2, -1, -1):
         if offset != 0:
-            result = homo_rotate(result, offset, cryptoContext)
-        result = homo_add(ciphers[index], result, cryptoContext)
+            result = homo_rotate(result, offset, cryptoContext, addend=ciphers[index])
+        else:
+            result = homo_add(ciphers[index], result, cryptoContext)
     return result
 
 

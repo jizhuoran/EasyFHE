@@ -491,6 +491,8 @@ def cv_hrot(
     swk_ax: Tensor,
     precomp_map: Tensor,
     context: Context,
+    add_bx: Tensor | None = None,
+    add_ax: Tensor | None = None,
 ) -> tuple[Tensor, Tensor]:
     beta = (curr_limbs + context.alpha - 1) // context.alpha
     return torch.hrot(
@@ -505,6 +507,8 @@ def cv_hrot(
         beta=beta,
         N=context.N,
         alpha=context.alpha,
+        add_bx=add_bx,
+        add_ax=add_ax,
         hat_inverse_vec_modup=context.hat_inverse_vec_modup,
         hat_inverse_vec_shoup_modup=context.hat_inverse_vec_shoup_modup,
         prod_q_i_mod_q_j_modup=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],

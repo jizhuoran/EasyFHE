@@ -5,6 +5,7 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/reshape.h>
 
+#include <optional>
 #include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
@@ -372,6 +373,8 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
     const uint64_t* __restrict__ eval_ax,
     const uint64_t* __restrict__ eval_bx,
     const uint64_t* __restrict__ c0,
+    const uint64_t* __restrict__ add_bx,
+    const uint64_t* __restrict__ add_ax,
     const int* __restrict__ inverse_precomp_map,
     const uint64_t* __restrict__ prod_inv,
     const uint64_t* __restrict__ prod_inv_shoup,
@@ -385,7 +388,8 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
     const int64_t length,
     const int64_t mult_length,
     const int64_t beta,
-    const int64_t alpha) {
+    const int64_t alpha,
+    const bool has_addend) {
   constexpr size_t LOG_RADIX = LOG_N - 6;
   constexpr int DATA_SIZE = 1u << LOG_RADIX;
   constexpr int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
@@ -462,12 +466,19 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
     if (bx >= prime) {
       bx -= prime;
     }
-    out_bx[out_index] = add_mod(bx, c0[q_index], prime);
+    bx = add_mod(bx, c0[q_index], prime);
+    if (has_addend) {
+      bx = add_mod(bx, add_bx[out_index], prime);
+    }
+    out_bx[out_index] = bx;
 
     uint64_t ax = sub_mod(key_ax, bases_ax[pair_idx], prime);
     ax = mul_and_reduce_shoup(ax, inv, inv_shoup, prime);
     if (ax >= prime) {
       ax -= prime;
+    }
+    if (has_addend) {
+      ax = add_mod(ax, add_ax[out_index], prime);
     }
     out_ax[out_index] = ax;
   }
@@ -659,6 +670,8 @@ static void launch_hrot_ntt_phase2_finalize(
     const Tensor& bx,
     const Tensor& ax,
     const Tensor& c0,
+    const Tensor* add_bx,
+    const Tensor* add_ax,
     const Tensor& inverse_precomp_map,
     int64_t L_IN,
     int64_t curr_limbs,
@@ -689,6 +702,8 @@ static void launch_hrot_ntt_phase2_finalize(
           ax.data_ptr<uint64_t>(),
           bx.data_ptr<uint64_t>(),
           c0.data_ptr<uint64_t>(),
+          add_bx ? add_bx->data_ptr<uint64_t>() : nullptr,
+          add_ax ? add_ax->data_ptr<uint64_t>() : nullptr,
           inverse_precomp_map.data_ptr<int>(),
           prod_inv_moddown.data_ptr<uint64_t>(),
           prod_inv_shoup_moddown.data_ptr<uint64_t>(),
@@ -702,7 +717,8 @@ static void launch_hrot_ntt_phase2_finalize(
           length,
           mult_length,
           beta,
-          alpha);
+          alpha,
+          add_bx != nullptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -715,6 +731,8 @@ static void hrot_ntt_phase2_finalize_cuda(
     const Tensor& bx,
     const Tensor& ax,
     const Tensor& c0,
+    const Tensor* add_bx,
+    const Tensor* add_ax,
     const Tensor& inverse_precomp_map,
     int64_t L_IN,
     int64_t curr_limbs,
@@ -741,6 +759,8 @@ static void hrot_ntt_phase2_finalize_cuda(
         bx,
         ax,
         c0,
+        add_bx,
+        add_ax,
         inverse_precomp_map,
         L_IN,
         curr_limbs,
@@ -766,6 +786,8 @@ static void hrot_ntt_phase2_finalize_cuda(
         bx,
         ax,
         c0,
+        add_bx,
+        add_ax,
         inverse_precomp_map,
         L_IN,
         curr_limbs,
@@ -791,6 +813,8 @@ static void hrot_ntt_phase2_finalize_cuda(
         bx,
         ax,
         c0,
+        add_bx,
+        add_ax,
         inverse_precomp_map,
         L_IN,
         curr_limbs,
@@ -816,6 +840,8 @@ static void hrot_ntt_phase2_finalize_cuda(
         bx,
         ax,
         c0,
+        add_bx,
+        add_ax,
         inverse_precomp_map,
         L_IN,
         curr_limbs,
@@ -843,6 +869,8 @@ static std::vector<Tensor> hrot_moddown_cuda(
     const Tensor& bx,
     const Tensor& ax,
     const Tensor& c0,
+    const std::optional<Tensor>& add_bx,
+    const std::optional<Tensor>& add_ax,
     const Tensor& precomp_map,
     int64_t curr_limbs,
     int64_t special_mod_start,
@@ -879,6 +907,15 @@ static std::vector<Tensor> hrot_moddown_cuda(
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
   TORCH_INTERNAL_ASSERT(c0.sizes()[0] == curr_limbs);
   TORCH_INTERNAL_ASSERT(c0.sizes()[1] == N);
+  TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
+  if (add_bx.has_value()) {
+    TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
+    TORCH_INTERNAL_ASSERT(add_ax->dim() == 2);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[0] == curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
+  }
   TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
   TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
 
@@ -940,6 +977,8 @@ static std::vector<Tensor> hrot_moddown_cuda(
       bx,
       ax,
       c0,
+      add_bx.has_value() ? &*add_bx : nullptr,
+      add_ax.has_value() ? &*add_ax : nullptr,
       inverse_precomp_map,
       L_IN,
       curr_limbs,
@@ -985,7 +1024,9 @@ std::vector<Tensor> hrot_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& inner_workspace) {
+    const Tensor& inner_workspace,
+    const std::optional<Tensor>& add_bx,
+    const std::optional<Tensor>& add_ax) {
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
   TORCH_INTERNAL_ASSERT(c1.dim() == 2);
   TORCH_INTERNAL_ASSERT(c0.sizes()[0] == curr_limbs);
@@ -994,6 +1035,15 @@ std::vector<Tensor> hrot_cuda(
   TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
   TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
+  TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
+  if (add_bx.has_value()) {
+    TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
+    TORCH_INTERNAL_ASSERT(add_ax->dim() == 2);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[0] == curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
+  }
 
   const auto sizeP = primes.numel() - L;
   const auto c1_4d = at::reshape(c1, {1, 1, curr_limbs, N});
@@ -1033,6 +1083,8 @@ std::vector<Tensor> hrot_cuda(
       bx,
       ax,
       c0,
+      add_bx,
+      add_ax,
       precomp_map,
       curr_limbs,
       special_mod_start,
