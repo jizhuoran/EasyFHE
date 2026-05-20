@@ -3399,6 +3399,11 @@
   dispatch:
     CUDA: fast_rotate_batch_finalize_compact_cuda
 
+- func: hrot(Tensor c0, Tensor c1, Tensor bx, Tensor ax, Tensor precomp_map, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor inner_workspace) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: hrot_cuda
+
 - func: mod_raise(Tensor input, *, int N, int L0, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
   dispatch:

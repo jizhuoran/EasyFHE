@@ -42,6 +42,21 @@ void NTT_modup_masked_impl(
     const uint64_t* param_power_of_roots_shoup,
     const uint64_t* param_power_of_roots);
 
+void NTT_modup_all_masked_impl(
+    uint64_t* inout_ptr,
+    const size_t beta,
+    const size_t curr_limbs,
+    const size_t N,
+    const size_t L,
+    const size_t alpha,
+    const size_t num_moduli_after_modup,
+    const size_t L_OUT,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const uint64_t* param_primes,
+    const uint64_t* param_power_of_roots_shoup,
+    const uint64_t* param_power_of_roots);
+
 void switch_modulus(
     uint64_t* out_ptr,
     uint64_t* in_ptr,
@@ -68,5 +83,23 @@ void const_mult_batch(
     size_t num_cv,
     size_t num_cipher,
     const uint64_t* primes_ptr);
+
+Tensor modup_without_copy_cuda(
+    const Tensor& in,
+    int64_t curr_limbs,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two);
 
 } // namespace at::native

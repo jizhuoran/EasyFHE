@@ -77,6 +77,131 @@ __global__ void modup_step_two_kernel(
       accum, prime_shared, barret_ratio_shared, barret_k_shared);
 }
 
+__global__ void modup_const_mult_all_kernel(
+    uint64_t* __restrict__ data,
+    const int64_t N,
+    const int64_t alpha,
+    const int64_t curr_limbs,
+    const int64_t LN,
+    const uint64_t* __restrict__ primes,
+    const uint64_t* __restrict__ hat_inverse_vecs,
+    const uint64_t* __restrict__ hat_inverse_vec_shoups,
+    const int64_t hat_stride) {
+  const int64_t degree_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  const int64_t limb = blockIdx.y;
+  const int64_t cipher_id = blockIdx.z;
+  if (degree_idx >= N || limb >= curr_limbs) {
+    return;
+  }
+
+  const int64_t begin_idx = (limb / alpha) * alpha;
+  const int64_t group_size =
+      min(alpha, curr_limbs - begin_idx);
+  const int64_t local_idx = limb - begin_idx;
+  const int64_t hat_row = begin_idx + group_size - 1;
+  const uint64_t prime = primes[limb];
+  const uint64_t scalar = hat_inverse_vecs[hat_row * hat_stride + local_idx];
+  const uint64_t scalar_shoup =
+      hat_inverse_vec_shoups[hat_row * hat_stride + local_idx];
+
+  uint64_t* out = data + cipher_id * LN + limb * N + degree_idx;
+  uint64_t value = mul_and_reduce_shoup(*out, scalar, scalar_shoup, prime);
+  if (value >= prime) {
+    value -= prime;
+  }
+  *out = value;
+}
+
+__global__ void modup_step_two_all_kernel(
+    uint64_t* __restrict__ to,
+    const uint64_t* __restrict__ from,
+    const int64_t N,
+    const int64_t alpha,
+    const int64_t curr_limbs,
+    const int64_t L,
+    const int64_t num_moduli_after_modup,
+    const int64_t L_OUTN,
+    const int64_t L_INN,
+    const uint64_t* __restrict__ primes,
+    const uint64_t* __restrict__ barrett_ratios,
+    const uint64_t* __restrict__ barrett_ks,
+    const uint64_t* __restrict__ prod_q_i_mod_q_js,
+    const int64_t prod_beta_stride) {
+  const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  const int64_t physical_limb = blockIdx.y;
+  const int64_t cipher_id = blockIdx.z;
+  if (degree_idx >= N) {
+    return;
+  }
+
+  const int64_t beta_idx = physical_limb / num_moduli_after_modup;
+  const int64_t out_idx =
+      physical_limb - beta_idx * num_moduli_after_modup;
+  const int64_t begin_idx = beta_idx * alpha;
+  const int64_t group_size = min(alpha, curr_limbs - begin_idx);
+  if (out_idx >= begin_idx && out_idx < begin_idx + group_size) {
+    return;
+  }
+
+  extern __shared__ uint64_t hat_mod_end_shared[];
+  __shared__ int64_t out_iter_shared;
+  __shared__ uint64_t prime_shared;
+  __shared__ uint64_t barret_ratio_shared;
+  __shared__ uint64_t barret_k_shared;
+
+  if (threadIdx.x == 0) {
+    const int64_t gap = L - curr_limbs;
+    const int64_t prime_idx = out_idx + ((out_idx < curr_limbs) ? 0 : gap);
+    out_iter_shared = out_idx - ((out_idx >= begin_idx + group_size) ? group_size : 0);
+    prime_shared = primes[prime_idx];
+    barret_ratio_shared = barrett_ratios[prime_idx];
+    barret_k_shared = barrett_ks[prime_idx];
+  }
+  if (threadIdx.x < group_size) {
+    const uint64_t* group_prod =
+        prod_q_i_mod_q_js + beta_idx * prod_beta_stride;
+    hat_mod_end_shared[threadIdx.x] =
+        group_prod[threadIdx.x + out_iter_shared * alpha];
+  }
+  __syncthreads();
+
+  to += cipher_id * L_OUTN;
+  from += cipher_id * L_INN;
+
+  uint128_t accum{0};
+  for (int i = 0; i < group_size; i++) {
+    const uint64_t op1 = from[(begin_idx + i) * N + degree_idx];
+    const uint64_t op2 = hat_mod_end_shared[i];
+    uint128_t out = mult_64_64_128(op1, op2);
+    inplace_add_128_128(out, accum);
+  }
+
+  to[physical_limb * N + degree_idx] = barret_reduction_128_64(
+      accum, prime_shared, barret_ratio_shared, barret_k_shared);
+}
+
+__global__ void modup_copy_original_all_kernel(
+    uint64_t* __restrict__ to,
+    const uint64_t* __restrict__ from,
+    const int64_t N,
+    const int64_t alpha,
+    const int64_t curr_limbs,
+    const int64_t num_moduli_after_modup,
+    const int64_t L_OUTN,
+    const int64_t L_INN) {
+  const int64_t degree_idx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  const int64_t limb = blockIdx.y;
+  const int64_t cipher_id = blockIdx.z;
+  if (degree_idx >= N || limb >= curr_limbs) {
+    return;
+  }
+
+  const int64_t beta_idx = limb / alpha;
+  const int64_t physical_limb = beta_idx * num_moduli_after_modup + limb;
+  to[cipher_id * L_OUTN + physical_limb * N + degree_idx] =
+      from[cipher_id * L_INN + limb * N + degree_idx];
+}
+
 } // namespace fhe
 
 namespace at::native {
@@ -154,7 +279,8 @@ static void modup_cuda_template(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& power_of_roots,
-    const Tensor& power_of_roots_shoup) {
+    const Tensor& power_of_roots_shoup,
+    bool copy_original_limbs) {
   auto num_cipher = from.sizes()[1];
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
@@ -166,6 +292,96 @@ static void modup_cuda_template(
   uint64_t* to_ptr__ = reinterpret_cast<uint64_t*>(to.data_ptr<uint64_t>());
   uint64_t* from_ptr__ = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto stream = at::cuda::getCurrentCUDAStream();
+
+  if (beta > 1) {
+    auto temp = at::empty({1, num_cipher, cur_limbs, N}, from.options());
+    auto* temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
+    const auto temp_LN = cur_limbs * N;
+
+    iNTT_impl(
+        temp_ptr,
+        from_ptr__,
+        cur_limbs,
+        N,
+        cur_limbs,
+        L_IN,
+        1, // num_cv
+        num_cipher,
+        primes.data_ptr<uint64_t>(),
+        inverse_power_of_roots_div_two.data_ptr<uint64_t>(),
+        inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
+
+    fhe::modup_const_mult_all_kernel<<<
+        dim3(num_blocks(N), cur_limbs, num_cipher),
+        BLOCK_SIZE,
+        0,
+        stream>>>(
+        temp_ptr,
+        N,
+        alpha,
+        cur_limbs,
+        temp_LN,
+        primes.data_ptr<uint64_t>(),
+        hat_inverse_vecs.data_ptr<uint64_t>(),
+        hat_inverse_vec_shoups.data_ptr<uint64_t>(),
+        hat_inverse_vecs.stride(0));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    const auto total_modup_limbs = beta * num_moduli_after_modup;
+    fhe::modup_step_two_all_kernel<<<
+        dim3(num_blocks(N), total_modup_limbs, num_cipher),
+        BLOCK_SIZE,
+        alpha * sizeof(uint64_t),
+        stream>>>(
+        to_ptr__,
+        temp_ptr,
+        N,
+        alpha,
+        cur_limbs,
+        L,
+        num_moduli_after_modup,
+        L_OUT * N,
+        temp_LN,
+        primes.data_ptr<uint64_t>(),
+        barret_ratio.data_ptr<uint64_t>(),
+        barret_k.data_ptr<uint64_t>(),
+        prod_q_i_mod_q_js.data_ptr<uint64_t>(),
+        prod_q_i_mod_q_js.stride(0));
+    C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+    NTT_modup_all_masked_impl(
+        to_ptr__,
+        beta,
+        cur_limbs,
+        N,
+        L,
+        alpha,
+        num_moduli_after_modup,
+        L_OUT,
+        1, // num_cv
+        num_cipher,
+        primes.data_ptr<uint64_t>(),
+        power_of_roots_shoup.data_ptr<uint64_t>(),
+        power_of_roots.data_ptr<uint64_t>());
+
+    if (copy_original_limbs) {
+      fhe::modup_copy_original_all_kernel<<<
+          dim3(num_blocks(N), cur_limbs, num_cipher),
+          BLOCK_SIZE,
+          0,
+          stream>>>(
+          to_ptr__,
+          from_ptr__,
+          N,
+          alpha,
+          cur_limbs,
+          num_moduli_after_modup,
+          L_OUT * N,
+          L_IN * N);
+      C10_CUDA_KERNEL_LAUNCH_CHECK();
+    }
+    return;
+  }
 
   for (int64_t group_idx = 0; group_idx < beta; ++group_idx) {
     auto to_ptr_ = to_ptr__ + (num_moduli_after_modup * N * group_idx);
@@ -240,15 +456,17 @@ static void modup_cuda_template(
         power_of_roots_shoup.data_ptr<uint64_t>(),
         power_of_roots.data_ptr<uint64_t>());
 
-    C10_CUDA_CHECK(cudaMemcpy2DAsync(
-        to_ptr_ + N * begin_idx,
-        L_OUT * N * sizeof(uint64_t),
-        from_ptr_,
-        L_IN * N * sizeof(uint64_t),
-        in_C_L_len * N * sizeof(uint64_t),
-        num_cipher,
-        cudaMemcpyDeviceToDevice,
-        stream));
+    if (copy_original_limbs) {
+      C10_CUDA_CHECK(cudaMemcpy2DAsync(
+          to_ptr_ + N * begin_idx,
+          L_OUT * N * sizeof(uint64_t),
+          from_ptr_,
+          L_IN * N * sizeof(uint64_t),
+          in_C_L_len * N * sizeof(uint64_t),
+          num_cipher,
+          cudaMemcpyDeviceToDevice,
+          stream));
+    }
   }
 }
 
@@ -296,7 +514,58 @@ Tensor modup_cuda(
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two,
       power_of_roots,
-      power_of_roots_shoup);
+      power_of_roots_shoup,
+      true);
+
+  return out;
+}
+
+Tensor modup_without_copy_cuda(
+    const Tensor& in,
+    int64_t curr_limbs,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  auto num_cv = in.sizes()[0];
+  TORCH_INTERNAL_ASSERT(num_cv == 1);
+  auto batch = in.sizes()[1];
+
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  auto out =
+      at::empty({num_cv, batch, beta * (curr_limbs + sizeP), N}, in.options());
+
+  modup_cuda_template(
+      out,
+      in,
+      curr_limbs,
+      L,
+      beta,
+      N,
+      alpha,
+      hat_inverse_vecs,
+      hat_inverse_vec_shoups,
+      prod_q_i_mod_q_js,
+      primes,
+      barret_ratio,
+      barret_k,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      power_of_roots,
+      power_of_roots_shoup,
+      false);
 
   return out;
 }

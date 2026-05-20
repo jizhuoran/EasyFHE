@@ -482,6 +482,48 @@ def cv_keyswitch(
     ).reshape(2, -1, context.N)
 
 
+def cv_hrot(
+    c0: Tensor,
+    c1: Tensor,
+    curr_limbs: int,
+    special_mod_start: int,
+    swk_bx: Tensor,
+    swk_ax: Tensor,
+    precomp_map: Tensor,
+    context: Context,
+) -> tuple[Tensor, Tensor]:
+    beta = (curr_limbs + context.alpha - 1) // context.alpha
+    return torch.hrot(
+        c0,
+        c1,
+        swk_bx,
+        swk_ax,
+        precomp_map,
+        curr_limbs=curr_limbs,
+        special_mod_start=special_mod_start,
+        L=context.L,
+        beta=beta,
+        N=context.N,
+        alpha=context.alpha,
+        hat_inverse_vec_modup=context.hat_inverse_vec_modup,
+        hat_inverse_vec_shoup_modup=context.hat_inverse_vec_shoup_modup,
+        prod_q_i_mod_q_j_modup=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
+        hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
+        hat_inverse_vec_shoup_moddown=context.hat_inverse_vec_shoup_moddown,
+        prod_q_i_mod_q_j_moddown=context.prod_q_i_mod_q_j_moddown,
+        prod_inv_moddown=context.prod_inv_moddown,
+        prod_inv_shoup_moddown=context.prod_inv_shoup_moddown,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
+        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+        inner_workspace=context.inner_workspace,
+    )
+
+
 def cv_drop_last_element_and_scale(
     input: Tensor,
     cur_limbs: int,
