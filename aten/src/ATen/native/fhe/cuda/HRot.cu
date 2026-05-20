@@ -189,11 +189,10 @@ __global__ void hrot_moddown_base_convert_ntt_phase1_kernel(
   }
 }
 
-__global__ void hrot_sum_reduce_from_modup_kernel(
+__global__ void hrot_sum_reduce_p_from_modup_kernel(
     uint64_t* __restrict__ out_ax,
     uint64_t* __restrict__ out_bx,
     const uint64_t* __restrict__ in_modup,
-    const uint64_t* __restrict__ c1,
     const uint64_t* __restrict__ eval_ax,
     const uint64_t* __restrict__ eval_bx,
     const size_t N,
@@ -207,17 +206,19 @@ __global__ void hrot_sum_reduce_from_modup_kernel(
     const uint64_t* __restrict__ primes,
     const uint64_t* __restrict__ barret_ks,
     const uint64_t* __restrict__ barret_ratios) {
-  const int idx = blockIdx.y;
+  const int p_idx = blockIdx.y;
   const int coeff = blockIdx.x * blockDim.x + threadIdx.x;
   if (coeff >= N) {
     return;
   }
 
+  const int idx = static_cast<int>(curr_limbs) + p_idx;
   const int swk_gap =
       static_cast<int>(special_mod_start) - static_cast<int>(curr_limbs);
-  const int prime_idx = (idx < curr_limbs) ? 0 : static_cast<int>(prime_gap);
-  const int swk_idx = (idx < curr_limbs) ? 0 : swk_gap;
+  const int prime_idx = static_cast<int>(prime_gap);
+  const int swk_idx = swk_gap;
   const int i = idx * N + coeff;
+  const int out_i = p_idx * N + coeff;
 
   const auto reduce_prime_idx = idx + prime_idx;
   const auto prime = primes[reduce_prime_idx];
@@ -227,38 +228,41 @@ __global__ void hrot_sum_reduce_from_modup_kernel(
   uint128_t accum_ax = {0, 0};
   uint128_t accum_bx = {0, 0};
   for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
-    const int begin_idx = beta_idx * alpha;
-    const int group_size =
-        min(static_cast<int>(alpha), static_cast<int>(curr_limbs) - begin_idx);
-    const bool is_original_limb =
-        idx >= begin_idx && idx < begin_idx + group_size;
     const int stride = N * (mult_length * beta_idx + swk_idx);
     const int in_ptr_stride = N * length * beta_idx;
-    const uint64_t op1 =
-        is_original_limb ? c1[i] : in_modup[i + in_ptr_stride];
+    const uint64_t op1 = in_modup[i + in_ptr_stride];
     const auto mul_ax = mult_64_64_128(op1, eval_ax[i + stride]);
     const auto mul_bx = mult_64_64_128(op1, eval_bx[i + stride]);
     inplace_add_128_128(mul_ax, accum_ax);
     inplace_add_128_128(mul_bx, accum_bx);
   }
 
-  out_ax[i] = barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
-  out_bx[i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+  out_ax[out_i] = barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+  out_bx[out_i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
 }
 
 __global__ void hrot_moddown_finalize_kernel(
     uint64_t* __restrict__ out_bx,
     uint64_t* __restrict__ out_ax,
     const uint64_t* __restrict__ baseconv_ntt,
-    const uint64_t* __restrict__ key_products,
+    const uint64_t* __restrict__ in_modup,
+    const uint64_t* __restrict__ c1,
+    const uint64_t* __restrict__ eval_ax,
+    const uint64_t* __restrict__ eval_bx,
     const uint64_t* __restrict__ c0,
     const int* __restrict__ precomp_map,
     const uint64_t* __restrict__ prod_inv,
     const uint64_t* __restrict__ prod_inv_shoup,
     const uint64_t* __restrict__ primes,
+    const uint64_t* __restrict__ barret_ks,
+    const uint64_t* __restrict__ barret_ratios,
     const int64_t N,
     const int64_t L_IN,
-    const int64_t curr_limbs) {
+    const int64_t curr_limbs,
+    const int64_t length,
+    const int64_t mult_length,
+    const int64_t beta,
+    const int64_t alpha) {
   const int64_t j = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   const int64_t limb = blockIdx.y;
   if (j >= N || limb >= curr_limbs) {
@@ -272,8 +276,32 @@ __global__ void hrot_moddown_finalize_kernel(
   const uint64_t prime = primes[limb];
   const uint64_t inv = prod_inv[limb];
   const uint64_t inv_shoup = prod_inv_shoup[limb];
+  const uint64_t barret_ratio = barret_ratios[limb];
+  const uint64_t barret_k = barret_ks[limb];
 
-  uint64_t bx = sub_mod(key_products[q_index], baseconv_ntt[q_index], prime);
+  uint128_t accum_ax = {0, 0};
+  uint128_t accum_bx = {0, 0};
+  for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
+    const int64_t begin_idx = beta_idx * alpha;
+    const int64_t remaining = curr_limbs - begin_idx;
+    const int64_t group_size = alpha < remaining ? alpha : remaining;
+    const bool is_original_limb =
+        limb >= begin_idx && limb < begin_idx + group_size;
+    const int64_t stride = N * mult_length * beta_idx;
+    const int64_t in_ptr_stride = N * length * beta_idx;
+    const uint64_t op1 =
+        is_original_limb ? c1[q_index] : in_modup[q_index + in_ptr_stride];
+    const auto mul_ax = mult_64_64_128(op1, eval_ax[q_index + stride]);
+    const auto mul_bx = mult_64_64_128(op1, eval_bx[q_index + stride]);
+    inplace_add_128_128(mul_ax, accum_ax);
+    inplace_add_128_128(mul_bx, accum_bx);
+  }
+  const uint64_t key_ax =
+      barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+  const uint64_t key_bx =
+      barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+
+  uint64_t bx = sub_mod(key_bx, baseconv_ntt[q_index], prime);
   bx = mul_and_reduce_shoup(bx, inv, inv_shoup, prime);
   if (bx >= prime) {
     bx -= prime;
@@ -281,7 +309,7 @@ __global__ void hrot_moddown_finalize_kernel(
   out_bx[out_index] = add_mod(bx, c0[q_index], prime);
 
   uint64_t ax = sub_mod(
-      key_products[cv_stride + q_index],
+      key_ax,
       baseconv_ntt[cv_stride + q_index],
       prime);
   ax = mul_and_reduce_shoup(ax, inv, inv_shoup, prime);
@@ -297,7 +325,6 @@ namespace at::native {
 
 static Tensor hrot_innerproduct_cuda(
     const Tensor& in,
-    const Tensor& c1,
     const Tensor& bx,
     const Tensor& ax,
     int64_t curr_limbs,
@@ -311,9 +338,6 @@ static Tensor hrot_innerproduct_cuda(
   TORCH_INTERNAL_ASSERT(in.dim() == 4);
   TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1);
   TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1);
-  TORCH_INTERNAL_ASSERT(c1.dim() == 2);
-  TORCH_INTERNAL_ASSERT(c1.sizes()[0] == curr_limbs);
-  TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
   const int beta = int((curr_limbs + alpha - 1) / alpha);
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
@@ -332,9 +356,8 @@ static Tensor hrot_innerproduct_cuda(
   TORCH_CHECK(bx.size(1) >= mult_length, "bx/ax modulus dimension mismatch");
   TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
 
-  auto out = at::empty({2, 1, length, N}, in.options());
+  auto out = at::empty({2, 1, sizeP, N}, in.options());
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto c1_ptr = reinterpret_cast<uint64_t*>(c1.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
   auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
   auto out_bx_ptr = reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
@@ -344,15 +367,14 @@ static Tensor hrot_innerproduct_cuda(
       reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
   auto barret_k_ptr =
       reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-  auto gridDim = dim3(num_blocks(N), length);
+  auto gridDim = dim3(num_blocks(N), sizeP);
   auto blockDim = BLOCK_SIZE;
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  fhe::hrot_sum_reduce_from_modup_kernel<<<gridDim, blockDim, 0, stream>>>(
+  fhe::hrot_sum_reduce_p_from_modup_kernel<<<gridDim, blockDim, 0, stream>>>(
       out_ax_ptr,
       out_bx_ptr,
       in_ptr,
-      c1_ptr,
       ax_ptr,
       bx_ptr,
       N,
@@ -475,10 +497,17 @@ static void hrot_moddown_base_convert_ntt_phase1_cuda(
 
 static std::vector<Tensor> hrot_moddown_cuda(
     const Tensor& in,
+    const Tensor& modup,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
     const Tensor& c0,
     const Tensor& precomp_map,
     int64_t curr_limbs,
+    int64_t special_mod_start,
     int64_t L,
+    int64_t beta,
+    int64_t alpha,
     int64_t sizeP,
     int64_t N,
     const Tensor& hat_inverse_vec_moddown,
@@ -496,8 +525,16 @@ static std::vector<Tensor> hrot_moddown_cuda(
   TORCH_INTERNAL_ASSERT(in.dim() == 4);
   TORCH_INTERNAL_ASSERT(in.sizes()[0] == 2);
   TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1);
-  TORCH_INTERNAL_ASSERT(in.sizes()[2] == curr_limbs + sizeP);
+  TORCH_INTERNAL_ASSERT(in.sizes()[2] == sizeP);
   TORCH_INTERNAL_ASSERT(in.sizes()[3] == N);
+  TORCH_INTERNAL_ASSERT(modup.dim() == 4);
+  TORCH_INTERNAL_ASSERT(modup.sizes()[0] == 1);
+  TORCH_INTERNAL_ASSERT(modup.sizes()[1] == 1);
+  TORCH_INTERNAL_ASSERT(modup.sizes()[2] == beta * (curr_limbs + sizeP));
+  TORCH_INTERNAL_ASSERT(modup.sizes()[3] == N);
+  TORCH_INTERNAL_ASSERT(c1.dim() == 2);
+  TORCH_INTERNAL_ASSERT(c1.sizes()[0] == curr_limbs);
+  TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
   TORCH_INTERNAL_ASSERT(c0.sizes()[0] == curr_limbs);
   TORCH_INTERNAL_ASSERT(c0.sizes()[1] == N);
@@ -512,16 +549,17 @@ static std::vector<Tensor> hrot_moddown_cuda(
   auto out_ax = at::empty({curr_limbs, N}, c0.options());
 
   auto from_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
+  auto modup_ptr = reinterpret_cast<uint64_t*>(modup.data_ptr<uint64_t>());
   auto workspace_ptr =
       reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
 
   iNTT_scaled_impl(
       workspace_ptr + curr_limbs * N,
-      from_ptr + curr_limbs * N,
+      from_ptr,
       sizeP,
       N,
       L_IN,
-      L_IN,
+      sizeP,
       num_cv,
       batch,
       primes.data_ptr<uint64_t>() + L,
@@ -564,15 +602,24 @@ static std::vector<Tensor> hrot_moddown_cuda(
       out_bx.data_ptr<uint64_t>(),
       out_ax.data_ptr<uint64_t>(),
       workspace_ptr,
-      from_ptr,
+      modup_ptr,
+      c1.data_ptr<uint64_t>(),
+      ax.data_ptr<uint64_t>(),
+      bx.data_ptr<uint64_t>(),
       c0.data_ptr<uint64_t>(),
       precomp_map.data_ptr<int>(),
       prod_inv_moddown.data_ptr<uint64_t>(),
       prod_inv_shoup_moddown.data_ptr<uint64_t>(),
       primes.data_ptr<uint64_t>(),
+      barret_k.data_ptr<uint64_t>(),
+      barret_ratio.data_ptr<uint64_t>(),
       N,
       L_IN,
-      curr_limbs);
+      curr_limbs,
+      curr_limbs + sizeP,
+      special_mod_start + sizeP,
+      beta,
+      alpha);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   return {out_bx, out_ax};
 }
@@ -635,7 +682,6 @@ std::vector<Tensor> hrot_cuda(
       inverse_scaled_power_of_roots_div_two);
   const auto inner_product = hrot_innerproduct_cuda(
       modup,
-      c1,
       bx,
       ax,
       curr_limbs,
@@ -648,10 +694,17 @@ std::vector<Tensor> hrot_cuda(
       barret_k);
   return hrot_moddown_cuda(
       inner_product,
+      modup,
+      c1,
+      bx,
+      ax,
       c0,
       precomp_map,
       curr_limbs,
+      special_mod_start,
       L,
+      beta,
+      alpha,
       sizeP,
       N,
       hat_inverse_vec_moddown,
