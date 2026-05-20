@@ -1425,37 +1425,6 @@ void launch_NTT_impl(
 }
 
 template <size_t LOG_N>
-void launch_NTT_phase2_impl(
-    uint64_t* inout_ptr,
-    size_t num_batch,
-    size_t log_cv,
-    size_t LN,
-    size_t BLN,
-    size_t num_cv,
-    size_t num_cipher,
-    const uint64_t* param_primes_ptr,
-    const uint64_t* param_power_of_roots_shoup_ptr,
-    const uint64_t* param_power_of_roots_ptr,
-    cudaStream_t stream) {
-  constexpr size_t N = size_t{1} << LOG_N;
-  constexpr size_t RADIX = 64;
-
-  fhe::NTTXPointPhase2<LOG_N>
-      <<<dim3(RADIX, num_batch, num_cv * num_cipher),
-         N / RADIX / 2,
-         0,
-         stream>>>(
-          inout_ptr,
-          log_cv,
-          LN,
-          BLN,
-          param_power_of_roots_ptr,
-          param_power_of_roots_shoup_ptr,
-          param_primes_ptr);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-template <size_t LOG_N>
 void launch_NTT_modup_masked_impl(
     uint64_t* inout_ptr,
     size_t num_batch,
@@ -1981,78 +1950,6 @@ void NTT_impl(
         stream);
   } else {
     TORCH_INTERNAL_ASSERT(false, "Unsupported NTT size");
-  }
-}
-
-void NTT_phase2_impl(
-    uint64_t* inout_ptr,
-    size_t num_batch,
-    size_t N,
-    size_t L,
-    size_t num_cv,
-    size_t num_cipher,
-    const uint64_t* param_primes_ptr,
-    const uint64_t* param_power_of_roots_shoup_ptr,
-    const uint64_t* param_power_of_roots_ptr) {
-  auto stream = at::cuda::getCurrentCUDAStream();
-  auto LOG_CV = log_cv_for(num_cv);
-  auto LN = L * N;
-  auto BLN = LN * num_cipher;
-
-  if (N == (size_t{1} << 17)) {
-    launch_NTT_phase2_impl<17>(
-        inout_ptr,
-        num_batch,
-        LOG_CV,
-        LN,
-        BLN,
-        num_cv,
-        num_cipher,
-        param_primes_ptr,
-        param_power_of_roots_shoup_ptr,
-        param_power_of_roots_ptr,
-        stream);
-  } else if (N == (size_t{1} << 16)) {
-    launch_NTT_phase2_impl<16>(
-        inout_ptr,
-        num_batch,
-        LOG_CV,
-        LN,
-        BLN,
-        num_cv,
-        num_cipher,
-        param_primes_ptr,
-        param_power_of_roots_shoup_ptr,
-        param_power_of_roots_ptr,
-        stream);
-  } else if (N == (size_t{1} << 15)) {
-    launch_NTT_phase2_impl<15>(
-        inout_ptr,
-        num_batch,
-        LOG_CV,
-        LN,
-        BLN,
-        num_cv,
-        num_cipher,
-        param_primes_ptr,
-        param_power_of_roots_shoup_ptr,
-        param_power_of_roots_ptr,
-        stream);
-  } else if (N == (size_t{1} << 14)) {
-    launch_NTT_phase2_impl<14>(
-        inout_ptr,
-        num_batch,
-        LOG_CV,
-        LN,
-        BLN,
-        num_cv,
-        num_cipher,
-        param_primes_ptr,
-        param_power_of_roots_shoup_ptr,
-        param_power_of_roots_ptr,
-        stream);
-  } else {
-    TORCH_INTERNAL_ASSERT(false, "Unsupported NTT phase2 size");
   }
 }
 

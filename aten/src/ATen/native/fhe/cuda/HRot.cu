@@ -83,6 +83,37 @@ __device__ __forceinline__ void hrot_local_ntt_radix(
   }
 }
 
+template <int NUM_ROUNDS>
+__device__ __forceinline__ void hrot_warp_butterfly(
+    uint64_t& i1,
+    uint64_t& i2,
+    uint32_t& stage_off,
+    const uint32_t laneID,
+    const uint64_t* __restrict__ W,
+    const uint64_t* __restrict__ W_shoup,
+    const uint64_t prime,
+    const uint64_t two_p) {
+  static_assert(NUM_ROUNDS >= 2);
+  hrot_butt_ntt_local(i1, i2, W[stage_off], W_shoup[stage_off], prime, two_p);
+
+#pragma unroll
+  for (int shift = NUM_ROUNDS - 2; shift >= 0; --shift) {
+    const uint32_t offset = 1u << shift;
+    const bool lower_half = (laneID & offset) == 0;
+    auto tmp = lower_half ? i2 : i1;
+    tmp = __shfl_xor_sync(0xFFFFFFFF, tmp, offset);
+    if (lower_half) {
+      i2 = tmp;
+    } else {
+      i1 = tmp;
+    }
+
+    stage_off <<= 1;
+    const uint32_t idx = stage_off + (laneID >> shift);
+    hrot_butt_ntt_local(i1, i2, W[idx], W_shoup[idx], prime, two_p);
+  }
+}
+
 template <size_t LOG_N, size_t NUM_GROUPS>
 __global__ void hrot_moddown_base_convert_ntt_phase1_kernel(
     uint64_t* __restrict__ workspace,
@@ -241,82 +272,205 @@ __global__ void hrot_sum_reduce_p_from_modup_kernel(
   out_bx[out_i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
 }
 
-__global__ void hrot_moddown_finalize_kernel(
+__global__ void invert_precomp_map_kernel(
+    int* __restrict__ inverse_map,
+    const int* __restrict__ precomp_map,
+    const int64_t N) {
+  const int64_t j = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  if (j >= N) {
+    return;
+  }
+  inverse_map[precomp_map[j]] = static_cast<int>(j);
+}
+
+template <size_t LOG_N, int NUM_WARP>
+__device__ __forceinline__ ulonglong2 hrot_ntt_phase2_pair(
+    uint64_t* __restrict__ inout_ptr,
+    const uint32_t poly_idx,
+    const uint32_t block_x,
+    const uint64_t* __restrict__ power_of_roots,
+    const uint64_t* __restrict__ power_of_roots_shoup,
+    const uint64_t prime,
+    const uint64_t two_p,
+    uint64_t (&tile)[2][NUM_WARP][WARP_SIZE + 1]) {
+  constexpr size_t LOG_RADIX = LOG_N - 6;
+  constexpr int R1_RADIX = 64;
+  constexpr int DATA_SIZE = 1u << LOG_RADIX;
+  constexpr int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
+
+  auto g_row = reinterpret_cast<uint64_t(*)[R1_RADIX][DATA_SIZE]>(inout_ptr);
+  uint32_t stage_off = R1_RADIX + block_x;
+
+  uint64_t i1 = g_row[poly_idx][block_x][threadIdx.x];
+  uint64_t i2 = g_row[poly_idx][block_x][threadIdx.x + kBLOCK_SIZE];
+
+  tile[0][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i1;
+  tile[1][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i2;
+  __syncthreads();
+
+  uint32_t laneID = threadIdx.x % WARP_SIZE;
+  uint32_t groupID = threadIdx.x / WARP_SIZE;
+  i1 = tile[0][groupID][laneID];
+  i2 = tile[1][groupID][laneID];
+
+  hrot_warp_butterfly<6>(
+      i1,
+      i2,
+      stage_off,
+      laneID,
+      power_of_roots,
+      power_of_roots_shoup,
+      prime,
+      two_p);
+
+  tile[0][groupID][laneID] = i1;
+  tile[1][groupID][laneID] = i2;
+  __syncthreads();
+
+  constexpr int SECOND_GROUP_SIZE = DATA_SIZE / WARP_SIZE / 4;
+  laneID = threadIdx.x % SECOND_GROUP_SIZE;
+  groupID = threadIdx.x / SECOND_GROUP_SIZE;
+
+  const uint32_t half_group = groupID >> 1;
+  if ((groupID & 1) == 0) {
+    i1 = tile[0][laneID][half_group];
+    i2 = tile[0][laneID + SECOND_GROUP_SIZE][half_group];
+  } else {
+    i1 = tile[1][laneID][half_group];
+    i2 = tile[1][laneID + SECOND_GROUP_SIZE][half_group];
+  }
+
+  stage_off = stage_off * 2 + groupID;
+  hrot_warp_butterfly<LOG_RADIX - 6>(
+      i1,
+      i2,
+      stage_off,
+      laneID,
+      power_of_roots,
+      power_of_roots_shoup,
+      prime,
+      two_p);
+
+  for (int k = 0; k < 3; k++) {
+    if (i1 >= prime) {
+      i1 -= prime;
+    }
+    if (i2 >= prime) {
+      i2 -= prime;
+    }
+  }
+  return {i1, i2};
+}
+
+template <size_t LOG_N>
+__global__ void hrot_ntt_phase2_finalize_kernel(
     uint64_t* __restrict__ out_bx,
     uint64_t* __restrict__ out_ax,
-    const uint64_t* __restrict__ baseconv_ntt,
+    uint64_t* __restrict__ workspace,
     const uint64_t* __restrict__ in_modup,
     const uint64_t* __restrict__ c1,
     const uint64_t* __restrict__ eval_ax,
     const uint64_t* __restrict__ eval_bx,
     const uint64_t* __restrict__ c0,
-    const int* __restrict__ precomp_map,
+    const int* __restrict__ inverse_precomp_map,
     const uint64_t* __restrict__ prod_inv,
     const uint64_t* __restrict__ prod_inv_shoup,
     const uint64_t* __restrict__ primes,
     const uint64_t* __restrict__ barret_ks,
     const uint64_t* __restrict__ barret_ratios,
-    const int64_t N,
+    const uint64_t* __restrict__ power_of_roots,
+    const uint64_t* __restrict__ power_of_roots_shoup,
     const int64_t L_IN,
     const int64_t curr_limbs,
     const int64_t length,
     const int64_t mult_length,
     const int64_t beta,
     const int64_t alpha) {
-  const int64_t j = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  const int64_t limb = blockIdx.y;
-  if (j >= N || limb >= curr_limbs) {
-    return;
-  }
+  constexpr size_t LOG_RADIX = LOG_N - 6;
+  constexpr int DATA_SIZE = 1u << LOG_RADIX;
+  constexpr int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
+  constexpr int NUM_WARP = kBLOCK_SIZE / WARP_SIZE;
+  constexpr int N = 1 << LOG_N;
 
-  const int64_t src = precomp_map[j];
-  const int64_t q_index = limb * N + src;
-  const int64_t out_index = limb * N + j;
-  const int64_t cv_stride = L_IN * N;
+  const uint32_t limb = blockIdx.y;
+  power_of_roots += limb * N;
+  power_of_roots_shoup += limb * N;
   const uint64_t prime = primes[limb];
+  const uint64_t two_p = prime << 1;
+  __shared__ uint64_t tile[2][NUM_WARP][WARP_SIZE + 1];
+
+  const int64_t cv_stride = L_IN * N;
+  const auto base_bx = hrot_ntt_phase2_pair<LOG_N, NUM_WARP>(
+      workspace,
+      limb,
+      blockIdx.x,
+      power_of_roots,
+      power_of_roots_shoup,
+      prime,
+      two_p,
+      tile);
+  __syncthreads();
+  const auto base_ax = hrot_ntt_phase2_pair<LOG_N, NUM_WARP>(
+      workspace + cv_stride,
+      limb,
+      blockIdx.x,
+      power_of_roots,
+      power_of_roots_shoup,
+      prime,
+      two_p,
+      tile);
+
+  const uint64_t bases_bx[2] = {base_bx.x, base_bx.y};
+  const uint64_t bases_ax[2] = {base_ax.x, base_ax.y};
+  const int64_t src_base = blockIdx.x * DATA_SIZE + 2 * threadIdx.x;
   const uint64_t inv = prod_inv[limb];
   const uint64_t inv_shoup = prod_inv_shoup[limb];
   const uint64_t barret_ratio = barret_ratios[limb];
   const uint64_t barret_k = barret_ks[limb];
 
-  uint128_t accum_ax = {0, 0};
-  uint128_t accum_bx = {0, 0};
-  for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
-    const int64_t begin_idx = beta_idx * alpha;
-    const int64_t remaining = curr_limbs - begin_idx;
-    const int64_t group_size = alpha < remaining ? alpha : remaining;
-    const bool is_original_limb =
-        limb >= begin_idx && limb < begin_idx + group_size;
-    const int64_t stride = N * mult_length * beta_idx;
-    const int64_t in_ptr_stride = N * length * beta_idx;
-    const uint64_t op1 =
-        is_original_limb ? c1[q_index] : in_modup[q_index + in_ptr_stride];
-    const auto mul_ax = mult_64_64_128(op1, eval_ax[q_index + stride]);
-    const auto mul_bx = mult_64_64_128(op1, eval_bx[q_index + stride]);
-    inplace_add_128_128(mul_ax, accum_ax);
-    inplace_add_128_128(mul_bx, accum_bx);
-  }
-  const uint64_t key_ax =
-      barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
-  const uint64_t key_bx =
-      barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+#pragma unroll
+  for (int pair_idx = 0; pair_idx < 2; ++pair_idx) {
+    const int64_t src = src_base + pair_idx;
+    const int64_t j = inverse_precomp_map[src];
+    const int64_t q_index = limb * N + src;
+    const int64_t out_index = limb * N + j;
 
-  uint64_t bx = sub_mod(key_bx, baseconv_ntt[q_index], prime);
-  bx = mul_and_reduce_shoup(bx, inv, inv_shoup, prime);
-  if (bx >= prime) {
-    bx -= prime;
-  }
-  out_bx[out_index] = add_mod(bx, c0[q_index], prime);
+    uint128_t accum_ax = {0, 0};
+    uint128_t accum_bx = {0, 0};
+    for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
+      const int64_t begin_idx = beta_idx * alpha;
+      const int64_t remaining = curr_limbs - begin_idx;
+      const int64_t group_size = alpha < remaining ? alpha : remaining;
+      const bool is_original_limb =
+          limb >= begin_idx && limb < begin_idx + group_size;
+      const int64_t stride = N * mult_length * beta_idx;
+      const int64_t in_ptr_stride = N * length * beta_idx;
+      const uint64_t op1 =
+          is_original_limb ? c1[q_index] : in_modup[q_index + in_ptr_stride];
+      const auto mul_ax = mult_64_64_128(op1, eval_ax[q_index + stride]);
+      const auto mul_bx = mult_64_64_128(op1, eval_bx[q_index + stride]);
+      inplace_add_128_128(mul_ax, accum_ax);
+      inplace_add_128_128(mul_bx, accum_bx);
+    }
+    const uint64_t key_ax =
+        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+    const uint64_t key_bx =
+        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
 
-  uint64_t ax = sub_mod(
-      key_ax,
-      baseconv_ntt[cv_stride + q_index],
-      prime);
-  ax = mul_and_reduce_shoup(ax, inv, inv_shoup, prime);
-  if (ax >= prime) {
-    ax -= prime;
+    uint64_t bx = sub_mod(key_bx, bases_bx[pair_idx], prime);
+    bx = mul_and_reduce_shoup(bx, inv, inv_shoup, prime);
+    if (bx >= prime) {
+      bx -= prime;
+    }
+    out_bx[out_index] = add_mod(bx, c0[q_index], prime);
+
+    uint64_t ax = sub_mod(key_ax, bases_ax[pair_idx], prime);
+    ax = mul_and_reduce_shoup(ax, inv, inv_shoup, prime);
+    if (ax >= prime) {
+      ax -= prime;
+    }
+    out_ax[out_index] = ax;
   }
-  out_ax[out_index] = ax;
 }
 
 } // namespace fhe
@@ -495,6 +649,193 @@ static void hrot_moddown_base_convert_ntt_phase1_cuda(
   }
 }
 
+template <size_t LOG_N>
+static void launch_hrot_ntt_phase2_finalize(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    uint64_t* workspace_ptr,
+    const uint64_t* modup_ptr,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
+    const Tensor& c0,
+    const Tensor& inverse_precomp_map,
+    int64_t L_IN,
+    int64_t curr_limbs,
+    int64_t length,
+    int64_t mult_length,
+    int64_t beta,
+    int64_t alpha,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_k,
+    const Tensor& barret_ratio,
+    const Tensor& power_of_roots,
+    const Tensor& power_of_roots_shoup,
+    cudaStream_t stream) {
+  constexpr size_t N = size_t{1} << LOG_N;
+  constexpr size_t RADIX = 64;
+  fhe::hrot_ntt_phase2_finalize_kernel<LOG_N>
+      <<<dim3(RADIX, curr_limbs),
+         N / RADIX / 2,
+         0,
+         stream>>>(
+          out_bx.data_ptr<uint64_t>(),
+          out_ax.data_ptr<uint64_t>(),
+          workspace_ptr,
+          modup_ptr,
+          c1.data_ptr<uint64_t>(),
+          ax.data_ptr<uint64_t>(),
+          bx.data_ptr<uint64_t>(),
+          c0.data_ptr<uint64_t>(),
+          inverse_precomp_map.data_ptr<int>(),
+          prod_inv_moddown.data_ptr<uint64_t>(),
+          prod_inv_shoup_moddown.data_ptr<uint64_t>(),
+          primes.data_ptr<uint64_t>(),
+          barret_k.data_ptr<uint64_t>(),
+          barret_ratio.data_ptr<uint64_t>(),
+          power_of_roots.data_ptr<uint64_t>(),
+          power_of_roots_shoup.data_ptr<uint64_t>(),
+          L_IN,
+          curr_limbs,
+          length,
+          mult_length,
+          beta,
+          alpha);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+static void hrot_ntt_phase2_finalize_cuda(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    uint64_t* workspace_ptr,
+    const uint64_t* modup_ptr,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
+    const Tensor& c0,
+    const Tensor& inverse_precomp_map,
+    int64_t L_IN,
+    int64_t curr_limbs,
+    int64_t N,
+    int64_t length,
+    int64_t mult_length,
+    int64_t beta,
+    int64_t alpha,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_k,
+    const Tensor& barret_ratio,
+    const Tensor& power_of_roots,
+    const Tensor& power_of_roots_shoup) {
+  auto stream = at::cuda::getCurrentCUDAStream();
+  if (N == (int64_t{1} << 17)) {
+    launch_hrot_ntt_phase2_finalize<17>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  } else if (N == (int64_t{1} << 16)) {
+    launch_hrot_ntt_phase2_finalize<16>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  } else if (N == (int64_t{1} << 15)) {
+    launch_hrot_ntt_phase2_finalize<15>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  } else if (N == (int64_t{1} << 14)) {
+    launch_hrot_ntt_phase2_finalize<14>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  } else {
+    TORCH_INTERNAL_ASSERT(false, "Unsupported hrot NTT size");
+  }
+}
+
 static std::vector<Tensor> hrot_moddown_cuda(
     const Tensor& in,
     const Tensor& modup,
@@ -581,46 +922,39 @@ static std::vector<Tensor> hrot_moddown_cuda(
       power_of_roots,
       power_of_roots_shoup);
 
-  NTT_phase2_impl(
-      workspace_ptr,
-      curr_limbs,
-      N,
-      L_IN,
-      num_cv,
-      batch,
-      primes.data_ptr<uint64_t>(),
-      power_of_roots_shoup.data_ptr<uint64_t>(),
-      power_of_roots.data_ptr<uint64_t>());
-
   dim3 block(BLOCK_SIZE);
   auto stream = at::cuda::getCurrentCUDAStream();
-  fhe::hrot_moddown_finalize_kernel<<<
-      dim3(num_blocks(N), curr_limbs),
-      block,
-      0,
-      stream>>>(
-      out_bx.data_ptr<uint64_t>(),
-      out_ax.data_ptr<uint64_t>(),
+  auto inverse_precomp_map = at::empty({N}, precomp_map.options());
+  fhe::invert_precomp_map_kernel<<<num_blocks(N), block, 0, stream>>>(
+      inverse_precomp_map.data_ptr<int>(),
+      precomp_map.data_ptr<int>(),
+      N);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+  hrot_ntt_phase2_finalize_cuda(
+      out_bx,
+      out_ax,
       workspace_ptr,
       modup_ptr,
-      c1.data_ptr<uint64_t>(),
-      ax.data_ptr<uint64_t>(),
-      bx.data_ptr<uint64_t>(),
-      c0.data_ptr<uint64_t>(),
-      precomp_map.data_ptr<int>(),
-      prod_inv_moddown.data_ptr<uint64_t>(),
-      prod_inv_shoup_moddown.data_ptr<uint64_t>(),
-      primes.data_ptr<uint64_t>(),
-      barret_k.data_ptr<uint64_t>(),
-      barret_ratio.data_ptr<uint64_t>(),
-      N,
+      c1,
+      bx,
+      ax,
+      c0,
+      inverse_precomp_map,
       L_IN,
       curr_limbs,
+      N,
       curr_limbs + sizeP,
       special_mod_start + sizeP,
       beta,
-      alpha);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
+      alpha,
+      prod_inv_moddown,
+      prod_inv_shoup_moddown,
+      primes,
+      barret_k,
+      barret_ratio,
+      power_of_roots,
+      power_of_roots_shoup);
   return {out_bx, out_ax};
 }
 
