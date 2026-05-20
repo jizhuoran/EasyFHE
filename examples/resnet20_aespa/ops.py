@@ -213,31 +213,21 @@ def conv3x3_sx(input, kernel_group, img_width, padding, copy_per_cipher, channel
     )
 
 
-def pointwise_conv(input, kernel_keys, bias_key, rot_offset, scale, cryptoContext, weights):
-    if not kernel_keys:
-        raise ValueError("pointwise_conv requires at least one kernel key")
-
+def pointwise_conv(input, kernel_group, bias_key, rot_offset, scale, cryptoContext, weights):
     _trace_op_state(
         cryptoContext,
         "pointwise_conv",
         input,
-        kernel_count=len(kernel_keys),
+        kernel_group=kernel_group,
         bias_key=bias_key,
         rot_offset=int(rot_offset),
     )
     input = reduce_noise_to_one(input, cryptoContext)
-
-    for idx, kernel_key in enumerate(kernel_keys):
-        encoded = weights.plaintext(
-            kernel_key,
-            cryptoContext.L - input.cur_limbs,
-            input.slots,
-            cryptoContext,
-            _resolve_scalar(scale, weights),
-        )
-        partial_sum = fhe.homo_mul_pt(input, encoded, cryptoContext)
-        finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
-        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
+    plaintexts = _read_kernel_group(kernel_group, input, scale, cryptoContext, weights)
+    input_batch = input.cipher_like([component.unsqueeze(0) for component in input.cv], batch_size=1)
+    partial_sums = fhe.fused_grouped_pairwise_mac(input_batch, plaintexts, plaintexts.batch_size, cryptoContext)
+    finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
+    finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
 
     finalsum = rescale_one_level(finalsum, cryptoContext)
     bias = weights.plaintext(

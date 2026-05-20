@@ -35,16 +35,15 @@ def homo_mul(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_mul", in0, in1, require_ext=False, require_same_metadata=("slots",))
     in0, in1 = _align_for_mul(in0, in1, cryptoContext)
     res = _cipher_mul(in0, in1, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.L,
-            cryptoContext.mult_swk_bx,
-            cryptoContext.mult_swk_ax,
-            cryptoContext,
-        )
+    key_switched = F.cv_keyswitch(
+        res.cv[2],
+        res.cur_limbs,
+        cryptoContext.L,
+        cryptoContext.mult_swk_bx,
+        cryptoContext.mult_swk_ax,
+        cryptoContext,
     )
+    tmp = res.cipher_like([key_switched[0], key_switched[1]])
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)
 
@@ -53,15 +52,14 @@ def homo_square(in0, cryptoContext):
     validation.validate_cipher_op("homo_square", in0, require_ext=False)
     in0 = alignment.align_to(in0, alignment.plan_reduce_noise_to_one(in0, cryptoContext), cryptoContext)
     res = _cipher_square(in0, cryptoContext)
-    tmp = res.cipher_like(
-        F.cv_keyswitch(
-            res.cv[2],
-            res.cur_limbs,
-            cryptoContext.L,
-            cryptoContext.mult_swk_bx,
-            cryptoContext.mult_swk_ax,
-            cryptoContext,
-        )
+    key_switched = F.cv_keyswitch(
+        res.cv[2],
+        res.cur_limbs,
+        cryptoContext.L,
+        cryptoContext.mult_swk_bx,
+        cryptoContext.mult_swk_ax,
+        cryptoContext,
     )
+    tmp = res.cipher_like([key_switched[0], key_switched[1]])
     res.cv = res.cv[:2]
     return _cipher_add(res, tmp, cryptoContext)

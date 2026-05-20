@@ -18,7 +18,7 @@ import numpy as np
 SCRIPT_DIR = Path(__file__).resolve().parent
 RESNET_DIR = SCRIPT_DIR.parent
 DEFAULT_WEIGHT_DIR = RESNET_DIR / "weights_aespa_20"
-DEFAULT_OUTPUT = RESNET_DIR / "resnet20_aespa_weights.npz"
+DEFAULT_OUTPUT = RESNET_DIR.parent / "resnet20_aespa" / "resnet20_aespa_weights.npz"
 
 
 def read_bin_vector(path: Path) -> np.ndarray:
@@ -172,6 +172,20 @@ def pointwise_sx_kernel_group(
     return f"{base}-sx", np.stack([pad_to_slots(row, slots) for row in rows], axis=0)
 
 
+def pointwise_kernel_group(
+    raw: dict[str, np.ndarray],
+    base: str,
+    channel_offset: int,
+    channels: int,
+    slots: int,
+) -> tuple[str, np.ndarray]:
+    rows = [
+        pad_to_slots(raw[f"{base}-ch{channel}-k1"], slots)
+        for channel in reversed(range(channel_offset, channel_offset + channels))
+    ]
+    return f"{base}-ch{channel_offset}-{channel_offset + channels - 1}-k1", np.stack(rows, axis=0)
+
+
 def pointwise_sx_bias(raw: dict[str, np.ndarray], base: str, slots: int) -> tuple[str, np.ndarray]:
     first = np.asarray(raw[f"{base}-bias1"], dtype=np.float64).reshape(-1)
     second = np.asarray(raw[f"{base}-bias2"], dtype=np.float64).reshape(-1)
@@ -226,9 +240,13 @@ def add_generated_resnet20_aespa_plaintexts(raw: dict[str, np.ndarray]) -> None:
             generated.append(conv3x3_kernel_group(raw, f"layer{block_id}-conv{conv_id}bn{conv_id}", 0, 64, 4096))
 
     generated.append(conv_sx_kernel_group(raw, "layer4-conv1bn1", loop_size=16, num_kernels=9, slots=32768, abs_rot_offset=1024))
+    generated.append(pointwise_kernel_group(raw, "layer4dx-conv1bn1", channel_offset=0, channels=16, slots=16384))
+    generated.append(pointwise_kernel_group(raw, "layer4dx-conv1bn1", channel_offset=16, channels=16, slots=16384))
     generated.append(pointwise_sx_kernel_group(raw, "layer4dx-conv1bn1", loop_size=16, slots=32768, abs_rot_offset=1024))
     generated.append(pointwise_sx_bias(raw, "layer4dx-conv1bn1", slots=32768))
     generated.append(conv_sx_kernel_group(raw, "layer7-conv1bn1", loop_size=32, num_kernels=9, slots=16384, abs_rot_offset=256))
+    generated.append(pointwise_kernel_group(raw, "layer7dx-conv1bn1", channel_offset=0, channels=32, slots=8192))
+    generated.append(pointwise_kernel_group(raw, "layer7dx-conv1bn1", channel_offset=32, channels=32, slots=8192))
     generated.append(pointwise_sx_kernel_group(raw, "layer7dx-conv1bn1", loop_size=32, slots=16384, abs_rot_offset=256))
     generated.append(pointwise_sx_bias(raw, "layer7dx-conv1bn1", slots=16384))
 

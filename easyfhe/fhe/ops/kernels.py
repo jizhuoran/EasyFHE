@@ -165,6 +165,14 @@ def cv_moddown(
     context: Context,
 ) -> Tensor:
     x_4d = _to_4d(x)
+    return _cv_moddown_4d(x_4d, curr_limbs, context).reshape(-1, context.N)
+
+
+def _cv_moddown_4d(
+    x_4d: Tensor,
+    curr_limbs: int,
+    context: Context,
+) -> Tensor:
     return torch.moddown(
         x_4d,
         curr_limbs=curr_limbs,
@@ -184,7 +192,7 @@ def cv_moddown(
         power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-    ).reshape(-1, context.N)
+    )
 
 
 def cv_moddown_write(out: Tensor, x: Tensor, curr_limbs: int, context: Context) -> Tensor:
@@ -343,6 +351,34 @@ def cv_innerproduct_write(
     )
 
 
+def cv_innerproduct_broadcast_cipher_pair(
+    x: Tensor,
+    curr_limbs: int,
+    special_mod_starts: Tensor,
+    swk_bxs: list[Tensor],
+    swk_axs: list[Tensor],
+    context: Context,
+) -> Tensor:
+    if x.dim() == 1:
+        x_4d = x.reshape(1, 1, -1, context.N)
+    else:
+        x_4d = _to_4d(x)
+    return torch.innerproduct_broadcast_cipher_pair(
+        x_4d,
+        bx=swk_bxs,
+        ax=swk_axs,
+        curr_limbs=curr_limbs,
+        alpha=context.alpha,
+        L=context.L,
+        N=context.N,
+        special_mod_start=special_mod_starts,
+        primes=context.primes,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        workspace=context.inner_workspace,
+    )
+
+
 def cv_fast_rotate_ext_batch_finalize(key_products, pc0, pc1, precomp_maps, offsets, cur_limbs, context):
     active_limbs = key_products.shape[2]
     return torch.fast_rotate_ext_batch_finalize(
@@ -352,6 +388,32 @@ def cv_fast_rotate_ext_batch_finalize(key_products, pc0, pc1, precomp_maps, offs
         precomp_maps,
         offsets,
         context.primes,
+        cur_limbs,
+        active_limbs,
+        context.N,
+    )
+
+
+def cv_fast_rotate_ext_batch_finalize_compact(
+    key_products,
+    product_indices,
+    c0,
+    c1,
+    precomp_maps,
+    cur_limbs,
+    active_limbs,
+    context,
+):
+    return torch.fast_rotate_ext_batch_finalize_compact(
+        key_products,
+        product_indices,
+        c0,
+        c1,
+        precomp_maps,
+        context.primes,
+        context.PModq,
+        context.barret_ratio,
+        context.barret_k,
         cur_limbs,
         active_limbs,
         context.N,
@@ -371,6 +433,27 @@ def cv_fast_rotate_batch_finalize(moddown_products, c0, c1, precomp_maps, offset
     )
 
 
+def cv_fast_rotate_batch_finalize_compact(
+    moddown_products,
+    product_indices,
+    c0,
+    c1,
+    precomp_maps,
+    cur_limbs,
+    context,
+):
+    return torch.fast_rotate_batch_finalize_compact(
+        moddown_products,
+        product_indices,
+        c0,
+        c1,
+        precomp_maps,
+        context.primes,
+        cur_limbs,
+        context.N,
+    )
+
+
 def cv_keyswitch(
     input: Tensor,
     cur_limbs: int,
@@ -378,7 +461,7 @@ def cv_keyswitch(
     swk_bx: Tensor,
     swk_ax: Tensor,
     context: Context,
-) -> list:
+) -> Tensor:
     modup_res = cv_modup(
         input,
         curr_limbs=cur_limbs,
@@ -392,21 +475,11 @@ def cv_keyswitch(
         swk_ax,
         context
     )
-
-
-    moddown_bx = cv_moddown(
-        inner_product[0],
-        curr_limbs=cur_limbs,
-        context=context
-    )
-
-    moddown_ax = cv_moddown(
-        inner_product[1],
-        curr_limbs=cur_limbs,
-        context=context
-    )
-
-    return [moddown_bx, moddown_ax]
+    return _cv_moddown_4d(
+        inner_product.reshape(2, 1, -1, context.N),
+        cur_limbs,
+        context,
+    ).reshape(2, -1, context.N)
 
 
 def cv_drop_last_element_and_scale(

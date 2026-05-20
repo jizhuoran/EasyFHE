@@ -1,27 +1,26 @@
 import easyfhe as torch
 import numpy as np
 
-from ..ciphertext import Cipher
 from . import kernels as F
 
 
 def homo_rotate(cipher, offset, cryptoContext):
     if offset == 0:
         return cipher.deep_copy()
-    norm_index = cryptoContext.norm_rot_index(offset)
-    swk = cryptoContext.get_rotation_key(norm_index)
-    special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(offset, cryptoContext.L)
-    result = cipher.cipher_like(
-        F.cv_keyswitch(
-            cipher.cv[1],
-            cipher.cur_limbs,
-            special_mod_start,
-            swk[0],
-            swk[1],
-            cryptoContext,
-        )
+    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
+    key_switched = F.cv_keyswitch(
+        cipher.cv[1],
+        cipher.cur_limbs,
+        special_mod_start,
+        swk_bx,
+        swk_ax,
+        cryptoContext,
     )
-    result.cv[0] = F.cv_add(cipher.cv[0], result.cv[0], cryptoContext.moduliQ, cipher.cur_limbs)
+    cv = [
+        F.cv_add(cipher.cv[0], key_switched[0], cryptoContext.moduliQ, cipher.cur_limbs),
+        key_switched[1],
+    ]
+    result = cipher.cipher_like(cv)
     return _cipher_automorphism(result, offset, cryptoContext)
 
 
@@ -82,55 +81,153 @@ def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
     batch_size = len(offsets)
     digits = _modup_to_ext(cipher, cryptoContext)
     active_limbs = cipher.cur_limbs + cryptoContext.K
-    key_products = torch.empty(
-        (2, batch_size, active_limbs, cryptoContext.N),
-        dtype=torch.uint64,
-        device=cryptoContext.device,
-    )
-    for batch_idx, offset in enumerate(offsets):
-        if offset == 0:
-            continue
-        norm_index = cryptoContext.norm_rot_index(offset)
-        swk = cryptoContext.get_rotation_key(norm_index)
-        special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(offset, cryptoContext.L)
-        F.cv_innerproduct_write(
-            key_products[:, batch_idx:batch_idx + 1, :, :],
-            digits.cv[0],
-            digits.cur_limbs,
-            special_mod_start,
-            swk[0],
-            swk[1],
-            cryptoContext,
-        )
+    key_products, product_indices = _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext)
+    precomp_maps = _precompute_auto_maps(offsets, cryptoContext)
 
-    precomp_maps, offsets_tensor = _batch_precompute_auto(offsets, cryptoContext)
     if output_ext:
-        cv = F.cv_fast_rotate_ext_batch_finalize(
+        return _finalize_fast_rotate_ext(
+            cipher,
             key_products,
-            _scale_to_P_ext(cipher.cv[0], cipher, cryptoContext),
-            _scale_to_P_ext(cipher.cv[1], cipher, cryptoContext),
+            product_indices,
             precomp_maps,
-            offsets_tensor,
-            cipher.cur_limbs,
+            active_limbs,
+            batch_size,
             cryptoContext,
         )
-        return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size, cipher_id="assign")
 
-    moddown_products = torch.empty(
-        (2, batch_size, cipher.cur_limbs, cryptoContext.N),
-        dtype=torch.uint64,
-        device=cryptoContext.device,
+    return _finalize_fast_rotate_q(
+        cipher,
+        key_products,
+        product_indices,
+        precomp_maps,
+        batch_size,
+        cryptoContext,
     )
-    F.cv_moddown_write(moddown_products, key_products, cipher.cur_limbs, cryptoContext)
-    cv = F.cv_fast_rotate_batch_finalize(
-        moddown_products,
+
+
+def _finalize_fast_rotate_ext(
+    cipher,
+    key_products,
+    product_indices,
+    precomp_maps,
+    active_limbs,
+    batch_size,
+    cryptoContext,
+):
+    cv = F.cv_fast_rotate_ext_batch_finalize_compact(
+        key_products,
+        product_indices,
         cipher.cv[0],
         cipher.cv[1],
         precomp_maps,
-        offsets_tensor,
+        cipher.cur_limbs,
+        active_limbs,
+        cryptoContext,
+    )
+    return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size, cipher_id="assign")
+
+
+def _finalize_fast_rotate_q(
+    cipher,
+    key_products,
+    product_indices,
+    precomp_maps,
+    batch_size,
+    cryptoContext,
+):
+    moddown_products = torch.empty(
+        (2, key_products.shape[1], cipher.cur_limbs, cryptoContext.N),
+        dtype=torch.uint64,
+        device=cryptoContext.device,
+    )
+    if key_products.shape[1] != 0:
+        F.cv_moddown_write(moddown_products, key_products, cipher.cur_limbs, cryptoContext)
+    cv = F.cv_fast_rotate_batch_finalize_compact(
+        moddown_products,
+        product_indices,
+        cipher.cv[0],
+        cipher.cv[1],
+        precomp_maps,
+        cipher.cur_limbs,
         cryptoContext,
     )
     return cipher.cipher_like(list(cv), batch_size=batch_size, cipher_id="assign")
+
+
+def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
+    nonzero_offsets, product_indices = _batch_rotation_product_plan(offsets, cryptoContext)
+    if not nonzero_offsets:
+        return torch.empty(
+            (2, 0, active_limbs, cryptoContext.N),
+            dtype=torch.uint64,
+            device=cryptoContext.device,
+        ), product_indices
+
+    swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(tuple(nonzero_offsets), cryptoContext)
+    key_products = F.cv_innerproduct_broadcast_cipher_pair(
+        digits.cv[0],
+        digits.cur_limbs,
+        starts,
+        swk_bxs,
+        swk_axs,
+        cryptoContext,
+    )
+    return key_products, product_indices
+
+
+def _batch_rotation_product_plan(offsets, cryptoContext):
+    cache = getattr(cryptoContext, "_fast_rotate_product_plan_cache", None)
+    if cache is None:
+        cache = {}
+        cryptoContext._fast_rotate_product_plan_cache = cache
+    key = (tuple(offsets), cryptoContext.device)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    product_index_values = []
+    nonzero_offsets = []
+    for offset in offsets:
+        if offset == 0:
+            product_index_values.append(-1)
+        else:
+            product_index_values.append(len(nonzero_offsets))
+            nonzero_offsets.append(offset)
+
+    product_indices = torch.from_numpy(np.array(product_index_values, dtype=np.int64)).to(cryptoContext.device)
+    cache[key] = (tuple(nonzero_offsets), product_indices)
+    return cache[key]
+
+
+def _batch_rotation_keys_and_starts(offsets, cryptoContext):
+    cache = getattr(cryptoContext, "_fast_rotate_key_product_cache", None)
+    if cache is None:
+        cache = {}
+        cryptoContext._fast_rotate_key_product_cache = cache
+    key = (tuple(offsets), cryptoContext.device)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    swk_bxs = []
+    swk_axs = []
+    special_mod_starts = []
+    for offset in offsets:
+        swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
+        swk_bxs.append(swk_bx)
+        swk_axs.append(swk_ax)
+        special_mod_starts.append(special_mod_start)
+
+    starts = torch.from_numpy(np.array(special_mod_starts, dtype=np.int64)).to(cryptoContext.device)
+    cache[key] = (swk_bxs, swk_axs, starts)
+    return cache[key]
+
+
+def _rotation_key_and_start(offset, cryptoContext):
+    norm_index = cryptoContext.norm_rot_index(offset)
+    swk_bx, swk_ax = cryptoContext.get_rotation_key(norm_index)
+    special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(offset, cryptoContext.L)
+    return swk_bx, swk_ax, special_mod_start
 
 
 def _normalize_offsets(offsets):
@@ -191,17 +288,15 @@ def _modup_to_ext(cipher, cryptoContext):
 
 
 def _fast_rotate_key_contribution_ext(digits, offset, cryptoContext):
-    norm_index = cryptoContext.norm_rot_index(offset)
-    swk = cryptoContext.get_rotation_key(norm_index)
-    special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(offset, cryptoContext.L)
+    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
     result = digits.cipher_like(
         F.cv_innerproduct(
             digits.cv[0].reshape(-1),
             curr_limbs=digits.cur_limbs,
             special_mod_start=special_mod_start,
             context=cryptoContext,
-            swk_bx=swk[0],
-            swk_ax=swk[1],
+            swk_bx=swk_bx,
+            swk_ax=swk_ax,
         ),
         is_ext=True,
     )
@@ -215,40 +310,33 @@ def _cipher_automorphism(cipher, offset, cryptoContext):
     return cipher.cipher_like(cv)
 
 
-def _scale_to_P_ext(cv, cipher, cryptoContext):
-    return torch.cat((
-        F.cv_mul_scalar(cv, cryptoContext.PModq, cryptoContext.moduliQ, cryptoContext.q_mu, cipher.cur_limbs),
-        torch.zeros(
-            (cryptoContext.K << cryptoContext.logN),
-            dtype=torch.uint64,
-            device=cryptoContext.device,
-        ).reshape(-1, cryptoContext.N),
-    ), dim=0)
-
-
-def _batch_precompute_auto(offsets, cryptoContext):
-    cache = getattr(cryptoContext, "_precompute_auto_batch_cache", None)
+def _precompute_auto_maps(offsets, cryptoContext):
+    cache = getattr(cryptoContext, "_precompute_auto_maps_cache", None)
     if cache is None:
         cache = {}
-        cryptoContext._precompute_auto_batch_cache = cache
+        cryptoContext._precompute_auto_maps_cache = cache
     key = (tuple(offsets), cryptoContext.device)
     cached = cache.get(key)
     if cached is not None:
         return cached
 
-    zero_map = None
     maps = []
     for offset in offsets:
         if offset == 0:
-            if zero_map is None:
-                zero_map = torch.from_numpy(np.zeros(cryptoContext.N, dtype=np.int32)).to(cryptoContext.device)
-            maps.append(zero_map)
+            maps.append(_zero_precompute_auto_map(cryptoContext))
         else:
             maps.append(cryptoContext.get_precompute_auto(cryptoContext.norm_rot_index(offset)))
     precomp_maps = torch.stack(maps, dim=0)
-    offsets_tensor = torch.from_numpy(np.array(offsets, dtype=np.int64)).to(cryptoContext.device)
-    cache[key] = (precomp_maps, offsets_tensor)
+    cache[key] = precomp_maps
     return cache[key]
+
+
+def _zero_precompute_auto_map(cryptoContext):
+    cached = getattr(cryptoContext, "_zero_precompute_auto_map", None)
+    if cached is None:
+        cached = torch.from_numpy(np.zeros(cryptoContext.N, dtype=np.int32)).to(cryptoContext.device)
+        cryptoContext._zero_precompute_auto_map = cached
+    return cached
 
 
 def _batch_item(cipher, index):

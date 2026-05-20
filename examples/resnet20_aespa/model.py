@@ -92,11 +92,10 @@ def _conv3x3_kernel_key(block_id, conv_id, channels, channel_offset=0):
     return _conv3x3_kernel_group_key(prefix, channel_offset, channels)
 
 
-def _pointwise_kernel_keys(block_id, conv_id, channels, channel_offset=0):
-    return [
-        f"layer{block_id}dx-conv{conv_id}bn{conv_id}-ch{channel + channel_offset}-k1"
-        for channel in range(channels)
-    ]
+def _pointwise_kernel_group_key(block_id, conv_id, channels, channel_offset=0):
+    if channels <= 0:
+        raise ValueError("pointwise kernel group requires at least one channel")
+    return f"layer{block_id}dx-conv{conv_id}bn{conv_id}-ch{channel_offset}-{channel_offset + channels - 1}-k1"
 
 
 def _pointwise_bias_key(block_id, conv_id, bias_offset):
@@ -211,7 +210,7 @@ def _downsample_projection_pair(input, block_id, in_channels, first_rot, rt, sca
     input = _projection_input_for_downsample(input, rt)
     first_half = pointwise_conv(
         input,
-        _pointwise_kernel_keys(block_id, 1, in_channels),
+        _pointwise_kernel_group_key(block_id, 1, in_channels),
         _pointwise_bias_key(block_id, 1, "1"),
         first_rot,
         scale,
@@ -220,7 +219,7 @@ def _downsample_projection_pair(input, block_id, in_channels, first_rot, rt, sca
     )
     second_half = pointwise_conv(
         input,
-        _pointwise_kernel_keys(block_id, 1, in_channels, channel_offset=in_channels),
+        _pointwise_kernel_group_key(block_id, 1, in_channels, channel_offset=in_channels),
         _pointwise_bias_key(block_id, 1, "2"),
         first_rot,
         scale,

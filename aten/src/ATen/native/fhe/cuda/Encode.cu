@@ -14,9 +14,9 @@
 #define MAX_64BIT_VALUE 9223372036854775295LL
 #define MAX_BITS_IN_WORD 61
 
-#define BLOCK_SIZE 256
-
 namespace fhe {
+static constexpr int kEncodeBlockSize = 256;
+
 template <typename DDTYPE>
 __global__ void new_fit_to_native_vector_kernel(
     DDTYPE* in_ptr,
@@ -112,7 +112,7 @@ static void encode_template(
             reinterpret_cast<scalar_t*>(input.data_ptr<scalar_t>());
         auto gap = N / (slots * 2);
         auto stream = at::cuda::getCurrentCUDAStream();
-        dim3 block(BLOCK_SIZE);
+        dim3 block(fhe::kEncodeBlockSize);
         dim3 grid(
             (slots + block.x - 1) / block.x,
             cur_limbs + (is_ext ? sizeP : 0),
@@ -179,7 +179,8 @@ Tensor encode_cuda(
     const Tensor& power_of_roots) {
   TORCH_INTERNAL_ASSERT(inverse_internal.dim() == 2);
   auto num_plaintext = inverse_internal.size(0);
-  Tensor out = at::zeros({num_plaintext, cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
+  Tensor out = at::zeros(
+      {num_plaintext, cur_limbs + (is_ext ? sizeP : 0), N}, primes.options());
 
   // for (size_t i = 0; i < num_plaintext; ++i) {
   //   auto inverse_internal_view = inverse_internal[i];
@@ -200,7 +201,7 @@ Tensor encode_cuda(
       power_of_roots_shoup,
       power_of_roots);
   // }
-  
+
   return out;
 }
 

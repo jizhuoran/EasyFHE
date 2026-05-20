@@ -3355,6 +3355,12 @@
   device_check: NoCheck
   dispatch:
     CPU: innerproduct_broadcast_cipher_cpu
+    CUDA: innerproduct_broadcast_cipher_cuda
+
+- func: innerproduct_broadcast_cipher_pair(Tensor in_modup, *, Tensor[] bx, Tensor[] ax, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: innerproduct_broadcast_cipher_pair_cuda
 
 - func: drop_last_element_and_scale(Tensor input, *, int curr_limbs, int l, int L, int N, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
   device_check: NoCheck
@@ -3373,6 +3379,11 @@
   dispatch:
     CUDA: fast_rotate_ext_batch_finalize_cuda
 
+- func: fast_rotate_ext_batch_finalize_compact(Tensor key_products, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, Tensor p_mod_q, Tensor barret_ratio, Tensor barret_k, int curr_limbs, int active_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fast_rotate_ext_batch_finalize_compact_cuda
+
 - func: fast_rotate_ext_batch_finalize_pair(Tensor key_product_bx, Tensor key_product_ax, Tensor pc0, Tensor pc1, Tensor precomp_maps, Tensor offsets, Tensor primes, int curr_limbs, int active_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:
@@ -3382,6 +3393,11 @@
   device_check: NoCheck
   dispatch:
     CUDA: fast_rotate_batch_finalize_cuda
+
+- func: fast_rotate_batch_finalize_compact(Tensor moddown_products, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, int curr_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fast_rotate_batch_finalize_compact_cuda
 
 - func: mod_raise(Tensor input, *, int N, int L0, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
