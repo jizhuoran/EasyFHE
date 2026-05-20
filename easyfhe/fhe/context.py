@@ -176,6 +176,7 @@ class Context:
         # for rotation
         self.left_rot_key_map = {key: [value[0].to("cpu"), value[1].to("cpu")] for key, value in left_rot_key_map.items()}
         self.precompute_auto_map = {key: value.to("cpu") for key, value in precompute_auto_map.items()}
+        self.inverse_precompute_auto_map = {}
 
         # for cv_drop
         self.q_inv_mod_q = q_inv_mod_q.to(device)
@@ -319,6 +320,24 @@ class Context:
             return self.precompute_auto_map[key].cuda()
         else:
             return self.precompute_auto_map[key]
+
+    def get_inverse_precompute_auto(self, key):
+        cache_key = (int(key), self.device)
+        cached = self.inverse_precompute_auto_map.get(cache_key)
+        if cached is not None:
+            return cached
+
+        import easyfhe as torch
+
+        precompute = self.get_precompute_auto(key).contiguous()
+        inverse = torch.empty_like(precompute)
+        inverse[precompute] = torch.arange(
+            precompute.numel(),
+            dtype=precompute.dtype,
+            device=precompute.device,
+        )
+        self.inverse_precompute_auto_map[cache_key] = inverse
+        return inverse
 
     def ensure_rotation_keys(self, rotation_groups):
         from .material.rotation import ensure_rotation_keys

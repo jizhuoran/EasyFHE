@@ -289,17 +289,6 @@ __global__ void hrot_sum_reduce_p_from_modup_kernel(
   out_bx[out_i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
 }
 
-__global__ void invert_precomp_map_kernel(
-    int* __restrict__ inverse_map,
-    const int* __restrict__ precomp_map,
-    const int64_t N) {
-  const int64_t j = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  if (j >= N) {
-    return;
-  }
-  inverse_map[precomp_map[j]] = static_cast<int>(j);
-}
-
 template <size_t LOG_N, int NUM_WARP>
 __device__ __forceinline__ ulonglong2 hrot_ntt_phase2_pair(
     uint64_t* __restrict__ inout_ptr,
@@ -967,7 +956,7 @@ static std::vector<Tensor> hrot_moddown_cuda(
     const Tensor& c0,
     const std::optional<Tensor>& add_bx,
     const std::optional<Tensor>& add_ax,
-    const Tensor& precomp_map,
+    const Tensor& inverse_precomp_map,
     int64_t curr_limbs,
     int64_t special_mod_start,
     int64_t L,
@@ -1014,8 +1003,8 @@ static std::vector<Tensor> hrot_moddown_cuda(
     TORCH_CHECK(add_bx->is_contiguous(), "hrot add_bx must be contiguous");
     TORCH_CHECK(add_ax->is_contiguous(), "hrot add_ax must be contiguous");
   }
-  TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
-  TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
+  TORCH_INTERNAL_ASSERT(inverse_precomp_map.dim() == 1);
+  TORCH_INTERNAL_ASSERT(inverse_precomp_map.sizes()[0] == N);
   TORCH_CHECK(sizeP > 0 && sizeP <= 64, "hrot sizeP must be in (0, 64]");
   TORCH_CHECK(in.is_contiguous(), "hrot moddown input must be contiguous");
   TORCH_CHECK(modup.is_contiguous(), "hrot modup input must be contiguous");
@@ -1023,7 +1012,9 @@ static std::vector<Tensor> hrot_moddown_cuda(
   TORCH_CHECK(c1.is_contiguous(), "hrot c1 must be contiguous");
   TORCH_CHECK(bx.is_contiguous(), "hrot bx must be contiguous");
   TORCH_CHECK(ax.is_contiguous(), "hrot ax must be contiguous");
-  TORCH_CHECK(precomp_map.is_contiguous(), "hrot precomp_map must be contiguous");
+  TORCH_CHECK(
+      inverse_precomp_map.is_contiguous(),
+      "hrot inverse_precomp_map must be contiguous");
 
   const int64_t num_cv = 2;
   const int64_t batch = 1;
@@ -1065,15 +1056,6 @@ static std::vector<Tensor> hrot_moddown_cuda(
       power_of_roots,
       power_of_roots_shoup);
 
-  dim3 block(BLOCK_SIZE);
-  auto stream = at::cuda::getCurrentCUDAStream();
-  auto inverse_precomp_map = at::empty({N}, precomp_map.options());
-  fhe::invert_precomp_map_kernel<<<num_blocks(N), block, 0, stream>>>(
-      inverse_precomp_map.data_ptr<int>(),
-      precomp_map.data_ptr<int>(),
-      N);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-
   hrot_ntt_phase2_finalize_cuda(
       out_bx,
       out_ax,
@@ -1108,7 +1090,7 @@ std::vector<Tensor> hrot_cuda(
     const Tensor& c1,
     const Tensor& bx,
     const Tensor& ax,
-    const Tensor& precomp_map,
+    const Tensor& inverse_precomp_map,
     int64_t curr_limbs,
     int64_t special_mod_start,
     int64_t L,
@@ -1130,7 +1112,6 @@ std::vector<Tensor> hrot_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
-    const Tensor& inner_workspace,
     const std::optional<Tensor>& add_bx,
     const std::optional<Tensor>& add_ax) {
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
@@ -1139,13 +1120,15 @@ std::vector<Tensor> hrot_cuda(
   TORCH_INTERNAL_ASSERT(c1.sizes()[0] == curr_limbs);
   TORCH_INTERNAL_ASSERT(c0.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
-  TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
-  TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
+  TORCH_INTERNAL_ASSERT(inverse_precomp_map.dim() == 1);
+  TORCH_INTERNAL_ASSERT(inverse_precomp_map.sizes()[0] == N);
   TORCH_CHECK(c0.is_contiguous(), "hrot c0 must be contiguous");
   TORCH_CHECK(c1.is_contiguous(), "hrot c1 must be contiguous");
   TORCH_CHECK(bx.is_contiguous(), "hrot bx must be contiguous");
   TORCH_CHECK(ax.is_contiguous(), "hrot ax must be contiguous");
-  TORCH_CHECK(precomp_map.is_contiguous(), "hrot precomp_map must be contiguous");
+  TORCH_CHECK(
+      inverse_precomp_map.is_contiguous(),
+      "hrot inverse_precomp_map must be contiguous");
   TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
   if (add_bx.has_value()) {
     TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
@@ -1199,7 +1182,7 @@ std::vector<Tensor> hrot_cuda(
       c0,
       add_bx,
       add_ax,
-      precomp_map,
+      inverse_precomp_map,
       curr_limbs,
       special_mod_start,
       L,

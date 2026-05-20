@@ -495,7 +495,7 @@ def cv_hrot(
     special_mod_start: int,
     swk_bx: Tensor,
     swk_ax: Tensor,
-    precomp_map: Tensor,
+    inverse_precomp_map: Tensor,
     context: Context,
     add_bx: Tensor | None = None,
     add_ax: Tensor | None = None,
@@ -506,7 +506,7 @@ def cv_hrot(
         c1,
         swk_bx,
         swk_ax,
-        precomp_map,
+        inverse_precomp_map,
         curr_limbs=curr_limbs,
         special_mod_start=special_mod_start,
         L=context.L,
@@ -530,7 +530,6 @@ def cv_hrot(
         power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-        inner_workspace=context.inner_workspace,
     )
 
 

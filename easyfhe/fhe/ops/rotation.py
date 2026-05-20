@@ -22,6 +22,7 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         if len(addend.cv) != 2:
             raise ValueError("homo_rotate(addend=...): expected two ciphertext components")
     swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
+    norm_index = cryptoContext.norm_rot_index(offset)
     cv = F.cv_hrot(
         cipher.cv[0],
         cipher.cv[1],
@@ -29,7 +30,7 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         special_mod_start,
         swk_bx,
         swk_ax,
-        cryptoContext.get_precompute_auto(cryptoContext.norm_rot_index(offset)),
+        cryptoContext.get_inverse_precompute_auto(norm_index),
         cryptoContext,
         add_bx=None if addend is None else addend.cv[0],
         add_ax=None if addend is None else addend.cv[1],
