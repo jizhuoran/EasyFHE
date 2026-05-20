@@ -36,6 +36,11 @@ def _parse_args():
     parser.add_argument("--auto-sync", action="store_true")
     parser.add_argument("--rotation-random-mode", choices=("fresh", "reuse_by_shape"), default="fresh")
     parser.add_argument("--rot-key-limb-limit", action="append", default=[], metavar="ROT:LIMBS")
+    parser.add_argument(
+        "--bootstrap-strategy",
+        choices=("double_hoist", "normal_giant", "normal_bsgs"),
+        default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
+    )
     parser.add_argument("--total", type=int, default=1)
     parser.add_argument("--trace-states", action="store_true")
     return parser.parse_args()
@@ -76,6 +81,7 @@ def _build_runtime(args):
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
+            strategy=config.bootstrap_strategy,
         )
         ctx.addkeys(bs_keys)
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
@@ -289,8 +295,10 @@ def _print_cache(weights):
 def main():
     args = _parse_args()
     rt = _build_runtime(args)
+    bootstrap_plan = next(iter(rt.bootstrap_material.values()))[1]
     print("================ ResNet20 AESPA inference benchmark ================")
     print(f"device: {rt.ctx.device}")
+    print(f"bootstrap_strategy: {bootstrap_plan.strategy}")
     print(f"warmup: {args.warmup}")
     print(f"iters: {args.iters}")
     print(f"auto_load_keys: {rt.ctx.options.resolved_auto_load_keys(rt.ctx.device)}")

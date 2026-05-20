@@ -42,6 +42,7 @@ class AespaConfig:
     dcrt_bits: int
     first_mod: int
     level_budgets: tuple[tuple[int, int], ...]
+    bootstrap_strategy: str
     secret_key_dist: str
     rescale_tech: str
     device: str
@@ -71,6 +72,11 @@ def _parse_args():
     parser.add_argument("--save-middle", action="store_true")
     parser.add_argument("--save-end", action="store_true")
     parser.add_argument("--total", type=int, default=int(os.environ.get("EASYFHE_TOTAL", "1")))
+    parser.add_argument(
+        "--bootstrap-strategy",
+        choices=("double_hoist", "normal_giant", "normal_bsgs"),
+        default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
+    )
     return parser.parse_known_args()[0]
 
 
@@ -91,6 +97,11 @@ def build_config(args):
         dcrt_bits=52,
         first_mod=55,
         level_budgets=((4, 4),),
+        bootstrap_strategy=getattr(
+            args,
+            "bootstrap_strategy",
+            os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
+        ),
         secret_key_dist="SPARSE_TERNARY",
         rescale_tech="FIXEDMANUAL",
         device=args.device,
@@ -107,6 +118,7 @@ def _print_config(config):
     print("dcrtBits: ", config.dcrt_bits)
     print("firstMod: ", config.first_mod)
     print("levelBudget_list: ", [list(level_budget) for level_budget in config.level_budgets])
+    print("bootstrapStrategy: ", config.bootstrap_strategy)
     print("secretKeyDist: ", config.secret_key_dist)
     print("rescaleTech: ", config.rescale_tech)
     print("weightCacheMode: ", config.weight_cache_mode)
@@ -287,6 +299,7 @@ def resnet20(config=None, args=None):
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
+            strategy=config.bootstrap_strategy,
         )
         cryptoContext.addkeys(bs_keys)
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
