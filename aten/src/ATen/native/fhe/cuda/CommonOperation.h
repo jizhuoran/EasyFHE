@@ -59,6 +59,17 @@ void NTT_impl(
     const uint64_t* param_power_of_roots_shoup,
     const uint64_t* param_power_of_roots);
 
+void NTT_phase2_impl(
+    uint64_t* inout_ptr,
+    const size_t num_batch,
+    const size_t N,
+    const size_t L,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const uint64_t* param_primes,
+    const uint64_t* param_power_of_roots_shoup,
+    const uint64_t* param_power_of_roots);
+
 void NTT_modup_masked_impl(
     uint64_t* inout_ptr,
     const size_t num_batch,
