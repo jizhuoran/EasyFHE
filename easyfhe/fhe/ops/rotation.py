@@ -1,6 +1,7 @@
 import easyfhe as torch
 import numpy as np
 
+from ..ciphertext import Cipher
 from . import kernels as F
 
 
@@ -60,16 +61,24 @@ def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count,
 
 
 def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy="normal"):
-    ciphers = tuple(ciphers)
     offset = int(offset)
-    if not ciphers:
-        raise ValueError("giant_rotate_sum: expected at least one cipher")
+    if isinstance(ciphers, Cipher):
+        if ciphers.batch_size <= 0:
+            raise ValueError("giant_rotate_sum: expected at least one cipher")
+    else:
+        ciphers = tuple(ciphers)
+        if not ciphers:
+            raise ValueError("giant_rotate_sum: expected at least one cipher")
 
     if strategy == "ext_double_hoist":
+        ciphers = _unpack_cipher_batch(ciphers) if isinstance(ciphers, Cipher) else ciphers
         offsets = tuple(index * offset for index in range(len(ciphers)))
         return _double_hoist_rotate_sum(ciphers, offsets, cryptoContext)
     if strategy == "ext_normal":
-        ciphers = tuple(moddown_from_ext(cipher, cryptoContext) for cipher in ciphers)
+        if isinstance(ciphers, Cipher):
+            ciphers = moddown_from_ext(ciphers, cryptoContext)
+        else:
+            ciphers = tuple(moddown_from_ext(cipher, cryptoContext) for cipher in ciphers)
     elif strategy != "normal":
         raise ValueError(f"unknown giant_rotate_sum strategy: {strategy}")
     return _normal_giant_rotate_sum(ciphers, offset, cryptoContext)
@@ -254,6 +263,7 @@ def _normalize_offsets(offsets):
 def _normal_giant_rotate_sum(ciphers, offset, cryptoContext):
     from .arithmetic import homo_add
 
+    ciphers = _unpack_cipher_batch(ciphers) if isinstance(ciphers, Cipher) else tuple(ciphers)
     if len(ciphers) == 1:
         return ciphers[0]
 
@@ -264,6 +274,21 @@ def _normal_giant_rotate_sum(ciphers, offset, cryptoContext):
         else:
             result = homo_add(ciphers[index], result, cryptoContext)
     return result
+
+
+def _unpack_cipher_batch(cipher):
+    if cipher.batch_size == 1 and cipher.cv[0].dim() < 3:
+        return (cipher,)
+    if cipher.cv[0].dim() < 3:
+        raise ValueError("expected batched cipher components")
+    return tuple(
+        cipher.cipher_like(
+            [component[index] for component in cipher.cv],
+            batch_size=1,
+            cipher_id="assign",
+        )
+        for index in range(int(cipher.batch_size))
+    )
 
 
 def _double_hoist_rotate_sum(inner_exts, offsets, cryptoContext):

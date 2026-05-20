@@ -164,8 +164,14 @@ def cv_moddown(
     curr_limbs: int,
     context: Context,
 ) -> Tensor:
+    orig_shape = x.shape
     x_4d = _to_4d(x)
-    return _cv_moddown_4d(x_4d, curr_limbs, context).reshape(-1, context.N)
+    res = _cv_moddown_4d(x_4d, curr_limbs, context)
+    if x.dim() == 3:
+        return res.reshape(orig_shape[0], -1, context.N)
+    if x.dim() == 2:
+        return res.reshape(-1, context.N)
+    return res
 
 
 def _cv_moddown_4d(

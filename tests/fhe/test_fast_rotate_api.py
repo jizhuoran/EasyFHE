@@ -49,8 +49,8 @@ def _mac_down_once(cipher, offsets, plain_values, context):
             is_ext=True,
         )
         plaintexts.append(plaintext_ext)
-    total_ext = fhe.fused_grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)[0]
-    return fhe.giant_rotate_sum([total_ext], 0, context, strategy="ext_double_hoist")
+    total_ext = fhe.fused_grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)
+    return fhe.giant_rotate_sum(total_ext, 0, context, strategy="ext_double_hoist")
 
 
 def _hoisted_mac(cipher, offsets, plain_values, context):

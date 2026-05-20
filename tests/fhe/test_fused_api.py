@@ -67,7 +67,8 @@ def test_fused_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeyp
         "cipher_batch_size": 2,
         "plaintext_batch_size": 2,
     }
-    assert len(result) == 1
+    assert result.batch_size == 1
+    assert tuple(result.cv[0].shape) == (1, 2, 4)
 
 
 def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
@@ -95,9 +96,8 @@ def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
         "cipher_batch_size": 2,
         "plaintext_batch_size": 4,
     }
-    assert len(result) == 2
-    assert all(item.batch_size == 1 for item in result)
-    assert tuple(result[0].cv[0].shape) == (2, 4)
+    assert result.batch_size == 2
+    assert tuple(result.cv[0].shape) == (2, 2, 4)
 
 
 def test_fused_grouped_pairwise_mac_rejects_lists():

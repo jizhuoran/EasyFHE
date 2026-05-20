@@ -30,7 +30,7 @@ def fused_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
         )
     _validate_cipher_plain_batch("fused_grouped_pairwise_mac", cipher_batch, plaintext_batch)
     cv = F.cipher_fused_grouped_pairwise_mac(cipher_batch, plaintext_batch, groups, cryptoContext)
-    return _mac_result_list(cipher_batch, plaintext_batch, cv, groups)
+    return _mac_result_like(cipher_batch, plaintext_batch, cv, batch_size=groups)
 
 
 def _require_cipher(value, name):
@@ -71,15 +71,3 @@ def _mac_result_like(cipher, plaintext, cv, batch_size):
         cipher_id="assign",
     )
 
-
-def _mac_result_list(cipher, plaintext, cv, count):
-    return [
-        cipher.cipher_like(
-            [component[index] for component in cv],
-            scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
-            noise_deg=cipher.noise_deg + plaintext.noise_deg,
-            batch_size=1,
-            cipher_id="assign",
-        )
-        for index in range(int(count))
-    ]

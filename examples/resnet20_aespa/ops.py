@@ -35,6 +35,17 @@ def _resolve_scalar(value, weights):
     return value
 
 
+def _cipher_batch_items(cipher):
+    return tuple(
+        cipher.cipher_like(
+            [component[index] for component in cipher.cv],
+            batch_size=1,
+            cipher_id="assign",
+        )
+        for index in range(int(cipher.batch_size))
+    )
+
+
 def _trace_op_state(cryptoContext, op, cipher, **extra):
     trace = getattr(cryptoContext, "aespa_state_trace", None)
     if trace is None:
@@ -149,7 +160,7 @@ def _initial_conv3x3(input, kernel_group, img_width, padding, rot_offset, scale,
     )
     partial_sums = [
         _initial_conv_postprocess(partial_sum, cryptoContext, weights)
-        for partial_sum in partial_sums
+        for partial_sum in _cipher_batch_items(partial_sums)
     ]
     result = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
     return fhe.homo_rotate(result, rot_offset, cryptoContext)

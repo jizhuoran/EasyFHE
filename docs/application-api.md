@@ -145,7 +145,7 @@ convolution, and linear-transform code.
 
 ```python
 rotated = fhe.fast_rotate(cipher, offsets, ctx, output_ext=False)
-partials = fhe.fused_grouped_pairwise_mac(rotated, plaintexts, groups, ctx)
+partials = fhe.fused_grouped_pairwise_mac(rotated, plaintexts, groups, ctx)  # batched Cipher
 result = fhe.giant_rotate_sum(partials, giant_offset, ctx, strategy="normal")
 
 result = fhe.hoisted_mac_sum(
