@@ -15,6 +15,19 @@
 
 namespace fhe {
 
+__device__ __forceinline__ uint64_t hrot_reduce_lazy_4p(
+    uint64_t x,
+    const uint64_t p,
+    const uint64_t two_p) {
+  if (x >= two_p) {
+    x -= two_p;
+  }
+  if (x >= p) {
+    x -= p;
+  }
+  return x;
+}
+
 __device__ __forceinline__ void hrot_butt_ntt_local(
     uint64_t& a,
     uint64_t& b,
@@ -138,10 +151,9 @@ __global__ void hrot_moddown_base_convert_ntt_phase1_kernel(
   const int64_t cv_id = blockIdx.z;
   const int N_init = NUM_GROUPS * blockIdx.x + laneID;
 
-  __shared__ uint64_t hat_mod_end_shared[997];
-  if (threadIdx.x < sizeP) {
-    hat_mod_end_shared[threadIdx.x] =
-        hat_mod_end[threadIdx.x + limb * sizeP];
+  extern __shared__ uint64_t hat_mod_end_shared[];
+  for (int t = threadIdx.x; t < sizeP; t += blockDim.x) {
+    hat_mod_end_shared[t] = hat_mod_end[t + limb * sizeP];
   }
   __syncthreads();
 
@@ -259,14 +271,18 @@ __global__ void hrot_sum_reduce_p_from_modup_kernel(
 
   uint128_t accum_ax = {0, 0};
   uint128_t accum_bx = {0, 0};
+  int64_t in_off = i;
+  int64_t eval_off = i + static_cast<int64_t>(swk_idx) * N;
+  const int64_t in_stride = static_cast<int64_t>(length) * N;
+  const int64_t eval_stride = static_cast<int64_t>(mult_length) * N;
   for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
-    const int stride = N * (mult_length * beta_idx + swk_idx);
-    const int in_ptr_stride = N * length * beta_idx;
-    const uint64_t op1 = in_modup[i + in_ptr_stride];
-    const auto mul_ax = mult_64_64_128(op1, eval_ax[i + stride]);
-    const auto mul_bx = mult_64_64_128(op1, eval_bx[i + stride]);
+    const uint64_t op1 = in_modup[in_off];
+    const auto mul_ax = mult_64_64_128(op1, eval_ax[eval_off]);
+    const auto mul_bx = mult_64_64_128(op1, eval_bx[eval_off]);
     inplace_add_128_128(mul_ax, accum_ax);
     inplace_add_128_128(mul_bx, accum_bx);
+    in_off += in_stride;
+    eval_off += eval_stride;
   }
 
   out_ax[out_i] = barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
@@ -352,18 +368,12 @@ __device__ __forceinline__ ulonglong2 hrot_ntt_phase2_pair(
       prime,
       two_p);
 
-  for (int k = 0; k < 3; k++) {
-    if (i1 >= prime) {
-      i1 -= prime;
-    }
-    if (i2 >= prime) {
-      i2 -= prime;
-    }
-  }
+  i1 = hrot_reduce_lazy_4p(i1, prime, two_p);
+  i2 = hrot_reduce_lazy_4p(i2, prime, two_p);
   return {i1, i2};
 }
 
-template <size_t LOG_N>
+template <size_t LOG_N, bool HAS_ADDEND>
 __global__ void hrot_ntt_phase2_finalize_kernel(
     uint64_t* __restrict__ out_bx,
     uint64_t* __restrict__ out_ax,
@@ -388,8 +398,7 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
     const int64_t length,
     const int64_t mult_length,
     const int64_t beta,
-    const int64_t alpha,
-    const bool has_addend) {
+    const int64_t alpha) {
   constexpr size_t LOG_RADIX = LOG_N - 6;
   constexpr int DATA_SIZE = 1u << LOG_RADIX;
   constexpr int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
@@ -431,6 +440,9 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
   const uint64_t inv_shoup = prod_inv_shoup[limb];
   const uint64_t barret_ratio = barret_ratios[limb];
   const uint64_t barret_k = barret_ks[limb];
+  const int64_t original_beta_idx = limb / alpha;
+  const int64_t in_stride = N * length;
+  const int64_t eval_stride = N * mult_length;
 
 #pragma unroll
   for (int pair_idx = 0; pair_idx < 2; ++pair_idx) {
@@ -441,20 +453,17 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
 
     uint128_t accum_ax = {0, 0};
     uint128_t accum_bx = {0, 0};
+    int64_t in_off = q_index;
+    int64_t eval_off = q_index;
     for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
-      const int64_t begin_idx = beta_idx * alpha;
-      const int64_t remaining = curr_limbs - begin_idx;
-      const int64_t group_size = alpha < remaining ? alpha : remaining;
-      const bool is_original_limb =
-          limb >= begin_idx && limb < begin_idx + group_size;
-      const int64_t stride = N * mult_length * beta_idx;
-      const int64_t in_ptr_stride = N * length * beta_idx;
       const uint64_t op1 =
-          is_original_limb ? c1[q_index] : in_modup[q_index + in_ptr_stride];
-      const auto mul_ax = mult_64_64_128(op1, eval_ax[q_index + stride]);
-      const auto mul_bx = mult_64_64_128(op1, eval_bx[q_index + stride]);
+          beta_idx == original_beta_idx ? c1[q_index] : in_modup[in_off];
+      const auto mul_ax = mult_64_64_128(op1, eval_ax[eval_off]);
+      const auto mul_bx = mult_64_64_128(op1, eval_bx[eval_off]);
       inplace_add_128_128(mul_ax, accum_ax);
       inplace_add_128_128(mul_bx, accum_bx);
+      in_off += in_stride;
+      eval_off += eval_stride;
     }
     const uint64_t key_ax =
         barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
@@ -467,7 +476,7 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
       bx -= prime;
     }
     bx = add_mod(bx, c0[q_index], prime);
-    if (has_addend) {
+    if constexpr (HAS_ADDEND) {
       bx = add_mod(bx, add_bx[out_index], prime);
     }
     out_bx[out_index] = bx;
@@ -477,7 +486,7 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
     if (ax >= prime) {
       ax -= prime;
     }
-    if (has_addend) {
+    if constexpr (HAS_ADDEND) {
       ax = add_mod(ax, add_ax[out_index], prime);
     }
     out_ax[out_index] = ax;
@@ -520,13 +529,17 @@ static Tensor hrot_innerproduct_cuda(
   TORCH_CHECK(bx.size(0) >= beta, "bx/ax beta dimension mismatch");
   TORCH_CHECK(bx.size(1) >= mult_length, "bx/ax modulus dimension mismatch");
   TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
+  TORCH_CHECK(in.is_contiguous(), "hrot innerproduct input must be contiguous");
+  TORCH_CHECK(bx.is_contiguous(), "hrot innerproduct bx must be contiguous");
+  TORCH_CHECK(ax.is_contiguous(), "hrot innerproduct ax must be contiguous");
 
   auto out = at::empty({2, 1, sizeP, N}, in.options());
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
   auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
-  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
+  auto out_ptr = reinterpret_cast<uint64_t*>(out.data_ptr<uint64_t>());
+  auto out_bx_ptr = out_ptr;
+  auto out_ax_ptr = out_ptr + sizeP * N;
   auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
   auto barret_ratio_ptr =
       reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
@@ -575,7 +588,7 @@ static void launch_hrot_moddown_base_convert_ntt_phase1(
   fhe::hrot_moddown_base_convert_ntt_phase1_kernel<LOG_N, NUM_GROUPS>
       <<<dim3(N / (NUM_GROUPS * 8) / 8, curr_limbs, 2),
          NUM_GROUPS * 8,
-         0,
+         sizeP * sizeof(uint64_t),
          stream>>>(
           workspace_ptr,
           L_IN,
@@ -660,7 +673,7 @@ static void hrot_moddown_base_convert_ntt_phase1_cuda(
   }
 }
 
-template <size_t LOG_N>
+template <size_t LOG_N, bool HAS_ADDEND>
 static void launch_hrot_ntt_phase2_finalize(
     Tensor& out_bx,
     Tensor& out_ax,
@@ -689,7 +702,7 @@ static void launch_hrot_ntt_phase2_finalize(
     cudaStream_t stream) {
   constexpr size_t N = size_t{1} << LOG_N;
   constexpr size_t RADIX = 64;
-  fhe::hrot_ntt_phase2_finalize_kernel<LOG_N>
+  fhe::hrot_ntt_phase2_finalize_kernel<LOG_N, HAS_ADDEND>
       <<<dim3(RADIX, curr_limbs),
          N / RADIX / 2,
          0,
@@ -717,9 +730,92 @@ static void launch_hrot_ntt_phase2_finalize(
           length,
           mult_length,
           beta,
-          alpha,
-          add_bx != nullptr);
+          alpha);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+template <size_t LOG_N>
+static void launch_hrot_ntt_phase2_finalize(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    uint64_t* workspace_ptr,
+    const uint64_t* modup_ptr,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
+    const Tensor& c0,
+    const Tensor* add_bx,
+    const Tensor* add_ax,
+    const Tensor& inverse_precomp_map,
+    int64_t L_IN,
+    int64_t curr_limbs,
+    int64_t length,
+    int64_t mult_length,
+    int64_t beta,
+    int64_t alpha,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_k,
+    const Tensor& barret_ratio,
+    const Tensor& power_of_roots,
+    const Tensor& power_of_roots_shoup,
+    cudaStream_t stream) {
+  if (add_bx != nullptr) {
+    launch_hrot_ntt_phase2_finalize<LOG_N, true>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        add_bx,
+        add_ax,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  } else {
+    launch_hrot_ntt_phase2_finalize<LOG_N, false>(
+        out_bx,
+        out_ax,
+        workspace_ptr,
+        modup_ptr,
+        c1,
+        bx,
+        ax,
+        c0,
+        add_bx,
+        add_ax,
+        inverse_precomp_map,
+        L_IN,
+        curr_limbs,
+        length,
+        mult_length,
+        beta,
+        alpha,
+        prod_inv_moddown,
+        prod_inv_shoup_moddown,
+        primes,
+        barret_k,
+        barret_ratio,
+        power_of_roots,
+        power_of_roots_shoup,
+        stream);
+  }
 }
 
 static void hrot_ntt_phase2_finalize_cuda(
@@ -915,9 +1011,19 @@ static std::vector<Tensor> hrot_moddown_cuda(
     TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
     TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
     TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
+    TORCH_CHECK(add_bx->is_contiguous(), "hrot add_bx must be contiguous");
+    TORCH_CHECK(add_ax->is_contiguous(), "hrot add_ax must be contiguous");
   }
   TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
   TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
+  TORCH_CHECK(sizeP > 0 && sizeP <= 64, "hrot sizeP must be in (0, 64]");
+  TORCH_CHECK(in.is_contiguous(), "hrot moddown input must be contiguous");
+  TORCH_CHECK(modup.is_contiguous(), "hrot modup input must be contiguous");
+  TORCH_CHECK(c0.is_contiguous(), "hrot c0 must be contiguous");
+  TORCH_CHECK(c1.is_contiguous(), "hrot c1 must be contiguous");
+  TORCH_CHECK(bx.is_contiguous(), "hrot bx must be contiguous");
+  TORCH_CHECK(ax.is_contiguous(), "hrot ax must be contiguous");
+  TORCH_CHECK(precomp_map.is_contiguous(), "hrot precomp_map must be contiguous");
 
   const int64_t num_cv = 2;
   const int64_t batch = 1;
@@ -1035,6 +1141,11 @@ std::vector<Tensor> hrot_cuda(
   TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(precomp_map.dim() == 1);
   TORCH_INTERNAL_ASSERT(precomp_map.sizes()[0] == N);
+  TORCH_CHECK(c0.is_contiguous(), "hrot c0 must be contiguous");
+  TORCH_CHECK(c1.is_contiguous(), "hrot c1 must be contiguous");
+  TORCH_CHECK(bx.is_contiguous(), "hrot bx must be contiguous");
+  TORCH_CHECK(ax.is_contiguous(), "hrot ax must be contiguous");
+  TORCH_CHECK(precomp_map.is_contiguous(), "hrot precomp_map must be contiguous");
   TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
   if (add_bx.has_value()) {
     TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
@@ -1043,9 +1154,12 @@ std::vector<Tensor> hrot_cuda(
     TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
     TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
     TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
+    TORCH_CHECK(add_bx->is_contiguous(), "hrot add_bx must be contiguous");
+    TORCH_CHECK(add_ax->is_contiguous(), "hrot add_ax must be contiguous");
   }
 
   const auto sizeP = primes.numel() - L;
+  TORCH_CHECK(sizeP > 0 && sizeP <= 64, "hrot sizeP must be in (0, 64]");
   const auto c1_4d = at::reshape(c1, {1, 1, curr_limbs, N});
   const auto modup = modup_without_copy_cuda(
       c1_4d,
