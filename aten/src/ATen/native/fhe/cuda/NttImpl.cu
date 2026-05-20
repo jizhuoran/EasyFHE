@@ -765,6 +765,136 @@ __global__ void NTT64PointPhase1ModupAllMasked(
   }
 }
 
+template <size_t LOG_N, size_t NUM_GROUPS>
+__global__ void ModupStepTwoNTT64PointPhase1All(
+    uint64_t __restrict__* out_ptr,
+    const uint64_t __restrict__* in_ptr,
+    const size_t LOG_CV,
+    const size_t LN,
+    const size_t BLN,
+    const size_t L_INN,
+    const uint64_t __restrict__* base_inv,
+    const uint64_t __restrict__* base_inv_,
+    const uint64_t __restrict__* primes,
+    const uint64_t __restrict__* barrett_ratios,
+    const uint64_t __restrict__* barrett_ks,
+    const uint64_t __restrict__* prod_q_i_mod_q_js,
+    const size_t prod_beta_stride,
+    const size_t curr_limbs,
+    const size_t L,
+    const size_t alpha,
+    const size_t num_moduli_after_modup) {
+  const uint32_t physical_limb_idx = blockIdx.y;
+  const uint32_t group_idx = physical_limb_idx / num_moduli_after_modup;
+  const uint32_t limb_idx = physical_limb_idx - group_idx * num_moduli_after_modup;
+  const uint32_t begin_idx = group_idx * alpha;
+  const uint32_t group_size =
+      min(static_cast<uint32_t>(alpha), static_cast<uint32_t>(curr_limbs - begin_idx));
+  if (limb_idx >= begin_idx && limb_idx < begin_idx + group_size) {
+    return;
+  }
+
+  static_assert(NUM_GROUPS == 8);
+  constexpr int GROUP_SIZE = 8;
+  constexpr int C_N = 1 << LOG_N;
+  constexpr int COEFF_STRIDE = C_N / (8 * GROUP_SIZE);
+
+  auto cipher_id = blockIdx.z >> LOG_CV;
+  auto cv_id = blockIdx.z & ((1 << LOG_CV) - 1);
+  out_ptr += cv_id * BLN + cipher_id * LN;
+  in_ptr += cipher_id * L_INN;
+
+  const uint32_t prime_idx =
+      limb_idx < curr_limbs ? limb_idx : L + (limb_idx - curr_limbs);
+  const uint32_t out_iter =
+      limb_idx - ((limb_idx >= begin_idx + group_size) ? group_size : 0);
+  const int groupID = threadIdx.x / GROUP_SIZE;
+  const int laneID = threadIdx.x % GROUP_SIZE;
+  const int N_init = NUM_GROUPS * blockIdx.x + laneID;
+
+  base_inv += prime_idx * C_N;
+  base_inv_ += prime_idx * C_N;
+  const uint64_t prime = primes[prime_idx];
+  const uint64_t two_p = prime << 1;
+  const uint64_t barret_ratio = barrett_ratios[prime_idx];
+  const uint64_t barret_k = barrett_ks[prime_idx];
+
+  extern __shared__ uint64_t hat_mod_end_shared[];
+  if (threadIdx.x < group_size) {
+    const uint64_t* group_prod =
+        prod_q_i_mod_q_js + group_idx * prod_beta_stride;
+    hat_mod_end_shared[threadIdx.x] =
+        group_prod[threadIdx.x + out_iter * alpha];
+  }
+  __syncthreads();
+
+  auto out_matrix =
+      reinterpret_cast<uint64_t(*)[8][GROUP_SIZE][COEFF_STRIDE]>(out_ptr);
+
+  uint64_t local[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    const int coeff = j * (GROUP_SIZE * COEFF_STRIDE) +
+        groupID * COEFF_STRIDE + N_init;
+    uint128_t accum{0};
+    for (int i = 0; i < group_size; i++) {
+      const uint64_t op1 = in_ptr[(begin_idx + i) * C_N + coeff];
+      const uint64_t op2 = hat_mod_end_shared[i];
+      uint128_t out = mult_64_64_128(op1, op2);
+      inplace_add_128_128(out, accum);
+    }
+    local[j] = barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
+  }
+
+  LOCAL_NTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      1,
+      base_inv,
+      base_inv_,
+      prime,
+      two_p);
+
+  __shared__ uint64_t transpose_matrix[NUM_GROUPS][GROUP_SIZE + 1][8 + 1];
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    transpose_matrix[laneID][j][groupID] = local[j];
+  }
+  __syncthreads();
+
+#pragma unroll
+  for (int l = 0; l < 8; ++l) {
+    local[l] = transpose_matrix[laneID][groupID][l];
+  }
+
+  LOCAL_NTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      8 + groupID,
+      base_inv,
+      base_inv_,
+      prime,
+      two_p);
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    out_matrix[physical_limb_idx][groupID][j][N_init] = local[j];
+  }
+}
+
 template <int NUM_ROUNDS>
 __device__ __forceinline__ void warp_butterfly(
     uint64_t& i1,
@@ -1440,6 +1570,76 @@ void launch_NTT_modup_all_masked_impl(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
+template <size_t LOG_N>
+void launch_modup_step_two_ntt_all_impl(
+    uint64_t* out_ptr,
+    const uint64_t* in_ptr,
+    size_t beta,
+    size_t curr_limbs,
+    size_t L,
+    size_t alpha,
+    size_t num_moduli_after_modup,
+    size_t log_cv,
+    size_t LN,
+    size_t BLN,
+    size_t L_INN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* barrett_ratios,
+    const uint64_t* barrett_ks,
+    const uint64_t* prod_q_i_mod_q_js,
+    size_t prod_beta_stride,
+    const uint64_t* param_power_of_roots_shoup_ptr,
+    const uint64_t* param_power_of_roots_ptr,
+    cudaStream_t stream) {
+  constexpr size_t N = size_t{1} << LOG_N;
+  constexpr size_t RADIX = 64;
+  const size_t num_physical_limbs = beta * num_moduli_after_modup;
+
+  fhe::ModupStepTwoNTT64PointPhase1All<LOG_N, kNttNumGroups>
+      <<<dim3(N / (kNttNumGroups * 8) / 8, num_physical_limbs, num_cv * num_cipher),
+         kNttNumGroups * 8,
+         alpha * sizeof(uint64_t),
+         stream>>>(
+          out_ptr,
+          in_ptr,
+          log_cv,
+          LN,
+          BLN,
+          L_INN,
+          param_power_of_roots_ptr,
+          param_power_of_roots_shoup_ptr,
+          param_primes_ptr,
+          barrett_ratios,
+          barrett_ks,
+          prod_q_i_mod_q_js,
+          prod_beta_stride,
+          curr_limbs,
+          L,
+          alpha,
+          num_moduli_after_modup);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+  fhe::NTTXPointPhase2ModupAllMasked<LOG_N>
+      <<<dim3(RADIX, num_physical_limbs, num_cv * num_cipher),
+         N / RADIX / 2,
+         0,
+         stream>>>(
+          out_ptr,
+          log_cv,
+          LN,
+          BLN,
+          param_power_of_roots_ptr,
+          param_power_of_roots_shoup_ptr,
+          param_primes_ptr,
+          curr_limbs,
+          L,
+          alpha,
+          num_moduli_after_modup);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
 } // namespace
 
 void iNTT_impl(
@@ -2037,6 +2237,129 @@ void NTT_modup_all_masked_impl(
         stream);
   } else {
     TORCH_INTERNAL_ASSERT(false, "Unsupported NTT size");
+  }
+}
+
+void modup_step_two_ntt_all_impl(
+    uint64_t* out_ptr,
+    const uint64_t* in_ptr,
+    size_t beta,
+    size_t curr_limbs,
+    size_t N,
+    size_t L,
+    size_t alpha,
+    size_t num_moduli_after_modup,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* barrett_ratios,
+    const uint64_t* barrett_ks,
+    const uint64_t* prod_q_i_mod_q_js,
+    size_t prod_beta_stride,
+    const uint64_t* param_power_of_roots_shoup_ptr,
+    const uint64_t* param_power_of_roots_ptr) {
+  auto stream = at::cuda::getCurrentCUDAStream();
+  auto LOG_CV = log_cv_for(num_cv);
+  auto LN = L_OUT * N;
+  auto BLN = LN * num_cipher;
+  auto L_INN = L_IN * N;
+
+  if (N == (size_t{1} << 17)) {
+    launch_modup_step_two_ntt_all_impl<17>(
+        out_ptr,
+        in_ptr,
+        beta,
+        curr_limbs,
+        L,
+        alpha,
+        num_moduli_after_modup,
+        LOG_CV,
+        LN,
+        BLN,
+        L_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        barrett_ratios,
+        barrett_ks,
+        prod_q_i_mod_q_js,
+        prod_beta_stride,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 16)) {
+    launch_modup_step_two_ntt_all_impl<16>(
+        out_ptr,
+        in_ptr,
+        beta,
+        curr_limbs,
+        L,
+        alpha,
+        num_moduli_after_modup,
+        LOG_CV,
+        LN,
+        BLN,
+        L_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        barrett_ratios,
+        barrett_ks,
+        prod_q_i_mod_q_js,
+        prod_beta_stride,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 15)) {
+    launch_modup_step_two_ntt_all_impl<15>(
+        out_ptr,
+        in_ptr,
+        beta,
+        curr_limbs,
+        L,
+        alpha,
+        num_moduli_after_modup,
+        LOG_CV,
+        LN,
+        BLN,
+        L_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        barrett_ratios,
+        barrett_ks,
+        prod_q_i_mod_q_js,
+        prod_beta_stride,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else if (N == (size_t{1} << 14)) {
+    launch_modup_step_two_ntt_all_impl<14>(
+        out_ptr,
+        in_ptr,
+        beta,
+        curr_limbs,
+        L,
+        alpha,
+        num_moduli_after_modup,
+        LOG_CV,
+        LN,
+        BLN,
+        L_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        barrett_ratios,
+        barrett_ks,
+        prod_q_i_mod_q_js,
+        prod_beta_stride,
+        param_power_of_roots_shoup_ptr,
+        param_power_of_roots_ptr,
+        stream);
+  } else {
+    TORCH_INTERNAL_ASSERT(false, "Unsupported modup NTT size");
   }
 }
 

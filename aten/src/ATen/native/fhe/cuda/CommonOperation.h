@@ -100,6 +100,27 @@ void NTT_modup_all_masked_impl(
     const uint64_t* param_power_of_roots_shoup,
     const uint64_t* param_power_of_roots);
 
+void modup_step_two_ntt_all_impl(
+    uint64_t* out_ptr,
+    const uint64_t* in_ptr,
+    const size_t beta,
+    const size_t curr_limbs,
+    const size_t N,
+    const size_t L,
+    const size_t alpha,
+    const size_t num_moduli_after_modup,
+    const size_t L_OUT,
+    const size_t L_IN,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const uint64_t* param_primes,
+    const uint64_t* barrett_ratios,
+    const uint64_t* barrett_ks,
+    const uint64_t* prod_q_i_mod_q_js,
+    const size_t prod_beta_stride,
+    const uint64_t* param_power_of_roots_shoup,
+    const uint64_t* param_power_of_roots);
+
 void switch_modulus(
     uint64_t* out_ptr,
     uint64_t* in_ptr,

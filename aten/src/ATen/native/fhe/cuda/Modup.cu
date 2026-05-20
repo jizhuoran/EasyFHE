@@ -112,74 +112,6 @@ __global__ void modup_const_mult_all_kernel(
   *out = value;
 }
 
-__global__ void modup_step_two_all_kernel(
-    uint64_t* __restrict__ to,
-    const uint64_t* __restrict__ from,
-    const int64_t N,
-    const int64_t alpha,
-    const int64_t curr_limbs,
-    const int64_t L,
-    const int64_t num_moduli_after_modup,
-    const int64_t L_OUTN,
-    const int64_t L_INN,
-    const uint64_t* __restrict__ primes,
-    const uint64_t* __restrict__ barrett_ratios,
-    const uint64_t* __restrict__ barrett_ks,
-    const uint64_t* __restrict__ prod_q_i_mod_q_js,
-    const int64_t prod_beta_stride) {
-  const int degree_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  const int64_t physical_limb = blockIdx.y;
-  const int64_t cipher_id = blockIdx.z;
-  if (degree_idx >= N) {
-    return;
-  }
-
-  const int64_t beta_idx = physical_limb / num_moduli_after_modup;
-  const int64_t out_idx =
-      physical_limb - beta_idx * num_moduli_after_modup;
-  const int64_t begin_idx = beta_idx * alpha;
-  const int64_t group_size = min(alpha, curr_limbs - begin_idx);
-  if (out_idx >= begin_idx && out_idx < begin_idx + group_size) {
-    return;
-  }
-
-  extern __shared__ uint64_t hat_mod_end_shared[];
-  __shared__ int64_t out_iter_shared;
-  __shared__ uint64_t prime_shared;
-  __shared__ uint64_t barret_ratio_shared;
-  __shared__ uint64_t barret_k_shared;
-
-  if (threadIdx.x == 0) {
-    const int64_t gap = L - curr_limbs;
-    const int64_t prime_idx = out_idx + ((out_idx < curr_limbs) ? 0 : gap);
-    out_iter_shared = out_idx - ((out_idx >= begin_idx + group_size) ? group_size : 0);
-    prime_shared = primes[prime_idx];
-    barret_ratio_shared = barrett_ratios[prime_idx];
-    barret_k_shared = barrett_ks[prime_idx];
-  }
-  if (threadIdx.x < group_size) {
-    const uint64_t* group_prod =
-        prod_q_i_mod_q_js + beta_idx * prod_beta_stride;
-    hat_mod_end_shared[threadIdx.x] =
-        group_prod[threadIdx.x + out_iter_shared * alpha];
-  }
-  __syncthreads();
-
-  to += cipher_id * L_OUTN;
-  from += cipher_id * L_INN;
-
-  uint128_t accum{0};
-  for (int i = 0; i < group_size; i++) {
-    const uint64_t op1 = from[(begin_idx + i) * N + degree_idx];
-    const uint64_t op2 = hat_mod_end_shared[i];
-    uint128_t out = mult_64_64_128(op1, op2);
-    inplace_add_128_128(out, accum);
-  }
-
-  to[physical_limb * N + degree_idx] = barret_reduction_128_64(
-      accum, prime_shared, barret_ratio_shared, barret_k_shared);
-}
-
 __global__ void modup_copy_original_all_kernel(
     uint64_t* __restrict__ to,
     const uint64_t* __restrict__ from,
@@ -296,7 +228,6 @@ static void modup_cuda_template(
   if (beta > 1) {
     auto temp = at::empty({1, num_cipher, cur_limbs, N}, from.options());
     auto* temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
-    const auto temp_LN = cur_limbs * N;
 
     iNTT_modup_scaled_impl(
         temp_ptr,
@@ -315,30 +246,9 @@ static void modup_cuda_template(
         hat_inverse_vec_shoups.data_ptr<uint64_t>(),
         hat_inverse_vecs.stride(0));
 
-    const auto total_modup_limbs = beta * num_moduli_after_modup;
-    fhe::modup_step_two_all_kernel<<<
-        dim3(num_blocks(N), total_modup_limbs, num_cipher),
-        BLOCK_SIZE,
-        alpha * sizeof(uint64_t),
-        stream>>>(
+    modup_step_two_ntt_all_impl(
         to_ptr__,
         temp_ptr,
-        N,
-        alpha,
-        cur_limbs,
-        L,
-        num_moduli_after_modup,
-        L_OUT * N,
-        temp_LN,
-        primes.data_ptr<uint64_t>(),
-        barret_ratio.data_ptr<uint64_t>(),
-        barret_k.data_ptr<uint64_t>(),
-        prod_q_i_mod_q_js.data_ptr<uint64_t>(),
-        prod_q_i_mod_q_js.stride(0));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
-
-    NTT_modup_all_masked_impl(
-        to_ptr__,
         beta,
         cur_limbs,
         N,
@@ -346,9 +256,14 @@ static void modup_cuda_template(
         alpha,
         num_moduli_after_modup,
         L_OUT,
+        cur_limbs,
         1, // num_cv
         num_cipher,
         primes.data_ptr<uint64_t>(),
+        barret_ratio.data_ptr<uint64_t>(),
+        barret_k.data_ptr<uint64_t>(),
+        prod_q_i_mod_q_js.data_ptr<uint64_t>(),
+        prod_q_i_mod_q_js.stride(0),
         power_of_roots_shoup.data_ptr<uint64_t>(),
         power_of_roots.data_ptr<uint64_t>());
 
