@@ -16,6 +16,38 @@ void iNTT_impl(
     const uint64_t* inverse_power_of_roots_div_two,
     const uint64_t* inverse_scaled_power_of_roots_div_two);
 
+void iNTT_scaled_impl(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    const size_t num_batch,
+    const size_t N,
+    const size_t L_OUT,
+    const size_t L_IN,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const uint64_t* param_primes,
+    const uint64_t* inverse_power_of_roots_div_two,
+    const uint64_t* inverse_scaled_power_of_roots_div_two,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups);
+
+void iNTT_modup_scaled_impl(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    const size_t curr_limbs,
+    const size_t N,
+    const size_t L_OUT,
+    const size_t L_IN,
+    const size_t num_cv,
+    const size_t num_cipher,
+    const size_t alpha,
+    const uint64_t* param_primes,
+    const uint64_t* inverse_power_of_roots_div_two,
+    const uint64_t* inverse_scaled_power_of_roots_div_two,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups,
+    const size_t scalar_stride);
+
 void NTT_impl(
     uint64_t* inout_ptr,
     const size_t num_batch,

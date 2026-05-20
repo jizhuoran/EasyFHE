@@ -292,6 +292,123 @@ __global__ void INTT64PointPhase2(
   }
 }
 
+template <size_t LOG_N, size_t NUM_GROUPS, bool MODUP_SCALE>
+__global__ void INTT64PointPhase2Scaled(
+    uint64_t __restrict__* inout_ptr,
+    const size_t LOG_CV,
+    const size_t LN,
+    const size_t BLN,
+    const size_t curr_limbs,
+    const size_t alpha,
+    const size_t scalar_stride,
+    const uint64_t __restrict__* base_inv,
+    const uint64_t __restrict__* base_inv_,
+    const uint64_t __restrict__* primes,
+    const uint64_t __restrict__* scalars,
+    const uint64_t __restrict__* scalar_shoups) {
+  static_assert(NUM_GROUPS == 8);
+  const int GROUP_SIZE = 8;
+
+  auto cipher_id = blockIdx.z >> LOG_CV;
+  auto cv_id = blockIdx.z & ((1 << LOG_CV) - 1);
+  inout_ptr += cv_id * BLN + cipher_id * LN;
+
+  const int groupID = threadIdx.x / GROUP_SIZE; // 0 ~ 7
+  const int laneID = threadIdx.x % GROUP_SIZE; // 0 ~ 7
+  const int C_N = 1 << LOG_N;
+  const uint32_t batch_idx = blockIdx.y;
+  base_inv += batch_idx * C_N;
+  base_inv_ += batch_idx * C_N;
+
+  const uint64_t* W = base_inv;
+  const uint64_t* W_ = base_inv_;
+  const uint64_t prime = primes[batch_idx];
+  const uint64_t two_p = prime << 1;
+
+  uint64_t scalar;
+  uint64_t scalar_shoup;
+  if constexpr (MODUP_SCALE) {
+    const size_t begin_idx = (batch_idx / alpha) * alpha;
+    const size_t group_size =
+        (begin_idx + alpha > curr_limbs) ? (curr_limbs - begin_idx) : alpha;
+    const size_t local_idx = batch_idx - begin_idx;
+    const size_t scalar_row = begin_idx + group_size - 1;
+    scalar = scalars[scalar_row * scalar_stride + local_idx];
+    scalar_shoup = scalar_shoups[scalar_row * scalar_stride + local_idx];
+  } else {
+    scalar = scalars[batch_idx];
+    scalar_shoup = scalar_shoups[batch_idx];
+  }
+
+  auto inout_matrix =
+      reinterpret_cast<uint64_t(*)[8][GROUP_SIZE][C_N / (8 * GROUP_SIZE)]>(inout_ptr);
+
+  const int N_init = NUM_GROUPS * blockIdx.x + laneID;
+
+  uint64_t local[8];
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    local[j] = inout_matrix[batch_idx][groupID][j][N_init];
+  }
+
+  LOCAL_INTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      8 + groupID,
+      W,
+      W_,
+      prime,
+      two_p);
+
+  __shared__ uint64_t transpose_matrix[NUM_GROUPS][GROUP_SIZE + 1][8 + 1];
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    transpose_matrix[laneID][j][groupID] = local[j];
+  }
+  __syncthreads();
+
+#pragma unroll
+  for (int l = 0; l < 8; ++l) {
+    local[l] = transpose_matrix[laneID][groupID][l];
+  }
+
+  LOCAL_INTT_RADIX<8>(
+      local[0],
+      local[1],
+      local[2],
+      local[3],
+      local[4],
+      local[5],
+      local[6],
+      local[7],
+      1,
+      W,
+      W_,
+      prime,
+      two_p);
+  for (int j = 0; j < 8; ++j) {
+    if (local[j] >= prime) {
+      local[j] -= prime;
+    }
+    local[j] = mul_and_reduce_shoup(local[j], scalar, scalar_shoup, prime);
+    if (local[j] >= prime) {
+      local[j] -= prime;
+    }
+  }
+
+#pragma unroll
+  for (int j = 0; j < 8; ++j) {
+    inout_matrix[batch_idx][j][groupID][N_init] = local[j];
+  }
+}
+
 __device__ __forceinline__ void butt_ntt_local(
     uint64_t& a,
     uint64_t& b,
@@ -1067,7 +1184,68 @@ void launch_iNTT_impl(
           BL_OUTN,
           inverse_power_of_roots_div_two_ptr,
           inverse_scaled_power_of_roots_div_two_ptr,
+	          param_primes_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+}
+
+template <size_t LOG_N, bool MODUP_SCALE>
+void launch_iNTT_scaled_impl(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    size_t num_batch,
+    size_t curr_limbs,
+    size_t alpha,
+    size_t scalar_stride,
+    size_t log_cv,
+    size_t L_OUTN,
+    size_t BL_OUTN,
+    size_t L_INN,
+    size_t BL_INN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* inverse_power_of_roots_div_two_ptr,
+    const uint64_t* inverse_scaled_power_of_roots_div_two_ptr,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups,
+    cudaStream_t stream) {
+  constexpr size_t N = size_t{1} << LOG_N;
+  constexpr size_t RADIX = 64;
+
+  fhe::INTTXPointPhase1<LOG_N>
+      <<<dim3(RADIX, num_batch, num_cv * num_cipher),
+         N / RADIX / 2,
+         0,
+         stream>>>(
+          in_ptr,
+          out_ptr,
+          log_cv,
+          L_OUTN,
+          BL_OUTN,
+          L_INN,
+          BL_INN,
+          inverse_power_of_roots_div_two_ptr,
+          inverse_scaled_power_of_roots_div_two_ptr,
           param_primes_ptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+  fhe::INTT64PointPhase2Scaled<LOG_N, kNttNumGroups, MODUP_SCALE>
+      <<<dim3(N / (kNttNumGroups * 8) / 8, num_batch, num_cv * num_cipher),
+         kNttNumGroups * 8,
+         0,
+         stream>>>(
+          out_ptr,
+          log_cv,
+          L_OUTN,
+          BL_OUTN,
+          curr_limbs,
+          alpha,
+          scalar_stride,
+          inverse_power_of_roots_div_two_ptr,
+          inverse_scaled_power_of_roots_div_two_ptr,
+          param_primes_ptr,
+          scalars,
+          scalar_shoups);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
@@ -1319,6 +1497,188 @@ void iNTT_impl(
   } else {
     TORCH_INTERNAL_ASSERT(false, "Unsupported iNTT size");
   }
+}
+
+template <bool MODUP_SCALE>
+static void iNTT_scaled_dispatch(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    size_t num_batch,
+    size_t curr_limbs,
+    size_t N,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    size_t alpha,
+    size_t scalar_stride,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* inverse_power_of_roots_div_two_ptr,
+    const uint64_t* inverse_scaled_power_of_roots_div_two_ptr,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups) {
+  auto stream = at::cuda::getCurrentCUDAStream();
+  auto LOG_CV = log_cv_for(num_cv);
+  auto L_OUTN = L_OUT * N;
+  auto BL_OUTN = L_OUTN * num_cipher;
+  auto L_INN = L_IN * N;
+  auto BL_INN = L_INN * num_cipher;
+
+  if (N == (size_t{1} << 17)) {
+    launch_iNTT_scaled_impl<17, MODUP_SCALE>(
+        out_ptr,
+        in_ptr,
+        num_batch,
+        curr_limbs,
+        alpha,
+        scalar_stride,
+        LOG_CV,
+        L_OUTN,
+        BL_OUTN,
+        L_INN,
+        BL_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        inverse_power_of_roots_div_two_ptr,
+        inverse_scaled_power_of_roots_div_two_ptr,
+        scalars,
+        scalar_shoups,
+        stream);
+  } else if (N == (size_t{1} << 16)) {
+    launch_iNTT_scaled_impl<16, MODUP_SCALE>(
+        out_ptr,
+        in_ptr,
+        num_batch,
+        curr_limbs,
+        alpha,
+        scalar_stride,
+        LOG_CV,
+        L_OUTN,
+        BL_OUTN,
+        L_INN,
+        BL_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        inverse_power_of_roots_div_two_ptr,
+        inverse_scaled_power_of_roots_div_two_ptr,
+        scalars,
+        scalar_shoups,
+        stream);
+  } else if (N == (size_t{1} << 15)) {
+    launch_iNTT_scaled_impl<15, MODUP_SCALE>(
+        out_ptr,
+        in_ptr,
+        num_batch,
+        curr_limbs,
+        alpha,
+        scalar_stride,
+        LOG_CV,
+        L_OUTN,
+        BL_OUTN,
+        L_INN,
+        BL_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        inverse_power_of_roots_div_two_ptr,
+        inverse_scaled_power_of_roots_div_two_ptr,
+        scalars,
+        scalar_shoups,
+        stream);
+  } else if (N == (size_t{1} << 14)) {
+    launch_iNTT_scaled_impl<14, MODUP_SCALE>(
+        out_ptr,
+        in_ptr,
+        num_batch,
+        curr_limbs,
+        alpha,
+        scalar_stride,
+        LOG_CV,
+        L_OUTN,
+        BL_OUTN,
+        L_INN,
+        BL_INN,
+        num_cv,
+        num_cipher,
+        param_primes_ptr,
+        inverse_power_of_roots_div_two_ptr,
+        inverse_scaled_power_of_roots_div_two_ptr,
+        scalars,
+        scalar_shoups,
+        stream);
+  } else {
+    TORCH_INTERNAL_ASSERT(false, "Unsupported scaled iNTT size");
+  }
+}
+
+void iNTT_scaled_impl(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    size_t num_batch,
+    size_t N,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* inverse_power_of_roots_div_two_ptr,
+    const uint64_t* inverse_scaled_power_of_roots_div_two_ptr,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups) {
+  iNTT_scaled_dispatch<false>(
+      out_ptr,
+      in_ptr,
+      num_batch,
+      num_batch,
+      N,
+      L_OUT,
+      L_IN,
+      num_cv,
+      num_cipher,
+      1,
+      num_batch,
+      param_primes_ptr,
+      inverse_power_of_roots_div_two_ptr,
+      inverse_scaled_power_of_roots_div_two_ptr,
+      scalars,
+      scalar_shoups);
+}
+
+void iNTT_modup_scaled_impl(
+    uint64_t* out_ptr,
+    uint64_t* in_ptr,
+    size_t curr_limbs,
+    size_t N,
+    size_t L_OUT,
+    size_t L_IN,
+    size_t num_cv,
+    size_t num_cipher,
+    size_t alpha,
+    const uint64_t* param_primes_ptr,
+    const uint64_t* inverse_power_of_roots_div_two_ptr,
+    const uint64_t* inverse_scaled_power_of_roots_div_two_ptr,
+    const uint64_t* scalars,
+    const uint64_t* scalar_shoups,
+    size_t scalar_stride) {
+  iNTT_scaled_dispatch<true>(
+      out_ptr,
+      in_ptr,
+      curr_limbs,
+      curr_limbs,
+      N,
+      L_OUT,
+      L_IN,
+      num_cv,
+      num_cipher,
+      alpha,
+      scalar_stride,
+      param_primes_ptr,
+      inverse_power_of_roots_div_two_ptr,
+      inverse_scaled_power_of_roots_div_two_ptr,
+      scalars,
+      scalar_shoups);
 }
 
 void NTT_impl(

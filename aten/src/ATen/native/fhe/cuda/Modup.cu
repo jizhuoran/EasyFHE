@@ -298,7 +298,7 @@ static void modup_cuda_template(
     auto* temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
     const auto temp_LN = cur_limbs * N;
 
-    iNTT_impl(
+    iNTT_modup_scaled_impl(
         temp_ptr,
         from_ptr__,
         cur_limbs,
@@ -307,25 +307,13 @@ static void modup_cuda_template(
         L_IN,
         1, // num_cv
         num_cipher,
+        alpha,
         primes.data_ptr<uint64_t>(),
         inverse_power_of_roots_div_two.data_ptr<uint64_t>(),
-        inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>());
-
-    fhe::modup_const_mult_all_kernel<<<
-        dim3(num_blocks(N), cur_limbs, num_cipher),
-        BLOCK_SIZE,
-        0,
-        stream>>>(
-        temp_ptr,
-        N,
-        alpha,
-        cur_limbs,
-        temp_LN,
-        primes.data_ptr<uint64_t>(),
+        inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>(),
         hat_inverse_vecs.data_ptr<uint64_t>(),
         hat_inverse_vec_shoups.data_ptr<uint64_t>(),
         hat_inverse_vecs.stride(0));
-    C10_CUDA_KERNEL_LAUNCH_CHECK();
 
     const auto total_modup_limbs = beta * num_moduli_after_modup;
     fhe::modup_step_two_all_kernel<<<

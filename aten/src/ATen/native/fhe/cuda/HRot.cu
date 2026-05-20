@@ -280,7 +280,7 @@ static std::vector<Tensor> hrot_moddown_cuda(
   auto workspace_ptr =
       reinterpret_cast<uint64_t*>(workspace.data_ptr<uint64_t>());
 
-  iNTT_impl(
+  iNTT_scaled_impl(
       workspace_ptr + curr_limbs * N,
       from_ptr + curr_limbs * N,
       sizeP,
@@ -291,20 +291,9 @@ static std::vector<Tensor> hrot_moddown_cuda(
       batch,
       primes.data_ptr<uint64_t>() + L,
       inverse_power_of_roots_div_two.data_ptr<uint64_t>() + L * N,
-      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>() + L * N);
-
-  const_mult_batch(
-      workspace_ptr + curr_limbs * N,
-      workspace_ptr + curr_limbs * N,
+      inverse_scaled_power_of_roots_div_two.data_ptr<uint64_t>() + L * N,
       hat_inverse_vec_moddown.data_ptr<uint64_t>(),
-      hat_inverse_vec_shoup_moddown.data_ptr<uint64_t>(),
-      sizeP,
-      N,
-      L_IN,
-      L_IN,
-      num_cv,
-      batch,
-      primes.data_ptr<uint64_t>() + L);
+      hat_inverse_vec_shoup_moddown.data_ptr<uint64_t>());
 
   dim3 block(BLOCK_SIZE);
   auto stream = at::cuda::getCurrentCUDAStream();
