@@ -1,19 +1,36 @@
 import cmath
 import math
-import pickle
 from functools import lru_cache
+from types import SimpleNamespace
 
 import numpy as np
+import easyfhe as torch
 
-from ..ops.encoding import encode_stage1
-from .rotation import bit_reverse_indices, compute_auto_map
 from ..runtime.scale_policy import split_rescale_tech
+
+
+@lru_cache(maxsize=None)
+def _bit_reverse_indices(ring_dim):
+    ring_dim = int(ring_dim)
+    if ring_dim <= 0 or ring_dim & (ring_dim - 1):
+        raise ValueError(f"ring_dim must be a positive power of two, got {ring_dim}")
+
+    logn = ring_dim.bit_length() - 1
+    values = np.arange(ring_dim, dtype=np.uint32)
+    values = ((values & np.uint32(0x55555555)) << np.uint32(1)) | ((values >> np.uint32(1)) & np.uint32(0x55555555))
+    values = ((values & np.uint32(0x33333333)) << np.uint32(2)) | ((values >> np.uint32(2)) & np.uint32(0x33333333))
+    values = ((values & np.uint32(0x0F0F0F0F)) << np.uint32(4)) | ((values >> np.uint32(4)) & np.uint32(0x0F0F0F0F))
+    values = ((values & np.uint32(0x00FF00FF)) << np.uint32(8)) | ((values >> np.uint32(8)) & np.uint32(0x00FF00FF))
+    values = (values << np.uint32(16)) | (values >> np.uint32(16))
+    result = (values >> np.uint32(32 - logn)).astype(np.int32)
+    result.setflags(write=False)
+    return result
 
 
 @lru_cache(maxsize=None)
 def _crt_root_tables(moduli, roots, ring_dim):
     ring_dim = int(ring_dim)
-    bit_reversed = bit_reverse_indices(ring_dim)
+    bit_reversed = _bit_reverse_indices(ring_dim)
     root_pows = []
     root_pows_inv = []
 
@@ -46,6 +63,153 @@ def _crt_root_tables(moduli, roots, ring_dim):
 
 def _shoup_value(value, prime):
     return (int(value) << 64) // int(prime)
+
+
+def _inv_mod(value, modulus):
+    return pow(int(value) % int(modulus), -1, int(modulus))
+
+
+def _mul_mod(a, b, modulus):
+    return int(((int(a) % int(modulus)) * (int(b) % int(modulus))) % int(modulus))
+
+
+def _as_uint64_vector(name, value):
+    array = np.asarray(value, dtype=np.uint64)
+    if array.ndim != 1:
+        raise ValueError(f"{name} must be a 1D uint64 vector, got shape {array.shape}")
+    return np.ascontiguousarray(array)
+
+
+def _as_eval_mult_key(value, *, dnum, limbs, ring_dim):
+    array = np.asarray(value, dtype=np.uint64)
+    expected_numel = 2 * int(dnum) * int(limbs) * int(ring_dim)
+    if array.size != expected_numel:
+        raise ValueError(
+            "eval_mult_key must contain "
+            f"{expected_numel} uint64 values for shape "
+            f"(2, {int(dnum)}, {int(limbs)}, {int(ring_dim)}), got {array.shape}"
+        )
+    return np.ascontiguousarray(array.reshape(2, int(dnum), int(limbs), int(ring_dim)))
+
+
+def _as_tensor(value, *, dtype):
+    if torch.is_tensor(value):
+        return value.to(dtype=dtype) if value.dtype != dtype else value
+    return torch.as_tensor(value, dtype=dtype)
+
+
+def _slot_bit_reverse_indices(log_slots):
+    return _bit_reverse_indices(1 << int(log_slots)).astype(np.uint32, copy=True)
+
+
+def _to_runtime_material(material):
+    primes = _as_tensor(material.primes, dtype=torch.uint64)
+
+    encode_bitrev_indices = dict(material.encode_bitrev_indices)
+    for key, value in encode_bitrev_indices.items():
+        encode_bitrev_indices[key] = _as_tensor(value, dtype=torch.uint32)
+
+    uint64_map_names = (
+        "QplusP_map",
+        "QmuplusPmu_map",
+        "QbarretKplusPbarretK_map",
+        "QbarretRatioplusPbarretRatio_map",
+        "QmaxdiffplusPmaxdiff_map",
+    )
+    uint64_maps = {
+        name: {
+            key: _as_tensor(value, dtype=torch.uint64)
+            for key, value in getattr(material, name).items()
+        }
+        for name in uint64_map_names
+    }
+
+    left_rot_key_map = {
+        int(rot_idx): [
+            _as_tensor(key_pair[0], dtype=torch.uint64),
+            _as_tensor(key_pair[1], dtype=torch.uint64),
+        ]
+        for rot_idx, key_pair in material.total_left_rot_key_map.items()
+    }
+    precompute_auto_map = {
+        int(rot_idx): _as_tensor(auto_map, dtype=torch.int32)
+        for rot_idx, auto_map in material.total_precompute_auto_map.items()
+    }
+    inverse_precompute_auto_map = {
+        int(rot_idx): _as_tensor(auto_map, dtype=torch.int32)
+        for rot_idx, auto_map in material.total_inverse_precompute_auto_map.items()
+    }
+
+    return SimpleNamespace(
+        L=material.L,
+        dnum=material.dnum,
+        alpha=material.alpha,
+        K=material.K,
+        M=material.M,
+        N=material.N,
+        Nh=material.Nh,
+        approxSF=material.approxSF,
+        h=material.h,
+        levelBudget=material.levelBudget,
+        logN=material.logN,
+        logNh=material.logNh,
+        logBsSlots_list=material.logBsSlots_list,
+        auxModSize=material.auxModSize,
+        rescaleTech=material.rescaleTech,
+        dcrtBits=material.dcrtBits,
+        max_num_moduli=material.max_num_moduli,
+        secretKeyDist=material.secretKeyDist,
+        sigma=material.sigma,
+        inBS=material.inBS,
+        primes=primes,
+        barret_k=_as_tensor(material.barret_k, dtype=torch.uint64),
+        barret_ratio=_as_tensor(material.barret_ratio, dtype=torch.uint64),
+        q_mu=_as_tensor(material.q_mu, dtype=torch.uint64),
+        moduliP_scalar=material.moduliP_scalar,
+        moduliQ_scalar=material.moduliQ_scalar,
+        moduliQ=_as_tensor(material.moduliQ, dtype=torch.uint64),
+        scalingFactorsReal=material.scalingFactorsReal,
+        scalingFactorsRealBig=material.scalingFactorsRealBig,
+        PModq=_as_tensor(material.PModq, dtype=torch.uint64),
+        max_int_diffs=_as_tensor(material.max_int_diffs, dtype=torch.uint64),
+        QmuplusPmu_map=uint64_maps["QmuplusPmu_map"],
+        QplusP_map=uint64_maps["QplusP_map"],
+        QmaxdiffplusPmaxdiff_map=uint64_maps["QmaxdiffplusPmaxdiff_map"],
+        QbarretKplusPbarretK_map=uint64_maps["QbarretKplusPbarretK_map"],
+        QbarretRatioplusPbarretRatio_map=uint64_maps["QbarretRatioplusPbarretRatio_map"],
+        automorphism_transform_out=_as_tensor(material.automorphism_transform_out, dtype=torch.uint64),
+        inner_out=_as_tensor(material.inner_out, dtype=torch.uint64),
+        moddown_out_ax=_as_tensor(material.moddown_out_ax, dtype=torch.uint64),
+        moddown_out_bx=_as_tensor(material.moddown_out_bx, dtype=torch.uint64),
+        modup_out=_as_tensor(material.modup_out, dtype=torch.uint64),
+        rescale_out=_as_tensor(material.rescale_out, dtype=torch.uint64),
+        mod_raise_out=_as_tensor(material.mod_raise_out, dtype=torch.uint64),
+        hat_inverse_vec_moddown=_as_tensor(material.hat_inverse_vec_moddown, dtype=torch.uint64),
+        hat_inverse_vec_shoup_moddown=_as_tensor(material.hat_inverse_vec_shoup_moddown, dtype=torch.uint64),
+        prod_inv_moddown=_as_tensor(material.prod_inv_moddown, dtype=torch.uint64),
+        prod_inv_shoup_moddown=_as_tensor(material.prod_inv_shoup_moddown, dtype=torch.uint64),
+        prod_q_i_mod_q_j_moddown=_as_tensor(material.prod_q_i_mod_q_j_moddown, dtype=torch.uint64),
+        hat_inverse_vec_modup=_as_tensor(material.hat_inverse_vec_modup, dtype=torch.uint64),
+        hat_inverse_vec_shoup_modup=_as_tensor(material.hat_inverse_vec_shoup_modup, dtype=torch.uint64),
+        prod_q_i_mod_q_j_modup=_as_tensor(material.prod_q_i_mod_q_j_modup, dtype=torch.uint64),
+        inner_workspace=_as_tensor(material.inner_workspace, dtype=torch.uint64),
+        mult_swk_ax=_as_tensor(material.mult_swk_ax, dtype=torch.uint64),
+        mult_swk_bx=_as_tensor(material.mult_swk_bx, dtype=torch.uint64),
+        inverse_power_of_roots_div_two=_as_tensor(material.inverse_power_of_roots_div_two, dtype=torch.uint64),
+        inverse_scaled_power_of_roots_div_two=_as_tensor(material.inverse_scaled_power_of_roots_div_two, dtype=torch.uint64),
+        power_of_roots=_as_tensor(material.power_of_roots, dtype=torch.uint64),
+        power_of_roots_shoup=_as_tensor(material.power_of_roots_shoup, dtype=torch.uint64),
+        left_rot_key_map=left_rot_key_map,
+        precompute_auto_map=precompute_auto_map,
+        inverse_precompute_auto_map=inverse_precompute_auto_map,
+        q_inv_mod_q=_as_tensor(material.q_inv_mod_q, dtype=torch.uint64),
+        q_inv_mod_q_shoup=_as_tensor(material.q_inv_mod_q_shoup, dtype=torch.uint64),
+        qlql_inv_mod_ql_div_ql_mod_q=_as_tensor(material.qlql_inv_mod_ql_div_ql_mod_q, dtype=torch.uint64),
+        qlql_inv_mod_ql_div_ql_mod_q_shoup=_as_tensor(material.qlql_inv_mod_ql_div_ql_mod_q_shoup, dtype=torch.uint64),
+        encode_params_ksiPows=_as_tensor(material.encode_params_ksiPows, dtype=torch.complex128),
+        encode_params_rotGroup=_as_tensor(material.encode_params_rotGroup, dtype=torch.uint32),
+        encode_bitrev_indices=encode_bitrev_indices,
+    )
 
 
 @lru_cache(maxsize=None)
@@ -86,73 +250,153 @@ def _ntt_tables_cached(primes, roots, ring_dim):
 
 
 class ContextMaterialBuilder:
+    @classmethod
+    def from_server(cls, server_material, options):
+        return cls.from_public_params(
+            log_n=server_material.log_n,
+            depth=server_material.depth,
+            dcrt_bits=server_material.dcrt_bits,
+            special_mod=server_material.special_mod,
+            dnum=server_material.dnum,
+            secret_key_dist=server_material.secret_key_dist,
+            rescale_tech=server_material.rescale_tech,
+            moduli_q=server_material.moduli_q,
+            roots_q=server_material.roots_q,
+            moduli_p=server_material.moduli_p,
+            roots_p=server_material.roots_p,
+            eval_mult_key=server_material.eval_mult_key,
+            rotation_keys=server_material.rotation_keys,
+            options=options,
+        )
+
+    @classmethod
+    def from_public_params(
+        cls,
+        *,
+        log_n,
+        depth,
+        dcrt_bits,
+        special_mod,
+        dnum,
+        secret_key_dist,
+        rescale_tech,
+        moduli_q,
+        roots_q,
+        moduli_p,
+        roots_p,
+        eval_mult_key,
+        rotation_keys=(),
+        options=None,
+    ):
+        return cls(
+            log_n=log_n,
+            depth=depth,
+            dcrt_bits=dcrt_bits,
+            special_mod=special_mod,
+            dnum=dnum,
+            moduli_q=moduli_q,
+            roots_q=roots_q,
+            moduli_p=moduli_p,
+            roots_p=roots_p,
+            eval_mult_key=eval_mult_key,
+            rotation_keys=rotation_keys,
+            secret_key_dist=secret_key_dist,
+            rescale_tech=rescale_tech,
+            options=options,
+        )
+
+    def to_runtime_material(self):
+        return _to_runtime_material(self)
+
     def __init__(
         self,
-        logN,
-        logBsSlots_list,
-        dcrtBits,
-        specialMod,
-        dnum,
-        levelBudget_list,
+        *,
+        log_n,
         depth,
-        moduliQ_scalar=None,
-        moduliP_scalar=None,
-        rootsQ=None,
-        rootsP=None,
-        MULT_SWK=None,
-        rot_swk_map=None,
-        autoIdx2rotIdx_map = None,
-        secretKeyDist=None,
-        rescaleTech=None,
-        dim1=None,
+        dcrt_bits,
+        special_mod,
+        dnum,
+        moduli_q,
+        roots_q,
+        moduli_p,
+        roots_p,
+        eval_mult_key,
+        rotation_keys=(),
+        secret_key_dist=None,
+        rescale_tech=None,
         options=None,
         h=64,
         sigma=32,
     ):
-        if moduliQ_scalar is None or rootsQ is None:
-            raise ValueError("ContextMaterialBuilder requires moduliQ_scalar and rootsQ from the native sampler")
-        if moduliP_scalar is None or rootsP is None:
-            raise ValueError("ContextMaterialBuilder requires moduliP_scalar and rootsP from the native sampler")
+        log_n = int(log_n)
+        dnum = int(dnum)
+        special_mod = int(special_mod)
+        moduli_q = _as_uint64_vector("moduli_q", moduli_q)
+        moduli_p = _as_uint64_vector("moduli_p", moduli_p)
+        roots_q = _as_uint64_vector("roots_q", roots_q)
+        roots_p = _as_uint64_vector("roots_p", roots_p)
 
-        L = len(moduliQ_scalar)
-        K = len(moduliP_scalar)
+        if log_n <= 0:
+            raise ValueError(f"log_n must be positive, got {log_n}")
+        L = len(moduli_q)
+        K = len(moduli_p)
+        if L <= 0:
+            raise ValueError("moduli_q must not be empty")
+        if K <= 0:
+            raise ValueError("moduli_p must not be empty")
+        if len(roots_q) != L:
+            raise ValueError(f"roots_q length must match moduli_q length {L}, got {len(roots_q)}")
+        if len(roots_p) != K:
+            raise ValueError(f"roots_p length must match moduli_p length {K}, got {len(roots_p)}")
+        if dnum <= 0:
+            raise ValueError(f"dnum must be positive, got {dnum}")
+
+        N = 1 << log_n
+        eval_mult_key = _as_eval_mult_key(
+            eval_mult_key,
+            dnum=dnum,
+            limbs=L + K,
+            ring_dim=N,
+        )
         alpha = int((L+dnum-1)//dnum)
-        self.logBsSlots_list = logBsSlots_list
-        self.secretKeyDist = secretKeyDist
-        self.rescaleTech = rescaleTech
-        self.scale_mode, self.rescale_policy = split_rescale_tech(rescaleTech)
-        self.specialMod = specialMod
+        self.logBsSlots_list = []
+        self.levelBudget = []
+        self.auxModSize = special_mod
+        self.secretKeyDist = secret_key_dist
+        self.rescaleTech = rescale_tech
+        self.scale_mode, self.rescale_policy = split_rescale_tech(rescale_tech)
+        self.specialMod = special_mod
+        self.inBS = False
 
-        self.logN = logN
-        self.dcrtBits = dcrtBits
+        self.logN = log_n
+        self.dcrtBits = int(dcrt_bits)
         self.L = int(L)
         self.K = int(K)
         self.dnum = dnum
         self.alpha = alpha
         self.h = h
         self.sigma = sigma
-        self.N = int(1 << logN)
+        self.N = int(N)
         self.M = self.N << 1
-        self.logNh = logN - 1
+        self.logNh = self.logN - 1
         self.Nh = self.N >> 1
 
         self.total_left_rot_key_map = {}
         self.total_precompute_auto_map = {}
-        self.encode_values = {}
+        self.total_inverse_precompute_auto_map = {}
 
         self.moduliQ_scalar, qRoots = self._init_crt_towers(
-            moduliQ_scalar,
-            rootsQ,
+            moduli_q,
+            roots_q,
         )
 
-        self.rootsQ = np.array(qRoots, dtype=np.uint64)
+        self.rootsQ = np.asarray(qRoots, dtype=np.uint64)
         self.q_mu = self._barrett_mu(self.moduliQ_scalar)
-        # self.q_mu_cuda = np.array(q_mu, dtype=np.uint64)
-        self.moduliQ = np.array(self.moduliQ_scalar, dtype=np.uint64)
+        self.moduliQ = np.asarray(self.moduliQ_scalar, dtype=np.uint64)
 
         self.moduliP_scalar, pRoots = self._init_crt_towers(
-            moduliP_scalar,
-            rootsP,
+            moduli_p,
+            roots_p,
         )
         p_mu = self._barrett_mu(self.moduliP_scalar)
 
@@ -161,19 +405,16 @@ class ContextMaterialBuilder:
         self._init_scaling_factors()
         self._init_encode_params()
 
-
-        self._init_runtime_workspace(moduliQ_scalar, moduliP_scalar)
+        self._init_runtime_workspace(moduli_q, moduli_p)
         self._init_ntt_tables(qRoots, pRoots)
         self._init_modup_tables()
         self._init_moddown_tables(pHatInvModp, pHatModq, PInvModq)
         self._init_rescale_tables(qInvModq)
         self.primes = np.array(self.primes, dtype=np.uint64)
 
-
-        self._install_eval_mult_key(MULT_SWK)
-        self._install_rotation_keys(rot_swk_map or {}, autoIdx2rotIdx_map or {}, options)
+        self._install_eval_mult_key(eval_mult_key)
+        self._install_rotation_keys(rotation_keys or ())
         self._build_level_modulus_maps(p_mu)
-        self._build_slot_conversion_masks(logN)
 
     def _init_basis_switch_tables(self):
         moduli_part_q = [0] * self.dnum
@@ -199,7 +440,7 @@ class ContextMaterialBuilder:
                     modulus = int(self.moduliQ_scalar[digit * self.alpha + i])
                     q_hat = modulus_part_q // modulus
                     self.PartQlHatInvModq[digit][size_part_q - level - 1][i] = int(
-                        self.invMod(q_hat, modulus)
+                        _inv_mod(q_hat, modulus)
                     )
 
         self.PartQlHatModp = [
@@ -210,7 +451,7 @@ class ContextMaterialBuilder:
             for _ in range(self.L)
         ]
         for level in range(self.L):
-            beta = math.ceil((level + 1) / self.alpha)
+            beta = (level + self.alpha) // self.alpha
             for digit in range(beta):
                 part_q_size = (
                     (self.L - (beta - 1) * self.alpha)
@@ -246,7 +487,7 @@ class ContextMaterialBuilder:
                 temp = int(self.moduliP_scalar[j] % self.moduliP_scalar[k])
                 p_hat_modp[k] = (p_hat_modp[k] * temp) % int(self.moduliP_scalar[k])
         for k in range(self.K):
-            p_hat_inv_modp[k] = int(self.invMod(int(p_hat_modp[k]), self.moduliP_scalar[k]))
+            p_hat_inv_modp[k] = int(_inv_mod(int(p_hat_modp[k]), self.moduliP_scalar[k]))
 
         p_hat_modq = [[0] * self.L for _ in range(self.K)]
         for k in range(self.K):
@@ -254,7 +495,7 @@ class ContextMaterialBuilder:
                 p_hat_modq[k][i] = int(1)
                 for s in list(range(k)) + list(range(k + 1, self.K)):
                     temp = int(self.moduliP_scalar[s]) % int(self.moduliQ_scalar[i])
-                    p_hat_modq[k][i] = self.mulMod(
+                    p_hat_modq[k][i] = _mul_mod(
                         int(p_hat_modq[k][i]),
                         temp,
                         int(self.moduliQ_scalar[i]),
@@ -265,7 +506,7 @@ class ContextMaterialBuilder:
             self.PModq[i] = int(1)
             for k in range(self.K):
                 temp = self.moduliP_scalar[k] % self.moduliQ_scalar[i]
-                self.PModq[i] = self.mulMod(
+                self.PModq[i] = _mul_mod(
                     int(self.PModq[i]),
                     int(temp),
                     int(self.moduliQ_scalar[i]),
@@ -273,12 +514,12 @@ class ContextMaterialBuilder:
 
         p_inv_modq = [0] * self.L
         for i in range(self.L):
-            p_inv_modq[i] = self.invMod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
+            p_inv_modq[i] = _inv_mod(int(self.PModq[i]), int(self.moduliQ_scalar[i]))
 
         q_inv_modq = [[0 for _ in range(self.L)] for _ in range(self.L)]
         for i in range(self.L):
             for j in list(range(i)) + list(range(i + 1, self.L)):
-                q_inv_modq[i][j] = self.invMod(
+                q_inv_modq[i][j] = _inv_mod(
                     int(self.moduliQ_scalar[i]),
                     int(self.moduliQ_scalar[j]),
                 )
@@ -289,8 +530,8 @@ class ContextMaterialBuilder:
             for i in range(level):
                 ql_inv_mod_ql = int(1)
                 for j in range(level):
-                    temp = self.invMod(self.moduliQ_scalar[j], self.moduliQ_scalar[level])
-                    ql_inv_mod_ql = self.mulMod(
+                    temp = _inv_mod(self.moduliQ_scalar[j], self.moduliQ_scalar[level])
+                    ql_inv_mod_ql = _mul_mod(
                         int(ql_inv_mod_ql),
                         int(temp),
                         int(self.moduliQ_scalar[level]),
@@ -327,75 +568,25 @@ class ContextMaterialBuilder:
 
     def _init_runtime_workspace(self, moduli_q, moduli_p):
         self.max_num_moduli = self.L + self.K
-        self.chain_length = self.L
-        self.num_special_moduli = self.K
         self.primes = np.hstack((moduli_q, moduli_p))
 
-        self.power_of_roots = None
-        self.power_of_roots_shoup = None
-        self.inverse_power_of_roots_div_two = None
-        self.inverse_scaled_power_of_roots_div_two = None
-        self.power_of_roots_vec = []
-        self.power_of_roots_shoup_vec = []
-        self.barret_k = []
-        self.barret_ratio = []
-
-        self.num_moduli_after_modup = self.max_num_moduli
-        self.hat_inverse_vec_modup = None
-        self.hat_inverse_vec_shoup_modup = None
-        self.prod_q_i_mod_q_j_modup = None
-
-        self.num_moduli_after_moddown = self.chain_length
-        self.hat_inverse_vec_moddown = []
-        self.hat_inverse_vec_shoup_moddown = []
-        self.prod_q_i_mod_q_j_moddown = []
-        self.prod_inv_moddown = []
-        self.prod_inv_shoup_moddown = []
-
-        self.qlql_inv_mod_ql_div_ql_mod_q = None
-        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = None
-        self.q_inv_mod_q = None
-        self.q_inv_mod_q_shoup = None
-
         self.beta = int((self.L + self.alpha - 1) / self.alpha)
+        num_moduli_after_modup = self.max_num_moduli
+        num_moduli_after_moddown = self.L
         inner_workspace_numel = (
             16
-            * self.num_moduli_after_modup
+            * num_moduli_after_modup
             * self.N
             * max(self.beta, 1)
         )
-        self.inner_workspace = np.array(
-            [0] * inner_workspace_numel,
-            dtype=np.uint64,
-        )
-        self.inner_out = np.array(
-            [0] * (2 * self.num_moduli_after_modup * self.N),
-            dtype=np.uint64,
-        )
-        self.moddown_out_ax = np.array(
-            [0] * (self.num_moduli_after_moddown * self.N),
-            dtype=np.uint64,
-        )
-        self.moddown_out_bx = np.array(
-            [0] * (self.num_moduli_after_moddown * self.N),
-            dtype=np.uint64,
-        )
-        self.modup_out = np.array(
-            [0] * (self.num_moduli_after_modup * self.N * self.beta),
-            dtype=np.uint64,
-        )
-        self.rescale_out = np.array(
-            [0] * ((self.L - 1) * self.N),
-            dtype=np.uint64,
-        )
-        self.automorphism_transform_out = np.array(
-            [0] * (self.num_moduli_after_modup * self.N),
-            dtype=np.uint64,
-        )
-        self.mod_raise_out = np.array(
-            [0] * (self.L * self.N),
-            dtype=np.uint64,
-        )
+        self.inner_workspace = np.zeros(inner_workspace_numel, dtype=np.uint64)
+        self.inner_out = np.zeros(2 * num_moduli_after_modup * self.N, dtype=np.uint64)
+        self.moddown_out_ax = np.zeros(num_moduli_after_moddown * self.N, dtype=np.uint64)
+        self.moddown_out_bx = np.zeros(num_moduli_after_moddown * self.N, dtype=np.uint64)
+        self.modup_out = np.zeros(num_moduli_after_modup * self.N * self.beta, dtype=np.uint64)
+        self.rescale_out = np.zeros((self.L - 1) * self.N, dtype=np.uint64)
+        self.automorphism_transform_out = np.zeros(num_moduli_after_modup * self.N, dtype=np.uint64)
+        self.mod_raise_out = np.zeros(self.L * self.N, dtype=np.uint64)
 
     def _init_ntt_tables(self, q_roots, p_roots):
         (
@@ -423,10 +614,7 @@ class ContextMaterialBuilder:
                 prod_q_i_mod_q_j = prod_q_i_mod_q_j.swapaxes(1, 0).flatten()
                 prod_qi_mod_qj.append(prod_q_i_mod_q_j)
             prod_q_i_mod_q_j_modup.append(prod_qi_mod_qj)
-        self.prod_q_i_mod_q_j_modup = np.array(
-            np.array(prod_q_i_mod_q_j_modup, dtype=np.uint64),
-            dtype=np.uint64,
-        )
+        self.prod_q_i_mod_q_j_modup = np.asarray(prod_q_i_mod_q_j_modup, dtype=np.uint64)
 
         hat_inverse_vec_modup = []
         hat_inverse_vec_shoup_modup = []
@@ -438,52 +626,33 @@ class ContextMaterialBuilder:
                 for k_idx in range(self.alpha):
                     prime_idx = dnum_idx * self.alpha + k_idx
                     prime = self.primes[prime_idx]
-                    shoup = self.shoup(int(hat_inverse_vec[k_idx]), prime)
+                    shoup = _shoup_value(int(hat_inverse_vec[k_idx]), prime)
                     hat_inv_shoup.append(shoup)
                 hat_inverse_vec_shoup_modup.append(hat_inv_shoup)
-        self.hat_inverse_vec_modup = np.array(
-            np.array(hat_inverse_vec_modup, dtype=np.uint64),
-            dtype=np.uint64,
-        )
-        self.hat_inverse_vec_shoup_modup = np.array(
-            np.array(hat_inverse_vec_shoup_modup, dtype=np.uint64),
-            dtype=np.uint64,
-        )
+        self.hat_inverse_vec_modup = np.asarray(hat_inverse_vec_modup, dtype=np.uint64)
+        self.hat_inverse_vec_shoup_modup = np.asarray(hat_inverse_vec_shoup_modup, dtype=np.uint64)
 
     def _init_moddown_tables(self, p_hat_inv_modp, p_hat_modq, p_inv_modq):
-        p_basis = self.primes[self.chain_length:]
-        q_basis = self.set_difference(self.primes, p_basis)
+        q_basis = self.primes[:self.L]
 
         hat_inv_shoup_moddown = []
         for k in range(self.K):
             prime = self.primes[self.L + k]
-            shoup = self.shoup(int(p_hat_inv_modp[k]), prime)
+            shoup = _shoup_value(int(p_hat_inv_modp[k]), prime)
             hat_inv_shoup_moddown.append(shoup)
-        self.hat_inverse_vec_moddown = np.array(
-            np.array([p_hat_inv_modp], dtype=np.uint64),
-            dtype=np.uint64,
-        )
-        self.hat_inverse_vec_shoup_moddown = np.array(
-            np.array([hat_inv_shoup_moddown], dtype=np.uint64),
-            dtype=np.uint64,
-        )
+        self.hat_inverse_vec_moddown = np.asarray([p_hat_inv_modp], dtype=np.uint64)
+        self.hat_inverse_vec_shoup_moddown = np.asarray([hat_inv_shoup_moddown], dtype=np.uint64)
 
-        self.prod_q_i_mod_q_j_moddown = np.array(
-            np.array([p_hat_modq.swapaxes(1, 0).flatten()], dtype=np.uint64),
+        self.prod_q_i_mod_q_j_moddown = np.asarray(
+            [p_hat_modq.swapaxes(1, 0).flatten()],
             dtype=np.uint64,
         )
 
         prod_shoup = []
         for i, q_prime in enumerate(q_basis):
-            prod_shoup.append(self.shoup(int(p_inv_modq[i]), q_prime))
-        self.prod_inv_moddown = np.array(
-            np.array([p_inv_modq], dtype=np.uint64),
-            dtype=np.uint64,
-        )
-        self.prod_inv_shoup_moddown = np.array(
-            np.array(prod_shoup, dtype=np.uint64),
-            dtype=np.uint64,
-        )
+            prod_shoup.append(_shoup_value(int(p_inv_modq[i]), q_prime))
+        self.prod_inv_moddown = np.asarray([p_inv_modq], dtype=np.uint64)
+        self.prod_inv_shoup_moddown = np.asarray(prod_shoup, dtype=np.uint64)
 
     def _init_rescale_tables(self, q_inv_modq):
         qlql_inv_mod_ql_div_ql_mod_q = self.QlQlInvModqlDivqlModq.reshape(-1)
@@ -494,15 +663,9 @@ class ContextMaterialBuilder:
                 value = qlql_inv_mod_ql_div_ql_mod_q[i * (self.L - 1) + j]
                 prime = self.primes[j]
                 qlql_inv_vec.append(value)
-                qlql_inv_shoup_vec.append(self.shoup(int(value), prime))
-        self.qlql_inv_mod_ql_div_ql_mod_q = np.array(
-            np.array(qlql_inv_vec, dtype=np.uint64),
-            dtype=np.uint64,
-        )
-        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = np.array(
-            np.array(qlql_inv_shoup_vec, dtype=np.uint64),
-            dtype=np.uint64,
-        )
+                qlql_inv_shoup_vec.append(_shoup_value(int(value), prime))
+        self.qlql_inv_mod_ql_div_ql_mod_q = np.asarray(qlql_inv_vec, dtype=np.uint64)
+        self.qlql_inv_mod_ql_div_ql_mod_q_shoup = np.asarray(qlql_inv_shoup_vec, dtype=np.uint64)
 
         q_inv_modq = q_inv_modq.reshape(-1)
         q_inv_vec = []
@@ -512,15 +675,9 @@ class ContextMaterialBuilder:
                 value = q_inv_modq[i * self.L + j]
                 prime = self.primes[j]
                 q_inv_vec.append(value)
-                q_inv_shoup_vec.append(self.shoup(int(value), prime))
-        self.q_inv_mod_q = np.array(
-            np.array(q_inv_vec, dtype=np.uint64),
-            dtype=np.uint64,
-        )
-        self.q_inv_mod_q_shoup = np.array(
-            np.array(q_inv_shoup_vec, dtype=np.uint64),
-            dtype=np.uint64,
-        )
+                q_inv_shoup_vec.append(_shoup_value(int(value), prime))
+        self.q_inv_mod_q = np.asarray(q_inv_vec, dtype=np.uint64)
+        self.q_inv_mod_q_shoup = np.asarray(q_inv_shoup_vec, dtype=np.uint64)
 
     def _init_crt_towers(self, moduli, roots):
         moduli = [int(modulus) for modulus in moduli]
@@ -580,58 +737,36 @@ class ContextMaterialBuilder:
         self.encode_params_ksiPows = np.array(self.encode_params_ksiPows, dtype=np.complex128)
         self.encode_params_rotGroup = np.array(self.encode_params_rotGroup, dtype=np.uint32)
         self.encode_bitrev_indices = {
-            log_slot: self._bitrev_indices(log_slot)
+            log_slot: _slot_bit_reverse_indices(log_slot)
             for log_slot in range(2, self.logN)
         }
 
-    def _bitrev_indices(self, k):
-        n = 1 << int(k)
-        rev = np.arange(n, dtype=np.uint32)
-        bits = np.arange(k, dtype=np.uint32)
-        rev = ((rev[:, None] >> bits) & 1).dot(1 << (k - 1 - bits))
-        return rev
-
     def _install_eval_mult_key(self, mult_swk):
-        self.mult_swk_bx = np.array(
-            mult_swk[0].reshape(self.dnum, self.L + self.K, self.N),
-            dtype=np.uint64,
-        )
-        self.mult_swk_ax = np.array(
-            mult_swk[1].reshape(self.dnum, self.L + self.K, self.N),
-            dtype=np.uint64,
-        )
+        self.mult_swk_bx = np.ascontiguousarray(mult_swk[0])
+        self.mult_swk_ax = np.ascontiguousarray(mult_swk[1])
 
-    def _install_rotation_keys(self, rot_swk_map, auto_idx_to_rot_idx_map, options):
-        max_rns_limbs_by_rot_evk = getattr(options, "rotation_key_limb_limits", None) or {}
-        for rot_swk in rot_swk_map.values():
-            for auto_idx, bx, ax in rot_swk:
-                rot_idx = auto_idx_to_rot_idx_map[auto_idx]
-                if rot_idx < 0:
-                    rot_idx = self.N // 2 + rot_idx
-                limb = max_rns_limbs_by_rot_evk.get(int(rot_idx))
-                if limb is None:
-                    limb = self.L
-                beta = (limb + self.alpha - 1) // self.alpha
-                reshaped_bx = np.array(bx, dtype=np.uint64).reshape(self.dnum, -1, self.N)
-                reshaped_ax = np.array(ax, dtype=np.uint64).reshape(self.dnum, -1, self.N)
-
-                self.total_left_rot_key_map[int(rot_idx)] = [
-                    np.concatenate(
-                        [
-                            reshaped_bx[:beta, :limb, :],
-                            reshaped_bx[:beta, self.L:self.L + self.K, :],
-                        ],
-                        axis=1,
-                    ),
-                    np.concatenate(
-                        [
-                            reshaped_ax[:beta, :limb, :],
-                            reshaped_ax[:beta, self.L:self.L + self.K, :],
-                        ],
-                        axis=1,
-                    ),
-                ]
-                self.total_precompute_auto_map[int(rot_idx)] = self.compute_auto_map(int(auto_idx), self.N)
+    def _install_rotation_keys(self, rot_swk_map):
+        for rot_idx, bx, ax, auto_map, inverse_auto_map in rot_swk_map:
+            bx = np.asarray(bx, dtype=np.uint64)
+            ax = np.asarray(ax, dtype=np.uint64)
+            auto_map = np.asarray(auto_map, dtype=np.int32)
+            inverse_auto_map = np.asarray(inverse_auto_map, dtype=np.int32)
+            if bx.shape != ax.shape:
+                raise ValueError(f"rotation key {rot_idx} bx/ax shape mismatch: {bx.shape} vs {ax.shape}")
+            if bx.ndim != 3 or bx.shape[-1] != self.N:
+                raise ValueError(f"rotation key {rot_idx} must be [beta, limbs, N], got {bx.shape}")
+            if auto_map.shape != (self.N,):
+                raise ValueError(f"rotation key {rot_idx} auto_map must have shape ({self.N},), got {auto_map.shape}")
+            if inverse_auto_map.shape != (self.N,):
+                raise ValueError(
+                    f"rotation key {rot_idx} inverse_auto_map must have shape ({self.N},), got {inverse_auto_map.shape}"
+                )
+            self.total_left_rot_key_map[int(rot_idx)] = [
+                np.ascontiguousarray(bx),
+                np.ascontiguousarray(ax),
+            ]
+            self.total_precompute_auto_map[int(rot_idx)] = np.ascontiguousarray(auto_map)
+            self.total_inverse_precompute_auto_map[int(rot_idx)] = np.ascontiguousarray(inverse_auto_map)
 
     def _build_level_modulus_maps(self, p_mu):
         self.QplusP_map = {}
@@ -660,115 +795,3 @@ class ContextMaterialBuilder:
                 np.concatenate((self.max_int_diffs[:cur_limbs], self.max_int_diffs[-self.K:])),
                 dtype=np.uint64,
             )
-
-    def _build_slot_conversion_masks(self, logN):
-        for i in range(9, int(logN)):
-            for j in range(8, i):
-                mask = np.asarray(
-                    [1] * (1 << j) + [0] * ((1 << i) - (1 << j)),
-                    dtype=np.float64,
-                )
-                mask = encode_stage1(mask, 1 << i, self.N)
-                self.encode_values["slot_conversion_mask_{}to{}".format(1 << i, 1 << j)] = mask
-
-    def compute_auto_map(self, k, N):
-        return compute_auto_map(k, N)
-
-    def shoup(self, in_value, prime):
-        temp = int(in_value) << 64
-        return int(int(temp) // int(prime))
-
-    def shoup_each(self, values, prime):
-        return [self.shoup(value, prime) for value in values]
-
-    def div_two(self, in_list, prime):
-        two_inv = self.invMod(2, prime)
-        out_list = [self.mulMod(int(x), int(two_inv), int(prime)) for x in in_list]
-        return out_list
-
-    def set_difference(self, begin, end):
-        remove_set = set(end)
-        return [item for item in begin if item not in remove_set]
-
-    def negate(self, r, a):
-        r = -a
-
-    def addMod(self, r, a, b, m):
-        r = (a + b) % m
-
-    def subMod(self, r, a, b, m):
-        r = b % m
-        r = (a + m - r) % m
-
-    def mulMod(self, a, b, m):
-        mul = (a % m) * (b % m)
-        mul %= m
-        return int(mul)
-
-    def mulModBarrett(self, r, a, b, p, pr, twok):
-        mul = (a % p) * (b % p)
-        self.modBarrett(r, mul, p, pr, twok)
-
-    def modBarrett(self, r, a, m, mr, twok):
-        tmp = (a * mr) >> twok
-        tmp *= m
-        tmp = a - tmp
-        r = tmp
-        if r < m:
-            return
-        else:
-            r -= m
-            return
-
-    def invMod(self, x, m):
-        temp = int(x) % int(m)
-        if self.gcd(temp, m) != 1:
-            raise ValueError("Inverse doesn't exist!!!")
-        else:
-            return self.powMod(int(temp), (int(m) - 2), int(m))
-
-    def powMod(self, x, y, modulus):
-        res = 1
-        while y > 0:
-            if y & 1:
-                res = self.mulMod(res, x, modulus)
-            y = y >> 1
-            x = self.mulMod(x, x, modulus)
-        return res
-
-    def inv(self, x):
-        UINT64_MAX = 0xFFFFFFFFFFFFFFFF
-        return pow(int(x), UINT64_MAX, UINT64_MAX + 1)
-
-    def pow(self, x, y):
-        res = 1
-        while y > 0:
-            if y & 1:
-                res *= x
-            y = y >> 1
-            x *= x
-        return res
-
-    def bitReverse(self, n, bit_size=32):
-        reversed_bits = 0
-        for i in range(bit_size):
-            reversed_bits <<= 1
-            reversed_bits |= n & 1
-            n >>= 1
-        return reversed_bits
-
-    def gcd(self, a, b):
-        if a == 0:
-            return b
-        return self.gcd(int(b) % int(a), int(a))
-
-    def method(self):  # function to initialize variables
-        pass
-
-    def Serialize(self):
-        return pickle.dumps(self)
-
-    def Deserialize(ctx_bytes):
-        cryptoContext = pickle.loads(ctx_bytes)
-
-        return cryptoContext
