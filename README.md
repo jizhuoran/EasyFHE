@@ -103,7 +103,7 @@ The ResNet-20 AESPA reference application is maintained separately:
 ## Repository Map
 
 - `easyfhe/`: Python package and retained tensor runtime surface.
-- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, runtime options, and material handling.
+- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, and material handling.
 - `aten/src/ATen/native/fhe/`: native FHE kernels and native sampler.
 - `packaging/`: manylinux wheel and container packaging scripts.
 

@@ -40,6 +40,14 @@ def _can_write_out(out, template, active_limbs, cv_count=None):
     return all(tuple(component.shape) == expected for component in out.cv[:cv_count])
 
 
+def _require_write_out(out, template, active_limbs, cv_count=None, op_name="cipher op"):
+    if out is None:
+        return False
+    if not _can_write_out(out, template, active_limbs, cv_count=cv_count):
+        raise ValueError(f"{op_name}(out=...): out must have writable component tensors")
+    return True
+
+
 def _metadata_like(cipher, cv, **metadata):
     return cipher.cipher_like(cv, **metadata)
 
@@ -50,7 +58,8 @@ def _finish_out(out, template, cv, **metadata):
 
 
 def _cipher_add(in0, in1, cryptoContext, *, out=None):
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2) and _fused_cuda_available(
+    write_out = _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_add")
+    if write_out and _fused_cuda_available(
         "fused_add_mod_write",
         out.cv[0],
         out.cv[1],
@@ -92,7 +101,7 @@ def _cipher_add(in0, in1, cryptoContext, *, out=None):
                 )
             )
         )
-    if _can_write_out(out, in0, in0.cur_limbs):
+    if write_out:
         for index, (cv0, cv1) in enumerate(zip(in0.cv, in1.cv)):
             F.cv_add(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs, out=out.cv[index])
         return out.replace_with(in0.cipher_like(out.cv))
@@ -102,7 +111,7 @@ def _cipher_add(in0, in1, cryptoContext, *, out=None):
 
 def _cipher_add_ext(in0, in1, cryptoContext, *, out=None):
     active_limbs = in0.cur_limbs + cryptoContext.K
-    if _can_write_out(out, in0, active_limbs):
+    if _require_write_out(out, in0, active_limbs, op_name="homo_add ext"):
         for index, (cv0, cv1) in enumerate(zip(in0.cv, in1.cv)):
             F.cv_add(
                 cv0,
@@ -125,7 +134,8 @@ def _cipher_add_ext(in0, in1, cryptoContext, *, out=None):
 
 
 def _cipher_sub(in0, in1, cryptoContext, *, out=None):
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2) and _fused_cuda_available(
+    write_out = _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_sub")
+    if write_out and _fused_cuda_available(
         "fused_sub_mod_write",
         out.cv[0],
         out.cv[1],
@@ -167,7 +177,7 @@ def _cipher_sub(in0, in1, cryptoContext, *, out=None):
                 )
             )
         )
-    if _can_write_out(out, in0, in0.cur_limbs):
+    if write_out:
         for index, (cv0, cv1) in enumerate(zip(in0.cv, in1.cv)):
             F.cv_sub(cv0, cv1, cryptoContext.moduliQ, in0.cur_limbs, out=out.cv[index])
         return out.replace_with(in0.cipher_like(out.cv))
@@ -177,7 +187,7 @@ def _cipher_sub(in0, in1, cryptoContext, *, out=None):
 
 def _cipher_sub_ext(in0, in1, cryptoContext, *, out=None):
     active_limbs = in0.cur_limbs + cryptoContext.K
-    if _can_write_out(out, in0, active_limbs):
+    if _require_write_out(out, in0, active_limbs, op_name="homo_sub ext"):
         for index, (cv0, cv1) in enumerate(zip(in0.cv, in1.cv)):
             F.cv_sub(
                 cv0,
@@ -202,9 +212,11 @@ def _cipher_sub_ext(in0, in1, cryptoContext, *, out=None):
 def _cipher_add_plain(cipher, plaintext, cryptoContext, *, out=None):
     moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
     active_limbs = cipher.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
-    if _can_write_out(out, cipher, active_limbs, cv_count=2):
+    if _require_write_out(out, cipher, active_limbs, cv_count=2, op_name="homo_add_pt"):
         F.cv_add(cipher.cv[0], plaintext.cv[0], moduli, active_limbs, out=out.cv[0])
-        return out.replace_with(cipher.cipher_like([out.cv[0], cipher.cv[1]]))
+        if out.cv[1] is not cipher.cv[1]:
+            out.cv[1].copy_(cipher.cv[1])
+        return out.replace_with(cipher.cipher_like(out.cv))
     cv = [
         F.cv_add(cipher.cv[0], plaintext.cv[0], moduli, active_limbs),
         cipher.cv[1],
@@ -213,7 +225,9 @@ def _cipher_add_plain(cipher, plaintext, cryptoContext, *, out=None):
 
 
 def _cipher_mul_plain(cipher, plaintext, cryptoContext, *, out=None):
-    if _can_write_out(out, cipher, cipher.cur_limbs, cv_count=2) and _fused_cuda_available(
+    active_limbs = cipher.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
+    write_out = _require_write_out(out, cipher, active_limbs, cv_count=2, op_name="homo_mul_pt")
+    if write_out and not cipher.is_ext and _fused_cuda_available(
         "fused_mul_pt_mod_write",
         out.cv[0],
         out.cv[1],
@@ -267,9 +281,8 @@ def _cipher_mul_plain(cipher, plaintext, cryptoContext, *, out=None):
 
     moduli = cryptoContext.QplusP_map[cipher.cur_limbs]
     mu = cryptoContext.QmuplusPmu_map[cipher.cur_limbs]
-    active_limbs = cipher.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
     plaintext_values = plaintext.cv[0]
-    if _can_write_out(out, cipher, active_limbs, cv_count=2):
+    if write_out:
         F.cv_mul(cipher.cv[0], plaintext_values, moduli, mu, active_limbs, out=out.cv[0])
         F.cv_mul(cipher.cv[1], plaintext_values, moduli, mu, active_limbs, out=out.cv[1])
         return out.replace_with(
@@ -320,9 +333,11 @@ def _cipher_square(in0, cryptoContext):
 
 def _cipher_add_scalar(in0, scalar, cryptoContext, *, out=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2):
+    if _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_add_scalar"):
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs, out=out.cv[0])
-        return out.replace_with(in0.cipher_like([out.cv[0], in0.cv[1]]))
+        if out.cv[1] is not in0.cv[1]:
+            out.cv[1].copy_(in0.cv[1])
+        return out.replace_with(in0.cipher_like(out.cv))
     return _finish_out(out, in0, [
         F.cv_add_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -331,9 +346,11 @@ def _cipher_add_scalar(in0, scalar, cryptoContext, *, out=None):
 
 def _cipher_sub_scalar(in0, scalar, cryptoContext, *, out=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2):
+    if _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_sub_scalar"):
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs, out=out.cv[0])
-        return out.replace_with(in0.cipher_like([out.cv[0], in0.cv[1]]))
+        if out.cv[1] is not in0.cv[1]:
+            out.cv[1].copy_(in0.cv[1])
+        return out.replace_with(in0.cipher_like(out.cv))
     return _finish_out(out, in0, [
         F.cv_sub_scalar(in0.cv[0], scalar_mod, cryptoContext.moduliQ, in0.cur_limbs),
         in0.cv[1],
@@ -342,7 +359,8 @@ def _cipher_sub_scalar(in0, scalar, cryptoContext, *, out=None):
 
 def _cipher_mul_scalar_double(in0, scalar, cryptoContext, *, out=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2) and _fused_cuda_available(
+    write_out = _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_mul_scalar_double")
+    if write_out and _fused_cuda_available(
         "fused_mul_scalar_mod_write",
         out.cv[0],
         out.cv[1],
@@ -395,7 +413,7 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext, *, out=None):
             noise_deg=in0.noise_deg + 1,
         )
     sc_factor = cryptoContext.scale_at(in0.cur_limbs)
-    if _can_write_out(out, in0, in0.cur_limbs):
+    if write_out:
         for index, cv0 in enumerate(in0.cv):
             F.cv_mul_scalar(
                 cv0,
@@ -421,7 +439,8 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext, *, out=None):
 
 def _cipher_mul_scalar_int(in0, scalar, cryptoContext, *, out=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.cur_limbs, in0.cv[0].device)
-    if _can_write_out(out, in0, in0.cur_limbs, cv_count=2) and _fused_cuda_available(
+    write_out = _require_write_out(out, in0, in0.cur_limbs, cv_count=2, op_name="homo_mul_scalar_int")
+    if write_out and _fused_cuda_available(
         "fused_mul_scalar_mod_write",
         out.cv[0],
         out.cv[1],
@@ -467,7 +486,7 @@ def _cipher_mul_scalar_int(in0, scalar, cryptoContext, *, out=None):
             scaling_factor=in0.scaling_factor,
             noise_deg=in0.noise_deg,
         )
-    if _can_write_out(out, in0, in0.cur_limbs):
+    if write_out:
         for index, cv0 in enumerate(in0.cv):
             F.cv_mul_scalar(
                 cv0,

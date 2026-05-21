@@ -651,16 +651,9 @@ def cv_hrot(
     context: Context,
     add_bx: Tensor | None = None,
     add_ax: Tensor | None = None,
-    out_bx: Tensor | None = None,
-    out_ax: Tensor | None = None,
 ) -> tuple[Tensor, Tensor]:
-    if (out_bx is None) != (out_ax is None):
-        raise ValueError("cv_hrot: out_bx and out_ax must be provided together")
     beta = (curr_limbs + context.alpha - 1) // context.alpha
-    hrot_op = torch.hrot_write if out_bx is not None and out_ax is not None else torch.hrot
-    out_args = () if out_bx is None and out_ax is None else (out_bx, out_ax)
-    return hrot_op(
-        *out_args,
+    return torch.hrot(
         c0,
         c1,
         swk_bx,

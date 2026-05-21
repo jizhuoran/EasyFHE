@@ -9,10 +9,10 @@ import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 
 try:
-    from .fhe_state import runtime_options_from_args
+    from .fhe_state import parse_rotation_key_limb_limits
     from .main import build_config, _format_seconds, _format_bytes
 except ImportError:
-    from fhe_state import runtime_options_from_args
+    from fhe_state import parse_rotation_key_limb_limits
     from main import build_config, _format_seconds, _format_bytes
 
 
@@ -76,7 +76,6 @@ def _format_cache(constants):
 
 def _build_bootstrap_runtime(args):
     config = build_config(args)
-    options = runtime_options_from_args(args)
     bootstrap_extra_depth = bs.depth(
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
@@ -102,9 +101,11 @@ def _build_bootstrap_runtime(args):
             scale_mode=config.scale_mode,
             rescale_policy=config.rescale_policy,
             rotations=rotations,
+            auto_load_keys=args.auto_load_keys,
+            rotation_random_mode=str(args.rotation_random_mode),
+            rotation_key_limb_limits=parse_rotation_key_limb_limits(args.rot_key_limb_limit),
         ),
         device=config.device,
-        options=options,
     )
     setup_seconds = time.perf_counter() - setup_start
 

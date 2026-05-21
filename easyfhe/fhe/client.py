@@ -13,8 +13,9 @@ from .ops.encoding import encode_stage1, encode_stage2
 
 
 class Client:
-    def __init__(self, material, options=None):
-        self._options = options
+    def __init__(self, material, *, auto_load_keys=None, rotation_key_limb_limits=None):
+        self.auto_load_keys = auto_load_keys
+        self.rotation_key_limb_limits = dict(rotation_key_limb_limits or {})
         self._contexts = {}
 
         self.log_n = int(material.log_n)
@@ -93,9 +94,7 @@ class Client:
 
         from ._keygen.context_material_builder import ContextMaterialBuilder
         from .context import Context
-        from .runtime.options import RuntimeOptions
 
-        options = self._options or RuntimeOptions()
         builder = ContextMaterialBuilder.from_public_params(
             log_n=self.log_n,
             depth=self.depth,
@@ -110,12 +109,12 @@ class Client:
             moduli_p=self.moduli_p,
             roots_p=self.roots_p,
             eval_mult_key=self.eval_mult_key,
-            options=options,
         )
         context = Context(
             builder.to_runtime_material(),
             device,
-            options,
+            auto_load_keys=self.auto_load_keys,
+            rotation_key_limb_limits=self.rotation_key_limb_limits,
             native_context_gen=True,
             generation_metadata=self._generation_metadata(),
             roots_q=self.roots_q,

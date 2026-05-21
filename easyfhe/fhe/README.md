@@ -3,7 +3,7 @@
 `easyfhe.fhe` is the CKKS-oriented public frontend layered on top of the
 retained EasyFHE tensor runtime. It owns encrypted tensor state, context
 generation, plaintext preparation, homomorphic operators, bootstrapping support,
-runtime options, and native key material generation.
+and native key material generation.
 
 ## Public Entry Points
 
@@ -29,7 +29,6 @@ The main entry points are:
 - ciphertext slot helpers.
 - `homo_add`, `homo_sub`, `homo_mul`, `homo_square`, scalar/plaintext variants,
   rotations, and `align_to` for explicit ciphertext state alignment.
-- `RuntimeOptions` for runtime control.
 
 The supported external API is the allowlist in `easyfhe.fhe.__all__`, sourced
 from `easyfhe.fhe._public_api.PUBLIC_API`. Importable submodules are
@@ -48,12 +47,11 @@ constants and a bootstrap plan, then call
 
 ## Package Map
 
-- `runtime/`: context specs, runtime options, rescale policy helpers, and
-  operation validation.
 - `context.py` and `ciphertext.py`: context construction and ciphertext/plaintext
   state containers.
+- `context_factory.py`: CKKS context spec and client/context generation.
 - `ops/`: homomorphic arithmetic, encoding, key switching, rotation, alignment,
-  fused operations, and thin native-kernel wrappers.
+  operation validation, fused operations, and thin native-kernel wrappers.
 - `../bs/`: public bootstrapping specs, planning, constants, runtime helpers,
   and OpenFHE-specific internal implementation code.
 - `_keygen/`: native sampler integration and context material assembly.

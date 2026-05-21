@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Mapping, Optional
 
-from .runtime.options import RuntimeOptions
 from .client import Client
 from ._keygen.context_material_builder import ContextMaterialBuilder
 from ._keygen.native_sampler import CkksSamplerConfig, NativeServerMaterial, sample_native_client_server
@@ -20,6 +19,9 @@ class CKKSContextSpec:
     scale_mode: str = "fixed"
     rescale_policy: str = "manual"
     rotations: tuple[int, ...] = ()
+    auto_load_keys: Optional[bool] = None
+    rotation_random_mode: str = "fresh"
+    rotation_key_limb_limits: Mapping[int, int] = field(default_factory=dict)
 
     def __post_init__(self):
         object.__setattr__(self, "depth", int(self.depth))
@@ -31,20 +33,28 @@ class CKKSContextSpec:
         object.__setattr__(self, "scale_mode", _normalize_scale_mode(self.scale_mode))
         object.__setattr__(self, "rescale_policy", _normalize_rescale_policy(self.rescale_policy))
         object.__setattr__(self, "rotations", tuple(int(rotation) for rotation in (self.rotations or ())))
+        object.__setattr__(self, "rotation_random_mode", str(self.rotation_random_mode))
+        object.__setattr__(
+            self,
+            "rotation_key_limb_limits",
+            {int(rotation): int(limbs) for rotation, limbs in (self.rotation_key_limb_limits or {}).items()},
+        )
 
 
-def generate_client_context(spec: CKKSContextSpec, device="cpu", options=None):
-    client_material, server_material = _sample_material(spec, options)
-    client = Client(client_material, copy.copy(options))
-    context = _build_context(server_material, device=device, options=options)
+def generate_client_context(spec: CKKSContextSpec, device="cpu"):
+    client_material, server_material = _sample_material(spec)
+    client = Client(
+        client_material,
+        auto_load_keys=spec.auto_load_keys,
+        rotation_key_limb_limits=spec.rotation_key_limb_limits,
+    )
+    context = _build_context(server_material, spec, device=device)
     return client, context
 
 
-def _sample_material(spec: CKKSContextSpec, options=None):
+def _sample_material(spec: CKKSContextSpec):
     if not isinstance(spec, CKKSContextSpec):
         raise TypeError("generate_client_context expects a CKKSContextSpec")
-    if options is None:
-        options = RuntimeOptions()
 
     depth = int(spec.depth)
 
@@ -58,9 +68,9 @@ def _sample_material(spec: CKKSContextSpec, options=None):
         secret_key_dist=spec.secret_key_dist,
         scale_mode=spec.scale_mode,
         rescale_policy=spec.rescale_policy,
-        rotation_key_limb_limits=dict(getattr(options, "rotation_key_limb_limits", None) or {}),
+        rotation_key_limb_limits=dict(spec.rotation_key_limb_limits),
         random_mode="parallel_deterministic",
-        rotation_random_mode=str(getattr(options, "rotation_random_mode", "fresh")),
+        rotation_random_mode=spec.rotation_random_mode,
     )
     client_material, server_material = sample_native_client_server(
         sampler_config,
@@ -70,19 +80,18 @@ def _sample_material(spec: CKKSContextSpec, options=None):
     return client_material, server_material
 
 
-def _build_context(server_material: NativeServerMaterial, device="cpu", options=None):
+def _build_context(server_material: NativeServerMaterial, spec: CKKSContextSpec, device="cpu"):
     if not isinstance(server_material, NativeServerMaterial):
         raise TypeError("_build_context expects native server material")
-    if options is None:
-        options = RuntimeOptions()
     from .context import Context
 
-    builder = ContextMaterialBuilder.from_server(server_material, copy.copy(options))
+    builder = ContextMaterialBuilder.from_server(server_material)
 
     context = Context(
         builder.to_runtime_material(),
         device,
-        options,
+        auto_load_keys=spec.auto_load_keys,
+        rotation_key_limb_limits=spec.rotation_key_limb_limits,
         native_context_gen=True,
         generation_metadata={
             "depth": int(server_material.depth),

@@ -11,7 +11,6 @@ CONTEXT_API = (
     "CKKSContextSpec",
     "Client",
     "Context",
-    "RuntimeOptions",
     "generate_client_context",
 )
 

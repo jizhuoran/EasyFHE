@@ -39,7 +39,6 @@ from .ops import (
     homo_sub_scalar_int_inplace,
     slot_resize,
 )
-from .runtime.options import RuntimeOptions
 from .context_factory import CKKSContextSpec, generate_client_context
 
 

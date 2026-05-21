@@ -264,7 +264,7 @@ def _ntt_tables_cached(primes, roots, ring_dim):
 
 class ContextMaterialBuilder:
     @classmethod
-    def from_server(cls, server_material, options):
+    def from_server(cls, server_material):
         return cls.from_public_params(
             log_n=server_material.log_n,
             depth=server_material.depth,
@@ -280,7 +280,6 @@ class ContextMaterialBuilder:
             roots_p=server_material.roots_p,
             eval_mult_key=server_material.eval_mult_key,
             rotation_keys=server_material.rotation_keys,
-            options=options,
         )
 
     @classmethod
@@ -301,7 +300,6 @@ class ContextMaterialBuilder:
         roots_p,
         eval_mult_key,
         rotation_keys=(),
-        options=None,
     ):
         return cls(
             log_n=log_n,
@@ -318,7 +316,6 @@ class ContextMaterialBuilder:
             secret_key_dist=secret_key_dist,
             scale_mode=scale_mode,
             rescale_policy=rescale_policy,
-            options=options,
         )
 
     def to_runtime_material(self):
@@ -341,7 +338,6 @@ class ContextMaterialBuilder:
         secret_key_dist=None,
         scale_mode=None,
         rescale_policy=None,
-        options=None,
         h=64,
         sigma=32,
     ):

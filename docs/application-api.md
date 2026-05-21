@@ -37,9 +37,9 @@ client, ctx = fhe.generate_client_context(
         scale_mode="fixed",
         rescale_policy="manual",
         rotations=(-1024, -256, -64, 1, 2, 4),
+        auto_load_keys=True,
     ),
     device="cuda",
-    options=fhe.RuntimeOptions(auto_load_keys=True),
 )
 ```
 

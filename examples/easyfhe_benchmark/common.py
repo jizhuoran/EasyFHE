@@ -179,11 +179,6 @@ class ContextCache:
             save_dir = save_dir / f"with_rotkeys_{rot_sig}"
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        options = fhe.RuntimeOptions(
-            auto_load_keys=bool(need_bootstrap or app_rot_indices),
-            rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
-            rotation_key_limb_limits=getattr(self.args, "rotation_key_limb_limits", {}) or {},
-        )
         bootstrap_depth = bs.depth(
             log_bs_slots=log_bs_slots_list,
             level_budget=level_budget_list,
@@ -211,9 +206,11 @@ class ContextCache:
                 scale_mode=str(self.args.scale_mode),
                 rescale_policy=str(self.args.rescale_policy),
                 rotations=rotations,
+                auto_load_keys=bool(need_bootstrap or app_rot_indices),
+                rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
+                rotation_key_limb_limits=getattr(self.args, "rotation_key_limb_limits", {}) or {},
             ),
             device=str(self.args.device),
-            options=options,
         )
         bootstrap_constants = {}
         for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list):

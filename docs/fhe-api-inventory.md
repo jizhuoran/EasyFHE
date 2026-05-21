@@ -24,7 +24,6 @@ These are the names ordinary users should be able to rely on.
 - `Cipher`
 - `Context`
 - `CKKSContextSpec`
-- `RuntimeOptions`
 - `ConstantBundle`
 - `generate_client_context`
 - `CipherState`
@@ -330,7 +329,6 @@ only. User code, bootstrapping code, and examples should not call them directly.
 - `torch.fast_rotate_batch_finalize`
 - `torch.fast_rotate_batch_finalize_compact`
 - `torch.hrot`
-- `torch.hrot_write`
 - `torch.mod_raise`
 - `torch.extend_ciphertext`
 - `torch.mul_by_monomial`

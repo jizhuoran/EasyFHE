@@ -12,12 +12,12 @@ import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 try:
     from .data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
-    from .fhe_state import runtime_options_from_args
+    from .fhe_state import parse_rotation_key_limb_limits
     from .model import AespaRuntime, encrypt_input, infer_encrypted
     from .weight_pack import WeightPack
 except ImportError:
     from data import DEFAULT_DATA_DIR, read_image, resolve_test_batch_path
-    from fhe_state import runtime_options_from_args
+    from fhe_state import parse_rotation_key_limb_limits
     from model import AespaRuntime, encrypt_input, infer_encrypted
     from weight_pack import WeightPack
 
@@ -280,7 +280,6 @@ def resnet20(config=None, args=None):
         raise ValueError(f"CIFAR-10 test batch {test_batch_path} does not exist!")
 
     _print_config(config)
-    options = runtime_options_from_args(args)
     bootstrap_extra_depth = bs.depth(
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
@@ -304,9 +303,11 @@ def resnet20(config=None, args=None):
             scale_mode=config.scale_mode,
             rescale_policy=config.rescale_policy,
             rotations=rotations,
+            auto_load_keys=args.auto_load_keys,
+            rotation_random_mode=str(args.rotation_random_mode),
+            rotation_key_limb_limits=parse_rotation_key_limb_limits(args.rot_key_limb_limit),
         ),
         device=config.device,
-        options=options,
     )
     bootstrap_material = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):

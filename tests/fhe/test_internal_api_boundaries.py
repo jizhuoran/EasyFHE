@@ -57,7 +57,6 @@ NATIVE_FHE_OPS = {
     "fast_rotate_batch_finalize",
     "fast_rotate_batch_finalize_compact",
     "hrot",
-    "hrot_write",
     "hmul_double_rescale",
     "mod_raise",
     "extend_ciphertext",

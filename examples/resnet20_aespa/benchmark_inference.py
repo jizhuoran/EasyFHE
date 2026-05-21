@@ -9,14 +9,14 @@ import easyfhe.fhe as fhe
 
 try:
     from .data import read_image
-    from .fhe_state import runtime_options_from_args
+    from .fhe_state import parse_rotation_key_limb_limits
     from .main import build_config, _format_seconds, _format_bytes
     from .model import AespaRuntime
     from .weight_pack import WeightPack
     from . import model
 except ImportError:
     from data import read_image
-    from fhe_state import runtime_options_from_args
+    from fhe_state import parse_rotation_key_limb_limits
     from main import build_config, _format_seconds, _format_bytes
     from model import AespaRuntime
     from weight_pack import WeightPack
@@ -56,7 +56,6 @@ def _sync(ctx):
 def _build_runtime(args):
     args.total = max(1, args.warmup + args.iters)
     config = build_config(args)
-    options = runtime_options_from_args(args)
     bootstrap_extra_depth = bs.depth(
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
@@ -80,9 +79,11 @@ def _build_runtime(args):
             scale_mode=config.scale_mode,
             rescale_policy=config.rescale_policy,
             rotations=rotations,
+            auto_load_keys=args.auto_load_keys,
+            rotation_random_mode=str(args.rotation_random_mode),
+            rotation_key_limb_limits=parse_rotation_key_limb_limits(args.rot_key_limb_limit),
         ),
         device=config.device,
-        options=options,
     )
     bootstrap_material = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
@@ -310,7 +311,7 @@ def main():
     print(f"bootstrap_strategy: {bootstrap_plan.strategy}")
     print(f"warmup: {args.warmup}")
     print(f"iters: {args.iters}")
-    print(f"auto_load_keys: {rt.ctx.options.resolved_auto_load_keys(rt.ctx.device)}")
+    print(f"auto_load_keys: {rt.ctx.auto_load_keys_resolved}")
 
     measured_timings = []
     measured_bootstraps = []

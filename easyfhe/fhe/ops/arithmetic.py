@@ -1,13 +1,9 @@
 from . import kernels as F
 from ..ciphertext import Cipher
-from ..runtime import validation
+from . import validation
 from . import alignment
 from .plaintext import _encode_double_for_scalar_op, homo_add_pt, homo_add_scalar_double
 from .primitives import _cipher_add, _cipher_add_ext, _cipher_mul, _cipher_square, _cipher_sub, _cipher_sub_ext
-
-
-def _assign_out(out, value):
-    return value if out is None else out.replace_with(value)
 
 
 def _align_for_add_or_sub(in0, in1, cryptoContext):
@@ -44,10 +40,10 @@ def homo_sub_inplace(in0, in1, cryptoContext):
     return homo_sub(in0, in1, cryptoContext, out=in0)
 
 
-def homo_mul(in0, in1, cryptoContext, *, out=None):
+def homo_mul(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_mul", in0, in1, require_ext=False, require_same_metadata=("slots",))
     in0, in1 = _align_for_mul(in0, in1, cryptoContext)
-    return _assign_out(out, _relinearize(_cipher_mul(in0, in1, cryptoContext), cryptoContext))
+    return _relinearize(_cipher_mul(in0, in1, cryptoContext), cryptoContext)
 
 
 def _post_mul_rescale_fallback(value, cryptoContext, *, add=None, sub=None, scalar=None, plaintext=None):
@@ -72,7 +68,6 @@ def homo_mul_rescale(
     sub=None,
     scalar=None,
     plaintext=None,
-    out=None,
 ):
     validation.validate_binary_cipher_op(
         "homo_mul_rescale",
@@ -94,14 +89,14 @@ def homo_mul_rescale(
         if apply_double:
             prod = _cipher_add(prod, prod, cryptoContext)
         prod = alignment.rescale_one_level(prod, cryptoContext)
-        return _assign_out(out, _post_mul_rescale_fallback(
+        return _post_mul_rescale_fallback(
             prod,
             cryptoContext,
             add=add,
             sub=sub,
             scalar=scalar,
             plaintext=plaintext,
-        ))
+        )
 
     out_cur_limbs = in0.cur_limbs - 1
     mod_reduce_factor = cryptoContext.rescale_divisor_at(out_cur_limbs)
@@ -178,44 +173,42 @@ def homo_mul_rescale(
         post_c1=post_c1,
         post_scalar=post_scalar,
     )
-    return _assign_out(out, in0.cipher_like(
+    return in0.cipher_like(
         [res[0, 0], res[1, 0]],
         cur_limbs=out_cur_limbs,
         scaling_factor=out_scaling_factor,
         noise_deg=in0.noise_deg + in1.noise_deg - 1,
-    ))
+    )
 
 
-def homo_mul_double_rescale(in0, in1, cryptoContext, *, out=None):
-    return homo_mul_rescale(in0, in1, cryptoContext, apply_double=True, out=out)
+def homo_mul_double_rescale(in0, in1, cryptoContext):
+    return homo_mul_rescale(in0, in1, cryptoContext, apply_double=True)
 
 
-def homo_mul_rescale_addscalar(in0, in1, scalar, cryptoContext, *, out=None):
+def homo_mul_rescale_addscalar(in0, in1, scalar, cryptoContext):
     return homo_mul_rescale(
         in0,
         in1,
         cryptoContext,
         apply_double=False,
         scalar=scalar,
-        out=out,
     )
 
 
-def homo_mul_rescale_addpt(in0, in1, plaintext, cryptoContext, *, out=None):
+def homo_mul_rescale_addpt(in0, in1, plaintext, cryptoContext):
     return homo_mul_rescale(
         in0,
         in1,
         cryptoContext,
         apply_double=False,
         plaintext=plaintext,
-        out=out,
     )
 
 
-def homo_square(in0, cryptoContext, *, out=None):
+def homo_square(in0, cryptoContext):
     validation.validate_cipher_op("homo_square", in0, require_ext=False)
     in0 = alignment.align_to(in0, alignment.plan_reduce_noise_to_one(in0, cryptoContext), cryptoContext)
-    return _assign_out(out, _relinearize(_cipher_square(in0, cryptoContext), cryptoContext))
+    return _relinearize(_cipher_square(in0, cryptoContext), cryptoContext)
 
 
 def _relinearize(cipher, cryptoContext):

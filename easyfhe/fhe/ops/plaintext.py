@@ -1,7 +1,8 @@
 import math
 
 from ..ciphertext import Cipher, Plaintext
-from ..runtime import validation
+from . import kernels as F
+from . import validation
 from .primitives import (
     _cipher_add_plain,
     _cipher_add_scalar,
@@ -121,10 +122,11 @@ def homo_mul_scalar_int(cipher, scalar, cryptoContext, *, out=None):
     if _is_encoded_scalar(scalar):
         return _cipher_mul_scalar_int(cipher, scalar, cryptoContext, out=out)
 
-    result = _cipher_mul_scalar_int(cipher, abs(scalar), cryptoContext)
+    result = _cipher_mul_scalar_int(cipher, abs(scalar), cryptoContext, out=out)
     if scalar < 0:
-        result = _cipher_neg(result, cryptoContext)
-    return _assign_out(out, result)
+        for component in result.cv:
+            F.cv_neg(component, cryptoContext.moduliQ, result.cur_limbs, inplace=True)
+    return result
 
 
 def homo_mul_scalar_int_inplace(cipher, scalar, cryptoContext):

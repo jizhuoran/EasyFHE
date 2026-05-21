@@ -192,11 +192,11 @@ def test_plaintext_and_scalar_multiply_out_and_inplace(monkeypatch):
     assert cipher2.cv[0] == "mul_double((4, 4, 4)).c0"
 
 
-def test_rotate_out(monkeypatch):
+def test_rotate_does_not_expose_out(monkeypatch):
     ctx = SimpleNamespace(
         L=3,
         N=8,
-        options=SimpleNamespace(rotation_key_limb_limits={}),
+        rotation_key_limb_limits={},
         get_rotation_key=lambda _index: ("swk_bx", "swk_ax"),
         get_inverse_precompute_auto=lambda _index: "inverse_precompute",
     )
@@ -205,59 +205,19 @@ def test_rotate_out(monkeypatch):
     cipher = _cipher("cipher")
     out = _cipher("out")
 
-    assert fhe.homo_rotate(cipher, 1, ctx, out=out) is out
-    assert out.cv == ["rot.c0", "rot.c1"]
-    assert out.cur_limbs == cipher.cur_limbs
+    with pytest.raises(TypeError):
+        fhe.homo_rotate(cipher, 1, ctx, out=out)
 
 
-def test_rotate_out_uses_hrot_component_out(monkeypatch):
+def test_cv_hrot_uses_allocating_native_op(monkeypatch):
     seen = {}
 
-    def fake_cv_hrot(*args, **kwargs):
-        seen["out_bx"] = kwargs["out_bx"]
-        seen["out_ax"] = kwargs["out_ax"]
-        return kwargs["out_bx"], kwargs["out_ax"]
-
-    ctx = SimpleNamespace(
-        L=3,
-        N=8,
-        options=SimpleNamespace(rotation_key_limb_limits={}),
-        get_rotation_key=lambda _index: ("swk_bx", "swk_ax"),
-        get_inverse_precompute_auto=lambda _index: "inverse_precompute",
-    )
-    monkeypatch.setattr(rotation.F, "cv_hrot", fake_cv_hrot)
-    cipher = Cipher(
-        [torch.zeros((3, 4), dtype=torch.uint64), torch.ones((3, 4), dtype=torch.uint64)],
-        3,
-        2.0,
-        1,
-        8,
-        False,
-    )
-    out = Cipher(
-        [torch.empty((3, 4), dtype=torch.uint64), torch.empty((3, 4), dtype=torch.uint64)],
-        1,
-        1.0,
-        2,
-        4,
-        False,
-    )
-
-    assert fhe.homo_rotate(cipher, 1, ctx, out=out) is out
-    assert seen == {"out_bx": out.cv[0], "out_ax": out.cv[1]}
-    assert out.cur_limbs == cipher.cur_limbs
-
-
-def test_cv_hrot_uses_native_write_when_out(monkeypatch):
-    seen = {}
-
-    def fake_hrot_write(out_bx, out_ax, *args, **kwargs):
-        seen["out_bx"] = out_bx
-        seen["out_ax"] = out_ax
+    def fake_hrot(*args, **kwargs):
+        seen["op"] = "hrot"
         seen["curr_limbs"] = kwargs["curr_limbs"]
-        return (out_bx, out_ax)
+        return ("rot.c0", "rot.c1")
 
-    monkeypatch.setattr(kernels.torch, "hrot_write", fake_hrot_write, raising=False)
+    monkeypatch.setattr(kernels.torch, "hrot", fake_hrot, raising=False)
     ctx = SimpleNamespace(
         alpha=2,
         L=3,
@@ -279,9 +239,6 @@ def test_cv_hrot_uses_native_write_when_out(monkeypatch):
         inverse_scaled_power_of_roots_div_two="inv_scaled_roots",
         inner_workspace="workspace",
     )
-    out_bx = torch.empty((3, 4), dtype=torch.uint64)
-    out_ax = torch.empty((3, 4), dtype=torch.uint64)
-
     result = kernels.cv_hrot(
         torch.zeros((3, 4), dtype=torch.uint64),
         torch.zeros((3, 4), dtype=torch.uint64),
@@ -291,12 +248,10 @@ def test_cv_hrot_uses_native_write_when_out(monkeypatch):
         "swk_ax",
         "precompute",
         ctx,
-        out_bx=out_bx,
-        out_ax=out_ax,
     )
 
-    assert result == (out_bx, out_ax)
-    assert seen == {"out_bx": out_bx, "out_ax": out_ax, "curr_limbs": 3}
+    assert result == ("rot.c0", "rot.c1")
+    assert seen == {"op": "hrot", "curr_limbs": 3}
 
 
 def test_cv_add_uses_out_view(monkeypatch):
@@ -375,11 +330,10 @@ def test_cipher_add_uses_fused_out_when_available(monkeypatch):
     assert out.slots == a.slots
 
 
-def test_mul_rescale_and_square_out(monkeypatch):
+def test_mul_rescale_and_square_do_not_expose_out(monkeypatch):
     ctx = _mul_context()
     a = _cipher("a", cur_limbs=4)
     b = _cipher("b", cur_limbs=4)
-    out = _cipher("out")
 
     monkeypatch.setattr(
         arithmetic.F,
@@ -387,12 +341,15 @@ def test_mul_rescale_and_square_out(monkeypatch):
         lambda *args, **kwargs: torch.zeros((2, 1, 3, 4), dtype=torch.uint64),
     )
 
-    result = fhe.homo_mul_rescale(a, b, ctx, out=out)
-    assert result is out
-    assert out.cur_limbs == 3
-    assert out.noise_deg == 1
-    assert out.scaling_factor == 4.0
-    assert len(out.cv) == 2
+    with pytest.raises(TypeError):
+        fhe.homo_mul_rescale(a, b, ctx, out=_cipher("out"))
+
+    result = fhe.homo_mul_rescale(a, b, ctx)
+    assert result is not a
+    assert result.cur_limbs == 3
+    assert result.noise_deg == 1
+    assert result.scaling_factor == 4.0
+    assert len(result.cv) == 2
 
     monkeypatch.setattr(
         arithmetic,
@@ -405,10 +362,12 @@ def test_mul_rescale_and_square_out(monkeypatch):
         lambda cipher, context: cipher.cipher_like(["relin.c0", "relin.c1"], noise_deg=2),
     )
 
-    square_out = _cipher("square_out")
-    assert arithmetic.homo_square(a, ctx, out=square_out) is square_out
-    assert square_out.cv == ["relin.c0", "relin.c1"]
-    assert square_out.noise_deg == 2
+    with pytest.raises(TypeError):
+        arithmetic.homo_square(a, ctx, out=_cipher("square_out"))
+
+    square = arithmetic.homo_square(a, ctx)
+    assert square.cv == ["relin.c0", "relin.c1"]
+    assert square.noise_deg == 2
 
 
 @pytest.mark.parametrize(
@@ -424,7 +383,6 @@ def test_mul_rescale_and_square_out(monkeypatch):
         "homo_mul_scalar_int_inplace",
         "homo_sub_scalar_int",
         "homo_sub_scalar_int_inplace",
-        "homo_mul_rescale",
         "reduce_noise_to_one",
     ],
 )

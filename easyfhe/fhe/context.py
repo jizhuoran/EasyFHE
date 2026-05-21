@@ -2,13 +2,20 @@ import easyfhe as torch
 import numpy as np
 
 
+def _resolved_auto_load_keys(value, device):
+    if value is not None:
+        return bool(value)
+    return str(device) == "cuda"
+
+
 class Context:
     def __init__(
         self,
         material,
         device,
-        options,
         *,
+        auto_load_keys=None,
+        rotation_key_limb_limits=None,
         native_context_gen=False,
         generation_metadata=None,
         roots_q=None,
@@ -16,7 +23,9 @@ class Context:
     ):
         # Context metadata.
         self.device = device
-        self.options = options
+        self.auto_load_keys = auto_load_keys
+        self.auto_load_keys_resolved = _resolved_auto_load_keys(auto_load_keys, device)
+        self.rotation_key_limb_limits = dict(rotation_key_limb_limits or {})
         self.native_context_gen = bool(native_context_gen)
         self.context_generation_config = None if generation_metadata is None else dict(generation_metadata)
         if roots_q is not None:
@@ -138,7 +147,7 @@ class Context:
         self.encode_params_rotGroup = material.encode_params_rotGroup
         self.encode_bitrev_indices = material.encode_bitrev_indices
             
-        if options.resolved_auto_load_keys(device) and device == "cuda":
+        if self.auto_load_keys_resolved and device == "cuda":
             for key, value in self.left_rot_key_map.items():
                 self.left_rot_key_map[key] = [
                     value[0].cuda(), value[1].cuda()
@@ -152,7 +161,8 @@ class Context:
         return Context(
             self,
             device,
-            self.options,
+            auto_load_keys=self.auto_load_keys,
+            rotation_key_limb_limits=self.rotation_key_limb_limits,
             native_context_gen=self.native_context_gen,
             generation_metadata=self.context_generation_config,
             roots_q=getattr(self, "rootsQ", None),
