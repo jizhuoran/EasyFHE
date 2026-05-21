@@ -688,8 +688,8 @@ static void hrot_moddown_base_convert_ntt_phase1_cuda(
 
 template <size_t LOG_N, bool HAS_ADDEND>
 static void launch_hrot_ntt_phase2_finalize(
-    Tensor& out_bx,
-    Tensor& out_ax,
+    const Tensor& out_bx,
+    const Tensor& out_ax,
     uint64_t* workspace_ptr,
     const uint64_t* modup_ptr,
     const Tensor& c1,
@@ -749,8 +749,8 @@ static void launch_hrot_ntt_phase2_finalize(
 
 template <size_t LOG_N>
 static void launch_hrot_ntt_phase2_finalize(
-    Tensor& out_bx,
-    Tensor& out_ax,
+    const Tensor& out_bx,
+    const Tensor& out_ax,
     uint64_t* workspace_ptr,
     const uint64_t* modup_ptr,
     const Tensor& c1,
@@ -832,8 +832,8 @@ static void launch_hrot_ntt_phase2_finalize(
 }
 
 static void hrot_ntt_phase2_finalize_cuda(
-    Tensor& out_bx,
-    Tensor& out_ax,
+    const Tensor& out_bx,
+    const Tensor& out_ax,
     uint64_t* workspace_ptr,
     const uint64_t* modup_ptr,
     const Tensor& c1,
@@ -971,7 +971,9 @@ static void hrot_ntt_phase2_finalize_cuda(
   }
 }
 
-static std::vector<Tensor> hrot_moddown_cuda(
+static std::vector<Tensor> hrot_moddown_into_cuda(
+    const Tensor& out_bx,
+    const Tensor& out_ax,
     const Tensor& in,
     const Tensor& modup,
     const Tensor& workspace,
@@ -1050,8 +1052,10 @@ static std::vector<Tensor> hrot_moddown_cuda(
   TORCH_INTERNAL_ASSERT(workspace.sizes()[2] == L_IN);
   TORCH_INTERNAL_ASSERT(workspace.sizes()[3] == N);
   TORCH_CHECK(workspace.is_contiguous(), "hrot workspace must be contiguous");
-  auto out_bx = at::empty({curr_limbs, N}, c0.options());
-  auto out_ax = at::empty({curr_limbs, N}, c0.options());
+  TORCH_CHECK(out_bx.sizes() == c10::IntArrayRef({curr_limbs, N}), "hrot out_bx shape mismatch");
+  TORCH_CHECK(out_ax.sizes() == c10::IntArrayRef({curr_limbs, N}), "hrot out_ax shape mismatch");
+  TORCH_CHECK(out_bx.is_contiguous(), "hrot out_bx must be contiguous");
+  TORCH_CHECK(out_ax.is_contiguous(), "hrot out_ax must be contiguous");
 
   auto from_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto modup_ptr = reinterpret_cast<uint64_t*>(modup.data_ptr<uint64_t>());
@@ -1115,7 +1119,9 @@ static std::vector<Tensor> hrot_moddown_cuda(
   return {out_bx, out_ax};
 }
 
-std::vector<Tensor> hrot_cuda(
+static std::vector<Tensor> hrot_impl(
+    const std::optional<Tensor>& out_bx,
+    const std::optional<Tensor>& out_ax,
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& bx,
@@ -1161,6 +1167,7 @@ std::vector<Tensor> hrot_cuda(
       inverse_precomp_map.is_contiguous(),
       "hrot inverse_precomp_map must be contiguous");
   TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
+  TORCH_INTERNAL_ASSERT(out_bx.has_value() == out_ax.has_value());
   if (add_bx.has_value()) {
     TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
     TORCH_INTERNAL_ASSERT(add_ax->dim() == 2);
@@ -1197,6 +1204,8 @@ std::vector<Tensor> hrot_cuda(
   workspace_offset += inner_product.numel();
   auto workspace = hrot_workspace_view(
       inner_workspace, workspace_offset, {2, 1, curr_limbs + sizeP, N});
+  Tensor result_bx = out_bx.has_value() ? *out_bx : at::empty({curr_limbs, N}, c0.options());
+  Tensor result_ax = out_ax.has_value() ? *out_ax : at::empty({curr_limbs, N}, c0.options());
 
   const auto c1_4d = at::reshape(c1, {1, 1, curr_limbs, N});
   modup_without_copy_cuda_out(
@@ -1231,7 +1240,9 @@ std::vector<Tensor> hrot_cuda(
       primes,
       barret_ratio,
       barret_k);
-  return hrot_moddown_cuda(
+  return hrot_moddown_into_cuda(
+      result_bx,
+      result_ax,
       inner_product,
       modup,
       workspace,
@@ -1261,6 +1272,136 @@ std::vector<Tensor> hrot_cuda(
       power_of_roots,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
+}
+
+std::vector<Tensor> hrot_cuda(
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
+    const Tensor& inverse_precomp_map,
+    int64_t curr_limbs,
+    int64_t special_mod_start,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vec_modup,
+    const Tensor& hat_inverse_vec_shoup_modup,
+    const Tensor& prod_q_i_mod_q_j_modup,
+    const Tensor& hat_inverse_vec_moddown,
+    const Tensor& hat_inverse_vec_shoup_moddown,
+    const Tensor& prod_q_i_mod_q_j_moddown,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& inner_workspace,
+    const std::optional<Tensor>& add_bx,
+    const std::optional<Tensor>& add_ax) {
+  return hrot_impl(
+      std::nullopt,
+      std::nullopt,
+      c0,
+      c1,
+      bx,
+      ax,
+      inverse_precomp_map,
+      curr_limbs,
+      special_mod_start,
+      L,
+      beta,
+      N,
+      alpha,
+      hat_inverse_vec_modup,
+      hat_inverse_vec_shoup_modup,
+      prod_q_i_mod_q_j_modup,
+      hat_inverse_vec_moddown,
+      hat_inverse_vec_shoup_moddown,
+      prod_q_i_mod_q_j_moddown,
+      prod_inv_moddown,
+      prod_inv_shoup_moddown,
+      primes,
+      barret_ratio,
+      barret_k,
+      power_of_roots_shoup,
+      power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      inner_workspace,
+      add_bx,
+      add_ax);
+}
+
+std::vector<Tensor> hrot_write_cuda(
+    const Tensor& out_bx,
+    const Tensor& out_ax,
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& bx,
+    const Tensor& ax,
+    const Tensor& inverse_precomp_map,
+    int64_t curr_limbs,
+    int64_t special_mod_start,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vec_modup,
+    const Tensor& hat_inverse_vec_shoup_modup,
+    const Tensor& prod_q_i_mod_q_j_modup,
+    const Tensor& hat_inverse_vec_moddown,
+    const Tensor& hat_inverse_vec_shoup_moddown,
+    const Tensor& prod_q_i_mod_q_j_moddown,
+    const Tensor& prod_inv_moddown,
+    const Tensor& prod_inv_shoup_moddown,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& inner_workspace,
+    const std::optional<Tensor>& add_bx,
+    const std::optional<Tensor>& add_ax) {
+  return hrot_impl(
+      out_bx,
+      out_ax,
+      c0,
+      c1,
+      bx,
+      ax,
+      inverse_precomp_map,
+      curr_limbs,
+      special_mod_start,
+      L,
+      beta,
+      N,
+      alpha,
+      hat_inverse_vec_modup,
+      hat_inverse_vec_shoup_modup,
+      prod_q_i_mod_q_j_modup,
+      hat_inverse_vec_moddown,
+      hat_inverse_vec_shoup_moddown,
+      prod_q_i_mod_q_j_moddown,
+      prod_inv_moddown,
+      prod_inv_shoup_moddown,
+      primes,
+      barret_ratio,
+      barret_k,
+      power_of_roots_shoup,
+      power_of_roots,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      inner_workspace,
+      add_bx,
+      add_ax);
 }
 
 } // namespace at::native

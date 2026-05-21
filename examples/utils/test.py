@@ -21,7 +21,8 @@ def evalpolyps_debug(
         dcrtBits=52,
         firstMod=56,
         levelBudget_list=[[4,4]],
-        rescaleTech = "FLEXIBLEAUTO", # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+        scale_mode = "fixed",
+        rescale_policy = "manual",
         device = "cuda",
         save_dir=DATA_DIR
 ):
@@ -29,7 +30,7 @@ def evalpolyps_debug(
     config = torch.fhe.config.Config(CHECK_CIPHER=False, PTX_TWIN=False, AUTO_LOAD_KEYS=False, COMPARE_WITH_OPENFHE=True) #eval_bootstrap and PTX_TWIN cannot pass CHECK_CIPHER
     cryptoContext, openfhe_context, openfhe_boot_contexts = (
         utils.try_load_context(maxLevelsRemaining, appRotIndex_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                               levelBudget_list, "UNIFORM_TERNARY", rescaleTech, device, save_dir=save_dir,
+                               levelBudget_list, "UNIFORM_TERNARY", scale_mode, rescale_policy, device, save_dir=save_dir,
                                config=config))
 
     encode_slots = (1 << 11)

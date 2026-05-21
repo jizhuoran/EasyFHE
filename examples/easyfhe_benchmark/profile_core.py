@@ -93,13 +93,12 @@ def build_bootstrap_target(case: bench.BenchmarkCase, crypto_context: Any, openf
         (log_bs_slots, tuple(level_budget))
     )
     if bootstrap_material is None:
-        bs_keys, constants, plan = bs.generate(
+        constants, plan = bs.generate(
             crypto_context,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=int(getattr(crypto_context, "maxLevelsRemaining", target_limbs)),
         )
-        crypto_context.addkeys(bs_keys)
     else:
         constants, plan = bootstrap_material
 

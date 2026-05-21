@@ -2,11 +2,30 @@ from __future__ import annotations
 
 from .constants import generate_bootstrap_constants
 from .internal.constants import BootstrapPlan
-from .requirements import bootstrap_depth
+from .requirements import bootstrap_depth, required_rotations
 
 
 def depth(*, log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
     return bootstrap_depth(log_bs_slots, level_budget, secret_key_dist)
+
+
+def plan_rot_keys(
+    *,
+    log_n,
+    log_bs_slots,
+    level_budget,
+    secret_key_dist="SPARSE_TERNARY",
+    dim1=None,
+):
+    return tuple(
+        required_rotations(
+            log_n,
+            log_bs_slots,
+            level_budget,
+            secret_key_dist=secret_key_dist,
+            dim1=dim1,
+        )
+    )
 
 
 def generate(
@@ -30,7 +49,7 @@ def generate(
         baby_step=baby_step,
         strategy=strategy,
     )
-    return tuple(plan.required_rotations), constants, plan
+    return constants, plan
 
 
 def bootstrap(cipher, crypto_context, constants, plan, *, L0):

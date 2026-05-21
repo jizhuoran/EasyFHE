@@ -44,7 +44,8 @@ class AespaConfig:
     level_budgets: tuple[tuple[int, int], ...]
     bootstrap_strategy: str
     secret_key_dist: str
-    rescale_tech: str
+    scale_mode: str
+    rescale_policy: str
     device: str
     weight_cache_mode: str
 
@@ -55,9 +56,6 @@ def _parse_args():
     key_group = parser.add_mutually_exclusive_group()
     key_group.add_argument("--auto-load-keys", dest="auto_load_keys", action="store_true", default=None)
     key_group.add_argument("--no-auto-load-keys", dest="auto_load_keys", action="store_false")
-    parser.add_argument("--count-ops", action="store_true")
-    parser.add_argument("--profile", "--time-ops", dest="time_ops", action="store_true")
-    parser.add_argument("--auto-sync", action="store_true")
     parser.add_argument(
         "--rotation-random-mode",
         choices=("fresh", "reuse_by_shape"),
@@ -111,7 +109,8 @@ def build_config(args):
             os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
         ),
         secret_key_dist=secret_key_dist,
-        rescale_tech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
         device=args.device,
         weight_cache_mode=os.environ.get("EASYFHE_WEIGHT_CACHE_MODE", "plain"),
     )
@@ -128,7 +127,8 @@ def _print_config(config):
     print("levelBudget_list: ", [list(level_budget) for level_budget in config.level_budgets])
     print("bootstrapStrategy: ", config.bootstrap_strategy)
     print("secretKeyDist: ", config.secret_key_dist)
-    print("rescaleTech: ", config.rescale_tech)
+    print("scaleMode: ", config.scale_mode)
+    print("rescalePolicy: ", config.rescale_policy)
     print("weightCacheMode: ", config.weight_cache_mode)
     print("\n\n")
     print("device: ", config.device)
@@ -139,7 +139,7 @@ def _print_config(config):
 
 def _decrypt_prediction(final_res, rt):
     try:
-        clear_result = rt.ctx.decrypt(final_res).cpu().numpy().reshape(-1)[:10]
+        clear_result = rt.client.decrypt(final_res).cpu().numpy().reshape(-1)[:10]
         return clear_result, np.argmax(clear_result)
     except RuntimeError as e:
         print(f"Decryption failed: {e}")
@@ -286,7 +286,14 @@ def resnet20(config=None, args=None):
         level_budget=config.level_budgets,
         secret_key_dist=config.secret_key_dist,
     )
-    cryptoContext = fhe.generate_context(
+    bootstrap_rotations = bs.plan_rot_keys(
+        log_n=config.log_n,
+        log_bs_slots=config.log_bs_slots,
+        level_budget=config.level_budgets,
+        secret_key_dist=config.secret_key_dist,
+    )
+    rotations = tuple(dict.fromkeys([*config.rotate_indices, *bootstrap_rotations]))
+    client, cryptoContext = fhe.generate_client_context(
         fhe.CKKSContextSpec(
             depth=config.max_levels_remaining + bootstrap_extra_depth,
             log_n=config.log_n,
@@ -294,28 +301,28 @@ def resnet20(config=None, args=None):
             dcrt_bits=config.dcrt_bits,
             first_mod=config.first_mod,
             secret_key_dist=config.secret_key_dist,
-            rescale_tech=config.rescale_tech,
-            rotations=config.rotate_indices,
+            scale_mode=config.scale_mode,
+            rescale_policy=config.rescale_policy,
+            rotations=rotations,
         ),
         device=config.device,
         options=options,
     )
     bootstrap_material = {}
     for log_bs_slots, level_budget in zip(config.log_bs_slots, config.level_budgets):
-        bs_keys, constants, plan = bs.generate(
+        constants, plan = bs.generate(
             cryptoContext,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
             strategy=config.bootstrap_strategy,
         )
-        cryptoContext.addkeys(bs_keys)
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
     print("cryptoContext: ", cryptoContext)
     weights = WeightPack.from_npz(config.weights_path, cache_mode=config.weight_cache_mode)
     print("weights loaded:", len(weights))
 
-    run_dataset(AespaRuntime(cryptoContext, weights, config, bootstrap_material))
+    run_dataset(AespaRuntime(cryptoContext, client, weights, config, bootstrap_material))
 
 
 if __name__ == "__main__":

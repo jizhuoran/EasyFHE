@@ -5,8 +5,10 @@ import easyfhe.fhe as fhe
 
 try:
     from .fhe_state import reduce_noise_to_one, rescale_one_level
+    from .weight_pack import slot_resize_mask_name
 except ImportError:
     from fhe_state import reduce_noise_to_one, rescale_one_level
+    from weight_pack import slot_resize_mask_name
 
 __all__ = [
     "broadcast_slot_sum",
@@ -173,7 +175,14 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
     channels = _fold_quarters(channels, cryptoContext)
     if spec.rescale_after_fold:
         channels = rescale_one_level(channels, cryptoContext)
-    return fhe.slot_resize(channels, channels.slots // 4, cryptoContext)
+    target_slots = channels.slots // 4
+    mask = weights.plaintext(
+        slot_resize_mask_name(channels.slots, target_slots),
+        cryptoContext.L - channels.cur_limbs,
+        channels.slots,
+        cryptoContext,
+    )
+    return fhe.slot_resize(channels, target_slots, cryptoContext, mask=mask)
 
 
 def downsample1024to256(c1, c2, num_channel, cryptoContext, weights):

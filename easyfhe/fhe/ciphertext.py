@@ -1,14 +1,5 @@
-import easyfhe as torch
-import numpy as np
-
 class Cipher:
-    _id_counter = 0
-
-    def get_next_id():
-        Cipher._id_counter += 1
-        return Cipher._id_counter
-
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, cipher_id="assign", batch_size=1):
+    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, batch_size=1):
         self.cv = cv
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
@@ -16,10 +7,6 @@ class Cipher:
         self.slots = slots
         self.is_ext = is_ext
         self.batch_size = int(batch_size)
-        if cipher_id == "assign":
-            self.cipher_id = Cipher.get_next_id()
-        else:
-            self.cipher_id = cipher_id
 
     def cipher_like(
         self,
@@ -29,17 +16,15 @@ class Cipher:
         noise_deg=None,
         slots=None,
         is_ext=None,
-        cipher_id="copy",
         batch_size=None,
     ):
         res = Cipher(
             cv,
-            self.cur_limbs if cur_limbs == None else cur_limbs,
-            self.scaling_factor if scaling_factor == None else scaling_factor,
-            self.noise_deg if noise_deg == None else noise_deg,
-            self.slots if slots == None else slots,
-            self.is_ext if is_ext == None else is_ext,
-            self.cipher_id if cipher_id == "copy" else cipher_id,
+            self.cur_limbs if cur_limbs is None else cur_limbs,
+            self.scaling_factor if scaling_factor is None else scaling_factor,
+            self.noise_deg if noise_deg is None else noise_deg,
+            self.slots if slots is None else slots,
+            self.is_ext if is_ext is None else is_ext,
             self.batch_size if batch_size is None else batch_size,
         )
         if "ptx_twin" in self.__dict__:
@@ -47,18 +32,34 @@ class Cipher:
         return res
 
     def deep_copy(self):
-        return self.cipher_like([x.clone() for x in self.cv], cipher_id="assign")
+        return self.cipher_like([x.clone() for x in self.cv])
+
+    def replace_with(self, other):
+        # Cipher-level mutation: callers may pass preallocated component tensors,
+        # but not every higher-level path guarantees tensor-level zero allocation.
+        self.cv = other.cv
+        self.cur_limbs = other.cur_limbs
+        self.scaling_factor = other.scaling_factor
+        self.noise_deg = other.noise_deg
+        self.slots = other.slots
+        self.is_ext = other.is_ext
+        self.batch_size = int(other.batch_size)
+        if "ptx_twin" in other.__dict__:
+            self.ptx_twin = np.copy(other.ptx_twin)
+        elif "ptx_twin" in self.__dict__:
+            del self.ptx_twin
+        return self
 
     def shallow_copy(self):
-        return self.cipher_like(self.cv, cipher_id="copy")
+        return self.cipher_like(self.cv)
 
     def cuda(self):
         cv = [x.cuda() for x in self.cv]
-        return self.cipher_like(cv, cipher_id="to_cuda")
+        return self.cipher_like(cv)
 
     def cpu(self):
         cv = [x.cpu() for x in self.cv]
-        return self.cipher_like(cv, cipher_id="to_cpu")
+        return self.cipher_like(cv)
 
     def __repr__(self):
         s = "Cipher(\n"
@@ -73,25 +74,3 @@ class Cipher:
         return s
 
 Plaintext = Cipher
-
-class PreparedPlaintext:
-    def __init__(self, values, slots, encoded_values, max_encoded_value):
-        self.values = values
-        self.slots = slots
-        self.encoded_values = encoded_values
-        self.max_encoded_value = max_encoded_value
-    
-    def deep_copy(self):
-        if torch.is_tensor(self.encoded_values):
-            encoded_values = self.encoded_values.clone()
-        else:
-            encoded_values = np.array(self.encoded_values, copy=True)
-        return PreparedPlaintext(
-            self.values.copy(),
-            self.slots,
-            encoded_values,
-            self.max_encoded_value,
-        )
-
-
-PreEncodeValues = PreparedPlaintext

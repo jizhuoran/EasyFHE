@@ -20,9 +20,6 @@ def reduce_noise_to_one(cipher, cryptoContext):
 def runtime_options_from_args(args):
     return fhe.RuntimeOptions(
         auto_load_keys=args.auto_load_keys,
-        auto_sync=bool(args.auto_sync),
-        time_ops=bool(args.time_ops),
-        count_ops=bool(args.count_ops),
         rotation_random_mode=str(args.rotation_random_mode),
         rotation_key_limb_limits=_parse_rotation_key_limb_limits(args.rot_key_limb_limit),
     )

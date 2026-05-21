@@ -37,7 +37,7 @@ def test_fused_broadcast_mac_requires_plaintext_batch(monkeypatch):
         [_cipher("a", cv_count=1), _cipher("b", cv_count=1), _cipher("c", cv_count=1)]
     )
 
-    fhe.fused_broadcast_mac(_cipher("x"), plaintexts, SimpleNamespace())
+    fused.fused_broadcast_mac(_cipher("x"), plaintexts, SimpleNamespace())
 
     assert seen == {
         "cipher_batch_size": 1,
@@ -135,15 +135,8 @@ def test_fused_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
 
 
 def test_scalar_weighted_acc_matches_scalar_mul_add_loop():
-    ctx = fhe.generate_context(
-        fhe.CKKSContextSpec(
-            depth=3,
-            log_n=6,
-            dnum=1,
-            dcrt_bits=30,
-            first_mod=35,
-            rotations=(),
-        ),
+    _, ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=6, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
     )
     batch_size = 4

@@ -5,13 +5,29 @@ from ..ciphertext import Cipher
 from . import kernels as F
 
 
-def homo_rotate(cipher, offset, cryptoContext, addend=None):
+def _assign_out(out, value):
+    return value if out is None else out.replace_with(value)
+
+
+def _can_write_hrot_out(out, cipher, addend=None):
+    if out is None or out is cipher or out is addend:
+        return False
+    if len(out.cv) != 2:
+        return False
+    try:
+        expected = tuple(cipher.cv[0].shape)
+        return tuple(out.cv[0].shape) == expected and tuple(out.cv[1].shape) == expected
+    except AttributeError:
+        return False
+
+
+def homo_rotate(cipher, offset, cryptoContext, addend=None, *, out=None):
     if offset == 0:
         if addend is not None:
             from .arithmetic import homo_add
 
-            return homo_add(addend, cipher, cryptoContext)
-        return cipher.deep_copy()
+            return homo_add(addend, cipher, cryptoContext, out=out)
+        return _assign_out(out, cipher.deep_copy())
     if addend is not None:
         if addend.is_ext:
             raise ValueError("homo_rotate(addend=...): expected a non-ext addend")
@@ -22,7 +38,8 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         if len(addend.cv) != 2:
             raise ValueError("homo_rotate(addend=...): expected two ciphertext components")
     swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
-    norm_index = cryptoContext.norm_rot_index(offset)
+    norm_index = _norm_rot_index(offset, cryptoContext)
+    direct_out = _can_write_hrot_out(out, cipher, addend)
     cv = F.cv_hrot(
         cipher.cv[0],
         cipher.cv[1],
@@ -34,8 +51,10 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         cryptoContext,
         add_bx=None if addend is None else addend.cv[0],
         add_ax=None if addend is None else addend.cv[1],
+        out_bx=None if not direct_out else out.cv[0],
+        out_ax=None if not direct_out else out.cv[1],
     )
-    return cipher.cipher_like(list(cv), cipher_id="assign")
+    return _assign_out(out, cipher.cipher_like(list(cv)))
 
 
 def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
@@ -146,7 +165,7 @@ def _finalize_fast_rotate_ext(
         active_limbs,
         cryptoContext,
     )
-    return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size, cipher_id="assign")
+    return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size)
 
 
 def _finalize_fast_rotate_q(
@@ -173,7 +192,7 @@ def _finalize_fast_rotate_q(
         cipher.cur_limbs,
         cryptoContext,
     )
-    return cipher.cipher_like(list(cv), batch_size=batch_size, cipher_id="assign")
+    return cipher.cipher_like(list(cv), batch_size=batch_size)
 
 
 def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
@@ -246,10 +265,18 @@ def _batch_rotation_keys_and_starts(offsets, cryptoContext):
 
 
 def _rotation_key_and_start(offset, cryptoContext):
-    norm_index = cryptoContext.norm_rot_index(offset)
+    norm_index = _norm_rot_index(offset, cryptoContext)
     swk_bx, swk_ax = cryptoContext.get_rotation_key(norm_index)
-    special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(offset, cryptoContext.L)
+    special_mod_start = cryptoContext.options.rotation_key_limb_limits.get(norm_index, cryptoContext.L)
     return swk_bx, swk_ax, special_mod_start
+
+
+def _norm_rot_index(offset, cryptoContext):
+    offset = int(offset)
+    if offset < 0:
+        return int((int(cryptoContext.N) // 2) + offset)
+    return offset
+
 
 
 def _normalize_offsets(offsets):
@@ -286,7 +313,6 @@ def _unpack_cipher_batch(cipher):
         cipher.cipher_like(
             [component[index] for component in cipher.cv],
             batch_size=1,
-            cipher_id="assign",
         )
         for index in range(int(cipher.batch_size))
     )
@@ -343,7 +369,7 @@ def _fast_rotate_key_contribution_ext(digits, offset, cryptoContext):
 
 
 def _cipher_automorphism(cipher, offset, cryptoContext):
-    norm_index = cryptoContext.norm_rot_index(offset)
+    norm_index = _norm_rot_index(offset, cryptoContext)
     limbs = cipher.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
     cv = [F.cv_automorphism_transform(cv, limbs, norm_index, cryptoContext) for cv in cipher.cv]
     return cipher.cipher_like(cv)
@@ -364,7 +390,7 @@ def _precompute_auto_maps(offsets, cryptoContext):
         if offset == 0:
             maps.append(_zero_precompute_auto_map(cryptoContext))
         else:
-            maps.append(cryptoContext.get_precompute_auto(cryptoContext.norm_rot_index(offset)))
+            maps.append(cryptoContext.get_precompute_auto(_norm_rot_index(offset, cryptoContext)))
     precomp_maps = torch.stack(maps, dim=0)
     cache[key] = precomp_maps
     return cache[key]
@@ -381,7 +407,7 @@ def _zero_precompute_auto_map(cryptoContext):
 def _batch_item(cipher, index):
     if cipher.batch_size == 1 and cipher.cv[0].dim() == 2:
         return cipher
-    return cipher.cipher_like([cv[int(index)] for cv in cipher.cv], batch_size=1, cipher_id="assign")
+    return cipher.cipher_like([cv[int(index)] for cv in cipher.cv], batch_size=1)
 
 
 def _pack_ciphers(ciphers):
@@ -402,4 +428,4 @@ def _pack_ciphers(ciphers):
         torch.stack([cipher.cv[component] for cipher in ciphers], dim=0)
         for component in range(len(first.cv))
     ]
-    return first.cipher_like(cv, batch_size=len(ciphers), cipher_id="assign")
+    return first.cipher_like(cv, batch_size=len(ciphers))

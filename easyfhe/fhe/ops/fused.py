@@ -68,6 +68,5 @@ def _mac_result_like(cipher, plaintext, cv, batch_size):
         scaling_factor=cipher.scaling_factor * plaintext.scaling_factor,
         noise_deg=cipher.noise_deg + plaintext.noise_deg,
         batch_size=batch_size,
-        cipher_id="assign",
     )
 

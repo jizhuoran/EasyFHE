@@ -130,21 +130,10 @@ class BsContext:
 
         M = context.M
         slots = M // 4 if numslots == 0 else numslots
-        rescale_tech = context.rescaleTech
 
         # 设置 correction_factor
         if correction_factor == 0:
-            if rescale_tech == "FLEXIBLEAUTO":
-                # 实验结果得出的最佳精度对应的默认 correction factors
-                tmp = round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
-                if tmp < 7:
-                    self.correctionFactor = 7
-                elif tmp > 13:
-                    self.correctionFactor = 13
-                else:
-                    self.correctionFactor = int(tmp)
-            else:
-                self.correctionFactor = 9
+            self.correctionFactor = 9
         else:
             self.correctionFactor = correction_factor
 

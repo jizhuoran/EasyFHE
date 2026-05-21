@@ -1,6 +1,8 @@
 """Public CKKS-oriented FHE frontend for EasyFHE."""
 
 from ._public_api import PUBLIC_API as _PUBLIC_API
+from .ciphertext import Cipher
+from .client import Client
 from .constants import ConstantBundle
 from .context import Context
 from .ops import (
@@ -9,28 +11,36 @@ from .ops import (
     fast_rotate,
     giant_rotate_sum,
     hoisted_mac_sum,
-    fused_broadcast_mac,
     fused_grouped_pairwise_mac,
     homo_add,
+    homo_add_inplace,
     homo_add_pt,
+    homo_add_pt_inplace,
     homo_add_scalar_double,
+    homo_add_scalar_double_inplace,
     homo_add_scalar_int,
+    homo_add_scalar_int_inplace,
     homo_mul,
+    homo_mul_rescale,
     homo_mul_rescale_addpt,
     homo_mul_rescale_addscalar,
     homo_mul_pt,
+    homo_mul_pt_inplace,
     homo_mul_scalar_double,
+    homo_mul_scalar_double_inplace,
     homo_mul_scalar_int,
+    homo_mul_scalar_int_inplace,
+    moddown_from_ext,
     homo_rotate,
-    homo_square,
+    reduce_noise_to_one,
     homo_sub,
+    homo_sub_inplace,
+    homo_sub_scalar_int,
+    homo_sub_scalar_int_inplace,
     slot_resize,
 )
 from .runtime.options import RuntimeOptions
-from .runtime.spec import (
-    CKKSContextSpec,
-    generate_context,
-)
+from .context_factory import CKKSContextSpec, generate_client_context
 
 
 __all__ = list(_PUBLIC_API)

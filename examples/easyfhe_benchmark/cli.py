@@ -495,7 +495,8 @@ def run_full_pipeline_main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--bootstrap-dcrt-bits", type=int, default=52)
     ap.add_argument("--bootstrap-first-mod", type=int, default=55)
     ap.add_argument("--bootstrap-secret-key-dist", default=DEFAULT_BOOTSTRAP_SECRET_KEY_DIST)
-    ap.add_argument("--bootstrap-rescale-tech", default="FIXEDMANUAL")
+    ap.add_argument("--bootstrap-scale-mode", default="fixed")
+    ap.add_argument("--bootstrap-rescale-policy", default="manual", choices=("manual", "auto"))
 
     ap.add_argument("--batched-report-md")
     ap.add_argument("--batched-basic-csv-out")
@@ -658,8 +659,10 @@ def run_full_pipeline_main(argv: Sequence[str] | None = None) -> int:
         str(int(args.bootstrap_first_mod)),
         "--secret-key-dist",
         str(args.bootstrap_secret_key_dist),
-        "--rescale-tech",
-        str(args.bootstrap_rescale_tech),
+        "--scale-mode",
+        str(args.bootstrap_scale_mode),
+        "--rescale-policy",
+        str(args.bootstrap_rescale_policy),
         "--rotation-random-mode",
         str(args.rotation_random_mode),
     ]

@@ -3,6 +3,7 @@ CORE_API = (
     "bootstrap",
     "depth",
     "generate",
+    "plan_rot_keys",
 )
 
 PUBLIC_API = (

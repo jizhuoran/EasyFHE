@@ -5,7 +5,8 @@ import numpy as np
 import easyfhe as torch
 
 from easyfhe.fhe.ops import alignment
-from easyfhe.fhe.ops import homo
+from easyfhe.fhe.ops import arithmetic
+from easyfhe.fhe.ops import plaintext
 from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import rotation
 from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
@@ -36,7 +37,7 @@ class _ChebyshevTailRequest:
 
 
 def _add_named_scalar_double_preserve_noise(ciphertext, name, constants, cryptoContext):
-    constant = constants.scalar(name)
+    constant = constants._scalar_value(name)
     encoded = constants.encoded_scalars(
         name,
         ciphertext.cur_limbs,
@@ -56,7 +57,6 @@ def _batch_prefix(cipher, size):
     return cipher.cipher_like(
         [component[:size] for component in cipher.cv],
         batch_size=size,
-        cipher_id="assign",
     )
 
 
@@ -67,7 +67,6 @@ def _grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext):
         scaling_factor=cipher_batch.scaling_factor * cryptoContext.scale_at(cipher_batch.cur_limbs),
         noise_deg=cipher_batch.noise_deg + 1,
         batch_size=int(scalars.shape[0]),
-        cipher_id="assign",
     )
 
 
@@ -115,7 +114,7 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         c = tail
         if c is not None:
             c = _add_chebyshev_constant(c, node.divcs_q, cryptoContext)
-            if not spec.root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+            if not spec.root and _uses_manual_rescale(cryptoContext):
                 target = T2[node.m - 1]
                 c = alignment.align_to(
                     c,
@@ -137,7 +136,7 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
             root=spec.root,
             has_tail=q is not None,
         )
-        q = highest if q is None else homo.homo_add(q, highest, cryptoContext)
+        q = highest if q is None else arithmetic.homo_add(q, highest, cryptoContext)
         return _add_chebyshev_constant(q, node.divqr_q, cryptoContext)
 
     if spec.kind == KIND_S:
@@ -145,9 +144,9 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         if s is None:
             s = T.items[node.k - 1]
         else:
-            s = homo.homo_add(s, T.items[node.k - 1], cryptoContext)
+            s = arithmetic.homo_add(s, T.items[node.k - 1], cryptoContext)
         s = _add_chebyshev_constant(s, node.s2, cryptoContext)
-        if not spec.root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if not spec.root and _uses_manual_rescale(cryptoContext):
             s = alignment.align_to(
                 s,
                 alignment.CipherState(s.cur_limbs - 1, 1, None),
@@ -156,6 +155,10 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         return s
 
     raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
+
+
+def _uses_manual_rescale(cryptoContext):
+    return cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual"
 
 
 def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_plan):
@@ -195,7 +198,6 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
                     for component in tails.cv
                 ],
                 batch_size=len(requests),
-                cipher_id="assign",
             )
         for index, request in enumerate(requests):
             tail_values[request.spec.out_idx] = rotation._batch_item(tails, index)
@@ -213,14 +215,14 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
 
 
 def _add_chebyshev_constant(value, coefficients, cryptoContext):
-    return homo.homo_add_scalar_double(value, coefficients[0] / 2, cryptoContext)
+    return plaintext.homo_add_scalar_double(value, coefficients[0] / 2, cryptoContext)
 
 
 def _chebyshev_basis(x, a, b, k, cryptoContext):
     T = [_scale_input_to_unit_interval(x, a, b, cryptoContext)]
     for order in range(2, k + 1):
         if order & 1:
-            value = homo.homo_mul_rescale(
+            value = arithmetic.homo_mul_rescale(
                 T[order // 2 - 1],
                 T[(order + 1) // 2 - 1],
                 cryptoContext,
@@ -228,7 +230,7 @@ def _chebyshev_basis(x, a, b, k, cryptoContext):
                 sub=T[0],
             )
         else:
-            value = homo.homo_mul_rescale(
+            value = arithmetic.homo_mul_rescale(
                 T[order // 2 - 1],
                 T[(order + 1) // 2 - 1],
                 cryptoContext,
@@ -264,12 +266,12 @@ def _scale_input_to_unit_interval(x, a, b, cryptoContext):
     y = x
     alpha = 2 / (b - a)
     if not math.isclose(alpha, 1.0):
-        y = homo.homo_mul_scalar_double(x, alpha, cryptoContext)
+        y = plaintext.homo_mul_scalar_double(x, alpha, cryptoContext)
         y = alignment.rescale_one_level(y, cryptoContext)
 
     beta = 2 * a / (b - a)
     if not math.isclose(beta, -1.0):
-        y = homo.homo_add_scalar_double(y, -1.0 - beta, cryptoContext)
+        y = plaintext.homo_add_scalar_double(y, -1.0 - beta, cryptoContext)
     return y
 
 
@@ -277,7 +279,7 @@ def _chebyshev_doubling_basis(Tk, m, cryptoContext):
     # T2[i] = T_{k * 2^i}(x). T2[0] is T_k(x).
     T2 = [Tk]
     for _ in range(1, m):
-        value = homo.homo_mul_rescale(
+        value = arithmetic.homo_mul_rescale(
             T2[-1],
             T2[-1],
             cryptoContext,
@@ -292,7 +294,7 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
     # Computes T_{k * (2^m - 1)}(x) from T_k, T_{2k}, ...
     value = T2[0]
     for doubled in T2[1:]:
-        value = homo.homo_mul_rescale(
+        value = arithmetic.homo_mul_rescale(
             value,
             doubled,
             cryptoContext,
@@ -305,15 +307,15 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
 def _q_highest_term(node: ChebyshevPSNode, Tk, cryptoContext, *, root, has_tail):
     if root:
         if has_tail:
-            return homo.homo_add(Tk, Tk, cryptoContext)
+            return arithmetic.homo_add(Tk, Tk, cryptoContext)
         value = Tk
         for _ in range(1, int(node.divqr_q[-1])):
-            value = homo.homo_add(value, Tk, cryptoContext)
+            value = arithmetic.homo_add(value, Tk, cryptoContext)
         return value
 
     coefficient = node.divqr_q[-1] + (1.1 if has_tail else 0.0)
     scalar = 2 ** math.floor(math.log2(coefficient))
-    return homo.homo_mul_scalar_int(Tk, scalar, cryptoContext)
+    return plaintext.homo_mul_scalar_int(Tk, scalar, cryptoContext)
 
 
 def _read_ref(ref, small_values, node_values):
@@ -332,18 +334,18 @@ def _eval_combine_spec(spec, small_values, node_values, T2, cryptoContext):
     base = T2[spec.base_idx]
 
     if c is None:
-        result = homo.homo_add_scalar_double(base, spec.node.divcs_q[0] / 2, cryptoContext)
+        result = plaintext.homo_add_scalar_double(base, spec.node.divcs_q[0] / 2, cryptoContext)
     else:
-        result = homo.homo_add(base, c, cryptoContext)
+        result = arithmetic.homo_add(base, c, cryptoContext)
 
-    return homo.homo_mul_rescale(result, q, cryptoContext, apply_double=False, add=s)
+    return arithmetic.homo_mul_rescale(result, q, cryptoContext, apply_double=False, add=s)
 
 
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_plan):
     plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
     if plan.pre_chebyshev_offset:
-        x = homo.homo_add_scalar_double(x, plan.pre_chebyshev_offset, cryptoContext)
+        x = plaintext.homo_add_scalar_double(x, plan.pre_chebyshev_offset, cryptoContext)
     flat = bootstrap_plan.approx_eval_plan
 
     T = _chebyshev_basis(x, a, b, flat.k, cryptoContext)
@@ -369,25 +371,25 @@ def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_pl
         )
 
     result = _read_ref(flat.root_ref, small_values, node_values)
-    return homo.homo_sub(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
+    return arithmetic.homo_sub(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
 
 
 def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan):
     plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
 
     for j in range(1, plan.double_angle_iterations + 1):
-        ciphertext = homo.homo_mul_rescale(
+        ciphertext = arithmetic.homo_mul_rescale(
             ciphertext,
             ciphertext,
             cryptoContext,
             apply_double=True,
-            scalar=constants.scalar(bootstrap_plan.double_angle_scalar_names[j - 1]),
+            scalar=constants._scalar_value(bootstrap_plan.double_angle_scalar_names[j - 1]),
         )
     return ciphertext
 
 
 def eval_bootstrap_approx_mod(ciphertext, cryptoContext, constants, bootstrap_plan):
     ciphertext = eval_bootstrapping_chebyshev(ciphertext, -1, 1, cryptoContext, constants, bootstrap_plan)
-    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+    if not _uses_manual_rescale(cryptoContext):
         ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan)

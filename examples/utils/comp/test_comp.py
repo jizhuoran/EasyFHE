@@ -27,7 +27,8 @@ def test_minimax_relu():
     dcrtBits = 52
     firstMod = 56
     levelBudget_list = []
-    rescaleTech = "FLEXIBLEAUTO"  # "FLEXIBLEAUTO" # "FIXEDMANUAL"
+    scale_mode = "fixed"
+    rescale_policy = "manual"
     secretKeyDist = "SPARSE_TERNARY"  # "SPARSE_TERNARY"  "UNIFORM_TERNARY"
     device = "cuda"
 
@@ -48,7 +49,7 @@ def test_minimax_relu():
                                      PTX_TWIN=False)
     cryptoContext, openfhe_context = (
         fhe.try_load_context(maxLevelsRemaining, rotate_index_list, logBsSlots_list, logN, dnum, dcrtBits, firstMod,
-                             levelBudget_list, secretKeyDist, rescaleTech, device, save_dir=DATA_DIR,
+                             levelBudget_list, secretKeyDist, scale_mode, rescale_policy, device, save_dir=DATA_DIR,
                              config=config))
 
     slots = cryptoContext.N//2

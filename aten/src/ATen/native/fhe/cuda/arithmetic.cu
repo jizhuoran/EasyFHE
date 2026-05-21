@@ -298,7 +298,9 @@ __global__ void fused_pair_arithmetic_kernel(
 }
 
 template <ArithmeticOp Op, FusedRhsLayout Layout, bool HasBarrett>
-std::vector<Tensor> fused_pair_arithmetic(
+std::vector<Tensor> fused_pair_arithmetic_out(
+    const Tensor& out0,
+    const Tensor& out1,
     const Tensor& a0,
     const Tensor& a1,
     const Tensor& rhs0,
@@ -328,9 +330,10 @@ std::vector<Tensor> fused_pair_arithmetic(
   if constexpr (HasBarrett) {
     TORCH_INTERNAL_ASSERT(barrett_mu != nullptr);
   }
-
-  auto out0 = at::empty(fused_output_sizes(a0, cur_limbs), a0.options());
-  auto out1 = at::empty(fused_output_sizes(a1, cur_limbs), a1.options());
+  TORCH_INTERNAL_ASSERT(out0.sizes().vec() == fused_output_sizes(a0, cur_limbs));
+  TORCH_INTERNAL_ASSERT(out1.sizes().vec() == fused_output_sizes(a1, cur_limbs));
+  TORCH_CHECK(out0.is_contiguous(), "fused output c0 must be contiguous");
+  TORCH_CHECK(out1.is_contiguous(), "fused output c1 must be contiguous");
 
   const auto N = static_cast<size_t>(coeff_dim(a0));
   const auto batch = static_cast<size_t>(batch_dim(a0));
@@ -360,6 +363,21 @@ std::vector<Tensor> fused_pair_arithmetic(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 
   return {out0, out1};
+}
+
+template <ArithmeticOp Op, FusedRhsLayout Layout, bool HasBarrett>
+std::vector<Tensor> fused_pair_arithmetic(
+    const Tensor& a0,
+    const Tensor& a1,
+    const Tensor& rhs0,
+    const Tensor* rhs1,
+    const Tensor& mod,
+    const Tensor* barrett_mu,
+    int64_t cur_limbs) {
+  auto out0 = at::empty(fused_output_sizes(a0, cur_limbs), a0.options());
+  auto out1 = at::empty(fused_output_sizes(a1, cur_limbs), a1.options());
+  return fused_pair_arithmetic_out<Op, Layout, HasBarrett>(
+      out0, out1, a0, a1, rhs0, rhs1, mod, barrett_mu, cur_limbs);
 }
 
 } // namespace
@@ -633,6 +651,19 @@ std::vector<Tensor> fused_add_mod_cuda(
       in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
 }
 
+std::vector<Tensor> fused_add_mod_write_cuda(
+    const Tensor& out0,
+    const Tensor& out1,
+    const Tensor& in0_c0,
+    const Tensor& in0_c1,
+    const Tensor& in1_c0,
+    const Tensor& in1_c1,
+    const Tensor& mod,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic_out<ArithmeticOp::Add, FusedRhsLayout::TensorPair, false>(
+      out0, out1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+}
+
 std::vector<Tensor> fused_sub_mod_cuda(
     const Tensor& in0_c0,
     const Tensor& in0_c1,
@@ -642,6 +673,19 @@ std::vector<Tensor> fused_sub_mod_cuda(
     int64_t cur_limbs) {
   return fused_pair_arithmetic<ArithmeticOp::Sub, FusedRhsLayout::TensorPair, false>(
       in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+}
+
+std::vector<Tensor> fused_sub_mod_write_cuda(
+    const Tensor& out0,
+    const Tensor& out1,
+    const Tensor& in0_c0,
+    const Tensor& in0_c1,
+    const Tensor& in1_c0,
+    const Tensor& in1_c1,
+    const Tensor& mod,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic_out<ArithmeticOp::Sub, FusedRhsLayout::TensorPair, false>(
+      out0, out1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
 }
 
 std::vector<Tensor> fused_mul_pt_mod_cuda(
@@ -655,6 +699,19 @@ std::vector<Tensor> fused_mul_pt_mod_cuda(
       c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
 }
 
+std::vector<Tensor> fused_mul_pt_mod_write_cuda(
+    const Tensor& out0,
+    const Tensor& out1,
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& plaintext,
+    const Tensor& mod,
+    const Tensor& barrett_mu,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::Plaintext, true>(
+      out0, out1, c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
+}
+
 std::vector<Tensor> fused_mul_scalar_mod_cuda(
     const Tensor& c0,
     const Tensor& c1,
@@ -664,6 +721,19 @@ std::vector<Tensor> fused_mul_scalar_mod_cuda(
     int64_t cur_limbs) {
   return fused_pair_arithmetic<ArithmeticOp::Mul, FusedRhsLayout::ScalarByLimb, true>(
       c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
+}
+
+std::vector<Tensor> fused_mul_scalar_mod_write_cuda(
+    const Tensor& out0,
+    const Tensor& out1,
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& scalar,
+    const Tensor& mod,
+    const Tensor& barrett_mu,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::ScalarByLimb, true>(
+      out0, out1, c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
 }
 
 Tensor neg_mod_cuda(

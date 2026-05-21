@@ -46,6 +46,7 @@ except ImportError:
 @dataclass
 class AespaRuntime:
     ctx: object
+    client: object
     weights: WeightPack
     config: object
     bootstrap_material: dict[int, tuple[object, object]]
@@ -201,7 +202,7 @@ def _downsample_conv_sx(input, block_id, in_img_width, out_channels, first_rot, 
 
 
 def _projection_input_for_downsample(input, rt):
-    if rt.ctx.rescaleTech != "FIXEDMANUAL":
+    if not (rt.ctx.scale_mode == "fixed" and rt.ctx.rescale_policy == "manual"):
         return input
     return fhe.align_to(input, fhe.CipherState(input.cur_limbs - 2, input.noise_deg), rt.ctx)
 
@@ -450,7 +451,7 @@ def final_layer(input, rt):
 
 
 def encrypt_input(image_vector, rt):
-    return rt.ctx.encrypt(image_vector, rt.ctx.device, 1, 14, 16 * 32 * 32)
+    return rt.client.encrypt(image_vector, device=rt.ctx.device, scale_deg=1, level=14, slots=16 * 32 * 32)
 
 
 def infer_encrypted(input_cipher, rt):

@@ -4,26 +4,21 @@ import easyfhe as torch
 
 from ..ciphertext import Cipher
 from .arithmetic import homo_add
-from .encoding import encode_stage2
 from .plaintext import homo_mul_pt
 from .rotation import homo_rotate
 
 
-def slot_resize(x, slots, cryptoContext):
+def slot_resize(x, slots, cryptoContext, *, mask=None):
     if x.is_ext:
         raise ValueError("slot_resize: expected non-ext cipher")
 
     if x.slots <= slots:
         res = x.deep_copy()
     else:
-        mask_name = "slot_conversion_mask_{}to{}".format(x.slots, slots)
-        mask = encode_stage2(
-            cryptoContext.encode_values[mask_name],
-            level=cryptoContext.L - x.cur_limbs,
-            slots=x.slots,
-            is_ext=x.is_ext,
-            cryptoContext=cryptoContext,
-        )
+        if mask is None:
+            raise ValueError("slot_resize requires mask plaintext when reducing slots")
+        if int(mask.slots) != int(x.slots):
+            raise ValueError(f"slot_resize mask slots [{mask.slots}] must match source slots [{x.slots}]")
         res = homo_mul_pt(x, mask, cryptoContext)
         for i in range(int(math.log2(slots)), int(math.log2(x.slots))):
             res = homo_add(res, homo_rotate(res, 1 << i, cryptoContext), cryptoContext)

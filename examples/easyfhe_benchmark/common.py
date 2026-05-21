@@ -18,7 +18,6 @@ ensure_repo_on_path()
 
 import easyfhe.fhe as fhe
 import easyfhe.bs.openfhe as bs
-from easyfhe.fhe.ops import homo as homo_ops
 from easyfhe.fhe.ops.encoding import encode_stage1, encode_stage2
 
 
@@ -185,34 +184,45 @@ class ContextCache:
             rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
             rotation_key_limb_limits=getattr(self.args, "rotation_key_limb_limits", {}) or {},
         )
-        crypto_context = fhe.generate_context(
+        bootstrap_depth = bs.depth(
+            log_bs_slots=log_bs_slots_list,
+            level_budget=level_budget_list,
+            secret_key_dist=str(self.args.secret_key_dist),
+        )
+        bootstrap_rotations = (
+            bs.plan_rot_keys(
+                log_n=int(self.args.logN),
+                log_bs_slots=log_bs_slots_list,
+                level_budget=level_budget_list,
+                secret_key_dist=str(self.args.secret_key_dist),
+            )
+            if need_bootstrap
+            else ()
+        )
+        rotations = tuple(dict.fromkeys([*app_rot_indices, *bootstrap_rotations]))
+        client, crypto_context = fhe.generate_client_context(
             fhe.CKKSContextSpec(
-                depth=int(self.args.max_levels_remaining)
-                + bs.depth(
-                    log_bs_slots=log_bs_slots_list,
-                    level_budget=level_budget_list,
-                    secret_key_dist=str(self.args.secret_key_dist),
-                ),
+                depth=int(self.args.max_levels_remaining) + bootstrap_depth,
                 log_n=int(self.args.logN),
                 dnum=int(dnum),
                 dcrt_bits=int(self.args.dcrt_bits),
                 first_mod=int(self.args.first_mod),
                 secret_key_dist=str(self.args.secret_key_dist),
-                rescale_tech=str(self.args.rescale_tech),
-                rotations=tuple(app_rot_indices),
+                scale_mode=str(self.args.scale_mode),
+                rescale_policy=str(self.args.rescale_policy),
+                rotations=rotations,
             ),
             device=str(self.args.device),
             options=options,
         )
         bootstrap_constants = {}
         for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list):
-            bs_keys, constants, plan = bs.generate(
+            constants, plan = bs.generate(
                 crypto_context,
                 log_bs_slots=int(log_bs_slots),
                 level_budget=[int(x) for x in level_budget],
                 max_levels_remaining=int(self.args.max_levels_remaining),
             )
-            crypto_context.addkeys(bs_keys)
             bootstrap_constants[(int(log_bs_slots), tuple(int(x) for x in level_budget))] = (
                 constants,
                 plan,
@@ -223,7 +233,7 @@ class ContextCache:
         crypto_context.LOAD_CHECKPOINT = False
         crypto_context.weight_path = ""
         crypto_context.pre_encode_type = None
-        self._cache[key] = (crypto_context, crypto_context)
+        self._cache[key] = (client, crypto_context)
         return self._cache[key]
 
 
@@ -255,7 +265,7 @@ def make_cipher(openfhe_context: Any, crypto_context: Any, values: List[float], 
     level = level_for_cur_limbs(crypto_context, cur_limbs)
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
-    return openfhe_context.encrypt(values, crypto_context.device, 1, level, slots)
+    return openfhe_context.encrypt(values, device=crypto_context.device, scale_deg=1, level=level, slots=slots)
 
 
 def make_plain_from_middle(crypto_context: Any, values: List[float], cur_limbs: int, slots: int, name: str):

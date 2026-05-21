@@ -76,7 +76,7 @@ def main():
     giant_offsets = [giant * baby_step for giant in range(slots // baby_step)]
     rotations = tuple(sorted(set(range(1, baby_step)) | {offset for offset in giant_offsets if offset}))
 
-    crypto_context = fhe.generate_context(
+    client, crypto_context = fhe.generate_client_context(
         fhe.CKKSContextSpec(
             depth=4,
             log_n=14,
@@ -92,13 +92,13 @@ def main():
     vector = rng.uniform(-0.5, 0.5, size=slots).astype(np.double)
     baseline = matrix @ vector
 
-    cipher = crypto_context.encrypt(vector, crypto_context.device, 1, 0, slots)
+    cipher = client.encrypt(vector, device=crypto_context.device, scale_deg=1, level=0, slots=slots)
 
     start = time.perf_counter()
     result = encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context)
     elapsed = time.perf_counter() - start
 
-    decrypted = crypto_context.decrypt(result).cpu().numpy().reshape(-1)[:slots]
+    decrypted = client.decrypt(result).cpu().numpy().reshape(-1)[:slots]
     diff = decrypted - baseline
     max_abs = float(np.max(np.abs(diff)))
     rmse = float(np.sqrt(np.mean(diff * diff)))

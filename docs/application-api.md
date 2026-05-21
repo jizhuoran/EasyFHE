@@ -16,7 +16,8 @@ implementation details unless their symbols are re-exported by the package root.
 
 ## Contexts
 
-Use `CKKSContextSpec` and `generate_context` to build a context.
+Use `CKKSContextSpec` and `generate_client_context` to build the paired client
+and server context.
 
 ```python
 extra_depth = bs.depth(
@@ -25,7 +26,7 @@ extra_depth = bs.depth(
     secret_key_dist="SPARSE_TERNARY",
 )
 
-ctx = fhe.generate_context(
+client, ctx = fhe.generate_client_context(
     fhe.CKKSContextSpec(
         depth=10 + extra_depth,
         log_n=16,
@@ -33,7 +34,8 @@ ctx = fhe.generate_context(
         dcrt_bits=52,
         first_mod=55,
         secret_key_dist="SPARSE_TERNARY",
-        rescale_tech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
         rotations=(-1024, -256, -64, 1, 2, 4),
     ),
     device="cuda",
@@ -41,14 +43,18 @@ ctx = fhe.generate_context(
 )
 ```
 
+Application-facing client methods:
+
+```python
+client.encrypt(values, device=None, scale_deg=1, level=0, slots=0)
+client.decrypt(cipher)
+```
+
 Application-facing context methods:
 
 ```python
-ctx.encrypt(values, device=None, scale_deg=1, level=0, slots=0)
-ctx.decrypt(cipher)
 ctx.cuda()
 ctx.cpu()
-ctx.add_keys(key_requirements)
 ctx.scale_at(cur_limbs=None)
 ctx.big_scale_at(cur_limbs=None)
 ctx.rescale_divisor_at(drop_limb=None)
@@ -58,15 +64,9 @@ The following are internal/debug helpers and should not be used by application
 code:
 
 ```python
-ctx.decrypt_phase(...)
-ctx.norm_rot_index(...)
 ctx.get_rotation_key(...)
 ctx.get_precompute_auto(...)
-ctx.ensure_rotation_keys(...)
-ctx.addkeys(...)
-ctx.GetScalingFactorReal(...)
-ctx.GetScalingFactorRealBig(...)
-ctx.GetModReduceFactor(...)
+ctx.get_inverse_precompute_auto(...)
 ```
 
 ## Constants
@@ -99,15 +99,16 @@ Application-facing constant methods:
 
 ```python
 bundle.plaintext(name, level, slots, ctx, scale=1.0, is_ext=False, cache=True)
+bundle.encoded_scalars(names, cur_limbs, noise_deg, ctx, mode="double", absolute=False, cache=True)
 bundle.cache_info()
 bundle.clear_cache()
 bundle.set_cache_mode(mode, clear=True)
 ```
 
-`encoded_scalars(...)`, raw scalar reads, middle encoding, and vector padding are
-internal implementation hooks. Application code should pass named vectors to
-`plaintext(...)` and let the bundle manage preparation, plaintext materialization,
-batching, and caching.
+Raw scalar reads, middle encoding, and vector padding are internal implementation
+details. Application code should access constants by name through
+`plaintext(...)` or `encoded_scalars(...)` and let the bundle manage preparation,
+materialization, batching, and caching.
 
 ## Basic Homomorphic Ops
 
@@ -128,8 +129,12 @@ fhe.homo_mul_scalar_double(cipher, value, ctx)
 fhe.homo_mul_scalar_int(cipher, value, ctx)
 
 fhe.homo_rotate(cipher, offset, ctx)
-fhe.slot_resize(cipher, slots, ctx)
+fhe.slot_resize(cipher, slots, ctx, mask=None)
 ```
+
+When reducing slot count, `slot_resize(...)` requires an explicit plaintext
+`mask` encoded at the source slot count. Increasing slot count only updates the
+ciphertext metadata and does not require a mask.
 
 Use `align_to` when an application needs explicit state alignment:
 
@@ -181,23 +186,31 @@ OpenFHE-compatible bootstrapping lives in `easyfhe.bs.openfhe`.
 ```python
 import easyfhe.bs.openfhe as bs
 
+level_budget = (4, 4)
 extra_depth = bs.depth(
     log_bs_slots=14,
-    level_budget=(4, 4),
+    level_budget=level_budget,
+    secret_key_dist="SPARSE_TERNARY",
+)
+rotations = bs.plan_rot_keys(
+    log_n=16,
+    log_bs_slots=14,
+    level_budget=level_budget,
     secret_key_dist="SPARSE_TERNARY",
 )
 
-ctx = fhe.generate_context(... depth=max_levels_remaining + extra_depth ...)
+client, ctx = fhe.generate_client_context(
+    ... depth=max_levels_remaining + extra_depth, rotations=rotations ...
+)
 
-bs_keys, bs_constants, bs_plan = bs.generate(
+bs_constants, bs_plan = bs.generate(
     ctx,
     log_bs_slots=14,
-    level_budget=(4, 4),
+    level_budget=level_budget,
     max_levels_remaining=max_levels_remaining,
     baby_step=None,
     strategy="double_hoist",
 )
-ctx.add_keys(bs_keys)
 
 cipher = bs.bootstrap(cipher, ctx, bs_constants, bs_plan, L0=cipher.cur_limbs)
 ```
@@ -206,6 +219,7 @@ Application-facing bootstrap API:
 
 ```python
 bs.depth(...)
+bs.plan_rot_keys(...)
 bs.generate(...)
 bs.bootstrap(...)
 bs.BootstrapPlan

@@ -1,9 +1,9 @@
 import math
 
-import easyfhe as torch
 from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import alignment
-from easyfhe.fhe.ops import homo
+from easyfhe.fhe.ops import arithmetic
+from easyfhe.fhe.ops import plaintext
 from easyfhe.fhe.ops import rotation
 from . import approx as bootstrap_approx
 
@@ -67,17 +67,10 @@ def _require_supported_transform_mode(level_budget):
 
 def _mod_raise(cipher, L0, cryptoContext):
     cv = [
-        torch.mod_raise(
+        F.cv_mod_raise(
             cv.reshape(1, 1, cv.shape[0], cv.shape[1]),
-            N=cryptoContext.N,
-            L0=L0,
-            old_prime=cryptoContext.primes_list[0],
-            primes=cryptoContext.primes,
-            switch_modulus_map=cryptoContext.switch_modulus_map,
-            inverse_power_of_roots_div_two=cryptoContext.inverse_power_of_roots_div_two,
-            inverse_scaled_power_of_roots_div_two=cryptoContext.inverse_scaled_power_of_roots_div_two,
-            power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
-            power_of_roots=cryptoContext.power_of_roots,
+            L0,
+            cryptoContext,
         ).reshape(-1, cryptoContext.N)
         for cv in cipher.cv
     ]
@@ -98,33 +91,24 @@ def _validate_bootstrap_inputs(bootstrap_constants, bootstrap_plan):
 
 
 def _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
-    correction_scale = bootstrap_constants.scalar("correction_scale")
+    correction_scale = bootstrap_constants._scalar_value("correction_scale")
     result = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
-        if cryptoContext.L != L0:
-            raise ValueError("FLEXIBLEAUTO bootstrap currently requires cryptoContext.L == L0")
-        target_sf = cryptoContext.scale_at(cur_limbs=L0)
-        source_sf = result.scaling_factor
-        mod_to_drop = float(cryptoContext.moduliQ_scalar[result.cur_limbs - 1])
-        correction_scale *= (target_sf / source_sf) * (mod_to_drop / source_sf)
 
-    result = homo.homo_mul_scalar_double(result, correction_scale, cryptoContext)
+    result = plaintext.homo_mul_scalar_double(result, correction_scale, cryptoContext)
     result = alignment.rescale_one_level(result, cryptoContext)
-    if cryptoContext.rescaleTech == "FLEXIBLEAUTO":
-        result.scaling_factor = target_sf
 
     result = _mod_raise(result, L0, cryptoContext)
     scalar = bootstrap_constants.encoded_scalars(
         "constant_eval_mult", result.cur_limbs, 1, cryptoContext, mode="double"
     )[0]
-    return homo.homo_mul_scalar_double(result, scalar, cryptoContext)
+    return plaintext.homo_mul_scalar_double(result, scalar, cryptoContext)
 
 
 def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
     scalar = bootstrap_constants.encoded_scalars(
         "post_scalar", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
-    return homo.homo_mul_scalar_int(
+    return plaintext.homo_mul_scalar_int_inplace(
         ciphertext,
         scalar,
         cryptoContext,
@@ -135,7 +119,7 @@ def _scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
     scalar = bootstrap_constants.encoded_scalars(
         "cor_factor", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
-    return homo.homo_mul_scalar_int(
+    return plaintext.homo_mul_scalar_int_inplace(
         ciphertext,
         scalar,
         cryptoContext,
@@ -150,9 +134,9 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
     raised = alignment.reduce_noise_to_one(raised, cryptoContext)
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
 
-    conjugate = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
-    imag = homo.homo_sub(encoded, conjugate, cryptoContext)
-    real = homo.homo_add(encoded, conjugate, cryptoContext)
+    conjugate = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
+    imag = arithmetic.homo_sub(encoded, conjugate, cryptoContext)
+    real = arithmetic.homo_add(encoded, conjugate, cryptoContext, out=conjugate)
     imag = _mul_by_monomial_inplace(imag, 3 * cryptoContext.M // 4, cryptoContext)
 
     real = alignment.reduce_noise_to_one(real, cryptoContext)
@@ -162,7 +146,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
     imag = _eval_bootstrap_approx(imag, cryptoContext, bootstrap_constants, bootstrap_plan)
 
     imag = _mul_by_monomial_inplace(imag, cryptoContext.M // 4, cryptoContext)
-    encoded = homo.homo_add(real, imag, cryptoContext)
+    encoded = arithmetic.homo_add(real, imag, cryptoContext, out=real)
     encoded = _scale_after_approx(encoded, cryptoContext, bootstrap_constants)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
     return eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
@@ -170,7 +154,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
 
 def _replicate_sparse_slots(raised, slots, cryptoContext):
     for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-        raised = homo.homo_rotate(
+        raised = rotation.homo_rotate(
             raised,
             (1 << step) * slots,
             cryptoContext,
@@ -180,7 +164,7 @@ def _replicate_sparse_slots(raised, slots, cryptoContext):
 
 
 def _restore_sparse_slots(decoded, slots, original_slots, cryptoContext):
-    decoded = homo.homo_add(decoded, homo.homo_rotate(decoded, slots, cryptoContext), cryptoContext)
+    decoded = rotation.homo_rotate(decoded, slots, cryptoContext, addend=decoded)
     decoded = decoded.cipher_like(decoded.cv, slots=slots)
     return decoded.cipher_like(decoded.cv, slots=original_slots)
 
@@ -190,7 +174,7 @@ def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_co
     raised = alignment.reduce_noise_to_one(raised, cryptoContext)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-    encoded = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
+    encoded = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
 
     encoded = _eval_bootstrap_approx(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)

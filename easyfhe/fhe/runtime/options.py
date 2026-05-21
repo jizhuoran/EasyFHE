@@ -5,9 +5,6 @@ from typing import Mapping, Optional
 @dataclass(frozen=True)
 class RuntimeOptions:
     auto_load_keys: Optional[bool] = None
-    auto_sync: bool = False
-    time_ops: bool = False
-    count_ops: bool = False
     rotation_random_mode: str = "fresh"
     rotation_key_limb_limits: Mapping[int, int] = field(default_factory=dict)
 

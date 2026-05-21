@@ -21,6 +21,10 @@ def _plaintext(values, context, *, level, slots, is_ext=False):
     )
 
 
+def _client_context(spec, device):
+    return fhe.generate_client_context(spec, device=device)
+
+
 def _mac_down_each(cipher, offsets, plain_values, context):
     rotated = fhe.fast_rotate(cipher, offsets, context)
     total = None
@@ -120,7 +124,7 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
 def test_fast_rotate_ext_mac_can_defer_moddown_once():
     slots = 1024
     offsets = list(range(16))
-    context = fhe.generate_context(
+    client, context = _client_context(
         fhe.CKKSContextSpec(
             depth=4,
             log_n=14,
@@ -129,10 +133,10 @@ def test_fast_rotate_ext_mac_can_defer_moddown_once():
             first_mod=35,
             rotations=tuple(offset for offset in offsets if offset),
         ),
-        device="cuda",
+        "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = context.encrypt(values, "cuda", 1, 0, slots)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
     plaintext_values = [
         np.full(slots, 0.01 * (idx + 1), dtype=np.double)
         for idx in range(len(offsets))
@@ -148,14 +152,14 @@ def test_fast_rotate_ext_mac_can_defer_moddown_once():
     assert hoisted.cur_limbs == down_once.cur_limbs
     assert hoisted.is_ext is False
     np.testing.assert_allclose(
-        context.decrypt(down_each).cpu().numpy()[:slots],
-        context.decrypt(down_once).cpu().numpy()[:slots],
+        client.decrypt(down_each).cpu().numpy()[:slots],
+        client.decrypt(down_once).cpu().numpy()[:slots],
         rtol=1e-4,
         atol=1e-4,
     )
     np.testing.assert_allclose(
-        context.decrypt(down_once).cpu().numpy()[:slots],
-        context.decrypt(hoisted).cpu().numpy()[:slots],
+        client.decrypt(down_once).cpu().numpy()[:slots],
+        client.decrypt(hoisted).cpu().numpy()[:slots],
         rtol=1e-4,
         atol=1e-4,
     )
@@ -165,7 +169,7 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
     slots = 1024
     baby_offsets = [0, 1, 2]
     giant_offset = 5
-    context = fhe.generate_context(
+    client, context = _client_context(
         fhe.CKKSContextSpec(
             depth=4,
             log_n=14,
@@ -174,10 +178,10 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
             first_mod=35,
             rotations=(1, 2, giant_offset),
         ),
-        device="cuda",
+        "cuda",
     )
     values = np.linspace(-0.5, 0.5, slots, dtype=np.double)
-    cipher = context.encrypt(values, "cuda", 1, 0, slots)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
     groups = [
         [np.full(slots, 0.01 * (group + 1) * (idx + 1), dtype=np.double) for idx in range(len(baby_offsets))]
         for group in range(3)
@@ -187,8 +191,8 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
     hoisted = _hoisted_mac_normal(cipher, baby_offsets, groups, giant_offset, context)
 
     np.testing.assert_allclose(
-        context.decrypt(manual).cpu().numpy()[:slots],
-        context.decrypt(hoisted).cpu().numpy()[:slots],
+        client.decrypt(manual).cpu().numpy()[:slots],
+        client.decrypt(hoisted).cpu().numpy()[:slots],
         rtol=1e-4,
         atol=1e-4,
     )
@@ -197,7 +201,7 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
 def test_fast_rotate_shapes_match_offsets():
     slots = 1024
     offsets = [0, 1, 2, 3]
-    context = fhe.generate_context(
+    client, context = _client_context(
         fhe.CKKSContextSpec(
             depth=4,
             log_n=14,
@@ -206,10 +210,10 @@ def test_fast_rotate_shapes_match_offsets():
             first_mod=35,
             rotations=tuple(offset for offset in offsets if offset),
         ),
-        device="cuda",
+        "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = context.encrypt(values, "cuda", 1, 0, slots)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
 
     normal_batch = fhe.fast_rotate(cipher, offsets, context)
     ext_batch = fhe.fast_rotate(cipher, offsets, context, output_ext=True)

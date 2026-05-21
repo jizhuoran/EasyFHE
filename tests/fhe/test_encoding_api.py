@@ -1,28 +1,21 @@
 import numpy as np
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.ops import encoding
 
 
 def _context():
-    return fhe.generate_context(
-        fhe.CKKSContextSpec(
-            depth=3,
-            log_n=5,
-            dnum=1,
-            dcrt_bits=30,
-            first_mod=35,
-            rotations=(),
-        ),
+    _, ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
     )
+    return ctx
 
 
 def test_encode_stage1_accepts_single_raw_vector():
     middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=8)
 
-    assert isinstance(middle, PreparedPlaintext)
+    assert isinstance(middle, encoding.PreparedPlaintext)
     assert middle.slots == 4
     assert middle.values.shape == (4,)
     assert middle.encoded_values.shape == (8,)
@@ -35,7 +28,7 @@ def test_encode_stage1_accepts_raw_batch():
         ring_dim=8,
     )
 
-    assert isinstance(middle, PreparedPlaintext)
+    assert isinstance(middle, encoding.PreparedPlaintext)
     assert middle.slots == 4
     assert middle.values.shape == (2, 4)
     assert middle.encoded_values.shape == (2, 8)

@@ -5,8 +5,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.constants import ConstantBundle
+from easyfhe.fhe.ops.encoding import PreparedPlaintext
 from .approx_plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
 from .rotations import linear_transform_plan
 from .precompute_context import BsContext
@@ -207,21 +207,8 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
     p = crypto_context.dcrtBits
     deg = int(_round_half_away_from_zero(math.log2(q0) - p))
 
-    rescale_tech = crypto_context.rescaleTech
-    M = crypto_context.M
     N = crypto_context.N
-    slots = plan.slots
-
-    if rescale_tech == "FLEXIBLEAUTO":
-        tmp = _round_half_away_from_zero(-0.265 * (2 * math.log2(M / 2) + math.log2(slots)) + 19.1)
-        if tmp < 7:
-            correction_factor = 7
-        elif tmp > 13:
-            correction_factor = 13
-        else:
-            correction_factor = int(tmp)
-    else:
-        correction_factor = 9
+    correction_factor = 9
 
     correction = correction_factor - deg
     correction_scale = 2.0**(-correction)

@@ -4,10 +4,31 @@ from functools import lru_cache
 import numpy as np
 import easyfhe as torch
 
-from ..ciphertext import Plaintext, PreparedPlaintext
+from ..ciphertext import Plaintext
+from . import kernels as F
 
 MAX_ENCODED_BITS = 61
 ZERO_THRESHOLD = 1e-20
+
+
+class PreparedPlaintext:
+    def __init__(self, values, slots, encoded_values, max_encoded_value):
+        self.values = values
+        self.slots = slots
+        self.encoded_values = encoded_values
+        self.max_encoded_value = max_encoded_value
+
+    def deep_copy(self):
+        if torch.is_tensor(self.encoded_values):
+            encoded_values = self.encoded_values.clone()
+        else:
+            encoded_values = np.array(self.encoded_values, copy=True)
+        return PreparedPlaintext(
+            self.values.copy(),
+            self.slots,
+            encoded_values,
+            self.max_encoded_value,
+        )
 
 
 @lru_cache(maxsize=None)
@@ -107,20 +128,14 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
     batch_size = 1 if encoded_values.ndim == 1 else int(encoded_values.shape[0])
     encoded_values = encoded_values.reshape(batch_size, 2 * slots)
 
-    pt_encode = torch.encode(
-        input=torch.as_tensor(encoded_values, dtype=torch.float64, device=cryptoContext.device),
-        N=cryptoContext.N,
-        cur_limbs=cur_limbs,
-        slots=slots,
-        scaling_factor=scaling_factor,
-        is_ext=is_ext,
-        sizeP=cryptoContext.primes.shape[0] - cryptoContext.L,
-        primes=cryptoContext.QplusP_map[cur_limbs],
-        max_int_diffs=cryptoContext.QmaxdiffplusPmaxdiff_map[cur_limbs],
-        barret_ratio=cryptoContext.QbarretRatioplusPbarretRatio_map[cur_limbs],
-        barret_k=cryptoContext.QbarretKplusPbarretK_map[cur_limbs],
-        power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
-        power_of_roots=cryptoContext.power_of_roots,
+    pt_encode = F.cv_encode(
+        torch.as_tensor(encoded_values, dtype=torch.float64, device=cryptoContext.device),
+        cryptoContext.N,
+        cur_limbs,
+        slots,
+        scaling_factor,
+        is_ext,
+        cryptoContext,
     )
     if batch_size == 1:
         return Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)

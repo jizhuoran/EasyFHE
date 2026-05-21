@@ -222,7 +222,7 @@ def coeff_number(deg: int, tree) -> int:
     return num
 
 
-def show_failure_relu(cipher, ground_truth_vec, precision, cryptoContext):
+def show_failure_relu(cipher, ground_truth_vec, precision, client):
     """
     Compare homomorphic ReLU result with ground truth.
 
@@ -230,14 +230,14 @@ def show_failure_relu(cipher, ground_truth_vec, precision, cryptoContext):
         cipher: Ciphertext after ReLU approximation.
         ground_truth_vec: Plain input vector (list or numpy array).
         precision: Bit precision for tolerance bound (e.g., 40 => 2^-40).
-        cryptoContext: Crypto context with decryptor and encoder.
+        client: FHE client with decryptor.
 
     Returns:
         Number of positions where |ReLU(x) - output[i]| > 2^-precision.
     """
 
     bound = 2 ** (-precision)
-    output = cryptoContext.decrypt(cipher).cpu().numpy().reshape(-1)
+    output = client.decrypt(cipher).cpu().numpy().reshape(-1)
     failure = 0
 
     for i in range(len(ground_truth_vec)):

@@ -21,36 +21,75 @@ def _cipher(name, cv_count=2):
     return cipher
 
 
-def test_constant_bundle_encodes_middle_and_caches_vectors():
+def test_constant_bundle_encodes_middle_and_caches_vectors(monkeypatch):
     bundle = fhe.ConstantBundle(
         vectors={"w": np.asarray([1.0, 2.0], dtype=np.double)},
         cache_mode="middle",
     )
+    calls = []
 
-    first = bundle._encoded_middle("w", slots=4, ring_dim=8)
-    second = bundle._encoded_middle("w", slots=4, ring_dim=8)
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        calls.append(middle)
+        return _cipher("w")
 
-    assert first is second
-    assert first.slots == 4
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+    first = bundle.plaintext("w", 3, 4, ctx)
+    second = bundle.plaintext("w", 3, 4, ctx)
+
+    assert first is not second
+    assert calls[0] is calls[1]
+    assert calls[0].slots == 4
     assert bundle.cache_info()["middle_hits"] == 1
     assert bundle.cache_info()["middle_misses"] == 1
 
 
-def test_constant_bundle_accepts_prepared_vectors():
+def test_constant_bundle_accepts_prepared_vectors(monkeypatch):
     prepared = encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=2, ring_dim=8)
     bundle = fhe.ConstantBundle(vectors={"w": prepared}, cache_mode="middle")
+    calls = []
 
-    assert bundle._encoded_middle("w", ring_dim=8) is prepared
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        calls.append(middle)
+        return _cipher("w")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+    bundle.plaintext("w", 3, 2, ctx)
+
+    assert calls == [prepared]
 
 
-def test_constant_bundle_preserves_complex_raw_values():
+def test_constant_bundle_preserves_complex_raw_values(monkeypatch):
     values = np.asarray([1.0 + 2.0j, 3.0 - 4.0j], dtype=np.complex128)
     bundle = fhe.ConstantBundle(vectors={"w": values}, cache_mode="none")
+    calls = []
 
-    padded = bundle._values("w", slots=4)
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        calls.append(middle)
+        return _cipher("w")
 
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+    bundle.plaintext("w", 3, 4, ctx)
+
+    padded = calls[0].values
     assert padded.dtype == np.complex128
     assert np.array_equal(padded, np.asarray([1.0 + 2.0j, 3.0 - 4.0j, 0.0, 0.0]))
+
+
+def test_constant_bundle_rejects_ragged_vector_batches():
+    bundle = fhe.ConstantBundle(
+        vectors={"w": [np.asarray([1.0]), np.asarray([2.0, 3.0])]},
+        cache_mode="none",
+    )
+
+    try:
+        bundle.plaintext("w", 3, 4, SimpleNamespace(N=8))
+    except TypeError as exc:
+        assert "rectangular numeric arrays" in str(exc)
+    else:
+        raise AssertionError("expected ragged vector batch to fail")
 
 
 def test_constant_bundle_rejects_list_of_names():
@@ -72,15 +111,8 @@ def test_constant_bundle_rejects_list_of_names():
 
 
 def test_constant_bundle_named_raw_batch_matches_individual_encoding():
-    ctx = fhe.generate_context(
-        fhe.CKKSContextSpec(
-            depth=3,
-            log_n=5,
-            dnum=1,
-            dcrt_bits=30,
-            first_mod=35,
-            rotations=(),
-        ),
+    _, ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
     )
     bundle = fhe.ConstantBundle(
@@ -147,7 +179,8 @@ def test_constant_bundle_encodes_and_caches_scalars():
         device="cpu",
         N=8,
         L=4,
-        rescaleTech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
         moduliQ_scalar=[17, 19, 23, 29],
         scale_at=lambda cur_limbs: 8.0,
     )
@@ -170,7 +203,8 @@ def test_constant_bundle_encodes_and_caches_scalar_batches():
         device="cpu",
         N=8,
         L=4,
-        rescaleTech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
         moduliQ_scalar=[17, 19, 23, 29],
         scale_at=lambda cur_limbs: 8.0,
     )
@@ -192,7 +226,8 @@ def test_constant_bundle_encodes_double_scalars_at_requested_noise_degree():
         device="cpu",
         N=8,
         L=4,
-        rescaleTech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
         moduliQ_scalar=[17, 19, 23, 29],
         scale_at=lambda cur_limbs: 8.0,
     )
@@ -208,5 +243,5 @@ def test_resnet_weight_pack_reuses_constant_bundle():
     weights = WeightPack({"w": np.asarray([1.0], dtype=np.double)}, cache_mode="middle")
 
     assert isinstance(weights, fhe.ConstantBundle)
-    assert "w" in weights.vectors
-    assert weights.arrays is weights.vectors
+    assert "w" in weights.arrays
+    assert not hasattr(weights, "vectors")

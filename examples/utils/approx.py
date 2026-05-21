@@ -6,6 +6,10 @@ import numpy as np
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
 
+def _uses_manual_rescale(cryptoContext):
+    return cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual"
+
+
 def get_relu_depth(degree):
     ranges = [
         (1, 5, 3),
@@ -27,7 +31,7 @@ def get_relu_depth(degree):
 
 
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
-    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+    if not _uses_manual_rescale(cryptoContext):
         target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
         if ciphertexts[target_idx].noise_deg == 2:
             ciphertexts[target_idx] = fhe.align_to(ciphertexts[target_idx], fhe.CipherState(ciphertexts[target_idx].cur_limbs - (1), ciphertexts[target_idx].noise_deg - (1)), cryptoContext)
@@ -145,7 +149,7 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = fhe.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             cu = fhe.align_to(cu, fhe.CipherState(T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor), cryptoContext)
         flag_c = True
 
@@ -191,7 +195,7 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = fhe.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             su = fhe.align_to(su, fhe.CipherState(su.cur_limbs - 1, 1, None), cryptoContext)
 
     if flag_c:
@@ -299,7 +303,6 @@ def ComputeDegreesPS(n):
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
-    rescaleTech = cryptoContext.rescaleTech
     n = degree(coefficients)
     f2 = np.copy(coefficients)
     # Make sure the coefficients do not have the zero dominant terms
@@ -753,7 +756,7 @@ def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
 
         # adds the free term (at x^0)
         cu = fhe.homo_add_scalar_double(cu, divcs_q[0], cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             cu = fhe.align_to(cu, fhe.CipherState(powers2[m - 1].cur_limbs, powers2[m - 1].noise_deg, powers2[m - 1].scaling_factor), cryptoContext)
         flag_c = True
 
@@ -796,7 +799,7 @@ def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
         else:
             su = powers[k - 1]
         su = fhe.homo_add_scalar_double(su, s2[0], cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             su = fhe.align_to(su, fhe.CipherState(su.cur_limbs - 1, 1, None), cryptoContext)
 
     if flag_c:

@@ -40,7 +40,7 @@ max_levels_after_bootstrap = 6
 input_limbs = 6
 bootstrap = fhe.BootstrapSpec(log_bs_slots=12, level_budget=(3, 3))
 
-ctx = fhe.generate_context(
+client, ctx = fhe.generate_client_context(
     fhe.CKKSContextSpec(
         depth=fhe.bootstrap_depth(max_levels_after_bootstrap, [bootstrap]),
         log_n=16,
@@ -48,7 +48,8 @@ ctx = fhe.generate_context(
         dcrt_bits=58,
         first_mod=60,
         secret_key_dist="SPARSE_TERNARY",
-        rescale_tech="FIXEDMANUAL",
+        scale_mode="fixed",
+        rescale_policy="manual",
     ),
     device=device,
 )

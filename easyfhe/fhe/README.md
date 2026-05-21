@@ -19,7 +19,8 @@ import easyfhe.fhe as fhe
 
 The main entry points are:
 
-- `CKKSContextSpec` and `generate_context` for context construction. Use
+- `CKKSContextSpec` and `generate_client_context` for client/context
+  construction. Use
   `easyfhe.bs.openfhe` to plan bootstrap extra depth and bootstrap rotation keys
   before constructing the context.
 - `Context`, `CipherState`, and `ConstantBundle` for runtime state and reusable
@@ -38,23 +39,24 @@ Bootstrap APIs live in concrete sibling packages such as `easyfhe.bs.openfhe`.
 New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
 construction and add it to the application's remaining-depth budget when
 choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
-directly. After context construction, call `bs.generate(ctx, ...)` to generate
-bootstrap rotation keys, constants, and a bootstrap plan, then call
-`ctx.add_keys(keys)` and `bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at
-runtime.
+directly. Call `bs.plan_rot_keys(...)` before key generation and include those
+offsets in `CKKSContextSpec.rotations`; key generation then returns separate
+client/server material, and `Context` is built from the server material only.
+After context construction, call `bs.generate(ctx, ...)` to generate bootstrap
+constants and a bootstrap plan, then call
+`bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at runtime.
 
 ## Package Map
 
-- `runtime/`: user-facing context specs, runtime options, validation, CLI, and
-  instrumentation.
+- `runtime/`: context specs, runtime options, rescale policy helpers, and
+  operation validation.
 - `context.py` and `ciphertext.py`: context construction and ciphertext/plaintext
   state containers.
 - `ops/`: homomorphic arithmetic, encoding, key switching, rotation, alignment,
   fused operations, and thin native-kernel wrappers.
 - `../bs/`: public bootstrapping specs, planning, constants, runtime helpers,
   and OpenFHE-specific internal implementation code.
-- `material/`: native sampler integration, CKKS key material, context material,
-  rotation plans, and sample arithmetic.
+- `_keygen/`: native sampler integration and context material assembly.
 
 ## Refactor Direction
 

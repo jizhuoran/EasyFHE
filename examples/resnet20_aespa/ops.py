@@ -31,7 +31,7 @@ def _read_kernel_group(name, cipher, scale, cryptoContext, weights, is_ext=False
 
 def _resolve_scalar(value, weights):
     if isinstance(value, str):
-        return weights.scalar(value)
+        return weights._scalar_value(value)
     return value
 
 
@@ -40,7 +40,6 @@ def _cipher_batch_items(cipher):
         cipher.cipher_like(
             [component[index] for component in cipher.cv],
             batch_size=1,
-            cipher_id="assign",
         )
         for index in range(int(cipher.batch_size))
     )
@@ -307,7 +306,7 @@ def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
 
 
 def aespa_add_shortcut(conv_out, shortcut, prefix, cryptoContext, weights, scale=1):
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+    if cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual":
         shortcut = fhe.align_to(
             shortcut,
             fhe.CipherState(shortcut.cur_limbs - (shortcut.cur_limbs - conv_out.cur_limbs), shortcut.noise_deg),

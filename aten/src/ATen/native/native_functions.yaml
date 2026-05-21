@@ -3303,20 +3303,40 @@
   dispatch:
     CUDA: fused_add_mod_cuda
 
+- func: fused_add_mod_write(Tensor out0, Tensor out1, Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_add_mod_write_cuda
+
 - func: fused_sub_mod(Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CUDA: fused_sub_mod_cuda
+
+- func: fused_sub_mod_write(Tensor out0, Tensor out1, Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_sub_mod_write_cuda
 
 - func: fused_mul_pt_mod(Tensor c0, Tensor c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CUDA: fused_mul_pt_mod_cuda
 
+- func: fused_mul_pt_mod_write(Tensor out0, Tensor out1, Tensor c0, Tensor c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_mul_pt_mod_write_cuda
+
 - func: fused_mul_scalar_mod(Tensor c0, Tensor c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CUDA: fused_mul_scalar_mod_cuda
+
+- func: fused_mul_scalar_mod_write(Tensor out0, Tensor out1, Tensor c0, Tensor c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_mul_scalar_mod_write_cuda
 
 - func: mul_pt_broadcast(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
@@ -3423,6 +3443,11 @@
   device_check: NoCheck
   dispatch:
     CUDA: hrot_cuda
+
+- func: hrot_write(Tensor out_bx, Tensor out_ax, Tensor c0, Tensor c1, Tensor bx, Tensor ax, Tensor inverse_precomp_map, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor inner_workspace, Tensor? add_bx=None, Tensor? add_ax=None) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: hrot_write_cuda
 
 - func: hmul_double_rescale(Tensor c0, Tensor c1, Tensor d0, Tensor d1, Tensor bx, Tensor ax, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, int old_prime, Tensor primes, Tensor q_mu, Tensor barret_ratio, Tensor barret_k, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor switch_modulus_map, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor inner_workspace, bool apply_double=False, int post_op=0, Tensor? post_c0=None, Tensor? post_c1=None, Tensor? post_scalar=None) -> Tensor
   device_check: NoCheck

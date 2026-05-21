@@ -432,6 +432,18 @@ at::Tensor Int64VectorToTensor(const std::vector<int64_t>& values) {
     return out;
 }
 
+at::Tensor UInt32VectorToInt32Tensor(const std::vector<uint32_t>& values) {
+    at::Tensor out = EmptyTensor({static_cast<int64_t>(values.size())}, at::kInt);
+    auto* outPtr = out.data_ptr<int32_t>();
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (values[i] > static_cast<uint32_t>(std::numeric_limits<int32_t>::max())) {
+            throw std::runtime_error("uint32 vector value does not fit int32 tensor");
+        }
+        outPtr[i] = static_cast<int32_t>(values[i]);
+    }
+    return out;
+}
+
 at::Tensor MatrixVectorToTensor(const std::vector<UIntMatrix>& matrices) {
     const size_t parts = matrices.size();
     const size_t rows  = parts == 0 ? 0 : matrices.front().size();
@@ -450,48 +462,6 @@ at::Tensor MatrixVectorToTensor(const std::vector<UIntMatrix>& matrices) {
             std::memcpy(outPtr + (part * rows + row) * cols, matrices[part][row].data(), cols * sizeof(uint64_t));
         }
     }
-    return out;
-}
-
-at::Tensor MatrixToFlatTensor(const UIntMatrix& matrix) {
-    const size_t rows = matrix.size();
-    const size_t cols = rows == 0 ? 0 : matrix.front().size();
-    for (size_t row = 0; row < rows; ++row) {
-        if (matrix[row].size() != cols) {
-            throw std::runtime_error("ragged uint64 matrix cannot be converted to flat tensor");
-        }
-    }
-    at::Tensor out = EmptyTensor({static_cast<int64_t>(rows * cols)}, at::kUInt64);
-    auto* outPtr = out.data_ptr<uint64_t>();
-    ParallelFor(rows, [&](size_t row) {
-        const size_t offset = row * cols;
-        std::memcpy(outPtr + offset, matrix[row].data(), cols * sizeof(uint64_t));
-    });
-    return out;
-}
-
-at::Tensor MatrixVectorToFlatTensor(const std::vector<UIntMatrix>& matrices) {
-    const size_t parts = matrices.size();
-    const size_t rows = parts == 0 ? 0 : matrices.front().size();
-    const size_t cols = rows == 0 ? 0 : matrices.front().front().size();
-    for (size_t part = 0; part < parts; ++part) {
-        if (matrices[part].size() != rows) {
-            throw std::runtime_error("ragged uint64 matrix vector cannot be converted to flat tensor");
-        }
-        for (size_t row = 0; row < rows; ++row) {
-            if (matrices[part][row].size() != cols) {
-                throw std::runtime_error("ragged uint64 matrix vector cannot be converted to flat tensor");
-            }
-        }
-    }
-    at::Tensor out = EmptyTensor({static_cast<int64_t>(parts * rows * cols)}, at::kUInt64);
-    auto* outPtr = out.data_ptr<uint64_t>();
-    ParallelFor(parts * rows, [&](size_t flatRow) {
-        const size_t part = flatRow / rows;
-        const size_t row = flatRow % rows;
-        const size_t offset = flatRow * cols;
-        std::memcpy(outPtr + offset, matrices[part][row].data(), cols * sizeof(uint64_t));
-    });
     return out;
 }
 
@@ -1544,6 +1514,26 @@ std::vector<uint32_t> PrecomputeAutoMapLocal(uint32_t ringDim, uint32_t autoInde
     return precomp;
 }
 
+std::vector<uint32_t> InvertAutoMapLocal(const std::vector<uint32_t>& autoMap) {
+    std::vector<uint32_t> inverse(autoMap.size());
+    for (uint32_t i = 0; i < autoMap.size(); ++i) {
+        const uint32_t mapped = autoMap[i];
+        if (mapped >= autoMap.size()) {
+            throw std::runtime_error("auto map contains an out-of-range index");
+        }
+        inverse[mapped] = i;
+    }
+    return inverse;
+}
+
+uint32_t NormalizeRotationIndexLocal(int32_t rotationIndex, uint32_t ringDim) {
+    const int64_t normalized = rotationIndex < 0 ? static_cast<int64_t>(ringDim / 2) + rotationIndex : rotationIndex;
+    if (normalized < 0 || normalized > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+        throw std::invalid_argument("normalized rotation index is outside uint32 range");
+    }
+    return static_cast<uint32_t>(normalized);
+}
+
 UIntMatrix AutomorphismTransformEval(const UIntMatrix& value, uint32_t autoIndex, uint32_t ringDim) {
     const auto precomp = PrecomputeAutoMapLocal(ringDim, autoIndex);
     UIntMatrix result = value;
@@ -1833,8 +1823,11 @@ struct ManualRotationKey {
 
 struct RotationKeyTensorResult {
     uint32_t autoIndex = 0;
+    uint32_t rotationIndex = 0;
     at::Tensor keyB;
     at::Tensor keyA;
+    at::Tensor autoMap;
+    at::Tensor inverseAutoMap;
     uint32_t limb = 0;
     bool trimmed = false;
 };
@@ -1865,8 +1858,8 @@ RotationKeyTensorResult RotationKeyToTensorResult(const ManualRotationKey& rotKe
         item.trimmed = true;
     }
     else {
-        item.keyB = MatrixVectorToFlatTensor(rotKey.key.keyB);
-        item.keyA = MatrixVectorToFlatTensor(rotKey.key.keyA);
+        item.keyB = MatrixVectorToTensor(rotKey.key.keyB);
+        item.keyA = MatrixVectorToTensor(rotKey.key.keyA);
     }
     return item;
 }
@@ -2489,9 +2482,11 @@ RotationKeyTensorResult ManualFullRotationSwitchKeyGenToTensorResult(const Nativ
     }
 
     at::Tensor keyB = EmptyTensor(
-        {static_cast<int64_t>(static_cast<size_t>(nativeParams.numPartQ) * rows * ringDim)}, at::kUInt64);
+        {static_cast<int64_t>(nativeParams.numPartQ), static_cast<int64_t>(rows), static_cast<int64_t>(ringDim)},
+        at::kUInt64);
     at::Tensor keyA = EmptyTensor(
-        {static_cast<int64_t>(static_cast<size_t>(nativeParams.numPartQ) * rows * ringDim)}, at::kUInt64);
+        {static_cast<int64_t>(nativeParams.numPartQ), static_cast<int64_t>(rows), static_cast<int64_t>(ringDim)},
+        at::kUInt64);
     auto* bPtr = keyB.data_ptr<uint64_t>();
     auto* aPtr = keyA.data_ptr<uint64_t>();
 
@@ -2708,8 +2703,11 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
     std::vector<RotationKeyTensorResult> keyList;
     for (const auto& group : rotationIndexGroups) {
         std::set<uint32_t> groupAutoIndices;
+        std::map<uint32_t, uint32_t> rotationIndexByAutoIndex;
         for (auto rotationIndex : group) {
-            groupAutoIndices.insert(FindAutomorphismIndex2nComplexLocal(rotationIndex, nativeParams.cyclOrder));
+            const uint32_t autoIndex = FindAutomorphismIndex2nComplexLocal(rotationIndex, nativeParams.cyclOrder);
+            groupAutoIndices.insert(autoIndex);
+            rotationIndexByAutoIndex.emplace(autoIndex, NormalizeRotationIndexLocal(rotationIndex, nativeParams.ringDim));
         }
         for (auto autoIndex : groupAutoIndices) {
             const bool forceRegenerate = autoIndex == nativeParams.cyclOrder - 1;
@@ -2732,6 +2730,13 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                 ++gProfile.rotationKeys;
             }
             auto trimIt = rotationTrimLimbsByAutoIndex.find(autoIndex);
+            auto finalizeItem = [&](RotationKeyTensorResult&& item) {
+                item.rotationIndex = rotationIndexByAutoIndex.at(autoIndex);
+                const auto autoMap = PrecomputeAutoMapLocal(nativeParams.ringDim, autoIndex);
+                item.autoMap = UInt32VectorToInt32Tensor(autoMap);
+                item.inverseAutoMap = UInt32VectorToInt32Tensor(InvertAutoMapLocal(autoMap));
+                keyList.push_back(std::move(item));
+            };
             if (sampling.IsParallelDeterministic() && trimIt != rotationTrimLimbsByAutoIndex.end()) {
                 RotationKeyTensorResult item = ManualTrimmedRotationSwitchKeyGenToTensorResult(
                     runtime,
@@ -2745,7 +2750,7 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                     true,
                     randomCache ? &*randomCache : nullptr);
                 stageStart = NowSeconds();
-                keyList.push_back(std::move(item));
+                finalizeItem(std::move(item));
             }
             else if (sampling.IsParallelDeterministic()) {
                 RotationKeyTensorResult item = ManualFullRotationSwitchKeyGenToTensorResult(
@@ -2758,7 +2763,7 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                     autoIndex,
                     randomCache ? &*randomCache : nullptr);
                 stageStart = NowSeconds();
-                keyList.push_back(std::move(item));
+                finalizeItem(std::move(item));
             }
             else {
                 ManualRotationKey rotKey{
@@ -2767,11 +2772,11 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                         runtime, key.sk, sNewExt, sNewExtShoup, nativeParams, prng, sampling, "rotation", autoIndex, false),
                 };
                 stageStart = NowSeconds();
-                keyList.push_back(RotationKeyToTensorResult(rotKey,
-                                                            rotationTrimLimbsByAutoIndex,
-                                                            static_cast<uint32_t>(nativeParams.moduliQ.size()),
-                                                            static_cast<uint32_t>(nativeParams.moduliP.size()),
-                                                            dnum));
+                finalizeItem(RotationKeyToTensorResult(rotKey,
+                                                       rotationTrimLimbsByAutoIndex,
+                                                       static_cast<uint32_t>(nativeParams.moduliQ.size()),
+                                                       static_cast<uint32_t>(nativeParams.moduliP.size()),
+                                                       dnum));
             }
             if (gProfile.enabled) {
                 gProfile.tupleReturn += NowSeconds() - stageStart;
@@ -2847,17 +2852,17 @@ at::Tensor ManualCipherToTensor(const ManualEncryptResult& encrypted) {
 }
 
 void AppendRotationKeyTensors(std::vector<at::Tensor>& out, const std::vector<RotationKeyTensorResult>& keys) {
-    at::Tensor manifest = EmptyTensor({static_cast<int64_t>(keys.size()), 3}, at::kLong);
+    at::Tensor manifest = EmptyTensor({static_cast<int64_t>(keys.size())}, at::kLong);
     auto* manifestPtr = manifest.data_ptr<int64_t>();
     for (size_t i = 0; i < keys.size(); ++i) {
-        manifestPtr[i * 3 + 0] = static_cast<int64_t>(keys[i].autoIndex);
-        manifestPtr[i * 3 + 1] = static_cast<int64_t>(keys[i].limb);
-        manifestPtr[i * 3 + 2] = keys[i].trimmed ? 1 : 0;
+        manifestPtr[i] = static_cast<int64_t>(keys[i].rotationIndex);
     }
     out.push_back(std::move(manifest));
     for (const auto& key : keys) {
         out.push_back(key.keyB);
         out.push_back(key.keyA);
+        out.push_back(key.autoMap);
+        out.push_back(key.inverseAutoMap);
     }
 }
 
@@ -2873,12 +2878,10 @@ std::vector<at::Tensor> SampleCkks(const NativeSamplerRequest& request, const at
         gProfile.keygen += NowSeconds() - stageStart;
     }
     ManualEvalMultKeyResult evalMultKey;
-    if (request.includeEvalMultKey) {
-        stageStart = NowSeconds();
-        evalMultKey = ManualEvalMultKeyGen(runtime, key, nativeParams, prng, sampling);
-        if (gProfile.enabled) {
-            gProfile.evalMult += NowSeconds() - stageStart;
-        }
+    stageStart = NowSeconds();
+    evalMultKey = ManualEvalMultKeyGen(runtime, key, nativeParams, prng, sampling);
+    if (gProfile.enabled) {
+        gProfile.evalMult += NowSeconds() - stageStart;
     }
     std::vector<double> inputValues;
     uint32_t actualSlots = 0;
@@ -2909,42 +2912,17 @@ std::vector<at::Tensor> SampleCkks(const NativeSamplerRequest& request, const at
     }
 
     std::vector<at::Tensor> out;
-    out.reserve(32);
+    out.reserve(10);
     out.push_back(VectorToTensor(nativeParams.moduliQ));
     out.push_back(VectorToTensor(nativeParams.rootsQ));
     out.push_back(VectorToTensor(nativeParams.moduliP));
     out.push_back(VectorToTensor(nativeParams.rootsP));
-    out.push_back(VectorToTensor(nativeParams.pModq));
-    out.push_back(ScalarInt64Tensor(request.depth));
-
     out.push_back(MatrixToTensor(key.sk));
     out.push_back(Int64VectorToTensor(key.skCoeff));
     out.push_back(MatrixToTensor(key.pkB));
     out.push_back(MatrixToTensor(key.pkA));
-    out.push_back(MatrixToTensor(key.pkE));
-
-    if (request.includeEncryptTrace) {
-        out.push_back(MatrixToTensor(encrypted->v));
-        out.push_back(MatrixToTensor(encrypted->e0));
-        out.push_back(MatrixToTensor(encrypted->e1));
-        out.push_back(MatrixToTensor(encrypted->ct0Zero));
-        out.push_back(MatrixToTensor(encrypted->ct1Zero));
-
-        out.push_back(MatrixToTensor(*ptx));
-        out.push_back(ManualCipherToTensor(*encrypted));
-        out.push_back(MatrixToTensor(*phase));
-        out.push_back(VectorToTensor(inputValues));
-        out.push_back(ScalarInt64Tensor(actualSlots));
-    }
-
-    if (request.includeEvalMultKey) {
-        out.push_back(MatrixToTensor(evalMultKey.skSquared));
-        out.push_back(MatrixToTensor(evalMultKey.skExt));
-        out.push_back(MatrixToTensor(evalMultKey.pModq));
-        out.push_back(MatrixVectorToTensor(evalMultKey.keyB));
-        out.push_back(MatrixVectorToTensor(evalMultKey.keyA));
-        out.push_back(MatrixVectorToTensor(evalMultKey.keyE));
-    }
+    out.push_back(MatrixVectorToTensor(evalMultKey.keyB));
+    out.push_back(MatrixVectorToTensor(evalMultKey.keyA));
 
     gProfile.Report();
     return out;
@@ -2984,7 +2962,7 @@ std::vector<at::Tensor> SampleRotationKeys(const NativeSamplerRequest& request,
                                                          sampling,
                                                          rotationRandomMode);
     std::vector<at::Tensor> out;
-    out.reserve(1 + rotationKeys.size() * 2);
+    out.reserve(1 + rotationKeys.size() * 4);
     AppendRotationKeyTensors(out, rotationKeys);
     gProfile.Report();
     return out;

@@ -17,7 +17,6 @@ ensure_repo_on_path()
 
 import easyfhe as torch
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ops import homo as homo_ops
 from easyfhe.fhe.ops.encoding import encode_stage1, encode_stage2
 from easyfhe.fhe.ops import rotation
 
@@ -375,7 +374,6 @@ def _build_moddown_from_ext_target(case: bench.BenchmarkCase, crypto_context: An
     ext_cipher = cipher.cipher_like(
         [rotation._scale_to_P_ext(cv, cipher, crypto_context) for cv in cipher.cv],
         is_ext=True,
-        cipher_id="assign",
     )
 
     def op():
@@ -468,7 +466,8 @@ def main() -> int:
     ap.add_argument("--dcrt-bits", type=int, default=52)
     ap.add_argument("--first-mod", type=int, default=55)
     ap.add_argument("--secret-key-dist", default="SPARSE_TERNARY")
-    ap.add_argument("--rescale-tech", default="FIXEDMANUAL")
+    ap.add_argument("--scale-mode", default="fixed")
+    ap.add_argument("--rescale-policy", default="manual", choices=("manual", "auto"))
     ap.add_argument("--limb-min", type=int, default=1)
     ap.add_argument("--limb-max", type=int, default=30)
     ap.add_argument("--basic-slots", type=int, default=4096)
