@@ -164,6 +164,14 @@ class Context:
 
         # for innerproduct
         self.inner_workspace = inner_workspace.to(device)
+        beta = int((self.L + self.alpha - 1) / self.alpha)
+        inner_workspace_numel = 16 * (self.L + self.K) * self.N * max(beta, 1)
+        if self.inner_workspace.numel() < inner_workspace_numel:
+            self.inner_workspace = torch.empty(
+                (inner_workspace_numel,),
+                dtype=torch.uint64,
+                device=device,
+            )
         self.mult_swk_ax = mult_swk_ax.to(device)
         self.mult_swk_bx = mult_swk_bx.to(device)
 

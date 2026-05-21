@@ -486,7 +486,27 @@ __global__ void hrot_ntt_phase2_finalize_kernel(
 
 namespace at::native {
 
-static Tensor hrot_innerproduct_cuda(
+static Tensor hrot_workspace_view(
+    const Tensor& workspace,
+    int64_t storage_offset,
+    c10::IntArrayRef sizes) {
+  int64_t stride = 1;
+  std::vector<int64_t> strides(sizes.size());
+  for (int64_t i = static_cast<int64_t>(sizes.size()) - 1; i >= 0; --i) {
+    strides[i] = stride;
+    stride *= sizes[i];
+  }
+  TORCH_CHECK(
+      storage_offset >= 0 && storage_offset + stride <= workspace.numel(),
+      "hrot inner_workspace is too small: need ",
+      storage_offset + stride,
+      " uint64 values, got ",
+      workspace.numel());
+  return workspace.as_strided(sizes, strides, storage_offset);
+}
+
+static void hrot_innerproduct_cuda(
+    const Tensor& out,
     const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
@@ -508,6 +528,11 @@ static Tensor hrot_innerproduct_cuda(
   const int mult_length = (special_mod_start + sizeP);
   TORCH_INTERNAL_ASSERT(in.sizes()[2] == beta * length);
   TORCH_INTERNAL_ASSERT(in.sizes()[3] == N);
+  TORCH_INTERNAL_ASSERT(out.dim() == 4);
+  TORCH_INTERNAL_ASSERT(out.sizes()[0] == 2);
+  TORCH_INTERNAL_ASSERT(out.sizes()[1] == 1);
+  TORCH_INTERNAL_ASSERT(out.sizes()[2] == sizeP);
+  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N);
   TORCH_CHECK(
       special_mod_start >= curr_limbs,
       "special_mod_start must be >= curr_limbs");
@@ -519,10 +544,10 @@ static Tensor hrot_innerproduct_cuda(
   TORCH_CHECK(bx.size(1) >= mult_length, "bx/ax modulus dimension mismatch");
   TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
   TORCH_CHECK(in.is_contiguous(), "hrot innerproduct input must be contiguous");
+  TORCH_CHECK(out.is_contiguous(), "hrot innerproduct output must be contiguous");
   TORCH_CHECK(bx.is_contiguous(), "hrot innerproduct bx must be contiguous");
   TORCH_CHECK(ax.is_contiguous(), "hrot innerproduct ax must be contiguous");
 
-  auto out = at::empty({2, 1, sizeP, N}, in.options());
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
   auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
@@ -556,7 +581,6 @@ static Tensor hrot_innerproduct_cuda(
       barret_k_ptr,
       barret_ratio_ptr);
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return out;
 }
 
 template <size_t LOG_N>
@@ -950,6 +974,7 @@ static void hrot_ntt_phase2_finalize_cuda(
 static std::vector<Tensor> hrot_moddown_cuda(
     const Tensor& in,
     const Tensor& modup,
+    const Tensor& workspace,
     const Tensor& c1,
     const Tensor& bx,
     const Tensor& ax,
@@ -1019,7 +1044,12 @@ static std::vector<Tensor> hrot_moddown_cuda(
   const int64_t num_cv = 2;
   const int64_t batch = 1;
   const int64_t L_IN = curr_limbs + sizeP;
-  auto workspace = at::empty({num_cv, batch, L_IN, N}, in.options());
+  TORCH_INTERNAL_ASSERT(workspace.dim() == 4);
+  TORCH_INTERNAL_ASSERT(workspace.sizes()[0] == num_cv);
+  TORCH_INTERNAL_ASSERT(workspace.sizes()[1] == batch);
+  TORCH_INTERNAL_ASSERT(workspace.sizes()[2] == L_IN);
+  TORCH_INTERNAL_ASSERT(workspace.sizes()[3] == N);
+  TORCH_CHECK(workspace.is_contiguous(), "hrot workspace must be contiguous");
   auto out_bx = at::empty({curr_limbs, N}, c0.options());
   auto out_ax = at::empty({curr_limbs, N}, c0.options());
 
@@ -1112,6 +1142,7 @@ std::vector<Tensor> hrot_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two,
+    const Tensor& inner_workspace,
     const std::optional<Tensor>& add_bx,
     const std::optional<Tensor>& add_ax) {
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
@@ -1143,8 +1174,34 @@ std::vector<Tensor> hrot_cuda(
 
   const auto sizeP = primes.numel() - L;
   TORCH_CHECK(sizeP > 0 && sizeP <= 64, "hrot sizeP must be in (0, 64]");
+  TORCH_CHECK(
+      inner_workspace.is_contiguous(),
+      "hrot inner_workspace must be contiguous");
+  TORCH_CHECK(
+      inner_workspace.is_cuda() == c0.is_cuda(),
+      "hrot inner_workspace device mismatch");
+
+  int64_t workspace_offset = 0;
+  auto modup = hrot_workspace_view(
+      inner_workspace,
+      workspace_offset,
+      {1, 1, beta * (curr_limbs + sizeP), N});
+  workspace_offset += modup.numel();
+  auto modup_temp = hrot_workspace_view(
+      inner_workspace,
+      workspace_offset,
+      {1, 1, curr_limbs, N});
+  workspace_offset += modup_temp.numel();
+  auto inner_product =
+      hrot_workspace_view(inner_workspace, workspace_offset, {2, 1, sizeP, N});
+  workspace_offset += inner_product.numel();
+  auto workspace = hrot_workspace_view(
+      inner_workspace, workspace_offset, {2, 1, curr_limbs + sizeP, N});
+
   const auto c1_4d = at::reshape(c1, {1, 1, curr_limbs, N});
-  const auto modup = modup_without_copy_cuda(
+  modup_without_copy_cuda_out(
+      modup,
+      modup_temp,
       c1_4d,
       curr_limbs,
       L,
@@ -1161,7 +1218,8 @@ std::vector<Tensor> hrot_cuda(
       power_of_roots,
       inverse_power_of_roots_div_two,
       inverse_scaled_power_of_roots_div_two);
-  const auto inner_product = hrot_innerproduct_cuda(
+  hrot_innerproduct_cuda(
+      inner_product,
       modup,
       bx,
       ax,
@@ -1176,6 +1234,7 @@ std::vector<Tensor> hrot_cuda(
   return hrot_moddown_cuda(
       inner_product,
       modup,
+      workspace,
       c1,
       bx,
       ax,

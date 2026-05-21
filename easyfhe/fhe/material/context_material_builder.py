@@ -358,8 +358,14 @@ class ContextMaterialBuilder:
         self.q_inv_mod_q_shoup = None
 
         self.beta = int((self.L + self.alpha - 1) / self.alpha)
+        inner_workspace_numel = (
+            16
+            * self.num_moduli_after_modup
+            * self.N
+            * max(self.beta, 1)
+        )
         self.inner_workspace = np.array(
-            [0] * (4 * self.num_moduli_after_modup * self.N * self.beta),
+            [0] * inner_workspace_numel,
             dtype=np.uint64,
         )
         self.inner_out = np.array(

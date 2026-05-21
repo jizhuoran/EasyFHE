@@ -55,7 +55,7 @@ def homo_mul_rescale(
     in1,
     cryptoContext,
     *,
-    apply_double=True,
+    apply_double=False,
     add=None,
     sub=None,
     scalar=None,

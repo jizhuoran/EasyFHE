@@ -530,6 +530,7 @@ def cv_hrot(
         power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+        inner_workspace=context.inner_workspace,
     )
 
 
@@ -544,7 +545,7 @@ def cv_hmul_double_rescale(
     swk_ax: Tensor,
     context: Context,
     *,
-    apply_double: bool = True,
+    apply_double: bool = False,
     post_op: int = 0,
     post_c0: Tensor | None = None,
     post_c1: Tensor | None = None,

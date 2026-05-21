@@ -341,6 +341,9 @@ def _eval_combine_spec(spec, small_values, node_values, T2, cryptoContext):
 
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_plan):
+    plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
+    if plan.pre_chebyshev_offset:
+        x = homo.homo_add_scalar_double(x, plan.pre_chebyshev_offset, cryptoContext)
     flat = bootstrap_plan.approx_eval_plan
 
     T = _chebyshev_basis(x, a, b, flat.k, cryptoContext)

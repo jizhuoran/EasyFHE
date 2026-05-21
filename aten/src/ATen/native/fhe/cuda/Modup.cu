@@ -197,6 +197,7 @@ static void modup_matmul(
 static void modup_cuda_template(
     Tensor& to,
     const Tensor& from,
+    const Tensor* temp_workspace,
     int64_t cur_limbs,
     int64_t L,
     int64_t beta,
@@ -226,7 +227,22 @@ static void modup_cuda_template(
   auto stream = at::cuda::getCurrentCUDAStream();
 
   if (beta > 1) {
-    auto temp = at::empty({1, num_cipher, cur_limbs, N}, from.options());
+    Tensor temp_storage;
+    const Tensor* temp_tensor = temp_workspace;
+    if (temp_tensor == nullptr) {
+      temp_storage = at::empty({1, num_cipher, cur_limbs, N}, from.options());
+      temp_tensor = &temp_storage;
+    } else {
+      TORCH_INTERNAL_ASSERT(temp_tensor->dim() == 4);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[0] == 1);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[1] == num_cipher);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[2] == cur_limbs);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[3] == N);
+      TORCH_CHECK(
+          temp_tensor->is_contiguous(),
+          "modup temp workspace must be contiguous");
+    }
+    auto temp = *temp_tensor;
     auto* temp_ptr = reinterpret_cast<uint64_t*>(temp.data_ptr<uint64_t>());
 
     iNTT_modup_scaled_impl(
@@ -403,6 +419,7 @@ Tensor modup_cuda(
   modup_cuda_template(
       out, // out_ptr + beta * (curr_limbs + sizeP) * N * batch_id,
       in, // in_ptr + in.sizes()[2] * N * batch_id,
+      nullptr,
       curr_limbs,
       L,
       beta,
@@ -421,6 +438,61 @@ Tensor modup_cuda(
       true);
 
   return out;
+}
+
+void modup_without_copy_cuda_out(
+    Tensor& out,
+    const Tensor& temp_workspace,
+    const Tensor& in,
+    int64_t curr_limbs,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  auto num_cv = in.sizes()[0];
+  TORCH_INTERNAL_ASSERT(num_cv == 1);
+  auto batch = in.sizes()[1];
+
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  TORCH_INTERNAL_ASSERT(out.dim() == 4);
+  TORCH_INTERNAL_ASSERT(out.sizes()[0] == num_cv);
+  TORCH_INTERNAL_ASSERT(out.sizes()[1] == batch);
+  TORCH_INTERNAL_ASSERT(out.sizes()[2] == beta * (curr_limbs + sizeP));
+  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N);
+  TORCH_CHECK(out.is_contiguous(), "modup output workspace must be contiguous");
+
+  modup_cuda_template(
+      out,
+      in,
+      &temp_workspace,
+      curr_limbs,
+      L,
+      beta,
+      N,
+      alpha,
+      hat_inverse_vecs,
+      hat_inverse_vec_shoups,
+      prod_q_i_mod_q_js,
+      primes,
+      barret_ratio,
+      barret_k,
+      inverse_power_of_roots_div_two,
+      inverse_scaled_power_of_roots_div_two,
+      power_of_roots,
+      power_of_roots_shoup,
+      false);
 }
 
 Tensor modup_without_copy_cuda(
@@ -453,6 +525,7 @@ Tensor modup_without_copy_cuda(
   modup_cuda_template(
       out,
       in,
+      nullptr,
       curr_limbs,
       L,
       beta,

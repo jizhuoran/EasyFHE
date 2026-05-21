@@ -155,6 +155,26 @@ Tensor modup_without_copy_cuda(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two);
 
+void modup_without_copy_cuda_out(
+    Tensor& out,
+    const Tensor& temp_workspace,
+    const Tensor& in,
+    int64_t curr_limbs,
+    int64_t L,
+    int64_t beta,
+    int64_t N,
+    int64_t alpha,
+    const Tensor& hat_inverse_vecs,
+    const Tensor& hat_inverse_vec_shoups,
+    const Tensor& prod_q_i_mod_q_js,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& power_of_roots_shoup,
+    const Tensor& power_of_roots,
+    const Tensor& inverse_power_of_roots_div_two,
+    const Tensor& inverse_scaled_power_of_roots_div_two);
+
 Tensor modup_cuda(
     const Tensor& in,
     int64_t curr_limbs,

@@ -6,6 +6,7 @@
 #include <ATen/native/fhe/cuda/arithmetic.h>
 #include <ATen/ops/empty.h>
 #include <ATen/native/fhe/cuda/Utils.cuh>
+#include <vector>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -22,6 +23,12 @@ enum class ArithmeticOp {
 
 enum class RhsLayout {
   Tensor,
+  ScalarByLimb,
+};
+
+enum class FusedRhsLayout {
+  TensorPair,
+  Plaintext,
   ScalarByLimb,
 };
 
@@ -215,6 +222,144 @@ Tensor& arithmetic_out(
   run_arithmetic<Op, Layout, HasBarrett>(
       out, lhs, rhs, mod, barrett_mu, cur_limbs);
   return out;
+}
+
+inline int64_t active_limb_dim(const Tensor& tensor) {
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
+  return tensor.dim() == 2 ? tensor.sizes()[0] : tensor.sizes()[1];
+}
+
+inline int64_t coeff_dim(const Tensor& tensor) {
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
+  return tensor.sizes()[tensor.dim() - 1];
+}
+
+inline int64_t batch_dim(const Tensor& tensor) {
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
+  return tensor.dim() == 2 ? 1 : tensor.sizes()[0];
+}
+
+inline std::vector<int64_t> fused_output_sizes(const Tensor& base, int64_t cur_limbs) {
+  auto sizes = base.sizes().vec();
+  sizes[base.dim() - 2] = cur_limbs;
+  return sizes;
+}
+
+template <ArithmeticOp Op, FusedRhsLayout Layout, bool HasBarrett>
+__global__ void fused_pair_arithmetic_kernel(
+    size_t N,
+    size_t batch,
+    size_t L_A,
+    size_t L_R,
+    int64_t cur_limbs,
+    uint64_t* __restrict__ out0,
+    uint64_t* __restrict__ out1,
+    const uint64_t* __restrict__ a0,
+    const uint64_t* __restrict__ a1,
+    const uint64_t* __restrict__ rhs0,
+    const uint64_t* __restrict__ rhs1,
+    size_t rhs_batch,
+    const uint64_t* __restrict__ mod,
+    const uint64_t* __restrict__ barrett_mu) {
+  const size_t linear = blockIdx.x * blockDim.x + threadIdx.x;
+  const size_t total = batch * static_cast<size_t>(cur_limbs) * N;
+  if (linear >= total) {
+    return;
+  }
+
+  const size_t coeff_idx = linear % N;
+  const size_t limb_idx = (linear / N) % static_cast<size_t>(cur_limbs);
+  const size_t batch_idx = linear / (N * static_cast<size_t>(cur_limbs));
+  const uint64_t modulus = mod[limb_idx];
+
+  const size_t out_offset = batch_idx * static_cast<size_t>(cur_limbs) * N + limb_idx * N + coeff_idx;
+  const size_t lhs_offset = batch_idx * L_A * N + limb_idx * N + coeff_idx;
+
+  uint64_t rhs_value0 = 0;
+  uint64_t rhs_value1 = 0;
+  if constexpr (Layout == FusedRhsLayout::TensorPair) {
+    const size_t rhs_offset = batch_idx * L_R * N + limb_idx * N + coeff_idx;
+    rhs_value0 = rhs0[rhs_offset];
+    rhs_value1 = rhs1[rhs_offset];
+  } else if constexpr (Layout == FusedRhsLayout::Plaintext) {
+    const size_t rhs_batch_idx = rhs_batch == 1 ? 0 : batch_idx;
+    const size_t rhs_offset = rhs_batch_idx * L_R * N + limb_idx * N + coeff_idx;
+    rhs_value0 = rhs0[rhs_offset];
+    rhs_value1 = rhs_value0;
+  } else {
+    rhs_value0 = rhs0[limb_idx];
+    rhs_value1 = rhs_value0;
+  }
+
+  out0[out_offset] = apply_op<Op, HasBarrett>(
+      a0[lhs_offset], rhs_value0, modulus, barrett_mu, limb_idx);
+  out1[out_offset] = apply_op<Op, HasBarrett>(
+      a1[lhs_offset], rhs_value1, modulus, barrett_mu, limb_idx);
+}
+
+template <ArithmeticOp Op, FusedRhsLayout Layout, bool HasBarrett>
+std::vector<Tensor> fused_pair_arithmetic(
+    const Tensor& a0,
+    const Tensor& a1,
+    const Tensor& rhs0,
+    const Tensor* rhs1,
+    const Tensor& mod,
+    const Tensor* barrett_mu,
+    int64_t cur_limbs) {
+  TORCH_INTERNAL_ASSERT(a0.dim() == 2 || a0.dim() == 3);
+  TORCH_INTERNAL_ASSERT(a1.sizes() == a0.sizes());
+  TORCH_INTERNAL_ASSERT(cur_limbs >= 0);
+  TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(a0));
+  TORCH_INTERNAL_ASSERT(coeff_dim(a0) == coeff_dim(a1));
+  if constexpr (Layout == FusedRhsLayout::TensorPair) {
+    TORCH_INTERNAL_ASSERT(rhs1 != nullptr);
+    TORCH_INTERNAL_ASSERT(rhs0.sizes() == a0.sizes());
+    TORCH_INTERNAL_ASSERT(rhs1->sizes() == a0.sizes());
+  } else if constexpr (Layout == FusedRhsLayout::Plaintext) {
+    TORCH_INTERNAL_ASSERT(rhs0.dim() == 2 || rhs0.dim() == 3);
+    TORCH_INTERNAL_ASSERT(coeff_dim(rhs0) == coeff_dim(a0));
+    TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(rhs0));
+    const auto rhs_batch = batch_dim(rhs0);
+    TORCH_INTERNAL_ASSERT(rhs_batch == 1 || rhs_batch == batch_dim(a0));
+  } else {
+    TORCH_INTERNAL_ASSERT(rhs0.dim() == 1);
+    TORCH_INTERNAL_ASSERT(cur_limbs <= rhs0.sizes()[0]);
+  }
+  if constexpr (HasBarrett) {
+    TORCH_INTERNAL_ASSERT(barrett_mu != nullptr);
+  }
+
+  auto out0 = at::empty(fused_output_sizes(a0, cur_limbs), a0.options());
+  auto out1 = at::empty(fused_output_sizes(a1, cur_limbs), a1.options());
+
+  const auto N = static_cast<size_t>(coeff_dim(a0));
+  const auto batch = static_cast<size_t>(batch_dim(a0));
+  const auto L_A = static_cast<size_t>(active_limb_dim(a0));
+  const auto L_R = Layout == FusedRhsLayout::ScalarByLimb ? 0 : static_cast<size_t>(active_limb_dim(rhs0));
+  const auto rhs_batch = Layout == FusedRhsLayout::Plaintext ? static_cast<size_t>(batch_dim(rhs0)) : batch;
+  const size_t total = batch * static_cast<size_t>(cur_limbs) * N;
+  const dim3 grid(fhe::launch_blocks(total));
+  const dim3 block(fhe::kBlockSize);
+  const auto stream = at::cuda::getCurrentCUDAStream();
+
+  fused_pair_arithmetic_kernel<Op, Layout, HasBarrett><<<grid, block, 0, stream>>>(
+      N,
+      batch,
+      L_A,
+      L_R,
+      cur_limbs,
+      out0.mutable_data_ptr<uint64_t>(),
+      out1.mutable_data_ptr<uint64_t>(),
+      a0.data_ptr<uint64_t>(),
+      a1.data_ptr<uint64_t>(),
+      rhs0.data_ptr<uint64_t>(),
+      rhs1 == nullptr ? nullptr : rhs1->data_ptr<uint64_t>(),
+      rhs_batch,
+      mod.data_ptr<uint64_t>(),
+      HasBarrett ? barrett_mu->data_ptr<uint64_t>() : nullptr);
+  C10_CUDA_KERNEL_LAUNCH_CHECK();
+
+  return {out0, out1};
 }
 
 } // namespace
@@ -475,6 +620,50 @@ Tensor& mul_scalar_mod_out_cuda(
     Tensor& out) {
   return arithmetic_out<ArithmeticOp::Mul, RhsLayout::ScalarByLimb, true>(
       lhs, rhs, mod, &barrett_mu, cur_limbs, out);
+}
+
+std::vector<Tensor> fused_add_mod_cuda(
+    const Tensor& in0_c0,
+    const Tensor& in0_c1,
+    const Tensor& in1_c0,
+    const Tensor& in1_c1,
+    const Tensor& mod,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic<ArithmeticOp::Add, FusedRhsLayout::TensorPair, false>(
+      in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+}
+
+std::vector<Tensor> fused_sub_mod_cuda(
+    const Tensor& in0_c0,
+    const Tensor& in0_c1,
+    const Tensor& in1_c0,
+    const Tensor& in1_c1,
+    const Tensor& mod,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic<ArithmeticOp::Sub, FusedRhsLayout::TensorPair, false>(
+      in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+}
+
+std::vector<Tensor> fused_mul_pt_mod_cuda(
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& plaintext,
+    const Tensor& mod,
+    const Tensor& barrett_mu,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic<ArithmeticOp::Mul, FusedRhsLayout::Plaintext, true>(
+      c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
+}
+
+std::vector<Tensor> fused_mul_scalar_mod_cuda(
+    const Tensor& c0,
+    const Tensor& c1,
+    const Tensor& scalar,
+    const Tensor& mod,
+    const Tensor& barrett_mu,
+    int64_t cur_limbs) {
+  return fused_pair_arithmetic<ArithmeticOp::Mul, FusedRhsLayout::ScalarByLimb, true>(
+      c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
 }
 
 Tensor neg_mod_cuda(
