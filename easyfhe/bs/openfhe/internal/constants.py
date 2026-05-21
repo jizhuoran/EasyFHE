@@ -7,7 +7,7 @@ import numpy as np
 
 from easyfhe.fhe.ciphertext import PreparedPlaintext
 from easyfhe.fhe.constants import ConstantBundle
-from .approx_plan import degree, get_bootstrap_approx_plan
+from .approx_plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
 from .rotations import linear_transform_plan
 from .precompute_context import BsContext
 
@@ -60,6 +60,7 @@ class BootstrapPlan:
     max_levels_remaining: int
     c2s_plan: BootstrapTransformPlan
     s2c_plan: BootstrapTransformPlan
+    approx_eval_plan: object
     approx_scalar_names: dict[tuple[str, ...], tuple[str, ...]]
     double_angle_scalar_names: tuple[str, ...]
     required_rotations: tuple[int, ...]
@@ -244,6 +245,8 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
 
 def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context):
     scalars = _compute_bootstrap_scalars(crypto_context, plan, bs_context.k)
+    approx_plan = get_bootstrap_approx_plan(crypto_context.secretKeyDist)
+    approx_eval_plan = compile_flat_ps_plan(approx_plan.ps_root)
     approx_scalar_names = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
     double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
     c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
@@ -266,6 +269,7 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
         max_levels_remaining=plan.max_levels_remaining,
         c2s_plan=c2s_runtime_plan,
         s2c_plan=s2c_runtime_plan,
+        approx_eval_plan=approx_eval_plan,
         approx_scalar_names=approx_scalar_names,
         double_angle_scalar_names=double_angle_scalar_names,
         required_rotations=tuple(required_rotations),

@@ -30,6 +30,45 @@ class BootstrapApproxPlan:
     message_scaling_factor: float
 
 
+KIND_C = 0
+KIND_Q = 1
+KIND_S = 2
+
+SPACE_SMALL = 0
+SPACE_NODE = 1
+
+
+@dataclass(frozen=True)
+class FlatPSSmallSpec:
+    kind: int
+    node: ChebyshevPSNode
+    path: tuple[str, ...]
+    root: bool
+    out_idx: int
+
+
+@dataclass(frozen=True)
+class FlatPSCombineSpec:
+    node: ChebyshevPSNode
+    path: tuple[str, ...]
+    root: bool
+    base_idx: int
+    c_ref: tuple[int, int]
+    q_ref: tuple[int, int]
+    s_ref: tuple[int, int]
+    out_idx: int
+
+
+@dataclass(frozen=True)
+class FlatPSPlan:
+    k: int
+    m: int
+    small_specs: tuple[FlatPSSmallSpec, ...]
+    combine_specs: tuple[FlatPSCombineSpec, ...]
+    root_ref: tuple[int, int]
+    node_count: int
+
+
 def degree(lst):
     for i in range(len(lst) - 1, -1, -1):
         if lst[i] != 0: return i
@@ -133,6 +172,62 @@ def _build_root_ps_node(k, m, divqr_q, divcs_q, s2):
         q_node=_build_inner_ps_node(divqr_q, k, m - 1) if degree(divqr_q) > k else None,
         s_node=_build_inner_ps_node(s2, k, m - 1) if degree(s2) > k else None,
     )
+
+
+def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
+    small_specs = []
+    combine_specs = []
+
+    def add_small(kind, node, path, root):
+        out_idx = len(small_specs)
+        small_specs.append(
+            FlatPSSmallSpec(
+                kind=int(kind),
+                node=node,
+                path=tuple(path),
+                root=bool(root),
+                out_idx=out_idx,
+            )
+        )
+        return (SPACE_SMALL, out_idx)
+
+    def compile_node(node, path, root):
+        c_ref = add_small(KIND_C, node, path, root)
+        if node.q_node is None:
+            q_ref = add_small(KIND_Q, node, path, root)
+        else:
+            q_ref = compile_node(node.q_node, (*path, "q_node"), False)
+
+        if node.s_node is None:
+            s_ref = add_small(KIND_S, node, path, root)
+        else:
+            s_ref = compile_node(node.s_node, (*path, "s_node"), False)
+
+        out_idx = len(combine_specs)
+        combine_specs.append(
+            FlatPSCombineSpec(
+                node=node,
+                path=tuple(path),
+                root=bool(root),
+                base_idx=int(node.m) - 1,
+                c_ref=c_ref,
+                q_ref=q_ref,
+                s_ref=s_ref,
+                out_idx=out_idx,
+            )
+        )
+        return (SPACE_NODE, out_idx)
+
+    root_ref = compile_node(root, ("root",), True)
+    return FlatPSPlan(
+        k=int(root.k),
+        m=int(root.m),
+        small_specs=tuple(small_specs),
+        combine_specs=tuple(combine_specs),
+        root_ref=root_ref,
+        node_count=len(combine_specs),
+    )
+
 
 @lru_cache(maxsize=None)
 def get_bootstrap_approx_plan(secretKeyDist):

@@ -168,9 +168,10 @@ def _initial_conv3x3(input, kernel_group, img_width, padding, rot_offset, scale,
 
 def _initial_conv_postprocess(partial_sum, cryptoContext, weights):
     partial_sum = rescale_one_level(partial_sum, cryptoContext)
+    base = partial_sum
     sum_rot = fhe.homo_rotate(partial_sum, 1024, cryptoContext)
-    partial_sum = fhe.homo_add(partial_sum, sum_rot, cryptoContext)
-    partial_sum = fhe.homo_add(partial_sum, fhe.homo_rotate(sum_rot, 1024, cryptoContext), cryptoContext)
+    partial_sum = fhe.homo_rotate(sum_rot, 1024, cryptoContext, addend=sum_rot)
+    partial_sum = fhe.homo_add(base, partial_sum, cryptoContext)
     return fhe.homo_mul_pt(
         partial_sum,
         weights.plaintext(
@@ -294,16 +295,15 @@ def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
         _resolve_scalar(scale, weights),
     )
     shifted = fhe.homo_add_pt(x, n1, cryptoContext)
-    squared = fhe.homo_square(shifted, cryptoContext)
-    squared = rescale_one_level(squared, cryptoContext)
+    out_cur_limbs = shifted.cur_limbs - 1
     n2 = weights.plaintext(
         f"{prefix}-n2",
-        cryptoContext.L - squared.cur_limbs,
-        squared.slots,
+        cryptoContext.L - out_cur_limbs,
+        shifted.slots,
         cryptoContext,
         _resolve_scalar(scale, weights),
     )
-    return fhe.homo_add_pt(squared, n2, cryptoContext)
+    return fhe.homo_mul_rescale_addpt(shifted, shifted, n2, cryptoContext)
 
 
 def aespa_add_shortcut(conv_out, shortcut, prefix, cryptoContext, weights, scale=1):

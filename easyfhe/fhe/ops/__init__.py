@@ -1,5 +1,5 @@
 from .alignment import CipherState, align_to
-from .arithmetic import homo_add, homo_mul, homo_square, homo_sub
+from .arithmetic import homo_add, homo_mul, homo_mul_rescale_addpt, homo_mul_rescale_addscalar, homo_square, homo_sub
 from .fused import fused_broadcast_mac, fused_grouped_pairwise_mac
 from .plaintext import (
     homo_add_pt,
@@ -30,6 +30,8 @@ __all__ = [
     "homo_add_scalar_double",
     "homo_add_scalar_int",
     "homo_mul",
+    "homo_mul_rescale_addpt",
+    "homo_mul_rescale_addscalar",
     "homo_mul_pt",
     "homo_mul_scalar_double",
     "homo_mul_scalar_int",

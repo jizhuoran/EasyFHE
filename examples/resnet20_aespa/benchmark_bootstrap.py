@@ -43,6 +43,11 @@ def _parse_args():
         default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
     )
     parser.add_argument(
+        "--secret-key-dist",
+        choices=("SPARSE_TERNARY", "UNIFORM_TERNARY"),
+        default=os.environ.get("EASYFHE_SECRET_KEY_DIST", "SPARSE_TERNARY"),
+    )
+    parser.add_argument(
         "--rotation-random-mode",
         choices=("fresh", "reuse_by_shape"),
         default="fresh",

@@ -170,10 +170,11 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
 
 def _replicate_sparse_slots(raised, slots, cryptoContext):
     for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-        raised = homo.homo_add(
+        raised = homo.homo_rotate(
             raised,
-            homo.homo_rotate(raised, (1 << step) * slots, cryptoContext),
+            (1 << step) * slots,
             cryptoContext,
+            addend=raised,
         )
     return raised.cipher_like(raised.cv, slots=slots)
 
@@ -189,8 +190,7 @@ def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_co
     raised = alignment.reduce_noise_to_one(raised, cryptoContext)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-    conjugate = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
-    encoded = homo.homo_add(encoded, conjugate, cryptoContext)
+    encoded = homo.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
 
     encoded = _eval_bootstrap_approx(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)

@@ -63,9 +63,10 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
     )
 
 
-def _masked_reduce(cipher, mask_n, rotated, cryptoContext, weights):
+def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
+    summed = fhe.homo_rotate(cipher, rotate_offset, cryptoContext, addend=cipher)
     cipher = fhe.homo_mul_pt(
-        fhe.homo_add(cipher, rotated, cryptoContext),
+        summed,
         weights.plaintext(
             f"gen_mask_{mask_n}_{cipher.slots}",
             cryptoContext.L - cipher.cur_limbs,
@@ -82,12 +83,12 @@ def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_resc
         fullpack = rescale_one_level(fullpack, cryptoContext)
     else:
         fullpack = reduce_noise_to_one(fullpack, cryptoContext)
-    fullpack = _masked_reduce(fullpack, 2, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext, weights)
-    fullpack = _masked_reduce(fullpack, 4, fhe.homo_rotate(fullpack, 2, cryptoContext), cryptoContext, weights)
+    fullpack = _masked_reduce(fullpack, 2, 1, cryptoContext, weights)
+    fullpack = _masked_reduce(fullpack, 4, 2, cryptoContext, weights)
     if include_gen8:
-        fullpack = _masked_reduce(fullpack, 8, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext, weights)
-        return fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
-    return fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext)
+        fullpack = _masked_reduce(fullpack, 8, 4, cryptoContext, weights)
+        return fhe.homo_rotate(fullpack, 8, cryptoContext, addend=fullpack)
+    return fhe.homo_rotate(fullpack, 4, cryptoContext, addend=fullpack)
 
 
 def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, row_rotate, cryptoContext, weights):
@@ -129,12 +130,9 @@ def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoCont
 
 def _fold_quarters(cipher, cryptoContext):
     quarter = cipher.slots // 4
-    cipher = fhe.homo_add(cipher, fhe.homo_rotate(cipher, -quarter, cryptoContext), cryptoContext)
-    cipher = fhe.homo_add(
-        cipher,
-        fhe.homo_rotate(fhe.homo_rotate(cipher, -quarter, cryptoContext), -quarter, cryptoContext),
-        cryptoContext,
-    )
+    cipher = fhe.homo_rotate(cipher, -quarter, cryptoContext, addend=cipher)
+    rotated = fhe.homo_rotate(cipher, -quarter, cryptoContext)
+    cipher = fhe.homo_rotate(rotated, -quarter, cryptoContext, addend=cipher)
     return cipher
 
 
@@ -226,7 +224,7 @@ def sum_adjacent_slots(input, slots, cryptoContext):
     _require_power_of_two(slots, "slots")
     result = input.deep_copy()
     for i in range(int(math.log2(slots))):
-        result = fhe.homo_add(result, fhe.homo_rotate(result, 2 ** i, cryptoContext), cryptoContext)
+        result = fhe.homo_rotate(result, 2 ** i, cryptoContext, addend=result)
     return result
 
 
@@ -234,7 +232,7 @@ def sum_channel_groups(input, group_size, num_groups, cryptoContext):
     _require_power_of_two(num_groups, "num_groups")
     result = input.deep_copy()
     for i in range(int(math.log2(num_groups))):
-        result = fhe.homo_add(result, fhe.homo_rotate(result, group_size * (2 ** i), cryptoContext), cryptoContext)
+        result = fhe.homo_rotate(result, group_size * (2 ** i), cryptoContext, addend=result)
     return result
 
 

@@ -2,6 +2,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+import easyfhe as torch
 
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import homo
@@ -9,13 +10,29 @@ from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import rotation
 from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 
-from .approx_plan import ChebyshevPSNode, degree, get_bootstrap_approx_plan
+from .approx_plan import (
+    KIND_C,
+    KIND_Q,
+    KIND_S,
+    SPACE_NODE,
+    SPACE_SMALL,
+    ChebyshevPSNode,
+    degree,
+    get_bootstrap_approx_plan,
+)
 
 
 @dataclass(frozen=True)
 class _ChebyshevBasis:
     items: tuple
     batch: object
+
+
+@dataclass(frozen=True)
+class _ChebyshevTailRequest:
+    spec: object
+    deg: int
+    scalar_path: tuple
 
 
 def _add_named_scalar_double_preserve_noise(ciphertext, name, constants, cryptoContext):
@@ -43,13 +60,13 @@ def _batch_prefix(cipher, size):
     )
 
 
-def _scalar_weighted_acc(cipher_batch, scalars, cryptoContext):
-    cv = F.cipher_scalar_weighted_acc(cipher_batch, scalars, cryptoContext)
+def _grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext):
+    cv = F.cipher_grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext)
     return cipher_batch.cipher_like(
         list(cv),
         scaling_factor=cipher_batch.scaling_factor * cryptoContext.scale_at(cipher_batch.cur_limbs),
         noise_deg=cipher_batch.noise_deg + 1,
-        batch_size=1,
+        batch_size=int(scalars.shape[0]),
         cipher_id="assign",
     )
 
@@ -60,22 +77,24 @@ def _truncated_degree(coefficients, size):
     return degree(truncated)
 
 
-def _chebyshev_tail(
-    coefficients,
-    T,
-    cryptoContext,
-    constants,
-    bootstrap_plan,
-    scalar_path,
-    *,
-    size=None,
-    identity_shortcut=False,
-):
+def _small_tail_metadata(spec):
+    node = spec.node
+    if spec.kind == KIND_C:
+        return node.divcs_q, (*spec.path, "c"), None, True
+    if spec.kind == KIND_Q:
+        return node.divqr_q, (*spec.path, "q"), node.k, False
+    if spec.kind == KIND_S:
+        return node.s2, (*spec.path, "s"), node.k, False
+    raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
+
+
+def _make_chebyshev_tail_request(spec, T, bootstrap_plan):
+    coefficients, scalar_path, size, identity_shortcut = _small_tail_metadata(spec)
     deg = degree(coefficients) if size is None else _truncated_degree(coefficients, size)
     if deg < 1:
-        return None
+        return None, None
     if identity_shortcut and deg == 1 and coefficients[1] == 1:
-        return T.items[0]
+        return None, T.items[0]
 
     names = bootstrap_plan.approx_scalar_names[tuple(scalar_path)]
     if len(names) != int(deg):
@@ -83,13 +102,114 @@ def _chebyshev_tail(
             f"Chebyshev scalar metadata mismatch at {scalar_path}: "
             f"got {len(names)}, expected {deg}"
         )
+    return _ChebyshevTailRequest(
+        spec=spec,
+        deg=int(deg),
+        scalar_path=tuple(scalar_path),
+    ), None
 
-    batch = _batch_prefix(T.batch, deg)
-    scalars = constants.encoded_scalars(names, batch.cur_limbs, 1, cryptoContext, mode="double")
-    return alignment.rescale_one_level(
-        _scalar_weighted_acc(batch, scalars, cryptoContext),
-        cryptoContext,
-    )
+
+def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
+    node = spec.node
+    if spec.kind == KIND_C:
+        c = tail
+        if c is not None:
+            c = _add_chebyshev_constant(c, node.divcs_q, cryptoContext)
+            if not spec.root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+                target = T2[node.m - 1]
+                c = alignment.align_to(
+                    c,
+                    alignment.CipherState(
+                        target.cur_limbs,
+                        target.noise_deg,
+                        target.scaling_factor,
+                    ),
+                    cryptoContext,
+                )
+        return c
+
+    if spec.kind == KIND_Q:
+        q = tail
+        highest = _q_highest_term(
+            node,
+            T.items[node.k - 1],
+            cryptoContext,
+            root=spec.root,
+            has_tail=q is not None,
+        )
+        q = highest if q is None else homo.homo_add(q, highest, cryptoContext)
+        return _add_chebyshev_constant(q, node.divqr_q, cryptoContext)
+
+    if spec.kind == KIND_S:
+        s = tail
+        if s is None:
+            s = T.items[node.k - 1]
+        else:
+            s = homo.homo_add(s, T.items[node.k - 1], cryptoContext)
+        s = _add_chebyshev_constant(s, node.s2, cryptoContext)
+        if not spec.root and cryptoContext.rescaleTech == "FIXEDMANUAL":
+            s = alignment.align_to(
+                s,
+                alignment.CipherState(s.cur_limbs - 1, 1, None),
+                cryptoContext,
+            )
+        return s
+
+    raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
+
+
+def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_plan):
+    tail_values = [None] * len(flat.small_specs)
+    grouped_requests = {}
+
+    for spec in flat.small_specs:
+        request, direct_tail = _make_chebyshev_tail_request(spec, T, bootstrap_plan)
+        if request is None:
+            tail_values[spec.out_idx] = direct_tail
+        else:
+            grouped_requests.setdefault(request.deg, []).append(request)
+
+    for deg, requests in grouped_requests.items():
+        batch = _batch_prefix(T.batch, deg)
+        scalar_rows = []
+        for request in requests:
+            names = bootstrap_plan.approx_scalar_names[request.scalar_path]
+            scalar_rows.append(
+                constants.encoded_scalars(
+                    names,
+                    batch.cur_limbs,
+                    1,
+                    cryptoContext,
+                    mode="double",
+                )
+            )
+        scalars = torch.stack(scalar_rows, dim=0).contiguous()
+        tails = alignment.rescale_one_level(
+            _grouped_scalar_weighted_acc(batch, scalars, cryptoContext),
+            cryptoContext,
+        )
+        if tails.batch_size > 1 and tails.cv[0].dim() == 2:
+            tails = tails.cipher_like(
+                [
+                    component.reshape(len(requests), tails.cur_limbs, cryptoContext.N)
+                    for component in tails.cv
+                ],
+                batch_size=len(requests),
+                cipher_id="assign",
+            )
+        for index, request in enumerate(requests):
+            tail_values[request.spec.out_idx] = rotation._batch_item(tails, index)
+
+    small_values = [None] * len(flat.small_specs)
+    for spec in flat.small_specs:
+        small_values[spec.out_idx] = _eval_small_spec_from_tail(
+            spec,
+            tail_values[spec.out_idx],
+            T,
+            T2,
+            cryptoContext,
+        )
+    return small_values
 
 
 def _add_chebyshev_constant(value, coefficients, cryptoContext):
@@ -99,13 +219,20 @@ def _add_chebyshev_constant(value, coefficients, cryptoContext):
 def _chebyshev_basis(x, a, b, k, cryptoContext):
     T = [_scale_input_to_unit_interval(x, a, b, cryptoContext)]
     for order in range(2, k + 1):
-        prod = homo.homo_mul(T[order // 2 - 1], T[(order + 1) // 2 - 1], cryptoContext)
-        value = homo.homo_add(prod, prod, cryptoContext)
-        value = alignment.rescale_one_level(value, cryptoContext)
         if order & 1:
-            value = homo.homo_sub(value, T[0], cryptoContext)
+            value = homo.homo_mul_rescale(
+                T[order // 2 - 1],
+                T[(order + 1) // 2 - 1],
+                cryptoContext,
+                sub=T[0],
+            )
         else:
-            value = homo.homo_add_scalar_double(value, -1.0, cryptoContext)
+            value = homo.homo_mul_rescale(
+                T[order // 2 - 1],
+                T[(order + 1) // 2 - 1],
+                cryptoContext,
+                scalar=-1.0,
+            )
         T.append(value)
 
     final = T[-1]
@@ -148,10 +275,7 @@ def _chebyshev_doubling_basis(Tk, m, cryptoContext):
     # T2[i] = T_{k * 2^i}(x). T2[0] is T_k(x).
     T2 = [Tk]
     for _ in range(1, m):
-        value = homo.homo_square(T2[-1], cryptoContext)
-        value = homo.homo_add(value, value, cryptoContext)
-        value = alignment.rescale_one_level(value, cryptoContext)
-        value = homo.homo_add_scalar_double(value, -1.0, cryptoContext)
+        value = homo.homo_mul_rescale(T2[-1], T2[-1], cryptoContext, scalar=-1.0)
         T2.append(value)
     return T2
 
@@ -160,10 +284,7 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
     # Computes T_{k * (2^m - 1)}(x) from T_k, T_{2k}, ...
     value = T2[0]
     for doubled in T2[1:]:
-        prod = homo.homo_mul(value, doubled, cryptoContext)
-        value = homo.homo_add(prod, prod, cryptoContext)
-        value = alignment.rescale_one_level(value, cryptoContext)
-        value = homo.homo_sub(value, T2[0], cryptoContext)
+        value = homo.homo_mul_rescale(value, doubled, cryptoContext, sub=T2[0])
     return value
 
 
@@ -181,100 +302,69 @@ def _q_highest_term(node: ChebyshevPSNode, Tk, cryptoContext, *, root, has_tail)
     return homo.homo_mul_scalar_int(Tk, scalar, cryptoContext)
 
 
-def _eval_ps_node(node: ChebyshevPSNode, T, T2, cryptoContext, constants, bootstrap_plan, path, *, root):
-    c = _chebyshev_tail(
-        node.divcs_q,
-        T,
-        cryptoContext,
-        constants,
-        bootstrap_plan,
-        (*path, "c"),
-        identity_shortcut=True,
-    )
-    if c is not None:
-        c = _add_chebyshev_constant(c, node.divcs_q, cryptoContext)
-        if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
-            target = T2[node.m - 1]
-            c = alignment.align_to(
-                c,
-                alignment.CipherState(target.cur_limbs, target.noise_deg, target.scaling_factor),
-                cryptoContext,
-            )
+def _read_ref(ref, small_values, node_values):
+    space, idx = ref
+    if space == SPACE_SMALL:
+        return small_values[idx]
+    if space == SPACE_NODE:
+        return node_values[idx]
+    raise ValueError(f"unknown flat PS value space: {space}")
 
-    if node.q_node is not None:
-        q = _eval_ps_node(node.q_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "q_node"), root=False)
-    else:
-        q = _chebyshev_tail(
-            node.divqr_q,
-            T,
-            cryptoContext,
-            constants,
-            bootstrap_plan,
-            (*path, "q"),
-            size=node.k,
-        )
-        highest = _q_highest_term(node, T.items[node.k - 1], cryptoContext, root=root, has_tail=q is not None)
-        q = highest if q is None else homo.homo_add(q, highest, cryptoContext)
-        q = _add_chebyshev_constant(q, node.divqr_q, cryptoContext)
 
-    if node.s_node is not None:
-        s = _eval_ps_node(node.s_node, T, T2, cryptoContext, constants, bootstrap_plan, (*path, "s_node"), root=False)
-    else:
-        s = _chebyshev_tail(
-            node.s2,
-            T,
-            cryptoContext,
-            constants,
-            bootstrap_plan,
-            (*path, "s"),
-            size=node.k,
-        )
-        s = T.items[node.k - 1] if s is None else homo.homo_add(s, T.items[node.k - 1], cryptoContext)
-        s = _add_chebyshev_constant(s, node.s2, cryptoContext)
-        if not root and cryptoContext.rescaleTech == "FIXEDMANUAL":
-            s = alignment.align_to(
-                s,
-                alignment.CipherState(s.cur_limbs - 1, 1, None),
-                cryptoContext,
-            )
+def _eval_combine_spec(spec, small_values, node_values, T2, cryptoContext):
+    c = _read_ref(spec.c_ref, small_values, node_values)
+    q = _read_ref(spec.q_ref, small_values, node_values)
+    s = _read_ref(spec.s_ref, small_values, node_values)
+    base = T2[spec.base_idx]
 
-    base = T2[node.m - 1]
     if c is None:
-        result = homo.homo_add_scalar_double(base, node.divcs_q[0] / 2, cryptoContext)
+        result = homo.homo_add_scalar_double(base, spec.node.divcs_q[0] / 2, cryptoContext)
     else:
         result = homo.homo_add(base, c, cryptoContext)
 
-    result = homo.homo_mul(result, q, cryptoContext)
-    result = alignment.rescale_one_level(result, cryptoContext)
-    result = homo.homo_add(result, s, cryptoContext)
-
-    if root:
-        result = homo.homo_sub(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
-    return result
+    return homo.homo_mul_rescale(result, q, cryptoContext, apply_double=False, add=s)
 
 
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
 def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_plan):
-    plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
-    root = plan.ps_root
-    T = _chebyshev_basis(x, a, b, root.k, cryptoContext)
-    T2 = _chebyshev_doubling_basis(T.items[-1], root.m, cryptoContext)
-    return _eval_ps_node(root, T, T2, cryptoContext, constants, bootstrap_plan, ("root",), root=True)
+    flat = bootstrap_plan.approx_eval_plan
+
+    T = _chebyshev_basis(x, a, b, flat.k, cryptoContext)
+    T2 = _chebyshev_doubling_basis(T.items[-1], flat.m, cryptoContext)
+
+    small_values = _eval_small_specs_grouped(
+        flat,
+        T,
+        T2,
+        cryptoContext,
+        constants,
+        bootstrap_plan,
+    )
+
+    node_values = [None] * flat.node_count
+    for spec in flat.combine_specs:
+        node_values[spec.out_idx] = _eval_combine_spec(
+            spec,
+            small_values,
+            node_values,
+            T2,
+            cryptoContext,
+        )
+
+    result = _read_ref(flat.root_ref, small_values, node_values)
+    return homo.homo_sub(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
 
 
 def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan):
     plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
 
     for j in range(1, plan.double_angle_iterations + 1):
-        ciphertext = homo.homo_square(ciphertext, cryptoContext)
-        ciphertext = homo.homo_add(ciphertext, ciphertext, cryptoContext)
-        ciphertext = _add_named_scalar_double_preserve_noise(
+        ciphertext = homo.homo_mul_rescale(
             ciphertext,
-            bootstrap_plan.double_angle_scalar_names[j - 1],
-            constants,
+            ciphertext,
             cryptoContext,
+            scalar=constants.scalar(bootstrap_plan.double_angle_scalar_names[j - 1]),
         )
-        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return ciphertext
 
 

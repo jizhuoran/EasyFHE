@@ -194,7 +194,7 @@ Tensor& mul_by_monomial_cuda_(
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
   TORCH_INTERNAL_ASSERT(res.dim() == 4);
-  TORCH_INTERNAL_ASSERT(res.sizes()[0] == 2);
+  TORCH_INTERNAL_ASSERT(res.sizes()[0] > 0);
 
 
   mul_by_monomial_inplace_template(

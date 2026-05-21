@@ -533,6 +533,68 @@ def cv_hrot(
     )
 
 
+def cv_hmul_double_rescale(
+    c0: Tensor,
+    c1: Tensor,
+    d0: Tensor,
+    d1: Tensor,
+    curr_limbs: int,
+    special_mod_start: int,
+    swk_bx: Tensor,
+    swk_ax: Tensor,
+    context: Context,
+    *,
+    apply_double: bool = True,
+    post_op: int = 0,
+    post_c0: Tensor | None = None,
+    post_c1: Tensor | None = None,
+    post_scalar: Tensor | None = None,
+) -> Tensor:
+    beta = (curr_limbs + context.alpha - 1) // context.alpha
+    return torch.hmul_double_rescale(
+        c0.contiguous(),
+        c1.contiguous(),
+        d0.contiguous(),
+        d1.contiguous(),
+        swk_bx,
+        swk_ax,
+        curr_limbs=curr_limbs,
+        special_mod_start=special_mod_start,
+        L=context.L,
+        beta=beta,
+        N=context.N,
+        alpha=context.alpha,
+        old_prime=context.primes_list[curr_limbs - 1],
+        primes=context.primes,
+        q_mu=context.q_mu,
+        barret_ratio=context.barret_ratio,
+        barret_k=context.barret_k,
+        hat_inverse_vec_modup=context.hat_inverse_vec_modup,
+        hat_inverse_vec_shoup_modup=context.hat_inverse_vec_shoup_modup,
+        prod_q_i_mod_q_j_modup=context.prod_q_i_mod_q_j_modup[curr_limbs - 1],
+        hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
+        hat_inverse_vec_shoup_moddown=context.hat_inverse_vec_shoup_moddown,
+        prod_q_i_mod_q_j_moddown=context.prod_q_i_mod_q_j_moddown,
+        prod_inv_moddown=context.prod_inv_moddown,
+        prod_inv_shoup_moddown=context.prod_inv_shoup_moddown,
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
+        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
+        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
+        switch_modulus_map=context.switch_modulus_map,
+        qlql_inv_mod_ql_div_ql_mod_q=context.qlql_inv_mod_ql_div_ql_mod_q,
+        qlql_inv_mod_ql_div_ql_mod_q_shoup=context.qlql_inv_mod_ql_div_ql_mod_q_shoup,
+        q_inv_mod_q=context.q_inv_mod_q,
+        q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
+        inner_workspace=context.inner_workspace,
+        apply_double=bool(apply_double),
+        post_op=int(post_op),
+        post_c0=None if post_c0 is None else post_c0.contiguous(),
+        post_c1=None if post_c1 is None else post_c1.contiguous(),
+        post_scalar=None if post_scalar is None else post_scalar.contiguous(),
+    )
+
+
 def cv_drop_last_element_and_scale(
     input: Tensor,
     cur_limbs: int,
@@ -684,5 +746,41 @@ def cipher_scalar_weighted_acc(cipher, scalars, context):
         cipher.batch_size,
         cipher.cur_limbs,
         context.N,
+    )
+    return res[0], res[1]
+
+
+def cipher_grouped_scalar_weighted_acc(cipher, scalars, context, *, strategy=-1):
+    if cipher.is_ext:
+        raise ValueError("cipher_grouped_scalar_weighted_acc expects a non-ext cipher batch")
+    if scalars.dim() != 3:
+        raise ValueError(
+            "cipher_grouped_scalar_weighted_acc expects scalars with shape "
+            "[groups, degree, limbs]"
+        )
+    groups = int(scalars.shape[0])
+    degree = int(scalars.shape[1])
+    if degree != int(cipher.batch_size):
+        raise ValueError(
+            "cipher_grouped_scalar_weighted_acc scalar degree mismatch: "
+            f"{degree} != {cipher.batch_size}"
+        )
+    if int(scalars.shape[2]) != int(cipher.cur_limbs):
+        raise ValueError(
+            "cipher_grouped_scalar_weighted_acc scalar limb mismatch: "
+            f"{int(scalars.shape[2])} != {cipher.cur_limbs}"
+        )
+    cipher_values = torch.stack(cipher.cv, dim=0)
+    res = torch.grouped_scalar_weighted_acc(
+        cipher_values,
+        scalars.contiguous(),
+        context.moduliQ,
+        context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
+        context.QbarretKplusPbarretK_map[cipher.cur_limbs],
+        groups,
+        cipher.batch_size,
+        cipher.cur_limbs,
+        context.N,
+        int(strategy),
     )
     return res[0], res[1]

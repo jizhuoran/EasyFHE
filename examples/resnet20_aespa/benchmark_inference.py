@@ -41,6 +41,11 @@ def _parse_args():
         choices=("double_hoist", "normal_giant", "normal_bsgs"),
         default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
     )
+    parser.add_argument(
+        "--secret-key-dist",
+        choices=("SPARSE_TERNARY", "UNIFORM_TERNARY"),
+        default=os.environ.get("EASYFHE_SECRET_KEY_DIST", "SPARSE_TERNARY"),
+    )
     parser.add_argument("--total", type=int, default=1)
     parser.add_argument("--trace-states", action="store_true")
     return parser.parse_args()

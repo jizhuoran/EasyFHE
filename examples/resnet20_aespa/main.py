@@ -77,10 +77,18 @@ def _parse_args():
         choices=("double_hoist", "normal_giant", "normal_bsgs"),
         default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
     )
+    parser.add_argument(
+        "--secret-key-dist",
+        choices=("SPARSE_TERNARY", "UNIFORM_TERNARY"),
+        default=os.environ.get("EASYFHE_SECRET_KEY_DIST", "SPARSE_TERNARY"),
+    )
     return parser.parse_known_args()[0]
 
 
 def build_config(args):
+    secret_key_dist = str(
+        getattr(args, "secret_key_dist", os.environ.get("EASYFHE_SECRET_KEY_DIST", "SPARSE_TERNARY"))
+    ).upper()
     return AespaConfig(
         total=args.total,
         data_dir=DATA_DIR,
@@ -94,15 +102,15 @@ def build_config(args):
         log_bs_slots=(14,),
         log_n=16,
         dnum=int(os.environ.get("EASYFHE_DNUM", "3")),
-        dcrt_bits=52,
-        first_mod=55,
+        dcrt_bits=int(os.environ.get("EASYFHE_DCRT_BITS", "59")),
+        first_mod=int(os.environ.get("EASYFHE_FIRST_MOD", "60")),
         level_budgets=((4, 4),),
         bootstrap_strategy=getattr(
             args,
             "bootstrap_strategy",
             os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
         ),
-        secret_key_dist="SPARSE_TERNARY",
+        secret_key_dist=secret_key_dist,
         rescale_tech="FIXEDMANUAL",
         device=args.device,
         weight_cache_mode=os.environ.get("EASYFHE_WEIGHT_CACHE_MODE", "plain"),

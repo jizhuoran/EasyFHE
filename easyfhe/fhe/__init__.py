@@ -16,6 +16,8 @@ from .ops import (
     homo_add_scalar_double,
     homo_add_scalar_int,
     homo_mul,
+    homo_mul_rescale_addpt,
+    homo_mul_rescale_addscalar,
     homo_mul_pt,
     homo_mul_scalar_double,
     homo_mul_scalar_int,
