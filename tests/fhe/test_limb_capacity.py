@@ -13,14 +13,16 @@ def _uint64_tensor(shape, fill=0):
 
 
 def _capacity_tensor(active, *, capacity, inactive_fill):
-    out = _uint64_tensor((capacity, active.shape[-1]), fill=inactive_fill)
-    out[: active.shape[0]] = active
+    if active.dim() == 2:
+        active = active.unsqueeze(0)
+    out = _uint64_tensor((active.shape[0], capacity, active.shape[-1]), fill=inactive_fill)
+    out[:, : active.shape[-2], :] = active
     return out
 
 
 def _cipher(name, *, cur_limbs=3, capacity=5, noise_deg=1):
-    c0 = _uint64_tensor((capacity, 64), fill=1)
-    c1 = _uint64_tensor((capacity, 64), fill=2)
+    c0 = _uint64_tensor((1, capacity, 64), fill=1)
+    c1 = _uint64_tensor((1, capacity, 64), fill=2)
     cipher = Cipher(
         [c0, c1],
         cur_limbs=cur_limbs,
@@ -34,7 +36,7 @@ def _cipher(name, *, cur_limbs=3, capacity=5, noise_deg=1):
 
 
 def _cipher_from_active(name, c0, c1, *, capacity, inactive_fill, cur_limbs=None):
-    cur_limbs = c0.shape[0] if cur_limbs is None else int(cur_limbs)
+    cur_limbs = c0.shape[-2] if cur_limbs is None else int(cur_limbs)
     cipher = Cipher(
         [
             _capacity_tensor(c0, capacity=capacity, inactive_fill=inactive_fill),
@@ -51,7 +53,7 @@ def _cipher_from_active(name, c0, c1, *, capacity, inactive_fill, cur_limbs=None
 
 
 def _plaintext_from_active(name, values, *, capacity, inactive_fill, cur_limbs=None):
-    cur_limbs = values.shape[0] if cur_limbs is None else int(cur_limbs)
+    cur_limbs = values.shape[-2] if cur_limbs is None else int(cur_limbs)
     plain = Cipher(
         [_capacity_tensor(values, capacity=capacity, inactive_fill=inactive_fill)],
         cur_limbs=cur_limbs,
@@ -94,8 +96,8 @@ def _context():
     ],
 )
 def test_cv_ops_use_cur_limbs_not_tensor_capacity(op_name, args):
-    active_x = _uint64_tensor((3, 64), fill=5)
-    active_y = _uint64_tensor((3, 64), fill=7)
+    active_x = _uint64_tensor((1, 3, 64), fill=5)
+    active_y = _uint64_tensor((1, 3, 64), fill=7)
     x_compact = active_x.clone()
     y_compact = active_y.clone()
     x_capacity = _capacity_tensor(active_x, capacity=5, inactive_fill=91)
@@ -128,19 +130,19 @@ def test_cv_ops_use_cur_limbs_not_tensor_capacity(op_name, args):
         capacity = op(x_capacity, *capacity_call_args, modulus, 3)
 
     assert tuple(capacity.shape) == tuple(x_capacity.shape)
-    assert capacity[:3].cpu().numpy().tolist() == compact[:3].cpu().numpy().tolist()
+    assert capacity[:, :3].cpu().numpy().tolist() == compact[:, :3].cpu().numpy().tolist()
 
 
 def test_cv_add_inplace_uses_cur_limbs_and_preserves_capacity():
-    x = _uint64_tensor((5, 64), fill=1)
-    y = _uint64_tensor((4, 64), fill=2)
+    x = _uint64_tensor((1, 5, 64), fill=1)
+    y = _uint64_tensor((1, 4, 64), fill=2)
     modulus = _uint64_tensor((5,), fill=97)
 
     result = kernels.cv_add(x, y, modulus, cur_limbs=3, inplace=True)
 
     assert result is x
-    assert tuple(x.shape) == (5, 64)
-    assert (x[:3].cpu().numpy() == 3).all()
+    assert tuple(x.shape) == (1, 5, 64)
+    assert (x[:, :3].cpu().numpy() == 3).all()
 
 
 def test_align_drop_limb_updates_metadata_without_compressing_non_ext_tensor():
@@ -150,7 +152,7 @@ def test_align_drop_limb_updates_metadata_without_compressing_non_ext_tensor():
     result = alignment.align_to(cipher, alignment.CipherState(2, 1), ctx)
 
     assert result.cur_limbs == 2
-    assert tuple(result.cv[0].shape) == (6, 64)
+    assert tuple(result.cv[0].shape) == (1, 6, 64)
     assert result.cv[0] is cipher.cv[0]
 
 
@@ -172,7 +174,7 @@ def test_rescale_updates_metadata_and_preserves_component_capacity(monkeypatch):
 
     def fake_drop_last(component, cur_limbs, level, context):
         assert cur_limbs == 4
-        return _uint64_tensor((3, 64), fill=11)
+        return _uint64_tensor((1, 3, 64), fill=11)
 
     monkeypatch.setattr(alignment.F, "cv_drop_last_element_and_scale", fake_drop_last)
 
@@ -180,8 +182,8 @@ def test_rescale_updates_metadata_and_preserves_component_capacity(monkeypatch):
 
     assert result.cur_limbs == 3
     assert result.noise_deg == 1
-    assert tuple(result.cv[0].shape) == (6, 64)
-    assert (result.cv[0][:3].cpu().numpy() == 11).all()
+    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert (result.cv[0][:, :3].cpu().numpy() == 11).all()
 
 
 def test_homo_add_preserves_left_operand_capacity():
@@ -192,7 +194,7 @@ def test_homo_add_preserves_left_operand_capacity():
     result = fhe.homo_add(a, b, ctx)
 
     assert result.cur_limbs == 3
-    assert tuple(result.cv[0].shape) == (5, 64)
+    assert tuple(result.cv[0].shape) == (1, 5, 64)
     assert result is not a
 
 
@@ -210,9 +212,9 @@ def test_homo_add_ignores_inactive_capacity_values():
     compact = fhe.homo_add(compact_a, compact_b, ctx)
     capacity = fhe.homo_add(capacity_a, capacity_b, ctx)
 
-    assert tuple(capacity.cv[0].shape) == (6, 64)
-    assert capacity.cv[0][:3].cpu().numpy().tolist() == compact.cv[0][:3].cpu().numpy().tolist()
-    assert capacity.cv[1][:3].cpu().numpy().tolist() == compact.cv[1][:3].cpu().numpy().tolist()
+    assert tuple(capacity.cv[0].shape) == (1, 6, 64)
+    assert capacity.cv[0][:, :3].cpu().numpy().tolist() == compact.cv[0][:, :3].cpu().numpy().tolist()
+    assert capacity.cv[1][:, :3].cpu().numpy().tolist() == compact.cv[1][:, :3].cpu().numpy().tolist()
 
 
 @pytest.mark.parametrize(
@@ -235,9 +237,9 @@ def test_public_cipher_scalar_ops_ignore_inactive_capacity_values(op):
     compact_result = getattr(fhe, op)(compact, scalar, ctx)
     capacity_result = getattr(fhe, op)(capacity, scalar, ctx)
 
-    assert tuple(capacity_result.cv[0].shape) == (6, 64)
-    assert capacity_result.cv[0][:3].cpu().numpy().tolist() == compact_result.cv[0][:3].cpu().numpy().tolist()
-    assert capacity_result.cv[1][:3].cpu().numpy().tolist() == compact_result.cv[1][:3].cpu().numpy().tolist()
+    assert tuple(capacity_result.cv[0].shape) == (1, 6, 64)
+    assert capacity_result.cv[0][:, :3].cpu().numpy().tolist() == compact_result.cv[0][:, :3].cpu().numpy().tolist()
+    assert capacity_result.cv[1][:, :3].cpu().numpy().tolist() == compact_result.cv[1][:, :3].cpu().numpy().tolist()
 
 
 def test_homo_sub_ignores_inactive_capacity_values():
@@ -254,9 +256,9 @@ def test_homo_sub_ignores_inactive_capacity_values():
     compact = fhe.homo_sub(compact_a, compact_b, ctx)
     capacity = fhe.homo_sub(capacity_a, capacity_b, ctx)
 
-    assert tuple(capacity.cv[0].shape) == (6, 64)
-    assert capacity.cv[0][:3].cpu().numpy().tolist() == compact.cv[0][:3].cpu().numpy().tolist()
-    assert capacity.cv[1][:3].cpu().numpy().tolist() == compact.cv[1][:3].cpu().numpy().tolist()
+    assert tuple(capacity.cv[0].shape) == (1, 6, 64)
+    assert capacity.cv[0][:, :3].cpu().numpy().tolist() == compact.cv[0][:, :3].cpu().numpy().tolist()
+    assert capacity.cv[1][:, :3].cpu().numpy().tolist() == compact.cv[1][:, :3].cpu().numpy().tolist()
 
 
 @pytest.mark.parametrize("op", ["homo_add_pt", "homo_mul_pt"])
@@ -273,9 +275,9 @@ def test_public_cipher_plaintext_ops_ignore_inactive_capacity_values(op):
     compact = getattr(fhe, op)(compact_cipher, compact_plain, ctx)
     capacity = getattr(fhe, op)(capacity_cipher, capacity_plain, ctx)
 
-    assert tuple(capacity.cv[0].shape) == (6, 64)
-    assert capacity.cv[0][:3].cpu().numpy().tolist() == compact.cv[0][:3].cpu().numpy().tolist()
-    assert capacity.cv[1][:3].cpu().numpy().tolist() == compact.cv[1][:3].cpu().numpy().tolist()
+    assert tuple(capacity.cv[0].shape) == (1, 6, 64)
+    assert capacity.cv[0][:, :3].cpu().numpy().tolist() == compact.cv[0][:, :3].cpu().numpy().tolist()
+    assert capacity.cv[1][:, :3].cpu().numpy().tolist() == compact.cv[1][:, :3].cpu().numpy().tolist()
 
 
 def test_homo_add_inplace_keeps_existing_capacity():
@@ -287,7 +289,7 @@ def test_homo_add_inplace_keeps_existing_capacity():
 
     assert result is a
     assert a.cur_limbs == 3
-    assert tuple(a.cv[0].shape) == (5, 64)
+    assert tuple(a.cv[0].shape) == (1, 5, 64)
 
 
 def test_homo_mul_and_square_preserve_capacity_before_relinearize(monkeypatch):
@@ -307,10 +309,10 @@ def test_homo_mul_and_square_preserve_capacity_before_relinearize(monkeypatch):
     compact_square = arithmetic.homo_square(compact_a, ctx)
     capacity_square = arithmetic.homo_square(capacity_a, ctx)
 
-    assert tuple(capacity_mul.cv[0].shape) == (6, 64)
-    assert capacity_mul.cv[0][:3].cpu().numpy().tolist() == compact_mul.cv[0][:3].cpu().numpy().tolist()
-    assert tuple(capacity_square.cv[0].shape) == (6, 64)
-    assert capacity_square.cv[0][:3].cpu().numpy().tolist() == compact_square.cv[0][:3].cpu().numpy().tolist()
+    assert tuple(capacity_mul.cv[0].shape) == (1, 6, 64)
+    assert capacity_mul.cv[0][:, :3].cpu().numpy().tolist() == compact_mul.cv[0][:, :3].cpu().numpy().tolist()
+    assert tuple(capacity_square.cv[0].shape) == (1, 6, 64)
+    assert capacity_square.cv[0][:, :3].cpu().numpy().tolist() == compact_square.cv[0][:, :3].cpu().numpy().tolist()
 
 
 def test_homo_mul_rescale_preserves_input_capacity(monkeypatch):
@@ -326,18 +328,18 @@ def test_homo_mul_rescale_preserves_input_capacity(monkeypatch):
     b = _cipher_from_active("b", active_b0, active_b1, capacity=5, inactive_fill=89, cur_limbs=4)
 
     def fake_hmul(*args, **kwargs):
-        return torch.stack([
-            torch.stack([_uint64_tensor((3, 64), fill=11)]),
-            torch.stack([_uint64_tensor((3, 64), fill=12)]),
-        ])
+        return (
+            _uint64_tensor((1, 3, 64), fill=11),
+            _uint64_tensor((1, 3, 64), fill=12),
+        )
 
     monkeypatch.setattr(arithmetic.F, "cv_hmul_double_rescale", fake_hmul)
 
     result = fhe.homo_mul_rescale(a, b, ctx)
 
     assert result.cur_limbs == 3
-    assert tuple(result.cv[0].shape) == (6, 64)
-    assert (result.cv[0][:3].cpu().numpy() == 11).all()
+    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert (result.cv[0][:, :3].cpu().numpy() == 11).all()
 
 
 def test_homo_rotate_preserves_capacity_and_uses_cur_limbs(monkeypatch):
@@ -354,14 +356,17 @@ def test_homo_rotate_preserves_capacity_and_uses_cur_limbs(monkeypatch):
 
     def fake_hrot(c0, c1, cur_limbs, *args, **kwargs):
         assert cur_limbs == 3
-        return _uint64_tensor((cur_limbs, 64), fill=6), _uint64_tensor((cur_limbs, 64), fill=7)
+        return (
+            _uint64_tensor((1, cur_limbs, 64), fill=6),
+            _uint64_tensor((1, cur_limbs, 64), fill=7),
+        )
 
     monkeypatch.setattr(rotation.F, "cv_hrot", fake_hrot)
 
     result = fhe.homo_rotate(cipher, 1, ctx)
 
-    assert tuple(result.cv[0].shape) == (6, 64)
-    assert (result.cv[0][:3].cpu().numpy() == 6).all()
+    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert (result.cv[0][:, :3].cpu().numpy() == 6).all()
 
 
 def test_scalar_weighted_acc_preserves_capacity_and_ignores_inactive_limbs():
@@ -385,4 +390,4 @@ def test_scalar_weighted_acc_preserves_capacity_and_ignores_inactive_limbs():
 
     result = kernels.cipher_scalar_weighted_acc(cipher, scalars, ctx)
 
-    assert tuple(result[0].shape) == (capacity, ctx.N)
+    assert tuple(result[0].shape) == (1, capacity, ctx.N)

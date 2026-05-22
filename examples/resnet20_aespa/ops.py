@@ -235,7 +235,7 @@ def pointwise_conv(input, kernel_group, bias_key, rot_offset, scale, cryptoConte
     )
     input = reduce_noise_to_one(input, cryptoContext)
     plaintexts = _read_kernel_group(kernel_group, input, scale, cryptoContext, weights)
-    input_batch = input.cipher_like([component.unsqueeze(0) for component in input.cv], batch_size=1)
+    input_batch = input.cipher_like(input.cv, batch_size=1)
     partial_sums = fhe.fused_grouped_pairwise_mac(input_batch, plaintexts, plaintexts.batch_size, cryptoContext)
     finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
     finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
@@ -269,7 +269,7 @@ def pointwise_conv_sx(input, kernel_group, bias_key, copy_per_cipher, channels, 
         cryptoContext,
         weights,
     )
-    input_batch = input.cipher_like([component.unsqueeze(0) for component in input.cv], batch_size=1)
+    input_batch = input.cipher_like(input.cv, batch_size=1)
     partial_sums = fhe.fused_grouped_pairwise_mac(input_batch, plaintexts, loop_size, cryptoContext)
     finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
     finalsum = fhe.homo_rotate(finalsum, loop_size * rot_offset, cryptoContext)

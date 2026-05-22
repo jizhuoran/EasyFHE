@@ -214,13 +214,13 @@ static void modup_cuda_template(
     const Tensor& power_of_roots,
     const Tensor& power_of_roots_shoup,
     bool copy_original_limbs) {
-  auto num_cipher = from.sizes()[1];
+  auto num_cipher = from.sizes()[0];
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   int64_t num_moduli_after_modup = cur_limbs + sizeP;
 
-  auto L_OUT = to.sizes()[2];
-  auto L_IN = from.sizes()[2];
+  auto L_OUT = to.sizes()[1];
+  auto L_IN = from.sizes()[1];
 
   uint64_t* to_ptr__ = reinterpret_cast<uint64_t*>(to.data_ptr<uint64_t>());
   uint64_t* from_ptr__ = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
@@ -230,14 +230,13 @@ static void modup_cuda_template(
     Tensor temp_storage;
     const Tensor* temp_tensor = temp_workspace;
     if (temp_tensor == nullptr) {
-      temp_storage = at::empty({1, num_cipher, cur_limbs, N}, from.options());
+      temp_storage = at::empty({num_cipher, cur_limbs, N}, from.options());
       temp_tensor = &temp_storage;
     } else {
-      TORCH_INTERNAL_ASSERT(temp_tensor->dim() == 4);
-      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[0] == 1);
-      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[1] == num_cipher);
-      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[2] == cur_limbs);
-      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[3] == N);
+      TORCH_INTERNAL_ASSERT(temp_tensor->dim() == 3);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[0] == num_cipher);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[1] == cur_limbs);
+      TORCH_INTERNAL_ASSERT(temp_tensor->sizes()[2] == N);
       TORCH_CHECK(
           temp_tensor->is_contiguous(),
           "modup temp workspace must be contiguous");
@@ -406,15 +405,13 @@ Tensor modup_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  auto num_cv = in.sizes()[0]; // should be 1
-  TORCH_INTERNAL_ASSERT(num_cv == 1);
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  auto batch = in.sizes()[0];
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   auto out =
-      at::empty({num_cv, batch, beta * (curr_limbs + sizeP), N}, in.options());
+      at::empty({batch, beta * (curr_limbs + sizeP), N}, in.options());
 
   modup_cuda_template(
       out, // out_ptr + beta * (curr_limbs + sizeP) * N * batch_id,
@@ -459,18 +456,15 @@ void modup_without_copy_cuda_out(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  auto num_cv = in.sizes()[0];
-  TORCH_INTERNAL_ASSERT(num_cv == 1);
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  auto batch = in.sizes()[0];
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  TORCH_INTERNAL_ASSERT(out.dim() == 4);
-  TORCH_INTERNAL_ASSERT(out.sizes()[0] == num_cv);
-  TORCH_INTERNAL_ASSERT(out.sizes()[1] == batch);
-  TORCH_INTERNAL_ASSERT(out.sizes()[2] == beta * (curr_limbs + sizeP));
-  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N);
+  TORCH_INTERNAL_ASSERT(out.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out.sizes()[0] == batch);
+  TORCH_INTERNAL_ASSERT(out.sizes()[1] == beta * (curr_limbs + sizeP));
+  TORCH_INTERNAL_ASSERT(out.sizes()[2] == N);
   TORCH_CHECK(out.is_contiguous(), "modup output workspace must be contiguous");
 
   modup_cuda_template(
@@ -512,15 +506,13 @@ Tensor modup_without_copy_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  auto num_cv = in.sizes()[0];
-  TORCH_INTERNAL_ASSERT(num_cv == 1);
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  auto batch = in.sizes()[0];
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   auto out =
-      at::empty({num_cv, batch, beta * (curr_limbs + sizeP), N}, in.options());
+      at::empty({batch, beta * (curr_limbs + sizeP), N}, in.options());
 
   modup_cuda_template(
       out,

@@ -137,8 +137,6 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
         is_ext,
         cryptoContext,
     )
-    if batch_size == 1:
-        return Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)
     return Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext, batch_size=batch_size)
 
 

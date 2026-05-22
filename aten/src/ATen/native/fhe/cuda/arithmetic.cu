@@ -156,10 +156,10 @@ void run_arithmetic(
     const Tensor& mod,
     const Tensor* barrett_mu,
     int64_t cur_limbs) {
-  TORCH_INTERNAL_ASSERT(lhs.dim() == 4);
-  const auto num_cv = lhs.sizes()[0];
-  const auto batch = lhs.sizes()[1];
-  const auto N = lhs.sizes()[3];
+  TORCH_INTERNAL_ASSERT(lhs.dim() == 3);
+  const auto num_cv = 1;
+  const auto batch = lhs.sizes()[0];
+  const auto N = lhs.sizes()[2];
   TORCH_INTERNAL_ASSERT(
       (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) ||
       (N == 1 << 17) || (N == 1 << 18));
@@ -167,13 +167,13 @@ void run_arithmetic(
     TORCH_INTERNAL_ASSERT(barrett_mu != nullptr);
   }
   const auto rhs_limb_extent =
-      Layout == RhsLayout::Tensor ? rhs.sizes()[2] : cur_limbs;
+      Layout == RhsLayout::Tensor ? rhs.sizes()[1] : cur_limbs;
 
   launch_arithmetic_kernel<Op, Layout, HasBarrett>(
       num_cv,
       batch,
-      out.sizes()[2],
-      lhs.sizes()[2],
+      out.sizes()[1],
+      lhs.sizes()[1],
       rhs_limb_extent,
       N,
       cur_limbs,
@@ -192,7 +192,7 @@ Tensor make_arithmetic_result(
     const Tensor* barrett_mu,
     int64_t cur_limbs) {
   Tensor out = at::empty(
-      {lhs.sizes()[0], lhs.sizes()[1], lhs.sizes()[2], lhs.sizes()[3]},
+      {lhs.sizes()[0], lhs.sizes()[1], lhs.sizes()[2]},
       lhs.options());
   run_arithmetic<Op, Layout, HasBarrett>(
       out, lhs, rhs, mod, barrett_mu, cur_limbs);
@@ -212,18 +212,18 @@ Tensor& arithmetic_inplace(
 }
 
 inline int64_t active_limb_dim(const Tensor& tensor) {
-  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
-  return tensor.dim() == 2 ? tensor.sizes()[0] : tensor.sizes()[1];
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 3);
+  return tensor.sizes()[1];
 }
 
 inline int64_t coeff_dim(const Tensor& tensor) {
-  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
-  return tensor.sizes()[tensor.dim() - 1];
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 3);
+  return tensor.sizes()[2];
 }
 
 inline int64_t batch_dim(const Tensor& tensor) {
-  TORCH_INTERNAL_ASSERT(tensor.dim() == 2 || tensor.dim() == 3);
-  return tensor.dim() == 2 ? 1 : tensor.sizes()[0];
+  TORCH_INTERNAL_ASSERT(tensor.dim() == 3);
+  return tensor.sizes()[0];
 }
 
 inline std::vector<int64_t> fused_output_sizes(const Tensor& base, int64_t cur_limbs) {
@@ -236,6 +236,7 @@ template <ArithmeticOp Op, FusedRhsLayout Layout, bool HasBarrett>
 __global__ void fused_pair_arithmetic_kernel(
     size_t N,
     size_t batch,
+    size_t L_OUT,
     size_t L_A,
     size_t L_R,
     int64_t cur_limbs,
@@ -259,7 +260,7 @@ __global__ void fused_pair_arithmetic_kernel(
   const size_t batch_idx = linear / (N * static_cast<size_t>(cur_limbs));
   const uint64_t modulus = mod[limb_idx];
 
-  const size_t out_offset = batch_idx * static_cast<size_t>(cur_limbs) * N + limb_idx * N + coeff_idx;
+  const size_t out_offset = batch_idx * L_OUT * N + limb_idx * N + coeff_idx;
   const size_t lhs_offset = batch_idx * L_A * N + limb_idx * N + coeff_idx;
 
   uint64_t rhs_value0 = 0;
@@ -295,17 +296,23 @@ std::vector<Tensor> fused_pair_arithmetic_out(
     const Tensor& mod,
     const Tensor* barrett_mu,
     int64_t cur_limbs) {
-  TORCH_INTERNAL_ASSERT(a0.dim() == 2 || a0.dim() == 3);
+  TORCH_INTERNAL_ASSERT(a0.dim() == 3);
   TORCH_INTERNAL_ASSERT(a1.sizes() == a0.sizes());
   TORCH_INTERNAL_ASSERT(cur_limbs >= 0);
   TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(a0));
   TORCH_INTERNAL_ASSERT(coeff_dim(a0) == coeff_dim(a1));
   if constexpr (Layout == FusedRhsLayout::TensorPair) {
     TORCH_INTERNAL_ASSERT(rhs1 != nullptr);
-    TORCH_INTERNAL_ASSERT(rhs0.sizes() == a0.sizes());
-    TORCH_INTERNAL_ASSERT(rhs1->sizes() == a0.sizes());
+    TORCH_INTERNAL_ASSERT(rhs0.dim() == 3);
+    TORCH_INTERNAL_ASSERT(rhs1->dim() == 3);
+    TORCH_INTERNAL_ASSERT(batch_dim(rhs0) == batch_dim(a0));
+    TORCH_INTERNAL_ASSERT(batch_dim(*rhs1) == batch_dim(a0));
+    TORCH_INTERNAL_ASSERT(coeff_dim(rhs0) == coeff_dim(a0));
+    TORCH_INTERNAL_ASSERT(coeff_dim(*rhs1) == coeff_dim(a0));
+    TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(rhs0));
+    TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(*rhs1));
   } else if constexpr (Layout == FusedRhsLayout::Plaintext) {
-    TORCH_INTERNAL_ASSERT(rhs0.dim() == 2 || rhs0.dim() == 3);
+    TORCH_INTERNAL_ASSERT(rhs0.dim() == 3);
     TORCH_INTERNAL_ASSERT(coeff_dim(rhs0) == coeff_dim(a0));
     TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(rhs0));
     const auto rhs_batch = batch_dim(rhs0);
@@ -317,13 +324,20 @@ std::vector<Tensor> fused_pair_arithmetic_out(
   if constexpr (HasBarrett) {
     TORCH_INTERNAL_ASSERT(barrett_mu != nullptr);
   }
-  TORCH_INTERNAL_ASSERT(out0.sizes().vec() == fused_output_sizes(a0, cur_limbs));
-  TORCH_INTERNAL_ASSERT(out1.sizes().vec() == fused_output_sizes(a1, cur_limbs));
+  TORCH_INTERNAL_ASSERT(out0.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out1.dim() == 3);
+  TORCH_INTERNAL_ASSERT(batch_dim(out0) == batch_dim(a0));
+  TORCH_INTERNAL_ASSERT(batch_dim(out1) == batch_dim(a0));
+  TORCH_INTERNAL_ASSERT(coeff_dim(out0) == coeff_dim(a0));
+  TORCH_INTERNAL_ASSERT(coeff_dim(out1) == coeff_dim(a0));
+  TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(out0));
+  TORCH_INTERNAL_ASSERT(cur_limbs <= active_limb_dim(out1));
   TORCH_CHECK(out0.is_contiguous(), "fused output c0 must be contiguous");
   TORCH_CHECK(out1.is_contiguous(), "fused output c1 must be contiguous");
 
   const auto N = static_cast<size_t>(coeff_dim(a0));
   const auto batch = static_cast<size_t>(batch_dim(a0));
+  const auto L_OUT = static_cast<size_t>(active_limb_dim(out0));
   const auto L_A = static_cast<size_t>(active_limb_dim(a0));
   const auto L_R = Layout == FusedRhsLayout::ScalarByLimb ? 0 : static_cast<size_t>(active_limb_dim(rhs0));
   const auto rhs_batch = Layout == FusedRhsLayout::Plaintext ? static_cast<size_t>(batch_dim(rhs0)) : batch;
@@ -335,6 +349,7 @@ std::vector<Tensor> fused_pair_arithmetic_out(
   fused_pair_arithmetic_kernel<Op, Layout, HasBarrett><<<grid, block, 0, stream>>>(
       N,
       batch,
+      L_OUT,
       L_A,
       L_R,
       cur_limbs,

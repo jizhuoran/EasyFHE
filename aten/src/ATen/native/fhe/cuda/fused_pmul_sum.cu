@@ -8,6 +8,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
@@ -18,7 +19,8 @@ namespace fhe {
 
 __global__ void fusedPairwiseMACKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mods,
     const uint64_t* __restrict__ barret_ratio,
@@ -27,7 +29,6 @@ __global__ void fusedPairwiseMACKernel(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto bid_y = blockIdx.y;
@@ -38,8 +39,8 @@ __global__ void fusedPairwiseMACKernel(
   for (size_t i = 0; i < num_ciphers; ++i) {
     auto plain_val = plain_ptr[i * L_PTN + bid_y * N + tid_x];
     auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-    auto cipher_val_bx = cipher_ptr[cipher_off];
-    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    auto cipher_val_bx = cipher_bx_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ax_ptr[cipher_off];
     inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
     inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
   }
@@ -53,7 +54,8 @@ __global__ void fusedPairwiseMACKernel(
 
 __global__ void fusedPairwiseMACKernel_batch(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -63,7 +65,6 @@ __global__ void fusedPairwiseMACKernel_batch(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto bid_y = blockIdx.y;
@@ -79,8 +80,8 @@ __global__ void fusedPairwiseMACKernel_batch(
   for (size_t i = 0; i < num_ciphers; ++i) {
     auto plain_val = plain_ptr[i * L_PTN + bid_y * N + tid_x];
     auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-    auto cipher_val_bx = cipher_ptr[cipher_off];
-    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    auto cipher_val_bx = cipher_bx_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ax_ptr[cipher_off];
     inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
     inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
     cipher_shared[BLOCK_SIZE * i + threadIdx.x] = cipher_val_bx;
@@ -146,7 +147,8 @@ __global__ void cpmulBroadcastPTKernel(
 
 __global__ void fusedBroadcastMACKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -162,8 +164,8 @@ __global__ void fusedBroadcastMACKernel(
   auto mod = mod_ptr[bid_y];
   auto barret_ratio = barret_ratio_ptr[bid_y];
   auto barret_k = barret_k_ptr[bid_y];
-  auto cipher_val_bx = cipher_ptr[bid_y * N + tid_x];
-  auto cipher_val_ax = cipher_ptr[L_CTN + bid_y * N + tid_x];
+  auto cipher_val_bx = cipher_bx_ptr[bid_y * N + tid_x];
+  auto cipher_val_ax = cipher_ax_ptr[bid_y * N + tid_x];
 
   uint128_t sum_bx = {0, 0};
   uint128_t sum_ax = {0, 0};
@@ -181,7 +183,8 @@ __global__ void fusedBroadcastMACKernel(
 
 __global__ void scalarWeightedAccKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ scalar_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -189,8 +192,7 @@ __global__ void scalarWeightedAccKernel(
     const int64_t num_cipher,
     const int64_t cur_limbs,
     const int64_t N,
-    const int64_t L_CTN,
-    const int64_t BL_CTN) {
+    const int64_t L_CTN) {
   auto tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   auto bid_y = blockIdx.y;
 
@@ -203,8 +205,8 @@ __global__ void scalarWeightedAccKernel(
   for (int64_t i = 0; i < num_cipher; ++i) {
     auto scalar_val = scalar_ptr[i * cur_limbs + bid_y];
     auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-    auto cipher_val_bx = cipher_ptr[cipher_off];
-    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    auto cipher_val_bx = cipher_bx_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ax_ptr[cipher_off];
     inplace_add_128_128(mult_64_64_128(cipher_val_bx, scalar_val), sum_bx);
     inplace_add_128_128(mult_64_64_128(cipher_val_ax, scalar_val), sum_ax);
   }
@@ -217,7 +219,8 @@ __global__ void scalarWeightedAccKernel(
 
 __global__ void groupedScalarWeightedAccGridKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ scalar_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -226,8 +229,7 @@ __global__ void groupedScalarWeightedAccGridKernel(
     const int64_t num_cipher,
     const int64_t cur_limbs,
     const int64_t N,
-    const int64_t L_CTN,
-    const int64_t BL_CTN) {
+    const int64_t L_CTN) {
   const int64_t tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   if (tid_x >= N) {
     return;
@@ -249,8 +251,8 @@ __global__ void groupedScalarWeightedAccGridKernel(
     const uint64_t scalar_val =
         scalar_ptr[(group * num_cipher + i) * cur_limbs + limb];
     const int64_t cipher_off = i * L_CTN + limb * N + tid_x;
-    const uint64_t cipher_val_bx = cipher_ptr[cipher_off];
-    const uint64_t cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    const uint64_t cipher_val_bx = cipher_bx_ptr[cipher_off];
+    const uint64_t cipher_val_ax = cipher_ax_ptr[cipher_off];
     inplace_add_128_128(mult_64_64_128(cipher_val_bx, scalar_val), sum_bx);
     inplace_add_128_128(mult_64_64_128(cipher_val_ax, scalar_val), sum_ax);
   }
@@ -265,15 +267,15 @@ __global__ void groupedScalarWeightedAccGridKernel(
 template <int NUM_GROUPS, int NUM_CIPHER>
 __global__ void groupedScalarWeightedAccRegKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ scalar_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
     const uint64_t* __restrict__ barret_k_ptr,
     const int64_t cur_limbs,
     const int64_t N,
-    const int64_t L_CTN,
-    const int64_t BL_CTN) {
+    const int64_t L_CTN) {
   const int64_t tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   if (tid_x >= N) {
     return;
@@ -291,8 +293,8 @@ __global__ void groupedScalarWeightedAccRegKernel(
 #pragma unroll
   for (int i = 0; i < NUM_CIPHER; ++i) {
     const int64_t cipher_off = i * L_CTN + limb * N + tid_x;
-    const uint64_t cipher_val_bx = cipher_ptr[cipher_off];
-    const uint64_t cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    const uint64_t cipher_val_bx = cipher_bx_ptr[cipher_off];
+    const uint64_t cipher_val_ax = cipher_ax_ptr[cipher_off];
 #pragma unroll
     for (int group = 0; group < NUM_GROUPS; ++group) {
       const uint64_t scalar_val =
@@ -320,15 +322,15 @@ __global__ void groupedScalarWeightedAccRegKernel(
 template <int NUM_GROUPS, int NUM_CIPHER, int X>
 __global__ void groupedScalarWeightedAccSharedKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ scalar_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
     const uint64_t* __restrict__ barret_k_ptr,
     const int64_t cur_limbs,
     const int64_t N,
-    const int64_t L_CTN,
-    const int64_t BL_CTN) {
+    const int64_t L_CTN) {
   static_assert(X <= 128);
   __shared__ uint64_t cipher_bx[NUM_CIPHER][X];
   __shared__ uint64_t cipher_ax[NUM_CIPHER][X];
@@ -342,8 +344,8 @@ __global__ void groupedScalarWeightedAccSharedKernel(
     for (int i = 0; i < NUM_CIPHER; ++i) {
       const int64_t cipher_off = i * L_CTN + limb * N + coeff;
       const bool valid = coeff < N;
-      cipher_bx[i][threadIdx.x] = valid ? cipher_ptr[cipher_off] : 0;
-      cipher_ax[i][threadIdx.x] = valid ? cipher_ptr[cipher_off + BL_CTN] : 0;
+      cipher_bx[i][threadIdx.x] = valid ? cipher_bx_ptr[cipher_off] : 0;
+      cipher_ax[i][threadIdx.x] = valid ? cipher_ax_ptr[cipher_off] : 0;
     }
   }
   __syncthreads();
@@ -409,7 +411,8 @@ __global__ void cpmulBroadcastCipherKernel(
 template <int NB, int NC, int X, int BY>
 __global__ void fusedPairwiseMACRegVecKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -417,7 +420,6 @@ __global__ void fusedPairwiseMACRegVecKernel(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN) {
   auto tid_x = blockIdx.x * X + threadIdx.x;
   auto bid_y = blockIdx.y;
@@ -431,8 +433,8 @@ __global__ void fusedPairwiseMACRegVecKernel(
 #pragma unroll
   for (int i = 0; i < NC; ++i) {
     auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-    cbx[i] = cipher_ptr[cipher_off];
-    cax[i] = cipher_ptr[cipher_off + BL_CTN];
+    cbx[i] = cipher_bx_ptr[cipher_off];
+    cax[i] = cipher_ax_ptr[cipher_off];
   }
 
   auto mod = mod_ptr[bid_y];
@@ -460,7 +462,8 @@ __global__ void fusedPairwiseMACRegVecKernel(
 template <int NB, int NC, int X, int BY, int R>
 __global__ void fusedPairwiseMACDirectKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -468,7 +471,6 @@ __global__ void fusedPairwiseMACDirectKernel(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN) {
   static_assert(BY * R == NB, "direct pairwise MAC expects BY * R == NB");
   auto tid_x = blockIdx.x * X + threadIdx.x;
@@ -488,8 +490,8 @@ __global__ void fusedPairwiseMACDirectKernel(
 #pragma unroll
   for (int i = 0; i < NC; ++i) {
     auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-    auto cipher_val_bx = cipher_ptr[cipher_off];
-    auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+    auto cipher_val_bx = cipher_bx_ptr[cipher_off];
+    auto cipher_val_ax = cipher_ax_ptr[cipher_off];
 #pragma unroll
     for (int r = 0; r < R; ++r) {
       auto batch_id = lane * R + r;
@@ -518,7 +520,8 @@ __global__ void fusedPairwiseMACDirectKernel(
 
 __global__ void fusedPairwiseMACDirectRuntimeKernel(
     uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
     const uint64_t* __restrict__ plain_ptr,
     const uint64_t* __restrict__ mod_ptr,
     const uint64_t* __restrict__ barret_ratio_ptr,
@@ -528,7 +531,6 @@ __global__ void fusedPairwiseMACDirectRuntimeKernel(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN) {
   auto tid_x = blockIdx.x * blockDim.x + threadIdx.x;
   auto bid_y = blockIdx.y;
@@ -548,8 +550,8 @@ __global__ void fusedPairwiseMACDirectRuntimeKernel(
       auto plain_val =
           plain_ptr[(batch_id * num_ciphers + i) * L_PTN + bid_y * N + tid_x];
       auto cipher_off = i * L_CTN + bid_y * N + tid_x;
-      auto cipher_val_bx = cipher_ptr[cipher_off];
-      auto cipher_val_ax = cipher_ptr[cipher_off + BL_CTN];
+      auto cipher_val_bx = cipher_bx_ptr[cipher_off];
+      auto cipher_val_ax = cipher_ax_ptr[cipher_off];
       inplace_add_128_128(mult_64_64_128(cipher_val_bx, plain_val), sum_bx);
       inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
     }
@@ -564,7 +566,8 @@ __global__ void fusedPairwiseMACDirectRuntimeKernel(
 template <int NB, int NC>
 void launchPairwiseMACDirectTemplate(
     uint64_t* res_ptr,
-    const uint64_t* cipher_ptr,
+    const uint64_t* cipher_bx_ptr,
+    const uint64_t* cipher_ax_ptr,
     const uint64_t* plain_ptr,
     const uint64_t* mod_ptr,
     const uint64_t* barret_ratio_ptr,
@@ -572,7 +575,6 @@ void launchPairwiseMACDirectTemplate(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN,
     cudaStream_t stream) {
   constexpr int BY = NB >= 8 ? 8 : NB;
@@ -582,7 +584,8 @@ void launchPairwiseMACDirectTemplate(
   dim3 grid((N + X - 1) / X, cur_limbs);
   fusedPairwiseMACDirectKernel<NB, NC, X, BY, R><<<grid, block, 0, stream>>>(
       res_ptr,
-      cipher_ptr,
+      cipher_bx_ptr,
+      cipher_ax_ptr,
       plain_ptr,
       mod_ptr,
       barret_ratio_ptr,
@@ -590,14 +593,14 @@ void launchPairwiseMACDirectTemplate(
       cur_limbs,
       N,
       L_CTN,
-      BL_CTN,
       L_PTN);
 }
 
 template <int NC>
 void launchPairwiseMACReg64Template(
     uint64_t* res_ptr,
-    const uint64_t* cipher_ptr,
+    const uint64_t* cipher_bx_ptr,
+    const uint64_t* cipher_ax_ptr,
     const uint64_t* plain_ptr,
     const uint64_t* mod_ptr,
     const uint64_t* barret_ratio_ptr,
@@ -605,7 +608,6 @@ void launchPairwiseMACReg64Template(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN,
-    const int64_t BL_CTN,
     const int64_t L_PTN,
     cudaStream_t stream) {
   constexpr int NB = 64;
@@ -615,7 +617,8 @@ void launchPairwiseMACReg64Template(
   dim3 grid((N + X - 1) / X, cur_limbs);
   fusedPairwiseMACRegVecKernel<NB, NC, X, BY><<<grid, block, 0, stream>>>(
       res_ptr,
-      cipher_ptr,
+      cipher_bx_ptr,
+      cipher_ax_ptr,
       plain_ptr,
       mod_ptr,
       barret_ratio_ptr,
@@ -623,7 +626,6 @@ void launchPairwiseMACReg64Template(
       cur_limbs,
       N,
       L_CTN,
-      BL_CTN,
       L_PTN);
 }
 
@@ -631,8 +633,9 @@ void launchPairwiseMACReg64Template(
 
 namespace at::native {
 
-Tensor batched_pairwise_mac_cuda(
-    const Tensor& cipher,
+std::vector<Tensor> batched_pairwise_mac_cuda(
+    const Tensor& cipher_bx,
+    const Tensor& cipher_ax,
     const Tensor& plaintext,
     const Tensor& param_primes,
     const Tensor& barret_ratio,
@@ -641,19 +644,19 @@ Tensor batched_pairwise_mac_cuda(
     int64_t num_cipher,
     int64_t cur_limbs,
     int64_t N) {
-  auto res = at::empty({2, number_batches, cur_limbs, N}, cipher.options());
+  auto res = at::empty({2, number_batches, cur_limbs, N}, cipher_bx.options());
 
   dim3 block(BLOCK_SIZE);
   dim3 grid(N / BLOCK_SIZE, cur_limbs);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  auto L_CTN = cipher.size(2) * N;
-  auto BL_CTN = cipher.size(1) * L_CTN;
-  auto L_PTN = plaintext.size(2) * N;
+  auto L_CTN = cipher_bx.size(1) * N;
+  auto L_PTN = plaintext.size(1) * N;
   if (number_batches == 1) {
     fhe::fusedPairwiseMACKernel<<<grid, block, 0, stream>>>(
         res.data_ptr<uint64_t>(),
-        cipher.data_ptr<uint64_t>(),
+        cipher_bx.data_ptr<uint64_t>(),
+        cipher_ax.data_ptr<uint64_t>(),
         plaintext.data_ptr<uint64_t>(),
         param_primes.data_ptr<uint64_t>(),
         barret_ratio.data_ptr<uint64_t>(),
@@ -662,11 +665,11 @@ Tensor batched_pairwise_mac_cuda(
         cur_limbs,
         N,
         L_CTN,
-        BL_CTN,
         L_PTN);
   } else {
     auto* res_ptr = res.data_ptr<uint64_t>();
-    auto* cipher_ptr = cipher.data_ptr<uint64_t>();
+    auto* cipher_bx_ptr = cipher_bx.data_ptr<uint64_t>();
+    auto* cipher_ax_ptr = cipher_ax.data_ptr<uint64_t>();
     auto* plain_ptr = plaintext.data_ptr<uint64_t>();
     auto* mod_ptr = param_primes.data_ptr<uint64_t>();
     auto* ratio_ptr = barret_ratio.data_ptr<uint64_t>();
@@ -675,7 +678,8 @@ Tensor batched_pairwise_mac_cuda(
 #define LAUNCH_DIRECT_FOR_NC(NB_VALUE, NC_VALUE)                              \
   fhe::launchPairwiseMACDirectTemplate<NB_VALUE, NC_VALUE>(                   \
       res_ptr,                                                                \
-      cipher_ptr,                                                             \
+      cipher_bx_ptr,                                                          \
+      cipher_ax_ptr,                                                          \
       plain_ptr,                                                              \
       mod_ptr,                                                                \
       ratio_ptr,                                                              \
@@ -683,7 +687,6 @@ Tensor batched_pairwise_mac_cuda(
       cur_limbs,                                                              \
       N,                                                                      \
       L_CTN,                                                                  \
-      BL_CTN,                                                                 \
       L_PTN,                                                                  \
       stream)
 
@@ -716,7 +719,8 @@ Tensor batched_pairwise_mac_cuda(
       fhe::fusedPairwiseMACDirectRuntimeKernel<<<                             \
           runtime_grid, runtime_block, 0, stream>>>(                          \
           res_ptr,                                                            \
-          cipher_ptr,                                                         \
+          cipher_bx_ptr,                                                      \
+          cipher_ax_ptr,                                                      \
           plain_ptr,                                                          \
           mod_ptr,                                                            \
           ratio_ptr,                                                          \
@@ -726,7 +730,6 @@ Tensor batched_pairwise_mac_cuda(
           cur_limbs,                                                          \
           N,                                                                  \
           L_CTN,                                                              \
-          BL_CTN,                                                             \
           L_PTN);                                                             \
       break;                                                                  \
     }                                                                         \
@@ -735,7 +738,8 @@ Tensor batched_pairwise_mac_cuda(
 #define LAUNCH_REG64_FOR_NC(NC_VALUE)                                         \
   fhe::launchPairwiseMACReg64Template<NC_VALUE>(                              \
       res_ptr,                                                                \
-      cipher_ptr,                                                             \
+      cipher_bx_ptr,                                                          \
+      cipher_ax_ptr,                                                          \
       plain_ptr,                                                              \
       mod_ptr,                                                                \
       ratio_ptr,                                                              \
@@ -743,7 +747,6 @@ Tensor batched_pairwise_mac_cuda(
       cur_limbs,                                                              \
       N,                                                                      \
       L_CTN,                                                                  \
-      BL_CTN,                                                                 \
       L_PTN,                                                                  \
       stream)
 
@@ -776,7 +779,8 @@ Tensor batched_pairwise_mac_cuda(
           fhe::fusedPairwiseMACDirectRuntimeKernel<<<
               runtime_grid, runtime_block, 0, stream>>>(
               res_ptr,
-              cipher_ptr,
+              cipher_bx_ptr,
+              cipher_ax_ptr,
               plain_ptr,
               mod_ptr,
               ratio_ptr,
@@ -786,7 +790,6 @@ Tensor batched_pairwise_mac_cuda(
               cur_limbs,
               N,
               L_CTN,
-              BL_CTN,
               L_PTN);
           break;
         }
@@ -817,7 +820,8 @@ Tensor batched_pairwise_mac_cuda(
           fhe::fusedPairwiseMACDirectRuntimeKernel<<<
               runtime_grid, runtime_block, 0, stream>>>(
               res_ptr,
-              cipher_ptr,
+              cipher_bx_ptr,
+              cipher_ax_ptr,
               plain_ptr,
               mod_ptr,
               ratio_ptr,
@@ -827,7 +831,6 @@ Tensor batched_pairwise_mac_cuda(
               cur_limbs,
               N,
               L_CTN,
-              BL_CTN,
               L_PTN);
           break;
         }
@@ -840,7 +843,7 @@ Tensor batched_pairwise_mac_cuda(
   }
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return res;
+  return {res.select(0, 0), res.select(0, 1)};
 }
 
 
@@ -879,8 +882,9 @@ Tensor cpmul_broadcast_pt_cuda(
 
 }
 
-Tensor fused_broadcast_mac_cuda(
-    const Tensor& cipher,
+std::vector<Tensor> fused_broadcast_mac_cuda(
+    const Tensor& cipher_bx,
+    const Tensor& cipher_ax,
     const Tensor& plaintext,
     const Tensor& param_primes,
     const Tensor& barret_ratio,
@@ -889,18 +893,19 @@ Tensor fused_broadcast_mac_cuda(
     int64_t cur_limbs,
     int64_t N) {
 
-  auto res = at::empty({2, cur_limbs, N}, cipher.options());
+  auto res = at::empty({2, 1, cur_limbs, N}, cipher_bx.options());
 
   dim3 block(BLOCK_SIZE);
   dim3 grid(N / BLOCK_SIZE, cur_limbs);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  auto L_CTN = cipher.size(1) * N;
-  auto L_PTN = plaintext.size(2) * N;
+  auto L_CTN = cipher_bx.size(1) * N;
+  auto L_PTN = plaintext.size(1) * N;
 
   fhe::fusedBroadcastMACKernel<<<grid, block, 0, stream>>>(
       res.data_ptr<uint64_t>(),
-      cipher.data_ptr<uint64_t>(),
+      cipher_bx.data_ptr<uint64_t>(),
+      cipher_ax.data_ptr<uint64_t>(),
       plaintext.data_ptr<uint64_t>(),
       param_primes.data_ptr<uint64_t>(),
       barret_ratio.data_ptr<uint64_t>(),
@@ -912,11 +917,12 @@ Tensor fused_broadcast_mac_cuda(
       L_PTN);
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return res;
+  return {res.select(0, 0), res.select(0, 1)};
 }
 
-Tensor scalar_weighted_acc_cuda(
-    const Tensor& cipher,
+std::vector<Tensor> scalar_weighted_acc_cuda(
+    const Tensor& cipher_bx,
+    const Tensor& cipher_ax,
     const Tensor& scalars,
     const Tensor& param_primes,
     const Tensor& barret_ratio,
@@ -925,18 +931,18 @@ Tensor scalar_weighted_acc_cuda(
     int64_t cur_limbs,
     int64_t N) {
 
-  auto res = at::empty({2, cur_limbs, N}, cipher.options());
+  auto res = at::empty({2, 1, cur_limbs, N}, cipher_bx.options());
 
   dim3 block(BLOCK_SIZE);
   dim3 grid(N / BLOCK_SIZE, cur_limbs);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  auto L_CTN = cipher.size(2) * N;
-  auto BL_CTN = cipher.size(1) * L_CTN;
+  auto L_CTN = cipher_bx.size(1) * N;
 
   fhe::scalarWeightedAccKernel<<<grid, block, 0, stream>>>(
       res.data_ptr<uint64_t>(),
-      cipher.data_ptr<uint64_t>(),
+      cipher_bx.data_ptr<uint64_t>(),
+      cipher_ax.data_ptr<uint64_t>(),
       scalars.data_ptr<uint64_t>(),
       param_primes.data_ptr<uint64_t>(),
       barret_ratio.data_ptr<uint64_t>(),
@@ -944,15 +950,15 @@ Tensor scalar_weighted_acc_cuda(
       num_cipher,
       cur_limbs,
       N,
-      L_CTN,
-      BL_CTN);
+      L_CTN);
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return res;
+  return {res.select(0, 0), res.select(0, 1)};
 }
 
-Tensor grouped_scalar_weighted_acc_cuda(
-    const Tensor& cipher,
+std::vector<Tensor> grouped_scalar_weighted_acc_cuda(
+    const Tensor& cipher_bx,
+    const Tensor& cipher_ax,
     const Tensor& scalars,
     const Tensor& param_primes,
     const Tensor& barret_ratio,
@@ -962,23 +968,24 @@ Tensor grouped_scalar_weighted_acc_cuda(
     int64_t cur_limbs,
     int64_t N,
     int64_t strategy) {
-  TORCH_CHECK(cipher.is_contiguous(), "cipher must be contiguous");
+  TORCH_CHECK(cipher_bx.is_contiguous(), "cipher_bx must be contiguous");
+  TORCH_CHECK(cipher_ax.is_contiguous(), "cipher_ax must be contiguous");
   TORCH_CHECK(scalars.is_contiguous(), "scalars must be contiguous");
   TORCH_CHECK(num_groups > 0, "num_groups must be positive");
   TORCH_CHECK(num_cipher > 0, "num_cipher must be positive");
 
-  auto res = at::empty({2, num_groups, cur_limbs, N}, cipher.options());
+  auto res = at::empty({2, num_groups, cur_limbs, N}, cipher_bx.options());
 
   auto stream = at::cuda::getCurrentCUDAStream();
   auto* res_ptr = res.data_ptr<uint64_t>();
-  const auto* cipher_ptr = cipher.data_ptr<uint64_t>();
+  const auto* cipher_bx_ptr = cipher_bx.data_ptr<uint64_t>();
+  const auto* cipher_ax_ptr = cipher_ax.data_ptr<uint64_t>();
   const auto* scalar_ptr = scalars.data_ptr<uint64_t>();
   const auto* mod_ptr = param_primes.data_ptr<uint64_t>();
   const auto* ratio_ptr = barret_ratio.data_ptr<uint64_t>();
   const auto* k_ptr = barret_k.data_ptr<uint64_t>();
 
-  const int64_t L_CTN = cipher.size(2) * N;
-  const int64_t BL_CTN = cipher.size(1) * L_CTN;
+  const int64_t L_CTN = cipher_bx.size(1) * N;
 
   const int64_t selected_strategy =
       (strategy < 0 && num_cipher == 6 &&
@@ -992,30 +999,30 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccRegKernel<7, 6>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 1 && num_cipher == 6 && num_groups == 6) {
     dim3 block(BLOCK_SIZE);
     dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, cur_limbs);
     fhe::groupedScalarWeightedAccRegKernel<6, 6>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 2 && num_cipher == 6 && num_groups == 7) {
     constexpr int X = 64;
     dim3 block(X, 7);
@@ -1023,15 +1030,15 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 2 && num_cipher == 6 && num_groups == 6) {
     constexpr int X = 64;
     dim3 block(X, 6);
@@ -1039,15 +1046,15 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 3 && num_cipher == 6 && num_groups == 7) {
     constexpr int X = 32;
     dim3 block(X, 7);
@@ -1055,15 +1062,15 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 3 && num_cipher == 6 && num_groups == 6) {
     constexpr int X = 32;
     dim3 block(X, 6);
@@ -1071,15 +1078,15 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 4 && num_cipher == 6 && num_groups == 7) {
     constexpr int X = 128;
     dim3 block(X, 7);
@@ -1087,15 +1094,15 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else if (selected_strategy == 4 && num_cipher == 6 && num_groups == 6) {
     constexpr int X = 128;
     dim3 block(X, 6);
@@ -1103,21 +1110,22 @@ Tensor grouped_scalar_weighted_acc_cuda(
     fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
         <<<grid, block, 0, stream>>>(
             res_ptr,
-            cipher_ptr,
+            cipher_bx_ptr,
+            cipher_ax_ptr,
             scalar_ptr,
             mod_ptr,
             ratio_ptr,
             k_ptr,
             cur_limbs,
             N,
-            L_CTN,
-            BL_CTN);
+            L_CTN);
   } else {
     dim3 block(BLOCK_SIZE);
     dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, cur_limbs, num_groups);
     fhe::groupedScalarWeightedAccGridKernel<<<grid, block, 0, stream>>>(
         res_ptr,
-        cipher_ptr,
+        cipher_bx_ptr,
+        cipher_ax_ptr,
         scalar_ptr,
         mod_ptr,
         ratio_ptr,
@@ -1126,12 +1134,11 @@ Tensor grouped_scalar_weighted_acc_cuda(
         num_cipher,
         cur_limbs,
         N,
-        L_CTN,
-        BL_CTN);
+        L_CTN);
   }
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return res;
+  return {res.select(0, 0), res.select(0, 1)};
 }
 
 Tensor cpmul_broadcast_cipher_cuda(

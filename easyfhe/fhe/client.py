@@ -221,7 +221,10 @@ def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
     if bx.numel() != l * n:
         raise RuntimeError(f"Unexpected encrypted tensor size: got {bx.numel()}, expected {l * n}")
     return Cipher(
-        [bx.view(l, n).to(target_device), ax.view(l, n).to(target_device)],
+        [
+            bx.view(1, l, n).to(target_device),
+            ax.view(1, l, n).to(target_device),
+        ],
         cur_limbs,
         ptx.scaling_factor,
         ptx.noise_deg,
@@ -267,8 +270,15 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
 def _decrypt_phase(cipher, secret_key, moduli_q):
     if len(cipher.cv) != 2:
         raise ValueError(f"Expected a degree-1 ciphertext with two components, got {len(cipher.cv)}")
-    ct0 = _as_uint64_matrix("ct0", cipher.cv[0].detach().cpu().numpy())
-    ct1 = _as_uint64_matrix("ct1", cipher.cv[1].detach().cpu().numpy())
+    ct0_tensor = cipher.cv[0]
+    ct1_tensor = cipher.cv[1]
+    if ct0_tensor.dim() == 3:
+        if int(ct0_tensor.shape[0]) != 1:
+            raise ValueError("decrypt currently expects batch_size=1")
+        ct0_tensor = ct0_tensor[0]
+        ct1_tensor = ct1_tensor[0]
+    ct0 = _as_uint64_matrix("ct0", ct0_tensor.detach().cpu().numpy())[: cipher.cur_limbs]
+    ct1 = _as_uint64_matrix("ct1", ct1_tensor.detach().cpu().numpy())[: cipher.cur_limbs]
     if ct0.shape != ct1.shape:
         raise ValueError(f"ct0/ct1 shape mismatch: {ct0.shape} vs {ct1.shape}")
 

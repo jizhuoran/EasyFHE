@@ -199,7 +199,7 @@ def homo_mul_rescale(
             post_c0 = post_c0[0]
         post_op = 4
 
-    res = F.cv_hmul_double_rescale(
+    res_c0, res_c1 = F.cv_hmul_double_rescale(
         in0.cv[0],
         in0.cv[1],
         in1.cv[0],
@@ -217,8 +217,8 @@ def homo_mul_rescale(
     )
     return in0.cipher_like(
         [
-            _preserve_component_capacity(in0.cv[0], res[0, 0]),
-            _preserve_component_capacity(in0.cv[1], res[1, 0]),
+            _preserve_component_capacity(in0.cv[0], res_c0),
+            _preserve_component_capacity(in0.cv[1], res_c1),
         ],
         cur_limbs=out_cur_limbs,
         scaling_factor=out_scaling_factor,

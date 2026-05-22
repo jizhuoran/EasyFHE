@@ -285,8 +285,8 @@ def test_cv_hrot_uses_allocating_native_op(monkeypatch):
         inner_workspace="workspace",
     )
     result = kernels.cv_hrot(
-        torch.zeros((3, 4), dtype=torch.uint64),
-        torch.zeros((3, 4), dtype=torch.uint64),
+        torch.zeros((1, 3, 4), dtype=torch.uint64),
+        torch.zeros((1, 3, 4), dtype=torch.uint64),
         3,
         3,
         "swk_bx",
@@ -309,12 +309,12 @@ def test_cv_add_allocates_result_view(monkeypatch):
         return torch.empty_like(x)
 
     monkeypatch.setattr(kernels.torch, "add_mod", fake_add_mod)
-    x = torch.zeros((3, 4), dtype=torch.uint64)
-    y = torch.zeros((3, 4), dtype=torch.uint64)
+    x = torch.zeros((1, 3, 4), dtype=torch.uint64)
+    y = torch.zeros((1, 3, 4), dtype=torch.uint64)
 
     result = kernels.cv_add(x, y, torch.ones((3,), dtype=torch.uint64), 3)
-    assert tuple(result.shape) == (3, 4)
-    assert seen == {"x_shape": (1, 1, 3, 4), "out": None, "cur_limbs": 3}
+    assert tuple(result.shape) == (1, 3, 4)
+    assert seen == {"x_shape": (1, 3, 4), "out": None, "cur_limbs": 3}
 
 
 def test_cipher_add_inplace_uses_component_inplace(monkeypatch):
@@ -327,7 +327,7 @@ def test_cipher_add_inplace_uses_component_inplace(monkeypatch):
     monkeypatch.setattr(primitives.F, "cv_add", fake_cv_add)
     ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed", moduliQ="q")
     a = Cipher(
-        [torch.zeros((3, 4), dtype=torch.uint64), torch.ones((3, 4), dtype=torch.uint64)],
+        [torch.zeros((1, 3, 4), dtype=torch.uint64), torch.ones((1, 3, 4), dtype=torch.uint64)],
         3,
         2.0,
         1,
@@ -335,7 +335,7 @@ def test_cipher_add_inplace_uses_component_inplace(monkeypatch):
         False,
     )
     b = Cipher(
-        [torch.full((3, 4), 2, dtype=torch.uint64), torch.full((3, 4), 3, dtype=torch.uint64)],
+        [torch.full((1, 3, 4), 2, dtype=torch.uint64), torch.full((1, 3, 4), 3, dtype=torch.uint64)],
         3,
         2.0,
         1,
@@ -365,8 +365,8 @@ def test_cipher_add_inplace_uses_cv_add_pair_when_available(monkeypatch):
     monkeypatch.setattr(primitives, "_fused_cuda_available", fake_available)
     monkeypatch.setattr(primitives.F, "cv_add_pair_", fake_cv_add_pair_)
     ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed", moduliQ="q")
-    a = Cipher([torch.zeros((3, 4), dtype=torch.uint64), torch.zeros((3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
-    b = Cipher([torch.zeros((3, 4), dtype=torch.uint64), torch.zeros((3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
+    a = Cipher([torch.zeros((1, 3, 4), dtype=torch.uint64), torch.zeros((1, 3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
+    b = Cipher([torch.zeros((1, 3, 4), dtype=torch.uint64), torch.zeros((1, 3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
 
     assert fhe.homo_add_inplace(a, b, ctx) is a
     assert calls == {"c0": a.cv[0], "c1": a.cv[1], "cur_limbs": 3}
@@ -382,7 +382,10 @@ def test_mul_rescale_and_square_do_not_expose_out(monkeypatch):
     monkeypatch.setattr(
         arithmetic.F,
         "cv_hmul_double_rescale",
-        lambda *args, **kwargs: torch.zeros((2, 1, 3, 4), dtype=torch.uint64),
+        lambda *args, **kwargs: (
+            torch.zeros((1, 3, 4), dtype=torch.uint64),
+            torch.zeros((1, 3, 4), dtype=torch.uint64),
+        ),
     )
 
     with pytest.raises(TypeError):

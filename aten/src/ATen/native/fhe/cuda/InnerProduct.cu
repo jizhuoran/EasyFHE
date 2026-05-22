@@ -437,8 +437,8 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
         barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
     auto res_bx =                                                         \
         barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
-    out_ptr[BATCH_ID * (N * length) + i] = res_bx;                        \
-    out_ptr[BATCH * (N * length) + BATCH_ID * (N * length) + i] = res_ax; \
+    out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
+    out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
   }
 
 #define COMPUTE_PAIR_ITER_1(BATCH)  DEFINE_COMPUTE_PAIR(0, BATCH)
@@ -504,7 +504,8 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
 
 #define DEFINE_PAIR_KERNEL(BATCH)                                           \
   __global__ void sum_reduce_fused_broadcast_cipher_pair_DL(                \
-      uint64_t* __restrict__ out_ptr,                                       \
+      uint64_t* __restrict__ out_bx_ptr,                                    \
+      uint64_t* __restrict__ out_ax_ptr,                                    \
       const uint64_t* __restrict__ in_ptr,                                  \
       SWK_PAIR_PARAMS_##BATCH,                                              \
       const size_t N,                                                       \
@@ -629,7 +630,8 @@ namespace at::native {
         blockDim,                                     \
         BLOCK_SIZE * beta * sizeof(uint64_t),         \
         stream>>>(                                    \
-        out_ptr,                                      \
+        out_bx_ptr,                                   \
+        out_ax_ptr,                                   \
         in_ptr,                                       \
         SWK_BX_AX_PARM_##NUM,                         \
         N,                                            \
@@ -720,7 +722,8 @@ static void innerproduct_broadcast_cipher_template(
 }
 
 static void innerproduct_broadcast_cipher_pair_template(
-    Tensor& out,
+    Tensor& out_bx,
+    Tensor& out_ax,
     const Tensor& in,
     const TensorList& swk_bxs,
     const TensorList& swk_axs,
@@ -742,8 +745,14 @@ static void innerproduct_broadcast_cipher_pair_template(
   const int B = static_cast<int>(swk_bxs.size());
   TORCH_INTERNAL_ASSERT(B > 0, "swk_bxs must not be empty");
   TORCH_INTERNAL_ASSERT(swk_axs.size() == swk_bxs.size(), "swk bx/ax list size mismatch");
-  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects num_cv == 1");
-  TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
+  TORCH_INTERNAL_ASSERT(out_bx.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_ax.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes() == out_ax.sizes());
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[0] == B);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[1] == length);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[2] == N);
   TORCH_INTERNAL_ASSERT(
       special_mod_start.numel() == B,
       "special_mod_start numel must equal swk list size");
@@ -763,7 +772,8 @@ static void innerproduct_broadcast_cipher_pair_template(
     TORCH_CHECK(sizes[2] == N, "swk last dimension must equal N");
   }
 
-  auto* out_ptr = out.data_ptr<uint64_t>();
+  auto* out_bx_ptr = out_bx.data_ptr<uint64_t>();
+  auto* out_ax_ptr = out_ax.data_ptr<uint64_t>();
   const auto* in_ptr = in.data_ptr<uint64_t>();
   const auto* special_mod_start_ptr = special_mod_start.data_ptr<int64_t>();
   const auto* primes_ptr = primes.data_ptr<uint64_t>();
@@ -787,7 +797,7 @@ Tensor innerproduct_broadcast_cipher_cuda(
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
   TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher expects num_cv == 1");
   TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1, "innerproduct_broadcast_cipher expects batch == 1");
   int batch = swks.size();
@@ -812,7 +822,7 @@ Tensor innerproduct_broadcast_cipher_cuda(
   return out;
 }
 
-Tensor innerproduct_broadcast_cipher_pair_cuda(
+std::vector<Tensor> innerproduct_broadcast_cipher_pair_cuda(
     const Tensor& in,
     TensorList swk_bxs,
     TensorList swk_axs,
@@ -825,17 +835,18 @@ Tensor innerproduct_broadcast_cipher_pair_cuda(
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects num_cv == 1");
-  TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
   const int64_t batch = swk_bxs.size();
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  auto out = at::empty({2, batch, curr_limbs + sizeP, N}, in.options());
+  auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
+  auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
   innerproduct_broadcast_cipher_pair_template(
-      out,
+      out_bx,
+      out_ax,
       in,
       swk_bxs,
       swk_axs,
@@ -848,7 +859,7 @@ Tensor innerproduct_broadcast_cipher_pair_cuda(
       barret_ratio,
       barret_k,
       workspace);
-  return out;
+  return {out_bx, out_ax};
 }
 
 static void innerproduct_template(
@@ -1047,7 +1058,7 @@ static void innerproduct_write_pair_template(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-Tensor innerproduct_cuda(
+std::vector<Tensor> innerproduct_cuda(
     const Tensor& in,
     const Tensor& bx,
     const Tensor& ax,
@@ -1060,16 +1071,17 @@ Tensor innerproduct_cuda(
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  auto num_cv = in.sizes()[0]; // should be 1
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  auto batch = in.sizes()[0];
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  auto out = at::empty({2, batch, curr_limbs + sizeP, N}, in.options());
+  auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
+  auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
-  innerproduct_template(
-      out,
+  innerproduct_write_pair_template(
+      out_bx,
+      out_ax,
       in,
       bx,
       ax,
@@ -1082,7 +1094,7 @@ Tensor innerproduct_cuda(
       barret_ratio,
       barret_k,
       workspace);
-  return out;
+  return {out_bx, out_ax};
 }
 
 Tensor innerproduct_write_cuda(

@@ -125,13 +125,16 @@ def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
     batch_size = len(offsets)
     digits = _modup_to_ext(cipher, cryptoContext)
     active_limbs = cipher.cur_limbs + cryptoContext.K
-    key_products, product_indices = _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext)
+    key_product_bx, key_product_ax, product_indices = _fast_rotate_key_products(
+        digits, offsets, active_limbs, cryptoContext
+    )
     precomp_maps = _precompute_auto_maps(offsets, cryptoContext)
 
     if output_ext:
         return _finalize_fast_rotate_ext(
             cipher,
-            key_products,
+            key_product_bx,
+            key_product_ax,
             product_indices,
             precomp_maps,
             active_limbs,
@@ -141,7 +144,8 @@ def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
 
     return _finalize_fast_rotate_q(
         cipher,
-        key_products,
+        key_product_bx,
+        key_product_ax,
         product_indices,
         precomp_maps,
         batch_size,
@@ -151,15 +155,17 @@ def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
 
 def _finalize_fast_rotate_ext(
     cipher,
-    key_products,
+    key_product_bx,
+    key_product_ax,
     product_indices,
     precomp_maps,
     active_limbs,
     batch_size,
     cryptoContext,
 ):
-    cv = F.cv_fast_rotate_ext_batch_finalize_compact(
-        key_products,
+    cv = F.cv_fast_rotate_ext_batch_finalize_compact_pair(
+        key_product_bx,
+        key_product_ax,
         product_indices,
         cipher.cv[0],
         cipher.cv[1],
@@ -173,21 +179,18 @@ def _finalize_fast_rotate_ext(
 
 def _finalize_fast_rotate_q(
     cipher,
-    key_products,
+    key_product_bx,
+    key_product_ax,
     product_indices,
     precomp_maps,
     batch_size,
     cryptoContext,
 ):
-    moddown_products = torch.empty(
-        (2, key_products.shape[1], cipher.cur_limbs, cryptoContext.N),
-        dtype=torch.uint64,
-        device=cryptoContext.device,
-    )
-    if key_products.shape[1] != 0:
-        F.cv_moddown_write(moddown_products, key_products, cipher.cur_limbs, cryptoContext)
-    cv = F.cv_fast_rotate_batch_finalize_compact(
-        moddown_products,
+    moddown_bx = F.cv_moddown(key_product_bx, cipher.cur_limbs, cryptoContext)
+    moddown_ax = F.cv_moddown(key_product_ax, cipher.cur_limbs, cryptoContext)
+    cv = F.cv_fast_rotate_batch_finalize_compact_pair(
+        moddown_bx,
+        moddown_ax,
         product_indices,
         cipher.cv[0],
         cipher.cv[1],
@@ -207,14 +210,15 @@ def _finalize_fast_rotate_q(
 def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
     nonzero_offsets, product_indices = _batch_rotation_product_plan(offsets, cryptoContext)
     if not nonzero_offsets:
-        return torch.empty(
-            (2, 0, active_limbs, cryptoContext.N),
+        empty = torch.empty(
+            (0, active_limbs, cryptoContext.N),
             dtype=torch.uint64,
             device=cryptoContext.device,
-        ), product_indices
+        )
+        return empty, empty, product_indices
 
     swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(tuple(nonzero_offsets), cryptoContext)
-    key_products = F.cv_innerproduct_broadcast_cipher_pair(
+    key_product_bx, key_product_ax = F.cv_innerproduct_broadcast_cipher_pair(
         digits.cv[0],
         digits.cur_limbs,
         starts,
@@ -222,7 +226,7 @@ def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
         swk_axs,
         cryptoContext,
     )
-    return key_products, product_indices
+    return key_product_bx, key_product_ax, product_indices
 
 
 def _batch_rotation_product_plan(offsets, cryptoContext):
@@ -364,14 +368,14 @@ def _modup_to_ext(cipher, cryptoContext):
 def _fast_rotate_key_contribution_ext(digits, offset, cryptoContext):
     swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
     result = digits.cipher_like(
-        F.cv_innerproduct(
-            digits.cv[0].reshape(-1),
+        list(F.cv_innerproduct(
+            digits.cv[0],
             curr_limbs=digits.cur_limbs,
             special_mod_start=special_mod_start,
             context=cryptoContext,
             swk_bx=swk_bx,
             swk_ax=swk_ax,
-        ),
+        )),
         is_ext=True,
     )
     return _cipher_automorphism(result, offset, cryptoContext)
@@ -434,7 +438,7 @@ def _pack_ciphers(ciphers):
                     f"{getattr(cipher, field)} != {getattr(first, field)}"
                 )
     cv = [
-        torch.stack([cipher.cv[component] for cipher in ciphers], dim=0)
+        torch.cat([cipher.cv[component] for cipher in ciphers], dim=0)
         for component in range(len(first.cv))
     ]
     return first.cipher_like(cv, batch_size=len(ciphers))

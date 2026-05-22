@@ -259,7 +259,7 @@ GENERATE_SIMPLE_FUNCTION(vneg, 0)
 #undef BARRET_ARGS_1
 #undef GENERATE_SIMPLE_FUNCTION
 
-/* kernel launchers for 4D tensors */
+/* kernel launchers for 3D [batch, L, N] component tensors */
 
 #define BARRET_PARAMS_0
 #define BARRET_PARAMS_1 , const uint64_t* barret_mu
@@ -335,19 +335,19 @@ GENERATE_FUNCTION(vmul_pt_pairwise, 1)
       const Tensor& b,                                                         \
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                            \
       int64_t cur_limbs) {                                                     \
-    TORCH_INTERNAL_ASSERT(a.dim() == 4);                                       \
-    auto num_cv = a.sizes()[0];                                                \
-    auto batch = a.sizes()[1];                                                 \
-    auto N = a.sizes()[3];                                                     \
+    TORCH_INTERNAL_ASSERT(a.dim() == 3);                                       \
+    auto num_cv = 1;                                                           \
+    auto batch = a.sizes()[0];                                                 \
+    auto N = a.sizes()[2];                                                     \
     TORCH_INTERNAL_ASSERT(                                                     \
         (N == 1 << 6) || (N == 1 << 14) || (N == 1 << 15) || (N == 1 << 16) || \
         (N == 1 << 17) || (N == 1 << 18));                                     \
-    const auto L_B = b.dim() >= 3 ? b.sizes()[2] : b.numel();                 \
+    const auto L_B = b.dim() >= 3 ? b.sizes()[1] : b.numel();                 \
     NAME##_mod(                                                                \
         num_cv,                                                                \
         batch,                                                                 \
-        c.sizes()[2],                                                          \
-        a.sizes()[2],                                                          \
+        c.sizes()[1],                                                          \
+        a.sizes()[1],                                                          \
         L_B,                                                                   \
         b.numel(),                                                             \
         N,                                                                     \
@@ -391,7 +391,7 @@ GENERATE_TEMPLATE(vmul_pt_pairwise, 1)
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                          \
       int64_t cur_limbs) {                                                   \
     Tensor c = at::empty(                                                    \
-        {a.sizes()[0], a.sizes()[1], a.sizes()[2], a.sizes()[3]}, a.options()); \
+        {a.sizes()[0], a.sizes()[1], a.sizes()[2]}, a.options());             \
     v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);    \
     return c;                                                                \
   }                                                                          \
@@ -421,7 +421,7 @@ GENERATE_INTERFACE(neg, 0)
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                          \
       int64_t cur_limbs) {                                                   \
     Tensor c = at::empty(                                                    \
-        {a.sizes()[0], a.sizes()[1], cur_limbs, a.sizes()[3]}, a.options()); \
+        {a.sizes()[0], cur_limbs, a.sizes()[2]}, a.options());                \
     v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);    \
     return c;                                                                \
   }

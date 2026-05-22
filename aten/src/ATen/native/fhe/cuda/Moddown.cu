@@ -204,11 +204,11 @@ static void moddown_cuda_template(
   const int start_length = sizeP;
   const int end_length = curr_limbs;
 
-  auto num_cv = from.sizes()[0]; // should be 2
-  auto batch = from.sizes()[1];
+  auto num_cv = 1;
+  auto batch = from.sizes()[0];
 
-  auto L_IN = from.sizes()[2];
-  auto L_OUT = res.sizes()[2];
+  auto L_IN = from.sizes()[1];
+  auto L_OUT = res.sizes()[1];
 
   auto from_ptr = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto workspace_ptr =
@@ -326,14 +326,13 @@ Tensor moddown_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  TORCH_INTERNAL_ASSERT(in.sizes()[2] == (curr_limbs + sizeP));
-  auto num_cv = in.sizes()[0]; // should be 2
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[1] == (curr_limbs + sizeP));
+  auto batch = in.sizes()[0];
 
-  auto out = at::empty({num_cv, batch, curr_limbs, N}, in.options());
+  auto out = at::empty({batch, curr_limbs, N}, in.options());
   auto workspace =
-      at::empty({num_cv, batch, curr_limbs + sizeP, N}, in.options());
+      at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
   moddown_cuda_template(
       out,
@@ -379,17 +378,16 @@ Tensor moddown_write_cuda(
     const Tensor& power_of_roots,
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  TORCH_INTERNAL_ASSERT(out.dim() == 4);
-  TORCH_INTERNAL_ASSERT(in.sizes()[2] == (curr_limbs + sizeP));
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[1] == (curr_limbs + sizeP));
   TORCH_INTERNAL_ASSERT(out.sizes()[0] == in.sizes()[0]);
-  TORCH_INTERNAL_ASSERT(out.sizes()[1] == in.sizes()[1]);
-  TORCH_INTERNAL_ASSERT(out.sizes()[2] == curr_limbs);
-  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N);
+  TORCH_INTERNAL_ASSERT(out.sizes()[1] == curr_limbs);
+  TORCH_INTERNAL_ASSERT(out.sizes()[2] == N);
 
   auto mutable_out = out;
   auto workspace =
-      at::empty({in.sizes()[0], in.sizes()[1], curr_limbs + sizeP, N}, in.options());
+      at::empty({in.sizes()[0], curr_limbs + sizeP, N}, in.options());
 
   moddown_cuda_template(
       mutable_out,

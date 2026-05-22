@@ -1378,8 +1378,8 @@ static Tensor hmul_moddown_drop_last_scale(
     TORCH_CHECK(post_c0->is_contiguous(), "hmul post_c0 must be contiguous");
     TORCH_CHECK(post_c1->is_contiguous(), "hmul post_c1 must be contiguous");
     TORCH_CHECK(post_c0->dim() == 2 && post_c1->dim() == 2, "hmul post cipher must be [limbs, N]");
-    TORCH_CHECK(post_c0->sizes()[0] == end_length && post_c0->sizes()[1] == N, "hmul post_c0 shape mismatch");
-    TORCH_CHECK(post_c1->sizes() == post_c0->sizes(), "hmul post_c1 shape mismatch");
+    TORCH_CHECK(post_c0->sizes()[0] >= end_length && post_c0->sizes()[1] == N, "hmul post_c0 shape mismatch");
+    TORCH_CHECK(post_c1->sizes()[0] >= end_length && post_c1->sizes()[1] == N, "hmul post_c1 shape mismatch");
   } else if (post_op == static_cast<int64_t>(fhe::HMulPostOp::AddScalar)) {
     TORCH_CHECK(post_scalar.has_value(), "hmul add scalar op requires post_scalar");
     TORCH_CHECK(!post_c0.has_value() && !post_c1.has_value(), "hmul scalar op cannot also use post cipher");
@@ -1391,7 +1391,7 @@ static Tensor hmul_moddown_drop_last_scale(
     TORCH_CHECK(!post_scalar.has_value(), "hmul add plaintext op cannot also use post_scalar");
     TORCH_CHECK(post_c0->is_contiguous(), "hmul post plaintext must be contiguous");
     TORCH_CHECK(post_c0->dim() == 2, "hmul post plaintext must be [limbs, N]");
-    TORCH_CHECK(post_c0->sizes()[0] == end_length && post_c0->sizes()[1] == N, "hmul post plaintext shape mismatch");
+    TORCH_CHECK(post_c0->sizes()[0] >= end_length && post_c0->sizes()[1] == N, "hmul post plaintext shape mismatch");
   } else {
     TORCH_CHECK(!post_c0.has_value() && !post_c1.has_value(), "hmul no-post op got post cipher");
     TORCH_CHECK(!post_scalar.has_value(), "hmul no-post op got post scalar");
@@ -1552,7 +1552,7 @@ static Tensor hmul_moddown_drop_last_scale(
   return out;
 }
 
-static Tensor hmul_double_rescale_impl(
+static std::vector<Tensor> hmul_double_rescale_impl(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& d0,
@@ -1597,11 +1597,12 @@ static Tensor hmul_double_rescale_impl(
   TORCH_CHECK(c1.is_contiguous(), "hmul c1 must be contiguous");
   TORCH_CHECK(d0.is_contiguous(), "hmul d0 must be contiguous");
   TORCH_CHECK(d1.is_contiguous(), "hmul d1 must be contiguous");
-  TORCH_CHECK(c0.dim() == 2 && c1.dim() == 2, "hmul inputs must be [limbs, N]");
-  TORCH_CHECK(c0.size(0) == curr_limbs && c0.size(1) == N, "hmul c0 shape mismatch");
-  TORCH_CHECK(c1.sizes() == c0.sizes(), "hmul c1 shape mismatch");
-  TORCH_CHECK(d0.sizes() == c0.sizes(), "hmul d0 shape mismatch");
-  TORCH_CHECK(d1.sizes() == c0.sizes(), "hmul d1 shape mismatch");
+  TORCH_CHECK(c0.dim() == 3 && c0.size(0) == 1, "hmul inputs must be [1, limbs, N]");
+  TORCH_CHECK(c1.dim() == 3 && c1.size(0) == 1, "hmul inputs must be [1, limbs, N]");
+  TORCH_CHECK(c0.size(1) >= curr_limbs && c0.size(2) == N, "hmul c0 shape mismatch");
+  TORCH_CHECK(c1.size(1) >= curr_limbs && c1.size(2) == N, "hmul c1 shape mismatch");
+  TORCH_CHECK(d0.size(1) >= curr_limbs && d0.size(2) == N, "hmul d0 shape mismatch");
+  TORCH_CHECK(d1.size(1) >= curr_limbs && d1.size(2) == N, "hmul d1 shape mismatch");
   TORCH_CHECK(inner_workspace.is_contiguous(), "hmul inner_workspace must be contiguous");
   TORCH_CHECK(inner_workspace.is_cuda() == c0.is_cuda(), "hmul inner_workspace device mismatch");
   TORCH_CHECK(alpha > 0, "hmul alpha must be positive");
@@ -1672,12 +1673,12 @@ static Tensor hmul_double_rescale_impl(
   auto modup = hmul_workspace_view(
       inner_workspace,
       workspace_offset,
-      {1, 1, beta * length, N});
+      {1, beta * length, N});
   workspace_offset += modup.numel();
   auto modup_temp = hmul_workspace_view(
       inner_workspace,
       workspace_offset,
-      {1, 1, curr_limbs, N});
+      {1, curr_limbs, N});
   workspace_offset += modup_temp.numel();
   auto inner_product = hmul_workspace_view(
       inner_workspace,
@@ -1715,7 +1716,7 @@ static Tensor hmul_double_rescale_impl(
       static_cast<int>(N));
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 
-  const auto axax = raw.slice(0, 2, 3);
+  const auto axax = raw.slice(0, 2, 3).reshape({1, curr_limbs, N});
   modup_without_copy_cuda_out(
       modup,
       modup_temp,
@@ -1752,14 +1753,23 @@ static Tensor hmul_double_rescale_impl(
       barret_ratio,
       barret_k);
 
-  return hmul_moddown_drop_last_scale(
+  std::optional<Tensor> post_c0_2d = post_c0;
+  std::optional<Tensor> post_c1_2d = post_c1;
+  if (post_c0_2d.has_value() && post_c0_2d->dim() == 3) {
+    post_c0_2d = (*post_c0_2d)[0];
+  }
+  if (post_c1_2d.has_value() && post_c1_2d->dim() == 3) {
+    post_c1_2d = (*post_c1_2d)[0];
+  }
+
+  auto result = hmul_moddown_drop_last_scale(
       raw,
       inner_product,
       moddown_workspace,
       workspace,
       last_limb_ntt,
-      post_c0,
-      post_c1,
+      post_c0_2d,
+      post_c1_2d,
       post_scalar,
       curr_limbs,
       L,
@@ -1785,9 +1795,10 @@ static Tensor hmul_double_rescale_impl(
       qlql_inv_mod_ql_div_ql_mod_q_shoup,
       q_inv_mod_q,
       q_inv_mod_q_shoup);
+  return {result[0], result[1]};
 }
 
-Tensor hmul_double_rescale_cuda(
+std::vector<Tensor> hmul_double_rescale_cuda(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& d0,

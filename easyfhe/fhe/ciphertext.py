@@ -1,6 +1,6 @@
 class Cipher:
     def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, batch_size=1):
-        self.cv = cv
+        self.cv = _normalize_components(cv)
         self.cur_limbs = cur_limbs
         self.scaling_factor = scaling_factor
         self.noise_deg = noise_deg
@@ -64,7 +64,11 @@ class Cipher:
     def __repr__(self):
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):
-            s += f"cv{i}={cv[:self.cur_limbs]},\n"
+            if hasattr(cv, "dim") and cv.dim() >= 2:
+                cv_repr = cv[..., : self.cur_limbs, :]
+            else:
+                cv_repr = cv
+            s += f"cv{i}={cv_repr},\n"
         s += f"cur_limbs={self.cur_limbs}\n"
         s += f"scaling_factor={self.scaling_factor}\n"
         s += f"noise_deg={self.noise_deg}\n"
@@ -74,3 +78,20 @@ class Cipher:
         return s
 
 Plaintext = Cipher
+
+
+def _normalize_components(cv):
+    if hasattr(cv, "dim"):
+        cv = [cv]
+    components = list(cv)
+    normalized = []
+    for component in components:
+        if hasattr(component, "dim"):
+            if component.dim() == 2:
+                component = component.unsqueeze(0)
+            elif component.dim() != 3:
+                raise ValueError(
+                    "cipher/plaintext components must be [batch, limbs, N]"
+                )
+        normalized.append(component)
+    return normalized

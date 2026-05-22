@@ -42,7 +42,7 @@ def test_fused_broadcast_mac_requires_plaintext_batch(monkeypatch):
     assert seen == {
         "cipher_batch_size": 1,
         "plaintext_batch_size": 3,
-        "cipher_shape": (2, 4),
+        "cipher_shape": (1, 2, 4),
         "plaintext_shape": (3, 2, 4),
     }
 
@@ -179,7 +179,7 @@ def test_scalar_weighted_acc_matches_scalar_mul_add_loop():
         acc = None
         for index in range(batch_size):
             term = kernels.cv_mul_scalar(
-                component[index],
+                component[index : index + 1],
                 scalars[index],
                 ctx.moduliQ,
                 ctx.q_mu,

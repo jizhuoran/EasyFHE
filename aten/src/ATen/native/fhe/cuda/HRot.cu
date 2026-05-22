@@ -1014,17 +1014,17 @@ static std::vector<Tensor> hrot_moddown_into_cuda(
   TORCH_INTERNAL_ASSERT(modup.sizes()[2] == beta * (curr_limbs + sizeP));
   TORCH_INTERNAL_ASSERT(modup.sizes()[3] == N);
   TORCH_INTERNAL_ASSERT(c1.dim() == 2);
-  TORCH_INTERNAL_ASSERT(c1.sizes()[0] == curr_limbs);
+  TORCH_INTERNAL_ASSERT(c1.sizes()[0] >= curr_limbs);
   TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(c0.dim() == 2);
-  TORCH_INTERNAL_ASSERT(c0.sizes()[0] == curr_limbs);
+  TORCH_INTERNAL_ASSERT(c0.sizes()[0] >= curr_limbs);
   TORCH_INTERNAL_ASSERT(c0.sizes()[1] == N);
   TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
   if (add_bx.has_value()) {
     TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
     TORCH_INTERNAL_ASSERT(add_ax->dim() == 2);
-    TORCH_INTERNAL_ASSERT(add_bx->sizes()[0] == curr_limbs);
-    TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[0] >= curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] >= curr_limbs);
     TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
     TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
     TORCH_CHECK(add_bx->is_contiguous(), "hrot add_bx must be contiguous");
@@ -1151,12 +1151,12 @@ static std::vector<Tensor> hrot_impl(
     const Tensor& inner_workspace,
     const std::optional<Tensor>& add_bx,
     const std::optional<Tensor>& add_ax) {
-  TORCH_INTERNAL_ASSERT(c0.dim() == 2);
-  TORCH_INTERNAL_ASSERT(c1.dim() == 2);
-  TORCH_INTERNAL_ASSERT(c0.sizes()[0] == curr_limbs);
-  TORCH_INTERNAL_ASSERT(c1.sizes()[0] == curr_limbs);
-  TORCH_INTERNAL_ASSERT(c0.sizes()[1] == N);
-  TORCH_INTERNAL_ASSERT(c1.sizes()[1] == N);
+  TORCH_INTERNAL_ASSERT(c0.dim() == 3 && c0.sizes()[0] == 1);
+  TORCH_INTERNAL_ASSERT(c1.dim() == 3 && c1.sizes()[0] == 1);
+  TORCH_INTERNAL_ASSERT(c0.sizes()[1] >= curr_limbs);
+  TORCH_INTERNAL_ASSERT(c1.sizes()[1] >= curr_limbs);
+  TORCH_INTERNAL_ASSERT(c0.sizes()[2] == N);
+  TORCH_INTERNAL_ASSERT(c1.sizes()[2] == N);
   TORCH_INTERNAL_ASSERT(inverse_precomp_map.dim() == 1);
   TORCH_INTERNAL_ASSERT(inverse_precomp_map.sizes()[0] == N);
   TORCH_CHECK(c0.is_contiguous(), "hrot c0 must be contiguous");
@@ -1169,12 +1169,12 @@ static std::vector<Tensor> hrot_impl(
   TORCH_INTERNAL_ASSERT(add_bx.has_value() == add_ax.has_value());
   TORCH_INTERNAL_ASSERT(out_bx.has_value() == out_ax.has_value());
   if (add_bx.has_value()) {
-    TORCH_INTERNAL_ASSERT(add_bx->dim() == 2);
-    TORCH_INTERNAL_ASSERT(add_ax->dim() == 2);
-    TORCH_INTERNAL_ASSERT(add_bx->sizes()[0] == curr_limbs);
-    TORCH_INTERNAL_ASSERT(add_ax->sizes()[0] == curr_limbs);
-    TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] == N);
-    TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] == N);
+    TORCH_INTERNAL_ASSERT(add_bx->dim() == 3 && add_bx->sizes()[0] == 1);
+    TORCH_INTERNAL_ASSERT(add_ax->dim() == 3 && add_ax->sizes()[0] == 1);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[1] >= curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[1] >= curr_limbs);
+    TORCH_INTERNAL_ASSERT(add_bx->sizes()[2] == N);
+    TORCH_INTERNAL_ASSERT(add_ax->sizes()[2] == N);
     TORCH_CHECK(add_bx->is_contiguous(), "hrot add_bx must be contiguous");
     TORCH_CHECK(add_ax->is_contiguous(), "hrot add_ax must be contiguous");
   }
@@ -1192,26 +1192,25 @@ static std::vector<Tensor> hrot_impl(
   auto modup = hrot_workspace_view(
       inner_workspace,
       workspace_offset,
-      {1, 1, beta * (curr_limbs + sizeP), N});
+      {1, beta * (curr_limbs + sizeP), N});
   workspace_offset += modup.numel();
   auto modup_temp = hrot_workspace_view(
       inner_workspace,
       workspace_offset,
-      {1, 1, curr_limbs, N});
+      {1, curr_limbs, N});
   workspace_offset += modup_temp.numel();
   auto inner_product =
       hrot_workspace_view(inner_workspace, workspace_offset, {2, 1, sizeP, N});
   workspace_offset += inner_product.numel();
   auto workspace = hrot_workspace_view(
       inner_workspace, workspace_offset, {2, 1, curr_limbs + sizeP, N});
-  Tensor result_bx = out_bx.has_value() ? *out_bx : at::empty({curr_limbs, N}, c0.options());
-  Tensor result_ax = out_ax.has_value() ? *out_ax : at::empty({curr_limbs, N}, c0.options());
+  Tensor result_bx = out_bx.has_value() ? *out_bx : at::empty({1, curr_limbs, N}, c0.options());
+  Tensor result_ax = out_ax.has_value() ? *out_ax : at::empty({1, curr_limbs, N}, c0.options());
 
-  const auto c1_4d = at::reshape(c1, {1, 1, curr_limbs, N});
   modup_without_copy_cuda_out(
       modup,
       modup_temp,
-      c1_4d,
+      c1,
       curr_limbs,
       L,
       beta,
@@ -1229,7 +1228,7 @@ static std::vector<Tensor> hrot_impl(
       inverse_scaled_power_of_roots_div_two);
   hrot_innerproduct_cuda(
       inner_product,
-      modup,
+      at::reshape(modup, {1, 1, beta * (curr_limbs + sizeP), N}),
       bx,
       ax,
       curr_limbs,
@@ -1240,18 +1239,25 @@ static std::vector<Tensor> hrot_impl(
       primes,
       barret_ratio,
       barret_k);
+  std::optional<Tensor> add_bx_2d;
+  std::optional<Tensor> add_ax_2d;
+  if (add_bx.has_value()) {
+    add_bx_2d = (*add_bx)[0];
+    add_ax_2d = (*add_ax)[0];
+  }
+
   return hrot_moddown_into_cuda(
-      result_bx,
-      result_ax,
+      result_bx[0],
+      result_ax[0],
       inner_product,
-      modup,
+      at::reshape(modup, {1, 1, beta * (curr_limbs + sizeP), N}),
       workspace,
-      c1,
+      c1[0],
       bx,
       ax,
-      c0,
-      add_bx,
-      add_ax,
+      c0[0],
+      add_bx_2d,
+      add_ax_2d,
       inverse_precomp_map,
       curr_limbs,
       special_mod_start,

@@ -107,10 +107,10 @@ static void drop_last_element_scale_template(
     Tensor& workspace) {
   const int end_length = curr_limbs - 1;
 
-  auto num_cv = from.sizes()[0];
-  const int num_cipher = from.sizes()[1];
-  const int L_IN = from.sizes()[2];
-  const int L_OUT = res.sizes()[2];
+  const int num_cv = 1;
+  const int num_cipher = from.sizes()[0];
+  const int L_IN = from.sizes()[1];
+  const int L_OUT = res.sizes()[1];
 
   auto from_ptr_ = reinterpret_cast<uint64_t*>(from.data_ptr<uint64_t>());
   auto workspace_ptr_ =
@@ -202,12 +202,11 @@ Tensor drop_last_element_scale_cuda(
     const Tensor& qlql_inv_mod_ql_div_ql_mod_q_shoup,
     const Tensor& q_inv_mod_q,
     const Tensor& q_inv_mod_q_shoup) {
-  TORCH_INTERNAL_ASSERT(from.dim() == 4);
-  auto num_cv = from.sizes()[0];
-  auto batch = from.sizes()[1];
+  TORCH_INTERNAL_ASSERT(from.dim() == 3);
+  auto batch = from.sizes()[0];
 
-  auto res = at::empty({num_cv, batch, (curr_limbs - 1), N}, from.options());
-  auto workspace = at::empty({num_cv, batch, curr_limbs, N}, from.options());
+  auto res = at::empty({batch, (curr_limbs - 1), N}, from.options());
+  auto workspace = at::empty({batch, curr_limbs, N}, from.options());
 
   drop_last_element_scale_template(
       res,

@@ -11,19 +11,9 @@ if TYPE_CHECKING:
 Tensor = torch.Tensor
 
 
-def _to_4d(t):
-    if t.dim() == 2:
-        return t.reshape(1, 1, t.shape[0], t.shape[1])
-    if t.dim() == 3:
-        return t.reshape(1, t.shape[0], t.shape[1], t.shape[2])
-    return t
-
-
-def _from_4d(t, orig_shape):
-    if len(orig_shape) == 2:
-        return t.reshape(-1, orig_shape[-1])
-    if len(orig_shape) == 3:
-        return t.reshape(orig_shape[0], -1, orig_shape[-1])
+def _component_3d(t):
+    if t.dim() != 3:
+        raise ValueError(f"expected component tensor [batch, limbs, N], got shape {tuple(t.shape)}")
     return t
 
 
@@ -33,10 +23,10 @@ def _to_2d(t, n):
     return t
 
 
-def _rhs_4d(rhs, coeff_count):
+def _rhs_component(rhs, coeff_count):
     if rhs.dim() < 2:
         rhs = _to_2d(rhs, coeff_count)
-    return _to_4d(rhs) if rhs.dim() >= 2 else rhs
+    return _component_3d(rhs) if rhs.dim() >= 2 else rhs
 
 
 def _preserve_limb_capacity(template, active):
@@ -59,14 +49,11 @@ def _preserve_limb_capacity(template, active):
 
 
 def _native_result_like(template, active):
-    return _preserve_limb_capacity(template, _from_4d(active, template.shape))
+    return _preserve_limb_capacity(template, active)
 
 
 def _native_plaintext_batch(plaintext):
-    values = plaintext.cv[0]
-    if values.dim() == 3:
-        values = values.unsqueeze(1)
-    return values
+    return _component_3d(plaintext.cv[0])
 
 
 def native_op_available(name):
@@ -82,62 +69,62 @@ def gen_scalar_tensor(scalar, modulus, cur_limbs):
 
 
 def cv_neg(x, modulus, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
+    x_component = _component_3d(x)
     if inplace:
-        torch.neg_mod_(x_4d, x_4d, modulus, cur_limbs=cur_limbs)
+        torch.neg_mod_(x_component, x_component, modulus, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.neg_mod(x_4d, x_4d, modulus, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.neg_mod(x_component, x_component, modulus, cur_limbs=cur_limbs))
 
 
 def cv_add(x, y, modulus, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
-    y_4d = _rhs_4d(y, x.shape[-1])
+    x_component = _component_3d(x)
+    y_component = _rhs_component(y, x.shape[-1])
     if inplace:
-        torch.add_mod_(x_4d, y_4d, modulus, cur_limbs=cur_limbs)
+        torch.add_mod_(x_component, y_component, modulus, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.add_mod(x_4d, y_4d, modulus, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.add_mod(x_component, y_component, modulus, cur_limbs=cur_limbs))
 
 
 def cv_sub(x, y, modulus, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
-    y_4d = _rhs_4d(y, x.shape[-1])
+    x_component = _component_3d(x)
+    y_component = _rhs_component(y, x.shape[-1])
     if inplace:
-        torch.sub_mod_(x_4d, y_4d, modulus, cur_limbs=cur_limbs)
+        torch.sub_mod_(x_component, y_component, modulus, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.sub_mod(x_4d, y_4d, modulus, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.sub_mod(x_component, y_component, modulus, cur_limbs=cur_limbs))
 
 
 def cv_mul(x, y, modulus, barret_mu, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
-    y_4d = _rhs_4d(y, x.shape[-1])
+    x_component = _component_3d(x)
+    y_component = _rhs_component(y, x.shape[-1])
     if inplace:
-        torch.mul_mod_(x_4d, y_4d, modulus, barret_mu, cur_limbs=cur_limbs)
+        torch.mul_mod_(x_component, y_component, modulus, barret_mu, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.mul_mod(x_4d, y_4d, modulus, barret_mu, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.mul_mod(x_component, y_component, modulus, barret_mu, cur_limbs=cur_limbs))
 
 
 def cv_add_scalar(x, scalar, modulus, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
+    x_component = _component_3d(x)
     if inplace:
-        torch.add_scalar_mod_(x_4d, scalar, modulus, cur_limbs=cur_limbs)
+        torch.add_scalar_mod_(x_component, scalar, modulus, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.add_scalar_mod(x_4d, scalar, modulus, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.add_scalar_mod(x_component, scalar, modulus, cur_limbs=cur_limbs))
 
 
 def cv_sub_scalar(x, scalar, modulus, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
+    x_component = _component_3d(x)
     if inplace:
-        torch.sub_scalar_mod_(x_4d, scalar, modulus, cur_limbs=cur_limbs)
+        torch.sub_scalar_mod_(x_component, scalar, modulus, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.sub_scalar_mod(x_4d, scalar, modulus, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.sub_scalar_mod(x_component, scalar, modulus, cur_limbs=cur_limbs))
 
 
 def cv_mul_scalar(x, scalar, modulus, barret_mu, cur_limbs, inplace=False):
-    x_4d = _to_4d(x)
+    x_component = _component_3d(x)
     if inplace:
-        torch.mul_scalar_mod_(x_4d, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
+        torch.mul_scalar_mod_(x_component, scalar, modulus, barret_mu, cur_limbs=cur_limbs)
         return x
-    return _native_result_like(x, torch.mul_scalar_mod(x_4d, scalar, modulus, barret_mu, cur_limbs=cur_limbs))
+    return _native_result_like(x, torch.mul_scalar_mod(x_component, scalar, modulus, barret_mu, cur_limbs=cur_limbs))
 
 
 def cv_add_pair(in0_c0, in0_c1, in1_c0, in1_c1, modulus, cur_limbs):
@@ -233,10 +220,10 @@ def cv_modup(
     curr_limbs: int,
     context: Context,
 ) -> Tensor:
-    x_4d = _to_4d(x)
+    x_3d = _component_3d(x)
     beta = (curr_limbs + context.alpha - 1) // context.alpha
     return torch.modup(
-        x_4d,
+        x_3d,
         curr_limbs=curr_limbs,
         L=context.L,
         beta=beta,
@@ -252,7 +239,7 @@ def cv_modup(
         power_of_roots=context.power_of_roots,
         inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
         inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-    ).reshape(-1, context.N)
+    )
 
 
 def cv_moddown(
@@ -260,48 +247,9 @@ def cv_moddown(
     curr_limbs: int,
     context: Context,
 ) -> Tensor:
-    orig_shape = x.shape
-    x_4d = _to_4d(x)
-    res = _cv_moddown_4d(x_4d, curr_limbs, context)
-    if x.dim() == 3:
-        return res.reshape(orig_shape[0], -1, context.N)
-    if x.dim() == 2:
-        return res.reshape(-1, context.N)
-    return res
-
-
-def _cv_moddown_4d(
-    x_4d: Tensor,
-    curr_limbs: int,
-    context: Context,
-) -> Tensor:
+    x_3d = _component_3d(x)
     return torch.moddown(
-        x_4d,
-        curr_limbs=curr_limbs,
-        L=context.L,
-        sizeP=context.K,
-        N=context.N,
-        logN=context.logN,
-        hat_inverse_vec_moddown=context.hat_inverse_vec_moddown,
-        hat_inverse_vec_shoup_moddown=context.hat_inverse_vec_shoup_moddown,
-        prod_q_i_mod_q_j_moddown=context.prod_q_i_mod_q_j_moddown,
-        prod_inv_moddown=context.prod_inv_moddown,
-        prod_inv_shoup_moddown=context.prod_inv_shoup_moddown,
-        primes=context.primes,
-        barret_ratio=context.barret_ratio,
-        barret_k=context.barret_k,
-        power_of_roots_shoup=context.power_of_roots_shoup,
-        power_of_roots=context.power_of_roots,
-        inverse_power_of_roots_div_two=context.inverse_power_of_roots_div_two,
-        inverse_scaled_power_of_roots_div_two=context.inverse_scaled_power_of_roots_div_two,
-    )
-
-
-def cv_moddown_write(dst: Tensor, x: Tensor, curr_limbs: int, context: Context) -> Tensor:
-    x_4d = _to_4d(x)
-    return torch.moddown_write(
-        dst,
-        x_4d,
+        x_3d,
         curr_limbs=curr_limbs,
         L=context.L,
         sizeP=context.K,
@@ -330,12 +278,9 @@ def cv_innerproduct(
     swk_ax: Tensor,
     context: Context,
 ) -> Tensor:
-    if x.dim() == 1:
-        x_4d = x.reshape(1, 1, -1, context.N)
-    else:
-        x_4d = _to_4d(x)
-    res = torch.innerproduct(
-        x_4d,
+    x_3d = _component_3d(x)
+    return torch.innerproduct(
+        x_3d,
         bx=swk_bx,
         ax=swk_ax,
         curr_limbs=curr_limbs,
@@ -348,7 +293,6 @@ def cv_innerproduct(
         barret_k=context.barret_k,
         workspace=context.inner_workspace,
     )
-    return res.reshape(2, -1, context.N)
 
 
 def cv_innerproduct_broadcast_cipher_pair(
@@ -359,12 +303,9 @@ def cv_innerproduct_broadcast_cipher_pair(
     swk_axs: list[Tensor],
     context: Context,
 ) -> Tensor:
-    if x.dim() == 1:
-        x_4d = x.reshape(1, 1, -1, context.N)
-    else:
-        x_4d = _to_4d(x)
+    x_3d = _component_3d(x)
     return torch.innerproduct_broadcast_cipher_pair(
-        x_4d,
+        x_3d,
         bx=swk_bxs,
         ax=swk_axs,
         curr_limbs=curr_limbs,
@@ -400,11 +341,7 @@ def cv_keyswitch(
         swk_ax,
         context,
     )
-    return _cv_moddown_4d(
-        inner_product.reshape(2, 1, -1, context.N),
-        cur_limbs,
-        context,
-    ).reshape(2, -1, context.N)
+    return tuple(cv_moddown(component, cur_limbs, context) for component in inner_product)
 
 
 def cv_hrot(
@@ -461,10 +398,10 @@ def cv_automorphism_transform(
 ) -> Tensor:
     if i < 0:
         raise ValueError("i should be non-negative")
-    input_4d = _to_4d(input)
+    input_3d = _component_3d(input)
     return torch.automorphism_transform(
-        input_4d, l=cur_limbs, N=context.N, precomp_vec=context.get_precompute_auto(i)
-    ).reshape(input.shape)
+        input_3d, l=cur_limbs, N=context.N, precomp_vec=context.get_precompute_auto(i)
+    )
 
 
 def cv_mul_by_monomial(
@@ -473,9 +410,9 @@ def cv_mul_by_monomial(
     monomialDeg: int,
     context: Context,
 ) -> None:
-    input_4d = _to_4d(input)
+    component = _component_3d(input)
     torch.mul_by_monomial_(
-        input_4d,
+        component,
         l=l,
         N=context.N,
         M=context.M,
@@ -489,8 +426,9 @@ def cv_mul_by_monomial(
     )
 
 
-def cv_fast_rotate_ext_batch_finalize_compact(
-    key_products,
+def cv_fast_rotate_ext_batch_finalize_compact_pair(
+    key_product_bx,
+    key_product_ax,
     product_indices,
     c0,
     c1,
@@ -499,8 +437,9 @@ def cv_fast_rotate_ext_batch_finalize_compact(
     active_limbs,
     context,
 ):
-    return torch.fast_rotate_ext_batch_finalize_compact(
-        key_products,
+    return torch.fast_rotate_ext_batch_finalize_compact_pair(
+        key_product_bx,
+        key_product_ax,
         product_indices,
         c0,
         c1,
@@ -515,8 +454,9 @@ def cv_fast_rotate_ext_batch_finalize_compact(
     )
 
 
-def cv_fast_rotate_batch_finalize_compact(
-    moddown_products,
+def cv_fast_rotate_batch_finalize_compact_pair(
+    moddown_bx,
+    moddown_ax,
     product_indices,
     c0,
     c1,
@@ -524,8 +464,9 @@ def cv_fast_rotate_batch_finalize_compact(
     cur_limbs,
     context,
 ):
-    return torch.fast_rotate_batch_finalize_compact(
-        moddown_products,
+    return torch.fast_rotate_batch_finalize_compact_pair(
+        moddown_bx,
+        moddown_ax,
         product_indices,
         c0,
         c1,
@@ -604,9 +545,9 @@ def cv_drop_last_element_and_scale(
     l: int,
     context: Context,
 ) -> Tensor:
-    input_4d = _to_4d(input)
+    component = _component_3d(input)
     rescale = torch.drop_last_element_and_scale(
-        input_4d,
+        component,
         curr_limbs=cur_limbs,
         l=l,
         L=context.L,
@@ -623,7 +564,7 @@ def cv_drop_last_element_and_scale(
         q_inv_mod_q=context.q_inv_mod_q,
         q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
     )
-    return rescale.reshape(-1, context.N)
+    return rescale
 
 
 def cv_mod_raise(input: Tensor, L0: int, context: Context) -> Tensor:
@@ -685,10 +626,10 @@ def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):
 
 def cipher_fused_grouped_pairwise_mac(cipher, plaintext, groups, context):
     active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
-    cipher_values = torch.stack(cipher.cv, dim=0)
     plaintext_values = _native_plaintext_batch(plaintext)
     res = torch.batched_pairwise_mac(
-        cipher_values,
+        _component_3d(cipher.cv[0]),
+        _component_3d(cipher.cv[1]),
         plaintext_values,
         context.QplusP_map[cipher.cur_limbs],
         context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
@@ -706,10 +647,10 @@ def cipher_fused_grouped_pairwise_mac(cipher, plaintext, groups, context):
 
 def cipher_fused_broadcast_mac(cipher, plaintext, context):
     active_limbs = cipher.cur_limbs + (context.K if cipher.is_ext else 0)
-    cipher_values = torch.stack(cipher.cv, dim=0)
     plaintext_values = _native_plaintext_batch(plaintext)
     res = torch.fused_broadcast_mac(
-        cipher_values,
+        _component_3d(cipher.cv[0]),
+        _component_3d(cipher.cv[1]),
         plaintext_values,
         context.QplusP_map[cipher.cur_limbs],
         context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
@@ -737,9 +678,9 @@ def cipher_scalar_weighted_acc(cipher, scalars, context):
             "cipher_scalar_weighted_acc scalar limb mismatch: "
             f"{int(scalars.shape[1])} != {cipher.cur_limbs}"
         )
-    cipher_values = torch.stack(cipher.cv, dim=0)
     res = torch.scalar_weighted_acc(
-        cipher_values,
+        _component_3d(cipher.cv[0]),
+        _component_3d(cipher.cv[1]),
         scalars,
         context.moduliQ,
         context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],
@@ -774,9 +715,9 @@ def cipher_grouped_scalar_weighted_acc(cipher, scalars, context, *, strategy=-1)
             "cipher_grouped_scalar_weighted_acc scalar limb mismatch: "
             f"{int(scalars.shape[2])} != {cipher.cur_limbs}"
         )
-    cipher_values = torch.stack(cipher.cv, dim=0)
     res = torch.grouped_scalar_weighted_acc(
-        cipher_values,
+        _component_3d(cipher.cv[0]),
+        _component_3d(cipher.cv[1]),
         scalars.contiguous(),
         context.moduliQ,
         context.QbarretRatioplusPbarretRatio_map[cipher.cur_limbs],

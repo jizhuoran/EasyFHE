@@ -68,10 +68,10 @@ def _require_supported_transform_mode(level_budget):
 def _mod_raise(cipher, L0, cryptoContext):
     cv = [
         F.cv_mod_raise(
-            cv.reshape(1, 1, cv.shape[0], cv.shape[1]),
+            cv,
             L0,
             cryptoContext,
-        ).reshape(-1, cryptoContext.N)
+        )
         for cv in cipher.cv
     ]
     return cipher.cipher_like(cv, L0)
