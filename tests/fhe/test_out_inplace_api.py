@@ -38,155 +38,200 @@ def _mul_context():
     )
 
 
-def test_homo_add_out_and_inplace(monkeypatch):
-    def fake_add(left, right, context, *, out=None):
+def test_homo_add_does_not_expose_out_and_inplace_mutates_first_arg(monkeypatch):
+    def fake_add(left, right, context):
         assert context is ctx
         left_name = left.cv[0].split(".", 1)[0]
         right_name = right.cv[0].split(".", 1)[0]
-        value = left.cipher_like(
+        return left.cipher_like(
             [f"add({left_name},{right_name}).c0", f"add({left_name},{right_name}).c1"],
             scaling_factor=7.0,
         )
-        return value if out is None else out.replace_with(value)
+
+    def fake_add_inplace(left, right, context):
+        return left.replace_with(fake_add(left, right, context))
 
     monkeypatch.setattr(arithmetic, "_cipher_add", fake_add)
+    monkeypatch.setattr(arithmetic, "_cipher_add_inplace", fake_add_inplace)
     ctx = _manual_fixed_context()
     a = _cipher("a")
     b = _cipher("b")
-    out = _cipher("out", cur_limbs=1, scaling_factor=1.0, noise_deg=2, slots=4)
+    with pytest.raises(TypeError):
+        fhe.homo_add(a, b, ctx, out=_cipher("out"))
 
-    result = fhe.homo_add(a, b, ctx, out=out)
-
-    assert result is out
-    assert out.cv == ["add(a,b).c0", "add(a,b).c1"]
-    assert out.cur_limbs == 3
-    assert out.scaling_factor == 7.0
-    assert out.noise_deg == 1
-    assert out.slots == 8
-    assert out.is_ext is False
+    result = fhe.homo_add(a, b, ctx)
+    assert result is not a
+    assert result.cv == ["add(a,b).c0", "add(a,b).c1"]
 
     inplace = fhe.homo_add_inplace(a, b, ctx)
     assert inplace is a
     assert a.cv == ["add(a,b).c0", "add(a,b).c1"]
 
 
-def test_homo_sub_out_and_inplace(monkeypatch):
+def test_homo_sub_does_not_expose_out_and_inplace_mutates_first_arg(monkeypatch):
+    def fake_sub(left, right, context):
+        return left.cipher_like(
+            [f"sub({left.cv[0].split('.', 1)[0]},{right.cv[0].split('.', 1)[0]}).c0", "sub.c1"]
+        )
+
     monkeypatch.setattr(
         arithmetic,
         "_cipher_sub",
-        lambda left, right, context, *, out=None: (out or left).replace_with(
-            left.cipher_like(
-                [f"sub({left.cv[0].split('.', 1)[0]},{right.cv[0].split('.', 1)[0]}).c0", "sub.c1"]
-            )
-        ),
+        fake_sub,
     )
+    monkeypatch.setattr(arithmetic, "_cipher_sub_inplace", lambda left, right, context: left.replace_with(fake_sub(left, right, context)))
     ctx = _manual_fixed_context()
     a = _cipher("a")
     b = _cipher("b")
-    out = _cipher("out")
 
-    assert fhe.homo_sub(a, b, ctx, out=out) is out
-    assert out.cv == ["sub(a,b).c0", "sub.c1"]
+    with pytest.raises(TypeError):
+        fhe.homo_sub(a, b, ctx, out=_cipher("out"))
+
+    result = fhe.homo_sub(a, b, ctx)
+    assert result is not a
+    assert result.cv == ["sub(a,b).c0", "sub.c1"]
     assert fhe.homo_sub_inplace(a, b, ctx) is a
     assert a.cv == ["sub(a,b).c0", "sub.c1"]
 
 
-def test_plaintext_and_scalar_out_and_inplace(monkeypatch):
+@pytest.mark.parametrize(
+    ("field", "kwargs"),
+    [
+        ("cur_limbs", {"cur_limbs": 2}),
+        ("noise_deg", {"noise_deg": 2}),
+        ("scaling_factor", {"scaling_factor": 3.0}),
+    ],
+)
+@pytest.mark.parametrize("op", [fhe.homo_add_inplace, fhe.homo_sub_inplace])
+def test_cipher_cipher_inplace_requires_already_aligned_operands(op, field, kwargs):
+    ctx = _manual_fixed_context()
+    a = _cipher("a")
+    b = _cipher("b", **kwargs)
+
+    with pytest.raises(ValueError, match=f"{field} mismatch"):
+        op(a, b, ctx)
+
+
+def test_plaintext_and_scalar_add_sub_do_not_expose_out_and_inplace_mutates(monkeypatch):
+    def fake_add_plain(cipher, plain, context):
+        return cipher.cipher_like(["add_pt.c0", cipher.cv[1]])
+
+    def fake_add_scalar(cipher, scalar, context):
+        return cipher.cipher_like([f"add_scalar({scalar}).c0", cipher.cv[1]])
+
+    def fake_sub_scalar(cipher, scalar, context):
+        return cipher.cipher_like([f"sub_scalar({scalar}).c0", cipher.cv[1]])
+
     monkeypatch.setattr(
         plaintext,
         "_cipher_add_plain",
-        lambda cipher, plain, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like(["add_pt.c0", cipher.cv[1]])
-        ),
+        fake_add_plain,
     )
+    monkeypatch.setattr(plaintext, "_cipher_add_plain_inplace", lambda cipher, plain, context: cipher.replace_with(fake_add_plain(cipher, plain, context)))
     monkeypatch.setattr(
         plaintext,
         "_cipher_add_scalar",
-        lambda cipher, scalar, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like([f"add_scalar({scalar}).c0", cipher.cv[1]])
-        ),
+        fake_add_scalar,
     )
+    monkeypatch.setattr(plaintext, "_cipher_add_scalar_inplace", lambda cipher, scalar, context: cipher.replace_with(fake_add_scalar(cipher, scalar, context)))
     monkeypatch.setattr(
         plaintext,
         "_cipher_sub_scalar",
-        lambda cipher, scalar, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like([f"sub_scalar({scalar}).c0", cipher.cv[1]])
-        ),
+        fake_sub_scalar,
     )
+    monkeypatch.setattr(plaintext, "_cipher_sub_scalar_inplace", lambda cipher, scalar, context: cipher.replace_with(fake_sub_scalar(cipher, scalar, context)))
 
     ctx = SimpleNamespace(moduliQ_scalar=[257, 263, 269], scale_at=lambda _level: 1.0)
     cipher = _cipher("cipher")
     plain = _cipher("plain")
-    out = _cipher("out")
 
-    assert fhe.homo_add_pt(cipher, plain, ctx, out=out) is out
-    assert out.cv == ["add_pt.c0", "cipher.c1"]
+    with pytest.raises(TypeError):
+        fhe.homo_add_pt(cipher, plain, ctx, out=_cipher("out"))
+    with pytest.raises(TypeError):
+        fhe.homo_add_scalar_int(cipher, 5, ctx, out=_cipher("out"))
+    with pytest.raises(TypeError):
+        fhe.homo_sub_scalar_int(cipher, 6, ctx, out=_cipher("out"))
+
+    add_pt = fhe.homo_add_pt(cipher, plain, ctx)
+    assert add_pt is not cipher
+    assert add_pt.cv == ["add_pt.c0", "cipher.c1"]
 
     assert fhe.homo_add_pt_inplace(cipher, plain, ctx) is cipher
     assert cipher.cv == ["add_pt.c0", "cipher.c1"]
 
-    out2 = _cipher("out2")
-    assert fhe.homo_add_scalar_int(cipher, 5, ctx, out=out2) is out2
-    assert out2.cv[0] == "add_scalar(5).c0"
+    add_scalar = fhe.homo_add_scalar_int(cipher, 5, ctx)
+    assert add_scalar.cv[0] == "add_scalar(5).c0"
 
-    assert fhe.homo_sub_scalar_int(cipher, 6, ctx, out=out2) is out2
-    assert out2.cv[0] == "sub_scalar(6).c0"
+    sub_scalar = fhe.homo_sub_scalar_int(cipher, 6, ctx)
+    assert sub_scalar.cv[0] == "sub_scalar(6).c0"
 
     assert fhe.homo_add_scalar_int_inplace(cipher, 7, ctx) is cipher
     assert cipher.cv[0] == "add_scalar(7).c0"
 
 
-def test_plaintext_and_scalar_multiply_out_and_inplace(monkeypatch):
+def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(monkeypatch):
+    def fake_mul_plain(cipher, plain, context):
+        return cipher.cipher_like(
+            ["mul_pt.c0", "mul_pt.c1"],
+            scaling_factor=11.0,
+            noise_deg=2,
+        )
+
+    def fake_mul_int(cipher, scalar, context):
+        return cipher.cipher_like([f"mul_int({scalar}).c0", cipher.cv[1]])
+
+    def fake_mul_double(cipher, scalar, context):
+        return cipher.cipher_like(
+            [f"mul_double({tuple(scalar)}).c0", cipher.cv[1]],
+            scaling_factor=13.0,
+            noise_deg=2,
+        )
+
     monkeypatch.setattr(
         plaintext,
         "_cipher_mul_plain",
-        lambda cipher, plain, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like(
-                ["mul_pt.c0", "mul_pt.c1"],
-                scaling_factor=11.0,
-                noise_deg=2,
-            )
-        ),
+        fake_mul_plain,
     )
+    monkeypatch.setattr(plaintext, "_cipher_mul_plain_inplace", lambda cipher, plain, context: cipher.replace_with(fake_mul_plain(cipher, plain, context)))
     monkeypatch.setattr(
         plaintext,
         "_cipher_mul_scalar_int",
-        lambda cipher, scalar, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like([f"mul_int({scalar}).c0", cipher.cv[1]])
-        ),
+        fake_mul_int,
     )
+    monkeypatch.setattr(plaintext, "_cipher_mul_scalar_int_inplace", lambda cipher, scalar, context: cipher.replace_with(fake_mul_int(cipher, scalar, context)))
     monkeypatch.setattr(
         plaintext,
         "_cipher_mul_scalar_double",
-        lambda cipher, scalar, context, *, out=None: (out or cipher).replace_with(
-            cipher.cipher_like(
-                [f"mul_double({tuple(scalar)}).c0", cipher.cv[1]],
-                scaling_factor=13.0,
-                noise_deg=2,
-            )
-        ),
+        fake_mul_double,
     )
+    monkeypatch.setattr(plaintext, "_cipher_mul_scalar_double_inplace", lambda cipher, scalar, context: cipher.replace_with(fake_mul_double(cipher, scalar, context)))
 
     ctx = SimpleNamespace(moduliQ_scalar=[257, 263, 269], scale_at=lambda _level: 1.0)
     cipher = _cipher("cipher")
     plain = _cipher("plain")
-    out = _cipher("out")
 
-    assert fhe.homo_mul_pt(cipher, plain, ctx, out=out) is out
-    assert out.cv == ["mul_pt.c0", "mul_pt.c1"]
-    assert out.scaling_factor == 11.0
-    assert out.noise_deg == 2
+    with pytest.raises(TypeError):
+        fhe.homo_mul_pt(cipher, plain, ctx, out=_cipher("out"))
+    with pytest.raises(TypeError):
+        fhe.homo_mul_scalar_int(cipher, 3, ctx, out=_cipher("out"))
+    with pytest.raises(TypeError):
+        fhe.homo_mul_scalar_double(cipher, 2.0, ctx, out=_cipher("out"))
+
+    mul_pt = fhe.homo_mul_pt(cipher, plain, ctx)
+    assert mul_pt is not cipher
+    assert mul_pt.cv == ["mul_pt.c0", "mul_pt.c1"]
+    assert mul_pt.scaling_factor == 11.0
+    assert mul_pt.noise_deg == 2
 
     assert fhe.homo_mul_pt_inplace(cipher, plain, ctx) is cipher
     assert cipher.cv == ["mul_pt.c0", "mul_pt.c1"]
 
-    out2 = _cipher("out2")
-    assert fhe.homo_mul_scalar_int(cipher, 3, ctx, out=out2) is out2
-    assert out2.cv[0] == "mul_int(3).c0"
+    mul_int = fhe.homo_mul_scalar_int(cipher, 3, ctx)
+    assert mul_int.cv[0] == "mul_int(3).c0"
 
     cipher2 = _cipher("cipher2")
-    assert fhe.homo_mul_scalar_double(cipher2, 2.0, ctx, out=out2) is out2
-    assert out2.cv[0] == "mul_double((2, 2, 2)).c0"
+    mul_double = fhe.homo_mul_scalar_double(cipher2, 2.0, ctx)
+    assert mul_double.cv[0] == "mul_double((2, 2, 2)).c0"
 
     assert fhe.homo_mul_scalar_double_inplace(cipher2, 4.0, ctx) is cipher2
     assert cipher2.cv[0] == "mul_double((4, 4, 4)).c0"
@@ -254,30 +299,30 @@ def test_cv_hrot_uses_allocating_native_op(monkeypatch):
     assert seen == {"op": "hrot", "curr_limbs": 3}
 
 
-def test_cv_add_uses_out_view(monkeypatch):
+def test_cv_add_allocates_result_view(monkeypatch):
     seen = {}
 
     def fake_add_mod(x, y, modulus, *, cur_limbs, out=None):
         seen["x_shape"] = tuple(x.shape)
-        seen["out_shape"] = tuple(out.shape)
+        seen["out"] = out
         seen["cur_limbs"] = cur_limbs
-        return out
+        return torch.empty_like(x)
 
     monkeypatch.setattr(kernels.torch, "add_mod", fake_add_mod)
     x = torch.zeros((3, 4), dtype=torch.uint64)
     y = torch.zeros((3, 4), dtype=torch.uint64)
-    out = torch.empty((3, 4), dtype=torch.uint64)
 
-    assert kernels.cv_add(x, y, torch.ones((3,), dtype=torch.uint64), 3, out=out) is out
-    assert seen == {"x_shape": (1, 1, 3, 4), "out_shape": (1, 1, 3, 4), "cur_limbs": 3}
+    result = kernels.cv_add(x, y, torch.ones((3,), dtype=torch.uint64), 3)
+    assert tuple(result.shape) == (3, 4)
+    assert seen == {"x_shape": (1, 1, 3, 4), "out": None, "cur_limbs": 3}
 
 
-def test_cipher_add_inplace_uses_component_out(monkeypatch):
+def test_cipher_add_inplace_uses_component_inplace(monkeypatch):
     seen = []
 
-    def fake_cv_add(left, right, modulus, cur_limbs, inplace=False, out=None):
-        seen.append((left, right, out, inplace))
-        return out
+    def fake_cv_add(left, right, modulus, cur_limbs, inplace=False):
+        seen.append((left, right, inplace))
+        return left
 
     monkeypatch.setattr(primitives.F, "cv_add", fake_cv_add)
     ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed", moduliQ="q")
@@ -300,34 +345,33 @@ def test_cipher_add_inplace_uses_component_out(monkeypatch):
 
     assert fhe.homo_add_inplace(a, b, ctx) is a
     assert len(seen) == 2
-    assert seen[0][2] is a.cv[0]
-    assert seen[1][2] is a.cv[1]
-    assert seen[0][3] is False
+    assert seen[0][0] is a.cv[0]
+    assert seen[1][0] is a.cv[1]
+    assert seen[0][2] is True
 
 
-def test_cipher_add_uses_fused_out_when_available(monkeypatch):
+def test_cipher_add_inplace_uses_cv_add_pair_when_available(monkeypatch):
     calls = {}
 
     def fake_available(name, *tensors):
-        return name == "fused_add_mod_write"
+        return name == "cv_add_pair"
 
-    def fake_fused_add_mod_write(out0, out1, *args):
-        calls["out0"] = out0
-        calls["out1"] = out1
-        calls["cur_limbs"] = args[-1]
-        return (out0, out1)
+    def fake_cv_add_pair_(in0_c0, in0_c1, in1_c0, in1_c1, modulus, cur_limbs):
+        calls["c0"] = in0_c0
+        calls["c1"] = in0_c1
+        calls["cur_limbs"] = cur_limbs
+        return (in0_c0, in0_c1)
 
     monkeypatch.setattr(primitives, "_fused_cuda_available", fake_available)
-    monkeypatch.setattr(primitives.F, "cv_fused_add_pair_write", fake_fused_add_mod_write)
+    monkeypatch.setattr(primitives.F, "cv_add_pair_", fake_cv_add_pair_)
     ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed", moduliQ="q")
     a = Cipher([torch.zeros((3, 4), dtype=torch.uint64), torch.zeros((3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
     b = Cipher([torch.zeros((3, 4), dtype=torch.uint64), torch.zeros((3, 4), dtype=torch.uint64)], 3, 2.0, 1, 8, False)
-    out = Cipher([torch.empty((3, 4), dtype=torch.uint64), torch.empty((3, 4), dtype=torch.uint64)], 3, 1.0, 2, 4, False)
 
-    assert fhe.homo_add(a, b, ctx, out=out) is out
-    assert calls == {"out0": out.cv[0], "out1": out.cv[1], "cur_limbs": 3}
-    assert out.scaling_factor == a.scaling_factor
-    assert out.slots == a.slots
+    assert fhe.homo_add_inplace(a, b, ctx) is a
+    assert calls == {"c0": a.cv[0], "c1": a.cv[1], "cur_limbs": 3}
+    assert a.scaling_factor == 2.0
+    assert a.slots == 8
 
 
 def test_mul_rescale_and_square_do_not_expose_out(monkeypatch):
@@ -386,7 +430,7 @@ def test_mul_rescale_and_square_do_not_expose_out(monkeypatch):
         "reduce_noise_to_one",
     ],
 )
-def test_new_out_inplace_symbols_are_public(name):
+def test_inplace_symbols_are_public(name):
     assert hasattr(fhe, name)
 
 

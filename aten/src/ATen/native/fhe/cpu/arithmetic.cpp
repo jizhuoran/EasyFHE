@@ -391,7 +391,7 @@ GENERATE_TEMPLATE(vmul_pt_pairwise, 1)
       const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                          \
       int64_t cur_limbs) {                                                   \
     Tensor c = at::empty(                                                    \
-        {a.sizes()[0], a.sizes()[1], cur_limbs, a.sizes()[3]}, a.options()); \
+        {a.sizes()[0], a.sizes()[1], a.sizes()[2], a.sizes()[3]}, a.options()); \
     v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);    \
     return c;                                                                \
   }                                                                          \
@@ -404,16 +404,6 @@ GENERATE_TEMPLATE(vmul_pt_pairwise, 1)
     v##NAME##_template(                                                      \
         self, self, other, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);         \
     return self;                                                             \
-  }                                                                          \
-                                                                             \
-  Tensor& NAME##_mod_out_cpu(                                                \
-      const Tensor& a,                                                       \
-      const Tensor& b,                                                       \
-      const Tensor& mod BARRET_PARAMS_##HAS_BARRET,                          \
-      int64_t cur_limbs,                                                     \
-      Tensor& c) {                                                           \
-    v##NAME##_template(c, a, b, mod BARRET_ARGS_##HAS_BARRET, cur_limbs);    \
-    return c;                                                                \
   }
 
 GENERATE_INTERFACE(add, 0)

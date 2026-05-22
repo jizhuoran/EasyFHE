@@ -5,6 +5,25 @@ from ..ciphertext import Cipher
 from . import kernels as F
 
 
+def _preserve_component_capacity(template, active):
+    if not hasattr(template, "shape") or not hasattr(active, "shape"):
+        return active
+    if active.dim() < 2 or template.dim() < 2:
+        return active
+    if active.shape[-1] != template.shape[-1]:
+        return active
+    capacity = int(template.shape[-2])
+    active_limbs = int(active.shape[-2])
+    if active_limbs > capacity:
+        return active
+    desired_shape = tuple(active.shape[:-2]) + (capacity, active.shape[-1])
+    if tuple(active.shape) == desired_shape:
+        return active
+    out = active.new_empty(desired_shape)
+    out[..., :active_limbs, :] = active
+    return out
+
+
 def homo_rotate(cipher, offset, cryptoContext, addend=None):
     if offset == 0:
         if addend is not None:
@@ -35,7 +54,10 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         add_bx=None if addend is None else addend.cv[0],
         add_ax=None if addend is None else addend.cv[1],
     )
-    return cipher.cipher_like(list(cv))
+    return cipher.cipher_like([
+        _preserve_component_capacity(cipher.cv[0], cv[0]),
+        _preserve_component_capacity(cipher.cv[1], cv[1]),
+    ])
 
 
 def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
@@ -173,7 +195,13 @@ def _finalize_fast_rotate_q(
         cipher.cur_limbs,
         cryptoContext,
     )
-    return cipher.cipher_like(list(cv), batch_size=batch_size)
+    return cipher.cipher_like(
+        [
+            _preserve_component_capacity(cipher.cv[0], cv[0]),
+            _preserve_component_capacity(cipher.cv[1], cv[1]),
+        ],
+        batch_size=batch_size,
+    )
 
 
 def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):

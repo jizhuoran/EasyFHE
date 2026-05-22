@@ -3,7 +3,18 @@ from ..ciphertext import Cipher
 from . import validation
 from . import alignment
 from .plaintext import _encode_double_for_scalar_op, homo_add_pt, homo_add_scalar_double
-from .primitives import _cipher_add, _cipher_add_ext, _cipher_mul, _cipher_square, _cipher_sub, _cipher_sub_ext
+from .primitives import (
+    _cipher_add,
+    _cipher_add_ext,
+    _cipher_add_ext_inplace,
+    _cipher_add_inplace,
+    _cipher_mul,
+    _cipher_square,
+    _cipher_sub,
+    _cipher_sub_ext,
+    _cipher_sub_ext_inplace,
+    _cipher_sub_inplace,
+)
 
 
 def _align_for_add_or_sub(in0, in1, cryptoContext):
@@ -16,28 +27,59 @@ def _align_for_mul(ct1: Cipher, ct2: Cipher, cryptoContext):
     return alignment.align_to(ct1, target1, cryptoContext), alignment.align_to(ct2, target2, cryptoContext)
 
 
-def homo_add(in0, in1, cryptoContext, *, out=None):
+def _validate_inplace_add_or_sub(op_name, in0, in1):
+    validation.validate_binary_cipher_op(
+        op_name,
+        in0,
+        in1,
+        require_same_metadata=("slots", "cur_limbs", "noise_deg", "scaling_factor"),
+    )
+
+
+def _preserve_component_capacity(template, active):
+    if not hasattr(template, "shape") or not hasattr(active, "shape"):
+        return active
+    if tuple(active.shape) == tuple(template.shape):
+        return active
+    if active.dim() != template.dim():
+        return active
+    if active.shape[:-2] != template.shape[:-2] or active.shape[-1] != template.shape[-1]:
+        return active
+    if active.shape[-2] > template.shape[-2]:
+        return active
+    out = template.new_empty(template.shape)
+    out[..., : active.shape[-2], :] = active
+    return out
+
+
+def homo_add(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_add", in0, in1, require_same_metadata=("slots",))
     in0, in1 = _align_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
-        return _cipher_add_ext(in0, in1, cryptoContext, out=out)
-    return _cipher_add(in0, in1, cryptoContext, out=out)
+        return _cipher_add_ext(in0, in1, cryptoContext)
+    return _cipher_add(in0, in1, cryptoContext)
 
 
 def homo_add_inplace(in0, in1, cryptoContext):
-    return homo_add(in0, in1, cryptoContext, out=in0)
+    _validate_inplace_add_or_sub("homo_add_inplace", in0, in1)
+    if in0.is_ext:
+        return _cipher_add_ext_inplace(in0, in1, cryptoContext)
+    return _cipher_add_inplace(in0, in1, cryptoContext)
 
 
-def homo_sub(in0, in1, cryptoContext, *, out=None):
+def homo_sub(in0, in1, cryptoContext):
     validation.validate_binary_cipher_op("homo_sub", in0, in1, require_same_metadata=("slots",))
     in0, in1 = _align_for_add_or_sub(in0, in1, cryptoContext)
     if in0.is_ext:
-        return _cipher_sub_ext(in0, in1, cryptoContext, out=out)
-    return _cipher_sub(in0, in1, cryptoContext, out=out)
+        return _cipher_sub_ext(in0, in1, cryptoContext)
+    return _cipher_sub(in0, in1, cryptoContext)
 
 
 def homo_sub_inplace(in0, in1, cryptoContext):
-    return homo_sub(in0, in1, cryptoContext, out=in0)
+    _validate_inplace_add_or_sub("homo_sub_inplace", in0, in1)
+    if in0.is_ext:
+        return _cipher_sub_ext_inplace(in0, in1, cryptoContext)
+    return _cipher_sub_inplace(in0, in1, cryptoContext)
 
 
 def homo_mul(in0, in1, cryptoContext):
@@ -174,7 +216,10 @@ def homo_mul_rescale(
         post_scalar=post_scalar,
     )
     return in0.cipher_like(
-        [res[0, 0], res[1, 0]],
+        [
+            _preserve_component_capacity(in0.cv[0], res[0, 0]),
+            _preserve_component_capacity(in0.cv[1], res[1, 0]),
+        ],
         cur_limbs=out_cur_limbs,
         scaling_factor=out_scaling_factor,
         noise_deg=in0.noise_deg + in1.noise_deg - 1,

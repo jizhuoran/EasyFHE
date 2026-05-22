@@ -3184,12 +3184,6 @@
     CPU: neg_mod_cpu_
     CUDA: neg_mod_cuda_
 
-- func: neg_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: neg_mod_out_cpu
-    CUDA: neg_mod_out_cuda
-
 - func: add_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
@@ -3201,12 +3195,6 @@
   dispatch:
     CPU: add_mod_cpu_
     CUDA: add_mod_cuda_
-
-- func: add_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: add_mod_out_cpu
-    CUDA: add_mod_out_cuda
 
 - func: sub_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
@@ -3220,12 +3208,6 @@
     CPU: sub_mod_cpu_
     CUDA: sub_mod_cuda_
 
-- func: sub_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: sub_mod_out_cpu
-    CUDA: sub_mod_out_cuda
-
 - func: mul_mod(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
@@ -3237,12 +3219,6 @@
   dispatch:
     CPU: mul_mod_cpu_
     CUDA: mul_mod_cuda_
-
-- func: mul_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: mul_mod_out_cpu
-    CUDA: mul_mod_out_cuda
 
 - func: add_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
@@ -3256,12 +3232,6 @@
     CPU: add_scalar_mod_cpu_
     CUDA: add_scalar_mod_cuda_
 
-- func: add_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: add_scalar_mod_out_cpu
-    CUDA: add_scalar_mod_out_cuda
-
 - func: sub_scalar_mod(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs) -> Tensor
   device_check: NoCheck
   dispatch:
@@ -3273,12 +3243,6 @@
   dispatch:
     CPU: sub_scalar_mod_cpu_
     CUDA: sub_scalar_mod_cuda_
-
-- func: sub_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
-  device_check: NoCheck
-  dispatch:
-    CPU: sub_scalar_mod_out_cpu
-    CUDA: sub_scalar_mod_out_cuda
 
 - func: mul_scalar_mod(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck
@@ -3292,51 +3256,45 @@
     CPU: mul_scalar_mod_cpu_
     CUDA: mul_scalar_mod_cuda_
 
-- func: mul_scalar_mod.out(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs, Tensor(a!) out) -> Tensor(a!)
+- func: cv_add_pair(Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CPU: mul_scalar_mod_out_cpu
-    CUDA: mul_scalar_mod_out_cuda
+    CUDA: cv_add_pair_cuda
 
-- func: fused_add_mod(Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+- func: cv_add_pair_(Tensor(a!) self, Tensor(b!) self_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-    CUDA: fused_add_mod_cuda
+    CUDA: cv_add_pair_inplace_cuda
 
-- func: fused_add_mod_write(Tensor out0, Tensor out1, Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+- func: cv_sub_pair(Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: fused_add_mod_write_cuda
+    CUDA: cv_sub_pair_cuda
 
-- func: fused_sub_mod(Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+- func: cv_sub_pair_(Tensor(a!) self, Tensor(b!) self_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-    CUDA: fused_sub_mod_cuda
+    CUDA: cv_sub_pair_inplace_cuda
 
-- func: fused_sub_mod_write(Tensor out0, Tensor out1, Tensor in0_c0, Tensor in0_c1, Tensor in1_c0, Tensor in1_c1, Tensor mod, *, int cur_limbs) -> Tensor[]
+- func: cv_mul_pt_pair(Tensor c0, Tensor c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: fused_sub_mod_write_cuda
+    CUDA: cv_mul_pt_pair_cuda
 
-- func: fused_mul_pt_mod(Tensor c0, Tensor c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
+- func: cv_mul_pt_pair_(Tensor(a!) self, Tensor(b!) self_c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-    CUDA: fused_mul_pt_mod_cuda
+    CUDA: cv_mul_pt_pair_inplace_cuda
 
-- func: fused_mul_pt_mod_write(Tensor out0, Tensor out1, Tensor c0, Tensor c1, Tensor plaintext, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
+- func: cv_mul_scalar_pair(Tensor c0, Tensor c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: fused_mul_pt_mod_write_cuda
+    CUDA: cv_mul_scalar_pair_cuda
 
-- func: fused_mul_scalar_mod(Tensor c0, Tensor c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
+- func: cv_mul_scalar_pair_(Tensor(a!) self, Tensor(b!) self_c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor(a!)
   device_check: NoCheck
   dispatch:
-    CUDA: fused_mul_scalar_mod_cuda
-
-- func: fused_mul_scalar_mod_write(Tensor out0, Tensor out1, Tensor c0, Tensor c1, Tensor scalar, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor[]
-  device_check: NoCheck
-  dispatch:
-    CUDA: fused_mul_scalar_mod_write_cuda
+    CUDA: cv_mul_scalar_pair_inplace_cuda
 
 - func: mul_pt_broadcast(Tensor self, Tensor in_b, Tensor mod, Tensor barret_mu, *, int cur_limbs) -> Tensor
   device_check: NoCheck

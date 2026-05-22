@@ -75,6 +75,8 @@ def reduce_noise_to_one(cipher, context):
 
 
 def rescale_one_level(cipher, context):
+    if cipher.is_ext:
+        raise ValueError("rescale_one_level: ext ciphers must be moddowned before rescale")
     if cipher.cur_limbs <= 1:
         raise ValueError(f"rescale_one_level: cur_limbs must be > 1, got {cipher.cur_limbs}")
     if cipher.noise_deg <= 1:
@@ -123,6 +125,8 @@ def _mul_ready_target(target: CipherState, context) -> CipherState:
 
 
 def _drop_to_limbs(cipher, target_limbs, context):
+    if cipher.is_ext:
+        raise ValueError("_drop_to_limbs: ext ciphers must be moddowned before dropping limbs")
     if target_limbs < 0 or target_limbs > cipher.cur_limbs:
         raise ValueError(
             f"_drop_to_limbs: target_limbs must be between 0 and cur_limbs, got "
@@ -132,23 +136,34 @@ def _drop_to_limbs(cipher, target_limbs, context):
     if target_limbs == cipher.cur_limbs:
         return cipher.shallow_copy()
 
-    if cipher.is_ext:
-        cv = [
-            torch.cat((component[..., :target_limbs, :], component[..., cipher.cur_limbs:, :]), dim=-2)
-            for component in cipher.cv
-        ]
-    else:
-        cv = [component[..., :target_limbs, :] for component in cipher.cv]
-    return cipher.cipher_like(cv, cur_limbs=target_limbs)
+    return cipher.cipher_like(cipher.cv, cur_limbs=target_limbs)
+
+
+def _preserve_component_capacity(template, active):
+    if not hasattr(template, "shape") or not hasattr(active, "shape"):
+        return active
+    if tuple(active.shape) == tuple(template.shape):
+        return active
+    if active.dim() != template.dim():
+        return active
+    if active.shape[:-2] != template.shape[:-2] or active.shape[-1] != template.shape[-1]:
+        return active
+    if active.shape[-2] > template.shape[-2]:
+        return active
+    out = torch.empty_like(template)
+    out[..., : active.shape[-2], :] = active
+    return out
 
 
 def _rescale_one_level(cipher, context):
+    if cipher.is_ext:
+        raise ValueError("_rescale_one_level: ext ciphers must be moddowned before rescale")
     if cipher.cur_limbs <= 1:
         raise ValueError(f"_rescale_one_level: cur_limbs must be > 1, got {cipher.cur_limbs}")
     if cipher.noise_deg <= 1:
         raise ValueError(f"_rescale_one_level: noise_deg must be > 1, got {cipher.noise_deg}")
     res_cv = [
-        F.cv_drop_last_element_and_scale(cv, cipher.cur_limbs, 0, context)
+        _preserve_component_capacity(cv, F.cv_drop_last_element_and_scale(cv, cipher.cur_limbs, 0, context))
         for cv in cipher.cv
     ]
     mod_reduce_factor = context.rescale_divisor_at(cipher.cur_limbs - 1)

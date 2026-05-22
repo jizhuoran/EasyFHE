@@ -276,36 +276,29 @@ only. User code, bootstrapping code, and examples should not call them directly.
 
 - `torch.neg_mod`
 - `torch.neg_mod_`
-- `torch.neg_mod.out`
 - `torch.add_mod`
 - `torch.add_mod_`
-- `torch.add_mod.out`
 - `torch.sub_mod`
 - `torch.sub_mod_`
-- `torch.sub_mod.out`
 - `torch.mul_mod`
 - `torch.mul_mod_`
-- `torch.mul_mod.out`
 - `torch.add_scalar_mod`
 - `torch.add_scalar_mod_`
-- `torch.add_scalar_mod.out`
 - `torch.sub_scalar_mod`
 - `torch.sub_scalar_mod_`
-- `torch.sub_scalar_mod.out`
 - `torch.mul_scalar_mod`
 - `torch.mul_scalar_mod_`
-- `torch.mul_scalar_mod.out`
 
 ### Fused Two-Component Ops
 
-- `torch.fused_add_mod`
-- `torch.fused_add_mod_write`
-- `torch.fused_sub_mod`
-- `torch.fused_sub_mod_write`
-- `torch.fused_mul_pt_mod`
-- `torch.fused_mul_pt_mod_write`
-- `torch.fused_mul_scalar_mod`
-- `torch.fused_mul_scalar_mod_write`
+- `torch.cv_add_pair`
+- `torch.cv_add_pair_`
+- `torch.cv_sub_pair`
+- `torch.cv_sub_pair_`
+- `torch.cv_mul_pt_pair`
+- `torch.cv_mul_pt_pair_`
+- `torch.cv_mul_scalar_pair`
+- `torch.cv_mul_scalar_pair_`
 - `torch.mul_pt_broadcast`
 - `torch.mul_pt_pairwise`
 - `torch.add_pt_broadcast`

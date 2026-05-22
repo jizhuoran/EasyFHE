@@ -192,7 +192,7 @@ Tensor make_arithmetic_result(
     const Tensor* barrett_mu,
     int64_t cur_limbs) {
   Tensor out = at::empty(
-      {lhs.sizes()[0], lhs.sizes()[1], cur_limbs, lhs.sizes()[3]},
+      {lhs.sizes()[0], lhs.sizes()[1], lhs.sizes()[2], lhs.sizes()[3]},
       lhs.options());
   run_arithmetic<Op, Layout, HasBarrett>(
       out, lhs, rhs, mod, barrett_mu, cur_limbs);
@@ -209,19 +209,6 @@ Tensor& arithmetic_inplace(
   run_arithmetic<Op, Layout, HasBarrett>(
       self, self, rhs, mod, barrett_mu, cur_limbs);
   return self;
-}
-
-template <ArithmeticOp Op, RhsLayout Layout, bool HasBarrett>
-Tensor& arithmetic_out(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    const Tensor* barrett_mu,
-    int64_t cur_limbs,
-    Tensor& out) {
-  run_arithmetic<Op, Layout, HasBarrett>(
-      out, lhs, rhs, mod, barrett_mu, cur_limbs);
-  return out;
 }
 
 inline int64_t active_limb_dim(const Tensor& tensor) {
@@ -478,16 +465,6 @@ Tensor& add_mod_cuda_(
       self, rhs, mod, nullptr, cur_limbs);
 }
 
-Tensor& add_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Add, RhsLayout::Tensor, false>(
-      lhs, rhs, mod, nullptr, cur_limbs, out);
-}
-
 Tensor sub_mod_cuda(
     const Tensor& lhs,
     const Tensor& rhs,
@@ -504,16 +481,6 @@ Tensor& sub_mod_cuda_(
     int64_t cur_limbs) {
   return arithmetic_inplace<ArithmeticOp::Sub, RhsLayout::Tensor, false>(
       self, rhs, mod, nullptr, cur_limbs);
-}
-
-Tensor& sub_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Sub, RhsLayout::Tensor, false>(
-      lhs, rhs, mod, nullptr, cur_limbs, out);
 }
 
 Tensor mul_mod_cuda(
@@ -536,17 +503,6 @@ Tensor& mul_mod_cuda_(
       self, rhs, mod, &barrett_mu, cur_limbs);
 }
 
-Tensor& mul_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    const Tensor& barrett_mu,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Mul, RhsLayout::Tensor, true>(
-      lhs, rhs, mod, &barrett_mu, cur_limbs, out);
-}
-
 Tensor add_scalar_mod_cuda(
     const Tensor& lhs,
     const Tensor& rhs,
@@ -567,16 +523,6 @@ Tensor& add_scalar_mod_cuda_(
       self, rhs, mod, nullptr, cur_limbs);
 }
 
-Tensor& add_scalar_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Add, RhsLayout::ScalarByLimb, false>(
-      lhs, rhs, mod, nullptr, cur_limbs, out);
-}
-
 Tensor sub_scalar_mod_cuda(
     const Tensor& lhs,
     const Tensor& rhs,
@@ -595,16 +541,6 @@ Tensor& sub_scalar_mod_cuda_(
     int64_t cur_limbs) {
   return arithmetic_inplace<ArithmeticOp::Sub, RhsLayout::ScalarByLimb, false>(
       self, rhs, mod, nullptr, cur_limbs);
-}
-
-Tensor& sub_scalar_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Sub, RhsLayout::ScalarByLimb, false>(
-      lhs, rhs, mod, nullptr, cur_limbs, out);
 }
 
 Tensor mul_scalar_mod_cuda(
@@ -629,18 +565,7 @@ Tensor& mul_scalar_mod_cuda_(
       self, rhs, mod, &barrett_mu, cur_limbs);
 }
 
-Tensor& mul_scalar_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    const Tensor& barrett_mu,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Mul, RhsLayout::ScalarByLimb, true>(
-      lhs, rhs, mod, &barrett_mu, cur_limbs, out);
-}
-
-std::vector<Tensor> fused_add_mod_cuda(
+std::vector<Tensor> cv_add_pair_cuda(
     const Tensor& in0_c0,
     const Tensor& in0_c1,
     const Tensor& in1_c0,
@@ -651,20 +576,19 @@ std::vector<Tensor> fused_add_mod_cuda(
       in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
 }
 
-std::vector<Tensor> fused_add_mod_write_cuda(
-    const Tensor& out0,
-    const Tensor& out1,
-    const Tensor& in0_c0,
-    const Tensor& in0_c1,
+Tensor& cv_add_pair_inplace_cuda(
+    Tensor& in0_c0,
+    Tensor& in0_c1,
     const Tensor& in1_c0,
     const Tensor& in1_c1,
     const Tensor& mod,
     int64_t cur_limbs) {
-  return fused_pair_arithmetic_out<ArithmeticOp::Add, FusedRhsLayout::TensorPair, false>(
-      out0, out1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+  fused_pair_arithmetic_out<ArithmeticOp::Add, FusedRhsLayout::TensorPair, false>(
+      in0_c0, in0_c1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+  return in0_c0;
 }
 
-std::vector<Tensor> fused_sub_mod_cuda(
+std::vector<Tensor> cv_sub_pair_cuda(
     const Tensor& in0_c0,
     const Tensor& in0_c1,
     const Tensor& in1_c0,
@@ -675,20 +599,19 @@ std::vector<Tensor> fused_sub_mod_cuda(
       in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
 }
 
-std::vector<Tensor> fused_sub_mod_write_cuda(
-    const Tensor& out0,
-    const Tensor& out1,
-    const Tensor& in0_c0,
-    const Tensor& in0_c1,
+Tensor& cv_sub_pair_inplace_cuda(
+    Tensor& in0_c0,
+    Tensor& in0_c1,
     const Tensor& in1_c0,
     const Tensor& in1_c1,
     const Tensor& mod,
     int64_t cur_limbs) {
-  return fused_pair_arithmetic_out<ArithmeticOp::Sub, FusedRhsLayout::TensorPair, false>(
-      out0, out1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+  fused_pair_arithmetic_out<ArithmeticOp::Sub, FusedRhsLayout::TensorPair, false>(
+      in0_c0, in0_c1, in0_c0, in0_c1, in1_c0, &in1_c1, mod, nullptr, cur_limbs);
+  return in0_c0;
 }
 
-std::vector<Tensor> fused_mul_pt_mod_cuda(
+std::vector<Tensor> cv_mul_pt_pair_cuda(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& plaintext,
@@ -699,20 +622,19 @@ std::vector<Tensor> fused_mul_pt_mod_cuda(
       c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
 }
 
-std::vector<Tensor> fused_mul_pt_mod_write_cuda(
-    const Tensor& out0,
-    const Tensor& out1,
-    const Tensor& c0,
-    const Tensor& c1,
+Tensor& cv_mul_pt_pair_inplace_cuda(
+    Tensor& c0,
+    Tensor& c1,
     const Tensor& plaintext,
     const Tensor& mod,
     const Tensor& barrett_mu,
     int64_t cur_limbs) {
-  return fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::Plaintext, true>(
-      out0, out1, c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
+  fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::Plaintext, true>(
+      c0, c1, c0, c1, plaintext, nullptr, mod, &barrett_mu, cur_limbs);
+  return c0;
 }
 
-std::vector<Tensor> fused_mul_scalar_mod_cuda(
+std::vector<Tensor> cv_mul_scalar_pair_cuda(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& scalar,
@@ -723,17 +645,16 @@ std::vector<Tensor> fused_mul_scalar_mod_cuda(
       c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
 }
 
-std::vector<Tensor> fused_mul_scalar_mod_write_cuda(
-    const Tensor& out0,
-    const Tensor& out1,
-    const Tensor& c0,
-    const Tensor& c1,
+Tensor& cv_mul_scalar_pair_inplace_cuda(
+    Tensor& c0,
+    Tensor& c1,
     const Tensor& scalar,
     const Tensor& mod,
     const Tensor& barrett_mu,
     int64_t cur_limbs) {
-  return fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::ScalarByLimb, true>(
-      out0, out1, c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
+  fused_pair_arithmetic_out<ArithmeticOp::Mul, FusedRhsLayout::ScalarByLimb, true>(
+      c0, c1, c0, c1, scalar, nullptr, mod, &barrett_mu, cur_limbs);
+  return c0;
 }
 
 Tensor neg_mod_cuda(
@@ -752,16 +673,6 @@ Tensor& neg_mod_cuda_(
     int64_t cur_limbs) {
   return arithmetic_inplace<ArithmeticOp::Neg, RhsLayout::Tensor, false>(
       self, rhs, mod, nullptr, cur_limbs);
-}
-
-Tensor& neg_mod_out_cuda(
-    const Tensor& lhs,
-    const Tensor& rhs,
-    const Tensor& mod,
-    int64_t cur_limbs,
-    Tensor& out) {
-  return arithmetic_out<ArithmeticOp::Neg, RhsLayout::Tensor, false>(
-      lhs, rhs, mod, nullptr, cur_limbs, out);
 }
 
 } // namespace at::native
