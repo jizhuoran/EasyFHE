@@ -208,6 +208,15 @@ EasyFHE follows the framework described in [A Framework for Developing and Optim
 
 EasyFHE is an alpha research system. APIs, build flags, ciphertext layout, wheel channels, and packaging details may change quickly. Do not treat it as a production cryptographic library without independent security and correctness review.
 
+## Roadmap
+
+EasyFHE is moving toward a more configurable and model-aware FHE runtime. Planned directions include:
+
+- **Heterogeneous RNS limb sizes.** Support CKKS parameter sets where different RNS limbs may use different bit widths, instead of assuming a uniform limb size across the chain. This will make the runtime more flexible for memory, precision, and bootstrapping trade-offs.
+- **Memory-aware configuration and customizable encoding.** Add support for memory-aware configuration generation and encoding customization inspired by **MACH: Memory-Aware Configuration Generation for Homomorphically Encrypted Neural Networks**. The goal is to let users tune encoding choices for specific encrypted neural-network workloads.
+- **Key-size minimization.** Provide tools and planning APIs that minimize evaluation-key footprint.
+- **Input-aware EvalMod customization.** Support input-distribution-aware bootstrapping, especially customized EvalMod approximations whose approximation interval, degree, and error objective are selected based on the expected ciphertext value range.
+
 ## Contributors
 
 EasyFHE is an open research codebase for the FHE and systems community. We welcome contributions of all kinds, including bug reports, documentation improvements, benchmarks, CUDA kernel optimizations, new CKKS operators, and bootstrapping experiments. If you are building on EasyFHE or have ideas for improving it, please open an issue, start a discussion, or submit a pull request.
