@@ -309,15 +309,25 @@ def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
 def grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext):
     validation.require_batched_cipher("grouped_scalar_weighted_acc", ciphers, "ciphers")
     cv = F.cipher_grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext)
+    groups = int(scalars.shape[0])
     return ciphers.cipher_like(
-        list(cv),
+        _grouped_acc_components(cv, groups, ciphers.state.cur_limbs, cryptoContext.N),
         state=CipherState(
             ciphers.state.cur_limbs,
             ciphers.state.noise_deg + 1,
             ciphers.state.scaling_factor * cryptoContext.scale_at(ciphers.state.cur_limbs),
         ),
-        batch_size=int(scalars.shape[0]),
+        batch_size=groups,
     )
+
+
+def _grouped_acc_components(cv, groups, cur_limbs, ring_dim):
+    if groups <= 1:
+        return list(cv)
+    return [
+        component.reshape(groups, cur_limbs, ring_dim) if component.dim() == 2 else component
+        for component in cv
+    ]
 
 
 def homo_mul_relin_rescale_postop(

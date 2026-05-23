@@ -164,18 +164,6 @@ def _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan):
     return scalars.reshape(len(flat.tail_specs), flat.tail_max_deg, batch.state.cur_limbs).contiguous()
 
 
-def _normalize_grouped_tail_shape(tails, count, cryptoContext):
-    if tails.batch_size <= 1 or tails.cv[0].dim() != 2:
-        return tails
-    return tails.cipher_like(
-        [
-            component.reshape(count, tails.state.cur_limbs, cryptoContext.N)
-            for component in tails.cv
-        ],
-        batch_size=count,
-    )
-
-
 def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
     if not flat.tail_specs:
         return ()
@@ -183,7 +171,6 @@ def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
     scalars = _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan)
     tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext)
     tails = alignment.rescale_one_level(tails, cryptoContext)
-    tails = _normalize_grouped_tail_shape(tails, len(flat.tail_specs), cryptoContext)
     return tuple(layout.cipher_batch_item(tails, index) for index in range(len(flat.tail_specs)))
 
 
