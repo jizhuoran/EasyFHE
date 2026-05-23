@@ -32,6 +32,7 @@ class _BootstrapConfig:
     level_budget: list[int]
     dim1: list[int]
     strategy: str
+    bootstrap_mode: str
     max_levels_remaining: int
 
     @property
@@ -63,6 +64,22 @@ def _normalize_strategy(strategy):
     return normalize_bootstrap_strategy(strategy)
 
 
+def _normalize_bootstrap_mode(bootstrap_mode):
+    mode = str(bootstrap_mode or "modraise_first").lower()
+    aliases = {
+        "classic": "modraise_first",
+        "modraise_first": "modraise_first",
+        "mod_raise_first": "modraise_first",
+        "slots_first": "stc_first",
+        "stc_first": "stc_first",
+        "s2c_first": "stc_first",
+    }
+    try:
+        return aliases[mode]
+    except KeyError as exc:
+        raise ValueError("bootstrap_mode must be one of: modraise_first, stc_first") from exc
+
+
 def _resolve_max_levels_remaining(max_levels_remaining):
     if max_levels_remaining is not None:
         return int(max_levels_remaining)
@@ -73,12 +90,13 @@ def _resolve_max_levels_remaining(max_levels_remaining):
     )
 
 
-def _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy):
+def _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy, bootstrap_mode):
     return _BootstrapConfig(
         log_bs_slots=int(log_bs_slots),
         level_budget=_normalize_level_budget(level_budget),
         dim1=_normalize_dim1(dim1),
         strategy=_normalize_strategy(strategy),
+        bootstrap_mode=_normalize_bootstrap_mode(bootstrap_mode),
         max_levels_remaining=_resolve_max_levels_remaining(max_levels_remaining),
     )
 
@@ -171,6 +189,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         level_budget=tuple(plan.level_budget),
         dim1=tuple(plan.dim1),
         strategy=plan.strategy,
+        bootstrap_mode=plan.bootstrap_mode,
         max_levels_remaining=plan.max_levels_remaining,
         c2s_plan=c2s_runtime_plan,
         s2c_plan=s2c_runtime_plan,
@@ -352,6 +371,7 @@ def generate_bootstrap_constants(
     dim1=None,
     baby_step=None,
     strategy="double_hoist",
+    bootstrap_mode="modraise_first",
 ):
     if dim1 is not None and baby_step is not None:
         raise ValueError("bootstrap generate accepts either dim1 or baby_step, not both")
@@ -364,6 +384,7 @@ def generate_bootstrap_constants(
         max_levels_remaining=max_levels_remaining,
         dim1=_normalize_public_pair_or_scalar(dim1 or (0, 0), "dim1"),
         strategy=strategy,
+        bootstrap_mode=bootstrap_mode,
     )
 
 
@@ -386,8 +407,9 @@ def _build_bootstrap_constants(
     max_levels_remaining=None,
     dim1=None,
     strategy="double_hoist",
+    bootstrap_mode="modraise_first",
 ):
-    plan = _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy)
+    plan = _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy, bootstrap_mode)
     precompute = _run_bootstrap_setup(crypto_context, plan)
     required_rotations = bootstrap_required_rotations(
         crypto_context.N,

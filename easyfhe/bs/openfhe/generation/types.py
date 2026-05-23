@@ -26,6 +26,7 @@ class BootstrapPlan:
     level_budget: tuple[int, int]
     dim1: tuple[int, int]
     strategy: str
+    bootstrap_mode: str
     max_levels_remaining: int
     c2s_plan: BootstrapTransformPlan
     s2c_plan: BootstrapTransformPlan

@@ -178,10 +178,7 @@ def _small_tail(spec, tail_values, T_items):
     return tail_values[spec.tail_idx]
 
 
-def _q_highest_term(spec, Tk, tail, constants, bootstrap_plan, cryptoContext):
-    if tail is not None:
-        Tk = alignment.align_to(Tk, tail.state, cryptoContext)
-
+def _q_highest_term(spec, Tk, constants, bootstrap_plan, cryptoContext):
     if spec.q_highest_mode == Q_HIGHEST_ROOT_DOUBLE:
         return arithmetic.homo_add(Tk, Tk, cryptoContext)
 
@@ -233,7 +230,7 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
 
 
 def _finish_q_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext):
-    highest = _q_highest_term(spec, T_items[spec.k - 1], tail, constants, bootstrap_plan, cryptoContext)
+    highest = _q_highest_term(spec, T_items[spec.k - 1], constants, bootstrap_plan, cryptoContext)
     value = highest if tail is None else arithmetic.homo_add(tail, highest, cryptoContext)
     return _add_chebyshev_constant(
         value,

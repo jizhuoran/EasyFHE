@@ -107,8 +107,7 @@ def _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
     scalar = bootstrap_constants.encoded_scalars(
         "constant_eval_mult", result.state.cur_limbs, 1, cryptoContext, mode="double"
     )[0]
-    result = arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
-    return alignment.reduce_noise_to_one(result, cryptoContext)
+    return arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
 
 
 def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
@@ -134,6 +133,7 @@ def _scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
 
 
 def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan):
+    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
 
     conjugate = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
@@ -163,6 +163,7 @@ def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_co
             addend=raised,
         )
     raised = raised.cipher_like(raised.cv, slots=slots)
+    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
     encoded = rotation.homo_rotate_add(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
@@ -185,6 +186,11 @@ def eval_bootstrap(ciphertext, cryptoContext, bootstrap_constants, bootstrap_pla
     if L0 is None:
         raise ValueError("bootstrap L0 must be explicit")
     _require_supported_transform_mode(bootstrap_plan.level_budget)
+
+    if getattr(bootstrap_plan, "bootstrap_mode", "modraise_first") == "stc_first":
+        from .bootstrap_stc_first import eval_bootstrap_stc_first
+
+        return eval_bootstrap_stc_first(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan, L0)
 
     slots = bootstrap_plan.slots
     raised = _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0)

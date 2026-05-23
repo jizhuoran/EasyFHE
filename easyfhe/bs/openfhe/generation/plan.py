@@ -123,10 +123,10 @@ def _small_coefficients_and_path(kind, node, path):
 
 
 def _small_align_policy(kind, root):
-    if kind == KIND_C:
-        return ALIGN_C_TO_BASE
     if root:
         return ALIGN_NONE
+    if kind == KIND_C:
+        return ALIGN_C_TO_BASE
     if kind == KIND_S:
         return ALIGN_S_DROP_TO_NOISE_ONE
     return ALIGN_NONE

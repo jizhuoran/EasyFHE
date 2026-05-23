@@ -6,8 +6,8 @@ from .generation.requirements import bootstrap_depth, required_rotations
 from .generation.types import BootstrapPlan
 
 
-def depth(*, log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
-    return bootstrap_depth(log_bs_slots, level_budget, secret_key_dist)
+def depth(*, log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY", bootstrap_mode="modraise_first"):
+    return bootstrap_depth(log_bs_slots, level_budget, secret_key_dist, bootstrap_mode)
 
 
 def plan_rot_keys(
@@ -38,6 +38,7 @@ def generate(
     dim1=None,
     baby_step=None,
     strategy="double_hoist",
+    bootstrap_mode="modraise_first",
 ):
     if max_levels_remaining is None:
         raise ValueError("generate requires max_levels_remaining when crypto_context is provided")
@@ -49,6 +50,7 @@ def generate(
         dim1=dim1,
         baby_step=baby_step,
         strategy=strategy,
+        bootstrap_mode=bootstrap_mode,
     )
     return constants, plan
 

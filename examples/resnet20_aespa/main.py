@@ -43,6 +43,7 @@ class AespaConfig:
     first_mod: int
     level_budgets: tuple[tuple[int, int], ...]
     bootstrap_strategy: str
+    bootstrap_mode: str
     secret_key_dist: str
     scale_mode: str
     rescale_policy: str
@@ -74,6 +75,11 @@ def _parse_args():
         "--bootstrap-strategy",
         choices=("double_hoist", "normal_giant", "normal_bsgs"),
         default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
+    )
+    parser.add_argument(
+        "--bootstrap-mode",
+        choices=("classic", "modraise_first", "slots_first", "stc_first"),
+        default=os.environ.get("EASYFHE_BOOTSTRAP_MODE", "modraise_first"),
     )
     parser.add_argument(
         "--secret-key-dist",
@@ -108,6 +114,11 @@ def build_config(args):
             "bootstrap_strategy",
             os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
         ),
+        bootstrap_mode=getattr(
+            args,
+            "bootstrap_mode",
+            os.environ.get("EASYFHE_BOOTSTRAP_MODE", "modraise_first"),
+        ),
         secret_key_dist=secret_key_dist,
         scale_mode="fixed",
         rescale_policy="manual",
@@ -126,6 +137,7 @@ def _print_config(config):
     print("firstMod: ", config.first_mod)
     print("levelBudget_list: ", [list(level_budget) for level_budget in config.level_budgets])
     print("bootstrapStrategy: ", config.bootstrap_strategy)
+    print("bootstrapMode: ", config.bootstrap_mode)
     print("secretKeyDist: ", config.secret_key_dist)
     print("scaleMode: ", config.scale_mode)
     print("rescalePolicy: ", config.rescale_policy)
@@ -284,6 +296,7 @@ def resnet20(config=None, args=None):
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
         secret_key_dist=config.secret_key_dist,
+        bootstrap_mode=config.bootstrap_mode,
     )
     bootstrap_rotations = bs.plan_rot_keys(
         log_n=config.log_n,
@@ -317,6 +330,7 @@ def resnet20(config=None, args=None):
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
             strategy=config.bootstrap_strategy,
+            bootstrap_mode=config.bootstrap_mode,
         )
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
     print("cryptoContext: ", cryptoContext)

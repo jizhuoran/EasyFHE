@@ -32,6 +32,11 @@ def _parse_args():
         default=os.environ.get("EASYFHE_BOOTSTRAP_STRATEGY", "double_hoist"),
     )
     parser.add_argument(
+        "--bootstrap-mode",
+        choices=("classic", "modraise_first", "slots_first", "stc_first"),
+        default=os.environ.get("EASYFHE_BOOTSTRAP_MODE", "modraise_first"),
+    )
+    parser.add_argument(
         "--secret-key-dist",
         choices=("SPARSE_TERNARY", "UNIFORM_TERNARY"),
         default=os.environ.get("EASYFHE_SECRET_KEY_DIST", "SPARSE_TERNARY"),
@@ -80,6 +85,7 @@ def _build_bootstrap_runtime(args):
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
         secret_key_dist=config.secret_key_dist,
+        bootstrap_mode=config.bootstrap_mode,
     )
     bootstrap_rotations = bs.plan_rot_keys(
         log_n=config.log_n,
@@ -119,6 +125,7 @@ def _build_bootstrap_runtime(args):
             level_budget=level_budget,
             max_levels_remaining=config.max_levels_remaining,
             strategy=config.bootstrap_strategy,
+            bootstrap_mode=config.bootstrap_mode,
         )
         constant_seconds.append(time.perf_counter() - constant_start)
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
@@ -173,6 +180,7 @@ def main():
     print("================ ResNet20 AESPA bootstrap benchmark ================")
     print(f"device: {ctx.device}")
     print(f"bootstrap_strategy: {plan.strategy}")
+    print(f"bootstrap_mode: {plan.bootstrap_mode}")
     print(f"log_bs_slots: {log_bs_slots}")
     print(f"cipher: cur_limbs={cipher.state.cur_limbs} noise_deg={cipher.state.noise_deg} slots={cipher.slots}")
     print(f"context setup: {_format_seconds(setup_seconds)}")
