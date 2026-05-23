@@ -7,7 +7,7 @@ import numpy as np
 
 from easyfhe.fhe.constants import ConstantBundle
 from easyfhe.fhe.ops.encoding import PreparedPlaintext
-from .plan import KIND_C, KIND_Q, KIND_S, compile_flat_ps_plan, get_bootstrap_approx_plan
+from .plan import compile_flat_ps_plan, get_bootstrap_approx_plan
 from .precompute import BootstrapPrecompute
 from .rotations import (
     bootstrap_required_rotations,
@@ -196,57 +196,27 @@ def _register_approx_scalars(scalars, flat):
     q_highest_names = {}
 
     for spec in flat.small_specs:
-        scalar_path = _small_scalar_path(spec)
-        coefficients = _small_coefficients(spec)
-        const_name = "approx." + ".".join((*scalar_path, "const"))
-        scalars[const_name] = float(coefficients[0] / 2)
-        constant_names[scalar_path] = const_name
+        const_name = "approx." + ".".join((*spec.scalar_path, "const"))
+        scalars[const_name] = float(spec.const_value)
+        constant_names[spec.scalar_path] = const_name
 
-        if spec.kind == KIND_Q and not spec.root:
-            has_tail = spec.tail_idx is not None
-            coefficient = spec.node.divqr_q[-1] + (1.1 if has_tail else 0.0)
-            value = 2 ** math.floor(math.log2(coefficient))
-            name = "approx." + ".".join((*scalar_path, "highest"))
-            scalars[name] = int(value)
-            q_highest_names[scalar_path] = name
+        if spec.q_highest_scalar_value is not None:
+            name = "approx." + ".".join((*spec.scalar_path, "highest"))
+            scalars[name] = int(spec.q_highest_scalar_value)
+            q_highest_names[spec.scalar_path] = name
 
     for spec in flat.tail_specs:
-        coefficients = _small_coefficients(spec)
         row = []
         for index in range(1, flat.tail_max_deg + 1):
             if index <= spec.deg:
                 name = "approx." + ".".join((*spec.scalar_path, str(index)))
-                scalars[name] = float(coefficients[index])
+                scalars[name] = float(spec.coefficients[index])
                 row.append(name)
             else:
                 row.append(zero_name)
         tail_names.append(tuple(row))
 
     return tuple(tail_names), constant_names, q_highest_names
-
-
-def _small_scalar_path(spec):
-    return tuple((*spec.path, _small_suffix(spec.kind)))
-
-
-def _small_suffix(kind):
-    if kind == KIND_C:
-        return "c"
-    if kind == KIND_Q:
-        return "q"
-    if kind == KIND_S:
-        return "s"
-    raise ValueError(f"unknown flat PS small spec kind: {kind}")
-
-
-def _small_coefficients(spec):
-    if spec.kind == KIND_C:
-        return spec.node.divcs_q
-    if spec.kind == KIND_Q:
-        return spec.node.divqr_q
-    if spec.kind == KIND_S:
-        return spec.node.s2
-    raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
 
 
 def _register_chebyshev_scalars(scalars):

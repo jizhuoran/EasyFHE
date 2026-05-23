@@ -5,12 +5,16 @@ from easyfhe.fhe.ops import arithmetic
 from easyfhe.fhe.ops import layout
 
 from ..generation.plan import (
+    ALIGN_C_TO_BASE,
+    ALIGN_S_DROP_TO_NOISE_ONE,
     KIND_C,
     KIND_Q,
     KIND_S,
+    Q_HIGHEST_ROOT_DOUBLE,
+    Q_HIGHEST_ROOT_REPEAT,
+    Q_HIGHEST_SCALAR,
     SPACE_NODE,
     SPACE_SMALL,
-    ChebyshevPSNode,
 )
 
 
@@ -191,26 +195,30 @@ def _small_tail(spec, tail_values, T_items):
     return tail_values[spec.tail_idx]
 
 
-def _q_highest_term(node: ChebyshevPSNode, path, Tk, constants, bootstrap_plan, cryptoContext, *, root, has_tail):
-    if root:
-        if has_tail:
-            return arithmetic.homo_add(Tk, Tk, cryptoContext)
+def _q_highest_term(spec, Tk, constants, bootstrap_plan, cryptoContext):
+    if spec.q_highest_mode == Q_HIGHEST_ROOT_DOUBLE:
+        return arithmetic.homo_add(Tk, Tk, cryptoContext)
+
+    if spec.q_highest_mode == Q_HIGHEST_ROOT_REPEAT:
         value = Tk
-        for _ in range(1, int(node.divqr_q[-1])):
+        for _ in range(1, int(spec.q_highest_repeat)):
             value = arithmetic.homo_add(value, Tk, cryptoContext)
         return value
 
-    return arithmetic.homo_mul_scalar_int(
-        Tk,
-        constants.encoded_scalars(
-            bootstrap_plan.approx_q_highest_scalar_names[tuple((*path, "q"))],
-            Tk.state.cur_limbs,
-            0,
+    if spec.q_highest_mode == Q_HIGHEST_SCALAR:
+        return arithmetic.homo_mul_scalar_int(
+            Tk,
+            constants.encoded_scalars(
+                bootstrap_plan.approx_q_highest_scalar_names[spec.scalar_path],
+                Tk.state.cur_limbs,
+                0,
+                cryptoContext,
+                mode="int",
+            )[0],
             cryptoContext,
-            mode="int",
-        )[0],
-        cryptoContext,
-    )
+        )
+
+    raise ValueError(f"unexpected Q highest mode: {spec.q_highest_mode}")
 
 
 def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
@@ -219,13 +227,13 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
 
     value = _add_chebyshev_constant(
         tail,
-        (*spec.path, "c"),
+        spec.scalar_path,
         constants,
         bootstrap_plan,
         cryptoContext,
     )
-    if not spec.root and _uses_manual_rescale(cryptoContext):
-        target = T2[spec.node.m - 1]
+    if spec.align_policy == ALIGN_C_TO_BASE and _uses_manual_rescale(cryptoContext):
+        target = T2[spec.m - 1]
         value = alignment.align_to(
             value,
             alignment.CipherState(
@@ -239,21 +247,11 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
 
 
 def _finish_q_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext):
-    node = spec.node
-    highest = _q_highest_term(
-        node,
-        spec.path,
-        T_items[node.k - 1],
-        constants,
-        bootstrap_plan,
-        cryptoContext,
-        root=spec.root,
-        has_tail=tail is not None,
-    )
+    highest = _q_highest_term(spec, T_items[spec.k - 1], constants, bootstrap_plan, cryptoContext)
     value = highest if tail is None else arithmetic.homo_add(tail, highest, cryptoContext)
     return _add_chebyshev_constant(
         value,
-        (*spec.path, "q"),
+        spec.scalar_path,
         constants,
         bootstrap_plan,
         cryptoContext,
@@ -261,17 +259,16 @@ def _finish_q_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext
 
 
 def _finish_s_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext):
-    node = spec.node
-    Tk = T_items[node.k - 1]
+    Tk = T_items[spec.k - 1]
     value = Tk if tail is None else arithmetic.homo_add(tail, Tk, cryptoContext)
     value = _add_chebyshev_constant(
         value,
-        (*spec.path, "s"),
+        spec.scalar_path,
         constants,
         bootstrap_plan,
         cryptoContext,
     )
-    if not spec.root and _uses_manual_rescale(cryptoContext):
+    if spec.align_policy == ALIGN_S_DROP_TO_NOISE_ONE and _uses_manual_rescale(cryptoContext):
         value = alignment.align_to(
             value,
             alignment.CipherState(value.state.cur_limbs - 1, 1, None),
@@ -330,7 +327,7 @@ def _eval_combine_spec(spec, small_values, node_values, T2, constants, bootstrap
         left = arithmetic.homo_add_scalar_double(
             base,
             constants.encoded_scalars(
-                bootstrap_plan.approx_constant_scalar_names[tuple((*spec.path, "c"))],
+                bootstrap_plan.approx_constant_scalar_names[spec.c_const_scalar_path],
                 base.state.cur_limbs,
                 1,
                 cryptoContext,

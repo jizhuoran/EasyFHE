@@ -69,12 +69,14 @@ def test_flat_ps_plan_preserves_recursive_paths_and_postorder():
             assert spec.tail_idx is None or spec.tail_idx < len(flat.tail_specs)
             assert not (spec.direct_t1 and spec.tail_idx is not None)
 
+        nodes_by_path = {path: node for node, path in nodes}
         for index, spec in enumerate(flat.combine_specs):
             assert spec.out_idx == index
-            assert spec.base_idx == spec.node.m - 1
+            assert spec.base_idx == nodes_by_path[spec.path].m - 1
             _assert_ref_ready(spec.q_ref, index)
             _assert_ref_ready(spec.s_ref, index)
             assert spec.c_ref[0] == SPACE_SMALL
+            assert spec.c_const_scalar_path == (*spec.path, "c")
 
 
 def test_flat_ps_plan_description_names_tables():

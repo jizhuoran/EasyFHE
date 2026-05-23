@@ -37,13 +37,22 @@ KIND_S = 2
 SPACE_SMALL = 0
 SPACE_NODE = 1
 
+ALIGN_NONE = 0
+ALIGN_C_TO_BASE = 1
+ALIGN_S_DROP_TO_NOISE_ONE = 2
+
+Q_HIGHEST_NONE = 0
+Q_HIGHEST_ROOT_DOUBLE = 1
+Q_HIGHEST_ROOT_REPEAT = 2
+Q_HIGHEST_SCALAR = 3
+
 
 @dataclass(frozen=True)
 class FlatPSTailSpec:
     kind: int
-    node: ChebyshevPSNode
     path: tuple[str, ...]
     scalar_path: tuple[str, ...]
+    coefficients: tuple[float, ...]
     deg: int
     out_idx: int
 
@@ -51,20 +60,27 @@ class FlatPSTailSpec:
 @dataclass(frozen=True)
 class FlatPSSmallSpec:
     kind: int
-    node: ChebyshevPSNode
     path: tuple[str, ...]
+    scalar_path: tuple[str, ...]
     root: bool
     out_idx: int
     tail_idx: int | None
     direct_t1: bool
+    k: int
+    m: int
+    const_value: float
+    align_policy: int
+    q_highest_mode: int
+    q_highest_repeat: int
+    q_highest_scalar_value: int | None
 
 
 @dataclass(frozen=True)
 class FlatPSCombineSpec:
-    node: ChebyshevPSNode
     path: tuple[str, ...]
     root: bool
     base_idx: int
+    c_const_scalar_path: tuple[str, ...]
     c_ref: tuple[int, int]
     q_ref: tuple[int, int]
     s_ref: tuple[int, int]
@@ -104,6 +120,27 @@ def _small_coefficients_and_path(kind, node, path):
     if kind == KIND_S:
         return node.s2, (*path, "s"), node.k
     raise ValueError(f"unknown flat PS small spec kind: {kind}")
+
+
+def _small_align_policy(kind, root):
+    if root:
+        return ALIGN_NONE
+    if kind == KIND_C:
+        return ALIGN_C_TO_BASE
+    if kind == KIND_S:
+        return ALIGN_S_DROP_TO_NOISE_ONE
+    return ALIGN_NONE
+
+
+def _q_highest_mode_and_value(node, root, has_tail):
+    if root:
+        if has_tail:
+            return Q_HIGHEST_ROOT_DOUBLE, 0, None
+        return Q_HIGHEST_ROOT_REPEAT, int(node.divqr_q[-1]), None
+
+    coefficient = node.divqr_q[-1] + (1.1 if has_tail else 0.0)
+    scalar = int(2 ** math.floor(math.log2(coefficient)))
+    return Q_HIGHEST_SCALAR, 0, scalar
 
 
 def long_division_chebyshev(f, g):
@@ -217,24 +254,41 @@ def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
             tail_specs.append(
                 FlatPSTailSpec(
                     kind=int(kind),
-                    node=node,
                     path=tuple(path),
                     scalar_path=tuple(scalar_path),
+                    coefficients=tuple(float(value) for value in coefficients),
                     deg=int(deg),
                     out_idx=tail_idx,
                 )
+            )
+
+        q_mode = Q_HIGHEST_NONE
+        q_repeat = 0
+        q_scalar_value = None
+        if kind == KIND_Q:
+            q_mode, q_repeat, q_scalar_value = _q_highest_mode_and_value(
+                node,
+                root,
+                tail_idx is not None,
             )
 
         out_idx = len(small_specs)
         small_specs.append(
             FlatPSSmallSpec(
                 kind=int(kind),
-                node=node,
                 path=tuple(path),
+                scalar_path=tuple(scalar_path),
                 root=bool(root),
                 out_idx=out_idx,
                 tail_idx=tail_idx,
                 direct_t1=direct_t1,
+                k=int(node.k),
+                m=int(node.m),
+                const_value=float(coefficients[0] / 2),
+                align_policy=_small_align_policy(kind, root),
+                q_highest_mode=q_mode,
+                q_highest_repeat=q_repeat,
+                q_highest_scalar_value=q_scalar_value,
             )
         )
         return (SPACE_SMALL, out_idx)
@@ -254,10 +308,10 @@ def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
         out_idx = len(combine_specs)
         combine_specs.append(
             FlatPSCombineSpec(
-                node=node,
                 path=tuple(path),
                 root=bool(root),
                 base_idx=int(node.m) - 1,
+                c_const_scalar_path=tuple((*path, "c")),
                 c_ref=c_ref,
                 q_ref=q_ref,
                 s_ref=s_ref,
@@ -298,7 +352,6 @@ def describe_flat_ps_plan(flat: FlatPSPlan, bootstrap_plan=None) -> str:
 
     lines.extend(["", "Small"])
     for spec in flat.small_specs:
-        scalar_path = (*spec.path, _kind_suffix(spec.kind))
         if spec.direct_t1:
             tail = "T1"
         elif spec.tail_idx is None:
@@ -306,14 +359,14 @@ def describe_flat_ps_plan(flat: FlatPSPlan, bootstrap_plan=None) -> str:
         else:
             tail = f"tail[{spec.tail_idx:02d}]"
         pieces = [tail]
-        pieces.append(f"+ const({_path_text(scalar_path)})")
-        if spec.kind == KIND_Q:
-            pieces.append("+ highest")
+        pieces.append(f"+ const({_path_text(spec.scalar_path)})")
+        if spec.q_highest_mode != Q_HIGHEST_NONE:
+            pieces.append(f"+ {_q_highest_text(spec)}")
         if spec.kind == KIND_S:
             pieces.append("+ Tk")
         lines.append(
             f"  small[{spec.out_idx:02d}] {_kind_name(spec.kind)} "
-            f"{_path_text(scalar_path)} = {' '.join(pieces)}"
+            f"{_path_text(spec.scalar_path)} = {' '.join(pieces)}"
         )
 
     lines.extend(["", "Combine"])
@@ -354,6 +407,16 @@ def _ref_text(ref):
     if space == SPACE_NODE:
         return f"node[{idx:02d}]"
     return f"ref({space},{idx})"
+
+
+def _q_highest_text(spec):
+    if spec.q_highest_mode == Q_HIGHEST_ROOT_DOUBLE:
+        return "2*Tk"
+    if spec.q_highest_mode == Q_HIGHEST_ROOT_REPEAT:
+        return f"{spec.q_highest_repeat}*Tk"
+    if spec.q_highest_mode == Q_HIGHEST_SCALAR:
+        return f"{spec.q_highest_scalar_value}*Tk"
+    return "highest"
 
 
 @lru_cache(maxsize=None)
