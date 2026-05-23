@@ -60,8 +60,11 @@ def eval_slots_to_coeffs(ctxt, cryptoContext, bootstrap_constants, bootstrap_pla
 
 
 def _require_supported_transform_mode(level_budget):
-    if int(level_budget[0]) == 1 and int(level_budget[1]) == 1:
-        raise NotImplementedError("linear-transform bootstrap with level_budget=(1, 1) is not implemented")
+    if int(level_budget[0]) == 1 or int(level_budget[1]) == 1:
+        raise NotImplementedError(
+            "OpenFHE bootstrap does not support the linear-transform route; "
+            f"both level_budget entries must be greater than 1, got {tuple(level_budget)}"
+        )
 
 
 def _mod_raise(cipher, L0, cryptoContext):

@@ -110,8 +110,8 @@ Notes:
 - `bootstrap(...)` calls the runtime and currently returns a cipher reduced to
   `noise_deg == 1`.
 - `generate_bootstrap_constants`, `bootstrap_depth`, `bootstrap_approx_depth`,
-  `required_rotations`, and `required_plaintexts` are implementation/setup
-  helpers, not package-root public API.
+  and `required_rotations` are implementation/setup helpers, not package-root
+  public API.
 
 `easyfhe.bs.cheddar` should stay hidden for now.
 
@@ -199,17 +199,21 @@ Module: `easyfhe.fhe.ops.primitives`.
 - `_decrypt_phase`
 - `mod_inverse`
 - `generate_bootstrap_constants`
-- `context_requirements`
 - `bootstrap_depth`
 - `bootstrap_approx_depth`
 - `required_rotations`
-- `required_plaintexts`
 
 ### Bootstrap Internals
 
 Modules:
 
-- `easyfhe.bs.openfhe.internal.*`
+- `easyfhe.bs.openfhe.runtime.bootstrap`
+- `easyfhe.bs.openfhe.runtime.approx`
+- `easyfhe.bs.openfhe.generation.constants`
+- `easyfhe.bs.openfhe.generation.plan`
+- `easyfhe.bs.openfhe.generation.precompute_context`
+- `easyfhe.bs.openfhe.generation.requirements`
+- `easyfhe.bs.openfhe.generation.rotations`
 - `easyfhe.bs.cheddar.internal.*`
 
 Names:
@@ -232,15 +236,11 @@ Names:
 - `round_half_away_from_zero`
 - `BsContext`
 - `BootstrapFFTParams`
-- `LinearTransformPlan`
+- `BootstrapTransformSchedule`
 - `reduce_rotation`
 - `select_layers`
 - `collapsed_fft_params`
-- `coeffs_to_slots_rotation_indices`
-- `slots_to_coeffs_rotation_indices`
-- `linear_transform_plan`
-- `bootstrap_core_rotation_indices`
-- `bootstrap_auto_index_map`
+- `bootstrap_transform_schedule`
 - `bootstrap_rotation_indices`
 - `coeffs_slots_conversion`
 - `eval_coeffs_to_slots`

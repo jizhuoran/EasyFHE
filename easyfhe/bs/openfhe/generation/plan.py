@@ -71,18 +71,16 @@ class FlatPSPlan:
 
 def degree(lst):
     for i in range(len(lst) - 1, -1, -1):
-        if lst[i] != 0: return i
-    return 0  # All elements are zero
+        if lst[i] != 0:
+            return i
+    return 0
 
-# f and g are vectors of Chebyshev interpolation coefficients of the two polynomials.
-# We assume their dominant coefficient is not zero. LongDivisionChebyshev returns the
-# vector of Chebyshev interpolation coefficients for the quotient and remainder of the
-# division f/g. longDiv is a struct that contains the vectors of coefficients for the
-# quotient and rest. We assume that the zero-th coefficient is c0, not c0/2 and returns
-# the same format.
 
 def long_division_chebyshev(f, g):
-    assert (not math.isclose(f[-1], 0)) and (not math.isclose(g[-1], 0)), f"Assertion failed: f[-1] = {f[-1]} is close to 0 or g[-1] = {g[-1]} is close to 0"
+    if math.isclose(f[-1], 0) or math.isclose(g[-1], 0):
+        raise ValueError(
+            f"Chebyshev division requires nonzero dominant coefficients, got f[-1]={f[-1]}, g[-1]={g[-1]}"
+        )
     n, k = len(f) - 1, len(g) - 1
 
     if n < k:
@@ -230,8 +228,8 @@ def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
 
 
 @lru_cache(maxsize=None)
-def get_bootstrap_approx_plan(secretKeyDist):
-    if secretKeyDist == "SPARSE_TERNARY":
+def get_bootstrap_approx_plan(secret_key_dist):
+    if secret_key_dist == "SPARSE_TERNARY":
         k = 7
         m = 3
         coefficients = np.array(
@@ -317,7 +315,7 @@ def get_bootstrap_approx_plan(secretKeyDist):
         double_angle_iterations = 3
         depth = 10
         message_scaling_factor = 1.0
-    elif secretKeyDist == "UNIFORM_TERNARY":
+    elif secret_key_dist == "UNIFORM_TERNARY":
         k = 6
         m = 4
         coefficients = np.array(
@@ -522,10 +520,10 @@ def get_bootstrap_approx_plan(secretKeyDist):
         depth = 13
         message_scaling_factor = 512.0
     else:
-        raise RuntimeError(f"unsupported bootstrap secretKeyDist: {secretKeyDist}")
+        raise RuntimeError(f"unsupported bootstrap secret_key_dist: {secret_key_dist}")
 
     return BootstrapApproxPlan(
-        secret_key_dist=str(secretKeyDist),
+        secret_key_dist=str(secret_key_dist),
         chebyshev_k=int(k),
         chebyshev_m=int(m),
         ps_root=_build_root_ps_node(k, m, divqr_q, divcs_q, s2),
@@ -536,5 +534,5 @@ def get_bootstrap_approx_plan(secretKeyDist):
     )
 
 
-def bootstrap_approx_depth(secretKeyDist):
-    return get_bootstrap_approx_plan(secretKeyDist).depth
+def bootstrap_approx_depth(secret_key_dist):
+    return get_bootstrap_approx_plan(secret_key_dist).depth

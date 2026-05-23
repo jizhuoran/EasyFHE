@@ -6,7 +6,12 @@ from .api import BootstrapPlan, bootstrap, depth, generate, plan_rot_keys
 
 __all__ = list(_PUBLIC_API)
 
-for _name in ("api", "constants", "requirements"):
+for _name in (
+    "api",
+    "approx",
+    "generation",
+    "runtime",
+):
     globals().pop(_name, None)
 del _name
 

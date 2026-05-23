@@ -18,7 +18,7 @@ class BootstrapFFTParams:
 
 
 @dataclass(frozen=True)
-class LinearTransformPlan:
+class BootstrapTransformSchedule:
     direction: str
     slots: int
     level_budget: int
@@ -203,18 +203,18 @@ def _find_fft_rotation_indices(level_budget_vec, dim1_vec, slots, cycl_order, bu
     return index_list
 
 
-def coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order):
+def _coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order):
     return _find_fft_rotation_indices(level_budget, dim1, slots, cycl_order, 0, 0, True)
 
 
-def slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order):
+def _slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order):
     return _find_fft_rotation_indices(level_budget, dim1, slots, cycl_order, 1, 1, False)
 
 
-def linear_transform_plan(direction, slots, level_budget, ring_dim, dim1=0):
+def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=0):
     direction = str(direction).upper()
     if direction not in ("C2S", "S2C"):
-        raise ValueError(f"unknown bootstrap linear transform direction: {direction}")
+        raise ValueError(f"unknown bootstrap transform direction: {direction}")
 
     slots = int(slots)
     level_budget = int(level_budget)
@@ -260,7 +260,7 @@ def linear_transform_plan(direction, slots, level_budget, ring_dim, dim1=0):
         for i in range(params.baby_step_rem):
             rot_out[rem_index][i] = reduce_rotation((params.giant_step_rem * i) << exp, cycl_order // 4)
 
-    return LinearTransformPlan(
+    return BootstrapTransformSchedule(
         direction=direction,
         slots=slots,
         level_budget=level_budget,
@@ -277,75 +277,31 @@ def linear_transform_plan(direction, slots, level_budget, ring_dim, dim1=0):
     )
 
 
-def bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order):
+def _bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order):
     rotations = []
-    rotations.extend(coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order))
-    rotations.extend(slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order))
+    rotations.extend(_coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order))
+    rotations.extend(_slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order))
     rotations = set(rotations)
     rotations.discard(0)
     rotations.discard(cycl_order // 4)
     return list(sorted(rotations))
 
 
-def _mod_inverse(value, modulus):
-    old_r, r = int(value), int(modulus)
-    old_s, s = 1, 0
-    while r:
-        quotient = old_r // r
-        old_r, r = r, old_r - quotient * r
-        old_s, s = s, old_s - quotient * s
-    if old_r != 1:
-        raise ValueError(f"{value} is not invertible modulo {modulus}")
-    return old_s % modulus
-
-
-def find_auto_index_2n_complex(rot_index, cycl_order):
-    rot_index = int(rot_index)
-    cycl_order = int(cycl_order)
-    if rot_index == 0:
-        return 1
-    if rot_index == cycl_order - 1:
-        return cycl_order - 1
-
-    generator = _mod_inverse(5, cycl_order) if rot_index < 0 else 5
-    result = generator
-    for _ in range(1, abs(rot_index)):
-        result = (result * generator) % cycl_order
-    return int(result)
-
-
-def bootstrap_auto_index_map(ring_dim, log_bs_slots, level_budget, secret_key_dist, dim1=None):
-    """Return the bootstrap automorphism-index to rotation-index map."""
-
+def bootstrap_rotation_indices(ring_dim, log_bs_slots, level_budget, secret_key_dist, dim1=None):
+    """Return bootstrap rotations plus the conjugation key rotation."""
     log_bs_slots = int(log_bs_slots)
     dim1 = [0, 0] if dim1 is None else dim1
     slots = 1 << log_bs_slots
     ring_dim = int(ring_dim)
     cycl_order = ring_dim << 1
-    rotations = bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order)
+    rotations = _bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order)
     half_ring_dim = ring_dim // 2
 
-    auto_idx_to_rot_idx = {}
+    result = []
     for rot in rotations:
         adj_rot = int(rot)
         if adj_rot < 0:
             adj_rot = half_ring_dim - abs(adj_rot)
-        auto_idx = int(find_auto_index_2n_complex(adj_rot, cycl_order))
-        auto_idx_to_rot_idx[auto_idx] = adj_rot
-
-    return auto_idx_to_rot_idx
-
-
-def bootstrap_rotation_indices(ring_dim, log_bs_slots, level_budget, secret_key_dist, dim1=None):
-    """Return bootstrap rotations plus the conjugation key rotation."""
-
-    auto_idx_to_rot_idx = bootstrap_auto_index_map(
-        ring_dim,
-        log_bs_slots,
-        level_budget,
-        secret_key_dist,
-        dim1,
-    )
-    rotations = list(auto_idx_to_rot_idx.values())
-    rotations.append((int(ring_dim) << 1) - 1)
-    return rotations
+        result.append(adj_rot)
+    result.append(cycl_order - 1)
+    return result

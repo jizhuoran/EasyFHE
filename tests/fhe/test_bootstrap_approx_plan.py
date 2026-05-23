@@ -1,4 +1,4 @@
-from easyfhe.bs.openfhe.internal.approx_plan import (
+from easyfhe.bs.openfhe.generation.plan import (
     KIND_C,
     KIND_Q,
     KIND_S,

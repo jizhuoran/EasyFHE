@@ -11,7 +11,7 @@ import easyfhe.fhe as fhe
 import easyfhe.bs.openfhe as bs
 ```
 
-Importable submodules under `easyfhe.fhe` and `easyfhe.bs.openfhe.internal` are
+Importable submodules under `easyfhe.fhe` and `easyfhe.bs.openfhe` are
 implementation details unless their symbols are re-exported by the package root.
 
 ## Contexts
@@ -232,7 +232,8 @@ depend on its internal fields.
 
 The following categories are intentionally outside the application API:
 
-- `easyfhe.bs.openfhe.internal.*`
+- OpenFHE bootstrap implementation modules such as `easyfhe.bs.openfhe.runtime.*`
+  and `easyfhe.bs.openfhe.generation.*`
 - native kernel wrappers under `easyfhe.fhe.ops.kernels`
 - raw encoding stages
 - raw key-switch, modup, moddown, automorphism, and precompute-map helpers

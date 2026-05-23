@@ -7,8 +7,8 @@ import numpy as np
 
 from easyfhe.fhe.constants import ConstantBundle
 from easyfhe.fhe.ops.encoding import PreparedPlaintext
-from .approx_plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
-from .rotations import linear_transform_plan
+from .plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
+from .rotations import bootstrap_transform_schedule
 from .precompute_context import BsContext
 
 
@@ -73,7 +73,13 @@ class BootstrapPlan:
 def _normalize_level_budget(level_budget):
     if level_budget is None or len(level_budget) != 2:
         raise ValueError(f"bootstrap level_budget must have two entries, got {level_budget}")
-    return [int(level_budget[0]), int(level_budget[1])]
+    budget = [int(level_budget[0]), int(level_budget[1])]
+    if budget[0] == 1 or budget[1] == 1:
+        raise NotImplementedError(
+            "OpenFHE bootstrap does not support the linear-transform route; "
+            f"both level_budget entries must be greater than 1, got {tuple(budget)}"
+        )
+    return budget
 
 
 def _normalize_dim1(dim1):
@@ -104,24 +110,23 @@ def _normalize_strategy(strategy):
         ) from exc
 
 
-def _resolve_max_levels_remaining(crypto_context, maxLevelsRemaining):
-    if maxLevelsRemaining is not None:
-        return int(maxLevelsRemaining)
+def _resolve_max_levels_remaining(max_levels_remaining):
+    if max_levels_remaining is not None:
+        return int(max_levels_remaining)
     raise ValueError(
-        "generate_bootstrap_constants requires maxLevelsRemaining. "
-        "Use easyfhe.bs.openfhe.generate(...) without a context to get extra depth, "
-        "then add it to maxLevelsRemaining "
-        "when creating CKKSContextSpec(depth=...)."
+        "generate_bootstrap_constants requires max_levels_remaining. "
+        "Use easyfhe.bs.openfhe.depth(...) to compute the extra bootstrap depth "
+        "before creating CKKSContextSpec(depth=...)."
     )
 
 
-def _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1, strategy):
+def _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy):
     return _BootstrapConfig(
         log_bs_slots=int(log_bs_slots),
         level_budget=_normalize_level_budget(level_budget),
         dim1=_normalize_dim1(dim1),
         strategy=_normalize_strategy(strategy),
-        max_levels_remaining=_resolve_max_levels_remaining(crypto_context, maxLevelsRemaining),
+        max_levels_remaining=_resolve_max_levels_remaining(max_levels_remaining),
     )
 
 
@@ -197,7 +202,6 @@ def _run_bootstrap_setup(crypto_context, plan):
         plan.dim1,
         plan.slots,
         0,
-        plan.max_levels_remaining,
     )
     return bs_context
 
@@ -236,8 +240,8 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
     approx_eval_plan = compile_flat_ps_plan(approx_plan.ps_root)
     approx_scalar_names = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
     double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
-    c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
-    s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
+    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
+    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
     plaintext_names = {
         "C2S": _name_table(c2s_plan),
         "S2C": _name_table(s2c_plan),
@@ -422,13 +426,49 @@ def generate_bootstrap_constants(
     crypto_context,
     log_bs_slots,
     level_budget,
-    maxLevelsRemaining=None,
+    max_levels_remaining=None,
+    *,
+    dim1=None,
+    baby_step=None,
+    strategy="double_hoist",
+):
+    if dim1 is not None and baby_step is not None:
+        raise ValueError("bootstrap generate accepts either dim1 or baby_step, not both")
+    dim1 = baby_step if baby_step is not None else dim1
+
+    return _build_bootstrap_constants(
+        crypto_context,
+        int(log_bs_slots),
+        _normalize_public_pair(level_budget, "level_budget"),
+        max_levels_remaining=max_levels_remaining,
+        dim1=_normalize_public_pair_or_scalar(dim1 or (0, 0), "dim1"),
+        strategy=strategy,
+    )
+
+
+def _normalize_public_pair(value, name):
+    if value is None or len(value) != 2:
+        raise ValueError(f"bootstrap {name} must have two entries, got {value}")
+    return (int(value[0]), int(value[1]))
+
+
+def _normalize_public_pair_or_scalar(value, name):
+    if isinstance(value, (int, float)):
+        return (int(value), int(value))
+    return _normalize_public_pair(value, name)
+
+
+def _build_bootstrap_constants(
+    crypto_context,
+    log_bs_slots,
+    level_budget,
+    max_levels_remaining=None,
     dim1=None,
     strategy="double_hoist",
 ):
-    plan = _make_plan(crypto_context, log_bs_slots, level_budget, maxLevelsRemaining, dim1, strategy)
+    plan = _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy)
     bs_context = _run_bootstrap_setup(crypto_context, plan)
-    c2s_plan = linear_transform_plan("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
-    s2c_plan = linear_transform_plan("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
+    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
+    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
     required_rotations = _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan)
     return _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)

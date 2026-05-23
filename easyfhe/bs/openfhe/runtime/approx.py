@@ -10,7 +10,7 @@ from easyfhe.fhe.ops import layout
 from easyfhe.fhe.ops import rotation
 from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 
-from .approx_plan import (
+from ..generation.plan import (
     KIND_C,
     KIND_Q,
     KIND_S,
@@ -255,17 +255,6 @@ def _chebyshev_basis(x, a, b, k, cryptoContext):
         T.append(value)
 
     final = T[-1]
-    # min_limbs = min(item.state.cur_limbs for item in T)
-    # if final.state.cur_limbs != min_limbs:
-    #     raise ValueError(
-    #         f"Chebyshev basis target is not the lowest limb state: "
-    #         f"final={final.state.cur_limbs}, min={min_limbs}"
-    #     )
-    # if any(item.state.noise_deg != 1 for item in T):
-    #     raise ValueError(
-    #         "Chebyshev basis expects all terms to have noise_deg=1 before packing: "
-    #         f"{[item.state.noise_deg for item in T]}"
-    #     )
     items = tuple(
         alignment.align_to(
             item,

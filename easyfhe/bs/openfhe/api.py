@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from .constants import generate_bootstrap_constants
-from .internal.constants import BootstrapPlan
-from .requirements import bootstrap_depth, required_rotations
+from .generation.constants import BootstrapPlan, generate_bootstrap_constants
+from .generation.requirements import bootstrap_depth, required_rotations
 
 
 def depth(*, log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
@@ -53,6 +52,6 @@ def generate(
 
 
 def bootstrap(cipher, crypto_context, constants, plan, *, L0):
-    from .internal.runtime import homo_bootstrap
+    from .runtime import homo_bootstrap
 
     return homo_bootstrap(cipher, crypto_context, constants, plan, L0=L0)
