@@ -93,7 +93,7 @@ CUDA/toolchain choices and more auditwheel exclusions.
 Each CUDA build gets a local version label by default, for example:
 
 ```text
-easyfhe-2.13.0a0+cu129.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl
+easyfhe-0.1.1+cu129.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl
 ```
 
 This prevents `cu124`, `cu128`, `cu129`, and `cu132` wheels from colliding
