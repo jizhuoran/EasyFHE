@@ -5,6 +5,7 @@ EasyFHE is a tensor runtime for Fully Homomorphic Encryption (FHE). See the [hom
 ```python
 import easyfhe
 import easyfhe.fhe as fhe
+import easyfhe.bs.openfhe as bs
 ```
 
 EasyFHE is not intended to be a full PyTorch replacement. The goal is narrower: make FHE programs easier to express while keeping the implementation close enough to the encrypted data layout, RNS levels, key material, and GPU kernels to optimize end-to-end execution.
@@ -15,7 +16,8 @@ The design philosophy follows the framework described in [A Framework for Develo
 
 ## Highlights
 
-- `easyfhe.fhe` frontend for CKKS context specs, ciphertext state, plaintext preparation, arithmetic, rotation, rescale, fused ops, and bootstrapping.
+- `easyfhe.fhe` frontend for CKKS context specs, ciphertext state, plaintext preparation, arithmetic, rotation, rescale, and fused ops.
+- `easyfhe.bs.openfhe` frontend for OpenFHE-compatible CKKS bootstrapping.
 - Native sampler and material generation for CKKS public keys, multiplication keys, rotation keys, and encryption/decryption material.
 - CUDA accelerated FHE kernels for encoding, NTT, automorphism, key switching, modulus movement, ciphertext arithmetic, and bootstrapping paths.
 - A PyTorch-derived tensor core with storage, dispatch, CUDA runtime, Python bindings, selected profiling, and selected NCCL-oriented infrastructure.
@@ -30,19 +32,32 @@ This computes `x^32 + 3.14*x^16 + 1` on encrypted CKKS slots and performs one bo
 
 ```python
 import numpy as np
-import easyfhe
 import easyfhe.fhe as fhe
+import easyfhe.bs.openfhe as bs
 
 
 device = "cuda"
 slots = 1 << 12
-max_levels_after_bootstrap = 6
+log_bs_slots = 12
+level_budget = (3, 3)
+post_bootstrap_levels = 6
 input_limbs = 6
-bootstrap = fhe.BootstrapSpec(log_bs_slots=12, level_budget=(3, 3))
+
+bootstrap_depth = bs.depth(
+    log_bs_slots=log_bs_slots,
+    level_budget=level_budget,
+    secret_key_dist="SPARSE_TERNARY",
+)
+bootstrap_rotations = bs.plan_rot_keys(
+    log_n=16,
+    log_bs_slots=log_bs_slots,
+    level_budget=level_budget,
+    strategy="double_hoist",
+)
 
 client, ctx = fhe.generate_client_context(
     fhe.CKKSContextSpec(
-        depth=fhe.bootstrap_depth(max_levels_after_bootstrap, [bootstrap]),
+        depth=post_bootstrap_levels + bootstrap_depth,
         log_n=16,
         dnum=3,
         dcrt_bits=58,
@@ -50,24 +65,43 @@ client, ctx = fhe.generate_client_context(
         secret_key_dist="SPARSE_TERNARY",
         scale_mode="fixed",
         rescale_policy="manual",
+        rotations=bootstrap_rotations,
+        auto_load_keys=True,
     ),
     device=device,
 )
 
-bootstrap_constants = fhe.generate_bootstrap_constants(
+bootstrap_constants, bootstrap_plan = bs.generate(
     ctx,
-    log_bs_slots=bootstrap.log_bs_slots,
-    level_budget=bootstrap.level_budget,
-    maxLevelsRemaining=max_levels_after_bootstrap,
+    log_bs_slots=log_bs_slots,
+    level_budget=level_budget,
+    post_bootstrap_levels=post_bootstrap_levels,
+    strategy="double_hoist",
+)
+constants = fhe.ConstantBundle(
+    scalars={
+        "pi": 3.14,
+        "one": 1.0,
+    }
 )
 
 
 def square(cipher):
-    return fhe.rescale_one_level(fhe.homo_square(cipher, ctx), ctx)
+    return fhe.homo_mul_relin_rescale_postop(cipher, cipher, ctx)
+
+
+def encoded_scalar(name, cipher, *, mode="double"):
+    return constants.encoded_scalars(
+        name,
+        cipher.state.cur_limbs,
+        cipher.state.noise_deg,
+        ctx,
+        mode=mode,
+    )[0]
 
 
 values = np.full(slots, 0.2, dtype=np.float64)
-x = ctx.encrypt(
+x = client.encrypt(
     values,
     device=device,
     scale_deg=1,
@@ -80,18 +114,22 @@ x4 = square(x2)
 x8 = square(x4)
 x16 = square(x8)
 
-x16 = fhe.homo_bootstrap(
+x16 = bs.bootstrap(
     x16,
     ctx,
     bootstrap_constants,
-    L0=max_levels_after_bootstrap,
+    bootstrap_plan,
+    L0=x16.state.cur_limbs,
+    bootstrap_mode="modraise_first",
 )
 
 x32 = square(x16)
-term = fhe.rescale_one_level(fhe.homo_mul_scalar_double(x16, 3.14, ctx), ctx)
-result = fhe.homo_add_scalar_double(fhe.homo_add(x32, term, ctx), 1.0, ctx)
+term = fhe.homo_mul_scalar_double(x16, encoded_scalar("pi", x16), ctx)
+term = fhe.reduce_noise_to_one(term, ctx)
+poly = fhe.homo_add(x32, term, ctx)
+result = fhe.homo_add_scalar_double(poly, encoded_scalar("one", poly), ctx)
 
-print(ctx.decrypt(result)[:8])
+print(client.decrypt(result)[:8])
 ```
 
 ## Reference Application
@@ -103,7 +141,8 @@ The ResNet-20 AESPA reference application is maintained separately:
 ## Repository Map
 
 - `easyfhe/`: Python package and retained tensor runtime surface.
-- `easyfhe/fhe/`: FHE frontend, context generation, ops, bootstrapping, and material handling.
+- `easyfhe/fhe/`: FHE frontend, context generation, ciphertext state, constants, and ops.
+- `easyfhe/bs/openfhe/`: OpenFHE-compatible CKKS bootstrapping API, constants, plans, and runtime.
 - `aten/src/ATen/native/fhe/`: native FHE kernels and native sampler.
 - `packaging/`: manylinux wheel and container packaging scripts.
 

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EasyFHE API Docs</title>
+    <meta
+      name="description"
+      content="Application, FHE runtime, and OpenFHE-compatible bootstrap API documentation for EasyFHE."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="index.html#top" aria-label="EasyFHE home">
+        <span class="brand-mark">E</span>
+        <span>EasyFHE</span>
+      </a>
+      <nav>
+        <a href="index.html#install">Install</a>
+        <a href="index.html#runtime">Runtime</a>
+        <a href="api.html" aria-current="page">Docs</a>
+        <a href="index.html#reference">Reference</a>
+        <a href="index.html#publish">Publish</a>
+        <a href="https://github.com/jizhuoran/EasyFHE">GitHub</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="docs-hero">
+        <div>
+          <p class="eyebrow">API reference</p>
+          <h1>EasyFHE Docs</h1>
+          <p>
+            Public application APIs, low-level FHE runtime operations, and the
+            OpenFHE-compatible bootstrap interface in one place.
+          </p>
+        </div>
+        <div class="docs-quick-links" aria-label="Documentation quick links">
+          <a href="#application">Application API</a>
+          <a href="#fhe">FHE API</a>
+          <a href="#bootstrap">Bootstrap API</a>
+        </div>
+      </section>
+
+      <section class="docs-shell" aria-label="API documentation">
+        <aside class="docs-tabs" aria-label="Documentation tabs">
+          <button
+            class="docs-tab active"
+            type="button"
+            data-doc="application-api.md"
+            data-hash="application"
+          >
+            <span>Application</span>
+            <small>Recommended package-root surface</small>
+          </button>
+          <button
+            class="docs-tab"
+            type="button"
+            data-doc="fhe-api.md"
+            data-hash="fhe"
+          >
+            <span>FHE Runtime</span>
+            <small>Contexts, constants, ops, layout</small>
+          </button>
+          <button
+            class="docs-tab"
+            type="button"
+            data-doc="openfhe-bootstrap-api.md"
+            data-hash="bootstrap"
+          >
+            <span>Bootstrap</span>
+            <small>OpenFHE-compatible bootstrapping</small>
+          </button>
+        </aside>
+
+        <article class="docs-content" id="doc-content" aria-live="polite">
+          <p class="docs-loading">Loading documentation...</p>
+        </article>
+      </section>
+    </main>
+
+    <footer>
+      <span>EasyFHE is an alpha research system.</span>
+      <a href="https://github.com/jizhuoran/EasyFHE">github.com/jizhuoran/EasyFHE</a>
+    </footer>
+
+    <script>
+      const tabs = Array.from(document.querySelectorAll(".docs-tab"));
+      const content = document.getElementById("doc-content");
+      const docCache = new Map();
+
+      const initialHash = window.location.hash.replace("#", "");
+      const initialTab = tabs.find((tab) => tab.dataset.hash === initialHash) || tabs[0];
+      activateTab(initialTab, { replace: true });
+
+      for (const tab of tabs) {
+        tab.addEventListener("click", () => activateTab(tab));
+      }
+      window.addEventListener("hashchange", () => {
+        const hash = window.location.hash.replace("#", "");
+        const tab = tabs.find((item) => item.dataset.hash === hash);
+        if (tab && !tab.classList.contains("active")) {
+          activateTab(tab, { replace: true });
+        }
+      });
+
+      async function activateTab(tab, options = {}) {
+        for (const item of tabs) {
+          item.classList.toggle("active", item === tab);
+        }
+        if (options.replace) {
+          history.replaceState(null, "", `#${tab.dataset.hash}`);
+        } else {
+          history.pushState(null, "", `#${tab.dataset.hash}`);
+        }
+        content.innerHTML = '<p class="docs-loading">Loading documentation...</p>';
+
+        try {
+          const markdown = await loadDoc(tab.dataset.doc);
+          content.innerHTML = renderMarkdown(markdown);
+          content.scrollTop = 0;
+        } catch (error) {
+          content.innerHTML = [
+            '<div class="docs-error">',
+            '<h2>Documentation could not be loaded</h2>',
+            '<p>Open the markdown file directly from the repository while viewing this page from a local file URL.</p>',
+            `<p><a href="${escapeHtml(tab.dataset.doc)}">${escapeHtml(tab.dataset.doc)}</a></p>`,
+            '</div>'
+          ].join("");
+        }
+      }
+
+      async function loadDoc(path) {
+        if (docCache.has(path)) {
+          return docCache.get(path);
+        }
+        const response = await fetch(path, { cache: "no-cache" });
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${path}: ${response.status}`);
+        }
+        const text = await response.text();
+        docCache.set(path, text);
+        return text;
+      }
+
+      function renderMarkdown(markdown) {
+        const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+        const html = [];
+        let paragraph = [];
+        let list = [];
+        let code = [];
+        let codeLang = "";
+
+        function flushParagraph() {
+          if (!paragraph.length) return;
+          html.push(`<p>${inline(paragraph.join(" "))}</p>`);
+          paragraph = [];
+        }
+
+        function flushList() {
+          if (!list.length) return;
+          html.push("<ul>");
+          for (const item of list) {
+            html.push(`<li>${inline(item)}</li>`);
+          }
+          html.push("</ul>");
+          list = [];
+        }
+
+        function flushCode() {
+          if (!code.length && codeLang === "") return;
+          const langClass = codeLang ? ` class="language-${escapeHtml(codeLang)}"` : "";
+          html.push(`<pre><code${langClass}>${escapeHtml(code.join("\n"))}</code></pre>`);
+          code = [];
+          codeLang = "";
+        }
+
+        for (const rawLine of lines) {
+          const line = rawLine.trimEnd();
+
+          if (line.startsWith("```")) {
+            if (codeLang !== "" || code.length) {
+              flushCode();
+            } else {
+              flushParagraph();
+              flushList();
+              codeLang = line.slice(3).trim() || "text";
+            }
+            continue;
+          }
+
+          if (codeLang !== "" || code.length) {
+            code.push(rawLine);
+            continue;
+          }
+
+          if (!line.trim()) {
+            flushParagraph();
+            flushList();
+            continue;
+          }
+
+          const heading = /^(#{1,4})\s+(.+)$/.exec(line);
+          if (heading) {
+            flushParagraph();
+            flushList();
+            const level = Math.min(heading[1].length + 1, 5);
+            const text = heading[2].replace(/`/g, "").trim();
+            const id = slug(text);
+            html.push(`<h${level} id="${id}">${inline(heading[2])}</h${level}>`);
+            continue;
+          }
+
+          const bullet = /^-\s+(.+)$/.exec(line);
+          if (bullet) {
+            flushParagraph();
+            list.push(bullet[1]);
+            continue;
+          }
+
+          paragraph.push(line.trim());
+        }
+
+        flushParagraph();
+        flushList();
+        flushCode();
+        return html.join("\n");
+      }
+
+      function inline(text) {
+        let out = escapeHtml(text);
+        out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+        out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+        out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        return out;
+      }
+
+      function slug(text) {
+        return text
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+    </script>
+  </body>
+</html>
