@@ -117,8 +117,6 @@ Notes:
   and `required_rotations` are implementation/setup helpers, not package-root
   public API.
 
-`easyfhe.bs.cheddar` should stay hidden for now.
-
 ## 3. Internal Python
 
 These should be importable by implementation code, but not documented for user
@@ -218,7 +216,6 @@ Modules:
 - `easyfhe.bs.openfhe.generation.precompute`
 - `easyfhe.bs.openfhe.generation.requirements`
 - `easyfhe.bs.openfhe.generation.rotations`
-- `easyfhe.bs.cheddar.internal.*`
 
 Names:
 
@@ -334,8 +331,7 @@ only. User code, bootstrapping code, and examples should not call them directly.
   compatibility, but `easyfhe.fhe.__all__` is the canonical stable surface.
 - OpenFHE bootstrapping package `__all__` should stay small: `BootstrapPlan`,
   `bootstrap`, `depth`, `describe_plan`, `generate`, `plan_rot_keys`.
-- Cheddar bootstrapping should stay hidden at package root for now.
-- `ops.kernels`, `ops.primitives`, and `bs.*.internal` should be treated as
+- `ops.kernels`, `ops.primitives`, and `bs.openfhe.*` internals should be treated as
   unstable implementation modules.
 - Native `torch.*` FHE ops should be documented only in native/kernel developer
   notes, not in user-facing API docs.

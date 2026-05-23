@@ -85,7 +85,6 @@ def _is_forbidden_resnet_import(module_name):
     return (
         module_name.startswith("easyfhe.fhe.")
         or module_name.startswith("easyfhe.bs.openfhe.")
-        or module_name.startswith("easyfhe.bs.cheddar")
     )
 
 
