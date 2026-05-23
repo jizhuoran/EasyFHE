@@ -107,7 +107,8 @@ def _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
     scalar = bootstrap_constants.encoded_scalars(
         "constant_eval_mult", result.state.cur_limbs, 1, cryptoContext, mode="double"
     )[0]
-    return arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
+    result = arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
+    return alignment.reduce_noise_to_one(result, cryptoContext)
 
 
 def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
@@ -132,12 +133,7 @@ def _scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
     )
 
 
-def _eval_bootstrap_approx(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan):
-    return bootstrap_approx.eval_bootstrap_approx_mod(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan)
-
-
 def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan):
-    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
 
     conjugate = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
@@ -148,8 +144,8 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
     real = alignment.reduce_noise_to_one(real, cryptoContext)
     imag = alignment.reduce_noise_to_one(imag, cryptoContext)
 
-    real = _eval_bootstrap_approx(real, cryptoContext, bootstrap_constants, bootstrap_plan)
-    imag = _eval_bootstrap_approx(imag, cryptoContext, bootstrap_constants, bootstrap_plan)
+    real = bootstrap_approx.eval_bootstrap_approx_mod(real, cryptoContext, bootstrap_constants, bootstrap_plan)
+    imag = bootstrap_approx.eval_bootstrap_approx_mod(imag, cryptoContext, bootstrap_constants, bootstrap_plan)
 
     imag = _mul_by_monomial_inplace(imag, cryptoContext.M // 4, cryptoContext)
     encoded = arithmetic.homo_add(real, imag, cryptoContext)
@@ -158,7 +154,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
     return eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
 
 
-def _replicate_sparse_slots(raised, slots, cryptoContext):
+def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan):
     for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
         raised = rotation.homo_rotate_add(
             raised,
@@ -166,29 +162,20 @@ def _replicate_sparse_slots(raised, slots, cryptoContext):
             cryptoContext,
             addend=raised,
         )
-    return raised.cipher_like(raised.cv, slots=slots)
-
-
-def _restore_sparse_slots(decoded, slots, original_slots, cryptoContext):
-    decoded = rotation.homo_rotate_add(decoded, slots, cryptoContext, addend=decoded)
-    decoded = decoded.cipher_like(decoded.cv, slots=slots)
-    return decoded.cipher_like(decoded.cv, slots=original_slots)
-
-
-def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan):
-    raised = _replicate_sparse_slots(raised, slots, cryptoContext)
-    raised = alignment.reduce_noise_to_one(raised, cryptoContext)
+    raised = raised.cipher_like(raised.cv, slots=slots)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
     encoded = rotation.homo_rotate_add(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
 
-    encoded = _eval_bootstrap_approx(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+    encoded = bootstrap_approx.eval_bootstrap_approx_mod(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
     encoded = _scale_after_approx(encoded, cryptoContext, bootstrap_constants)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
 
     decoded = eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
-    return _restore_sparse_slots(decoded, slots, original_slots, cryptoContext)
+    decoded = rotation.homo_rotate_add(decoded, slots, cryptoContext, addend=decoded)
+    decoded = decoded.cipher_like(decoded.cv, slots=slots)
+    return decoded.cipher_like(decoded.cv, slots=original_slots)
 
 
 # note: EvalBootstrap in ckksrns-fhe.cpp
