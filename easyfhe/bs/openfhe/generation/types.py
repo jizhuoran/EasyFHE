@@ -26,8 +26,7 @@ class BootstrapPlan:
     level_budget: tuple[int, int]
     dim1: tuple[int, int]
     strategy: str
-    bootstrap_mode: str
-    max_levels_remaining: int
+    post_bootstrap_levels: int
     c2s_plan: BootstrapTransformPlan
     s2c_plan: BootstrapTransformPlan
     approx_eval_plan: object
@@ -42,6 +41,10 @@ class BootstrapPlan:
     @property
     def slots(self):
         return 1 << self.log_bs_slots
+
+    @property
+    def max_levels_remaining(self):
+        return self.post_bootstrap_levels
 
     def describe_approx(self):
         from .plan import describe_flat_ps_plan

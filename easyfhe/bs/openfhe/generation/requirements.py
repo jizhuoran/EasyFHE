@@ -1,34 +1,26 @@
 from __future__ import annotations
 
 from .plan import bootstrap_approx_depth as _bootstrap_approx_depth_from_plan
-from .constants import _normalize_bootstrap_mode
 from .rotations import bootstrap_required_rotations, normalize_bootstrap_strategy
 
 
-def bootstrap_depth(log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY", bootstrap_mode="modraise_first"):
+def bootstrap_depth(log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
     """Return extra CKKS depth needed for these OpenFHE bootstraps."""
 
     params = _normalize_params(log_bs_slots, level_budget, None)
     if not params:
         return 0
     _reject_linear_transform_budget(params)
-    mode = _normalize_bootstrap_mode(bootstrap_mode)
-    max_budget = max((budget for _, budget, _ in params), key=lambda budget: _budget_depth(budget, mode))
+    max_budget = max((budget for _, budget, _ in params), key=sum)
     return (
         bootstrap_approx_depth(secret_key_dist)
-        + _budget_depth(max_budget, mode)
+        + int(max_budget[0])
+        + int(max_budget[1])
     )
 
 
 def bootstrap_approx_depth(secret_key_dist="SPARSE_TERNARY"):
     return _bootstrap_approx_depth_from_plan(str(secret_key_dist))
-
-
-def _budget_depth(budget, bootstrap_mode):
-    depth = int(budget[0]) + int(budget[1])
-    if bootstrap_mode == "stc_first":
-        depth += int(budget[1])
-    return depth
 
 
 def required_rotations(

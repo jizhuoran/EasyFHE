@@ -14,6 +14,11 @@ import easyfhe.bs.openfhe as bs
 Importable submodules under `easyfhe.fhe` and `easyfhe.bs.openfhe` are
 implementation details unless their symbols are re-exported by the package root.
 
+Detailed references:
+
+- [EasyFHE FHE API](fhe-api.md)
+- [OpenFHE Bootstrap API](openfhe-bootstrap-api.md)
+
 ## Contexts
 
 Use `CKKSContextSpec` and `generate_client_context` to build the paired client
@@ -199,19 +204,26 @@ rotations = bs.plan_rot_keys(
 )
 
 client, ctx = fhe.generate_client_context(
-    ... depth=max_levels_remaining + extra_depth, rotations=rotations ...
+    ... depth=post_bootstrap_levels + extra_depth, rotations=rotations ...
 )
 
 bs_constants, bs_plan = bs.generate(
     ctx,
     log_bs_slots=14,
     level_budget=level_budget,
-    max_levels_remaining=max_levels_remaining,
+    post_bootstrap_levels=post_bootstrap_levels,
     baby_step=None,
     strategy="double_hoist",
 )
 
-cipher = bs.bootstrap(cipher, ctx, bs_constants, bs_plan, L0=cipher.state.cur_limbs)
+cipher = bs.bootstrap(
+    cipher,
+    ctx,
+    bs_constants,
+    bs_plan,
+    L0=cipher.state.cur_limbs,
+    bootstrap_mode="modraise_first",
+)
 ```
 
 Application-facing bootstrap API:
@@ -224,6 +236,8 @@ bs.bootstrap(...)
 bs.describe_plan(...)
 bs.BootstrapPlan
 ```
+
+Detailed reference: [OpenFHE Bootstrap API](openfhe-bootstrap-api.md).
 
 `BootstrapPlan` is returned by `generate(...)` and passed back to
 `bootstrap(...)`. Treat it as an opaque plan object; application code should not
