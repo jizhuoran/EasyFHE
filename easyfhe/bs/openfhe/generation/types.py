@@ -34,6 +34,7 @@ class BootstrapPlan:
     approx_constant_scalar_names: dict[tuple[str, ...], str]
     approx_q_highest_scalar_names: dict[tuple[str, ...], str]
     chebyshev_neg_one_scalar_name: str
+    double_angle_iterations: int
     double_angle_scalar_names: tuple[str, ...]
     required_rotations: tuple[int, ...]
 

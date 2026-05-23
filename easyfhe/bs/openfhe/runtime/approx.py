@@ -11,7 +11,6 @@ from ..generation.plan import (
     SPACE_NODE,
     SPACE_SMALL,
     ChebyshevPSNode,
-    get_bootstrap_approx_plan,
 )
 
 
@@ -52,14 +51,13 @@ def _add_chebyshev_constant(value, scalar_path, constants, bootstrap_plan, crypt
 # Chebyshev basis construction
 
 
-def _scale_input_to_unit_interval(x, a, b, cryptoContext):
+def _require_unit_interval(a, b):
     alpha = 2 / (b - a)
     beta = 2 * a / (b - a)
     if not (math.isclose(alpha, 1.0) and math.isclose(beta, -1.0)):
         raise NotImplementedError(
             "OpenFHE bootstrap approx runtime only supports the precomputed interval [-1, 1]"
         )
-    return x
 
 
 def _chebyshev_basis(unit_x, k, cryptoContext, constants, bootstrap_plan):
@@ -368,8 +366,8 @@ def _eval_combine_specs(flat, small_values, T2, constants, bootstrap_plan, crypt
 def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_plan):
     flat = bootstrap_plan.approx_eval_plan
 
-    unit_x = _scale_input_to_unit_interval(x, a, b, cryptoContext)
-    T_items, T_batch = _chebyshev_basis(unit_x, flat.k, cryptoContext, constants, bootstrap_plan)
+    _require_unit_interval(a, b)
+    T_items, T_batch = _chebyshev_basis(x, flat.k, cryptoContext, constants, bootstrap_plan)
     T2 = _chebyshev_doubling_basis(T_items[-1], flat.m, cryptoContext, constants, bootstrap_plan)
 
     small_values = _eval_small_specs(flat, T_items, T_batch, T2, cryptoContext, constants, bootstrap_plan)
@@ -380,16 +378,14 @@ def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_pl
 
 
 def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan):
-    plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
-
-    for j in range(1, plan.double_angle_iterations + 1):
+    for j in range(bootstrap_plan.double_angle_iterations):
         ciphertext = arithmetic.homo_mul_relin_rescale_postop(
             ciphertext,
             ciphertext,
             cryptoContext,
             apply_double=True,
             scalar=_mul_rescale_constant(
-                bootstrap_plan.double_angle_scalar_names[j - 1],
+                bootstrap_plan.double_angle_scalar_names[j],
                 ciphertext,
                 ciphertext,
                 constants,

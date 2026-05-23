@@ -179,6 +179,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         approx_constant_scalar_names=approx_constant_scalar_names,
         approx_q_highest_scalar_names=approx_q_highest_scalar_names,
         chebyshev_neg_one_scalar_name=chebyshev_neg_one_scalar_name,
+        double_angle_iterations=approx_plan.double_angle_iterations,
         double_angle_scalar_names=double_angle_scalar_names,
         required_rotations=tuple(required_rotations),
     )
