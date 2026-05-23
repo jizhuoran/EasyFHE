@@ -427,7 +427,7 @@ def cv_double_hoist_giant_sum_ext(
         key_product_ax,
         c0,
         precomp_maps,
-        context.primes,
+        context.QplusP_map[cur_limbs],
         context.PModq,
         context.barret_ratio,
         context.barret_k,
