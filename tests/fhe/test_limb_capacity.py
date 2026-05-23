@@ -4,7 +4,7 @@ import easyfhe as torch
 import pytest
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ciphertext import Cipher
+from easyfhe.fhe.ciphertext import Cipher, CipherState
 from easyfhe.fhe.ops import alignment, arithmetic, kernels, rotation
 
 
@@ -25,9 +25,7 @@ def _cipher(name, *, cur_limbs=3, capacity=5, noise_deg=1):
     c1 = _uint64_tensor((1, capacity, 64), fill=2)
     cipher = Cipher(
         [c0, c1],
-        cur_limbs=cur_limbs,
-        scaling_factor=2.0,
-        noise_deg=noise_deg,
+        CipherState(cur_limbs, noise_deg, 2.0),
         slots=8,
         is_ext=False,
     )
@@ -42,9 +40,7 @@ def _cipher_from_active(name, c0, c1, *, capacity, inactive_fill, cur_limbs=None
             _capacity_tensor(c0, capacity=capacity, inactive_fill=inactive_fill),
             _capacity_tensor(c1, capacity=capacity, inactive_fill=inactive_fill + 1),
         ],
-        cur_limbs=cur_limbs,
-        scaling_factor=2.0,
-        noise_deg=1,
+        CipherState(cur_limbs, 1, 2.0),
         slots=8,
         is_ext=False,
     )
@@ -56,9 +52,7 @@ def _plaintext_from_active(name, values, *, capacity, inactive_fill, cur_limbs=N
     cur_limbs = values.shape[-2] if cur_limbs is None else int(cur_limbs)
     plain = Cipher(
         [_capacity_tensor(values, capacity=capacity, inactive_fill=inactive_fill)],
-        cur_limbs=cur_limbs,
-        scaling_factor=2.0,
-        noise_deg=1,
+        CipherState(cur_limbs, 1, 2.0),
         slots=8,
         is_ext=False,
     )
@@ -81,6 +75,16 @@ def _context():
         scale_at=lambda _cur_limbs: 2.0,
         rescale_divisor_at=lambda _drop_limb: 2.0,
     )
+
+
+def _flex_context():
+    ctx = _context()
+    ctx.scale_mode = "flexible"
+    ctx.rescale_policy = "auto"
+    ctx.scale_at = lambda _cur_limbs: 10.0
+    ctx.big_scale_at = lambda _cur_limbs: 100.0
+    ctx.rescale_divisor_at = lambda _drop_limb: 3.0
+    return ctx
 
 
 @pytest.mark.parametrize(
@@ -151,7 +155,7 @@ def test_align_drop_limb_updates_metadata_without_compressing_non_ext_tensor():
 
     result = alignment.align_to(cipher, alignment.CipherState(2, 1), ctx)
 
-    assert result.cur_limbs == 2
+    assert result.state.cur_limbs == 2
     assert tuple(result.cv[0].shape) == (1, 6, 64)
     assert result.cv[0] is cipher.cv[0]
 
@@ -168,7 +172,7 @@ def test_ext_cipher_cannot_drop_limbs_or_rescale_via_alignment():
         alignment.rescale_one_level(cipher, ctx)
 
 
-def test_rescale_updates_metadata_and_preserves_component_capacity(monkeypatch):
+def test_rescale_updates_metadata_and_returns_active_limb_tensor(monkeypatch):
     ctx = _context()
     cipher = _cipher("a", cur_limbs=4, capacity=6, noise_deg=2)
 
@@ -176,14 +180,45 @@ def test_rescale_updates_metadata_and_preserves_component_capacity(monkeypatch):
         assert cur_limbs == 4
         return _uint64_tensor((1, 3, 64), fill=11)
 
-    monkeypatch.setattr(alignment.F, "cv_drop_last_element_and_scale", fake_drop_last)
+    monkeypatch.setattr(alignment.F, "cv_rescale_one_level", fake_drop_last)
 
     result = alignment.rescale_one_level(cipher, ctx)
 
-    assert result.cur_limbs == 3
-    assert result.noise_deg == 1
-    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert result.state.cur_limbs == 3
+    assert result.state.noise_deg == 1
+    assert tuple(result.cv[0].shape) == (1, 3, 64)
     assert (result.cv[0][:, :3].cpu().numpy() == 11).all()
+
+
+def test_flexible_alignment_uses_scale_correction_and_target_scale(monkeypatch):
+    calls = {}
+
+    def fake_scalar_tensor(values, moduli, cur_limbs):
+        calls["scalars"] = tuple(int(value) for value in values)
+        calls["cur_limbs"] = cur_limbs
+        return torch.tensor(values, dtype=torch.uint64)
+
+    def fake_mul_scalar(component, scalar, moduli, mu, cur_limbs):
+        calls["mul_cur_limbs"] = cur_limbs
+        return component.clone()
+
+    def fake_rescale(component, cur_limbs, _level, context):
+        calls["rescale_cur_limbs"] = cur_limbs
+        return component[..., : cur_limbs - 1, :].clone()
+
+    monkeypatch.setattr(alignment.F, "gen_scalar_tensor", fake_scalar_tensor)
+    monkeypatch.setattr(alignment.F, "cv_mul_scalar", fake_mul_scalar)
+    monkeypatch.setattr(alignment.F, "cv_rescale_one_level", fake_rescale)
+
+    cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=1)
+    result = alignment.align_to(cipher, CipherState(2, 1, 5.0), _flex_context())
+
+    assert calls["scalars"] == (8, 8, 8, 8)
+    assert calls["cur_limbs"] == 4
+    assert calls["mul_cur_limbs"] == 4
+    assert calls["rescale_cur_limbs"] == 3
+    assert result.state == CipherState(2, 1, 5.0)
+    assert tuple(result.cv[0].shape) == (1, 2, 64)
 
 
 def test_homo_add_preserves_left_operand_capacity():
@@ -193,7 +228,7 @@ def test_homo_add_preserves_left_operand_capacity():
 
     result = fhe.homo_add(a, b, ctx)
 
-    assert result.cur_limbs == 3
+    assert result.state.cur_limbs == 3
     assert tuple(result.cv[0].shape) == (1, 5, 64)
     assert result is not a
 
@@ -232,7 +267,7 @@ def test_public_cipher_scalar_ops_ignore_inactive_capacity_values(op):
     active_a1 = _uint64_tensor((3, 64), fill=6)
     compact = _cipher_from_active("compact", active_a0, active_a1, capacity=3, inactive_fill=0)
     capacity = _cipher_from_active("capacity", active_a0, active_a1, capacity=6, inactive_fill=91)
-    scalar = 3 if op != "homo_mul_scalar_double" else 1.5
+    scalar = [3, 3, 3]
 
     compact_result = getattr(fhe, op)(compact, scalar, ctx)
     capacity_result = getattr(fhe, op)(capacity, scalar, ctx)
@@ -288,12 +323,15 @@ def test_homo_add_inplace_keeps_existing_capacity():
     result = fhe.homo_add_inplace(a, b, ctx)
 
     assert result is a
-    assert a.cur_limbs == 3
+    assert a.state.cur_limbs == 3
     assert tuple(a.cv[0].shape) == (1, 5, 64)
 
 
-def test_homo_mul_and_square_preserve_capacity_before_relinearize(monkeypatch):
+def test_homo_mul_relin_uses_active_limbs_before_key_switch(monkeypatch):
     ctx = _context()
+    ctx.L = 4
+    ctx.mult_swk_bx = "bx"
+    ctx.mult_swk_ax = "ax"
     active_a0 = _uint64_tensor((3, 64), fill=5)
     active_a1 = _uint64_tensor((3, 64), fill=6)
     active_b0 = _uint64_tensor((3, 64), fill=7)
@@ -302,20 +340,21 @@ def test_homo_mul_and_square_preserve_capacity_before_relinearize(monkeypatch):
     compact_b = _cipher_from_active("compact_b", active_b0, active_b1, capacity=3, inactive_fill=0)
     capacity_a = _cipher_from_active("capacity_a", active_a0, active_a1, capacity=6, inactive_fill=91)
     capacity_b = _cipher_from_active("capacity_b", active_b0, active_b1, capacity=5, inactive_fill=89)
-    monkeypatch.setattr(arithmetic, "_relinearize", lambda cipher, context: cipher)
 
-    compact_mul = fhe.homo_mul(compact_a, compact_b, ctx)
-    capacity_mul = fhe.homo_mul(capacity_a, capacity_b, ctx)
-    compact_square = arithmetic.homo_square(compact_a, ctx)
-    capacity_square = arithmetic.homo_square(capacity_a, ctx)
+    def fake_keyswitch(component, cur_limbs, *_args):
+        assert cur_limbs == 3
+        return [_uint64_tensor(component.shape, fill=0), _uint64_tensor(component.shape, fill=0)]
+
+    monkeypatch.setattr(arithmetic.F, "cv_keyswitch", fake_keyswitch)
+
+    compact_mul = fhe.homo_mul_relin(compact_a, compact_b, ctx)
+    capacity_mul = fhe.homo_mul_relin(capacity_a, capacity_b, ctx)
 
     assert tuple(capacity_mul.cv[0].shape) == (1, 6, 64)
     assert capacity_mul.cv[0][:, :3].cpu().numpy().tolist() == compact_mul.cv[0][:, :3].cpu().numpy().tolist()
-    assert tuple(capacity_square.cv[0].shape) == (1, 6, 64)
-    assert capacity_square.cv[0][:, :3].cpu().numpy().tolist() == compact_square.cv[0][:, :3].cpu().numpy().tolist()
 
 
-def test_homo_mul_rescale_preserves_input_capacity(monkeypatch):
+def test_homo_mul_relin_rescale_postop_returns_active_limb_tensor(monkeypatch):
     ctx = _context()
     ctx.L = 4
     ctx.mult_swk_bx = "bx"
@@ -333,16 +372,16 @@ def test_homo_mul_rescale_preserves_input_capacity(monkeypatch):
             _uint64_tensor((1, 3, 64), fill=12),
         )
 
-    monkeypatch.setattr(arithmetic.F, "cv_hmul_double_rescale", fake_hmul)
+    monkeypatch.setattr(arithmetic.F, "cv_hmul_relin_rescale", fake_hmul)
 
-    result = fhe.homo_mul_rescale(a, b, ctx)
+    result = fhe.homo_mul_relin_rescale_postop(a, b, ctx)
 
-    assert result.cur_limbs == 3
-    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert result.state.cur_limbs == 3
+    assert tuple(result.cv[0].shape) == (1, 3, 64)
     assert (result.cv[0][:, :3].cpu().numpy() == 11).all()
 
 
-def test_homo_rotate_preserves_capacity_and_uses_cur_limbs(monkeypatch):
+def test_homo_rotate_uses_cur_limbs(monkeypatch):
     ctx = SimpleNamespace(
         L=4,
         N=64,
@@ -365,11 +404,11 @@ def test_homo_rotate_preserves_capacity_and_uses_cur_limbs(monkeypatch):
 
     result = fhe.homo_rotate(cipher, 1, ctx)
 
-    assert tuple(result.cv[0].shape) == (1, 6, 64)
+    assert tuple(result.cv[0].shape) == (1, 3, 64)
     assert (result.cv[0][:, :3].cpu().numpy() == 6).all()
 
 
-def test_scalar_weighted_acc_preserves_capacity_and_ignores_inactive_limbs():
+def test_grouped_scalar_weighted_acc_ignores_inactive_limbs():
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=6, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
@@ -386,8 +425,8 @@ def test_scalar_weighted_acc_preserves_capacity_and_ignores_inactive_limbs():
         component[:, :cur_limbs] = active
         component[:, cur_limbs:] = _uint64_tensor((batch_size, capacity - cur_limbs, ctx.N), fill=91)
     scalars = torch.ones((batch_size, cur_limbs), dtype=torch.uint64)
-    cipher = Cipher(cv, cur_limbs, 1.0, 1, ctx.N // 2, False, batch_size=batch_size)
+    cipher = Cipher(cv, CipherState(cur_limbs, 1, 1.0), ctx.N // 2, False, batch_size=batch_size)
 
-    result = kernels.cipher_scalar_weighted_acc(cipher, scalars, ctx)
+    result = fhe.grouped_scalar_weighted_acc(cipher, scalars.unsqueeze(0), ctx)
 
-    assert tuple(result[0].shape) == (1, capacity, ctx.N)
+    assert tuple(result.cv[0].shape) == (1, cur_limbs, ctx.N)

@@ -3,16 +3,16 @@ def rescale_one_level(cipher, cryptoContext):
 
     return fhe.align_to(
         cipher,
-        fhe.CipherState(cipher.cur_limbs - 1, cipher.noise_deg - 1),
+        fhe.CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1),
         cryptoContext,
     )
 
 
 def reduce_noise_to_one(cipher, cryptoContext):
-    if cipher.noise_deg == 1:
+    if cipher.state.noise_deg == 1:
         return cipher
-    if cipher.noise_deg != 2:
-        raise ValueError(f"Expected noise_deg 1 or 2, got {cipher.noise_deg}")
+    if cipher.state.noise_deg != 2:
+        raise ValueError(f"Expected noise_deg 1 or 2, got {cipher.state.noise_deg}")
     return rescale_one_level(cipher, cryptoContext)
 
 

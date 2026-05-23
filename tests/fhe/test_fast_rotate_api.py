@@ -33,7 +33,7 @@ def _mac_down_each(cipher, offsets, plain_values, context):
         plaintext = _plaintext(
             values,
             context,
-            level=context.L - rot.cur_limbs,
+            level=context.L - rot.state.cur_limbs,
             slots=rot.slots,
         )
         term = fhe.homo_mul_pt(rot, plaintext, context)
@@ -48,12 +48,12 @@ def _mac_down_once(cipher, offsets, plain_values, context):
         plaintext_ext = _plaintext(
             values,
             context,
-            level=context.L - rotated_ext.cur_limbs,
+            level=context.L - rotated_ext.state.cur_limbs,
             slots=rotated_ext.slots,
             is_ext=True,
         )
         plaintexts.append(plaintext_ext)
-    total_ext = fhe.fused_grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)
+    total_ext = fhe.grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)
     return fhe.giant_rotate_sum(total_ext, 0, context, strategy="ext_double_hoist")
 
 
@@ -63,7 +63,7 @@ def _hoisted_mac(cipher, offsets, plain_values, context):
         plaintext_ext = _plaintext(
             values,
             context,
-            level=context.L - cipher.cur_limbs,
+            level=context.L - cipher.state.cur_limbs,
             slots=cipher.slots,
             is_ext=True,
         )
@@ -79,6 +79,30 @@ def _hoisted_mac(cipher, offsets, plain_values, context):
     )
 
 
+def _hoisted_mac_ext_double(cipher, offsets, groups, giant_offset, context):
+    plaintexts = []
+    for group in groups:
+        for values in group:
+            plaintexts.append(
+                _plaintext(
+                    values,
+                    context,
+                    level=context.L - cipher.state.cur_limbs,
+                    slots=cipher.slots,
+                    is_ext=True,
+                )
+            )
+    return fhe.hoisted_mac_sum(
+        cipher,
+        offsets,
+        rotation._pack_ciphers(plaintexts),
+        giant_offset,
+        len(groups),
+        context,
+        strategy="ext_double_hoist",
+    )
+
+
 def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
     plaintexts = []
     for group in groups:
@@ -87,7 +111,7 @@ def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
                 _plaintext(
                     values,
                     context,
-                    level=context.L - cipher.cur_limbs,
+                    level=context.L - cipher.state.cur_limbs,
                     slots=cipher.slots,
                 )
             )
@@ -112,7 +136,7 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
             plaintext = _plaintext(
                 values,
                 context,
-                level=context.L - rotated.cur_limbs,
+                level=context.L - rotated.state.cur_limbs,
                 slots=rotated.slots,
             )
             term = fhe.homo_mul_pt(rotated, plaintext, context)
@@ -146,10 +170,10 @@ def test_fast_rotate_ext_mac_can_defer_moddown_once():
     down_once = _mac_down_once(cipher, offsets, plaintext_values, context)
     hoisted = _hoisted_mac(cipher, offsets, plaintext_values, context)
 
-    assert down_each.cur_limbs == down_once.cur_limbs
+    assert down_each.state.cur_limbs == down_once.state.cur_limbs
     assert down_each.is_ext is False
     assert down_once.is_ext is False
-    assert hoisted.cur_limbs == down_once.cur_limbs
+    assert hoisted.state.cur_limbs == down_once.state.cur_limbs
     assert hoisted.is_ext is False
     np.testing.assert_allclose(
         client.decrypt(down_each).cpu().numpy()[:slots],
@@ -189,6 +213,41 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
 
     manual = _manual_normal_grouped_mac(cipher, baby_offsets, groups, giant_offset, context)
     hoisted = _hoisted_mac_normal(cipher, baby_offsets, groups, giant_offset, context)
+
+    np.testing.assert_allclose(
+        client.decrypt(manual).cpu().numpy()[:slots],
+        client.decrypt(hoisted).cpu().numpy()[:slots],
+        rtol=1e-4,
+        atol=1e-4,
+    )
+
+
+def test_hoisted_mac_sum_ext_double_uses_giant_step_offsets():
+    slots = 1024
+    baby_offsets = [0, 1, 2]
+    giant_offset = 5
+    group_count = 3
+    giant_keys = [giant_offset * index for index in range(1, group_count)]
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=5,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=tuple(sorted({*baby_offsets[1:], *giant_keys})),
+        ),
+        "cuda",
+    )
+    values = np.linspace(-0.75, 0.75, slots, dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    groups = [
+        [np.full(slots, 0.01 * (group + 1) * (idx + 1), dtype=np.double) for idx in range(len(baby_offsets))]
+        for group in range(group_count)
+    ]
+
+    manual = _manual_normal_grouped_mac(cipher, baby_offsets, groups, giant_offset, context)
+    hoisted = _hoisted_mac_ext_double(cipher, baby_offsets, groups, giant_offset, context)
 
     np.testing.assert_allclose(
         client.decrypt(manual).cpu().numpy()[:slots],

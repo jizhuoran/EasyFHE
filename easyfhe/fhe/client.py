@@ -7,7 +7,7 @@ import math
 import numpy as np
 import easyfhe as torch
 
-from .ciphertext import Cipher
+from .ciphertext import Cipher, CipherState
 from .ops import kernels as F
 from .ops.encoding import encode_stage1, encode_stage2
 
@@ -63,7 +63,7 @@ class Client:
             cryptoContext=context,
         )
         ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
-        cur_limbs = ptx.cur_limbs
+        cur_limbs = ptx.state.cur_limbs
         return _encrypt(
             self._public_key_b[:cur_limbs],
             self._public_key_a[:cur_limbs],
@@ -80,8 +80,8 @@ class Client:
             phase,
             self._params,
             plaintext_modulus_bits=self.dcrt_bits,
-            noise_scale_deg=getattr(cipher, "noise_deg", 1),
-            scaling_factor=getattr(cipher, "scaling_factor", None),
+            noise_scale_deg=cipher.state.noise_deg,
+            scaling_factor=cipher.state.scaling_factor,
             slots=getattr(cipher, "slots", 0),
         )
         return torch.tensor(decoded, device=cipher.cv[0].device, dtype=torch.float64)
@@ -200,7 +200,7 @@ def _as_moduli_q(value, limbs=None):
 
 def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
     logn = context.logN
-    cur_limbs = ptx.cur_limbs
+    cur_limbs = ptx.state.cur_limbs
     l = cur_limbs
     nh = context.N // 2
 
@@ -225,21 +225,19 @@ def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
             bx.view(1, l, n).to(target_device),
             ax.view(1, l, n).to(target_device),
         ],
-        cur_limbs,
-        ptx.scaling_factor,
-        ptx.noise_deg,
+        ptx.state,
         ptx.slots,
         is_ext=False,
     )
 
 
 def _raise_plaintext_scale_degree(ptx, scale_deg, context):
-    if scale_deg == ptx.noise_deg:
+    if scale_deg == ptx.state.noise_deg:
         return ptx
-    if scale_deg < 1 or ptx.noise_deg != 1:
-        raise ValueError(f"unsupported plaintext scale degree transition: {ptx.noise_deg} -> {scale_deg}")
+    if scale_deg < 1 or ptx.state.noise_deg != 1:
+        raise ValueError(f"unsupported plaintext scale degree transition: {ptx.state.noise_deg} -> {scale_deg}")
 
-    cur_limbs = ptx.cur_limbs
+    cur_limbs = ptx.state.cur_limbs
     base_scale = context.scale_at(cur_limbs)
     base_scale_int = round(base_scale)
     scale_multiplier = [
@@ -262,8 +260,7 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
     ]
     return ptx.cipher_like(
         cv,
-        scaling_factor=base_scale ** scale_deg,
-        noise_deg=scale_deg,
+        state=CipherState(cur_limbs, scale_deg, base_scale ** scale_deg),
     )
 
 
@@ -277,12 +274,12 @@ def _decrypt_phase(cipher, secret_key, moduli_q):
             raise ValueError("decrypt currently expects batch_size=1")
         ct0_tensor = ct0_tensor[0]
         ct1_tensor = ct1_tensor[0]
-    ct0 = _as_uint64_matrix("ct0", ct0_tensor.detach().cpu().numpy())[: cipher.cur_limbs]
-    ct1 = _as_uint64_matrix("ct1", ct1_tensor.detach().cpu().numpy())[: cipher.cur_limbs]
+    ct0 = _as_uint64_matrix("ct0", ct0_tensor.detach().cpu().numpy())[: cipher.state.cur_limbs]
+    ct1 = _as_uint64_matrix("ct1", ct1_tensor.detach().cpu().numpy())[: cipher.state.cur_limbs]
     if ct0.shape != ct1.shape:
         raise ValueError(f"ct0/ct1 shape mismatch: {ct0.shape} vs {ct1.shape}")
 
-    sk = _as_uint64_matrix("secret_key", secret_key)[: cipher.cur_limbs]
+    sk = _as_uint64_matrix("secret_key", secret_key)[: cipher.state.cur_limbs]
     if sk.shape != ct0.shape:
         raise ValueError(f"secret key/cipher shape mismatch: {sk.shape} vs {ct0.shape}")
 

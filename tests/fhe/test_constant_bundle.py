@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import easyfhe as torch
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ciphertext import Cipher
+from easyfhe.fhe.ciphertext import Cipher, CipherState
 from easyfhe.fhe.ops.encoding import encode_stage1
 from examples.resnet20_aespa.weight_pack import WeightPack
 
@@ -11,9 +11,7 @@ from examples.resnet20_aespa.weight_pack import WeightPack
 def _cipher(name, cv_count=2):
     cipher = Cipher(
         [torch.zeros((2, 4), dtype=torch.uint64) for _ in range(cv_count)],
-        cur_limbs=2,
-        scaling_factor=1.0,
-        noise_deg=1,
+        CipherState(2, 1, 1.0),
         slots=4,
         is_ext=False,
     )

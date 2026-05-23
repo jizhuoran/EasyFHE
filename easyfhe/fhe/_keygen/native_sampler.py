@@ -34,8 +34,6 @@ class CkksSamplerConfig:
     first_mod: int = 60
     dnum: int = 3
     secret_key_dist: str = "SPARSE_TERNARY"
-    scale_mode: str = "fixed"
-    rescale_policy: str = "manual"
     rotation_key_limb_limits: dict[int, int] | None = None
     random_mode: str = "sequential"
     rotation_random_mode: str = "fresh"
@@ -105,7 +103,6 @@ def sample_native_context(
         int(config.first_mod),
         int(config.dnum),
         str(config.secret_key_dist),
-        _native_scaling_technique(config.scale_mode, config.rescale_policy),
         True,
         False,
         1,
@@ -142,7 +139,14 @@ def sample_native_context(
     )
 
 
-def split_native_client_server(config: CkksSamplerConfig, bundle: NativeContextBundle, rotation_keys):
+def split_native_client_server(
+    config: CkksSamplerConfig,
+    bundle: NativeContextBundle,
+    rotation_keys,
+    *,
+    scale_mode,
+    rescale_policy,
+):
     eval_mult_key = np.asarray([bundle.eval_mult_key_b, bundle.eval_mult_key_a], dtype=np.uint64)
     client = NativeClientMaterial(
         secret_key=bundle.secret_key,
@@ -154,8 +158,8 @@ def split_native_client_server(config: CkksSamplerConfig, bundle: NativeContextB
         special_mod=int(config.first_mod),
         dnum=int(config.dnum),
         secret_key_dist=str(config.secret_key_dist),
-        scale_mode=str(config.scale_mode),
-        rescale_policy=str(config.rescale_policy),
+        scale_mode=str(scale_mode),
+        rescale_policy=str(rescale_policy),
         moduli_q=np.array(bundle.moduli_q, copy=True),
         roots_q=np.array(bundle.roots_q, copy=True),
         moduli_p=np.array(bundle.moduli_p, copy=True),
@@ -169,8 +173,8 @@ def split_native_client_server(config: CkksSamplerConfig, bundle: NativeContextB
         special_mod=int(config.first_mod),
         dnum=int(config.dnum),
         secret_key_dist=str(config.secret_key_dist),
-        scale_mode=str(config.scale_mode),
-        rescale_policy=str(config.rescale_policy),
+        scale_mode=str(scale_mode),
+        rescale_policy=str(rescale_policy),
         moduli_q=bundle.moduli_q,
         roots_q=bundle.roots_q,
         moduli_p=bundle.moduli_p,
@@ -181,7 +185,14 @@ def split_native_client_server(config: CkksSamplerConfig, bundle: NativeContextB
     return client, server
 
 
-def sample_native_client_server(config: CkksSamplerConfig, rotation_indices=(), slots=0):
+def sample_native_client_server(
+    config: CkksSamplerConfig,
+    rotation_indices=(),
+    slots=0,
+    *,
+    scale_mode,
+    rescale_policy,
+):
     bundle = sample_native_context(config, slots=slots)
     rotation_keys = (
         sample_native_rotation_keys(
@@ -193,7 +204,13 @@ def sample_native_client_server(config: CkksSamplerConfig, rotation_indices=(), 
         if rotation_indices
         else ()
     )
-    return split_native_client_server(config, bundle, rotation_keys)
+    return split_native_client_server(
+        config,
+        bundle,
+        rotation_keys,
+        scale_mode=scale_mode,
+        rescale_policy=rescale_policy,
+    )
 
 
 def sample_native_rotation_keys(
@@ -220,7 +237,6 @@ def sample_native_rotation_keys(
         int(config.first_mod),
         int(config.dnum),
         str(config.secret_key_dist),
-        _native_scaling_technique(config.scale_mode, config.rescale_policy),
         rotation_indices,
         rotation_offsets,
         trim_auto_indices,
@@ -231,16 +247,6 @@ def sample_native_rotation_keys(
         1,
     )
     return _decode_rotation_tensors(list(tensors))
-
-
-def _native_scaling_technique(scale_mode, rescale_policy):
-    scale_mode = str(scale_mode).lower()
-    rescale_policy = str(rescale_policy).lower()
-    if scale_mode != "fixed":
-        raise ValueError(f"native CKKS sampler currently supports scale_mode='fixed', got {scale_mode!r}")
-    if rescale_policy not in {"manual", "auto"}:
-        raise ValueError(f"rescale_policy must be 'manual' or 'auto', got {rescale_policy!r}")
-    return "FIXEDMANUAL"
 
 
 def _rotation_trim_limbs_by_auto_index(rotation_indices, ring_dim, max_limbs_by_rotation):

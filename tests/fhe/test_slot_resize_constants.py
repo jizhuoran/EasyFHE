@@ -1,21 +1,20 @@
 from types import SimpleNamespace
 
 import easyfhe.fhe as fhe
+from easyfhe.fhe.ciphertext import CipherState
 from easyfhe.fhe.ops import slots as slots_ops
 
 
 class _DummyCipher:
     is_ext = False
-    cur_limbs = 3
-    noise_deg = 1
 
     def __init__(self, slots):
         self.slots = slots
+        self.state = CipherState(3, 1, None)
 
     def deep_copy(self):
         copied = _DummyCipher(self.slots)
-        copied.cur_limbs = self.cur_limbs
-        copied.noise_deg = self.noise_deg
+        copied.state = self.state
         copied.is_ext = self.is_ext
         return copied
 

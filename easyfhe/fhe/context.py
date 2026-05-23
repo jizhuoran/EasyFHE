@@ -79,7 +79,6 @@ class Context:
         self.PModq = material.PModq.to(device)
         self.max_int_diffs = material.max_int_diffs.to(device)
 
-        self.automorphism_transform_out = material.automorphism_transform_out.to(device)
         self.inner_out = material.inner_out.to(device)
         self.moddown_out_ax = material.moddown_out_ax.to(device)
         self.moddown_out_bx = material.moddown_out_bx.to(device)
@@ -176,12 +175,28 @@ class Context:
         return self.construct_copy("cpu")
 
     def scale_at(self, cur_limbs=None):
+        if cur_limbs is None:
+            cur_limbs = self.L
+        if self.scale_mode == "flexible":
+            level = self.L - int(cur_limbs)
+            if 0 <= level < len(self.scalingFactorsReal):
+                return self.scalingFactorsReal[level]
         return self.approxSF
 
     def big_scale_at(self, cur_limbs=None):
+        if cur_limbs is None:
+            cur_limbs = self.L
+        if self.scale_mode == "flexible":
+            level = self.L - int(cur_limbs)
+            if 0 <= level < len(self.scalingFactorsRealBig):
+                return self.scalingFactorsRealBig[level]
         return self.approxSF
 
     def rescale_divisor_at(self, drop_limb=None):
+        if drop_limb is None:
+            drop_limb = 0
+        if self.scale_mode == "flexible":
+            return float(self.moduliQ_scalar[int(drop_limb)])
         return self.approxSF
 
     def get_rotation_key(self, rot_index):

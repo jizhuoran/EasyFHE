@@ -227,7 +227,7 @@ Tensor moddown_cuda(
     const Tensor& inverse_power_of_roots_div_two,
     const Tensor& inverse_scaled_power_of_roots_div_two);
 
-Tensor drop_last_element_scale_cuda(
+Tensor rescale_one_level_cuda(
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,

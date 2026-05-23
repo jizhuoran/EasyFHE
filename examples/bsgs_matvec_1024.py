@@ -49,7 +49,7 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
                 is_ext=True,
             )
             plaintexts.append(plaintext)
-        inner_ext = fhe.fused_grouped_pairwise_mac(
+        inner_ext = fhe.grouped_pairwise_mac(
             baby_exts,
             rotation._pack_ciphers(plaintexts),
             1,

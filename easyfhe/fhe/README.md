@@ -27,7 +27,7 @@ The main entry points are:
   scalar/vector constant packs. Plaintext materialization should go through
   `ConstantBundle.plaintext(...)`; raw encoding stages are internal helpers.
 - ciphertext slot helpers.
-- `homo_add`, `homo_sub`, `homo_mul`, `homo_square`, scalar/plaintext variants,
+- `homo_add`, `homo_sub`, `homo_mul_relin`, scalar/plaintext variants,
   rotations, and `align_to` for explicit ciphertext state alignment.
 
 The supported external API is the allowlist in `easyfhe.fhe.__all__`, sourced

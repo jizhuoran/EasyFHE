@@ -45,7 +45,7 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
             c1,
             weights.plaintext(
                 f"mask_first_n_{old_slots}_{c1.slots}",
-                cryptoContext.L - c1.cur_limbs,
+                cryptoContext.L - c1.state.cur_limbs,
                 c1.slots,
                 cryptoContext,
             ),
@@ -55,7 +55,7 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
             c2,
             weights.plaintext(
                 second_mask_key,
-                cryptoContext.L - c2.cur_limbs,
+                cryptoContext.L - c2.state.cur_limbs,
                 c2.slots,
                 cryptoContext,
             ),
@@ -71,7 +71,7 @@ def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
         summed,
         weights.plaintext(
             f"gen_mask_{mask_n}_{cipher.slots}",
-            cryptoContext.L - cipher.cur_limbs,
+            cryptoContext.L - cipher.state.cur_limbs,
             cipher.slots,
             cryptoContext,
         ),
@@ -100,7 +100,7 @@ def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, ro
             fullpack,
             weights.plaintext(
                 f"{row_mask_prefix}_{row_width}_{spatial_size}_{i}_{fullpack.slots}",
-                cryptoContext.L - fullpack.cur_limbs,
+                cryptoContext.L - fullpack.state.cur_limbs,
                 fullpack.slots,
                 cryptoContext,
             ),
@@ -119,7 +119,7 @@ def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoCont
             rows,
             weights.plaintext(
                 f"mask_channel_{i}_{num_channel}_{spatial_size}",
-                cryptoContext.L - rows.cur_limbs,
+                cryptoContext.L - rows.state.cur_limbs,
                 rows.slots,
                 cryptoContext,
             ),
@@ -144,8 +144,8 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
         trace.append(
             {
                 "op": f"downsample{spec.spatial_size}to{spec.out_spatial_size}",
-                "cur_limbs": int(c1.cur_limbs),
-                "noise_deg": int(c1.noise_deg),
+                "cur_limbs": int(c1.state.cur_limbs),
+                "noise_deg": int(c1.state.noise_deg),
                 "slots": int(c1.slots),
                 "is_ext": bool(c1.is_ext),
                 "second_cipher": c2 is not None,
@@ -178,7 +178,7 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
     target_slots = channels.slots // 4
     mask = weights.plaintext(
         slot_resize_mask_name(channels.slots, target_slots),
-        cryptoContext.L - channels.cur_limbs,
+        cryptoContext.L - channels.state.cur_limbs,
         channels.slots,
         cryptoContext,
     )

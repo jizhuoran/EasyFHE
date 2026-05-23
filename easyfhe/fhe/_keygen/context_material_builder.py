@@ -102,8 +102,8 @@ def _slot_bit_reverse_indices(log_slots):
 
 def _normalize_scale_mode(value):
     value = "fixed" if value is None else str(value).lower()
-    if value != "fixed":
-        raise ValueError(f"scale_mode must be 'fixed', got {value!r}")
+    if value not in {"fixed", "flexible"}:
+        raise ValueError(f"scale_mode must be 'fixed' or 'flexible', got {value!r}")
     return value
 
 
@@ -190,7 +190,6 @@ def _to_runtime_material(material):
         QmaxdiffplusPmaxdiff_map=uint64_maps["QmaxdiffplusPmaxdiff_map"],
         QbarretKplusPbarretK_map=uint64_maps["QbarretKplusPbarretK_map"],
         QbarretRatioplusPbarretRatio_map=uint64_maps["QbarretRatioplusPbarretRatio_map"],
-        automorphism_transform_out=_as_tensor(material.automorphism_transform_out, dtype=torch.uint64),
         inner_out=_as_tensor(material.inner_out, dtype=torch.uint64),
         moddown_out_ax=_as_tensor(material.moddown_out_ax, dtype=torch.uint64),
         moddown_out_bx=_as_tensor(material.moddown_out_bx, dtype=torch.uint64),
@@ -598,7 +597,6 @@ class ContextMaterialBuilder:
         self.moddown_out_bx = np.zeros(num_moduli_after_moddown * self.N, dtype=np.uint64)
         self.modup_out = np.zeros(num_moduli_after_modup * self.N * self.beta, dtype=np.uint64)
         self.rescale_out = np.zeros((self.L - 1) * self.N, dtype=np.uint64)
-        self.automorphism_transform_out = np.zeros(num_moduli_after_modup * self.N, dtype=np.uint64)
         self.mod_raise_out = np.zeros(self.L * self.N, dtype=np.uint64)
 
     def _init_ntt_tables(self, q_roots, p_roots):
@@ -708,8 +706,32 @@ class ContextMaterialBuilder:
 
     def _init_scaling_factors(self):
         self.approxSF = 2**self.dcrtBits
-        self.scalingFactorsReal = []
-        self.scalingFactorsRealBig = []
+        if self.scale_mode != "flexible":
+            self.scalingFactorsReal = []
+            self.scalingFactorsRealBig = []
+            return
+
+        self.scalingFactorsReal = [0.0] * self.L
+        if self.L > 0:
+            if int(self.specialMod) == int(self.dcrtBits):
+                self.scalingFactorsReal[0] = float(self.approxSF)
+            else:
+                self.scalingFactorsReal[0] = float(self.moduliQ_scalar[self.L - 1])
+
+            last_preset_factor = self.scalingFactorsReal[0]
+            for level in range(1, self.L):
+                prev_scale = self.scalingFactorsReal[level - 1]
+                drop_modulus = float(self.moduliQ_scalar[self.L - level])
+                self.scalingFactorsReal[level] = prev_scale * prev_scale / drop_modulus
+                ratio = self.scalingFactorsReal[level] / last_preset_factor
+                if ratio <= 0.5 or ratio >= 2.0:
+                    self.scalingFactorsReal[level] = float(self.approxSF)
+                    last_preset_factor = self.scalingFactorsReal[level]
+
+        self.scalingFactorsRealBig = [
+            scale * scale
+            for scale in self.scalingFactorsReal[:-1]
+        ]
 
     def _init_encode_params(self):
         five_pows = 1

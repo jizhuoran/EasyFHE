@@ -87,7 +87,7 @@ weights = fhe.ConstantBundle(
 
 pt = weights.plaintext(
     "kernel",
-    level=ctx.L - cipher.cur_limbs,
+    level=ctx.L - cipher.state.cur_limbs,
     slots=cipher.slots,
     cryptoContext=ctx,
     scale=1.0,
@@ -117,16 +117,16 @@ Use these for normal ciphertext arithmetic:
 ```python
 fhe.homo_add(a, b, ctx)
 fhe.homo_sub(a, b, ctx)
-fhe.homo_mul(a, b, ctx)
-fhe.homo_square(a, ctx)
+fhe.homo_mul_relin(a, b, ctx)
 
 fhe.homo_add_pt(cipher, plaintext, ctx)
 fhe.homo_mul_pt(cipher, plaintext, ctx)
 
-fhe.homo_add_scalar_double(cipher, value, ctx)
-fhe.homo_add_scalar_int(cipher, value, ctx)
-fhe.homo_mul_scalar_double(cipher, value, ctx)
-fhe.homo_mul_scalar_int(cipher, value, ctx)
+encoded = bundle.encoded_scalars("scale", cipher.state.cur_limbs, cipher.state.noise_deg, ctx, mode="double")[0]
+fhe.homo_mul_scalar_double(cipher, encoded, ctx)
+
+shift = bundle.encoded_scalars("shift", cipher.state.cur_limbs, 0, ctx, mode="int")[0]
+fhe.homo_add_scalar_int(cipher, shift, ctx)
 
 fhe.homo_rotate(cipher, offset, ctx)
 fhe.slot_resize(cipher, slots, ctx, mask=None)
@@ -150,7 +150,8 @@ convolution, and linear-transform code.
 
 ```python
 rotated = fhe.fast_rotate(cipher, offsets, ctx, output_ext=False)
-partials = fhe.fused_grouped_pairwise_mac(rotated, plaintexts, groups, ctx)  # batched Cipher
+partials = fhe.grouped_pairwise_mac(rotated, plaintexts, groups, ctx)  # batched Cipher
+weighted = fhe.grouped_scalar_weighted_acc(rotated, encoded_scalars, ctx)  # batched Cipher
 result = fhe.giant_rotate_sum(partials, giant_offset, ctx, strategy="normal")
 
 result = fhe.hoisted_mac_sum(
@@ -174,10 +175,6 @@ Strategies:
 
 Avoid using lower-level rotation helpers such as modup, moddown, automorphism
 precompute maps, and raw rotation-key access. Those are runtime internals.
-
-`fused_broadcast_mac` is not recommended for application code. A single
-ciphertext multiplied by many plaintexts and summed is usually better expressed
-by pre-summing the plaintext constants and using one `homo_mul_pt`.
 
 ## Bootstrapping
 
@@ -212,7 +209,7 @@ bs_constants, bs_plan = bs.generate(
     strategy="double_hoist",
 )
 
-cipher = bs.bootstrap(cipher, ctx, bs_constants, bs_plan, L0=cipher.cur_limbs)
+cipher = bs.bootstrap(cipher, ctx, bs_constants, bs_plan, L0=cipher.state.cur_limbs)
 ```
 
 Application-facing bootstrap API:

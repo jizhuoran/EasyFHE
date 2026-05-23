@@ -44,10 +44,10 @@ Client public methods:
 - `homo_add_inplace`
 - `homo_sub`
 - `homo_sub_inplace`
-- `homo_mul`
-- `homo_mul_rescale`
-- `homo_mul_rescale_addscalar`
-- `homo_mul_rescale_addpt`
+- `homo_mul_relin`
+- `homo_mul_relin_rescale_postop`
+- `homo_mul_relin_rescale_add_scalar`
+- `homo_mul_relin_rescale_add_pt`
 
 ### Plaintext And Scalar Arithmetic
 
@@ -73,7 +73,8 @@ Client public methods:
 - `hoisted_mac_sum`
 - `giant_rotate_sum`
 - `moddown_from_ext`
-- `fused_grouped_pairwise_mac`
+- `grouped_pairwise_mac`
+- `grouped_scalar_weighted_acc`
 - `slot_resize`
 
 ### Manual Level Control
@@ -119,7 +120,6 @@ or benchmark code. The main cleanup goal is to keep these out of package-level
 
 Module: `easyfhe.fhe.ops.kernels`.
 
-- `cv_check`
 - `gen_scalar_tensor`
 - `cv_neg`
 - `cv_add`
@@ -130,23 +130,16 @@ Module: `easyfhe.fhe.ops.kernels`.
 - `cv_mul_scalar`
 - `cv_modup`
 - `cv_moddown`
-- `cv_moddown_write`
-- `cv_innerproduct`
-- `cv_innerproduct_write`
-- `cv_innerproduct_broadcast_cipher_pair`
-- `cv_fast_rotate_ext_batch_finalize`
-- `cv_fast_rotate_ext_batch_finalize_compact`
-- `cv_fast_rotate_batch_finalize`
-- `cv_fast_rotate_batch_finalize_compact`
+- `cv_innerproduct_broadcast`
+- `cv_innerproduct_pairwise`
+- `cv_finalize_fast_rotation_ext`
+- `cv_finalize_fast_rotation_q`
 - `cv_keyswitch`
 - `cv_hrot`
-- `cv_hmul_double_rescale`
-- `cv_drop_last_element_and_scale`
-- `cv_automorphism_transform`
+- `cv_hmul_relin_rescale`
+- `cv_rescale_one_level`
 - `cv_mul_by_monomial`
-- `cipher_fused_grouped_pairwise_mac`
-- `cipher_fused_broadcast_mac`
-- `cipher_scalar_weighted_acc`
+- `cipher_grouped_pairwise_mac`
 - `cipher_grouped_scalar_weighted_acc`
 
 ### FHE Primitive Helpers
@@ -154,7 +147,7 @@ Module: `easyfhe.fhe.ops.kernels`.
 Module: `easyfhe.fhe.ops.primitives`.
 
 - `_scalar_tensor`
-- `_fused_cuda_available`
+- `_all_cuda`
 - `_can_fuse_pairwise`
 - `_assign_out`
 - `_component_shape`
@@ -162,13 +155,10 @@ Module: `easyfhe.fhe.ops.primitives`.
 - `_metadata_like`
 - `_finish_out`
 - `_cipher_add`
-- `_cipher_add_ext`
 - `_cipher_sub`
-- `_cipher_sub_ext`
 - `_cipher_add_plain`
 - `_cipher_mul_plain`
 - `_cipher_mul`
-- `_cipher_square`
 - `_cipher_add_scalar`
 - `_cipher_sub_scalar`
 - `_cipher_mul_scalar_double`
@@ -184,19 +174,12 @@ Module: `easyfhe.fhe.ops.primitives`.
 - `validate_matching_metadata`
 - `PreparedPlaintext`
 - `Plaintext`
-- `state_of`
-- `consumed_depth`
 - `rescale_one_level`
-- `has_target_scale`
 - `plan_add_alignment`
 - `plan_mul_alignment`
-- `plan_reduce_noise_to_one`
 - `extract_cv`
 - `encode_stage1`
 - `encode_stage2`
-- `fused_broadcast_mac`
-- `homo_mul_double_rescale`
-- `homo_square`
 - `Client`
 - `ContextMaterialBuilder`
 - `CkksSamplerConfig`
@@ -314,8 +297,7 @@ only. User code, bootstrapping code, and examples should not call them directly.
 - `torch.innerproduct_write_pair`
 - `torch.innerproduct_broadcast_cipher`
 - `torch.innerproduct_broadcast_cipher_pair`
-- `torch.drop_last_element_and_scale`
-- `torch.automorphism_transform`
+- `torch.rescale_one_level`
 - `torch.fast_rotate_ext_batch_finalize`
 - `torch.fast_rotate_ext_batch_finalize_compact`
 - `torch.fast_rotate_ext_batch_finalize_pair`
@@ -330,10 +312,8 @@ only. User code, bootstrapping code, and examples should not call them directly.
 
 ### Multiply And Fused Accumulation
 
-- `torch.hmul_double_rescale`
+- `torch.hmul_relin_rescale`
 - `torch.batched_pairwise_mac`
-- `torch.fused_broadcast_mac`
-- `torch.scalar_weighted_acc`
 - `torch.grouped_scalar_weighted_acc`
 - `torch.cpmul_broadcast_pt`
 

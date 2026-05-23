@@ -66,8 +66,6 @@ def _sample_material(spec: CKKSContextSpec):
         first_mod=spec.first_mod,
         dnum=spec.dnum,
         secret_key_dist=spec.secret_key_dist,
-        scale_mode=spec.scale_mode,
-        rescale_policy=spec.rescale_policy,
         rotation_key_limb_limits=dict(spec.rotation_key_limb_limits),
         random_mode="parallel_deterministic",
         rotation_random_mode=spec.rotation_random_mode,
@@ -76,6 +74,8 @@ def _sample_material(spec: CKKSContextSpec):
         sampler_config,
         rotation_indices,
         slots=max(1, 1 << (int(spec.log_n) - 1)),
+        scale_mode=spec.scale_mode,
+        rescale_policy=spec.rescale_policy,
     )
     return client_material, server_material
 
@@ -115,8 +115,8 @@ def _build_context(server_material: NativeServerMaterial, spec: CKKSContextSpec,
 
 def _normalize_scale_mode(value):
     value = str(value).lower()
-    if value != "fixed":
-        raise ValueError(f"scale_mode must be 'fixed', got {value!r}")
+    if value not in {"fixed", "flexible"}:
+        raise ValueError(f"scale_mode must be 'fixed' or 'flexible', got {value!r}")
     return value
 
 

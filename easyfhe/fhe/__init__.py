@@ -1,17 +1,17 @@
 """Public CKKS-oriented FHE frontend for EasyFHE."""
 
 from ._public_api import PUBLIC_API as _PUBLIC_API
-from .ciphertext import Cipher
+from .ciphertext import Cipher, CipherState
 from .client import Client
 from .constants import ConstantBundle
 from .context import Context
 from .ops import (
-    CipherState,
     align_to,
     fast_rotate,
     giant_rotate_sum,
     hoisted_mac_sum,
-    fused_grouped_pairwise_mac,
+    grouped_pairwise_mac,
+    grouped_scalar_weighted_acc,
     homo_add,
     homo_add_inplace,
     homo_add_pt,
@@ -20,10 +20,10 @@ from .ops import (
     homo_add_scalar_double_inplace,
     homo_add_scalar_int,
     homo_add_scalar_int_inplace,
-    homo_mul,
-    homo_mul_rescale,
-    homo_mul_rescale_addpt,
-    homo_mul_rescale_addscalar,
+    homo_mul_relin,
+    homo_mul_relin_rescale_postop,
+    homo_mul_relin_rescale_add_pt,
+    homo_mul_relin_rescale_add_scalar,
     homo_mul_pt,
     homo_mul_pt_inplace,
     homo_mul_scalar_double,

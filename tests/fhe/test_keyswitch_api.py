@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from easyfhe.fhe.ciphertext import Cipher
+from easyfhe.fhe.ciphertext import Cipher, CipherState
 from easyfhe.fhe.ops import rotation
 
 
@@ -18,7 +18,7 @@ def test_modup_to_ext_uses_second_cipher_component(monkeypatch):
     monkeypatch.setattr(rotation.F, "cv_modup", fake_cv_modup)
 
     context = SimpleNamespace()
-    cipher = Cipher(["cv0", "cv1"], cur_limbs=3, scaling_factor=1.0, noise_deg=1, slots=8, is_ext=False)
+    cipher = Cipher(["cv0", "cv1"], CipherState(3, 1, 1.0), slots=8, is_ext=False)
 
     result = rotation._modup_to_ext(cipher, context)
 
@@ -29,7 +29,7 @@ def test_modup_to_ext_uses_second_cipher_component(monkeypatch):
 
 def test_modup_to_ext_rejects_single_component_cipher():
     context = SimpleNamespace()
-    cipher = Cipher(["cv0"], cur_limbs=3, scaling_factor=1.0, noise_deg=1, slots=8, is_ext=False)
+    cipher = Cipher(["cv0"], CipherState(3, 1, 1.0), slots=8, is_ext=False)
 
     with pytest.raises(ValueError, match="expected at least two components"):
         rotation._modup_to_ext(cipher, context)

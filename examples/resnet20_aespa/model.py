@@ -204,7 +204,7 @@ def _downsample_conv_sx(input, block_id, in_img_width, out_channels, first_rot, 
 def _projection_input_for_downsample(input, rt):
     if not (rt.ctx.scale_mode == "fixed" and rt.ctx.rescale_policy == "manual"):
         return input
-    return fhe.align_to(input, fhe.CipherState(input.cur_limbs - 2, input.noise_deg), rt.ctx)
+    return fhe.align_to(input, fhe.CipherState(input.state.cur_limbs - 2, input.state.noise_deg), rt.ctx)
 
 
 def _downsample_projection_pair(input, block_id, in_channels, first_rot, rt, scale):
@@ -423,7 +423,7 @@ def final_layer(input, rt):
         res,
         rt.weights.plaintext(
             f"mask_mod_{spatial_size}_{1.0 / spatial_size}_{res.slots}",
-            rt.ctx.L - res.cur_limbs,
+            rt.ctx.L - res.state.cur_limbs,
             res.slots,
             rt.ctx,
         ),
@@ -433,7 +433,7 @@ def final_layer(input, rt):
     res = rescale_one_level(res, rt.ctx)
     weight = rt.weights.plaintext(
         f"fc_{res.slots}",
-        rt.ctx.L - res.cur_limbs,
+        rt.ctx.L - res.state.cur_limbs,
         res.slots,
         rt.ctx,
     )
@@ -443,7 +443,7 @@ def final_layer(input, rt):
 
     bias = rt.weights.plaintext(
         f"bias_{res.slots}",
-        rt.ctx.L - res.cur_limbs,
+        rt.ctx.L - res.state.cur_limbs,
         res.slots,
         rt.ctx,
     )

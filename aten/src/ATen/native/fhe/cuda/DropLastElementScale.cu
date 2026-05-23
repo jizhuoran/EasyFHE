@@ -86,7 +86,7 @@ static void const_mult_add_batch(
   C10_CUDA_KERNEL_LAUNCH_CHECK();
 }
 
-static void drop_last_element_scale_template(
+static void rescale_one_level_template(
     Tensor& res,
     const Tensor& from,
     int64_t curr_limbs,
@@ -185,7 +185,7 @@ static void drop_last_element_scale_template(
       param_primes.data_ptr<uint64_t>());
 }
 
-Tensor drop_last_element_scale_cuda(
+Tensor rescale_one_level_cuda(
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,
@@ -208,7 +208,7 @@ Tensor drop_last_element_scale_cuda(
   auto res = at::empty({batch, (curr_limbs - 1), N}, from.options());
   auto workspace = at::empty({batch, curr_limbs, N}, from.options());
 
-  drop_last_element_scale_template(
+  rescale_one_level_template(
       res,
       from,
       curr_limbs,

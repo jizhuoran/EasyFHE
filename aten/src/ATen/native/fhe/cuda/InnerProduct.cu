@@ -474,6 +474,74 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
 #define COMPUTE_PAIR_ITER_31(BATCH) COMPUTE_PAIR_ITER_30(BATCH) DEFINE_COMPUTE_PAIR(30, BATCH)
 #define COMPUTE_PAIR_ITER_32(BATCH) COMPUTE_PAIR_ITER_31(BATCH) DEFINE_COMPUTE_PAIR(31, BATCH)
 
+#define DEFINE_COMPUTE_PAIRWISE(BATCH_ID)                                  \
+  {                                                                       \
+    uint128_t accum_ax = {0, 0};                                          \
+    uint128_t accum_bx = {0, 0};                                          \
+    const int64_t special_mod_start = special_mod_start_list[BATCH_ID];   \
+    const int swk_gap = static_cast<int>(special_mod_start - static_cast<int64_t>(curr_limbs)); \
+    const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : static_cast<int>(prime_gap)); \
+    const int reduce_prime_idx = idx + prime_idx;                         \
+    const auto prime = primes[reduce_prime_idx];                          \
+    const auto barret_ratio = barret_ratios[reduce_prime_idx];            \
+    const auto barret_k = barret_ks[reduce_prime_idx];                    \
+    const int mult_length = static_cast<int>(special_mod_start + sizeP);  \
+    const int swk_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : swk_gap);   \
+    const uint64_t* __restrict__ eval_bx = swk_bx##BATCH_ID;              \
+    const uint64_t* __restrict__ eval_ax = swk_ax##BATCH_ID;              \
+    const int64_t input_batch_stride = static_cast<int64_t>(BATCH_ID) * N * length * beta; \
+    for (int beta_idx = 0; beta_idx < beta; beta_idx++) {                 \
+      const int stride = N * (mult_length * beta_idx + swk_idx);          \
+      const int in_ptr_stride = N * length * beta_idx;                    \
+      auto op1 = in_ptr[input_batch_stride + i + in_ptr_stride];          \
+      auto op2_bx = eval_bx[i + stride];                                  \
+      auto op2_ax = eval_ax[i + stride];                                  \
+      auto mul_ax = mult_64_64_128(op1, op2_ax);                          \
+      auto mul_bx = mult_64_64_128(op1, op2_bx);                          \
+      inplace_add_128_128(mul_ax, accum_ax);                              \
+      inplace_add_128_128(mul_bx, accum_bx);                              \
+    }                                                                     \
+    auto res_ax =                                                         \
+        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+    auto res_bx =                                                         \
+        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+    out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
+    out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
+  }
+
+#define COMPUTE_PAIRWISE_ITER_1  DEFINE_COMPUTE_PAIRWISE(0)
+#define COMPUTE_PAIRWISE_ITER_2  COMPUTE_PAIRWISE_ITER_1 DEFINE_COMPUTE_PAIRWISE(1)
+#define COMPUTE_PAIRWISE_ITER_3  COMPUTE_PAIRWISE_ITER_2 DEFINE_COMPUTE_PAIRWISE(2)
+#define COMPUTE_PAIRWISE_ITER_4  COMPUTE_PAIRWISE_ITER_3 DEFINE_COMPUTE_PAIRWISE(3)
+#define COMPUTE_PAIRWISE_ITER_5  COMPUTE_PAIRWISE_ITER_4 DEFINE_COMPUTE_PAIRWISE(4)
+#define COMPUTE_PAIRWISE_ITER_6  COMPUTE_PAIRWISE_ITER_5 DEFINE_COMPUTE_PAIRWISE(5)
+#define COMPUTE_PAIRWISE_ITER_7  COMPUTE_PAIRWISE_ITER_6 DEFINE_COMPUTE_PAIRWISE(6)
+#define COMPUTE_PAIRWISE_ITER_8  COMPUTE_PAIRWISE_ITER_7 DEFINE_COMPUTE_PAIRWISE(7)
+#define COMPUTE_PAIRWISE_ITER_9  COMPUTE_PAIRWISE_ITER_8 DEFINE_COMPUTE_PAIRWISE(8)
+#define COMPUTE_PAIRWISE_ITER_10 COMPUTE_PAIRWISE_ITER_9 DEFINE_COMPUTE_PAIRWISE(9)
+#define COMPUTE_PAIRWISE_ITER_11 COMPUTE_PAIRWISE_ITER_10 DEFINE_COMPUTE_PAIRWISE(10)
+#define COMPUTE_PAIRWISE_ITER_12 COMPUTE_PAIRWISE_ITER_11 DEFINE_COMPUTE_PAIRWISE(11)
+#define COMPUTE_PAIRWISE_ITER_13 COMPUTE_PAIRWISE_ITER_12 DEFINE_COMPUTE_PAIRWISE(12)
+#define COMPUTE_PAIRWISE_ITER_14 COMPUTE_PAIRWISE_ITER_13 DEFINE_COMPUTE_PAIRWISE(13)
+#define COMPUTE_PAIRWISE_ITER_15 COMPUTE_PAIRWISE_ITER_14 DEFINE_COMPUTE_PAIRWISE(14)
+#define COMPUTE_PAIRWISE_ITER_16 COMPUTE_PAIRWISE_ITER_15 DEFINE_COMPUTE_PAIRWISE(15)
+#define COMPUTE_PAIRWISE_ITER_17 COMPUTE_PAIRWISE_ITER_16 DEFINE_COMPUTE_PAIRWISE(16)
+#define COMPUTE_PAIRWISE_ITER_18 COMPUTE_PAIRWISE_ITER_17 DEFINE_COMPUTE_PAIRWISE(17)
+#define COMPUTE_PAIRWISE_ITER_19 COMPUTE_PAIRWISE_ITER_18 DEFINE_COMPUTE_PAIRWISE(18)
+#define COMPUTE_PAIRWISE_ITER_20 COMPUTE_PAIRWISE_ITER_19 DEFINE_COMPUTE_PAIRWISE(19)
+#define COMPUTE_PAIRWISE_ITER_21 COMPUTE_PAIRWISE_ITER_20 DEFINE_COMPUTE_PAIRWISE(20)
+#define COMPUTE_PAIRWISE_ITER_22 COMPUTE_PAIRWISE_ITER_21 DEFINE_COMPUTE_PAIRWISE(21)
+#define COMPUTE_PAIRWISE_ITER_23 COMPUTE_PAIRWISE_ITER_22 DEFINE_COMPUTE_PAIRWISE(22)
+#define COMPUTE_PAIRWISE_ITER_24 COMPUTE_PAIRWISE_ITER_23 DEFINE_COMPUTE_PAIRWISE(23)
+#define COMPUTE_PAIRWISE_ITER_25 COMPUTE_PAIRWISE_ITER_24 DEFINE_COMPUTE_PAIRWISE(24)
+#define COMPUTE_PAIRWISE_ITER_26 COMPUTE_PAIRWISE_ITER_25 DEFINE_COMPUTE_PAIRWISE(25)
+#define COMPUTE_PAIRWISE_ITER_27 COMPUTE_PAIRWISE_ITER_26 DEFINE_COMPUTE_PAIRWISE(26)
+#define COMPUTE_PAIRWISE_ITER_28 COMPUTE_PAIRWISE_ITER_27 DEFINE_COMPUTE_PAIRWISE(27)
+#define COMPUTE_PAIRWISE_ITER_29 COMPUTE_PAIRWISE_ITER_28 DEFINE_COMPUTE_PAIRWISE(28)
+#define COMPUTE_PAIRWISE_ITER_30 COMPUTE_PAIRWISE_ITER_29 DEFINE_COMPUTE_PAIRWISE(29)
+#define COMPUTE_PAIRWISE_ITER_31 COMPUTE_PAIRWISE_ITER_30 DEFINE_COMPUTE_PAIRWISE(30)
+#define COMPUTE_PAIRWISE_ITER_32 COMPUTE_PAIRWISE_ITER_31 DEFINE_COMPUTE_PAIRWISE(31)
+
 #define DEFINE_KERNEL(BATCH)                                                \
   __global__ void sum_reduce_fused_broadcast_cipher_DL(                     \
       uint64_t* __restrict__ out_ptr,                                       \
@@ -528,6 +596,27 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
     }                                                                       \
     __syncthreads();                                                        \
     COMPUTE_PAIR_ITER_##BATCH(BATCH);                                       \
+  }
+
+#define DEFINE_PAIRWISE_KERNEL(BATCH)                                       \
+  __global__ void sum_reduce_fused_pairwise_cipher_pair_DL(                 \
+      uint64_t* __restrict__ out_bx_ptr,                                    \
+      uint64_t* __restrict__ out_ax_ptr,                                    \
+      const uint64_t* __restrict__ in_ptr,                                  \
+      SWK_PAIR_PARAMS_##BATCH,                                              \
+      const size_t N,                                                       \
+      const size_t length,                                                  \
+      const size_t sizeP,                                                   \
+      const size_t beta,                                                    \
+      size_t curr_limbs,                                                    \
+      size_t prime_gap,                                                     \
+      const int64_t* special_mod_start_list,                                \
+      const uint64_t* primes,                                               \
+      const uint64_t* barret_ks,                                            \
+      const uint64_t* barret_ratios) {                                      \
+    const int idx = blockIdx.y;                                             \
+    const int i = idx * N + blockIdx.x * blockDim.x + threadIdx.x;          \
+    COMPUTE_PAIRWISE_ITER_##BATCH;                                          \
   }
 
 
@@ -596,6 +685,39 @@ DEFINE_PAIR_KERNEL(30);
 DEFINE_PAIR_KERNEL(31);
 DEFINE_PAIR_KERNEL(32);
 
+DEFINE_PAIRWISE_KERNEL(1);
+DEFINE_PAIRWISE_KERNEL(2);
+DEFINE_PAIRWISE_KERNEL(3);
+DEFINE_PAIRWISE_KERNEL(4);
+DEFINE_PAIRWISE_KERNEL(5);
+DEFINE_PAIRWISE_KERNEL(6);
+DEFINE_PAIRWISE_KERNEL(7);
+DEFINE_PAIRWISE_KERNEL(8);
+DEFINE_PAIRWISE_KERNEL(9);
+DEFINE_PAIRWISE_KERNEL(10);
+DEFINE_PAIRWISE_KERNEL(11);
+DEFINE_PAIRWISE_KERNEL(12);
+DEFINE_PAIRWISE_KERNEL(13);
+DEFINE_PAIRWISE_KERNEL(14);
+DEFINE_PAIRWISE_KERNEL(15);
+DEFINE_PAIRWISE_KERNEL(16);
+DEFINE_PAIRWISE_KERNEL(17);
+DEFINE_PAIRWISE_KERNEL(18);
+DEFINE_PAIRWISE_KERNEL(19);
+DEFINE_PAIRWISE_KERNEL(20);
+DEFINE_PAIRWISE_KERNEL(21);
+DEFINE_PAIRWISE_KERNEL(22);
+DEFINE_PAIRWISE_KERNEL(23);
+DEFINE_PAIRWISE_KERNEL(24);
+DEFINE_PAIRWISE_KERNEL(25);
+DEFINE_PAIRWISE_KERNEL(26);
+DEFINE_PAIRWISE_KERNEL(27);
+DEFINE_PAIRWISE_KERNEL(28);
+DEFINE_PAIRWISE_KERNEL(29);
+DEFINE_PAIRWISE_KERNEL(30);
+DEFINE_PAIRWISE_KERNEL(31);
+DEFINE_PAIRWISE_KERNEL(32);
+
 } // namespace fhe
 
 namespace at::native {
@@ -644,6 +766,29 @@ namespace at::native {
         primes_ptr,                                   \
         barret_k_ptr,                                 \
         barret_ratio_ptr);                            \
+    break;
+
+#define DISPATCH_SUM_REDUCE_PAIRWISE_CASE(NUM)       \
+  case NUM:                                          \
+    fhe::sum_reduce_fused_pairwise_cipher_pair_DL<<< \
+        gridDim,                                     \
+        blockDim,                                    \
+        0,                                           \
+        stream>>>(                                   \
+        out_bx_ptr,                                  \
+        out_ax_ptr,                                  \
+        in_ptr,                                      \
+        SWK_BX_AX_PARM_##NUM,                        \
+        N,                                           \
+        length,                                      \
+        sizeP,                                       \
+        beta,                                        \
+        curr_limbs,                                  \
+        prime_gap,                                   \
+        special_mod_start_ptr,                       \
+        primes_ptr,                                  \
+        barret_k_ptr,                                \
+        barret_ratio_ptr);                           \
     break;
 
 static void innerproduct_broadcast_cipher_template(
@@ -721,7 +866,7 @@ static void innerproduct_broadcast_cipher_template(
   DISPATCH_BATCH_FUNC(swks.size(), DISPATCH_SUM_REDUCE_CASE);
 }
 
-static void innerproduct_broadcast_cipher_pair_template(
+static void innerproduct_broadcast_template(
     Tensor& out_bx,
     Tensor& out_ax,
     const Tensor& in,
@@ -746,7 +891,7 @@ static void innerproduct_broadcast_cipher_pair_template(
   TORCH_INTERNAL_ASSERT(B > 0, "swk_bxs must not be empty");
   TORCH_INTERNAL_ASSERT(swk_axs.size() == swk_bxs.size(), "swk bx/ax list size mismatch");
   TORCH_INTERNAL_ASSERT(in.dim() == 3);
-  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast expects batch == 1");
   TORCH_INTERNAL_ASSERT(out_bx.dim() == 3);
   TORCH_INTERNAL_ASSERT(out_ax.dim() == 3);
   TORCH_INTERNAL_ASSERT(out_bx.sizes() == out_ax.sizes());
@@ -783,6 +928,70 @@ static void innerproduct_broadcast_cipher_pair_template(
   auto blockDim = BLOCK_SIZE;
   auto stream = at::cuda::getCurrentCUDAStream();
   DISPATCH_BATCH_FUNC(B, DISPATCH_SUM_REDUCE_PAIR_CASE);
+}
+
+static void innerproduct_pairwise_template(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    const Tensor& in,
+    const TensorList& swk_bxs,
+    const TensorList& swk_axs,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t L,
+    int64_t N,
+    const Tensor& special_mod_start,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  (void)workspace;
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  const int length = (curr_limbs + sizeP);
+  const int prime_gap = L - curr_limbs;
+  const int B = static_cast<int>(swk_bxs.size());
+  TORCH_INTERNAL_ASSERT(B > 0, "swk_bxs must not be empty");
+  TORCH_INTERNAL_ASSERT(swk_axs.size() == swk_bxs.size(), "swk bx/ax list size mismatch");
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == B, "innerproduct_pairwise expects input batch == key batch");
+  TORCH_INTERNAL_ASSERT(out_bx.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_ax.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes() == out_ax.sizes());
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[0] == B);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[1] == length);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[2] == N);
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.numel() == B,
+      "special_mod_start numel must equal swk list size");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.device() == in.device(),
+      "special_mod_start must be on same device as in");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.scalar_type() == at::kLong,
+      "special_mod_start must be int64");
+
+  for (int b = 0; b < B; ++b) {
+    TORCH_CHECK(swk_bxs[b].dim() == 3, "swk bx tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_axs[b].dim() == 3, "swk ax tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_bxs[b].sizes() == swk_axs[b].sizes(), "swk bx/ax tensor shape mismatch");
+    const auto sizes = swk_bxs[b].sizes();
+    TORCH_CHECK(sizes[0] >= beta, "swk beta dimension must be >= ceil(curr_limbs / alpha)");
+    TORCH_CHECK(sizes[2] == N, "swk last dimension must equal N");
+  }
+
+  auto* out_bx_ptr = out_bx.data_ptr<uint64_t>();
+  auto* out_ax_ptr = out_ax.data_ptr<uint64_t>();
+  const auto* in_ptr = in.data_ptr<uint64_t>();
+  const auto* special_mod_start_ptr = special_mod_start.data_ptr<int64_t>();
+  const auto* primes_ptr = primes.data_ptr<uint64_t>();
+  const auto* barret_ratio_ptr = barret_ratio.data_ptr<uint64_t>();
+  const auto* barret_k_ptr = barret_k.data_ptr<uint64_t>();
+  auto gridDim = dim3(N / BLOCK_SIZE, length);
+  auto blockDim = BLOCK_SIZE;
+  auto stream = at::cuda::getCurrentCUDAStream();
+  DISPATCH_BATCH_FUNC(B, DISPATCH_SUM_REDUCE_PAIRWISE_CASE);
 }
 
 Tensor innerproduct_broadcast_cipher_cuda(
@@ -822,7 +1031,7 @@ Tensor innerproduct_broadcast_cipher_cuda(
   return out;
 }
 
-std::vector<Tensor> innerproduct_broadcast_cipher_pair_cuda(
+std::vector<Tensor> innerproduct_broadcast_cuda(
     const Tensor& in,
     TensorList swk_bxs,
     TensorList swk_axs,
@@ -836,7 +1045,7 @@ std::vector<Tensor> innerproduct_broadcast_cipher_pair_cuda(
     const Tensor& barret_k,
     const Tensor& workspace) {
   TORCH_INTERNAL_ASSERT(in.dim() == 3);
-  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher_pair expects batch == 1");
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast expects batch == 1");
   const int64_t batch = swk_bxs.size();
 
   int64_t sizeQP = primes.numel();
@@ -844,7 +1053,7 @@ std::vector<Tensor> innerproduct_broadcast_cipher_pair_cuda(
   auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
   auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
-  innerproduct_broadcast_cipher_pair_template(
+  innerproduct_broadcast_template(
       out_bx,
       out_ax,
       in,
@@ -862,313 +1071,39 @@ std::vector<Tensor> innerproduct_broadcast_cipher_pair_cuda(
   return {out_bx, out_ax};
 }
 
-static void innerproduct_template(
-    Tensor& out,
+std::vector<Tensor> innerproduct_pairwise_cuda(
     const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
+    TensorList swk_bxs,
+    TensorList swk_axs,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t special_mod_start,
     int64_t L,
     int64_t N,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  const int beta = int((curr_limbs + alpha - 1) / alpha);
-  int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - L;
-  const int length = (curr_limbs + sizeP);
-  const int mult_length = (special_mod_start + sizeP);
-  TORCH_CHECK(special_mod_start >= curr_limbs, "special_mod_start must be >= curr_limbs");
-  TORCH_CHECK(special_mod_start <= L, "special_mod_start must be <= L");
-  TORCH_CHECK(bx.dim() == 3, "bx must be [beta, mult_length, N]");
-  TORCH_CHECK(ax.dim() == 3, "ax must be [beta, mult_length, N]");
-  TORCH_CHECK(bx.sizes() == ax.sizes(), "bx and ax must have identical shapes");
-  TORCH_CHECK(
-      bx.size(0) >= beta,
-      "bx/ax beta dimension must be >= ceil(curr_limbs / alpha)");
-  TORCH_CHECK(
-      bx.size(1) >= mult_length,
-      "bx/ax modulus dimension must be >= special_mod_start + sizeP");
-  TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
-  const int prime_gap = L - curr_limbs;
-
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
-  auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
-  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
-  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-  auto barret_ratio_ptr =
-      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-  auto barret_k_ptr =
-      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-  auto gridDim = dim3(N / BLOCK_SIZE, length);
-  auto blockDim = BLOCK_SIZE;
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  if (out.sizes()[1] == 1) {
-    fhe::sum_reduce_fused_broadcast_key_batch1<<<gridDim, blockDim, 0, stream>>>(
-        out_ax_ptr,
-        out_bx_ptr,
-        in_ptr,
-        ax_ptr,
-        bx_ptr,
-        N,
-        length,
-        mult_length,
-        beta,
-        curr_limbs,
-        prime_gap,
-        special_mod_start,
-        primes_ptr,
-        barret_k_ptr,
-        barret_ratio_ptr);
-  } else {
-    cudaFuncSetAttribute(
-        fhe::sum_reduce_fused_broadcast_key,
-        cudaFuncAttributeMaxDynamicSharedMemorySize,
-        BLOCK_SIZE * beta * sizeof(uint64_t) * 2);
-
-    fhe::sum_reduce_fused_broadcast_key<<<
-        gridDim,
-        blockDim,
-        BLOCK_SIZE * beta * sizeof(uint64_t) * 2,
-        stream>>>(
-        out_ax_ptr,
-        out_bx_ptr,
-        in_ptr,
-        ax_ptr,
-        bx_ptr,
-        N,
-        out.sizes()[1],
-        length,
-        mult_length,
-        beta,
-        curr_limbs,
-        prime_gap,
-        special_mod_start,
-        primes_ptr,
-        barret_k_ptr,
-        barret_ratio_ptr);
-  }
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-static void innerproduct_write_pair_template(
-    Tensor& out_bx,
-    Tensor& out_ax,
-    const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t special_mod_start,
-    int64_t L,
-    int64_t N,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  const int beta = int((curr_limbs + alpha - 1) / alpha);
-  int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - L;
-  const int length = (curr_limbs + sizeP);
-  const int mult_length = (special_mod_start + sizeP);
-  TORCH_CHECK(special_mod_start >= curr_limbs, "special_mod_start must be >= curr_limbs");
-  TORCH_CHECK(special_mod_start <= L, "special_mod_start must be <= L");
-  TORCH_CHECK(out_bx.dim() == 3, "out_bx must be [batch, length, N]");
-  TORCH_CHECK(out_ax.dim() == 3, "out_ax must be [batch, length, N]");
-  TORCH_CHECK(out_bx.sizes() == out_ax.sizes(), "out_bx and out_ax must have identical shapes");
-  TORCH_CHECK(out_bx.size(1) == length, "innerproduct_write_pair output limb dimension mismatch");
-  TORCH_CHECK(out_bx.size(2) == N, "innerproduct_write_pair output N mismatch");
-  TORCH_CHECK(bx.dim() == 3, "bx must be [beta, mult_length, N]");
-  TORCH_CHECK(ax.dim() == 3, "ax must be [beta, mult_length, N]");
-  TORCH_CHECK(bx.sizes() == ax.sizes(), "bx and ax must have identical shapes");
-  TORCH_CHECK(
-      bx.size(0) >= beta,
-      "bx/ax beta dimension must be >= ceil(curr_limbs / alpha)");
-  TORCH_CHECK(
-      bx.size(1) >= mult_length,
-      "bx/ax modulus dimension must be >= special_mod_start + sizeP");
-  TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
-  const int prime_gap = L - curr_limbs;
-
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
-  auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out_bx.data_ptr<uint64_t>());
-  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out_ax.data_ptr<uint64_t>());
-  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-  auto barret_ratio_ptr =
-      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-  auto barret_k_ptr =
-      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-  auto gridDim = dim3(N / BLOCK_SIZE, length);
-  auto blockDim = BLOCK_SIZE;
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  if (out_bx.sizes()[0] == 1) {
-    fhe::sum_reduce_fused_broadcast_key_batch1<<<gridDim, blockDim, 0, stream>>>(
-        out_ax_ptr,
-        out_bx_ptr,
-        in_ptr,
-        ax_ptr,
-        bx_ptr,
-        N,
-        length,
-        mult_length,
-        beta,
-        curr_limbs,
-        prime_gap,
-        special_mod_start,
-        primes_ptr,
-        barret_k_ptr,
-        barret_ratio_ptr);
-  } else {
-    cudaFuncSetAttribute(
-        fhe::sum_reduce_fused_broadcast_key,
-        cudaFuncAttributeMaxDynamicSharedMemorySize,
-        BLOCK_SIZE * beta * sizeof(uint64_t) * 2);
-
-    fhe::sum_reduce_fused_broadcast_key<<<
-        gridDim,
-        blockDim,
-        BLOCK_SIZE * beta * sizeof(uint64_t) * 2,
-        stream>>>(
-        out_ax_ptr,
-        out_bx_ptr,
-        in_ptr,
-        ax_ptr,
-        bx_ptr,
-        N,
-        out_bx.sizes()[0],
-        length,
-        mult_length,
-        beta,
-        curr_limbs,
-        prime_gap,
-        special_mod_start,
-        primes_ptr,
-        barret_k_ptr,
-        barret_ratio_ptr);
-  }
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-std::vector<Tensor> innerproduct_cuda(
-    const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t special_mod_start,
-    int64_t L,
-    int64_t N,
+    const Tensor& special_mod_start,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
   TORCH_INTERNAL_ASSERT(in.dim() == 3);
-  auto batch = in.sizes()[0];
+  const int64_t batch = swk_bxs.size();
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == batch, "innerproduct_pairwise expects input batch == key batch");
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
   auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
   auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
-  innerproduct_write_pair_template(
+  innerproduct_pairwise_template(
       out_bx,
       out_ax,
       in,
-      bx,
-      ax,
+      swk_bxs,
+      swk_axs,
       curr_limbs,
       alpha,
-      special_mod_start,
       L,
       N,
-      primes,
-      barret_ratio,
-      barret_k,
-      workspace);
-  return {out_bx, out_ax};
-}
-
-Tensor innerproduct_write_cuda(
-    const Tensor& out,
-    const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t special_mod_start,
-    int64_t L,
-    int64_t N,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  TORCH_INTERNAL_ASSERT(out.dim() == 4);
-  TORCH_INTERNAL_ASSERT(out.sizes()[0] == 2, "innerproduct_write expects out num_cv == 2");
-  int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - L;
-  TORCH_INTERNAL_ASSERT(
-      out.sizes()[2] == curr_limbs + sizeP,
-      "innerproduct_write output limb dimension mismatch");
-  TORCH_INTERNAL_ASSERT(out.sizes()[3] == N, "innerproduct_write output N mismatch");
-
-  auto mutable_out = out;
-  innerproduct_template(
-      mutable_out,
-      in,
-      bx,
-      ax,
-      curr_limbs,
-      alpha,
       special_mod_start,
-      L,
-      N,
-      primes,
-      barret_ratio,
-      barret_k,
-      workspace);
-  return out;
-}
-
-std::vector<Tensor> innerproduct_write_pair_cuda(
-    const Tensor& out_bx,
-    const Tensor& out_ax,
-    const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t special_mod_start,
-    int64_t L,
-    int64_t N,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-
-  auto mutable_out_bx = out_bx;
-  auto mutable_out_ax = out_ax;
-  innerproduct_write_pair_template(
-      mutable_out_bx,
-      mutable_out_ax,
-      in,
-      bx,
-      ax,
-      curr_limbs,
-      alpha,
-      special_mod_start,
-      L,
-      N,
       primes,
       barret_ratio,
       barret_k,

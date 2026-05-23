@@ -299,7 +299,7 @@ def _build_mul_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe_co
     rhs = bench.make_cipher(openfhe_context, crypto_context, rhs_vals, case.cur_limbs, case.slots)
 
     def op():
-        return fhe.homo_mul(lhs, rhs, crypto_context)
+        return fhe.homo_mul_relin(lhs, rhs, crypto_context)
 
     probe = op()
     return op, {
@@ -394,7 +394,7 @@ def _build_square_target(case: bench.BenchmarkCase, crypto_context: Any, openfhe
     cipher = bench.make_cipher(openfhe_context, crypto_context, bench.vector_values(case.slots), case.cur_limbs, case.slots)
 
     def op():
-        return fhe.homo_square(cipher, crypto_context)
+        return fhe.homo_mul_relin(cipher, cipher, crypto_context)
 
     probe = op()
     return op, {

@@ -116,8 +116,8 @@ def _profile_wrappers(rt, records, block_records, op_records, state):
                 "stage": state.get("stage"),
                 "block": state.get("block"),
                 "L0": int(L0),
-                "in_limbs": int(cipher.cur_limbs),
-                "out_limbs": int(result.cur_limbs),
+                "in_limbs": int(cipher.state.cur_limbs),
+                "out_limbs": int(result.state.cur_limbs),
                 "seconds": time.perf_counter() - start,
             }
         )

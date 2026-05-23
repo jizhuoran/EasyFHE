@@ -6,8 +6,6 @@ import easyfhe as torch
 
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
-from easyfhe.fhe.ops import plaintext
-from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import rotation
 from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 
@@ -40,8 +38,8 @@ def _add_named_scalar_double_preserve_noise(ciphertext, name, constants, cryptoC
     constant = constants._scalar_value(name)
     encoded = constants.encoded_scalars(
         name,
-        ciphertext.cur_limbs,
-        ciphertext.noise_deg,
+        ciphertext.state.cur_limbs,
+        ciphertext.state.noise_deg,
         cryptoContext,
         absolute=True,
     )[0]
@@ -61,13 +59,7 @@ def _batch_prefix(cipher, size):
 
 
 def _grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext):
-    cv = F.cipher_grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext)
-    return cipher_batch.cipher_like(
-        list(cv),
-        scaling_factor=cipher_batch.scaling_factor * cryptoContext.scale_at(cipher_batch.cur_limbs),
-        noise_deg=cipher_batch.noise_deg + 1,
-        batch_size=int(scalars.shape[0]),
-    )
+    return arithmetic.grouped_scalar_weighted_acc(cipher_batch, scalars, cryptoContext)
 
 
 def _truncated_degree(coefficients, size):
@@ -119,9 +111,9 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
                 c = alignment.align_to(
                     c,
                     alignment.CipherState(
-                        target.cur_limbs,
-                        target.noise_deg,
-                        target.scaling_factor,
+                        target.state.cur_limbs,
+                        target.state.noise_deg,
+                        target.state.scaling_factor,
                     ),
                     cryptoContext,
                 )
@@ -149,7 +141,7 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         if not spec.root and _uses_manual_rescale(cryptoContext):
             s = alignment.align_to(
                 s,
-                alignment.CipherState(s.cur_limbs - 1, 1, None),
+                alignment.CipherState(s.state.cur_limbs - 1, 1, None),
                 cryptoContext,
             )
         return s
@@ -180,7 +172,7 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
             scalar_rows.append(
                 constants.encoded_scalars(
                     names,
-                    batch.cur_limbs,
+                    batch.state.cur_limbs,
                     1,
                     cryptoContext,
                     mode="double",
@@ -194,7 +186,7 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
         if tails.batch_size > 1 and tails.cv[0].dim() == 2:
             tails = tails.cipher_like(
                 [
-                    component.reshape(len(requests), tails.cur_limbs, cryptoContext.N)
+                    component.reshape(len(requests), tails.state.cur_limbs, cryptoContext.N)
                     for component in tails.cv
                 ],
                 batch_size=len(requests),
@@ -215,14 +207,31 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
 
 
 def _add_chebyshev_constant(value, coefficients, cryptoContext):
-    return plaintext.homo_add_scalar_double(value, coefficients[0] / 2, cryptoContext)
+    return arithmetic.homo_add_scalar_double(
+        value,
+        _encoded_double_scalar(coefficients[0] / 2, value.state.cur_limbs, cryptoContext),
+        cryptoContext,
+    )
+
+
+def _encoded_double_scalar(value, cur_limbs, cryptoContext):
+    return arithmetic._encode_double_for_scalar_op(value, cur_limbs, cryptoContext)
+
+
+def _encoded_int_scalar(value, cur_limbs, cryptoContext):
+    return arithmetic._encode_int_for_scalar_op(value, cur_limbs, cryptoContext)
+
+
+def _encoded_mul_rescale_scalar(in0, in1, value, cryptoContext):
+    target, _ = alignment.plan_mul_alignment(in0, in1, cryptoContext)
+    return _encoded_double_scalar(value, target.cur_limbs - 1, cryptoContext)
 
 
 def _chebyshev_basis(x, a, b, k, cryptoContext):
     T = [_scale_input_to_unit_interval(x, a, b, cryptoContext)]
     for order in range(2, k + 1):
         if order & 1:
-            value = arithmetic.homo_mul_rescale(
+            value = arithmetic.homo_mul_relin_rescale_postop(
                 T[order // 2 - 1],
                 T[(order + 1) // 2 - 1],
                 cryptoContext,
@@ -230,31 +239,36 @@ def _chebyshev_basis(x, a, b, k, cryptoContext):
                 sub=T[0],
             )
         else:
-            value = arithmetic.homo_mul_rescale(
+            value = arithmetic.homo_mul_relin_rescale_postop(
                 T[order // 2 - 1],
                 T[(order + 1) // 2 - 1],
                 cryptoContext,
                 apply_double=True,
-                scalar=-1.0,
+                scalar=_encoded_mul_rescale_scalar(
+                    T[order // 2 - 1],
+                    T[(order + 1) // 2 - 1],
+                    -1.0,
+                    cryptoContext,
+                ),
             )
         T.append(value)
 
     final = T[-1]
-    # min_limbs = min(item.cur_limbs for item in T)
-    # if final.cur_limbs != min_limbs:
+    # min_limbs = min(item.state.cur_limbs for item in T)
+    # if final.state.cur_limbs != min_limbs:
     #     raise ValueError(
     #         f"Chebyshev basis target is not the lowest limb state: "
-    #         f"final={final.cur_limbs}, min={min_limbs}"
+    #         f"final={final.state.cur_limbs}, min={min_limbs}"
     #     )
-    # if any(item.noise_deg != 1 for item in T):
+    # if any(item.state.noise_deg != 1 for item in T):
     #     raise ValueError(
     #         "Chebyshev basis expects all terms to have noise_deg=1 before packing: "
-    #         f"{[item.noise_deg for item in T]}"
+    #         f"{[item.state.noise_deg for item in T]}"
     #     )
     items = tuple(
         alignment.align_to(
             item,
-            alignment.CipherState(final.cur_limbs, final.noise_deg, final.scaling_factor),
+            alignment.CipherState(final.state.cur_limbs, final.state.noise_deg, final.state.scaling_factor),
             cryptoContext,
         )
         for item in T
@@ -266,12 +280,20 @@ def _scale_input_to_unit_interval(x, a, b, cryptoContext):
     y = x
     alpha = 2 / (b - a)
     if not math.isclose(alpha, 1.0):
-        y = plaintext.homo_mul_scalar_double(x, alpha, cryptoContext)
+        y = arithmetic.homo_mul_scalar_double(
+            x,
+            _encoded_double_scalar(alpha, x.state.cur_limbs, cryptoContext),
+            cryptoContext,
+        )
         y = alignment.rescale_one_level(y, cryptoContext)
 
     beta = 2 * a / (b - a)
     if not math.isclose(beta, -1.0):
-        y = plaintext.homo_add_scalar_double(y, -1.0 - beta, cryptoContext)
+        y = arithmetic.homo_add_scalar_double(
+            y,
+            _encoded_double_scalar(-1.0 - beta, y.state.cur_limbs, cryptoContext),
+            cryptoContext,
+        )
     return y
 
 
@@ -279,12 +301,12 @@ def _chebyshev_doubling_basis(Tk, m, cryptoContext):
     # T2[i] = T_{k * 2^i}(x). T2[0] is T_k(x).
     T2 = [Tk]
     for _ in range(1, m):
-        value = arithmetic.homo_mul_rescale(
+        value = arithmetic.homo_mul_relin_rescale_postop(
             T2[-1],
             T2[-1],
             cryptoContext,
             apply_double=True,
-            scalar=-1.0,
+            scalar=_encoded_mul_rescale_scalar(T2[-1], T2[-1], -1.0, cryptoContext),
         )
         T2.append(value)
     return T2
@@ -294,7 +316,7 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
     # Computes T_{k * (2^m - 1)}(x) from T_k, T_{2k}, ...
     value = T2[0]
     for doubled in T2[1:]:
-        value = arithmetic.homo_mul_rescale(
+        value = arithmetic.homo_mul_relin_rescale_postop(
             value,
             doubled,
             cryptoContext,
@@ -315,7 +337,11 @@ def _q_highest_term(node: ChebyshevPSNode, Tk, cryptoContext, *, root, has_tail)
 
     coefficient = node.divqr_q[-1] + (1.1 if has_tail else 0.0)
     scalar = 2 ** math.floor(math.log2(coefficient))
-    return plaintext.homo_mul_scalar_int(Tk, scalar, cryptoContext)
+    return arithmetic.homo_mul_scalar_int(
+        Tk,
+        _encoded_int_scalar(scalar, Tk.state.cur_limbs, cryptoContext),
+        cryptoContext,
+    )
 
 
 def _read_ref(ref, small_values, node_values):
@@ -334,11 +360,15 @@ def _eval_combine_spec(spec, small_values, node_values, T2, cryptoContext):
     base = T2[spec.base_idx]
 
     if c is None:
-        result = plaintext.homo_add_scalar_double(base, spec.node.divcs_q[0] / 2, cryptoContext)
+        result = arithmetic.homo_add_scalar_double(
+            base,
+            _encoded_double_scalar(spec.node.divcs_q[0] / 2, base.state.cur_limbs, cryptoContext),
+            cryptoContext,
+        )
     else:
         result = arithmetic.homo_add(base, c, cryptoContext)
 
-    return arithmetic.homo_mul_rescale(result, q, cryptoContext, apply_double=False, add=s)
+    return arithmetic.homo_mul_relin_rescale_postop(result, q, cryptoContext, apply_double=False, add=s)
 
 
 # note: EvalChebyshevSeriesPS in ckksrns-advancedshe.cpp
@@ -375,18 +405,23 @@ def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstra
     plan = get_bootstrap_approx_plan(cryptoContext.secretKeyDist)
 
     for j in range(1, plan.double_angle_iterations + 1):
-        ciphertext = arithmetic.homo_mul_rescale(
+        ciphertext = arithmetic.homo_mul_relin_rescale_postop(
             ciphertext,
             ciphertext,
             cryptoContext,
             apply_double=True,
-            scalar=constants._scalar_value(bootstrap_plan.double_angle_scalar_names[j - 1]),
+            scalar=_encoded_mul_rescale_scalar(
+                ciphertext,
+                ciphertext,
+                constants._scalar_value(bootstrap_plan.double_angle_scalar_names[j - 1]),
+                cryptoContext,
+            ),
         )
     return ciphertext
 
 
 def eval_bootstrap_approx_mod(ciphertext, cryptoContext, constants, bootstrap_plan):
     ciphertext = eval_bootstrapping_chebyshev(ciphertext, -1, 1, cryptoContext, constants, bootstrap_plan)
-    if not _uses_manual_rescale(cryptoContext):
+    if not _uses_manual_rescale(cryptoContext) and ciphertext.state.noise_deg > 1:
         ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan)

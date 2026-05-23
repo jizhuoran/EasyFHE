@@ -5,25 +5,6 @@ from ..ciphertext import Cipher
 from . import kernels as F
 
 
-def _preserve_component_capacity(template, active):
-    if not hasattr(template, "shape") or not hasattr(active, "shape"):
-        return active
-    if active.dim() < 2 or template.dim() < 2:
-        return active
-    if active.shape[-1] != template.shape[-1]:
-        return active
-    capacity = int(template.shape[-2])
-    active_limbs = int(active.shape[-2])
-    if active_limbs > capacity:
-        return active
-    desired_shape = tuple(active.shape[:-2]) + (capacity, active.shape[-1])
-    if tuple(active.shape) == desired_shape:
-        return active
-    out = active.new_empty(desired_shape)
-    out[..., :active_limbs, :] = active
-    return out
-
-
 def homo_rotate(cipher, offset, cryptoContext, addend=None):
     if offset == 0:
         if addend is not None:
@@ -34,7 +15,7 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
     if addend is not None:
         if addend.is_ext:
             raise ValueError("homo_rotate(addend=...): expected a non-ext addend")
-        if addend.cur_limbs != cipher.cur_limbs:
+        if addend.state.cur_limbs != cipher.state.cur_limbs:
             raise ValueError(
                 "homo_rotate(addend=...): addend cur_limbs must match the rotated cipher"
             )
@@ -45,7 +26,7 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
     cv = F.cv_hrot(
         cipher.cv[0],
         cipher.cv[1],
-        cipher.cur_limbs,
+        cipher.state.cur_limbs,
         special_mod_start,
         swk_bx,
         swk_ax,
@@ -54,10 +35,7 @@ def homo_rotate(cipher, offset, cryptoContext, addend=None):
         add_bx=None if addend is None else addend.cv[0],
         add_ax=None if addend is None else addend.cv[1],
     )
-    return cipher.cipher_like([
-        _preserve_component_capacity(cipher.cv[0], cv[0]),
-        _preserve_component_capacity(cipher.cv[1], cv[1]),
-    ])
+    return cipher.cipher_like(list(cv))
 
 
 def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
@@ -65,7 +43,7 @@ def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
 
 
 def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count, cryptoContext, *, strategy):
-    from .fused import fused_grouped_pairwise_mac
+    from .arithmetic import grouped_pairwise_mac
 
     if strategy == "normal":
         baby_rotations = fast_rotate(cipher, baby_offsets, cryptoContext)
@@ -74,7 +52,7 @@ def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count,
     else:
         raise ValueError(f"unknown hoisted_mac_sum strategy: {strategy}")
 
-    partial_sums = fused_grouped_pairwise_mac(
+    partial_sums = grouped_pairwise_mac(
         baby_rotations.cipher_like(baby_rotations.cv, slots=plaintexts.slots),
         plaintexts,
         giant_count,
@@ -93,24 +71,28 @@ def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy="normal"):
         if not ciphers:
             raise ValueError("giant_rotate_sum: expected at least one cipher")
 
+    if strategy not in ("normal", "ext_normal", "ext_double_hoist"):
+        raise ValueError(f"unknown giant_rotate_sum strategy: {strategy}")
+
+    if offset == 0:
+        result = _cipher_sum(ciphers, cryptoContext)
+        return moddown_from_ext(result, cryptoContext) if result.is_ext else result
+
     if strategy == "ext_double_hoist":
         ciphers = _unpack_cipher_batch(ciphers) if isinstance(ciphers, Cipher) else ciphers
-        offsets = tuple(index * offset for index in range(len(ciphers)))
-        return _double_hoist_rotate_sum(ciphers, offsets, cryptoContext)
+        return _double_hoist_rotate_sum(ciphers, offset, cryptoContext)
     if strategy == "ext_normal":
         if isinstance(ciphers, Cipher):
             ciphers = moddown_from_ext(ciphers, cryptoContext)
         else:
             ciphers = tuple(moddown_from_ext(cipher, cryptoContext) for cipher in ciphers)
-    elif strategy != "normal":
-        raise ValueError(f"unknown giant_rotate_sum strategy: {strategy}")
     return _normal_giant_rotate_sum(ciphers, offset, cryptoContext)
 
 
 def moddown_from_ext(cipher, cryptoContext):
     if not cipher.is_ext:
         raise ValueError("moddown_from_ext: expected ext cipher")
-    cv = [F.cv_moddown(cv, cipher.cur_limbs, cryptoContext) for cv in cipher.cv]
+    cv = [F.cv_moddown(cv, cipher.state.cur_limbs, cryptoContext) for cv in cipher.cv]
     return cipher.cipher_like(cv, is_ext=False)
 
 
@@ -124,7 +106,7 @@ def _fast_rotate_impl(cipher, offsets, cryptoContext, *, output_ext):
 
     batch_size = len(offsets)
     digits = _modup_to_ext(cipher, cryptoContext)
-    active_limbs = cipher.cur_limbs + cryptoContext.K
+    active_limbs = cipher.state.cur_limbs + cryptoContext.K
     key_product_bx, key_product_ax, product_indices = _fast_rotate_key_products(
         digits, offsets, active_limbs, cryptoContext
     )
@@ -163,14 +145,14 @@ def _finalize_fast_rotate_ext(
     batch_size,
     cryptoContext,
 ):
-    cv = F.cv_fast_rotate_ext_batch_finalize_compact_pair(
+    cv = F.cv_finalize_fast_rotation_ext(
         key_product_bx,
         key_product_ax,
         product_indices,
         cipher.cv[0],
         cipher.cv[1],
         precomp_maps,
-        cipher.cur_limbs,
+        cipher.state.cur_limbs,
         active_limbs,
         cryptoContext,
     )
@@ -186,25 +168,19 @@ def _finalize_fast_rotate_q(
     batch_size,
     cryptoContext,
 ):
-    moddown_bx = F.cv_moddown(key_product_bx, cipher.cur_limbs, cryptoContext)
-    moddown_ax = F.cv_moddown(key_product_ax, cipher.cur_limbs, cryptoContext)
-    cv = F.cv_fast_rotate_batch_finalize_compact_pair(
+    moddown_bx = F.cv_moddown(key_product_bx, cipher.state.cur_limbs, cryptoContext)
+    moddown_ax = F.cv_moddown(key_product_ax, cipher.state.cur_limbs, cryptoContext)
+    cv = F.cv_finalize_fast_rotation_q(
         moddown_bx,
         moddown_ax,
         product_indices,
         cipher.cv[0],
         cipher.cv[1],
         precomp_maps,
-        cipher.cur_limbs,
+        cipher.state.cur_limbs,
         cryptoContext,
     )
-    return cipher.cipher_like(
-        [
-            _preserve_component_capacity(cipher.cv[0], cv[0]),
-            _preserve_component_capacity(cipher.cv[1], cv[1]),
-        ],
-        batch_size=batch_size,
-    )
+    return cipher.cipher_like(list(cv), batch_size=batch_size)
 
 
 def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
@@ -218,9 +194,9 @@ def _fast_rotate_key_products(digits, offsets, active_limbs, cryptoContext):
         return empty, empty, product_indices
 
     swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(tuple(nonzero_offsets), cryptoContext)
-    key_product_bx, key_product_ax = F.cv_innerproduct_broadcast_cipher_pair(
+    key_product_bx, key_product_ax = F.cv_innerproduct_broadcast(
         digits.cv[0],
-        digits.cur_limbs,
+        digits.state.cur_limbs,
         starts,
         swk_bxs,
         swk_axs,
@@ -302,18 +278,23 @@ def _normalize_offsets(offsets):
 
 
 def _normal_giant_rotate_sum(ciphers, offset, cryptoContext):
-    from .arithmetic import homo_add
-
     ciphers = _unpack_cipher_batch(ciphers) if isinstance(ciphers, Cipher) else tuple(ciphers)
     if len(ciphers) == 1:
         return ciphers[0]
 
     result = ciphers[-1]
     for index in range(len(ciphers) - 2, -1, -1):
-        if offset != 0:
-            result = homo_rotate(result, offset, cryptoContext, addend=ciphers[index])
-        else:
-            result = homo_add(ciphers[index], result, cryptoContext)
+        result = homo_rotate(result, offset, cryptoContext, addend=ciphers[index])
+    return result
+
+
+def _cipher_sum(ciphers, cryptoContext):
+    from .arithmetic import homo_add
+
+    ciphers = _unpack_cipher_batch(ciphers) if isinstance(ciphers, Cipher) else tuple(ciphers)
+    result = ciphers[0]
+    for cipher in ciphers[1:]:
+        result = homo_add(result, cipher, cryptoContext)
     return result
 
 
@@ -331,30 +312,52 @@ def _unpack_cipher_batch(cipher):
     )
 
 
-def _double_hoist_rotate_sum(inner_exts, offsets, cryptoContext):
+def _double_hoist_rotate_sum(inner_exts, step_offset, cryptoContext):
     from .arithmetic import homo_add
-    from .slots import extract_cv
 
-    first_acc = None
-    outer_ext = None
-    for inner_ext, offset in zip(inner_exts, offsets):
-        if offset == 0:
-            inner_ext_cv0 = extract_cv(inner_ext, 0, cryptoContext)
-            first = moddown_from_ext(inner_ext_cv0, cryptoContext)
-            c1_ext = extract_cv(inner_ext, 1, cryptoContext, append_zeros=True)
-        else:
-            inner = moddown_from_ext(inner_ext, cryptoContext)
-            inner_cv0 = extract_cv(inner, 0, cryptoContext)
-            first = _cipher_automorphism(inner_cv0, offset, cryptoContext)
-            inner_digits = _modup_to_ext(inner, cryptoContext)
-            c1_ext = _fast_rotate_key_contribution_ext(inner_digits, offset, cryptoContext)
+    inner_exts = tuple(inner_exts)
+    if not inner_exts:
+        raise ValueError("double_hoist_rotate_sum: expected at least one cipher")
 
-        first_acc = first if first_acc is None else homo_add(first_acc, first, cryptoContext)
-        outer_ext = c1_ext if outer_ext is None else homo_add(outer_ext, c1_ext, cryptoContext)
+    result_ext = inner_exts[0]
+    step_offset = int(step_offset)
+    if len(inner_exts) > 1:
+        rotated_exts = _double_hoist_rotated_ext_batch(
+            inner_exts[1:],
+            step_offset,
+            cryptoContext,
+        )
+        result_ext = _cipher_sum((result_ext, *_unpack_cipher_batch(rotated_exts)), cryptoContext)
 
-    outer = moddown_from_ext(outer_ext, cryptoContext)
-    first_full_cv = extract_cv(first_acc, 0, cryptoContext, append_zeros=True)
-    return homo_add(outer, first_full_cv, cryptoContext)
+    return moddown_from_ext(result_ext, cryptoContext)
+
+
+def _double_hoist_rotated_ext_batch(inner_exts, step_offset, cryptoContext):
+    inner_exts = tuple(inner_exts)
+    inner = moddown_from_ext(_pack_ciphers(inner_exts), cryptoContext)
+    inner_digits = _modup_to_ext(inner, cryptoContext)
+    offsets = tuple(index * int(step_offset) for index in range(1, len(inner_exts) + 1))
+    active_limbs = inner.state.cur_limbs + cryptoContext.K
+    swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(offsets, cryptoContext)
+    key_product_bx, key_product_ax = F.cv_innerproduct_pairwise(
+        inner_digits.cv[0],
+        inner_digits.state.cur_limbs,
+        starts,
+        swk_bxs,
+        swk_axs,
+        cryptoContext,
+    )
+    precomp_maps = _precompute_auto_maps(offsets, cryptoContext)
+    return _finalize_fast_rotate_ext(
+        inner,
+        key_product_bx,
+        key_product_ax,
+        _range_product_indices(len(inner_exts), cryptoContext),
+        precomp_maps,
+        active_limbs,
+        len(inner_exts),
+        cryptoContext,
+    )
 
 
 def _modup_to_ext(cipher, cryptoContext):
@@ -362,30 +365,7 @@ def _modup_to_ext(cipher, cryptoContext):
         raise ValueError("modup_to_ext: expected non-ext cipher")
     if len(cipher.cv) < 2:
         raise ValueError(f"modup_to_ext: expected at least two components, got {len(cipher.cv)}")
-    return cipher.cipher_like([F.cv_modup(cipher.cv[1], cipher.cur_limbs, cryptoContext)], is_ext=True)
-
-
-def _fast_rotate_key_contribution_ext(digits, offset, cryptoContext):
-    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
-    result = digits.cipher_like(
-        list(F.cv_innerproduct(
-            digits.cv[0],
-            curr_limbs=digits.cur_limbs,
-            special_mod_start=special_mod_start,
-            context=cryptoContext,
-            swk_bx=swk_bx,
-            swk_ax=swk_ax,
-        )),
-        is_ext=True,
-    )
-    return _cipher_automorphism(result, offset, cryptoContext)
-
-
-def _cipher_automorphism(cipher, offset, cryptoContext):
-    norm_index = _norm_rot_index(offset, cryptoContext)
-    limbs = cipher.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
-    cv = [F.cv_automorphism_transform(cv, limbs, norm_index, cryptoContext) for cv in cipher.cv]
-    return cipher.cipher_like(cv)
+    return cipher.cipher_like([F.cv_modup(cipher.cv[1], cipher.state.cur_limbs, cryptoContext)], is_ext=True)
 
 
 def _precompute_auto_maps(offsets, cryptoContext):
@@ -407,6 +387,21 @@ def _precompute_auto_maps(offsets, cryptoContext):
     precomp_maps = torch.stack(maps, dim=0)
     cache[key] = precomp_maps
     return cache[key]
+
+
+def _range_product_indices(count, cryptoContext):
+    cache = getattr(cryptoContext, "_range_product_indices_cache", None)
+    if cache is None:
+        cache = {}
+        cryptoContext._range_product_indices_cache = cache
+    key = (int(count), cryptoContext.device)
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    indices = torch.from_numpy(np.arange(int(count), dtype=np.int64)).to(cryptoContext.device)
+    cache[key] = indices
+    return indices
 
 
 def _zero_precompute_auto_map(cryptoContext):
@@ -431,7 +426,7 @@ def _pack_ciphers(ciphers):
     for idx, cipher in enumerate(ciphers):
         if len(cipher.cv) != len(first.cv):
             raise ValueError(f"cipher batch component count mismatch at index {idx}")
-        for field in ("cur_limbs", "scaling_factor", "noise_deg", "slots", "is_ext"):
+        for field in ("state", "slots", "is_ext"):
             if getattr(cipher, field) != getattr(first, field):
                 raise ValueError(
                     f"cipher batch {field} mismatch at index {idx}: "

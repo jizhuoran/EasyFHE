@@ -147,11 +147,6 @@ enum class SecretKeyDistLocal {
     SparseTernary,
 };
 
-enum class ScalingTechniqueLocal {
-    FixedManual,
-    Unsupported,
-};
-
 enum class RandomModeLocal {
     Sequential,
     ParallelDeterministic,
@@ -274,12 +269,6 @@ SecretKeyDistLocal ParseSecretKeyDist(const std::string& value) {
     if (value == "SPARSE_TERNARY")
         return SecretKeyDistLocal::SparseTernary;
     throw std::invalid_argument("unsupported secret_key_dist: " + value);
-}
-
-ScalingTechniqueLocal ParseScalingTechnique(const std::string& value) {
-    if (value == "FIXEDMANUAL")
-        return ScalingTechniqueLocal::FixedManual;
-    return ScalingTechniqueLocal::Unsupported;
 }
 
 RandomModeLocal ParseRandomMode(const std::string& value) {
@@ -1895,7 +1884,6 @@ struct NativeSamplerRequest {
     int64_t firstMod = 60;
     int64_t dnum = 3;
     std::string secretKeyDist = "SPARSE_TERNARY";
-    std::string scalingTechnique = "FIXEDMANUAL";
     bool includeEvalMultKey = false;
     bool includeEncryptTrace = true;
     int64_t scaleDeg = 1;
@@ -1923,10 +1911,6 @@ NativeCkksParams GenerateNativeCkksParams(const NativeSamplerRequest& request, F
     const auto dcrtBits         = static_cast<uint32_t>(request.dcrtBits);
     const auto firstMod         = static_cast<uint32_t>(request.firstMod);
     const auto dnum             = static_cast<uint32_t>(request.dnum);
-    const auto scalingTechnique = ParseScalingTechnique(request.scalingTechnique);
-    if (scalingTechnique != ScalingTechniqueLocal::FixedManual) {
-        throw std::runtime_error("native CKKS params currently support FIXEDMANUAL only");
-    }
 
     const uint32_t ringDim    = uint32_t{1} << logN;
     const uint32_t cyclOrder  = 2 * ringDim;
@@ -2974,7 +2958,6 @@ NativeSamplerRequest MakeRequest(int64_t logN,
                                  int64_t firstMod,
                                  int64_t dnum,
                                  std::string_view secretKeyDist,
-                                 std::string_view scalingTechnique,
                                  bool includeEvalMultKey,
                                  bool includeEncryptTrace,
                                  int64_t scaleDeg,
@@ -2998,7 +2981,6 @@ NativeSamplerRequest MakeRequest(int64_t logN,
     request.firstMod = firstMod;
     request.dnum = dnum;
     request.secretKeyDist = std::string(secretKeyDist);
-    request.scalingTechnique = std::string(scalingTechnique);
     request.includeEvalMultKey = includeEvalMultKey;
     request.includeEncryptTrace = includeEncryptTrace;
     request.scaleDeg = scaleDeg;
@@ -3024,7 +3006,6 @@ std::vector<Tensor> fhe_native_sample_ckks_cpu(const Tensor& values,
                                                int64_t firstMod,
                                                int64_t dnum,
                                                std::string_view secretKeyDist,
-                                               std::string_view scalingTechnique,
                                                bool includeEvalMultKey,
                                                bool includeEncryptTrace,
                                                int64_t scaleDeg,
@@ -3039,7 +3020,6 @@ std::vector<Tensor> fhe_native_sample_ckks_cpu(const Tensor& values,
                                firstMod,
                                dnum,
                                secretKeyDist,
-                               scalingTechnique,
                                includeEvalMultKey,
                                includeEncryptTrace,
                                scaleDeg,
@@ -3064,7 +3044,6 @@ std::vector<Tensor> fhe_native_sample_rotation_keys_cpu(const Tensor& secretKey,
                                                         int64_t firstMod,
                                                         int64_t dnum,
                                                         std::string_view secretKeyDist,
-                                                        std::string_view scalingTechnique,
                                                         at::IntArrayRef rotationIndices,
                                                         at::IntArrayRef rotationGroupOffsets,
                                                         at::IntArrayRef rotationTrimAutoIndices,
@@ -3079,7 +3058,6 @@ std::vector<Tensor> fhe_native_sample_rotation_keys_cpu(const Tensor& secretKey,
                                firstMod,
                                dnum,
                                secretKeyDist,
-                               scalingTechnique,
                                false,
                                false,
                                1,

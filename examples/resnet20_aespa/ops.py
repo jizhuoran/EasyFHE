@@ -17,7 +17,7 @@ __all__ = [
 
 
 def _read_kernel_group(name, cipher, scale, cryptoContext, weights, is_ext=False, cache=True):
-    level = cryptoContext.L - cipher.cur_limbs
+    level = cryptoContext.L - cipher.state.cur_limbs
     return weights.plaintext(
         name,
         level,
@@ -51,8 +51,8 @@ def _trace_op_state(cryptoContext, op, cipher, **extra):
         return
     record = {
         "op": op,
-        "cur_limbs": int(cipher.cur_limbs),
-        "noise_deg": int(cipher.noise_deg),
+        "cur_limbs": int(cipher.state.cur_limbs),
+        "noise_deg": int(cipher.state.noise_deg),
         "slots": int(cipher.slots),
         "is_ext": bool(cipher.is_ext),
     }
@@ -151,7 +151,7 @@ def _initial_conv3x3(input, kernel_group, img_width, padding, rot_offset, scale,
     input = reduce_noise_to_one(input, cryptoContext)
     rotations = fhe.fast_rotate(input, _conv3x3_offsets(img_width, padding), cryptoContext)
     plaintexts = _read_kernel_group(kernel_group, rotations, scale, cryptoContext, weights)
-    partial_sums = fhe.fused_grouped_pairwise_mac(
+    partial_sums = fhe.grouped_pairwise_mac(
         rotations,
         plaintexts,
         _conv3x3_channel_count(plaintexts),
@@ -175,7 +175,7 @@ def _initial_conv_postprocess(partial_sum, cryptoContext, weights):
         partial_sum,
         weights.plaintext(
             f"mask_from_to_0_1024_{partial_sum.slots}",
-            cryptoContext.L - partial_sum.cur_limbs,
+            cryptoContext.L - partial_sum.state.cur_limbs,
             partial_sum.slots,
             cryptoContext,
         ),
@@ -236,14 +236,14 @@ def pointwise_conv(input, kernel_group, bias_key, rot_offset, scale, cryptoConte
     input = reduce_noise_to_one(input, cryptoContext)
     plaintexts = _read_kernel_group(kernel_group, input, scale, cryptoContext, weights)
     input_batch = input.cipher_like(input.cv, batch_size=1)
-    partial_sums = fhe.fused_grouped_pairwise_mac(input_batch, plaintexts, plaintexts.batch_size, cryptoContext)
+    partial_sums = fhe.grouped_pairwise_mac(input_batch, plaintexts, plaintexts.batch_size, cryptoContext)
     finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
     finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
 
     finalsum = rescale_one_level(finalsum, cryptoContext)
     bias = weights.plaintext(
         bias_key,
-        cryptoContext.L - finalsum.cur_limbs,
+        cryptoContext.L - finalsum.state.cur_limbs,
         finalsum.slots,
         cryptoContext,
         _resolve_scalar(scale, weights),
@@ -270,13 +270,13 @@ def pointwise_conv_sx(input, kernel_group, bias_key, copy_per_cipher, channels, 
         weights,
     )
     input_batch = input.cipher_like(input.cv, batch_size=1)
-    partial_sums = fhe.fused_grouped_pairwise_mac(input_batch, plaintexts, loop_size, cryptoContext)
+    partial_sums = fhe.grouped_pairwise_mac(input_batch, plaintexts, loop_size, cryptoContext)
     finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy="normal")
     finalsum = fhe.homo_rotate(finalsum, loop_size * rot_offset, cryptoContext)
     finalsum = rescale_one_level(finalsum, cryptoContext)
     bias = weights.plaintext(
         bias_key,
-        cryptoContext.L - finalsum.cur_limbs,
+        cryptoContext.L - finalsum.state.cur_limbs,
         finalsum.slots,
         cryptoContext,
         _resolve_scalar(scale, weights),
@@ -288,13 +288,13 @@ def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
     x = reduce_noise_to_one(x, cryptoContext)
     n1 = weights.plaintext(
         f"{prefix}-n1",
-        cryptoContext.L - x.cur_limbs,
+        cryptoContext.L - x.state.cur_limbs,
         x.slots,
         cryptoContext,
         _resolve_scalar(scale, weights),
     )
     shifted = fhe.homo_add_pt(x, n1, cryptoContext)
-    out_cur_limbs = shifted.cur_limbs - 1
+    out_cur_limbs = shifted.state.cur_limbs - 1
     n2 = weights.plaintext(
         f"{prefix}-n2",
         cryptoContext.L - out_cur_limbs,
@@ -302,19 +302,19 @@ def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
         cryptoContext,
         _resolve_scalar(scale, weights),
     )
-    return fhe.homo_mul_rescale_addpt(shifted, shifted, n2, cryptoContext)
+    return fhe.homo_mul_relin_rescale_add_pt(shifted, shifted, n2, cryptoContext)
 
 
 def aespa_add_shortcut(conv_out, shortcut, prefix, cryptoContext, weights, scale=1):
     if cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual":
         shortcut = fhe.align_to(
             shortcut,
-            fhe.CipherState(shortcut.cur_limbs - (shortcut.cur_limbs - conv_out.cur_limbs), shortcut.noise_deg),
+            fhe.CipherState(shortcut.state.cur_limbs - (shortcut.state.cur_limbs - conv_out.state.cur_limbs), shortcut.state.noise_deg),
             cryptoContext,
         )
     a2 = weights.plaintext(
         f"{prefix}-A2",
-        cryptoContext.L - shortcut.cur_limbs,
+        cryptoContext.L - shortcut.state.cur_limbs,
         shortcut.slots,
         cryptoContext,
         _resolve_scalar(scale, weights),

@@ -3162,12 +3162,12 @@
   variants: function
 # Below are operations for FHE
 
-- func: fhe_native_sample_ckks(Tensor values, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, str scaling_technique, bool include_eval_mult_key=False, bool include_encrypt_trace=True, int scale_deg=1, int level=0, int slots=0, str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
+- func: fhe_native_sample_ckks(Tensor values, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, bool include_eval_mult_key=False, bool include_encrypt_trace=True, int scale_deg=1, int level=0, int slots=0, str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CPU: fhe_native_sample_ckks_cpu
 
-- func: fhe_native_sample_rotation_keys(Tensor secret_key, Tensor secret_key_coeff, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, str scaling_technique, int[] rotation_indices=[], int[] rotation_group_offsets=[], int[] rotation_trim_auto_indices=[], int[] rotation_trim_limbs=[], str rotation_random_mode="fresh", str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
+- func: fhe_native_sample_rotation_keys(Tensor secret_key, Tensor secret_key_coeff, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, int[] rotation_indices=[], int[] rotation_group_offsets=[], int[] rotation_trim_auto_indices=[], int[] rotation_trim_limbs=[], str rotation_random_mode="fresh", str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CPU: fhe_native_sample_rotation_keys_cpu
@@ -3308,47 +3308,41 @@
     CPU: moddown_cpu
     CUDA: moddown_cuda
 
-- func: innerproduct(Tensor in_modup, *, Tensor bx, Tensor ax, int curr_limbs, int alpha, int special_mod_start, int L, int N, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor[]
+- func: innerproduct_broadcast(Tensor in_modup, *, Tensor[] bx, Tensor[] ax, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: innerproduct_cuda
+    CUDA: innerproduct_broadcast_cuda
 
-- func: innerproduct_broadcast_cipher_pair(Tensor in_modup, *, Tensor[] bx, Tensor[] ax, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor[]
+- func: innerproduct_pairwise(Tensor in_modup, *, Tensor[] bx, Tensor[] ax, int curr_limbs, int alpha, int L, int N, Tensor special_mod_start, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor workspace) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: innerproduct_broadcast_cipher_pair_cuda
+    CUDA: innerproduct_pairwise_cuda
 
-- func: drop_last_element_and_scale(Tensor input, *, int curr_limbs, int l, int L, int N, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
+- func: rescale_one_level(Tensor input, *, int curr_limbs, int l, int L, int N, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup) -> Tensor
   device_check: NoCheck
   dispatch:
-    CPU: drop_last_element_scale_cpu
-    CUDA: drop_last_element_scale_cuda
+    CPU: rescale_one_level_cpu
+    CUDA: rescale_one_level_cuda
 
-- func: automorphism_transform(Tensor self, *, int l, int N, Tensor precomp_vec) -> Tensor
+- func: finalize_fast_rotation_ext(Tensor key_product_bx, Tensor key_product_ax, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, Tensor p_mod_q, Tensor barret_ratio, Tensor barret_k, int curr_limbs, int active_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CPU: automorphism_transform_cpu
-    CUDA: automorphism_transform_cuda
+    CUDA: finalize_fast_rotation_ext_cuda
 
-- func: fast_rotate_ext_batch_finalize_compact_pair(Tensor key_product_bx, Tensor key_product_ax, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, Tensor p_mod_q, Tensor barret_ratio, Tensor barret_k, int curr_limbs, int active_limbs, int N) -> Tensor[]
+- func: finalize_fast_rotation_q(Tensor moddown_bx, Tensor moddown_ax, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: fast_rotate_ext_batch_finalize_compact_pair_cuda
-
-- func: fast_rotate_batch_finalize_compact_pair(Tensor moddown_bx, Tensor moddown_ax, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, int curr_limbs, int N) -> Tensor[]
-  device_check: NoCheck
-  dispatch:
-    CUDA: fast_rotate_batch_finalize_compact_pair_cuda
+    CUDA: finalize_fast_rotation_q_cuda
 
 - func: hrot(Tensor c0, Tensor c1, Tensor bx, Tensor ax, Tensor inverse_precomp_map, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor primes, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor inner_workspace, Tensor? add_bx=None, Tensor? add_ax=None) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CUDA: hrot_cuda
 
-- func: hmul_double_rescale(Tensor c0, Tensor c1, Tensor d0, Tensor d1, Tensor bx, Tensor ax, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, int old_prime, Tensor primes, Tensor q_mu, Tensor barret_ratio, Tensor barret_k, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor switch_modulus_map, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor inner_workspace, bool apply_double=False, int post_op=0, Tensor? post_c0=None, Tensor? post_c1=None, Tensor? post_scalar=None) -> Tensor[]
+- func: hmul_relin_rescale(Tensor c0, Tensor c1, Tensor d0, Tensor d1, Tensor bx, Tensor ax, *, int curr_limbs, int special_mod_start, int L, int beta, int N, int alpha, int old_prime, Tensor primes, Tensor q_mu, Tensor barret_ratio, Tensor barret_k, Tensor hat_inverse_vec_modup, Tensor hat_inverse_vec_shoup_modup, Tensor prod_q_i_mod_q_j_modup, Tensor hat_inverse_vec_moddown, Tensor hat_inverse_vec_shoup_moddown, Tensor prod_q_i_mod_q_j_moddown, Tensor prod_inv_moddown, Tensor prod_inv_shoup_moddown, Tensor power_of_roots_shoup, Tensor power_of_roots, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor switch_modulus_map, Tensor qlql_inv_mod_ql_div_ql_mod_q, Tensor qlql_inv_mod_ql_div_ql_mod_q_shoup, Tensor q_inv_mod_q, Tensor q_inv_mod_q_shoup, Tensor inner_workspace, bool apply_double=False, int post_op=0, Tensor? post_c0=None, Tensor? post_c1=None, Tensor? post_scalar=None) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CUDA: hmul_double_rescale_cuda
+    CUDA: hmul_relin_rescale_cuda
 
 - func: mod_raise(Tensor input, *, int N, int L0, int old_prime, Tensor primes, Tensor switch_modulus_map, Tensor inverse_power_of_roots_div_two, Tensor inverse_scaled_power_of_roots_div_two, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
   device_check: NoCheck
@@ -3399,18 +3393,6 @@
   dispatch:
     CPU: batched_pairwise_mac_cpu
     CUDA: batched_pairwise_mac_cuda
-
-- func: fused_broadcast_mac(Tensor cipher_bx, Tensor cipher_ax, Tensor plaintext, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_plain, int curr_limbs, int N) -> Tensor[]
-  device_check: NoCheck
-  dispatch:
-    CPU: fused_broadcast_mac_cpu
-    CUDA: fused_broadcast_mac_cuda
-
-- func: scalar_weighted_acc(Tensor cipher_bx, Tensor cipher_ax, Tensor scalars, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_cipher, int curr_limbs, int N) -> Tensor[]
-  device_check: NoCheck
-  dispatch:
-    CPU: scalar_weighted_acc_cpu
-    CUDA: scalar_weighted_acc_cuda
 
 - func: grouped_scalar_weighted_acc(Tensor cipher_bx, Tensor cipher_ax, Tensor scalars, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_groups, int num_cipher, int curr_limbs, int N, int strategy) -> Tensor[]
   device_check: NoCheck

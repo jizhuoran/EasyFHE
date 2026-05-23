@@ -5,16 +5,14 @@ import numpy as np
 import pytest
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ciphertext import Cipher
-from easyfhe.fhe.ops import fused, kernels, rotation
+from easyfhe.fhe.ciphertext import Cipher, CipherState
+from easyfhe.fhe.ops import arithmetic, kernels, rotation
 
 
 def _cipher(name, cv_count=2):
     cipher = Cipher(
         [torch.zeros((2, 4), dtype=torch.uint64) for _ in range(cv_count)],
-        cur_limbs=2,
-        scaling_factor=1.0,
-        noise_deg=1,
+        CipherState(2, 1, 1.0),
         slots=4,
         is_ext=False,
     )
@@ -22,32 +20,7 @@ def _cipher(name, cv_count=2):
     return cipher
 
 
-def test_fused_broadcast_mac_requires_plaintext_batch(monkeypatch):
-    seen = {}
-
-    def fake_native(cipher, plaintexts, context):
-        seen["cipher_batch_size"] = cipher.batch_size
-        seen["plaintext_batch_size"] = plaintexts.batch_size
-        seen["cipher_shape"] = tuple(cipher.cv[0].shape)
-        seen["plaintext_shape"] = tuple(plaintexts.cv[0].shape)
-        return [cipher.cv[0], cipher.cv[1]]
-
-    monkeypatch.setattr(fused.F, "cipher_fused_broadcast_mac", fake_native)
-    plaintexts = rotation._pack_ciphers(
-        [_cipher("a", cv_count=1), _cipher("b", cv_count=1), _cipher("c", cv_count=1)]
-    )
-
-    fused.fused_broadcast_mac(_cipher("x"), plaintexts, SimpleNamespace())
-
-    assert seen == {
-        "cipher_batch_size": 1,
-        "plaintext_batch_size": 3,
-        "cipher_shape": (1, 2, 4),
-        "plaintext_shape": (3, 2, 4),
-    }
-
-
-def test_fused_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeypatch):
+def test_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeypatch):
     seen = {}
 
     def fake_native(ciphers, plaintexts, groups, context):
@@ -56,11 +29,11 @@ def test_fused_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeyp
         seen["plaintext_batch_size"] = plaintexts.batch_size
         return [torch.zeros((groups, 2, 4), dtype=torch.uint64) for _ in range(2)]
 
-    monkeypatch.setattr(fused.F, "cipher_fused_grouped_pairwise_mac", fake_native)
+    monkeypatch.setattr(arithmetic.F, "cipher_grouped_pairwise_mac", fake_native)
     ciphers = rotation._pack_ciphers([_cipher("a"), _cipher("b")])
     plaintexts = rotation._pack_ciphers([_cipher("x", cv_count=1), _cipher("y", cv_count=1)])
 
-    result = fhe.fused_grouped_pairwise_mac(ciphers, plaintexts, 1, SimpleNamespace())
+    result = fhe.grouped_pairwise_mac(ciphers, plaintexts, 1, SimpleNamespace())
 
     assert seen == {
         "groups": 1,
@@ -71,7 +44,7 @@ def test_fused_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeyp
     assert tuple(result.cv[0].shape) == (1, 2, 4)
 
 
-def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
+def test_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
     seen = {}
 
     def fake_native(ciphers, plaintexts, groups, context):
@@ -80,7 +53,7 @@ def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
         seen["plaintext_batch_size"] = plaintexts.batch_size
         return [torch.zeros((groups, 2, 4), dtype=torch.uint64) for _ in range(2)]
 
-    monkeypatch.setattr(fused.F, "cipher_fused_grouped_pairwise_mac", fake_native)
+    monkeypatch.setattr(arithmetic.F, "cipher_grouped_pairwise_mac", fake_native)
     ciphers = rotation._pack_ciphers([_cipher("a"), _cipher("b")])
     plaintexts = rotation._pack_ciphers([
         _cipher("x0", cv_count=1),
@@ -89,7 +62,7 @@ def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
         _cipher("y1", cv_count=1),
     ])
 
-    result = fhe.fused_grouped_pairwise_mac(ciphers, plaintexts, 2, SimpleNamespace())
+    result = fhe.grouped_pairwise_mac(ciphers, plaintexts, 2, SimpleNamespace())
 
     assert seen == {
         "groups": 2,
@@ -100,9 +73,9 @@ def test_fused_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
     assert tuple(result.cv[0].shape) == (2, 2, 4)
 
 
-def test_fused_grouped_pairwise_mac_rejects_lists():
+def test_grouped_pairwise_mac_rejects_lists():
     with pytest.raises(TypeError, match="expected a batched Cipher"):
-        fhe.fused_grouped_pairwise_mac(
+        fhe.grouped_pairwise_mac(
             [_cipher("a"), _cipher("b")],
             [_cipher("x", cv_count=1), _cipher("y", cv_count=1)],
             1,
@@ -110,9 +83,9 @@ def test_fused_grouped_pairwise_mac_rejects_lists():
         )
 
 
-def test_fused_grouped_pairwise_mac_group_one_rejects_mismatched_batch_lengths():
+def test_grouped_pairwise_mac_group_one_rejects_mismatched_batch_lengths():
     with pytest.raises(ValueError, match="plaintext batch size must equal groups"):
-        fhe.fused_grouped_pairwise_mac(
+        fhe.grouped_pairwise_mac(
             rotation._pack_ciphers([_cipher("a"), _cipher("b")]),
             rotation._pack_ciphers([_cipher("x", cv_count=1)]),
             1,
@@ -120,9 +93,9 @@ def test_fused_grouped_pairwise_mac_group_one_rejects_mismatched_batch_lengths()
         )
 
 
-def test_fused_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
+def test_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
     with pytest.raises(ValueError, match="plaintext batch size must equal groups"):
-        fhe.fused_grouped_pairwise_mac(
+        fhe.grouped_pairwise_mac(
             rotation._pack_ciphers([_cipher("a"), _cipher("b")]),
             rotation._pack_ciphers([
                 _cipher("x0", cv_count=1),
@@ -134,7 +107,7 @@ def test_fused_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
         )
 
 
-def test_scalar_weighted_acc_matches_scalar_mul_add_loop():
+def test_grouped_scalar_weighted_acc_matches_scalar_mul_add_loop():
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=6, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
@@ -165,15 +138,13 @@ def test_scalar_weighted_acc_matches_scalar_mul_add_loop():
     )
     cipher = Cipher(
         cv,
-        cur_limbs=cur_limbs,
-        scaling_factor=1.0,
-        noise_deg=1,
+        CipherState(cur_limbs, 1, 1.0),
         slots=ctx.N // 2,
         is_ext=False,
         batch_size=batch_size,
     )
 
-    actual = kernels.cipher_scalar_weighted_acc(cipher, scalars, ctx)
+    actual = fhe.grouped_scalar_weighted_acc(cipher, scalars.unsqueeze(0), ctx)
     expected = []
     for component in cipher.cv:
         acc = None
@@ -188,4 +159,6 @@ def test_scalar_weighted_acc_matches_scalar_mul_add_loop():
             acc = term if acc is None else kernels.cv_add(acc, term, ctx.moduliQ, cur_limbs)
         expected.append(acc)
 
-    assert all(np.array_equal(a.numpy(), e.numpy()) for a, e in zip(actual, expected))
+    assert actual.batch_size == 1
+    assert actual.state == CipherState(cur_limbs, 2, ctx.scale_at(cur_limbs))
+    assert all(np.array_equal(a.numpy(), e.numpy()) for a, e in zip(actual.cv, expected))

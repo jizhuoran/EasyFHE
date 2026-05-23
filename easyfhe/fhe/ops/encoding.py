@@ -4,7 +4,7 @@ from functools import lru_cache
 import numpy as np
 import easyfhe as torch
 
-from ..ciphertext import Plaintext
+from ..ciphertext import CipherState, Plaintext
 from . import kernels as F
 
 MAX_ENCODED_BITS = 61
@@ -137,7 +137,13 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
         is_ext,
         cryptoContext,
     )
-    return Plaintext([pt_encode], cur_limbs, scaling_factor, 1, slots, is_ext, batch_size=batch_size)
+    return Plaintext(
+        [pt_encode],
+        CipherState(cur_limbs, 1, scaling_factor),
+        slots,
+        is_ext,
+        batch_size=batch_size,
+    )
 
 
 def _raw_rows(raw_values):

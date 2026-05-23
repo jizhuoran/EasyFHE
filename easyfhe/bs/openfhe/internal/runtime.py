@@ -3,7 +3,6 @@ import math
 from easyfhe.fhe.ops import kernels as F
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
-from easyfhe.fhe.ops import plaintext
 from easyfhe.fhe.ops import rotation
 from . import approx as bootstrap_approx
 
@@ -23,7 +22,7 @@ def coeffs_slots_conversion(ciphertext, transform_plan, constants, bootstrap_pla
 
         plaintext_batch = constants.plaintext(
             step.plaintext_name,
-            cryptoContext.L - result.cur_limbs,
+            cryptoContext.L - result.state.cur_limbs,
             step.plaintext_slots,
             cryptoContext,
             is_ext=is_ext,
@@ -74,12 +73,12 @@ def _mod_raise(cipher, L0, cryptoContext):
         )
         for cv in cipher.cv
     ]
-    return cipher.cipher_like(cv, L0)
+    return cipher.cipher_like(cv, state=cipher.state.replace(cur_limbs=L0))
 
 
 def _mul_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
-    F.cv_mul_by_monomial(cipher.cv[0], cipher.cur_limbs, monomial_degree, cryptoContext)
-    F.cv_mul_by_monomial(cipher.cv[1], cipher.cur_limbs, monomial_degree, cryptoContext)
+    F.cv_mul_by_monomial(cipher.cv[0], cipher.state.cur_limbs, monomial_degree, cryptoContext)
+    F.cv_mul_by_monomial(cipher.cv[1], cipher.state.cur_limbs, monomial_degree, cryptoContext)
     return cipher
 
 
@@ -94,21 +93,25 @@ def _raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
     correction_scale = bootstrap_constants._scalar_value("correction_scale")
     result = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
 
-    result = plaintext.homo_mul_scalar_double(result, correction_scale, cryptoContext)
+    result = arithmetic.homo_mul_scalar_double(
+        result,
+        arithmetic._encode_double_for_scalar_op(correction_scale, result.state.cur_limbs, cryptoContext),
+        cryptoContext,
+    )
     result = alignment.rescale_one_level(result, cryptoContext)
 
     result = _mod_raise(result, L0, cryptoContext)
     scalar = bootstrap_constants.encoded_scalars(
-        "constant_eval_mult", result.cur_limbs, 1, cryptoContext, mode="double"
+        "constant_eval_mult", result.state.cur_limbs, 1, cryptoContext, mode="double"
     )[0]
-    return plaintext.homo_mul_scalar_double(result, scalar, cryptoContext)
+    return arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
 
 
 def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
     scalar = bootstrap_constants.encoded_scalars(
-        "post_scalar", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
+        "post_scalar", ciphertext.state.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
-    return plaintext.homo_mul_scalar_int_inplace(
+    return arithmetic.homo_mul_scalar_int_inplace(
         ciphertext,
         scalar,
         cryptoContext,
@@ -117,9 +120,9 @@ def _scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
 
 def _scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
     scalar = bootstrap_constants.encoded_scalars(
-        "cor_factor", ciphertext.cur_limbs, 0, cryptoContext, mode="int"
+        "cor_factor", ciphertext.state.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
-    return plaintext.homo_mul_scalar_int_inplace(
+    return arithmetic.homo_mul_scalar_int_inplace(
         ciphertext,
         scalar,
         cryptoContext,
@@ -136,7 +139,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
 
     conjugate = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
     imag = arithmetic.homo_sub(encoded, conjugate, cryptoContext)
-    real = arithmetic.homo_add(encoded, conjugate, cryptoContext, out=conjugate)
+    real = arithmetic.homo_add(encoded, conjugate, cryptoContext)
     imag = _mul_by_monomial_inplace(imag, 3 * cryptoContext.M // 4, cryptoContext)
 
     real = alignment.reduce_noise_to_one(real, cryptoContext)
@@ -146,7 +149,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
     imag = _eval_bootstrap_approx(imag, cryptoContext, bootstrap_constants, bootstrap_plan)
 
     imag = _mul_by_monomial_inplace(imag, cryptoContext.M // 4, cryptoContext)
-    encoded = arithmetic.homo_add(real, imag, cryptoContext, out=real)
+    encoded = arithmetic.homo_add(real, imag, cryptoContext)
     encoded = _scale_after_approx(encoded, cryptoContext, bootstrap_constants)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
     return eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)

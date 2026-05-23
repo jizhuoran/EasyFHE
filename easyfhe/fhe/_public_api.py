@@ -8,6 +8,7 @@ unless they are re-exported here.
 
 CONTEXT_API = (
     "Cipher",
+    "CipherState",
     "CKKSContextSpec",
     "Client",
     "Context",
@@ -19,7 +20,6 @@ CONSTANT_API = (
 )
 
 ALIGNMENT_API = (
-    "CipherState",
     "align_to",
     "reduce_noise_to_one",
 )
@@ -33,10 +33,10 @@ BASIC_OPS_API = (
     "homo_add_scalar_double_inplace",
     "homo_add_scalar_int",
     "homo_add_scalar_int_inplace",
-    "homo_mul",
-    "homo_mul_rescale",
-    "homo_mul_rescale_addpt",
-    "homo_mul_rescale_addscalar",
+    "homo_mul_relin",
+    "homo_mul_relin_rescale_postop",
+    "homo_mul_relin_rescale_add_pt",
+    "homo_mul_relin_rescale_add_scalar",
     "homo_mul_pt",
     "homo_mul_pt_inplace",
     "homo_mul_scalar_double",
@@ -52,7 +52,8 @@ BASIC_OPS_API = (
 
 HOISTED_OPS_API = (
     "fast_rotate",
-    "fused_grouped_pairwise_mac",
+    "grouped_pairwise_mac",
+    "grouped_scalar_weighted_acc",
     "giant_rotate_sum",
     "hoisted_mac_sum",
     "moddown_from_ext",

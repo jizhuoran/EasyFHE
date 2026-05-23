@@ -139,7 +139,7 @@ def _run_timed_bootstrap(ctx, cipher, constants, plan, iters):
     for _ in range(iters):
         _sync(ctx)
         start = time.perf_counter()
-        out = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.cur_limbs)
+        out = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.state.cur_limbs)
         _sync(ctx)
         times.append(time.perf_counter() - start)
     return out, times
@@ -174,7 +174,7 @@ def main():
     print(f"device: {ctx.device}")
     print(f"bootstrap_strategy: {plan.strategy}")
     print(f"log_bs_slots: {log_bs_slots}")
-    print(f"cipher: cur_limbs={cipher.cur_limbs} noise_deg={cipher.noise_deg} slots={cipher.slots}")
+    print(f"cipher: cur_limbs={cipher.state.cur_limbs} noise_deg={cipher.state.noise_deg} slots={cipher.slots}")
     print(f"context setup: {_format_seconds(setup_seconds)}")
     print("constant/key setup:", ", ".join(_format_seconds(value) for value in constant_seconds))
     print("constant cache before:", _format_cache(constants))

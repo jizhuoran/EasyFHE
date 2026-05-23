@@ -3,8 +3,7 @@ import math
 import easyfhe as torch
 
 from ..ciphertext import Cipher
-from .arithmetic import homo_add
-from .plaintext import homo_mul_pt
+from .arithmetic import homo_add, homo_mul_pt
 from .rotation import homo_rotate
 
 

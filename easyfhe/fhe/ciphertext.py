@@ -1,9 +1,27 @@
+from dataclasses import dataclass
+from typing import Optional
+
+import numpy as np
+
+
+@dataclass(frozen=True)
+class CipherState:
+    cur_limbs: int
+    noise_deg: int
+    scaling_factor: Optional[float] = None
+
+    def replace(self, *, cur_limbs=None, noise_deg=None, scaling_factor=None):
+        return CipherState(
+            self.cur_limbs if cur_limbs is None else cur_limbs,
+            self.noise_deg if noise_deg is None else noise_deg,
+            self.scaling_factor if scaling_factor is None else scaling_factor,
+        )
+
+
 class Cipher:
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, batch_size=1):
+    def __init__(self, cv, state: CipherState, slots, is_ext, batch_size=1):
         self.cv = _normalize_components(cv)
-        self.cur_limbs = cur_limbs
-        self.scaling_factor = scaling_factor
-        self.noise_deg = noise_deg
+        self.state = state
         self.slots = slots
         self.is_ext = is_ext
         self.batch_size = int(batch_size)
@@ -11,18 +29,14 @@ class Cipher:
     def cipher_like(
         self,
         cv,
-        cur_limbs=None,
-        scaling_factor=None,
-        noise_deg=None,
+        state=None,
         slots=None,
         is_ext=None,
         batch_size=None,
     ):
         res = Cipher(
             cv,
-            self.cur_limbs if cur_limbs is None else cur_limbs,
-            self.scaling_factor if scaling_factor is None else scaling_factor,
-            self.noise_deg if noise_deg is None else noise_deg,
+            self.state if state is None else state,
             self.slots if slots is None else slots,
             self.is_ext if is_ext is None else is_ext,
             self.batch_size if batch_size is None else batch_size,
@@ -38,9 +52,7 @@ class Cipher:
         # Cipher-level mutation: callers may pass preallocated component tensors,
         # but not every higher-level path guarantees tensor-level zero allocation.
         self.cv = other.cv
-        self.cur_limbs = other.cur_limbs
-        self.scaling_factor = other.scaling_factor
-        self.noise_deg = other.noise_deg
+        self.state = other.state
         self.slots = other.slots
         self.is_ext = other.is_ext
         self.batch_size = int(other.batch_size)
@@ -65,13 +77,11 @@ class Cipher:
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):
             if hasattr(cv, "dim") and cv.dim() >= 2:
-                cv_repr = cv[..., : self.cur_limbs, :]
+                cv_repr = cv[..., : self.state.cur_limbs, :]
             else:
                 cv_repr = cv
             s += f"cv{i}={cv_repr},\n"
-        s += f"cur_limbs={self.cur_limbs}\n"
-        s += f"scaling_factor={self.scaling_factor}\n"
-        s += f"noise_deg={self.noise_deg}\n"
+        s += f"state={self.state}\n"
         s += f"slots={self.slots}\n"
         s += f"batch_size={self.batch_size}\n"
         s += ")"

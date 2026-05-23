@@ -1552,7 +1552,7 @@ static Tensor hmul_moddown_drop_last_scale(
   return out;
 }
 
-static std::vector<Tensor> hmul_double_rescale_impl(
+static std::vector<Tensor> hmul_relin_rescale_impl(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& d0,
@@ -1798,7 +1798,7 @@ static std::vector<Tensor> hmul_double_rescale_impl(
   return {result[0], result[1]};
 }
 
-std::vector<Tensor> hmul_double_rescale_cuda(
+std::vector<Tensor> hmul_relin_rescale_cuda(
     const Tensor& c0,
     const Tensor& c1,
     const Tensor& d0,
@@ -1839,7 +1839,7 @@ std::vector<Tensor> hmul_double_rescale_cuda(
     const std::optional<Tensor>& post_c0,
     const std::optional<Tensor>& post_c1,
     const std::optional<Tensor>& post_scalar) {
-  return hmul_double_rescale_impl(
+  return hmul_relin_rescale_impl(
       c0,
       c1,
       d0,

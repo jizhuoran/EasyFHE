@@ -1,38 +1,10 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/empty_like.h>
 
 #include <vector>
 
 #include "ATen/native/fhe/cuda/Utils.cuh"
-
-namespace fhe {
-template <size_t NUM_CV>
-__global__ void automorphism_transform_kernel(
-    uint64_t* __restrict__ out,
-    const uint64_t* __restrict__ in,
-    const size_t N,
-    const size_t LN,
-    const size_t BLN,
-    const int32_t* __restrict__ precomp_vec) {
-  const size_t coeff = blockIdx.x * BLOCK_SIZE + threadIdx.x;
-  const size_t limb = blockIdx.y;
-  const size_t batch = blockIdx.z;
-  if (coeff >= N) {
-    return;
-  }
-
-  const size_t src = static_cast<size_t>(precomp_vec[coeff]);
-  const size_t batch_offset = batch * LN;
-  const size_t limb_offset = limb * N;
-#pragma unroll
-  for (int cv = 0; cv < NUM_CV; ++cv) {
-    const size_t cv_offset = cv * BLN + batch_offset + limb_offset;
-    out[cv_offset + coeff] = in[cv_offset + src];
-  }
-}
-} // namespace fhe
 
 namespace fhe {
 __global__ void fast_rotate_ext_batch_finalize_kernel(
@@ -179,7 +151,7 @@ __global__ void fast_rotate_ext_batch_finalize_pair_kernel(
   out_ax[out_index] = key_product_ax[key_index];
 }
 
-__global__ void fast_rotate_ext_batch_finalize_compact_pair_kernel(
+__global__ void finalize_fast_rotation_ext_kernel(
     uint64_t* __restrict__ out_bx,
     uint64_t* __restrict__ out_ax,
     const uint64_t* __restrict__ key_product_bx,
@@ -195,7 +167,8 @@ __global__ void fast_rotate_ext_batch_finalize_compact_pair_kernel(
     const int64_t curr_limbs,
     const int64_t active_limbs,
     const int64_t N,
-    const int64_t batch) {
+    const int64_t batch,
+    const int64_t c_batch) {
   const int64_t j = blockIdx.x * BLOCK_SIZE + threadIdx.x;
   const int64_t limb = blockIdx.y;
   const int64_t b = blockIdx.z;
@@ -208,15 +181,16 @@ __global__ void fast_rotate_ext_batch_finalize_compact_pair_kernel(
   if (product_b < 0) {
     if (limb < curr_limbs) {
       const int64_t coeff_index = limb * N + j;
+      const int64_t c_offset = (c_batch == 1 ? 0 : b * curr_limbs * N);
       const auto prime = primes[limb];
       const auto p_mod_q_limb = p_mod_q[limb];
       out_bx[out_index] = barret_reduction_128_64(
-          mult_64_64_128(c0[coeff_index], p_mod_q_limb),
+          mult_64_64_128(c0[c_offset + coeff_index], p_mod_q_limb),
           prime,
           barret_ratios[limb],
           barret_ks[limb]);
       out_ax[out_index] = barret_reduction_128_64(
-          mult_64_64_128(c1[coeff_index], p_mod_q_limb),
+          mult_64_64_128(c1[c_offset + coeff_index], p_mod_q_limb),
           prime,
           barret_ratios[limb],
           barret_ks[limb]);
@@ -232,9 +206,10 @@ __global__ void fast_rotate_ext_batch_finalize_compact_pair_kernel(
   uint64_t bx = key_product_bx[key_index];
   if (limb < curr_limbs) {
     const int64_t coeff_index = limb * N + src;
+    const int64_t c_offset = (c_batch == 1 ? 0 : b * curr_limbs * N);
     const auto prime = primes[limb];
     const auto scaled_c0 = barret_reduction_128_64(
-        mult_64_64_128(c0[coeff_index], p_mod_q[limb]),
+        mult_64_64_128(c0[c_offset + coeff_index], p_mod_q[limb]),
         prime,
         barret_ratios[limb],
         barret_ks[limb]);
@@ -314,7 +289,7 @@ __global__ void fast_rotate_batch_finalize_compact_kernel(
   out_ax[out_index] = moddown_products[product_stride + product_index];
 }
 
-__global__ void fast_rotate_batch_finalize_compact_pair_kernel(
+__global__ void finalize_fast_rotation_q_kernel(
     uint64_t* __restrict__ out_bx,
     uint64_t* __restrict__ out_ax,
     const uint64_t* __restrict__ moddown_bx,
@@ -351,44 +326,6 @@ __global__ void fast_rotate_batch_finalize_compact_pair_kernel(
 } // namespace fhe
 
 namespace at::native {
-static void automorphism_transform_template(
-    Tensor& out,
-    const Tensor& in,
-    int64_t l,
-    int64_t N,
-    const Tensor& precomp_vec) {
-  auto* out_ptr = out.data_ptr<uint64_t>();
-  const auto* in_ptr = in.data_ptr<uint64_t>();
-  const auto* precomp_vec_ptr = precomp_vec.data_ptr<int32_t>();
-
-  const dim3 block(BLOCK_SIZE);
-  const dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, l, out.sizes()[0]);
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  const auto LN = in.sizes()[1] * N;
-  const auto BLN = in.sizes()[0] * LN;
-
-  fhe::automorphism_transform_kernel<1><<<grid, block, 0, stream>>>(
-      out_ptr, in_ptr, N, LN, BLN, precomp_vec_ptr);
-
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-Tensor automorphism_transform_cuda(
-    const Tensor& from,
-    int64_t l,
-    int64_t N,
-    const Tensor& precomp_vec) {
-  TORCH_INTERNAL_ASSERT(from.dim() == 3);
-  TORCH_INTERNAL_ASSERT(l <= from.sizes()[1]);
-  TORCH_INTERNAL_ASSERT(N == from.sizes()[2]);
-  TORCH_INTERNAL_ASSERT(precomp_vec.numel() == N);
-
-  Tensor out = at::empty_like(from);
-  automorphism_transform_template(out, from, l, N, precomp_vec);
-  return out;
-}
-
 std::vector<Tensor> fast_rotate_ext_batch_finalize_cuda(
     const Tensor& key_products,
     const Tensor& pc0,
@@ -558,7 +495,7 @@ std::vector<Tensor> fast_rotate_ext_batch_finalize_pair_cuda(
   return {out_bx, out_ax};
 }
 
-std::vector<Tensor> fast_rotate_ext_batch_finalize_compact_pair_cuda(
+std::vector<Tensor> finalize_fast_rotation_ext_cuda(
     const Tensor& key_product_bx,
     const Tensor& key_product_ax,
     const Tensor& product_indices,
@@ -579,8 +516,9 @@ std::vector<Tensor> fast_rotate_ext_batch_finalize_compact_pair_cuda(
   TORCH_INTERNAL_ASSERT(key_product_bx.sizes()[2] == N);
   TORCH_INTERNAL_ASSERT(product_indices.dim() == 1);
   TORCH_INTERNAL_ASSERT(product_indices.scalar_type() == at::kLong);
-  TORCH_INTERNAL_ASSERT(c0.dim() == 3 && c0.sizes()[0] == 1);
-  TORCH_INTERNAL_ASSERT(c1.dim() == 3 && c1.sizes()[0] == 1);
+  const auto batch = product_indices.sizes()[0];
+  TORCH_INTERNAL_ASSERT(c0.dim() == 3 && (c0.sizes()[0] == 1 || c0.sizes()[0] == batch));
+  TORCH_INTERNAL_ASSERT(c1.dim() == 3 && (c1.sizes()[0] == 1 || c1.sizes()[0] == batch));
   TORCH_INTERNAL_ASSERT(c0.sizes()[1] >= curr_limbs);
   TORCH_INTERNAL_ASSERT(c0.sizes()[2] == N);
   TORCH_INTERNAL_ASSERT(c1.sizes()[1] >= curr_limbs);
@@ -588,7 +526,6 @@ std::vector<Tensor> fast_rotate_ext_batch_finalize_compact_pair_cuda(
   TORCH_INTERNAL_ASSERT(precomp_maps.dim() == 2);
   TORCH_INTERNAL_ASSERT(precomp_maps.sizes()[1] == N);
 
-  const auto batch = product_indices.sizes()[0];
   TORCH_INTERNAL_ASSERT(precomp_maps.sizes()[0] == batch);
 
   auto out_bx = at::empty({batch, active_limbs, N}, key_product_bx.options());
@@ -598,7 +535,7 @@ std::vector<Tensor> fast_rotate_ext_batch_finalize_compact_pair_cuda(
   dim3 grid(N / BLOCK_SIZE, active_limbs, batch);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  fhe::fast_rotate_ext_batch_finalize_compact_pair_kernel<<<grid, block, 0, stream>>>(
+  fhe::finalize_fast_rotation_ext_kernel<<<grid, block, 0, stream>>>(
       out_bx.data_ptr<uint64_t>(),
       out_ax.data_ptr<uint64_t>(),
       key_product_bx.data_ptr<uint64_t>(),
@@ -614,7 +551,8 @@ std::vector<Tensor> fast_rotate_ext_batch_finalize_compact_pair_cuda(
       curr_limbs,
       active_limbs,
       N,
-      batch);
+      batch,
+      c0.sizes()[0]);
 
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   return {out_bx, out_ax};
@@ -720,7 +658,7 @@ std::vector<Tensor> fast_rotate_batch_finalize_compact_cuda(
   return {out_bx, out_ax};
 }
 
-std::vector<Tensor> fast_rotate_batch_finalize_compact_pair_cuda(
+std::vector<Tensor> finalize_fast_rotation_q_cuda(
     const Tensor& moddown_bx,
     const Tensor& moddown_ax,
     const Tensor& product_indices,
@@ -756,7 +694,7 @@ std::vector<Tensor> fast_rotate_batch_finalize_compact_pair_cuda(
   dim3 grid(N / BLOCK_SIZE, curr_limbs, batch);
   auto stream = at::cuda::getCurrentCUDAStream();
 
-  fhe::fast_rotate_batch_finalize_compact_pair_kernel<<<grid, block, 0, stream>>>(
+  fhe::finalize_fast_rotation_q_kernel<<<grid, block, 0, stream>>>(
       out_bx.data_ptr<uint64_t>(),
       out_ax.data_ptr<uint64_t>(),
       moddown_bx.data_ptr<uint64_t>(),
