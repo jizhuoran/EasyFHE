@@ -221,12 +221,14 @@ bs.depth(...)
 bs.plan_rot_keys(...)
 bs.generate(...)
 bs.bootstrap(...)
+bs.describe_plan(...)
 bs.BootstrapPlan
 ```
 
 `BootstrapPlan` is returned by `generate(...)` and passed back to
 `bootstrap(...)`. Treat it as an opaque plan object; application code should not
-depend on its internal fields.
+depend on its internal fields. Use `bs.describe_plan(plan)` when debugging the
+generated bootstrapping schedule.
 
 ## Non-API Internals
 

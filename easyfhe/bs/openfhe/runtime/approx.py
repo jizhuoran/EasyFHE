@@ -1,8 +1,4 @@
 import math
-from dataclasses import dataclass
-
-import numpy as np
-import easyfhe as torch
 
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
@@ -15,16 +11,8 @@ from ..generation.plan import (
     SPACE_NODE,
     SPACE_SMALL,
     ChebyshevPSNode,
-    degree,
     get_bootstrap_approx_plan,
 )
-
-
-@dataclass(frozen=True)
-class _SmallTailRequest:
-    spec: object
-    deg: int
-    scalar_path: tuple
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +137,7 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
 
 
 # ---------------------------------------------------------------------------
-# Small PS specs: C/Q/S tails over T1..Tk
+# Small PS specs: padded tail table plus C/Q/S finalization
 
 
 def _batch_prefix(cipher, size):
@@ -162,69 +150,16 @@ def _batch_prefix(cipher, size):
     )
 
 
-def _truncated_degree(coefficients, size):
-    truncated = np.copy(coefficients[:size])
-    truncated.resize(size, refcheck=False)
-    return degree(truncated)
-
-
-def _small_coefficients_and_path(spec):
-    node = spec.node
-    if spec.kind == KIND_C:
-        return node.divcs_q, (*spec.path, "c"), None
-    if spec.kind == KIND_Q:
-        return node.divqr_q, (*spec.path, "q"), node.k
-    if spec.kind == KIND_S:
-        return node.s2, (*spec.path, "s"), node.k
-    raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
-
-
-def _make_small_tail_request(spec, T_items, bootstrap_plan):
-    coefficients, scalar_path, size = _small_coefficients_and_path(spec)
-    deg = degree(coefficients) if size is None else _truncated_degree(coefficients, size)
-    if deg < 1:
-        return None, None
-    if spec.kind == KIND_C and deg == 1 and coefficients[1] == 1:
-        return None, T_items[0]
-
-    scalar_path = tuple(scalar_path)
-    names = bootstrap_plan.approx_scalar_names[scalar_path]
-    if len(names) != int(deg):
-        raise ValueError(
-            f"Chebyshev scalar metadata mismatch at {scalar_path}: "
-            f"got {len(names)}, expected {deg}"
-        )
-    return _SmallTailRequest(spec=spec, deg=int(deg), scalar_path=scalar_path), None
-
-
-def _collect_small_tail_requests(flat, T_items, bootstrap_plan):
-    tail_values = [None] * len(flat.small_specs)
-    grouped_requests = {}
-
-    for spec in flat.small_specs:
-        request, direct_tail = _make_small_tail_request(spec, T_items, bootstrap_plan)
-        if request is None:
-            tail_values[spec.out_idx] = direct_tail
-        else:
-            grouped_requests.setdefault(request.deg, []).append(request)
-
-    return tail_values, grouped_requests
-
-
-def _tail_scalars_for_requests(requests, batch, constants, cryptoContext, bootstrap_plan):
-    rows = []
-    for request in requests:
-        names = bootstrap_plan.approx_scalar_names[request.scalar_path]
-        rows.append(
-            constants.encoded_scalars(
-                names,
-                batch.state.cur_limbs,
-                1,
-                cryptoContext,
-                mode="double",
-            )
-        )
-    return torch.stack(rows, dim=0).contiguous()
+def _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan):
+    names = tuple(name for row in bootstrap_plan.approx_tail_scalar_names for name in row)
+    scalars = constants.encoded_scalars(
+        names,
+        batch.state.cur_limbs,
+        1,
+        cryptoContext,
+        mode="double",
+    )
+    return scalars.reshape(len(flat.tail_specs), flat.tail_max_deg, batch.state.cur_limbs).contiguous()
 
 
 def _normalize_grouped_tail_shape(tails, count, cryptoContext):
@@ -239,22 +174,23 @@ def _normalize_grouped_tail_shape(tails, count, cryptoContext):
     )
 
 
-def _eval_grouped_tail_requests(tail_values, grouped_requests, T_batch, cryptoContext, constants, bootstrap_plan):
-    for deg, requests in grouped_requests.items():
-        batch = _batch_prefix(T_batch, deg)
-        scalars = _tail_scalars_for_requests(
-            requests,
-            batch,
-            constants,
-            cryptoContext,
-            bootstrap_plan,
-        )
-        tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext)
-        tails = alignment.rescale_one_level(tails, cryptoContext)
-        tails = _normalize_grouped_tail_shape(tails, len(requests), cryptoContext)
+def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
+    if not flat.tail_specs:
+        return ()
+    batch = _batch_prefix(T_batch, flat.tail_max_deg)
+    scalars = _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan)
+    tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext)
+    tails = alignment.rescale_one_level(tails, cryptoContext)
+    tails = _normalize_grouped_tail_shape(tails, len(flat.tail_specs), cryptoContext)
+    return tuple(layout.cipher_batch_item(tails, index) for index in range(len(flat.tail_specs)))
 
-        for index, request in enumerate(requests):
-            tail_values[request.spec.out_idx] = layout.cipher_batch_item(tails, index)
+
+def _small_tail(spec, tail_values, T_items):
+    if spec.direct_t1:
+        return T_items[0]
+    if spec.tail_idx is None:
+        return None
+    return tail_values[spec.tail_idx]
 
 
 def _q_highest_term(node: ChebyshevPSNode, path, Tk, constants, bootstrap_plan, cryptoContext, *, root, has_tail):
@@ -357,21 +293,13 @@ def _finish_small_spec(spec, tail, T_items, T2, constants, bootstrap_plan, crypt
 
 
 def _eval_small_specs(flat, T_items, T_batch, T2, cryptoContext, constants, bootstrap_plan):
-    tail_values, grouped_requests = _collect_small_tail_requests(flat, T_items, bootstrap_plan)
-    _eval_grouped_tail_requests(
-        tail_values,
-        grouped_requests,
-        T_batch,
-        cryptoContext,
-        constants,
-        bootstrap_plan,
-    )
+    tail_values = _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan)
 
     small_values = [None] * len(flat.small_specs)
     for spec in flat.small_specs:
         small_values[spec.out_idx] = _finish_small_spec(
             spec,
-            tail_values[spec.out_idx],
+            _small_tail(spec, tail_values, T_items),
             T_items,
             T2,
             constants,

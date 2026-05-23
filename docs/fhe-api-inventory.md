@@ -97,8 +97,10 @@ manual pipelines, but should not be presented as the default user surface.
 `easyfhe.bs.openfhe`:
 
 - `depth`
+- `plan_rot_keys`
 - `generate`
 - `bootstrap`
+- `describe_plan`
 - `BootstrapPlan`
 
 Notes:
@@ -106,9 +108,11 @@ Notes:
 - `depth(...)` is the public name for `bootstrap_depth(...)`; keep one name at
   package root.
 - `generate(...)` wraps constant generation and returns
-  `(required_rotations, constants, plan)`.
+  `(constants, plan)`.
 - `bootstrap(...)` calls the runtime and currently returns a cipher reduced to
   `noise_deg == 1`.
+- `describe_plan(...)` returns a readable bootstrapping plan summary for
+  debugging.
 - `generate_bootstrap_constants`, `bootstrap_depth`, `bootstrap_approx_depth`,
   and `required_rotations` are implementation/setup helpers, not package-root
   public API.
@@ -329,7 +333,7 @@ only. User code, bootstrapping code, and examples should not call them directly.
 - `easyfhe.fhe.ops.__all__` may mirror the stable operation list for backward
   compatibility, but `easyfhe.fhe.__all__` is the canonical stable surface.
 - OpenFHE bootstrapping package `__all__` should stay small: `BootstrapPlan`,
-  `bootstrap`, `depth`, `generate`.
+  `bootstrap`, `depth`, `describe_plan`, `generate`, `plan_rot_keys`.
 - Cheddar bootstrapping should stay hidden at package root for now.
 - `ops.kernels`, `ops.primitives`, and `bs.*.internal` should be treated as
   unstable implementation modules.

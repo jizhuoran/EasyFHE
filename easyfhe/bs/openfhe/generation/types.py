@@ -30,7 +30,7 @@ class BootstrapPlan:
     c2s_plan: BootstrapTransformPlan
     s2c_plan: BootstrapTransformPlan
     approx_eval_plan: object
-    approx_scalar_names: dict[tuple[str, ...], tuple[str, ...]]
+    approx_tail_scalar_names: tuple[tuple[str, ...], ...]
     approx_constant_scalar_names: dict[tuple[str, ...], str]
     approx_q_highest_scalar_names: dict[tuple[str, ...], str]
     chebyshev_neg_one_scalar_name: str
@@ -40,3 +40,8 @@ class BootstrapPlan:
     @property
     def slots(self):
         return 1 << self.log_bs_slots
+
+    def describe_approx(self):
+        from .plan import describe_flat_ps_plan
+
+        return describe_flat_ps_plan(self.approx_eval_plan, self)

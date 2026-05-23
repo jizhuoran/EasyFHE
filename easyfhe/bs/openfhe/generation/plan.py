@@ -39,12 +39,24 @@ SPACE_NODE = 1
 
 
 @dataclass(frozen=True)
+class FlatPSTailSpec:
+    kind: int
+    node: ChebyshevPSNode
+    path: tuple[str, ...]
+    scalar_path: tuple[str, ...]
+    deg: int
+    out_idx: int
+
+
+@dataclass(frozen=True)
 class FlatPSSmallSpec:
     kind: int
     node: ChebyshevPSNode
     path: tuple[str, ...]
     root: bool
     out_idx: int
+    tail_idx: int | None
+    direct_t1: bool
 
 
 @dataclass(frozen=True)
@@ -63,6 +75,8 @@ class FlatPSCombineSpec:
 class FlatPSPlan:
     k: int
     m: int
+    tail_specs: tuple[FlatPSTailSpec, ...]
+    tail_max_deg: int
     small_specs: tuple[FlatPSSmallSpec, ...]
     combine_specs: tuple[FlatPSCombineSpec, ...]
     root_ref: tuple[int, int]
@@ -74,6 +88,22 @@ def degree(lst):
         if lst[i] != 0:
             return i
     return 0
+
+
+def _truncated_degree(coefficients, size):
+    truncated = np.copy(coefficients[: int(size)])
+    truncated.resize(int(size), refcheck=False)
+    return degree(truncated)
+
+
+def _small_coefficients_and_path(kind, node, path):
+    if kind == KIND_C:
+        return node.divcs_q, (*path, "c"), None
+    if kind == KIND_Q:
+        return node.divqr_q, (*path, "q"), node.k
+    if kind == KIND_S:
+        return node.s2, (*path, "s"), node.k
+    raise ValueError(f"unknown flat PS small spec kind: {kind}")
 
 
 def long_division_chebyshev(f, g):
@@ -173,10 +203,28 @@ def _build_root_ps_node(k, m, divqr_q, divcs_q, s2):
 
 
 def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
+    tail_specs = []
     small_specs = []
     combine_specs = []
 
     def add_small(kind, node, path, root):
+        coefficients, scalar_path, size = _small_coefficients_and_path(kind, node, path)
+        deg = degree(coefficients) if size is None else _truncated_degree(coefficients, size)
+        direct_t1 = bool(kind == KIND_C and deg == 1 and coefficients[1] == 1)
+        tail_idx = None
+        if deg >= 1 and not direct_t1:
+            tail_idx = len(tail_specs)
+            tail_specs.append(
+                FlatPSTailSpec(
+                    kind=int(kind),
+                    node=node,
+                    path=tuple(path),
+                    scalar_path=tuple(scalar_path),
+                    deg=int(deg),
+                    out_idx=tail_idx,
+                )
+            )
+
         out_idx = len(small_specs)
         small_specs.append(
             FlatPSSmallSpec(
@@ -185,6 +233,8 @@ def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
                 path=tuple(path),
                 root=bool(root),
                 out_idx=out_idx,
+                tail_idx=tail_idx,
+                direct_t1=direct_t1,
             )
         )
         return (SPACE_SMALL, out_idx)
@@ -220,11 +270,90 @@ def compile_flat_ps_plan(root: ChebyshevPSNode) -> FlatPSPlan:
     return FlatPSPlan(
         k=int(root.k),
         m=int(root.m),
+        tail_specs=tuple(tail_specs),
+        tail_max_deg=max((spec.deg for spec in tail_specs), default=0),
         small_specs=tuple(small_specs),
         combine_specs=tuple(combine_specs),
         root_ref=root_ref,
         node_count=len(combine_specs),
     )
+
+
+def describe_flat_ps_plan(flat: FlatPSPlan, bootstrap_plan=None) -> str:
+    lines = [
+        "Approx PS Plan",
+        (
+            f"k={flat.k} m={flat.m} "
+            f"tails={len(flat.tail_specs)} max_deg={flat.tail_max_deg} "
+            f"small={len(flat.small_specs)} combine={len(flat.combine_specs)}"
+        ),
+        "",
+        "Tails",
+    ]
+    for spec in flat.tail_specs:
+        lines.append(
+            f"  tail[{spec.out_idx:02d}] {_kind_name(spec.kind)} "
+            f"{_path_text(spec.scalar_path)} deg={spec.deg}"
+        )
+
+    lines.extend(["", "Small"])
+    for spec in flat.small_specs:
+        scalar_path = (*spec.path, _kind_suffix(spec.kind))
+        if spec.direct_t1:
+            tail = "T1"
+        elif spec.tail_idx is None:
+            tail = "None"
+        else:
+            tail = f"tail[{spec.tail_idx:02d}]"
+        pieces = [tail]
+        pieces.append(f"+ const({_path_text(scalar_path)})")
+        if spec.kind == KIND_Q:
+            pieces.append("+ highest")
+        if spec.kind == KIND_S:
+            pieces.append("+ Tk")
+        lines.append(
+            f"  small[{spec.out_idx:02d}] {_kind_name(spec.kind)} "
+            f"{_path_text(scalar_path)} = {' '.join(pieces)}"
+        )
+
+    lines.extend(["", "Combine"])
+    for spec in flat.combine_specs:
+        lines.append(
+            f"  node[{spec.out_idx:02d}] {_path_text(spec.path)} = "
+            f"(T2[{spec.base_idx}] + {_ref_text(spec.c_ref)}) * "
+            f"{_ref_text(spec.q_ref)} + {_ref_text(spec.s_ref)}"
+        )
+
+    if bootstrap_plan is not None:
+        lines.extend(["", "Scalar Tables"])
+        lines.append(
+            f"  tail_scalar_rows={len(getattr(bootstrap_plan, 'approx_tail_scalar_names', ())) }"
+        )
+        lines.append(
+            f"  chebyshev_neg_one={getattr(bootstrap_plan, 'chebyshev_neg_one_scalar_name', None)}"
+        )
+    return "\n".join(lines)
+
+
+def _kind_name(kind):
+    return {KIND_C: "C", KIND_Q: "Q", KIND_S: "S"}.get(kind, f"kind={kind}")
+
+
+def _kind_suffix(kind):
+    return {KIND_C: "c", KIND_Q: "q", KIND_S: "s"}[kind]
+
+
+def _path_text(path):
+    return ".".join(path)
+
+
+def _ref_text(ref):
+    space, idx = ref
+    if space == SPACE_SMALL:
+        return f"small[{idx:02d}]"
+    if space == SPACE_NODE:
+        return f"node[{idx:02d}]"
+    return f"ref({space},{idx})"
 
 
 @lru_cache(maxsize=None)

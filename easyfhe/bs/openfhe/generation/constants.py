@@ -7,7 +7,7 @@ import numpy as np
 
 from easyfhe.fhe.constants import ConstantBundle
 from easyfhe.fhe.ops.encoding import PreparedPlaintext
-from .plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
+from .plan import KIND_C, KIND_Q, KIND_S, compile_flat_ps_plan, get_bootstrap_approx_plan
 from .precompute import BootstrapPrecompute
 from .rotations import (
     bootstrap_required_rotations,
@@ -148,10 +148,10 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
     approx_plan = get_bootstrap_approx_plan(crypto_context.secretKeyDist)
     approx_eval_plan = compile_flat_ps_plan(approx_plan.ps_root)
     (
-        approx_scalar_names,
+        approx_tail_scalar_names,
         approx_constant_scalar_names,
         approx_q_highest_scalar_names,
-    ) = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
+    ) = _register_approx_scalars(scalars, approx_eval_plan)
     chebyshev_neg_one_scalar_name = _register_chebyshev_scalars(scalars)
     double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
     c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], precompute.N, plan.dim1[0])
@@ -175,7 +175,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         c2s_plan=c2s_runtime_plan,
         s2c_plan=s2c_runtime_plan,
         approx_eval_plan=approx_eval_plan,
-        approx_scalar_names=approx_scalar_names,
+        approx_tail_scalar_names=approx_tail_scalar_names,
         approx_constant_scalar_names=approx_constant_scalar_names,
         approx_q_highest_scalar_names=approx_q_highest_scalar_names,
         chebyshev_neg_one_scalar_name=chebyshev_neg_one_scalar_name,
@@ -186,49 +186,66 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
     return constants, bootstrap_plan
 
 
-def _register_approx_scalars(scalars, secret_key_dist):
-    names = {}
+def _register_approx_scalars(scalars, flat):
+    zero_name = "approx.zero"
+    scalars[zero_name] = 0.0
+
+    tail_names = []
     constant_names = {}
     q_highest_names = {}
-    approx_plan = get_bootstrap_approx_plan(secret_key_dist)
 
-    def add(path, coefficients, size=None):
-        path = tuple(path)
-        deg = _coeff_degree(coefficients, size)
-        const_name = "approx." + ".".join((*path, "const"))
+    for spec in flat.small_specs:
+        scalar_path = _small_scalar_path(spec)
+        coefficients = _small_coefficients(spec)
+        const_name = "approx." + ".".join((*scalar_path, "const"))
         scalars[const_name] = float(coefficients[0] / 2)
-        constant_names[path] = const_name
+        constant_names[scalar_path] = const_name
 
-        item_names = []
-        for index, value in enumerate(coefficients[1 : deg + 1], start=1):
-            name = "approx." + ".".join((*path, str(index)))
-            scalars[name] = float(value)
-            item_names.append(name)
-        names[path] = tuple(item_names)
+        if spec.kind == KIND_Q and not spec.root:
+            has_tail = spec.tail_idx is not None
+            coefficient = spec.node.divqr_q[-1] + (1.1 if has_tail else 0.0)
+            value = 2 ** math.floor(math.log2(coefficient))
+            name = "approx." + ".".join((*scalar_path, "highest"))
+            scalars[name] = int(value)
+            q_highest_names[scalar_path] = name
 
-    def add_q_highest(path, node, root):
-        if root:
-            return
-        has_tail = _coeff_degree(node.divqr_q, node.k) > 0
-        coefficient = node.divqr_q[-1] + (1.1 if has_tail else 0.0)
-        value = 2 ** math.floor(math.log2(coefficient))
-        name = "approx." + ".".join((*path, "q", "highest"))
-        scalars[name] = int(value)
-        q_highest_names[tuple((*path, "q"))] = name
+    for spec in flat.tail_specs:
+        coefficients = _small_coefficients(spec)
+        row = []
+        for index in range(1, flat.tail_max_deg + 1):
+            if index <= spec.deg:
+                name = "approx." + ".".join((*spec.scalar_path, str(index)))
+                scalars[name] = float(coefficients[index])
+                row.append(name)
+            else:
+                row.append(zero_name)
+        tail_names.append(tuple(row))
 
-    def walk(node, path, root=False):
-        add((*path, "c"), node.divcs_q)
-        add((*path, "q"), node.divqr_q, node.k)
-        add((*path, "s"), node.s2, node.k)
-        if node.q_node is None:
-            add_q_highest(path, node, root)
-        if node.q_node is not None:
-            walk(node.q_node, (*path, "q_node"))
-        if node.s_node is not None:
-            walk(node.s_node, (*path, "s_node"))
+    return tuple(tail_names), constant_names, q_highest_names
 
-    walk(approx_plan.ps_root, ("root",), root=True)
-    return names, constant_names, q_highest_names
+
+def _small_scalar_path(spec):
+    return tuple((*spec.path, _small_suffix(spec.kind)))
+
+
+def _small_suffix(kind):
+    if kind == KIND_C:
+        return "c"
+    if kind == KIND_Q:
+        return "q"
+    if kind == KIND_S:
+        return "s"
+    raise ValueError(f"unknown flat PS small spec kind: {kind}")
+
+
+def _small_coefficients(spec):
+    if spec.kind == KIND_C:
+        return spec.node.divcs_q
+    if spec.kind == KIND_Q:
+        return spec.node.divqr_q
+    if spec.kind == KIND_S:
+        return spec.node.s2
+    raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
 
 
 def _register_chebyshev_scalars(scalars):
@@ -248,14 +265,6 @@ def _register_double_angle_scalars(scalars, secret_key_dist):
         )
         names.append(name)
     return tuple(names)
-
-
-def _coeff_degree(coefficients, size=None):
-    if size is None:
-        return degree(coefficients)
-    truncated = np.copy(coefficients[: int(size)])
-    truncated.resize(int(size), refcheck=False)
-    return degree(truncated)
 
 
 def _flatten_table(name_table, table, default_slots):

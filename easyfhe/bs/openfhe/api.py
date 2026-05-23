@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .generation.constants import generate_bootstrap_constants
+from .generation.plan import describe_flat_ps_plan
 from .generation.requirements import bootstrap_depth, required_rotations
 from .generation.types import BootstrapPlan
 
@@ -50,6 +51,10 @@ def generate(
         strategy=strategy,
     )
     return constants, plan
+
+
+def describe_plan(plan):
+    return describe_flat_ps_plan(plan.approx_eval_plan, plan)
 
 
 def bootstrap(cipher, crypto_context, constants, plan, *, L0):

@@ -1,6 +1,7 @@
 CORE_API = (
     "BootstrapPlan",
     "bootstrap",
+    "describe_plan",
     "depth",
     "generate",
     "plan_rot_keys",
