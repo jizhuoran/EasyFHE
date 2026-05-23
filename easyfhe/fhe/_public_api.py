@@ -44,6 +44,7 @@ BASIC_OPS_API = (
     "homo_mul_scalar_int",
     "homo_mul_scalar_int_inplace",
     "homo_rotate",
+    "homo_rotate_add",
     "homo_sub",
     "homo_sub_inplace",
     "homo_sub_scalar_int",
@@ -55,12 +56,18 @@ HOISTED_OPS_API = (
     "grouped_pairwise_mac",
     "grouped_scalar_weighted_acc",
     "giant_rotate_sum",
+    "HOIST_EXT_DOUBLE_HOIST",
+    "HOIST_EXT_NORMAL",
+    "HOIST_NORMAL",
     "hoisted_mac_sum",
     "moddown_from_ext",
 )
 
 SHAPE_API = (
-    "slot_resize",
+    "expand_slots",
+    "fold_slots",
+    "pack_cipher_batch",
+    "unpack_cipher_batch",
 )
 
 PUBLIC_API = (

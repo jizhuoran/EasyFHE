@@ -6,6 +6,7 @@ import easyfhe as torch
 
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
+from easyfhe.fhe.ops import layout
 from easyfhe.fhe.ops import rotation
 from easyfhe.fhe.ops.primitives import _cipher_add_scalar, _cipher_sub_scalar
 
@@ -192,7 +193,7 @@ def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_p
                 batch_size=len(requests),
             )
         for index, request in enumerate(requests):
-            tail_values[request.spec.out_idx] = rotation._batch_item(tails, index)
+            tail_values[request.spec.out_idx] = layout.cipher_batch_item(tails, index)
 
     small_values = [None] * len(flat.small_specs)
     for spec in flat.small_specs:
@@ -273,7 +274,7 @@ def _chebyshev_basis(x, a, b, k, cryptoContext):
         )
         for item in T
     )
-    return _ChebyshevBasis(items=items, batch=rotation._pack_ciphers(items))
+    return _ChebyshevBasis(items=items, batch=layout.pack_cipher_batch(items))
 
 
 def _scale_input_to_unit_interval(x, a, b, cryptoContext):

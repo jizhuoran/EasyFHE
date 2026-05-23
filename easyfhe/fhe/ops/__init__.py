@@ -27,13 +27,17 @@ from .arithmetic import (
     homo_sub_scalar_int_inplace,
 )
 from .rotation import (
+    HOIST_EXT_DOUBLE_HOIST,
+    HOIST_EXT_NORMAL,
+    HOIST_NORMAL,
     fast_rotate,
     giant_rotate_sum,
     hoisted_mac_sum,
+    homo_rotate_add,
     homo_rotate,
     moddown_from_ext,
 )
-from .slots import slot_resize
+from .layout import expand_slots, fold_slots, pack_cipher_batch, unpack_cipher_batch
 
 __all__ = [
     "CipherState",
@@ -41,6 +45,9 @@ __all__ = [
     "reduce_noise_to_one",
     "fast_rotate",
     "giant_rotate_sum",
+    "HOIST_EXT_DOUBLE_HOIST",
+    "HOIST_EXT_NORMAL",
+    "HOIST_NORMAL",
     "hoisted_mac_sum",
     "grouped_pairwise_mac",
     "grouped_scalar_weighted_acc",
@@ -64,9 +71,13 @@ __all__ = [
     "homo_mul_scalar_int_inplace",
     "moddown_from_ext",
     "homo_rotate",
+    "homo_rotate_add",
     "homo_sub",
     "homo_sub_inplace",
     "homo_sub_scalar_int",
     "homo_sub_scalar_int_inplace",
-    "slot_resize",
+    "expand_slots",
+    "fold_slots",
+    "pack_cipher_batch",
+    "unpack_cipher_batch",
 ]

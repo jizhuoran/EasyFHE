@@ -3329,6 +3329,11 @@
   dispatch:
     CUDA: finalize_fast_rotation_ext_cuda
 
+- func: double_hoist_giant_sum_ext(Tensor base_bx, Tensor base_ax, Tensor key_product_bx, Tensor key_product_ax, Tensor c0, Tensor precomp_maps, Tensor primes, Tensor p_mod_q, Tensor barret_ratio, Tensor barret_k, int curr_limbs, int active_limbs, int N) -> Tensor[]
+  device_check: NoCheck
+  dispatch:
+    CUDA: double_hoist_giant_sum_ext_cuda
+
 - func: finalize_fast_rotation_q(Tensor moddown_bx, Tensor moddown_ax, Tensor product_indices, Tensor c0, Tensor c1, Tensor precomp_maps, Tensor primes, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:

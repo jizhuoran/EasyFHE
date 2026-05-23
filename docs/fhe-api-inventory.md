@@ -69,13 +69,18 @@ Client public methods:
 ### Rotation And Shape
 
 - `homo_rotate`
+- `homo_rotate_add`
 - `fast_rotate`
 - `hoisted_mac_sum`
 - `giant_rotate_sum`
+- `HOIST_NORMAL`
+- `HOIST_EXT_NORMAL`
+- `HOIST_EXT_DOUBLE_HOIST`
 - `moddown_from_ext`
 - `grouped_pairwise_mac`
 - `grouped_scalar_weighted_acc`
-- `slot_resize`
+- `expand_slots`
+- `fold_slots`
 
 ### Manual Level Control
 
@@ -167,17 +172,18 @@ Module: `easyfhe.fhe.ops.primitives`.
 
 ### Validation, Runtime, Material, And Fixture Internals
 
+- `pack_cipher_batch`
+- `unpack_cipher_batch`
+- `cipher_batch_item`
 - `validate_cipher_op`
 - `validate_binary_cipher_op`
 - `validate_cipher_plain_op`
-- `validate_cipher_scalar_op`
 - `validate_matching_metadata`
 - `PreparedPlaintext`
 - `Plaintext`
 - `rescale_one_level`
 - `plan_add_alignment`
 - `plan_mul_alignment`
-- `extract_cv`
 - `encode_stage1`
 - `encode_stage2`
 - `Client`

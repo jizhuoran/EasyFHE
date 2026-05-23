@@ -6,6 +6,9 @@ from .client import Client
 from .constants import ConstantBundle
 from .context import Context
 from .ops import (
+    HOIST_EXT_DOUBLE_HOIST,
+    HOIST_EXT_NORMAL,
+    HOIST_NORMAL,
     align_to,
     fast_rotate,
     giant_rotate_sum,
@@ -32,12 +35,16 @@ from .ops import (
     homo_mul_scalar_int_inplace,
     moddown_from_ext,
     homo_rotate,
+    homo_rotate_add,
     reduce_noise_to_one,
     homo_sub,
     homo_sub_inplace,
     homo_sub_scalar_int,
     homo_sub_scalar_int_inplace,
-    slot_resize,
+    expand_slots,
+    fold_slots,
+    pack_cipher_batch,
+    unpack_cipher_batch,
 )
 from .context_factory import CKKSContextSpec, generate_client_context
 

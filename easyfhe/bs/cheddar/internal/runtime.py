@@ -11,9 +11,9 @@ def coeffs_slots_conversion(ciphertext, transform_plan, constants, bootstrap_pla
     result = ciphertext
     strategy = bootstrap_plan.strategy
     hoist_strategy = {
-        "normal_bsgs": "normal",
-        "normal_giant": "ext_normal",
-    }.get(strategy, "ext_double_hoist")
+        "normal_bsgs": rotation.HOIST_NORMAL,
+        "normal_giant": rotation.HOIST_EXT_NORMAL,
+    }.get(strategy, rotation.HOIST_EXT_DOUBLE_HOIST)
     is_ext = strategy != "normal_bsgs"
 
     for loop_pos, step in enumerate(transform_plan.steps):
@@ -157,7 +157,7 @@ def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstra
 
 def _replicate_sparse_slots(raised, slots, cryptoContext):
     for step in range(int(math.log2(cryptoContext.N // (2 * slots)))):
-        raised = rotation.homo_rotate(
+        raised = rotation.homo_rotate_add(
             raised,
             (1 << step) * slots,
             cryptoContext,
@@ -177,7 +177,7 @@ def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_co
     raised = alignment.reduce_noise_to_one(raised, cryptoContext)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-    encoded = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
+    encoded = rotation.homo_rotate_add(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
 
     encoded = _eval_bootstrap_approx(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)

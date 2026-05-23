@@ -5,10 +5,10 @@ import easyfhe.fhe as fhe
 
 try:
     from .fhe_state import reduce_noise_to_one, rescale_one_level
-    from .weight_pack import slot_resize_mask_name
+    from .weight_pack import fold_slots_mask_name
 except ImportError:
     from fhe_state import reduce_noise_to_one, rescale_one_level
-    from weight_pack import slot_resize_mask_name
+    from weight_pack import fold_slots_mask_name
 
 __all__ = [
     "broadcast_slot_sum",
@@ -37,8 +37,8 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
     if c2 is None:
         return c1
     old_slots = c1.slots
-    c1 = fhe.slot_resize(c1, c1.slots * 2, cryptoContext)
-    c2 = fhe.slot_resize(c2, c2.slots * 2, cryptoContext)
+    c1 = fhe.expand_slots(c1, c1.slots * 2, cryptoContext)
+    c2 = fhe.expand_slots(c2, c2.slots * 2, cryptoContext)
     second_mask_key = f"mask_second_n_{old_slots}_{c2.slots}"
     return fhe.homo_add(
         fhe.homo_mul_pt(
@@ -66,7 +66,7 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
 
 
 def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
-    summed = fhe.homo_rotate(cipher, rotate_offset, cryptoContext, addend=cipher)
+    summed = fhe.homo_rotate_add(cipher, rotate_offset, cryptoContext, addend=cipher)
     cipher = fhe.homo_mul_pt(
         summed,
         weights.plaintext(
@@ -89,8 +89,8 @@ def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_resc
     fullpack = _masked_reduce(fullpack, 4, 2, cryptoContext, weights)
     if include_gen8:
         fullpack = _masked_reduce(fullpack, 8, 4, cryptoContext, weights)
-        return fhe.homo_rotate(fullpack, 8, cryptoContext, addend=fullpack)
-    return fhe.homo_rotate(fullpack, 4, cryptoContext, addend=fullpack)
+        return fhe.homo_rotate_add(fullpack, 8, cryptoContext, addend=fullpack)
+    return fhe.homo_rotate_add(fullpack, 4, cryptoContext, addend=fullpack)
 
 
 def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, row_rotate, cryptoContext, weights):
@@ -132,9 +132,9 @@ def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoCont
 
 def _fold_quarters(cipher, cryptoContext):
     quarter = cipher.slots // 4
-    cipher = fhe.homo_rotate(cipher, -quarter, cryptoContext, addend=cipher)
+    cipher = fhe.homo_rotate_add(cipher, -quarter, cryptoContext, addend=cipher)
     rotated = fhe.homo_rotate(cipher, -quarter, cryptoContext)
-    cipher = fhe.homo_rotate(rotated, -quarter, cryptoContext, addend=cipher)
+    cipher = fhe.homo_rotate_add(rotated, -quarter, cryptoContext, addend=cipher)
     return cipher
 
 
@@ -177,12 +177,12 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
         channels = rescale_one_level(channels, cryptoContext)
     target_slots = channels.slots // 4
     mask = weights.plaintext(
-        slot_resize_mask_name(channels.slots, target_slots),
+        fold_slots_mask_name(channels.slots, target_slots),
         cryptoContext.L - channels.state.cur_limbs,
         channels.slots,
         cryptoContext,
     )
-    return fhe.slot_resize(channels, target_slots, cryptoContext, mask=mask)
+    return fhe.fold_slots(channels, target_slots, cryptoContext, mask=mask)
 
 
 def downsample1024to256(c1, c2, num_channel, cryptoContext, weights):
@@ -233,7 +233,7 @@ def sum_adjacent_slots(input, slots, cryptoContext):
     _require_power_of_two(slots, "slots")
     result = input.deep_copy()
     for i in range(int(math.log2(slots))):
-        result = fhe.homo_rotate(result, 2 ** i, cryptoContext, addend=result)
+        result = fhe.homo_rotate_add(result, 2 ** i, cryptoContext, addend=result)
     return result
 
 
@@ -241,7 +241,7 @@ def sum_channel_groups(input, group_size, num_groups, cryptoContext):
     _require_power_of_two(num_groups, "num_groups")
     result = input.deep_copy()
     for i in range(int(math.log2(num_groups))):
-        result = fhe.homo_rotate(result, group_size * (2 ** i), cryptoContext, addend=result)
+        result = fhe.homo_rotate_add(result, group_size * (2 ** i), cryptoContext, addend=result)
     return result
 
 

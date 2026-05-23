@@ -4,7 +4,7 @@ import time
 import numpy as np
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ops import rotation
+from easyfhe.fhe.ops import layout, rotation
 
 
 def _diagonal_values(matrix, offset):
@@ -51,13 +51,18 @@ def encrypted_bsgs_matvec(cipher, matrix, baby_step, crypto_context):
             plaintexts.append(plaintext)
         inner_ext = fhe.grouped_pairwise_mac(
             baby_exts,
-            rotation._pack_ciphers(plaintexts),
+            layout.pack_cipher_batch(plaintexts),
             1,
             crypto_context,
         )
-        inner_exts.append(rotation._unpack_cipher_batch(inner_ext)[0])
+        inner_exts.append(layout.unpack_cipher_batch(inner_ext)[0])
 
-    return fhe.giant_rotate_sum(inner_exts, baby_step, crypto_context, strategy="ext_double_hoist")
+    return fhe.giant_rotate_sum(
+        layout.pack_cipher_batch(inner_exts),
+        baby_step,
+        crypto_context,
+        strategy=fhe.HOIST_EXT_DOUBLE_HOIST,
+    )
 
 
 def main():

@@ -6,7 +6,7 @@ import pytest
 
 import easyfhe.fhe as fhe
 from easyfhe.fhe.ciphertext import Cipher, CipherState
-from easyfhe.fhe.ops import arithmetic, kernels, rotation
+from easyfhe.fhe.ops import arithmetic, kernels, layout
 
 
 def _cipher(name, cv_count=2):
@@ -30,8 +30,8 @@ def test_grouped_pairwise_mac_group_one_requires_prepacked_batches(monkeypatch):
         return [torch.zeros((groups, 2, 4), dtype=torch.uint64) for _ in range(2)]
 
     monkeypatch.setattr(arithmetic.F, "cipher_grouped_pairwise_mac", fake_native)
-    ciphers = rotation._pack_ciphers([_cipher("a"), _cipher("b")])
-    plaintexts = rotation._pack_ciphers([_cipher("x", cv_count=1), _cipher("y", cv_count=1)])
+    ciphers = layout.pack_cipher_batch([_cipher("a"), _cipher("b")])
+    plaintexts = layout.pack_cipher_batch([_cipher("x", cv_count=1), _cipher("y", cv_count=1)])
 
     result = fhe.grouped_pairwise_mac(ciphers, plaintexts, 1, SimpleNamespace())
 
@@ -54,8 +54,8 @@ def test_grouped_pairwise_mac_reuses_cipher_batch(monkeypatch):
         return [torch.zeros((groups, 2, 4), dtype=torch.uint64) for _ in range(2)]
 
     monkeypatch.setattr(arithmetic.F, "cipher_grouped_pairwise_mac", fake_native)
-    ciphers = rotation._pack_ciphers([_cipher("a"), _cipher("b")])
-    plaintexts = rotation._pack_ciphers([
+    ciphers = layout.pack_cipher_batch([_cipher("a"), _cipher("b")])
+    plaintexts = layout.pack_cipher_batch([
         _cipher("x0", cv_count=1),
         _cipher("y0", cv_count=1),
         _cipher("x1", cv_count=1),
@@ -86,8 +86,8 @@ def test_grouped_pairwise_mac_rejects_lists():
 def test_grouped_pairwise_mac_group_one_rejects_mismatched_batch_lengths():
     with pytest.raises(ValueError, match="plaintext batch size must equal groups"):
         fhe.grouped_pairwise_mac(
-            rotation._pack_ciphers([_cipher("a"), _cipher("b")]),
-            rotation._pack_ciphers([_cipher("x", cv_count=1)]),
+            layout.pack_cipher_batch([_cipher("a"), _cipher("b")]),
+            layout.pack_cipher_batch([_cipher("x", cv_count=1)]),
             1,
             SimpleNamespace(),
         )
@@ -96,8 +96,8 @@ def test_grouped_pairwise_mac_group_one_rejects_mismatched_batch_lengths():
 def test_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
     with pytest.raises(ValueError, match="plaintext batch size must equal groups"):
         fhe.grouped_pairwise_mac(
-            rotation._pack_ciphers([_cipher("a"), _cipher("b")]),
-            rotation._pack_ciphers([
+            layout.pack_cipher_batch([_cipher("a"), _cipher("b")]),
+            layout.pack_cipher_batch([
                 _cipher("x0", cv_count=1),
                 _cipher("y0", cv_count=1),
                 _cipher("x1", cv_count=1),

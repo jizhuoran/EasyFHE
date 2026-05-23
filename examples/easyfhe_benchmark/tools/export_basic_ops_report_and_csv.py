@@ -13,7 +13,7 @@ import numpy as np
 DEFAULT_LATENCY_US = {
     "encrypt": 0.0,
     "decrypt": 0.0,
-    "slot_resize": 0.0,
+    "expand_slots": 0.0,
     "clone": 0.0,
     "encode": 4.0,
     "add": 3.0,
@@ -51,7 +51,7 @@ def _sort_key(row_key: Tuple) -> Tuple[str, ...]:
 def _seed_zero_cost_rows(summary: Dict, accelerator: str) -> Dict[Tuple, float]:
     return {
         (op, accelerator, "", "", "", "", "", "", ""): float(DEFAULT_LATENCY_US[op])
-        for op in ("encrypt", "decrypt", "slot_resize", "clone")
+        for op in ("encrypt", "decrypt", "expand_slots", "clone")
     }
 
 

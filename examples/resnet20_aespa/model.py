@@ -129,7 +129,7 @@ def _bootstrap(rt, input, L0):
 
 def _bootstrap_and_resize_for_downsample(input, rt):
     boot = _bootstrap(rt, input, rt.ctx.L)
-    return fhe.slot_resize(boot, boot.slots << 1, rt.ctx)
+    return fhe.expand_slots(boot, boot.slots << 1, rt.ctx)
 
 
 def _conv_then_aespa_nonlinear(input, block_id, conv_id, img_width, channels, rot_offset, rt, scale=1):

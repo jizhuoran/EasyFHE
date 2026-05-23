@@ -129,12 +129,14 @@ shift = bundle.encoded_scalars("shift", cipher.state.cur_limbs, 0, ctx, mode="in
 fhe.homo_add_scalar_int(cipher, shift, ctx)
 
 fhe.homo_rotate(cipher, offset, ctx)
-fhe.slot_resize(cipher, slots, ctx, mask=None)
+fhe.homo_rotate_add(cipher, offset, ctx, addend=other)
+fhe.expand_slots(cipher, slots, ctx)
+fhe.fold_slots(cipher, slots, ctx, mask=mask)
 ```
 
-When reducing slot count, `slot_resize(...)` requires an explicit plaintext
-`mask` encoded at the source slot count. Increasing slot count only updates the
-ciphertext metadata and does not require a mask.
+`expand_slots(...)` only updates ciphertext metadata and requires the target
+slot count to be at least the current slot count. `fold_slots(...)` reduces the
+slot count with an explicit plaintext mask encoded at the source slot count.
 
 Use `align_to` when an application needs explicit state alignment:
 
@@ -152,7 +154,7 @@ convolution, and linear-transform code.
 rotated = fhe.fast_rotate(cipher, offsets, ctx, output_ext=False)
 partials = fhe.grouped_pairwise_mac(rotated, plaintexts, groups, ctx)  # batched Cipher
 weighted = fhe.grouped_scalar_weighted_acc(rotated, encoded_scalars, ctx)  # batched Cipher
-result = fhe.giant_rotate_sum(partials, giant_offset, ctx, strategy="normal")
+result = fhe.giant_rotate_sum(partials, giant_offset, ctx, strategy=fhe.HOIST_NORMAL)
 
 result = fhe.hoisted_mac_sum(
     cipher,
@@ -161,16 +163,16 @@ result = fhe.hoisted_mac_sum(
     giant_offset,
     giant_count,
     ctx,
-    strategy="normal",
+    strategy=fhe.HOIST_NORMAL,
 )
 ```
 
 Strategies:
 
 ```python
-"normal"           # fast rotate to normal ciphertexts, normal giant rotations
-"ext_normal"       # fast rotate to ext, multiply in ext, moddown before giants
-"ext_double_hoist" # fast rotate to ext, multiply in ext, double-hoisted giants
+fhe.HOIST_NORMAL           # fast rotate to normal ciphertexts, normal giant rotations
+fhe.HOIST_EXT_NORMAL       # fast rotate to ext, multiply in ext, moddown before giants
+fhe.HOIST_EXT_DOUBLE_HOIST # fast rotate to ext, multiply in ext, double-hoisted giants
 ```
 
 Avoid using lower-level rotation helpers such as modup, moddown, automorphism

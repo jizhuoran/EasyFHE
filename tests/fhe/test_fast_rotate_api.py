@@ -3,7 +3,7 @@ import pytest
 
 import easyfhe as torch
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ops import rotation
+from easyfhe.fhe.ops import layout, rotation
 
 pytestmark = pytest.mark.skipif(
     not torch.cuda.is_available(),
@@ -29,7 +29,7 @@ def _mac_down_each(cipher, offsets, plain_values, context):
     rotated = fhe.fast_rotate(cipher, offsets, context)
     total = None
     for index, values in enumerate(plain_values):
-        rot = rotation._batch_item(rotated, index)
+        rot = layout.cipher_batch_item(rotated, index)
         plaintext = _plaintext(
             values,
             context,
@@ -53,8 +53,8 @@ def _mac_down_once(cipher, offsets, plain_values, context):
             is_ext=True,
         )
         plaintexts.append(plaintext_ext)
-    total_ext = fhe.grouped_pairwise_mac(rotated_ext, rotation._pack_ciphers(plaintexts), 1, context)
-    return fhe.giant_rotate_sum(total_ext, 0, context, strategy="ext_double_hoist")
+    total_ext = fhe.grouped_pairwise_mac(rotated_ext, layout.pack_cipher_batch(plaintexts), 1, context)
+    return fhe.moddown_from_ext(layout.cipher_batch_item(total_ext, 0), context)
 
 
 def _hoisted_mac(cipher, offsets, plain_values, context):
@@ -71,11 +71,11 @@ def _hoisted_mac(cipher, offsets, plain_values, context):
     return fhe.hoisted_mac_sum(
         cipher,
         offsets,
-        rotation._pack_ciphers(plaintexts),
+        layout.pack_cipher_batch(plaintexts),
         0,
         1,
         context,
-        strategy="ext_double_hoist",
+        strategy=fhe.HOIST_EXT_DOUBLE_HOIST,
     )
 
 
@@ -95,11 +95,11 @@ def _hoisted_mac_ext_double(cipher, offsets, groups, giant_offset, context):
     return fhe.hoisted_mac_sum(
         cipher,
         offsets,
-        rotation._pack_ciphers(plaintexts),
+        layout.pack_cipher_batch(plaintexts),
         giant_offset,
         len(groups),
         context,
-        strategy="ext_double_hoist",
+        strategy=fhe.HOIST_EXT_DOUBLE_HOIST,
     )
 
 
@@ -118,11 +118,11 @@ def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
     return fhe.hoisted_mac_sum(
         cipher,
         offsets,
-        rotation._pack_ciphers(plaintexts),
+        layout.pack_cipher_batch(plaintexts),
         giant_offset,
         len(groups),
         context,
-        strategy="normal",
+        strategy=fhe.HOIST_NORMAL,
     )
 
 
@@ -132,7 +132,7 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
     for group in groups:
         total = None
         for index, values in enumerate(group):
-            rotated = rotation._batch_item(rotations, index)
+            rotated = layout.cipher_batch_item(rotations, index)
             plaintext = _plaintext(
                 values,
                 context,
@@ -142,7 +142,7 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
             term = fhe.homo_mul_pt(rotated, plaintext, context)
             total = term if total is None else fhe.homo_add(total, term, context)
         partial_sums.append(total)
-    return fhe.giant_rotate_sum(partial_sums, giant_offset, context, strategy="normal")
+    return fhe.giant_rotate_sum(layout.pack_cipher_batch(partial_sums), giant_offset, context, strategy=fhe.HOIST_NORMAL)
 
 
 def test_fast_rotate_ext_mac_can_defer_moddown_once():
@@ -283,3 +283,84 @@ def test_fast_rotate_shapes_match_offsets():
     assert ext_batch.cv[0].shape[0] == len(offsets)
     assert normal_batch.is_ext is False
     assert ext_batch.is_ext is True
+
+
+def test_fast_rotate_rejects_all_zero_offsets():
+    slots = 1024
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=(),
+        ),
+        "cuda",
+    )
+    values = np.linspace(0.0, 1.5, slots, dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+
+    with pytest.raises(ValueError, match="at least one nonzero offset"):
+        fhe.fast_rotate(cipher, [0, 0], context)
+
+
+def test_giant_rotate_sum_rejects_zero_offset():
+    slots = 1024
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=(),
+        ),
+        "cuda",
+    )
+    values = np.linspace(0.0, 1.5, slots, dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+
+    with pytest.raises(ValueError, match="offset must be nonzero"):
+        fhe.giant_rotate_sum((cipher,), 0, context, strategy=fhe.HOIST_NORMAL)
+
+
+def test_giant_rotate_sum_requires_batched_cipher():
+    slots = 1024
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=(1,),
+        ),
+        "cuda",
+    )
+    values = np.linspace(0.0, 1.5, slots, dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+
+    with pytest.raises(TypeError, match="expected a batched Cipher"):
+        fhe.giant_rotate_sum((cipher,), 1, context, strategy=fhe.HOIST_NORMAL)
+
+
+def test_giant_rotate_sum_requires_multiple_cipher_batch():
+    slots = 1024
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            rotations=(1,),
+        ),
+        "cuda",
+    )
+    values = np.linspace(0.0, 1.5, slots, dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    batched = cipher.cipher_like(cipher.cv, batch_size=1)
+
+    with pytest.raises(ValueError, match="batch_size > 1"):
+        fhe.giant_rotate_sum(batched, 1, context, strategy=fhe.HOIST_NORMAL)

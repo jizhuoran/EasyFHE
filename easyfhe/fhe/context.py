@@ -105,6 +105,8 @@ class Context:
                 dtype=torch.uint64,
                 device=device,
             )
+        self.key_product_identity_indices = torch.arange((1 << 16) - 1, dtype=torch.int64, device=device)
+        self.precompute_auto_maps_cache = {}
         self.mult_swk_ax = material.mult_swk_ax.to(device)
         self.mult_swk_bx = material.mult_swk_bx.to(device)
 

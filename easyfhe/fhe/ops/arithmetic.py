@@ -64,14 +64,7 @@ def _encode_int_for_scalar_op(value, cur_limbs, cryptoContext):
 
 
 def _require_encoded_scalar(value, op_name):
-    if hasattr(value, "to") and hasattr(value, "dim"):
-        return value
-    if isinstance(value, (list, tuple)):
-        return value
-    raise TypeError(
-        f"{op_name}: expected an encoded scalar tensor or per-limb scalar list; "
-        "encode raw constants with ConstantBundle.encoded_scalars or arithmetic._encode_*_for_scalar_op"
-    )
+    return validation.require_encoded_scalar(value, op_name)
 
 
 def homo_add(in0, in1, cryptoContext):
@@ -121,7 +114,6 @@ def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         "homo_add_pt",
         cipher,
         plaintext,
-        require_ext=False,
         require_noise_deg=1,
         require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
     )
@@ -133,7 +125,6 @@ def homo_add_pt_inplace(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         "homo_add_pt_inplace",
         cipher,
         plaintext,
-        require_ext=False,
         require_noise_deg=1,
         require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
     )
@@ -163,7 +154,7 @@ def homo_mul_pt_inplace(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_add_scalar_double(cipher, constant, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_add_scalar_double",
         cipher,
         require_ext=False,
@@ -173,7 +164,7 @@ def homo_add_scalar_double(cipher, constant, cryptoContext):
 
 
 def homo_add_scalar_double_inplace(cipher, constant, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_add_scalar_double_inplace",
         cipher,
         require_ext=False,
@@ -187,7 +178,7 @@ def homo_add_scalar_double_inplace(cipher, constant, cryptoContext):
 
 
 def homo_add_scalar_int(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_add_scalar_int",
         cipher,
         require_ext=False,
@@ -197,7 +188,7 @@ def homo_add_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_add_scalar_int_inplace(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_add_scalar_int_inplace",
         cipher,
         require_ext=False,
@@ -211,7 +202,7 @@ def homo_add_scalar_int_inplace(cipher, scalar, cryptoContext):
 
 
 def homo_sub_scalar_int(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_sub_scalar_int",
         cipher,
         require_ext=False,
@@ -221,7 +212,7 @@ def homo_sub_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_sub_scalar_int_inplace(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_sub_scalar_int_inplace",
         cipher,
         require_ext=False,
@@ -235,7 +226,7 @@ def homo_sub_scalar_int_inplace(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_int(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_mul_scalar_int",
         cipher,
         require_ext=False,
@@ -244,7 +235,7 @@ def homo_mul_scalar_int(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_int_inplace(cipher, scalar, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_mul_scalar_int_inplace",
         cipher,
         require_ext=False,
@@ -257,7 +248,7 @@ def homo_mul_scalar_int_inplace(cipher, scalar, cryptoContext):
 
 
 def homo_mul_scalar_double(cipher, constant, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_mul_scalar_double",
         cipher,
         require_ext=False,
@@ -271,7 +262,7 @@ def homo_mul_scalar_double(cipher, constant, cryptoContext):
 
 
 def homo_mul_scalar_double_inplace(cipher, constant, cryptoContext):
-    validation.validate_cipher_scalar_op(
+    validation.validate_cipher_op(
         "homo_mul_scalar_double_inplace",
         cipher,
         require_ext=False,
@@ -285,16 +276,9 @@ def homo_mul_scalar_double_inplace(cipher, constant, cryptoContext):
 
 
 def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
-    if not isinstance(ciphers, Cipher):
-        raise TypeError(f"ciphers: expected a batched Cipher, got {type(ciphers)}")
-    if not isinstance(plaintexts, Cipher):
-        raise TypeError(f"plaintexts: expected a batched Cipher, got {type(plaintexts)}")
-
-    groups = int(groups)
-    if groups <= 0:
-        raise ValueError(f"grouped_pairwise_mac: groups must be positive, got {groups}")
-    if ciphers.batch_size == 0:
-        raise ValueError("grouped_pairwise_mac: expected at least one cipher per group")
+    validation.require_batched_cipher("grouped_pairwise_mac", ciphers, "ciphers")
+    validation.require_batched_cipher("grouped_pairwise_mac", plaintexts, "plaintexts")
+    groups = validation.validate_positive_int("grouped_pairwise_mac", "groups", groups)
 
     expected_plaintexts = groups * ciphers.batch_size
     if plaintexts.batch_size != expected_plaintexts:
@@ -323,8 +307,7 @@ def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
 
 
 def grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext):
-    if not isinstance(ciphers, Cipher):
-        raise TypeError(f"ciphers: expected a batched Cipher, got {type(ciphers)}")
+    validation.require_batched_cipher("grouped_scalar_weighted_acc", ciphers, "ciphers")
     cv = F.cipher_grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext)
     return ciphers.cipher_like(
         list(cv),

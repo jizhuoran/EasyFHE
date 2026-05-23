@@ -384,7 +384,7 @@ def cv_mul_by_monomial(
 def cv_finalize_fast_rotation_ext(
     key_product_bx,
     key_product_ax,
-    product_indices,
+    key_product_indices,
     c0,
     c1,
     precomp_maps,
@@ -395,9 +395,37 @@ def cv_finalize_fast_rotation_ext(
     return torch.finalize_fast_rotation_ext(
         key_product_bx,
         key_product_ax,
-        product_indices,
+        key_product_indices,
         c0,
         c1,
+        precomp_maps,
+        context.primes,
+        context.PModq,
+        context.barret_ratio,
+        context.barret_k,
+        cur_limbs,
+        active_limbs,
+        context.N,
+    )
+
+
+def cv_double_hoist_giant_sum_ext(
+    base_bx,
+    base_ax,
+    key_product_bx,
+    key_product_ax,
+    c0,
+    precomp_maps,
+    cur_limbs,
+    active_limbs,
+    context,
+):
+    return torch.double_hoist_giant_sum_ext(
+        base_bx,
+        base_ax,
+        key_product_bx,
+        key_product_ax,
+        c0,
         precomp_maps,
         context.primes,
         context.PModq,
@@ -412,7 +440,7 @@ def cv_finalize_fast_rotation_ext(
 def cv_finalize_fast_rotation_q(
     moddown_bx,
     moddown_ax,
-    product_indices,
+    key_product_indices,
     c0,
     c1,
     precomp_maps,
@@ -422,7 +450,7 @@ def cv_finalize_fast_rotation_q(
     return torch.finalize_fast_rotation_q(
         moddown_bx,
         moddown_ax,
-        product_indices,
+        key_product_indices,
         c0,
         c1,
         precomp_maps,
