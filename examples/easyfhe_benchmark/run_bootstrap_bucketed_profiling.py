@@ -53,7 +53,8 @@ def _make_base_args(args: argparse.Namespace) -> SimpleNamespace:
         dcrt_bits=int(args.dcrt_bits),
         first_mod=int(args.first_mod),
         secret_key_dist=str(args.secret_key_dist),
-        rescale_tech=str(args.rescale_tech),
+        scale_mode=str(args.scale_mode),
+        rescale_policy=str(args.rescale_policy),
         device=str(args.device),
         rotation_random_mode=str(args.rotation_random_mode),
     )
@@ -178,7 +179,8 @@ def _bucket_report(
             "dcrt_bits": int(args.dcrt_bits),
             "first_mod": int(args.first_mod),
             "secret_key_dist": str(args.secret_key_dist),
-            "rescale_tech": str(args.rescale_tech),
+            "scale_mode": str(args.scale_mode),
+            "rescale_policy": str(args.rescale_policy),
             "warmup_heavy": int(args.warmup_heavy),
             "timed_heavy": int(args.timed_heavy),
             "target_limb_values": _target_limb_values(args, bucket["level_budget"]),
@@ -275,7 +277,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--dcrt-bits", type=int, default=52)
     ap.add_argument("--first-mod", type=int, default=55)
     ap.add_argument("--secret-key-dist", default="SPARSE_TERNARY")
-    ap.add_argument("--rescale-tech", default="FIXEDMANUAL")
+    ap.add_argument("--scale-mode", default="fixed")
+    ap.add_argument("--rescale-policy", default="manual", choices=("manual", "auto"))
     ap.add_argument("--limit-buckets", type=int)
     ap.add_argument("--include-samples", action="store_true")
     ap.add_argument("--no-resume", action="store_true")

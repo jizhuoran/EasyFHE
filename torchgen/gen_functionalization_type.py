@@ -74,6 +74,21 @@ MUTABLE_OPS_NOT_USING_FUNCTIONALIZATION = (
         "_fill_mem_eff_dropout_mask_",
         # Inference-only op called behind a custom op graph break.
         "_flash_attention_forward_no_dropout_inplace",
+        # EasyFHE native kernels are invoked only through thin FHE wrappers and
+        # do not participate in PyTorch functionalization.
+        "neg_mod_",
+        "add_mod_",
+        "sub_mod_",
+        "mul_mod_",
+        "add_scalar_mod_",
+        "sub_scalar_mod_",
+        "mul_scalar_mod_",
+        "cv_add_pair_",
+        "cv_sub_pair_",
+        "cv_mul_pt_pair_",
+        "cv_mul_scalar_pair_",
+        "mul_by_monomial_",
+        "mul_by_monomial.out",
     ]
 )
 

@@ -10,6 +10,8 @@
 #include <ATen/ops/stack.h>
 #include <ATen/ops/zeros.h>
 
+#include <vector>
+
 #include "ATen/native/fhe/cuda/Utils.cuh"
 
 __constant__ const uint64_t*  c_eval_swks[64];
@@ -131,6 +133,50 @@ __global__ void sum_reduce_fused_broadcast_key(
   }
 }
 
+__global__ void sum_reduce_fused_broadcast_key_batch1(
+    uint64_t* __restrict__ out_ax,
+    uint64_t* __restrict__ out_bx,
+    const uint64_t* __restrict__ in_ptr,
+    const uint64_t* __restrict__ eval_ax,
+    const uint64_t* __restrict__ eval_bx,
+    const size_t N,
+    const size_t length,
+    const size_t mult_length,
+    const size_t beta,
+    size_t curr_limbs,
+    size_t prime_gap,
+    size_t special_mod_start,
+    const uint64_t* __restrict__ primes,
+    const uint64_t* __restrict__ barret_ks,
+    const uint64_t* __restrict__ barret_ratios) {
+  const int idx = blockIdx.y;
+  const int i = idx * N + blockIdx.x * blockDim.x + threadIdx.x;
+  const int swk_gap =
+      static_cast<int>(special_mod_start) - static_cast<int>(curr_limbs);
+  const int prime_idx = (idx < curr_limbs) ? 0 : static_cast<int>(prime_gap);
+  const int swk_idx = (idx < curr_limbs) ? 0 : swk_gap;
+
+  const auto reduce_prime_idx = idx + prime_idx;
+  const auto prime = primes[reduce_prime_idx];
+  const auto barret_ratio = barret_ratios[reduce_prime_idx];
+  const auto barret_k = barret_ks[reduce_prime_idx];
+
+  uint128_t accum_ax = {0, 0};
+  uint128_t accum_bx = {0, 0};
+  for (int beta_idx = 0; beta_idx < beta; beta_idx++) {
+    const int stride = N * (mult_length * beta_idx + swk_idx);
+    const int in_ptr_stride = N * length * beta_idx;
+    const uint64_t op1 = in_ptr[i + in_ptr_stride];
+    const auto mul_ax = mult_64_64_128(op1, eval_ax[i + stride]);
+    const auto mul_bx = mult_64_64_128(op1, eval_bx[i + stride]);
+    inplace_add_128_128(mul_ax, accum_ax);
+    inplace_add_128_128(mul_bx, accum_bx);
+  }
+
+  out_ax[i] = barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+  out_bx[i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+}
+
 #define SWK_PARAMS_1  uint64_t* swk0
 #define SWK_PARAMS_2  SWK_PARAMS_1, uint64_t* swk1
 #define SWK_PARAMS_3  SWK_PARAMS_2, uint64_t* swk2
@@ -230,6 +276,72 @@ __global__ void sum_reduce_fused_broadcast_key(
 #define SWK_PARM_31 SWK_PARM_30, swks[30].data_ptr<uint64_t>()
 #define SWK_PARM_32 SWK_PARM_31, swks[31].data_ptr<uint64_t>()
 
+#define SWK_PAIR_PARAMS_1  const uint64_t* swk_bx0, const uint64_t* swk_ax0
+#define SWK_PAIR_PARAMS_2  SWK_PAIR_PARAMS_1, const uint64_t* swk_bx1, const uint64_t* swk_ax1
+#define SWK_PAIR_PARAMS_3  SWK_PAIR_PARAMS_2, const uint64_t* swk_bx2, const uint64_t* swk_ax2
+#define SWK_PAIR_PARAMS_4  SWK_PAIR_PARAMS_3, const uint64_t* swk_bx3, const uint64_t* swk_ax3
+#define SWK_PAIR_PARAMS_5  SWK_PAIR_PARAMS_4, const uint64_t* swk_bx4, const uint64_t* swk_ax4
+#define SWK_PAIR_PARAMS_6  SWK_PAIR_PARAMS_5, const uint64_t* swk_bx5, const uint64_t* swk_ax5
+#define SWK_PAIR_PARAMS_7  SWK_PAIR_PARAMS_6, const uint64_t* swk_bx6, const uint64_t* swk_ax6
+#define SWK_PAIR_PARAMS_8  SWK_PAIR_PARAMS_7, const uint64_t* swk_bx7, const uint64_t* swk_ax7
+#define SWK_PAIR_PARAMS_9  SWK_PAIR_PARAMS_8, const uint64_t* swk_bx8, const uint64_t* swk_ax8
+#define SWK_PAIR_PARAMS_10 SWK_PAIR_PARAMS_9, const uint64_t* swk_bx9, const uint64_t* swk_ax9
+#define SWK_PAIR_PARAMS_11 SWK_PAIR_PARAMS_10, const uint64_t* swk_bx10, const uint64_t* swk_ax10
+#define SWK_PAIR_PARAMS_12 SWK_PAIR_PARAMS_11, const uint64_t* swk_bx11, const uint64_t* swk_ax11
+#define SWK_PAIR_PARAMS_13 SWK_PAIR_PARAMS_12, const uint64_t* swk_bx12, const uint64_t* swk_ax12
+#define SWK_PAIR_PARAMS_14 SWK_PAIR_PARAMS_13, const uint64_t* swk_bx13, const uint64_t* swk_ax13
+#define SWK_PAIR_PARAMS_15 SWK_PAIR_PARAMS_14, const uint64_t* swk_bx14, const uint64_t* swk_ax14
+#define SWK_PAIR_PARAMS_16 SWK_PAIR_PARAMS_15, const uint64_t* swk_bx15, const uint64_t* swk_ax15
+#define SWK_PAIR_PARAMS_17 SWK_PAIR_PARAMS_16, const uint64_t* swk_bx16, const uint64_t* swk_ax16
+#define SWK_PAIR_PARAMS_18 SWK_PAIR_PARAMS_17, const uint64_t* swk_bx17, const uint64_t* swk_ax17
+#define SWK_PAIR_PARAMS_19 SWK_PAIR_PARAMS_18, const uint64_t* swk_bx18, const uint64_t* swk_ax18
+#define SWK_PAIR_PARAMS_20 SWK_PAIR_PARAMS_19, const uint64_t* swk_bx19, const uint64_t* swk_ax19
+#define SWK_PAIR_PARAMS_21 SWK_PAIR_PARAMS_20, const uint64_t* swk_bx20, const uint64_t* swk_ax20
+#define SWK_PAIR_PARAMS_22 SWK_PAIR_PARAMS_21, const uint64_t* swk_bx21, const uint64_t* swk_ax21
+#define SWK_PAIR_PARAMS_23 SWK_PAIR_PARAMS_22, const uint64_t* swk_bx22, const uint64_t* swk_ax22
+#define SWK_PAIR_PARAMS_24 SWK_PAIR_PARAMS_23, const uint64_t* swk_bx23, const uint64_t* swk_ax23
+#define SWK_PAIR_PARAMS_25 SWK_PAIR_PARAMS_24, const uint64_t* swk_bx24, const uint64_t* swk_ax24
+#define SWK_PAIR_PARAMS_26 SWK_PAIR_PARAMS_25, const uint64_t* swk_bx25, const uint64_t* swk_ax25
+#define SWK_PAIR_PARAMS_27 SWK_PAIR_PARAMS_26, const uint64_t* swk_bx26, const uint64_t* swk_ax26
+#define SWK_PAIR_PARAMS_28 SWK_PAIR_PARAMS_27, const uint64_t* swk_bx27, const uint64_t* swk_ax27
+#define SWK_PAIR_PARAMS_29 SWK_PAIR_PARAMS_28, const uint64_t* swk_bx28, const uint64_t* swk_ax28
+#define SWK_PAIR_PARAMS_30 SWK_PAIR_PARAMS_29, const uint64_t* swk_bx29, const uint64_t* swk_ax29
+#define SWK_PAIR_PARAMS_31 SWK_PAIR_PARAMS_30, const uint64_t* swk_bx30, const uint64_t* swk_ax30
+#define SWK_PAIR_PARAMS_32 SWK_PAIR_PARAMS_31, const uint64_t* swk_bx31, const uint64_t* swk_ax31
+
+#define SWK_BX_AX_PARM_1  swk_bxs[0].data_ptr<uint64_t>(), swk_axs[0].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_2  SWK_BX_AX_PARM_1, swk_bxs[1].data_ptr<uint64_t>(), swk_axs[1].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_3  SWK_BX_AX_PARM_2, swk_bxs[2].data_ptr<uint64_t>(), swk_axs[2].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_4  SWK_BX_AX_PARM_3, swk_bxs[3].data_ptr<uint64_t>(), swk_axs[3].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_5  SWK_BX_AX_PARM_4, swk_bxs[4].data_ptr<uint64_t>(), swk_axs[4].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_6  SWK_BX_AX_PARM_5, swk_bxs[5].data_ptr<uint64_t>(), swk_axs[5].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_7  SWK_BX_AX_PARM_6, swk_bxs[6].data_ptr<uint64_t>(), swk_axs[6].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_8  SWK_BX_AX_PARM_7, swk_bxs[7].data_ptr<uint64_t>(), swk_axs[7].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_9  SWK_BX_AX_PARM_8, swk_bxs[8].data_ptr<uint64_t>(), swk_axs[8].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_10 SWK_BX_AX_PARM_9, swk_bxs[9].data_ptr<uint64_t>(), swk_axs[9].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_11 SWK_BX_AX_PARM_10, swk_bxs[10].data_ptr<uint64_t>(), swk_axs[10].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_12 SWK_BX_AX_PARM_11, swk_bxs[11].data_ptr<uint64_t>(), swk_axs[11].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_13 SWK_BX_AX_PARM_12, swk_bxs[12].data_ptr<uint64_t>(), swk_axs[12].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_14 SWK_BX_AX_PARM_13, swk_bxs[13].data_ptr<uint64_t>(), swk_axs[13].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_15 SWK_BX_AX_PARM_14, swk_bxs[14].data_ptr<uint64_t>(), swk_axs[14].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_16 SWK_BX_AX_PARM_15, swk_bxs[15].data_ptr<uint64_t>(), swk_axs[15].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_17 SWK_BX_AX_PARM_16, swk_bxs[16].data_ptr<uint64_t>(), swk_axs[16].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_18 SWK_BX_AX_PARM_17, swk_bxs[17].data_ptr<uint64_t>(), swk_axs[17].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_19 SWK_BX_AX_PARM_18, swk_bxs[18].data_ptr<uint64_t>(), swk_axs[18].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_20 SWK_BX_AX_PARM_19, swk_bxs[19].data_ptr<uint64_t>(), swk_axs[19].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_21 SWK_BX_AX_PARM_20, swk_bxs[20].data_ptr<uint64_t>(), swk_axs[20].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_22 SWK_BX_AX_PARM_21, swk_bxs[21].data_ptr<uint64_t>(), swk_axs[21].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_23 SWK_BX_AX_PARM_22, swk_bxs[22].data_ptr<uint64_t>(), swk_axs[22].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_24 SWK_BX_AX_PARM_23, swk_bxs[23].data_ptr<uint64_t>(), swk_axs[23].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_25 SWK_BX_AX_PARM_24, swk_bxs[24].data_ptr<uint64_t>(), swk_axs[24].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_26 SWK_BX_AX_PARM_25, swk_bxs[25].data_ptr<uint64_t>(), swk_axs[25].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_27 SWK_BX_AX_PARM_26, swk_bxs[26].data_ptr<uint64_t>(), swk_axs[26].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_28 SWK_BX_AX_PARM_27, swk_bxs[27].data_ptr<uint64_t>(), swk_axs[27].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_29 SWK_BX_AX_PARM_28, swk_bxs[28].data_ptr<uint64_t>(), swk_axs[28].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_30 SWK_BX_AX_PARM_29, swk_bxs[29].data_ptr<uint64_t>(), swk_axs[29].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_31 SWK_BX_AX_PARM_30, swk_bxs[30].data_ptr<uint64_t>(), swk_axs[30].data_ptr<uint64_t>()
+#define SWK_BX_AX_PARM_32 SWK_BX_AX_PARM_31, swk_bxs[31].data_ptr<uint64_t>(), swk_axs[31].data_ptr<uint64_t>()
+
 #define DEFINE_COMPUTE(BATCH_ID)                                          \
   {                                                                       \
     uint128_t accum_ax = {0, 0};                                          \
@@ -296,6 +408,140 @@ __global__ void sum_reduce_fused_broadcast_key(
 #define COMPUTE_ITER_31 COMPUTE_ITER_30 DEFINE_COMPUTE(30)
 #define COMPUTE_ITER_32 COMPUTE_ITER_31 DEFINE_COMPUTE(31)
 
+#define DEFINE_COMPUTE_PAIR(BATCH_ID, BATCH)                              \
+  {                                                                       \
+    uint128_t accum_ax = {0, 0};                                          \
+    uint128_t accum_bx = {0, 0};                                          \
+    const int64_t special_mod_start = special_mod_start_list[BATCH_ID];   \
+    const int swk_gap = static_cast<int>(special_mod_start - static_cast<int64_t>(curr_limbs)); \
+    const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : static_cast<int>(prime_gap)); \
+    const int reduce_prime_idx = idx + prime_idx;                         \
+    const auto prime = primes[reduce_prime_idx];                          \
+    const auto barret_ratio = barret_ratios[reduce_prime_idx];            \
+    const auto barret_k = barret_ks[reduce_prime_idx];                    \
+    const int mult_length = static_cast<int>(special_mod_start + sizeP);  \
+    const int swk_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : swk_gap);   \
+    const uint64_t* __restrict__ eval_bx = swk_bx##BATCH_ID;              \
+    const uint64_t* __restrict__ eval_ax = swk_ax##BATCH_ID;              \
+    for (int beta_idx = 0; beta_idx < beta; beta_idx++) {                 \
+      const int stride = N * (mult_length * beta_idx + swk_idx);          \
+      auto op1 = shared_mem[threadIdx.x + beta_idx * BLOCK_SIZE];         \
+      auto op2_bx = eval_bx[i + stride];                                  \
+      auto op2_ax = eval_ax[i + stride];                                  \
+      auto mul_ax = mult_64_64_128(op1, op2_ax);                          \
+      auto mul_bx = mult_64_64_128(op1, op2_bx);                          \
+      inplace_add_128_128(mul_ax, accum_ax);                              \
+      inplace_add_128_128(mul_bx, accum_bx);                              \
+    }                                                                     \
+    auto res_ax =                                                         \
+        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+    auto res_bx =                                                         \
+        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+    out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
+    out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
+  }
+
+#define COMPUTE_PAIR_ITER_1(BATCH)  DEFINE_COMPUTE_PAIR(0, BATCH)
+#define COMPUTE_PAIR_ITER_2(BATCH)  COMPUTE_PAIR_ITER_1(BATCH) DEFINE_COMPUTE_PAIR(1, BATCH)
+#define COMPUTE_PAIR_ITER_3(BATCH)  COMPUTE_PAIR_ITER_2(BATCH) DEFINE_COMPUTE_PAIR(2, BATCH)
+#define COMPUTE_PAIR_ITER_4(BATCH)  COMPUTE_PAIR_ITER_3(BATCH) DEFINE_COMPUTE_PAIR(3, BATCH)
+#define COMPUTE_PAIR_ITER_5(BATCH)  COMPUTE_PAIR_ITER_4(BATCH) DEFINE_COMPUTE_PAIR(4, BATCH)
+#define COMPUTE_PAIR_ITER_6(BATCH)  COMPUTE_PAIR_ITER_5(BATCH) DEFINE_COMPUTE_PAIR(5, BATCH)
+#define COMPUTE_PAIR_ITER_7(BATCH)  COMPUTE_PAIR_ITER_6(BATCH) DEFINE_COMPUTE_PAIR(6, BATCH)
+#define COMPUTE_PAIR_ITER_8(BATCH)  COMPUTE_PAIR_ITER_7(BATCH) DEFINE_COMPUTE_PAIR(7, BATCH)
+#define COMPUTE_PAIR_ITER_9(BATCH)  COMPUTE_PAIR_ITER_8(BATCH) DEFINE_COMPUTE_PAIR(8, BATCH)
+#define COMPUTE_PAIR_ITER_10(BATCH) COMPUTE_PAIR_ITER_9(BATCH) DEFINE_COMPUTE_PAIR(9, BATCH)
+#define COMPUTE_PAIR_ITER_11(BATCH) COMPUTE_PAIR_ITER_10(BATCH) DEFINE_COMPUTE_PAIR(10, BATCH)
+#define COMPUTE_PAIR_ITER_12(BATCH) COMPUTE_PAIR_ITER_11(BATCH) DEFINE_COMPUTE_PAIR(11, BATCH)
+#define COMPUTE_PAIR_ITER_13(BATCH) COMPUTE_PAIR_ITER_12(BATCH) DEFINE_COMPUTE_PAIR(12, BATCH)
+#define COMPUTE_PAIR_ITER_14(BATCH) COMPUTE_PAIR_ITER_13(BATCH) DEFINE_COMPUTE_PAIR(13, BATCH)
+#define COMPUTE_PAIR_ITER_15(BATCH) COMPUTE_PAIR_ITER_14(BATCH) DEFINE_COMPUTE_PAIR(14, BATCH)
+#define COMPUTE_PAIR_ITER_16(BATCH) COMPUTE_PAIR_ITER_15(BATCH) DEFINE_COMPUTE_PAIR(15, BATCH)
+#define COMPUTE_PAIR_ITER_17(BATCH) COMPUTE_PAIR_ITER_16(BATCH) DEFINE_COMPUTE_PAIR(16, BATCH)
+#define COMPUTE_PAIR_ITER_18(BATCH) COMPUTE_PAIR_ITER_17(BATCH) DEFINE_COMPUTE_PAIR(17, BATCH)
+#define COMPUTE_PAIR_ITER_19(BATCH) COMPUTE_PAIR_ITER_18(BATCH) DEFINE_COMPUTE_PAIR(18, BATCH)
+#define COMPUTE_PAIR_ITER_20(BATCH) COMPUTE_PAIR_ITER_19(BATCH) DEFINE_COMPUTE_PAIR(19, BATCH)
+#define COMPUTE_PAIR_ITER_21(BATCH) COMPUTE_PAIR_ITER_20(BATCH) DEFINE_COMPUTE_PAIR(20, BATCH)
+#define COMPUTE_PAIR_ITER_22(BATCH) COMPUTE_PAIR_ITER_21(BATCH) DEFINE_COMPUTE_PAIR(21, BATCH)
+#define COMPUTE_PAIR_ITER_23(BATCH) COMPUTE_PAIR_ITER_22(BATCH) DEFINE_COMPUTE_PAIR(22, BATCH)
+#define COMPUTE_PAIR_ITER_24(BATCH) COMPUTE_PAIR_ITER_23(BATCH) DEFINE_COMPUTE_PAIR(23, BATCH)
+#define COMPUTE_PAIR_ITER_25(BATCH) COMPUTE_PAIR_ITER_24(BATCH) DEFINE_COMPUTE_PAIR(24, BATCH)
+#define COMPUTE_PAIR_ITER_26(BATCH) COMPUTE_PAIR_ITER_25(BATCH) DEFINE_COMPUTE_PAIR(25, BATCH)
+#define COMPUTE_PAIR_ITER_27(BATCH) COMPUTE_PAIR_ITER_26(BATCH) DEFINE_COMPUTE_PAIR(26, BATCH)
+#define COMPUTE_PAIR_ITER_28(BATCH) COMPUTE_PAIR_ITER_27(BATCH) DEFINE_COMPUTE_PAIR(27, BATCH)
+#define COMPUTE_PAIR_ITER_29(BATCH) COMPUTE_PAIR_ITER_28(BATCH) DEFINE_COMPUTE_PAIR(28, BATCH)
+#define COMPUTE_PAIR_ITER_30(BATCH) COMPUTE_PAIR_ITER_29(BATCH) DEFINE_COMPUTE_PAIR(29, BATCH)
+#define COMPUTE_PAIR_ITER_31(BATCH) COMPUTE_PAIR_ITER_30(BATCH) DEFINE_COMPUTE_PAIR(30, BATCH)
+#define COMPUTE_PAIR_ITER_32(BATCH) COMPUTE_PAIR_ITER_31(BATCH) DEFINE_COMPUTE_PAIR(31, BATCH)
+
+#define DEFINE_COMPUTE_PAIRWISE(BATCH_ID)                                  \
+  {                                                                       \
+    uint128_t accum_ax = {0, 0};                                          \
+    uint128_t accum_bx = {0, 0};                                          \
+    const int64_t special_mod_start = special_mod_start_list[BATCH_ID];   \
+    const int swk_gap = static_cast<int>(special_mod_start - static_cast<int64_t>(curr_limbs)); \
+    const int prime_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : static_cast<int>(prime_gap)); \
+    const int reduce_prime_idx = idx + prime_idx;                         \
+    const auto prime = primes[reduce_prime_idx];                          \
+    const auto barret_ratio = barret_ratios[reduce_prime_idx];            \
+    const auto barret_k = barret_ks[reduce_prime_idx];                    \
+    const int mult_length = static_cast<int>(special_mod_start + sizeP);  \
+    const int swk_idx = ((idx >= 0 && idx < curr_limbs) ? 0 : swk_gap);   \
+    const uint64_t* __restrict__ eval_bx = swk_bx##BATCH_ID;              \
+    const uint64_t* __restrict__ eval_ax = swk_ax##BATCH_ID;              \
+    const int64_t input_batch_stride = static_cast<int64_t>(BATCH_ID) * N * length * beta; \
+    for (int beta_idx = 0; beta_idx < beta; beta_idx++) {                 \
+      const int stride = N * (mult_length * beta_idx + swk_idx);          \
+      const int in_ptr_stride = N * length * beta_idx;                    \
+      auto op1 = in_ptr[input_batch_stride + i + in_ptr_stride];          \
+      auto op2_bx = eval_bx[i + stride];                                  \
+      auto op2_ax = eval_ax[i + stride];                                  \
+      auto mul_ax = mult_64_64_128(op1, op2_ax);                          \
+      auto mul_bx = mult_64_64_128(op1, op2_bx);                          \
+      inplace_add_128_128(mul_ax, accum_ax);                              \
+      inplace_add_128_128(mul_bx, accum_bx);                              \
+    }                                                                     \
+    auto res_ax =                                                         \
+        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+    auto res_bx =                                                         \
+        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+    out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
+    out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
+  }
+
+#define COMPUTE_PAIRWISE_ITER_1  DEFINE_COMPUTE_PAIRWISE(0)
+#define COMPUTE_PAIRWISE_ITER_2  COMPUTE_PAIRWISE_ITER_1 DEFINE_COMPUTE_PAIRWISE(1)
+#define COMPUTE_PAIRWISE_ITER_3  COMPUTE_PAIRWISE_ITER_2 DEFINE_COMPUTE_PAIRWISE(2)
+#define COMPUTE_PAIRWISE_ITER_4  COMPUTE_PAIRWISE_ITER_3 DEFINE_COMPUTE_PAIRWISE(3)
+#define COMPUTE_PAIRWISE_ITER_5  COMPUTE_PAIRWISE_ITER_4 DEFINE_COMPUTE_PAIRWISE(4)
+#define COMPUTE_PAIRWISE_ITER_6  COMPUTE_PAIRWISE_ITER_5 DEFINE_COMPUTE_PAIRWISE(5)
+#define COMPUTE_PAIRWISE_ITER_7  COMPUTE_PAIRWISE_ITER_6 DEFINE_COMPUTE_PAIRWISE(6)
+#define COMPUTE_PAIRWISE_ITER_8  COMPUTE_PAIRWISE_ITER_7 DEFINE_COMPUTE_PAIRWISE(7)
+#define COMPUTE_PAIRWISE_ITER_9  COMPUTE_PAIRWISE_ITER_8 DEFINE_COMPUTE_PAIRWISE(8)
+#define COMPUTE_PAIRWISE_ITER_10 COMPUTE_PAIRWISE_ITER_9 DEFINE_COMPUTE_PAIRWISE(9)
+#define COMPUTE_PAIRWISE_ITER_11 COMPUTE_PAIRWISE_ITER_10 DEFINE_COMPUTE_PAIRWISE(10)
+#define COMPUTE_PAIRWISE_ITER_12 COMPUTE_PAIRWISE_ITER_11 DEFINE_COMPUTE_PAIRWISE(11)
+#define COMPUTE_PAIRWISE_ITER_13 COMPUTE_PAIRWISE_ITER_12 DEFINE_COMPUTE_PAIRWISE(12)
+#define COMPUTE_PAIRWISE_ITER_14 COMPUTE_PAIRWISE_ITER_13 DEFINE_COMPUTE_PAIRWISE(13)
+#define COMPUTE_PAIRWISE_ITER_15 COMPUTE_PAIRWISE_ITER_14 DEFINE_COMPUTE_PAIRWISE(14)
+#define COMPUTE_PAIRWISE_ITER_16 COMPUTE_PAIRWISE_ITER_15 DEFINE_COMPUTE_PAIRWISE(15)
+#define COMPUTE_PAIRWISE_ITER_17 COMPUTE_PAIRWISE_ITER_16 DEFINE_COMPUTE_PAIRWISE(16)
+#define COMPUTE_PAIRWISE_ITER_18 COMPUTE_PAIRWISE_ITER_17 DEFINE_COMPUTE_PAIRWISE(17)
+#define COMPUTE_PAIRWISE_ITER_19 COMPUTE_PAIRWISE_ITER_18 DEFINE_COMPUTE_PAIRWISE(18)
+#define COMPUTE_PAIRWISE_ITER_20 COMPUTE_PAIRWISE_ITER_19 DEFINE_COMPUTE_PAIRWISE(19)
+#define COMPUTE_PAIRWISE_ITER_21 COMPUTE_PAIRWISE_ITER_20 DEFINE_COMPUTE_PAIRWISE(20)
+#define COMPUTE_PAIRWISE_ITER_22 COMPUTE_PAIRWISE_ITER_21 DEFINE_COMPUTE_PAIRWISE(21)
+#define COMPUTE_PAIRWISE_ITER_23 COMPUTE_PAIRWISE_ITER_22 DEFINE_COMPUTE_PAIRWISE(22)
+#define COMPUTE_PAIRWISE_ITER_24 COMPUTE_PAIRWISE_ITER_23 DEFINE_COMPUTE_PAIRWISE(23)
+#define COMPUTE_PAIRWISE_ITER_25 COMPUTE_PAIRWISE_ITER_24 DEFINE_COMPUTE_PAIRWISE(24)
+#define COMPUTE_PAIRWISE_ITER_26 COMPUTE_PAIRWISE_ITER_25 DEFINE_COMPUTE_PAIRWISE(25)
+#define COMPUTE_PAIRWISE_ITER_27 COMPUTE_PAIRWISE_ITER_26 DEFINE_COMPUTE_PAIRWISE(26)
+#define COMPUTE_PAIRWISE_ITER_28 COMPUTE_PAIRWISE_ITER_27 DEFINE_COMPUTE_PAIRWISE(27)
+#define COMPUTE_PAIRWISE_ITER_29 COMPUTE_PAIRWISE_ITER_28 DEFINE_COMPUTE_PAIRWISE(28)
+#define COMPUTE_PAIRWISE_ITER_30 COMPUTE_PAIRWISE_ITER_29 DEFINE_COMPUTE_PAIRWISE(29)
+#define COMPUTE_PAIRWISE_ITER_31 COMPUTE_PAIRWISE_ITER_30 DEFINE_COMPUTE_PAIRWISE(30)
+#define COMPUTE_PAIRWISE_ITER_32 COMPUTE_PAIRWISE_ITER_31 DEFINE_COMPUTE_PAIRWISE(31)
+
 #define DEFINE_KERNEL(BATCH)                                                \
   __global__ void sum_reduce_fused_broadcast_cipher_DL(                     \
       uint64_t* __restrict__ out_ptr,                                       \
@@ -322,6 +568,55 @@ __global__ void sum_reduce_fused_broadcast_key(
     }                                                                       \
     __syncthreads();                                                        \
     COMPUTE_ITER_##BATCH;                                                   \
+  }
+
+#define DEFINE_PAIR_KERNEL(BATCH)                                           \
+  __global__ void sum_reduce_fused_broadcast_cipher_pair_DL(                \
+      uint64_t* __restrict__ out_bx_ptr,                                    \
+      uint64_t* __restrict__ out_ax_ptr,                                    \
+      const uint64_t* __restrict__ in_ptr,                                  \
+      SWK_PAIR_PARAMS_##BATCH,                                              \
+      const size_t N,                                                       \
+      const size_t length,                                                  \
+      const size_t sizeP,                                                   \
+      const size_t beta,                                                    \
+      size_t curr_limbs,                                                    \
+      size_t prime_gap,                                                     \
+      const int64_t* special_mod_start_list,                                \
+      const uint64_t* primes,                                               \
+      const uint64_t* barret_ks,                                            \
+      const uint64_t* barret_ratios) {                                      \
+    const int idx = blockIdx.y;                                             \
+    const int i = idx * N + blockIdx.x * blockDim.x + threadIdx.x;          \
+    extern __shared__ uint64_t shared_mem[];                                \
+    for (int beta_idx = 0; beta_idx < beta; beta_idx++) {                   \
+      const int in_ptr_stride = N * length * beta_idx;                      \
+      shared_mem[threadIdx.x + beta_idx * BLOCK_SIZE] =                     \
+          in_ptr[i + in_ptr_stride];                                        \
+    }                                                                       \
+    __syncthreads();                                                        \
+    COMPUTE_PAIR_ITER_##BATCH(BATCH);                                       \
+  }
+
+#define DEFINE_PAIRWISE_KERNEL(BATCH)                                       \
+  __global__ void sum_reduce_fused_pairwise_cipher_pair_DL(                 \
+      uint64_t* __restrict__ out_bx_ptr,                                    \
+      uint64_t* __restrict__ out_ax_ptr,                                    \
+      const uint64_t* __restrict__ in_ptr,                                  \
+      SWK_PAIR_PARAMS_##BATCH,                                              \
+      const size_t N,                                                       \
+      const size_t length,                                                  \
+      const size_t sizeP,                                                   \
+      const size_t beta,                                                    \
+      size_t curr_limbs,                                                    \
+      size_t prime_gap,                                                     \
+      const int64_t* special_mod_start_list,                                \
+      const uint64_t* primes,                                               \
+      const uint64_t* barret_ks,                                            \
+      const uint64_t* barret_ratios) {                                      \
+    const int idx = blockIdx.y;                                             \
+    const int i = idx * N + blockIdx.x * blockDim.x + threadIdx.x;          \
+    COMPUTE_PAIRWISE_ITER_##BATCH;                                          \
   }
 
 
@@ -357,6 +652,71 @@ DEFINE_KERNEL(29);
 DEFINE_KERNEL(30);
 DEFINE_KERNEL(31);
 DEFINE_KERNEL(32);
+DEFINE_PAIR_KERNEL(1);
+DEFINE_PAIR_KERNEL(2);
+DEFINE_PAIR_KERNEL(3);
+DEFINE_PAIR_KERNEL(4);
+DEFINE_PAIR_KERNEL(5);
+DEFINE_PAIR_KERNEL(6);
+DEFINE_PAIR_KERNEL(7);
+DEFINE_PAIR_KERNEL(8);
+DEFINE_PAIR_KERNEL(9);
+DEFINE_PAIR_KERNEL(10);
+DEFINE_PAIR_KERNEL(11);
+DEFINE_PAIR_KERNEL(12);
+DEFINE_PAIR_KERNEL(13);
+DEFINE_PAIR_KERNEL(14);
+DEFINE_PAIR_KERNEL(15);
+DEFINE_PAIR_KERNEL(16);
+DEFINE_PAIR_KERNEL(17);
+DEFINE_PAIR_KERNEL(18);
+DEFINE_PAIR_KERNEL(19);
+DEFINE_PAIR_KERNEL(20);
+DEFINE_PAIR_KERNEL(21);
+DEFINE_PAIR_KERNEL(22);
+DEFINE_PAIR_KERNEL(23);
+DEFINE_PAIR_KERNEL(24);
+DEFINE_PAIR_KERNEL(25);
+DEFINE_PAIR_KERNEL(26);
+DEFINE_PAIR_KERNEL(27);
+DEFINE_PAIR_KERNEL(28);
+DEFINE_PAIR_KERNEL(29);
+DEFINE_PAIR_KERNEL(30);
+DEFINE_PAIR_KERNEL(31);
+DEFINE_PAIR_KERNEL(32);
+
+DEFINE_PAIRWISE_KERNEL(1);
+DEFINE_PAIRWISE_KERNEL(2);
+DEFINE_PAIRWISE_KERNEL(3);
+DEFINE_PAIRWISE_KERNEL(4);
+DEFINE_PAIRWISE_KERNEL(5);
+DEFINE_PAIRWISE_KERNEL(6);
+DEFINE_PAIRWISE_KERNEL(7);
+DEFINE_PAIRWISE_KERNEL(8);
+DEFINE_PAIRWISE_KERNEL(9);
+DEFINE_PAIRWISE_KERNEL(10);
+DEFINE_PAIRWISE_KERNEL(11);
+DEFINE_PAIRWISE_KERNEL(12);
+DEFINE_PAIRWISE_KERNEL(13);
+DEFINE_PAIRWISE_KERNEL(14);
+DEFINE_PAIRWISE_KERNEL(15);
+DEFINE_PAIRWISE_KERNEL(16);
+DEFINE_PAIRWISE_KERNEL(17);
+DEFINE_PAIRWISE_KERNEL(18);
+DEFINE_PAIRWISE_KERNEL(19);
+DEFINE_PAIRWISE_KERNEL(20);
+DEFINE_PAIRWISE_KERNEL(21);
+DEFINE_PAIRWISE_KERNEL(22);
+DEFINE_PAIRWISE_KERNEL(23);
+DEFINE_PAIRWISE_KERNEL(24);
+DEFINE_PAIRWISE_KERNEL(25);
+DEFINE_PAIRWISE_KERNEL(26);
+DEFINE_PAIRWISE_KERNEL(27);
+DEFINE_PAIRWISE_KERNEL(28);
+DEFINE_PAIRWISE_KERNEL(29);
+DEFINE_PAIRWISE_KERNEL(30);
+DEFINE_PAIRWISE_KERNEL(31);
+DEFINE_PAIRWISE_KERNEL(32);
 
 } // namespace fhe
 
@@ -383,6 +743,52 @@ namespace at::native {
         primes_ptr,                              \
         barret_k_ptr,                            \
         barret_ratio_ptr);                       \
+    break;
+
+#define DISPATCH_SUM_REDUCE_PAIR_CASE(NUM)            \
+  case NUM:                                           \
+    fhe::sum_reduce_fused_broadcast_cipher_pair_DL<<< \
+        gridDim,                                      \
+        blockDim,                                     \
+        BLOCK_SIZE * beta * sizeof(uint64_t),         \
+        stream>>>(                                    \
+        out_bx_ptr,                                   \
+        out_ax_ptr,                                   \
+        in_ptr,                                       \
+        SWK_BX_AX_PARM_##NUM,                         \
+        N,                                            \
+        length,                                       \
+        sizeP,                                        \
+        beta,                                         \
+        curr_limbs,                                   \
+        prime_gap,                                    \
+        special_mod_start_ptr,                        \
+        primes_ptr,                                   \
+        barret_k_ptr,                                 \
+        barret_ratio_ptr);                            \
+    break;
+
+#define DISPATCH_SUM_REDUCE_PAIRWISE_CASE(NUM)       \
+  case NUM:                                          \
+    fhe::sum_reduce_fused_pairwise_cipher_pair_DL<<< \
+        gridDim,                                     \
+        blockDim,                                    \
+        0,                                           \
+        stream>>>(                                   \
+        out_bx_ptr,                                  \
+        out_ax_ptr,                                  \
+        in_ptr,                                      \
+        SWK_BX_AX_PARM_##NUM,                        \
+        N,                                           \
+        length,                                      \
+        sizeP,                                       \
+        beta,                                        \
+        curr_limbs,                                  \
+        prime_gap,                                   \
+        special_mod_start_ptr,                       \
+        primes_ptr,                                  \
+        barret_k_ptr,                                \
+        barret_ratio_ptr);                           \
     break;
 
 static void innerproduct_broadcast_cipher_template(
@@ -460,6 +866,134 @@ static void innerproduct_broadcast_cipher_template(
   DISPATCH_BATCH_FUNC(swks.size(), DISPATCH_SUM_REDUCE_CASE);
 }
 
+static void innerproduct_broadcast_template(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    const Tensor& in,
+    const TensorList& swk_bxs,
+    const TensorList& swk_axs,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t L,
+    int64_t N,
+    const Tensor& special_mod_start,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  (void)workspace;
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  const int length = (curr_limbs + sizeP);
+  const int prime_gap = L - curr_limbs;
+  const int B = static_cast<int>(swk_bxs.size());
+  TORCH_INTERNAL_ASSERT(B > 0, "swk_bxs must not be empty");
+  TORCH_INTERNAL_ASSERT(swk_axs.size() == swk_bxs.size(), "swk bx/ax list size mismatch");
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast expects batch == 1");
+  TORCH_INTERNAL_ASSERT(out_bx.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_ax.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes() == out_ax.sizes());
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[0] == B);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[1] == length);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[2] == N);
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.numel() == B,
+      "special_mod_start numel must equal swk list size");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.device() == in.device(),
+      "special_mod_start must be on same device as in");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.scalar_type() == at::kLong,
+      "special_mod_start must be int64");
+
+  for (int b = 0; b < B; ++b) {
+    TORCH_CHECK(swk_bxs[b].dim() == 3, "swk bx tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_axs[b].dim() == 3, "swk ax tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_bxs[b].sizes() == swk_axs[b].sizes(), "swk bx/ax tensor shape mismatch");
+    const auto sizes = swk_bxs[b].sizes();
+    TORCH_CHECK(sizes[0] >= beta, "swk beta dimension must be >= ceil(curr_limbs / alpha)");
+    TORCH_CHECK(sizes[2] == N, "swk last dimension must equal N");
+  }
+
+  auto* out_bx_ptr = out_bx.data_ptr<uint64_t>();
+  auto* out_ax_ptr = out_ax.data_ptr<uint64_t>();
+  const auto* in_ptr = in.data_ptr<uint64_t>();
+  const auto* special_mod_start_ptr = special_mod_start.data_ptr<int64_t>();
+  const auto* primes_ptr = primes.data_ptr<uint64_t>();
+  const auto* barret_ratio_ptr = barret_ratio.data_ptr<uint64_t>();
+  const auto* barret_k_ptr = barret_k.data_ptr<uint64_t>();
+  auto gridDim = dim3(N / BLOCK_SIZE, length);
+  auto blockDim = BLOCK_SIZE;
+  auto stream = at::cuda::getCurrentCUDAStream();
+  DISPATCH_BATCH_FUNC(B, DISPATCH_SUM_REDUCE_PAIR_CASE);
+}
+
+static void innerproduct_pairwise_template(
+    Tensor& out_bx,
+    Tensor& out_ax,
+    const Tensor& in,
+    const TensorList& swk_bxs,
+    const TensorList& swk_axs,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t L,
+    int64_t N,
+    const Tensor& special_mod_start,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  (void)workspace;
+  const int beta = int((curr_limbs + alpha - 1) / alpha);
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  const int length = (curr_limbs + sizeP);
+  const int prime_gap = L - curr_limbs;
+  const int B = static_cast<int>(swk_bxs.size());
+  TORCH_INTERNAL_ASSERT(B > 0, "swk_bxs must not be empty");
+  TORCH_INTERNAL_ASSERT(swk_axs.size() == swk_bxs.size(), "swk bx/ax list size mismatch");
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == B, "innerproduct_pairwise expects input batch == key batch");
+  TORCH_INTERNAL_ASSERT(out_bx.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_ax.dim() == 3);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes() == out_ax.sizes());
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[0] == B);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[1] == length);
+  TORCH_INTERNAL_ASSERT(out_bx.sizes()[2] == N);
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.numel() == B,
+      "special_mod_start numel must equal swk list size");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.device() == in.device(),
+      "special_mod_start must be on same device as in");
+  TORCH_INTERNAL_ASSERT(
+      special_mod_start.scalar_type() == at::kLong,
+      "special_mod_start must be int64");
+
+  for (int b = 0; b < B; ++b) {
+    TORCH_CHECK(swk_bxs[b].dim() == 3, "swk bx tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_axs[b].dim() == 3, "swk ax tensor must have shape [beta, mult_length, N]");
+    TORCH_CHECK(swk_bxs[b].sizes() == swk_axs[b].sizes(), "swk bx/ax tensor shape mismatch");
+    const auto sizes = swk_bxs[b].sizes();
+    TORCH_CHECK(sizes[0] >= beta, "swk beta dimension must be >= ceil(curr_limbs / alpha)");
+    TORCH_CHECK(sizes[2] == N, "swk last dimension must equal N");
+  }
+
+  auto* out_bx_ptr = out_bx.data_ptr<uint64_t>();
+  auto* out_ax_ptr = out_ax.data_ptr<uint64_t>();
+  const auto* in_ptr = in.data_ptr<uint64_t>();
+  const auto* special_mod_start_ptr = special_mod_start.data_ptr<int64_t>();
+  const auto* primes_ptr = primes.data_ptr<uint64_t>();
+  const auto* barret_ratio_ptr = barret_ratio.data_ptr<uint64_t>();
+  const auto* barret_k_ptr = barret_k.data_ptr<uint64_t>();
+  auto gridDim = dim3(N / BLOCK_SIZE, length);
+  auto blockDim = BLOCK_SIZE;
+  auto stream = at::cuda::getCurrentCUDAStream();
+  DISPATCH_BATCH_FUNC(B, DISPATCH_SUM_REDUCE_PAIRWISE_CASE);
+}
+
 Tensor innerproduct_broadcast_cipher_cuda(
     const Tensor& in,
     TensorList swks,
@@ -472,7 +1006,7 @@ Tensor innerproduct_broadcast_cipher_cuda(
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
   TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast_cipher expects num_cv == 1");
   TORCH_INTERNAL_ASSERT(in.sizes()[1] == 1, "innerproduct_broadcast_cipher expects batch == 1");
   int batch = swks.size();
@@ -497,118 +1031,84 @@ Tensor innerproduct_broadcast_cipher_cuda(
   return out;
 }
 
-static void innerproduct_template(
-    Tensor& out,
+std::vector<Tensor> innerproduct_broadcast_cuda(
     const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
+    TensorList swk_bxs,
+    TensorList swk_axs,
     int64_t curr_limbs,
     int64_t alpha,
-    int64_t special_mod_start,
     int64_t L,
     int64_t N,
+    const Tensor& special_mod_start,
     const Tensor& primes,
     const Tensor& barret_ratio,
     const Tensor& barret_k,
     const Tensor& workspace) {
-  const int beta = int((curr_limbs + alpha - 1) / alpha);
-  int64_t sizeQP = primes.numel();
-  int64_t sizeP = sizeQP - L;
-  const int length = (curr_limbs + sizeP);
-  const int mult_length = (special_mod_start + sizeP);
-  TORCH_CHECK(special_mod_start >= curr_limbs, "special_mod_start must be >= curr_limbs");
-  TORCH_CHECK(special_mod_start <= L, "special_mod_start must be <= L");
-  TORCH_CHECK(bx.dim() == 3, "bx must be [beta, mult_length, N]");
-  TORCH_CHECK(ax.dim() == 3, "ax must be [beta, mult_length, N]");
-  TORCH_CHECK(bx.sizes() == ax.sizes(), "bx and ax must have identical shapes");
-  TORCH_CHECK(
-      bx.size(0) >= beta,
-      "bx/ax beta dimension must be >= ceil(curr_limbs / alpha)");
-  TORCH_CHECK(
-      bx.size(1) >= mult_length,
-      "bx/ax modulus dimension must be >= special_mod_start + sizeP");
-  TORCH_CHECK(bx.size(2) == N, "bx/ax last dimension must equal N");
-  const int prime_gap = L - curr_limbs;
-
-  auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
-  auto ax_ptr = reinterpret_cast<uint64_t*>(ax.data_ptr<uint64_t>());
-  auto bx_ptr = reinterpret_cast<uint64_t*>(bx.data_ptr<uint64_t>());
-  auto out_bx_ptr = reinterpret_cast<uint64_t*>(out[0].data_ptr<uint64_t>());
-  auto out_ax_ptr = reinterpret_cast<uint64_t*>(out[1].data_ptr<uint64_t>());
-  auto primes_ptr = reinterpret_cast<uint64_t*>(primes.data_ptr<uint64_t>());
-  auto barret_ratio_ptr =
-      reinterpret_cast<uint64_t*>(barret_ratio.data_ptr<uint64_t>());
-  auto barret_k_ptr =
-      reinterpret_cast<uint64_t*>(barret_k.data_ptr<uint64_t>());
-  auto gridDim = dim3(N / BLOCK_SIZE, length);
-  auto blockDim = BLOCK_SIZE;
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  cudaFuncSetAttribute(
-      fhe::sum_reduce_fused_broadcast_key,
-      cudaFuncAttributeMaxDynamicSharedMemorySize,
-      BLOCK_SIZE * beta * sizeof(uint64_t) * 2);
-
-  fhe::sum_reduce_fused_broadcast_key<<<
-      gridDim,
-      blockDim,
-      BLOCK_SIZE * beta * sizeof(uint64_t) * 2,
-      stream>>>(
-      out_ax_ptr,
-      out_bx_ptr,
-      in_ptr,
-      ax_ptr,
-      bx_ptr,
-      N,
-      out.sizes()[1],
-      length,
-      mult_length,
-      beta,
-      curr_limbs,
-      prime_gap,
-      special_mod_start,
-      primes_ptr,
-      barret_k_ptr,
-      barret_ratio_ptr);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-}
-
-Tensor innerproduct_cuda(
-    const Tensor& in,
-    const Tensor& bx,
-    const Tensor& ax,
-    int64_t curr_limbs,
-    int64_t alpha,
-    int64_t special_mod_start,
-    int64_t L,
-    int64_t N,
-    const Tensor& primes,
-    const Tensor& barret_ratio,
-    const Tensor& barret_k,
-    const Tensor& workspace) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
-  auto num_cv = in.sizes()[0]; // should be 1
-  auto batch = in.sizes()[1];
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == 1, "innerproduct_broadcast expects batch == 1");
+  const int64_t batch = swk_bxs.size();
 
   int64_t sizeQP = primes.numel();
   int64_t sizeP = sizeQP - L;
-  auto out = at::empty({2, batch, curr_limbs + sizeP, N}, in.options());
+  auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
+  auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
 
-  innerproduct_template(
-      out,
+  innerproduct_broadcast_template(
+      out_bx,
+      out_ax,
       in,
-      bx,
-      ax,
+      swk_bxs,
+      swk_axs,
       curr_limbs,
       alpha,
-      special_mod_start,
       L,
       N,
+      special_mod_start,
       primes,
       barret_ratio,
       barret_k,
       workspace);
-  return out;
+  return {out_bx, out_ax};
+}
+
+std::vector<Tensor> innerproduct_pairwise_cuda(
+    const Tensor& in,
+    TensorList swk_bxs,
+    TensorList swk_axs,
+    int64_t curr_limbs,
+    int64_t alpha,
+    int64_t L,
+    int64_t N,
+    const Tensor& special_mod_start,
+    const Tensor& primes,
+    const Tensor& barret_ratio,
+    const Tensor& barret_k,
+    const Tensor& workspace) {
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
+  const int64_t batch = swk_bxs.size();
+  TORCH_INTERNAL_ASSERT(in.sizes()[0] == batch, "innerproduct_pairwise expects input batch == key batch");
+
+  int64_t sizeQP = primes.numel();
+  int64_t sizeP = sizeQP - L;
+  auto out_bx = at::empty({batch, curr_limbs + sizeP, N}, in.options());
+  auto out_ax = at::empty({batch, curr_limbs + sizeP, N}, in.options());
+
+  innerproduct_pairwise_template(
+      out_bx,
+      out_ax,
+      in,
+      swk_bxs,
+      swk_axs,
+      curr_limbs,
+      alpha,
+      L,
+      N,
+      special_mod_start,
+      primes,
+      barret_ratio,
+      barret_k,
+      workspace);
+  return {out_bx, out_ax};
 }
 
 } // namespace at::native

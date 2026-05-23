@@ -1,93 +1,107 @@
-import easyfhe as torch
+from dataclasses import dataclass
+from typing import Optional
+
 import numpy as np
 
+
+@dataclass(frozen=True)
+class CipherState:
+    cur_limbs: int
+    noise_deg: int
+    scaling_factor: Optional[float] = None
+
+    def replace(self, *, cur_limbs=None, noise_deg=None, scaling_factor=None):
+        return CipherState(
+            self.cur_limbs if cur_limbs is None else cur_limbs,
+            self.noise_deg if noise_deg is None else noise_deg,
+            self.scaling_factor if scaling_factor is None else scaling_factor,
+        )
+
+
 class Cipher:
-    _id_counter = 0
-
-    def get_next_id():
-        Cipher._id_counter += 1
-        return Cipher._id_counter
-
-    def __init__(self, cv, cur_limbs, scaling_factor, noise_deg, slots, is_ext, cipher_id = "assign"):
-        self.cv = cv
-        self.cur_limbs = cur_limbs
-        self.scaling_factor = scaling_factor
-        self.noise_deg = noise_deg
+    def __init__(self, cv, state: CipherState, slots, is_ext, batch_size=1):
+        self.cv = _normalize_components(cv)
+        self.state = state
         self.slots = slots
         self.is_ext = is_ext
-        if cipher_id == "assign":
-            self.cipher_id = Cipher.get_next_id()
-        else:
-            self.cipher_id = cipher_id
+        self.batch_size = int(batch_size)
 
     def cipher_like(
         self,
         cv,
-        cur_limbs=None,
-        scaling_factor=None,
-        noise_deg=None,
+        state=None,
         slots=None,
         is_ext=None,
-        cipher_id="copy",
+        batch_size=None,
     ):
         res = Cipher(
             cv,
-            self.cur_limbs if cur_limbs == None else cur_limbs,
-            self.scaling_factor if scaling_factor == None else scaling_factor,
-            self.noise_deg if noise_deg == None else noise_deg,
-            self.slots if slots == None else slots,
-            self.is_ext if is_ext == None else is_ext,
-            self.cipher_id if cipher_id == "copy" else cipher_id,
+            self.state if state is None else state,
+            self.slots if slots is None else slots,
+            self.is_ext if is_ext is None else is_ext,
+            self.batch_size if batch_size is None else batch_size,
         )
         if "ptx_twin" in self.__dict__:
             res.ptx_twin = np.copy(self.ptx_twin)
         return res
 
     def deep_copy(self):
-        return self.cipher_like([x.clone() for x in self.cv], cipher_id="assign")
+        return self.cipher_like([x.clone() for x in self.cv])
+
+    def replace_with(self, other):
+        # Cipher-level mutation: callers may pass preallocated component tensors,
+        # but not every higher-level path guarantees tensor-level zero allocation.
+        self.cv = other.cv
+        self.state = other.state
+        self.slots = other.slots
+        self.is_ext = other.is_ext
+        self.batch_size = int(other.batch_size)
+        if "ptx_twin" in other.__dict__:
+            self.ptx_twin = np.copy(other.ptx_twin)
+        elif "ptx_twin" in self.__dict__:
+            del self.ptx_twin
+        return self
 
     def shallow_copy(self):
-        return self.cipher_like(self.cv, cipher_id="copy")
+        return self.cipher_like(self.cv)
 
     def cuda(self):
         cv = [x.cuda() for x in self.cv]
-        return self.cipher_like(cv, cipher_id="to_cuda")
+        return self.cipher_like(cv)
 
     def cpu(self):
         cv = [x.cpu() for x in self.cv]
-        return self.cipher_like(cv, cipher_id="to_cpu")
+        return self.cipher_like(cv)
 
     def __repr__(self):
         s = "Cipher(\n"
         for i, cv in enumerate(self.cv):
-            s += f"cv{i}={cv[:self.cur_limbs]},\n"
-        s += f"cur_limbs={self.cur_limbs}\n"
-        s += f"scaling_factor={self.scaling_factor}\n"
-        s += f"noise_deg={self.noise_deg}\n"
+            if hasattr(cv, "dim") and cv.dim() >= 2:
+                cv_repr = cv[..., : self.state.cur_limbs, :]
+            else:
+                cv_repr = cv
+            s += f"cv{i}={cv_repr},\n"
+        s += f"state={self.state}\n"
         s += f"slots={self.slots}\n"
+        s += f"batch_size={self.batch_size}\n"
         s += ")"
         return s
 
 Plaintext = Cipher
 
-class PreparedPlaintext:
-    def __init__(self, values, slots, encoded_values, max_encoded_value):
-        self.values = values
-        self.slots = slots
-        self.encoded_values = encoded_values
-        self.max_encoded_value = max_encoded_value
-    
-    def deep_copy(self):
-        if torch.is_tensor(self.encoded_values):
-            encoded_values = self.encoded_values.clone()
-        else:
-            encoded_values = np.array(self.encoded_values, copy=True)
-        return PreparedPlaintext(
-            self.values.copy(),
-            self.slots,
-            encoded_values,
-            self.max_encoded_value,
-        )
 
-
-PreEncodeValues = PreparedPlaintext
+def _normalize_components(cv):
+    if hasattr(cv, "dim"):
+        cv = [cv]
+    components = list(cv)
+    normalized = []
+    for component in components:
+        if hasattr(component, "dim"):
+            if component.dim() == 2:
+                component = component.unsqueeze(0)
+            elif component.dim() != 3:
+                raise ValueError(
+                    "cipher/plaintext components must be [batch, limbs, N]"
+                )
+        normalized.append(component)
+    return normalized

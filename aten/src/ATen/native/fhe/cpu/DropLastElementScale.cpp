@@ -62,7 +62,7 @@ void const_mult_add_batch(
   }
 }
 
-void drop_last_element_scale_template(
+void rescale_one_level_template(
     Tensor& res,
     const Tensor& from,
     int64_t curr_limbs,
@@ -163,7 +163,7 @@ void drop_last_element_scale_template(
 
 namespace at::native {
 
-Tensor drop_last_element_scale_cpu(
+Tensor rescale_one_level_cpu(
     const Tensor& from,
     int64_t curr_limbs,
     int64_t l,
@@ -187,7 +187,7 @@ Tensor drop_last_element_scale_cpu(
   auto res = at::empty({num_cv, batch, curr_limbs - 1, N}, from.options());
   auto workspace = at::empty({num_cv, batch, curr_limbs, N}, from.options());
 
-  drop_last_element_scale_template(
+  rescale_one_level_template(
       res,
       from,
       curr_limbs,

@@ -19,7 +19,7 @@ def evalT(Tm, Tn, Tmminusn, cryptoContext):
     """
     compute T_{m+n}(x) = 2 * Tm * Tn - T_{|m-n|}, corresponding to Chebyshev recurrence formula
     """
-    temp = fhe.homo_mul(Tm, Tn, cryptoContext)         # Tm * Tn
+    temp = fhe.homo_mul_relin(Tm, Tn, cryptoContext)         # Tm * Tn
     temp = fhe.homo_add(temp, temp, cryptoContext)     # 2 * Tm * Tn
     temp = fhe.align_to(temp, fhe.CipherState(temp.cur_limbs - (1), temp.noise_deg - (1)), cryptoContext)
     Tmplusn = fhe.homo_sub(temp, Tmminusn, cryptoContext)
@@ -103,10 +103,10 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                     if T[tree.tree[k]] is None or pt[2 * k + 1] is None:
                         raise ValueError("Required T or pt missing at internal node")
 
-                    pt[j] = fhe.homo_mul(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
+                    pt[j] = fhe.homo_mul_relin(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
                     k *= 2
                     while tree.tree[k] > 0:
-                        term = fhe.homo_mul(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
+                        term = fhe.homo_mul_relin(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
                         pt[j] = fhe.homo_add(pt[j], term, cryptoContext)
                         k *= 2
 
@@ -157,12 +157,12 @@ def eval_polynomial_integrate(cipher, deg, decomp_coeff, tree, cryptoContext):
                     if T[tree.tree[k]] is None or pt[2 * k + 1] is None:
                         raise ValueError("Missing operands in tree node evaluation")
 
-                    pt[j] = fhe.homo_mul(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
+                    pt[j] = fhe.homo_mul_relin(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
                     k *= 2
                     while tree.tree[k] > 0:
                         if T[tree.tree[k]] is None or pt[2 * k + 1] is None:
                             raise ValueError("Missing recursive operands")
-                        term = fhe.homo_mul(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
+                        term = fhe.homo_mul_relin(T[tree.tree[k]], pt[2 * k + 1], cryptoContext)
                         pt[j] = fhe.homo_add(pt[j], term, cryptoContext)
                         k *= 2
                     pt[j] = fhe.align_to(pt[j], fhe.CipherState(pt[j].cur_limbs - (1), pt[j].noise_deg - (1)), cryptoContext)
@@ -222,7 +222,7 @@ def coeff_number(deg: int, tree) -> int:
     return num
 
 
-def show_failure_relu(cipher, ground_truth_vec, precision, cryptoContext):
+def show_failure_relu(cipher, ground_truth_vec, precision, client):
     """
     Compare homomorphic ReLU result with ground truth.
 
@@ -230,14 +230,14 @@ def show_failure_relu(cipher, ground_truth_vec, precision, cryptoContext):
         cipher: Ciphertext after ReLU approximation.
         ground_truth_vec: Plain input vector (list or numpy array).
         precision: Bit precision for tolerance bound (e.g., 40 => 2^-40).
-        cryptoContext: Crypto context with decryptor and encoder.
+        client: FHE client with decryptor.
 
     Returns:
         Number of positions where |ReLU(x) - output[i]| > 2^-precision.
     """
 
     bound = 2 ** (-precision)
-    output = cryptoContext.decrypt(cipher).cpu().numpy().reshape(-1)
+    output = client.decrypt(cipher).cpu().numpy().reshape(-1)
     failure = 0
 
     for i in range(len(ground_truth_vec)):
@@ -372,7 +372,7 @@ def minimax_relu(comp_no, deg_list, alpha, tree_list, scaled_val, cipher_in, cry
     cipher_half = cryptoContext.cipher_half
 
     temp = fhe.homo_add(cipher_x, cipher_half, cryptoContext)
-    result = fhe.homo_mul(temp, cipher_in, cryptoContext)
+    result = fhe.homo_mul_relin(temp, cipher_in, cryptoContext)
     result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (1), result.noise_deg - (1)), cryptoContext)
 
     return result

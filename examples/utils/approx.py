@@ -6,6 +6,10 @@ import numpy as np
 BASE_NUM_LEVELS_TO_DROP = 1 #todo: to be removed, or move to cryptoContext
 
 
+def _uses_manual_rescale(cryptoContext):
+    return cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual"
+
+
 def get_relu_depth(degree):
     ranges = [
         (1, 5, 3),
@@ -27,7 +31,7 @@ def get_relu_depth(degree):
 
 
 def eval_linear_wsum_mutable(ciphertexts, constants, cryptoContext):
-    if cryptoContext.rescaleTech != "FIXEDMANUAL":
+    if not _uses_manual_rescale(cryptoContext):
         target_idx = min(range(len(ciphertexts)), key=lambda i: ciphertexts[i].cur_limbs - ciphertexts[i].noise_deg)
         if ciphertexts[target_idx].noise_deg == 2:
             ciphertexts[target_idx] = fhe.align_to(ciphertexts[target_idx], fhe.CipherState(ciphertexts[target_idx].cur_limbs - (1), ciphertexts[target_idx].noise_deg - (1)), cryptoContext)
@@ -145,7 +149,7 @@ def inner_eval_chebyshev_ps(coefficients,
         # adds the free term (at x^0)
         cu = fhe.homo_add_scalar_double(cu, divcs_q[0] / 2, cryptoContext)
         # Need to reduce levels up to the level of T2[m-1].
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             cu = fhe.align_to(cu, fhe.CipherState(T2[m - 1].cur_limbs, T2[m - 1].noise_deg, T2[m - 1].scaling_factor), cryptoContext)
         flag_c = True
 
@@ -191,7 +195,7 @@ def inner_eval_chebyshev_ps(coefficients,
             su = T[k - 1]
 
         su = fhe.homo_add_scalar_double(su, s2[0] / 2, cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             su = fhe.align_to(su, fhe.CipherState(su.cur_limbs - 1, 1, None), cryptoContext)
 
     if flag_c:
@@ -199,7 +203,7 @@ def inner_eval_chebyshev_ps(coefficients,
     else:
         result = fhe.homo_add_scalar_double(T2[m - 1], divcs_q[0] / 2, cryptoContext)
 
-    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_mul_relin(result, qu, cryptoContext)
     result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (BASE_NUM_LEVELS_TO_DROP), result.noise_deg - (BASE_NUM_LEVELS_TO_DROP)), cryptoContext)
     result = fhe.homo_add(result, su, cryptoContext)
 
@@ -299,7 +303,6 @@ def ComputeDegreesPS(n):
 # @profile_pytorch_function
 def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
-    rescaleTech = cryptoContext.rescaleTech
     n = degree(coefficients)
     f2 = np.copy(coefficients)
     # Make sure the coefficients do not have the zero dominant terms
@@ -354,7 +357,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
         T[0] = fhe.homo_add_scalar_double(T[0], -1.0 - beta, cryptoContext)
 
     for i in range(2, k + 1):
-        prod = fhe.homo_mul(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
+        prod = fhe.homo_mul_relin(T[i // 2 - 1], T[(i + 1) // 2 - 1], cryptoContext)
         tmp = fhe.homo_add(prod, prod, cryptoContext)
         tmp = fhe.align_to(tmp, fhe.CipherState(tmp.cur_limbs - (1), tmp.noise_deg - (1)), cryptoContext)
         if i & 1 == 1:  # i is odd
@@ -372,7 +375,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     # T2[0] is used as a placeholder
     T2 = [T[-1]]
     for i in range(1, m):
-        tmp = fhe.homo_square(T2[i - 1], cryptoContext)
+        tmp = fhe.homo_mul_relin(T2[i - 1], T2[i - 1], cryptoContext)
         tmp = fhe.homo_add(tmp, tmp, cryptoContext)
         tmp = fhe.align_to(tmp, fhe.CipherState(tmp.cur_limbs - (1), tmp.noise_deg - (1)), cryptoContext)
         tmp = fhe.homo_add_scalar_double(tmp, -1.0, cryptoContext)
@@ -384,7 +387,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
     T2km1 = T2[0]
     for i in range(1, m):
         # compute T_{k(2*m - 1)} = 2*T_{k(2^{m-1}-1)}(y)*T_{k*2^{m-1}}(y) - T_k(y)
-        prod = fhe.homo_mul(T2km1, T2[i], cryptoContext)
+        prod = fhe.homo_mul_relin(T2km1, T2[i], cryptoContext)
         T2km1 = fhe.homo_add(prod, prod, cryptoContext)
         T2km1 = fhe.align_to(T2km1, fhe.CipherState(T2km1.cur_limbs - (1), T2km1.noise_deg - (1)), cryptoContext)
         T2km1 = fhe.homo_sub(T2km1, T2[0], cryptoContext)
@@ -465,7 +468,7 @@ def eval_chebyshev_series_ps(x, coefficients, a, b, cryptoContext):
 
 
 
-    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_mul_relin(result, qu, cryptoContext)
     result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (1), result.noise_deg - (1)), cryptoContext)
     result = fhe.homo_add(result, su, cryptoContext)
 
@@ -584,7 +587,7 @@ def eval_poly_ps(x, coefficients, cryptoContext):
     powers = [x.deep_copy()]
     for i in range(2, k + 1):
         if not (i & (i - 1)): # if i is a power of two
-            t = fhe.homo_square(powers[i // 2 - 1], cryptoContext)
+            t = fhe.homo_mul_relin(powers[i // 2 - 1], powers[i // 2 - 1], cryptoContext)
             t = fhe.align_to(t, fhe.CipherState(t.cur_limbs - (1), t.noise_deg - (1)), cryptoContext)
             powers.append(t)
         elif indices[i - 1] == 1: # non-power of 2
@@ -593,7 +596,7 @@ def eval_poly_ps(x, coefficients, cryptoContext):
             t1 = powers[powerOf2 - 1]
             t2 = powers[rem - 1]
             t2 = fhe.align_to(t2, fhe.CipherState(t1.cur_limbs, t1.noise_deg, t1.scaling_factor), cryptoContext)
-            t = fhe.homo_mul(t1, t2, cryptoContext)
+            t = fhe.homo_mul_relin(t1, t2, cryptoContext)
             t = fhe.align_to(t, fhe.CipherState(t.cur_limbs - (1), t.noise_deg - (1)), cryptoContext)
             powers.append(t)
         else:
@@ -608,14 +611,14 @@ def eval_poly_ps(x, coefficients, cryptoContext):
     # computes powers of form k*2^i for x
     powers2 = [powers[k - 1].deep_copy()]
     for i in range(1, m):
-        t = fhe.homo_square(powers2[i - 1], cryptoContext)
+        t = fhe.homo_mul_relin(powers2[i - 1], powers2[i - 1], cryptoContext)
         t = fhe.align_to(t, fhe.CipherState(t.cur_limbs - (1), t.noise_deg - (1)), cryptoContext)
         powers2.append(t)
 
     # computes the product of the powers in power2, that yield x^{k(2*m - 1)}
     power2km1 = powers2[0].deep_copy()
     for i in range(1, m):
-        tmp = fhe.homo_mul(power2km1, powers2[i], cryptoContext)
+        tmp = fhe.homo_mul_relin(power2km1, powers2[i], cryptoContext)
         tmp = fhe.align_to(tmp, fhe.CipherState(tmp.cur_limbs - (1), tmp.noise_deg - (1)), cryptoContext)
         power2km1 = tmp
 
@@ -707,7 +710,7 @@ def eval_poly_ps(x, coefficients, cryptoContext):
     else:
         result = fhe.homo_add_scalar_double(powers2[m - 1], divcs_q[0], cryptoContext)
 
-    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_mul_relin(result, qu, cryptoContext)
     result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (1), result.noise_deg - (1)), cryptoContext)
     result = fhe.homo_add(result, su, cryptoContext)
     result = fhe.homo_sub(result, power2km1, cryptoContext)
@@ -753,7 +756,7 @@ def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
 
         # adds the free term (at x^0)
         cu = fhe.homo_add_scalar_double(cu, divcs_q[0], cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             cu = fhe.align_to(cu, fhe.CipherState(powers2[m - 1].cur_limbs, powers2[m - 1].noise_deg, powers2[m - 1].scaling_factor), cryptoContext)
         flag_c = True
 
@@ -796,7 +799,7 @@ def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
         else:
             su = powers[k - 1]
         su = fhe.homo_add_scalar_double(su, s2[0], cryptoContext)
-        if cryptoContext.rescaleTech == "FIXEDMANUAL":
+        if _uses_manual_rescale(cryptoContext):
             su = fhe.align_to(su, fhe.CipherState(su.cur_limbs - 1, 1, None), cryptoContext)
 
     if flag_c:
@@ -804,7 +807,7 @@ def inner_eval_poly_ps(x, coefficients, k, m, powers, powers2, cryptoContext):
     else:
         result = fhe.homo_add_scalar_double(powers2[m - 1], divcs_q[0], cryptoContext)
 
-    result = fhe.homo_mul(result, qu, cryptoContext)
+    result = fhe.homo_mul_relin(result, qu, cryptoContext)
     result = fhe.align_to(result, fhe.CipherState(result.cur_limbs - (1), result.noise_deg - (1)), cryptoContext)
     result = fhe.homo_add(result, su, cryptoContext)
 

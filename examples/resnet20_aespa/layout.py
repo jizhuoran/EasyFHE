@@ -3,6 +3,13 @@ from dataclasses import dataclass
 
 import easyfhe.fhe as fhe
 
+try:
+    from .fhe_state import reduce_noise_to_one, rescale_one_level
+    from .weight_pack import fold_slots_mask_name
+except ImportError:
+    from fhe_state import reduce_noise_to_one, rescale_one_level
+    from weight_pack import fold_slots_mask_name
+
 __all__ = [
     "broadcast_slot_sum",
     "downsample1024to256",
@@ -27,18 +34,18 @@ class _DownsampleSpec:
 
 
 def _merge_fullpack(c1, c2, cryptoContext, weights):
+    if c2 is None:
+        return c1
     old_slots = c1.slots
-    c1 = fhe.slot_resize(c1, c1.slots * 2, cryptoContext)
-    c2 = fhe.slot_resize(c2, c2.slots * 2, cryptoContext)
+    c1 = fhe.expand_slots(c1, c1.slots * 2, cryptoContext)
+    c2 = fhe.expand_slots(c2, c2.slots * 2, cryptoContext)
     second_mask_key = f"mask_second_n_{old_slots}_{c2.slots}"
-    if not weights.has(second_mask_key):
-        second_mask_key = f"mask_scecond_n_{old_slots}_{c2.slots}"
     return fhe.homo_add(
         fhe.homo_mul_pt(
             c1,
             weights.plaintext(
                 f"mask_first_n_{old_slots}_{c1.slots}",
-                cryptoContext.L - c1.cur_limbs,
+                cryptoContext.L - c1.state.cur_limbs,
                 c1.slots,
                 cryptoContext,
             ),
@@ -48,7 +55,7 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
             c2,
             weights.plaintext(
                 second_mask_key,
-                cryptoContext.L - c2.cur_limbs,
+                cryptoContext.L - c2.state.cur_limbs,
                 c2.slots,
                 cryptoContext,
             ),
@@ -58,35 +65,32 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
     )
 
 
-def _double_rotate(cipher, cryptoContext):
-    return fhe.homo_rotate(fhe.homo_rotate(cipher, 1, cryptoContext), 1, cryptoContext)
-
-
-def _masked_reduce(cipher, mask_n, rotated, cryptoContext, weights):
+def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
+    summed = fhe.homo_rotate_add(cipher, rotate_offset, cryptoContext, addend=cipher)
     cipher = fhe.homo_mul_pt(
-        fhe.homo_add(cipher, rotated, cryptoContext),
+        summed,
         weights.plaintext(
             f"gen_mask_{mask_n}_{cipher.slots}",
-            cryptoContext.L - cipher.cur_limbs,
+            cryptoContext.L - cipher.state.cur_limbs,
             cipher.slots,
             cryptoContext,
         ),
         cryptoContext,
     )
-    return fhe.rescale_one_level(cipher, cryptoContext)
+    return rescale_one_level(cipher, cryptoContext)
 
 
 def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_rescale):
     if initial_rescale == "always":
-        fullpack = fhe.rescale_one_level(fullpack, cryptoContext)
+        fullpack = rescale_one_level(fullpack, cryptoContext)
     else:
-        fullpack = fhe.reduce_noise_to_one(fullpack, cryptoContext)
-    fullpack = _masked_reduce(fullpack, 2, fhe.homo_rotate(fullpack, 1, cryptoContext), cryptoContext, weights)
-    fullpack = _masked_reduce(fullpack, 4, _double_rotate(fullpack, cryptoContext), cryptoContext, weights)
+        fullpack = reduce_noise_to_one(fullpack, cryptoContext)
+    fullpack = _masked_reduce(fullpack, 2, 1, cryptoContext, weights)
+    fullpack = _masked_reduce(fullpack, 4, 2, cryptoContext, weights)
     if include_gen8:
-        fullpack = _masked_reduce(fullpack, 8, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext, weights)
-        return fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 8, cryptoContext), cryptoContext)
-    return fhe.homo_add(fullpack, fhe.homo_rotate(fullpack, 4, cryptoContext), cryptoContext)
+        fullpack = _masked_reduce(fullpack, 8, 4, cryptoContext, weights)
+        return fhe.homo_rotate_add(fullpack, 8, cryptoContext, addend=fullpack)
+    return fhe.homo_rotate_add(fullpack, 4, cryptoContext, addend=fullpack)
 
 
 def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, row_rotate, cryptoContext, weights):
@@ -96,7 +100,7 @@ def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, ro
             fullpack,
             weights.plaintext(
                 f"{row_mask_prefix}_{row_width}_{spatial_size}_{i}_{fullpack.slots}",
-                cryptoContext.L - fullpack.cur_limbs,
+                cryptoContext.L - fullpack.state.cur_limbs,
                 fullpack.slots,
                 cryptoContext,
             ),
@@ -105,7 +109,7 @@ def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, ro
         rows = masked if rows is None else fhe.homo_add(rows, masked, cryptoContext)
         if i < row_count - 1:
             fullpack = fhe.homo_rotate(fullpack, row_rotate, cryptoContext)
-    return fhe.rescale_one_level(rows, cryptoContext)
+    return rescale_one_level(rows, cryptoContext)
 
 
 def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoContext, weights):
@@ -115,7 +119,7 @@ def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoCont
             rows,
             weights.plaintext(
                 f"mask_channel_{i}_{num_channel}_{spatial_size}",
-                cryptoContext.L - rows.cur_limbs,
+                cryptoContext.L - rows.state.cur_limbs,
                 rows.slots,
                 cryptoContext,
             ),
@@ -128,16 +132,25 @@ def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoCont
 
 def _fold_quarters(cipher, cryptoContext):
     quarter = cipher.slots // 4
-    cipher = fhe.homo_add(cipher, fhe.homo_rotate(cipher, -quarter, cryptoContext), cryptoContext)
-    cipher = fhe.homo_add(
-        cipher,
-        fhe.homo_rotate(fhe.homo_rotate(cipher, -quarter, cryptoContext), -quarter, cryptoContext),
-        cryptoContext,
-    )
+    cipher = fhe.homo_rotate_add(cipher, -quarter, cryptoContext, addend=cipher)
+    rotated = fhe.homo_rotate(cipher, -quarter, cryptoContext)
+    cipher = fhe.homo_rotate_add(rotated, -quarter, cryptoContext, addend=cipher)
     return cipher
 
 
 def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
+    trace = getattr(cryptoContext, "aespa_state_trace", None)
+    if trace is not None:
+        trace.append(
+            {
+                "op": f"downsample{spec.spatial_size}to{spec.out_spatial_size}",
+                "cur_limbs": int(c1.state.cur_limbs),
+                "noise_deg": int(c1.state.noise_deg),
+                "slots": int(c1.slots),
+                "is_ext": bool(c1.is_ext),
+                "second_cipher": c2 is not None,
+            }
+        )
     fullpack = _merge_fullpack(c1, c2, cryptoContext, weights)
     fullpack = _spatial_reduce(
         fullpack,
@@ -158,11 +171,18 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
     )
     channels = _pack_channels(rows, num_channel, spec.spatial_size, spec.out_spatial_size, cryptoContext, weights)
     if spec.rescale_before_fold:
-        channels = fhe.rescale_one_level(channels, cryptoContext)
+        channels = rescale_one_level(channels, cryptoContext)
     channels = _fold_quarters(channels, cryptoContext)
     if spec.rescale_after_fold:
-        channels = fhe.rescale_one_level(channels, cryptoContext)
-    return fhe.slot_resize(channels, channels.slots // 4, cryptoContext)
+        channels = rescale_one_level(channels, cryptoContext)
+    target_slots = channels.slots // 4
+    mask = weights.plaintext(
+        fold_slots_mask_name(channels.slots, target_slots),
+        cryptoContext.L - channels.state.cur_limbs,
+        channels.slots,
+        cryptoContext,
+    )
+    return fhe.fold_slots(channels, target_slots, cryptoContext, mask=mask)
 
 
 def downsample1024to256(c1, c2, num_channel, cryptoContext, weights):
@@ -202,7 +222,7 @@ def downsample256to64(c1, c2, num_channel, cryptoContext, weights):
             row_count=32,
             row_rotate=24,
             include_gen8=False,
-            initial_rescale="always",
+            initial_rescale="if_needed",
             rescale_before_fold=False,
             rescale_after_fold=True,
         ),
@@ -213,7 +233,7 @@ def sum_adjacent_slots(input, slots, cryptoContext):
     _require_power_of_two(slots, "slots")
     result = input.deep_copy()
     for i in range(int(math.log2(slots))):
-        result = fhe.homo_add(result, fhe.homo_rotate(result, 2 ** i, cryptoContext), cryptoContext)
+        result = fhe.homo_rotate_add(result, 2 ** i, cryptoContext, addend=result)
     return result
 
 
@@ -221,7 +241,7 @@ def sum_channel_groups(input, group_size, num_groups, cryptoContext):
     _require_power_of_two(num_groups, "num_groups")
     result = input.deep_copy()
     for i in range(int(math.log2(num_groups))):
-        result = fhe.homo_add(result, fhe.homo_rotate(result, group_size * (2 ** i), cryptoContext), cryptoContext)
+        result = fhe.homo_rotate_add(result, group_size * (2 ** i), cryptoContext, addend=result)
     return result
 
 

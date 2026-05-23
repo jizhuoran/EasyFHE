@@ -51,7 +51,7 @@ cmd=(
   --csv-out "$FULL_CSV_OUT"
   --pipeline-summary-json "$PIPELINE_SUMMARY_JSON"
   --repeats "${FULL_REPEATS:-1}"
-  --ops ${FULL_OPS:-encode add add_pt mul_pt mul rescale force_rescale drop_last_elements modup_to_ext moddown_from_ext square rotate eval_fast_rotate}
+  --ops ${FULL_OPS:-encode add add_pt mul_pt mul rescale force_rescale drop_last_elements modup_to_ext moddown_from_ext square rotate fast_rotate}
   --limb-min "${FULL_LIMB_MIN:-1}"
   --limb-max "${FULL_LIMB_MAX:-40}"
   --basic-slots "${FULL_BASIC_SLOTS:-4096}"
@@ -79,7 +79,8 @@ cmd=(
   --bootstrap-dcrt-bits "${BOOTSTRAP_DCRT_BITS:-52}"
   --bootstrap-first-mod "${BOOTSTRAP_FIRST_MOD:-55}"
   --bootstrap-secret-key-dist "${BOOTSTRAP_SECRET_KEY_DIST:-SPARSE_TERNARY}"
-  --bootstrap-rescale-tech "${BOOTSTRAP_RESCALE_TECH:-FIXEDMANUAL}"
+  --bootstrap-scale-mode "${BOOTSTRAP_SCALE_MODE:-fixed}"
+  --bootstrap-rescale-policy "${BOOTSTRAP_RESCALE_POLICY:-manual}"
   --batched-report-md "$BATCHED_REPORT_MD"
   --batched-basic-csv-out "$BATCHED_BASIC_CSV_OUT"
   --batched-csv-out "$BATCHED_CSV_OUT"

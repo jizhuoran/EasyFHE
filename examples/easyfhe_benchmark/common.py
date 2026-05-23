@@ -17,10 +17,11 @@ except ImportError:
 ensure_repo_on_path()
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe import homo_ops
+import easyfhe.bs.openfhe as bs
+from easyfhe.fhe.ops.encoding import encode_stage1, encode_stage2
 
 
-KEYSWITCH_LIKE_OPS = {"mul", "square", "rotate", "eval_fast_rotate", "bootstrap"}
+KEYSWITCH_LIKE_OPS = {"mul", "square", "rotate", "fast_rotate", "bootstrap"}
 CONTEXT_CACHE_MODES = {"persistent", "transient", "memory"}
 
 MIN_SUPPORTED_CUR_LIMBS = {
@@ -36,7 +37,7 @@ MIN_SUPPORTED_CUR_LIMBS = {
     "moddown_from_ext": 1,
     "square": 2,
     "rotate": 1,
-    "eval_fast_rotate": 1,
+    "fast_rotate": 1,
     "bootstrap": 2,
 }
 
@@ -178,50 +179,57 @@ class ContextCache:
             save_dir = save_dir / f"with_rotkeys_{rot_sig}"
         save_dir.mkdir(parents=True, exist_ok=True)
 
-        bootstrap_specs = tuple(
-            fhe.BootstrapSpec(log_bs_slots, tuple(level_budget))
-            for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list)
+        bootstrap_depth = bs.depth(
+            log_bs_slots=log_bs_slots_list,
+            level_budget=level_budget_list,
+            secret_key_dist=str(self.args.secret_key_dist),
         )
-        options = fhe.RuntimeOptions(
-            auto_load_keys=bool(need_bootstrap or app_rot_indices),
-            rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
-            rotation_key_limb_limits=getattr(self.args, "rotation_key_limb_limits", {}) or {},
+        bootstrap_rotations = (
+            bs.plan_rot_keys(
+                log_n=int(self.args.logN),
+                log_bs_slots=log_bs_slots_list,
+                level_budget=level_budget_list,
+            )
+            if need_bootstrap
+            else ()
         )
-        crypto_context = fhe.generate_context(
+        rotations = tuple(dict.fromkeys([*app_rot_indices, *bootstrap_rotations]))
+        client, crypto_context = fhe.generate_client_context(
             fhe.CKKSContextSpec(
-                depth=fhe.bootstrap_depth(
-                    int(self.args.max_levels_remaining),
-                    bootstrap_specs,
-                    str(self.args.secret_key_dist),
-                ),
+                depth=int(self.args.max_levels_remaining) + bootstrap_depth,
                 log_n=int(self.args.logN),
                 dnum=int(dnum),
                 dcrt_bits=int(self.args.dcrt_bits),
                 first_mod=int(self.args.first_mod),
                 secret_key_dist=str(self.args.secret_key_dist),
-                rescale_tech=str(self.args.rescale_tech),
-                rotations=tuple(app_rot_indices),
+                scale_mode=str(self.args.scale_mode),
+                rescale_policy=str(self.args.rescale_policy),
+                rotations=rotations,
+                auto_load_keys=bool(need_bootstrap or app_rot_indices),
+                rotation_random_mode=str(getattr(self.args, "rotation_random_mode", "reuse_by_shape")),
+                rotation_key_limb_limits=getattr(self.args, "rotation_key_limb_limits", {}) or {},
             ),
             device=str(self.args.device),
-            options=options,
         )
         bootstrap_constants = {}
         for log_bs_slots, level_budget in zip(log_bs_slots_list, level_budget_list):
+            constants, plan = bs.generate(
+                crypto_context,
+                log_bs_slots=int(log_bs_slots),
+                level_budget=[int(x) for x in level_budget],
+                max_levels_remaining=int(self.args.max_levels_remaining),
+            )
             bootstrap_constants[(int(log_bs_slots), tuple(int(x) for x in level_budget))] = (
-                fhe.generate_bootstrap_constants(
-                    crypto_context,
-                    int(log_bs_slots),
-                    [int(x) for x in level_budget],
-                    int(self.args.max_levels_remaining),
-                )
-        )
+                constants,
+                plan,
+            )
         crypto_context.benchmark_bootstrap_constants = bootstrap_constants
         crypto_context.maxLevelsRemaining = int(self.args.max_levels_remaining)
         crypto_context.DIRECT_LOAD = False
         crypto_context.LOAD_CHECKPOINT = False
         crypto_context.weight_path = ""
         crypto_context.pre_encode_type = None
-        self._cache[key] = (crypto_context, crypto_context)
+        self._cache[key] = (client, crypto_context)
         return self._cache[key]
 
 
@@ -253,15 +261,21 @@ def make_cipher(openfhe_context: Any, crypto_context: Any, values: List[float], 
     level = level_for_cur_limbs(crypto_context, cur_limbs)
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
-    return openfhe_context.encrypt(values, crypto_context.device, 1, level, slots)
+    return openfhe_context.encrypt(values, device=crypto_context.device, scale_deg=1, level=level, slots=slots)
 
 
 def make_plain_from_middle(crypto_context: Any, values: List[float], cur_limbs: int, slots: int, name: str):
     level = level_for_cur_limbs(crypto_context, cur_limbs)
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
-    middle_value = homo_ops.prepare_plaintext(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
-    return homo_ops.encode(middle_value, name, level, slots, False, crypto_context)
+    middle_value = encode_stage1(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
+    return encode_stage2(
+        middle_value,
+        level=level,
+        slots=slots,
+        is_ext=False,
+        cryptoContext=crypto_context,
+    )
 
 
 def case_context_kwargs(case: BenchmarkCase) -> Dict[str, Any]:
@@ -272,7 +286,7 @@ def case_context_kwargs(case: BenchmarkCase) -> Dict[str, Any]:
             "log_bs_slots_list": [int(case.extra["logBsSlots"])],
             "level_budget_list": [[int(x) for x in case.extra["level_budget"]]],
         }
-    if case.op in {"rotate", "eval_fast_rotate"}:
+    if case.op in {"rotate", "fast_rotate"}:
         return {
             "need_bootstrap": False,
             "app_rot_indices": [int(case.extra["step"])],

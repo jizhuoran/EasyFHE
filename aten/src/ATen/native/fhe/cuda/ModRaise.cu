@@ -26,10 +26,10 @@ static void mod_raise_template(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  auto num_cv = in.sizes()[0];
-  auto num_cipher = in.sizes()[1];
-  auto L_IN = in.sizes()[2];
-  auto N = in.sizes()[3];
+  auto num_cv = 1;
+  auto num_cipher = in.sizes()[0];
+  auto L_IN = in.sizes()[1];
+  auto N = in.sizes()[2];
 
   auto in_ptr = reinterpret_cast<uint64_t*>(in.data_ptr<uint64_t>());
   auto res_ptr = reinterpret_cast<uint64_t*>(res.data_ptr<uint64_t>());
@@ -89,9 +89,9 @@ Tensor mod_raise_cuda(
     const Tensor& inverse_scaled_power_of_roots_div_two,
     const Tensor& param_power_of_roots_shoup,
     const Tensor& param_power_of_roots) {
-  TORCH_INTERNAL_ASSERT(in.dim() == 4);
+  TORCH_INTERNAL_ASSERT(in.dim() == 3);
 
-  auto out = at::empty({in.sizes()[0], in.sizes()[1], L0, N}, in.options());
+  auto out = at::empty({in.sizes()[0], L0, N}, in.options());
 
   mod_raise_template(
       out,

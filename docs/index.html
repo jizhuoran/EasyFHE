@@ -19,6 +19,7 @@
       <nav>
         <a href="#install">Install</a>
         <a href="#runtime">Runtime</a>
+        <a href="api.html">Docs</a>
         <a href="#reference">Reference</a>
         <a href="#publish">Publish</a>
         <a href="https://github.com/jizhuoran/EasyFHE">GitHub</a>
@@ -39,6 +40,7 @@
           <div class="hero-actions">
             <a class="button primary" href="#install">Get install command</a>
             <a class="button secondary" href="#runtime">Explore runtime</a>
+            <a class="button secondary" href="api.html">Read API docs</a>
           </div>
         </div>
       </section>
@@ -49,7 +51,7 @@
           <h2>Choose a CUDA wheel channel</h2>
           <p>
             EasyFHE keeps one Python package name and separates CUDA variants
-            by wheel channel. The v0.0.1 wheels target Linux x86_64,
+            by wheel channel. The v0.1.1 wheels target Linux x86_64,
             Python 3.12, and Ubuntu 22.04/24.04 systems with a compatible
             NVIDIA driver and CUDA runtime.
           </p>
@@ -178,7 +180,7 @@
 Branch: docs
 Folder: /
 
-python -m pip install "easyfhe==0.0.1+cu132" \
+python -m pip install "easyfhe==0.1.1+cu132" \
   --find-links https://jizhuoran.github.io/EasyFHE/whl/cu132</code></pre>
       </section>
     </main>
@@ -193,7 +195,7 @@ python -m pip install "easyfhe==0.0.1+cu132" \
         {
           id: "cu132",
           label: "CUDA 13.2",
-          version: "0.0.1+cu132",
+          version: "0.1.1+cu132",
           findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu132",
           python: "3.12",
           platform: "Linux x86_64",
@@ -204,7 +206,7 @@ python -m pip install "easyfhe==0.0.1+cu132" \
         {
           id: "cu124",
           label: "CUDA 12.4",
-          version: "0.0.1+cu124",
+          version: "0.1.1+cu124",
           findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu124",
           python: "3.12",
           platform: "Linux x86_64",

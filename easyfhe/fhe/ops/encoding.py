@@ -4,11 +4,31 @@ from functools import lru_cache
 import numpy as np
 import easyfhe as torch
 
-from ..ciphertext import Plaintext, PreparedPlaintext
-from ..runtime.instrumentation import run_instrumented_op
+from ..ciphertext import CipherState, Plaintext
+from . import kernels as F
 
 MAX_ENCODED_BITS = 61
 ZERO_THRESHOLD = 1e-20
+
+
+class PreparedPlaintext:
+    def __init__(self, values, slots, encoded_values, max_encoded_value):
+        self.values = values
+        self.slots = slots
+        self.encoded_values = encoded_values
+        self.max_encoded_value = max_encoded_value
+
+    def deep_copy(self):
+        if torch.is_tensor(self.encoded_values):
+            encoded_values = self.encoded_values.clone()
+        else:
+            encoded_values = np.array(self.encoded_values, copy=True)
+        return PreparedPlaintext(
+            self.values.copy(),
+            self.slots,
+            encoded_values,
+            self.max_encoded_value,
+        )
 
 
 @lru_cache(maxsize=None)
@@ -50,6 +70,105 @@ def _bit_reverse_permutation(size):
             indices[i], indices[j] = indices[j], indices[i]
     indices.setflags(write=False)
     return indices
+
+
+def encode_stage1(raw_values, slots, ring_dim):
+    """Encode raw slot values into a contiguous middle representation."""
+
+    if ring_dim is None:
+        raise ValueError("encode_stage1 requires an explicit ring_dim")
+    slots = int(slots)
+    ring_dim = int(ring_dim)
+    cycl_order = ring_dim << 1
+    rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
+
+    rows, is_batch = _raw_rows(raw_values)
+    values = []
+    encoded_values = []
+    max_encoded_value = 0.0
+    for row in rows:
+        padded = _pad_1d(row, slots, 0.0)
+        encoded = _fft_special_inv(
+            _pad_1d(_as_complex_array(row), slots, complex(0.0, 0.0)),
+            cycl_order,
+            rot_group,
+            ksi_pows,
+        )
+        encoded = np.ascontiguousarray(encoded, dtype=np.complex128).view(np.float64)
+        values.append(padded)
+        encoded_values.append(encoded)
+        if encoded.size:
+            max_encoded_value = max(max_encoded_value, float(np.max(np.abs(encoded))))
+
+    if is_batch:
+        return PreparedPlaintext(
+            np.stack(values, axis=0),
+            slots,
+            np.stack(encoded_values, axis=0),
+            max_encoded_value,
+        )
+    return PreparedPlaintext(values[0], slots, encoded_values[0], max_encoded_value)
+
+
+def encode_stage2(middle, level, slots, is_ext, cryptoContext):
+    """Materialize a middle representation as an FHE plaintext."""
+
+    if not isinstance(middle, PreparedPlaintext):
+        raise TypeError(f"encode_stage2 expected PreparedPlaintext, got {type(middle)}")
+    level = int(level)
+    slots = int(slots)
+    is_ext = bool(is_ext)
+    _validate_prepared_slots(middle, slots)
+
+    cur_limbs = cryptoContext.L - level
+    scaling_factor = cryptoContext.scale_at(cur_limbs)
+    _validate_scaled_range(middle, scaling_factor)
+
+    encoded_values = np.asarray(middle.encoded_values)
+    batch_size = 1 if encoded_values.ndim == 1 else int(encoded_values.shape[0])
+    encoded_values = encoded_values.reshape(batch_size, 2 * slots)
+
+    pt_encode = F.cv_encode(
+        torch.as_tensor(encoded_values, dtype=torch.float64, device=cryptoContext.device),
+        cryptoContext.N,
+        cur_limbs,
+        slots,
+        scaling_factor,
+        is_ext,
+        cryptoContext,
+    )
+    return Plaintext(
+        [pt_encode],
+        CipherState(cur_limbs, 1, scaling_factor),
+        slots,
+        is_ext,
+        batch_size=batch_size,
+    )
+
+
+def _raw_rows(raw_values):
+    if isinstance(raw_values, PreparedPlaintext):
+        raise TypeError("encode_stage1 expects raw values, not PreparedPlaintext")
+    if isinstance(raw_values, (list, tuple)):
+        if not raw_values:
+            raise ValueError("encode_stage1 requires at least one row")
+        if np.asarray(raw_values).ndim == 1 and not isinstance(raw_values[0], (list, tuple, np.ndarray)):
+            return [_raw_values(raw_values)], False
+        rows = [_raw_values(row) for row in raw_values]
+        return rows, True
+
+    values = np.asarray(raw_values)
+    if values.ndim >= 2:
+        flat = values.reshape(values.shape[0], -1)
+        return [_raw_values(row) for row in flat], True
+    return [_raw_values(values)], False
+
+
+def _raw_values(values):
+    values = np.asarray(values).reshape(-1)
+    if np.iscomplexobj(values):
+        return np.asarray(values, dtype=np.complex128).reshape(-1)
+    return np.asarray(values, dtype=np.double).reshape(-1)
 
 
 def _as_complex_array(values):
@@ -96,7 +215,7 @@ def _fft_special_inv(values, cycl_order, rot_group, ksi_pows):
 
 
 def _validate_prepared_slots(prepared, slots):
-    if prepared.slots != slots:
+    if int(prepared.slots) != int(slots):
         raise ValueError(f"Prepared plaintext slots [{prepared.slots}] do not match requested slots [{slots}]")
 
 
@@ -111,99 +230,3 @@ def _validate_scaled_range(prepared, scaling_factor):
             f"Prepared plaintext is too large for encoding: "
             f"max_encoded_value={prepared.max_encoded_value}, scaling_factor={scaling_factor}"
         )
-
-
-def _encoded_values_tensor(prepared, slots, cryptoContext):
-    return torch.as_tensor(
-        prepared.encoded_values,
-        dtype=torch.float64,
-        device=cryptoContext.device,
-    ).reshape(-1, 2 * slots)
-
-
-def prepare_plaintext(x, slots, ring_dim):
-    if ring_dim is None:
-        raise ValueError("prepare_plaintext requires an explicit ring_dim")
-    if not isinstance(x, np.ndarray):
-        raise TypeError(f"prepare_plaintext input must be np.ndarray, got {type(x)}")
-    ring_dim = int(ring_dim)
-    cycl_order = ring_dim << 1
-    rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
-
-    values = x
-    inverse_complex = _pad_1d(_as_complex_array(values), slots, complex(0.0, 0.0))
-    inverse_complex = _fft_special_inv(inverse_complex, cycl_order, rot_group, ksi_pows)
-    encoded_values = np.ascontiguousarray(inverse_complex, dtype=np.complex128).view(np.float64)
-
-    return PreparedPlaintext(
-        _pad_1d(values, slots, 0.0),
-        slots,
-        encoded_values,
-        np.max(np.abs(encoded_values)),
-    )
-
-
-def make_plaintext(prepared, level, slots, is_ext, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "make_plaintext",
-        _make_plaintext,
-        prepared,
-        level,
-        slots,
-        is_ext,
-        cryptoContext,
-    )
-
-
-def encode(x, name, level, slots, is_ext, cryptoContext):
-    return run_instrumented_op(
-        cryptoContext,
-        "encode",
-        _encode,
-        x,
-        name,
-        level,
-        slots,
-        is_ext,
-        cryptoContext,
-    )
-
-
-def _encode(x, name, level, slots, is_ext, cryptoContext):
-    if isinstance(x, np.ndarray):
-        middle_value = prepare_plaintext(x, slots, cryptoContext.N)
-    elif isinstance(x, PreparedPlaintext):
-        _validate_prepared_slots(x, slots)
-        middle_value = x
-    else:
-        raise TypeError(f"Invalid plaintext source type: {type(x)}")
-
-    return _make_plaintext(middle_value, level, slots, is_ext, cryptoContext)
-
-
-def _make_plaintext(middle_value, level, slots, is_ext, cryptoContext):
-    if not isinstance(middle_value, PreparedPlaintext):
-        raise TypeError(f"Invalid prepared plaintext type: {type(middle_value)}")
-    _validate_prepared_slots(middle_value, slots)
-    cur_limbs = cryptoContext.L - level
-    scaling_factor = cryptoContext.scale_at(cur_limbs)
-    _validate_scaled_range(middle_value, scaling_factor)
-
-    pt_encode = torch.encode(
-        input=_encoded_values_tensor(middle_value, slots, cryptoContext),
-        N=cryptoContext.N,
-        cur_limbs=cur_limbs,
-        slots=slots,
-        scaling_factor=scaling_factor,
-        is_ext=is_ext,
-        sizeP=cryptoContext.primes.shape[0] - cryptoContext.L,
-        primes=cryptoContext.QplusP_map[cur_limbs],
-        max_int_diffs=cryptoContext.QmaxdiffplusPmaxdiff_map[cur_limbs],
-        barret_ratio=cryptoContext.QbarretRatioplusPbarretRatio_map[cur_limbs],
-        barret_k=cryptoContext.QbarretKplusPbarretK_map[cur_limbs],
-        power_of_roots_shoup=cryptoContext.power_of_roots_shoup,
-        power_of_roots=cryptoContext.power_of_roots,
-    )
-    gpufhe_cipher = Plaintext(pt_encode.unsqueeze(0), cur_limbs, scaling_factor, 1, slots, is_ext)
-    return gpufhe_cipher

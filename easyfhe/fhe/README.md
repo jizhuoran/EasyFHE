@@ -3,9 +3,12 @@
 `easyfhe.fhe` is the CKKS-oriented public frontend layered on top of the
 retained EasyFHE tensor runtime. It owns encrypted tensor state, context
 generation, plaintext preparation, homomorphic operators, bootstrapping support,
-runtime options, and native key material generation.
+and native key material generation.
 
 ## Public Entry Points
+
+For the application-facing API contract, see
+[`docs/application-api.md`](../../docs/application-api.md).
 
 Use the package root for stable FHE workflows:
 
@@ -16,29 +19,42 @@ import easyfhe.fhe as fhe
 
 The main entry points are:
 
-- `CKKSContextSpec`, `BootstrapSpec`, `bootstrap_depth`, and `generate_context`
-  for context construction.
-- `Context`, `CipherState`, and `PreparedPlaintext` for runtime state.
-- `prepare_plaintext`, `make_plaintext`, `encode`, and ciphertext slot helpers.
-- `homo_add`, `homo_sub`, `homo_mul`, `homo_square`, scalar/plaintext variants,
-  rotations, rescale, and noise-level alignment helpers.
-- `generate_bootstrap_constants` and `homo_bootstrap` for bootstrapping.
-- `RuntimeOptions`, `profile`, and CLI helpers for runtime control.
+- `CKKSContextSpec` and `generate_client_context` for client/context
+  construction. Use
+  `easyfhe.bs.openfhe` to plan bootstrap extra depth and bootstrap rotation keys
+  before constructing the context.
+- `Context`, `CipherState`, and `ConstantBundle` for runtime state and reusable
+  scalar/vector constant packs. Plaintext materialization should go through
+  `ConstantBundle.plaintext(...)`; raw encoding stages are internal helpers.
+- ciphertext slot helpers.
+- `homo_add`, `homo_sub`, `homo_mul_relin`, scalar/plaintext variants,
+  rotations, and `align_to` for explicit ciphertext state alignment.
+
+The supported external API is the allowlist in `easyfhe.fhe.__all__`, sourced
+from `easyfhe.fhe._public_api.PUBLIC_API`. Importable submodules are
+implementation details unless their symbols are re-exported by the package root.
+
+Bootstrap APIs live in concrete sibling packages such as `easyfhe.bs.openfhe`.
+New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
+construction and add it to the application's remaining-depth budget when
+choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
+directly. Call `bs.plan_rot_keys(...)` before key generation and include those
+offsets in `CKKSContextSpec.rotations`; key generation then returns separate
+client/server material, and `Context` is built from the server material only.
+After context construction, call `bs.generate(ctx, ...)` to generate bootstrap
+constants and a bootstrap plan, then call
+`bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at runtime.
 
 ## Package Map
 
-- `runtime/`: user-facing context specs, runtime options, validation, CLI, and
-  instrumentation.
 - `context.py` and `ciphertext.py`: context construction and ciphertext/plaintext
   state containers.
+- `context_factory.py`: CKKS context spec and client/context generation.
 - `ops/`: homomorphic arithmetic, encoding, key switching, rotation, alignment,
-  fused operations, and thin native-kernel wrappers.
-- `bootstrap/`: bootstrapping plans, constants, rotations, approximation, and
-  runtime execution.
-- `material/`: native sampler integration, CKKS key material, context material,
-  rotation plans, and sample arithmetic.
-- `dev_tools/` and `logger/`: debugging and instrumentation helpers used by
-  development workflows.
+  operation validation, fused operations, and thin native-kernel wrappers.
+- `../bs/`: public bootstrapping specs, planning, constants, runtime helpers,
+  and OpenFHE-specific internal implementation code.
+- `_keygen/`: native sampler integration and context material assembly.
 
 ## Refactor Direction
 

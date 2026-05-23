@@ -1,78 +1,181 @@
 import easyfhe.fhe as fhe
 
+try:
+    from .fhe_state import reduce_noise_to_one, rescale_one_level
+except ImportError:
+    from fhe_state import reduce_noise_to_one, rescale_one_level
+
 __all__ = [
     "aespa_add_shortcut",
     "aespa_nonlinear",
     "conv3x3",
+    "conv3x3_sx",
     "initial_conv3x3",
     "pointwise_conv",
+    "pointwise_conv_sx",
 ]
 
 
-def _pairwise_mac(ctxs, ptxs, cryptoContext):
-    if len(ctxs) != len(ptxs) or len(ctxs) == 0:
-        raise ValueError(f"ctxs and ptxs must have the same non-zero length, but got {len(ctxs)} and {len(ptxs)}")
+def _read_kernel_group(name, cipher, scale, cryptoContext, weights, is_ext=False, cache=True):
+    level = cryptoContext.L - cipher.state.cur_limbs
+    return weights.plaintext(
+        name,
+        level,
+        cipher.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+        is_ext=is_ext,
+        cache=cache,
+    )
 
-    partial_sum = fhe.homo_mul_pt(ctxs[0], ptxs[0], cryptoContext)
-    for ctx, ptx in zip(ctxs[1:], ptxs[1:]):
-        partial_sum = fhe.homo_add(partial_sum, fhe.homo_mul_pt(ctx, ptx, cryptoContext), cryptoContext)
-    return partial_sum
+
+def _resolve_scalar(value, weights):
+    if isinstance(value, str):
+        return weights._scalar_value(value)
+    return value
 
 
-def _read_kernel_rows(prefix, cipher, scale, cryptoContext, weights):
-    level = cryptoContext.L - cipher.cur_limbs
+def _cipher_batch_items(cipher):
+    return tuple(
+        cipher.cipher_like(
+            [component[index] for component in cipher.cv],
+            batch_size=1,
+        )
+        for index in range(int(cipher.batch_size))
+    )
+
+
+def _trace_op_state(cryptoContext, op, cipher, **extra):
+    trace = getattr(cryptoContext, "aespa_state_trace", None)
+    if trace is None:
+        return
+    record = {
+        "op": op,
+        "cur_limbs": int(cipher.state.cur_limbs),
+        "noise_deg": int(cipher.state.noise_deg),
+        "slots": int(cipher.slots),
+        "is_ext": bool(cipher.is_ext),
+    }
+    record.update(extra)
+    trace.append(record)
+
+
+def _conv3x3_offsets(img_width, padding):
     return [
-        weights.plaintext(f"{prefix}-k{k + 1}", level, cipher.slots, cryptoContext, scale)
-        for k in range(9)
+        -img_width - padding,
+        -img_width,
+        -img_width + padding,
+        -padding,
+        0,
+        padding,
+        img_width - padding,
+        img_width,
+        img_width + padding,
     ]
 
 
-def _rot_input(input, img_width, padding, cryptoContext):
-    digits = fhe.modup_to_ext(input.cipher_like([input.cv[1]]), cryptoContext)
-    digits_neg_padding = fhe.eval_fast_rotate(digits, input, -padding, True, True, cryptoContext)
-    digits_padding = fhe.eval_fast_rotate(digits, input, padding, True, True, cryptoContext)
-    digits_neg_img_width = fhe.eval_fast_rotate(digits, input, -img_width, True, True, cryptoContext)
-    digits_img_width = fhe.eval_fast_rotate(digits, input, img_width, True, True, cryptoContext)
+def _conv3x3_channel_count(plaintexts):
+    if plaintexts.batch_size % 9 != 0:
+        raise ValueError(f"conv3x3 kernel batch size must be a multiple of 9, got {plaintexts.batch_size}")
+    return plaintexts.batch_size // 9
 
-    return [
-        fhe.homo_rotate(digits_neg_padding, -img_width, cryptoContext),
-        digits_neg_img_width,
-        fhe.homo_rotate(digits_padding, -img_width, cryptoContext),
-        digits_neg_padding,
+
+def _conv3x3(input, kernel_group, img_width, padding, rot_offset, scale, cryptoContext, weights):
+    _trace_op_state(
+        cryptoContext,
+        "conv3x3",
         input,
-        digits_padding,
-        fhe.homo_rotate(digits_neg_padding, img_width, cryptoContext),
-        digits_img_width,
-        fhe.homo_rotate(digits_padding, img_width, cryptoContext),
+        kernel_group=kernel_group,
+        img_width=int(img_width),
+        rot_offset=int(rot_offset),
+    )
+    input = reduce_noise_to_one(input, cryptoContext)
+    plaintexts = _read_kernel_group(
+        kernel_group,
+        input,
+        scale,
+        cryptoContext,
+        weights,
+    )
+    result = fhe.hoisted_mac_sum(
+        input,
+        _conv3x3_offsets(img_width, padding),
+        plaintexts,
+        rot_offset,
+        _conv3x3_channel_count(plaintexts),
+        cryptoContext,
+        strategy=fhe.HOIST_NORMAL,
+    )
+    return fhe.homo_rotate(result, rot_offset, cryptoContext)
+
+
+def _conv3x3_sx(input, kernel_group, img_width, padding, copy_per_cipher, channels, rot_offset, scale, cryptoContext, weights):
+    _trace_op_state(
+        cryptoContext,
+        "conv3x3_sx",
+        input,
+        kernel_group=kernel_group,
+        img_width=int(img_width),
+        rot_offset=int(rot_offset),
+    )
+    input = reduce_noise_to_one(input, cryptoContext)
+    loop_size = int(channels) // int(copy_per_cipher)
+    plaintexts = _read_kernel_group(
+        kernel_group,
+        input,
+        scale,
+        cryptoContext,
+        weights,
+    )
+    result = fhe.hoisted_mac_sum(
+        input,
+        _conv3x3_offsets(img_width, padding),
+        plaintexts,
+        rot_offset,
+        loop_size,
+        cryptoContext,
+        strategy=fhe.HOIST_NORMAL,
+    )
+    return fhe.homo_rotate(result, loop_size * rot_offset, cryptoContext)
+
+
+def _initial_conv3x3(input, kernel_group, img_width, padding, rot_offset, scale, cryptoContext, weights):
+    _trace_op_state(
+        cryptoContext,
+        "initial_conv3x3",
+        input,
+        kernel_group=kernel_group,
+        img_width=int(img_width),
+        rot_offset=int(rot_offset),
+    )
+    input = reduce_noise_to_one(input, cryptoContext)
+    rotations = fhe.fast_rotate(input, _conv3x3_offsets(img_width, padding), cryptoContext)
+    plaintexts = _read_kernel_group(kernel_group, rotations, scale, cryptoContext, weights)
+    partial_sums = fhe.grouped_pairwise_mac(
+        rotations,
+        plaintexts,
+        _conv3x3_channel_count(plaintexts),
+        cryptoContext,
+    )
+    partial_sums = [
+        _initial_conv_postprocess(partial_sum, cryptoContext, weights)
+        for partial_sum in _cipher_batch_items(partial_sums)
     ]
-
-
-def _conv3x3(input, prefixes, img_width, padding, rot_offset, scale, cryptoContext, weights, postprocess=None):
-    if not prefixes:
-        raise ValueError("conv3x3 requires at least one kernel prefix")
-
-    input = fhe.reduce_noise_to_one(input, cryptoContext)
-    rotations = _rot_input(input, img_width, padding, cryptoContext)
-
-    for idx, prefix in enumerate(prefixes):
-        partial_sum = _pairwise_mac(rotations, _read_kernel_rows(prefix, input, scale, cryptoContext, weights), cryptoContext)
-        if postprocess is not None:
-            partial_sum = postprocess(partial_sum)
-        finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
-        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
-    return finalsum
+    result = fhe.giant_rotate_sum(fhe.pack_cipher_batch(partial_sums), rot_offset, cryptoContext, strategy=fhe.HOIST_NORMAL)
+    return fhe.homo_rotate(result, rot_offset, cryptoContext)
 
 
 def _initial_conv_postprocess(partial_sum, cryptoContext, weights):
-    partial_sum = fhe.rescale_one_level(partial_sum, cryptoContext)
+    partial_sum = rescale_one_level(partial_sum, cryptoContext)
+    base = partial_sum
     sum_rot = fhe.homo_rotate(partial_sum, 1024, cryptoContext)
-    partial_sum = fhe.homo_add(partial_sum, sum_rot, cryptoContext)
-    partial_sum = fhe.homo_add(partial_sum, fhe.homo_rotate(sum_rot, 1024, cryptoContext), cryptoContext)
+    partial_sum = fhe.homo_rotate_add(sum_rot, 1024, cryptoContext, addend=sum_rot)
+    partial_sum = fhe.homo_add(base, partial_sum, cryptoContext)
     return fhe.homo_mul_pt(
         partial_sum,
         weights.plaintext(
             f"mask_from_to_0_1024_{partial_sum.slots}",
-            cryptoContext.L - partial_sum.cur_limbs,
+            cryptoContext.L - partial_sum.state.cur_limbs,
             partial_sum.slots,
             cryptoContext,
         ),
@@ -80,24 +183,10 @@ def _initial_conv_postprocess(partial_sum, cryptoContext, weights):
     )
 
 
-def initial_conv3x3(input, kernel_prefixes, img_width, padding, rot_offset, scale, cryptoContext, weights):
-    return _conv3x3(
+def initial_conv3x3(input, kernel_group, img_width, padding, rot_offset, scale, cryptoContext, weights):
+    return _initial_conv3x3(
         input,
-        kernel_prefixes,
-        img_width,
-        padding,
-        rot_offset,
-        scale,
-        cryptoContext,
-        weights,
-        lambda partial_sum: _initial_conv_postprocess(partial_sum, cryptoContext, weights),
-    )
-
-
-def conv3x3(input, kernel_prefixes, img_width, padding, rot_offset, scale, cryptoContext, weights):
-    return _conv3x3(
-        input,
-        kernel_prefixes,
+        kernel_group,
         img_width,
         padding,
         rot_offset,
@@ -107,39 +196,127 @@ def conv3x3(input, kernel_prefixes, img_width, padding, rot_offset, scale, crypt
     )
 
 
-def pointwise_conv(input, kernel_keys, bias_key, rot_offset, scale, cryptoContext, weights):
-    if not kernel_keys:
-        raise ValueError("pointwise_conv requires at least one kernel key")
+def conv3x3(input, kernel_group, img_width, padding, rot_offset, scale, cryptoContext, weights):
+    return _conv3x3(
+        input,
+        kernel_group,
+        img_width,
+        padding,
+        rot_offset,
+        scale,
+        cryptoContext,
+        weights,
+    )
 
-    input = fhe.reduce_noise_to_one(input, cryptoContext)
 
-    for idx, kernel_key in enumerate(kernel_keys):
-        encoded = weights.plaintext_for_cipher(kernel_key, input, cryptoContext, scale)
-        partial_sum = fhe.homo_mul_pt(input, encoded, cryptoContext)
-        finalsum = partial_sum.deep_copy() if idx == 0 else fhe.homo_add(finalsum, partial_sum, cryptoContext)
-        finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
+def conv3x3_sx(input, kernel_group, img_width, padding, copy_per_cipher, channels, rot_offset, scale, cryptoContext, weights):
+    return _conv3x3_sx(
+        input,
+        kernel_group,
+        img_width,
+        padding,
+        copy_per_cipher,
+        channels,
+        rot_offset,
+        scale,
+        cryptoContext,
+        weights,
+    )
 
-    finalsum = fhe.rescale_one_level(finalsum, cryptoContext)
-    bias = weights.plaintext_for_cipher(bias_key, finalsum, cryptoContext, scale)
+
+def pointwise_conv(input, kernel_group, bias_key, rot_offset, scale, cryptoContext, weights):
+    _trace_op_state(
+        cryptoContext,
+        "pointwise_conv",
+        input,
+        kernel_group=kernel_group,
+        bias_key=bias_key,
+        rot_offset=int(rot_offset),
+    )
+    input = reduce_noise_to_one(input, cryptoContext)
+    plaintexts = _read_kernel_group(kernel_group, input, scale, cryptoContext, weights)
+    input_batch = input.cipher_like(input.cv, batch_size=1)
+    partial_sums = fhe.grouped_pairwise_mac(input_batch, plaintexts, plaintexts.batch_size, cryptoContext)
+    finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy=fhe.HOIST_NORMAL)
+    finalsum = fhe.homo_rotate(finalsum, rot_offset, cryptoContext)
+
+    finalsum = rescale_one_level(finalsum, cryptoContext)
+    bias = weights.plaintext(
+        bias_key,
+        cryptoContext.L - finalsum.state.cur_limbs,
+        finalsum.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+    )
+    return fhe.homo_add_pt(finalsum, bias, cryptoContext)
+
+
+def pointwise_conv_sx(input, kernel_group, bias_key, copy_per_cipher, channels, rot_offset, scale, cryptoContext, weights):
+    _trace_op_state(
+        cryptoContext,
+        "pointwise_conv_sx",
+        input,
+        kernel_group=kernel_group,
+        bias_key=bias_key,
+        rot_offset=int(rot_offset),
+    )
+    input = reduce_noise_to_one(input, cryptoContext)
+    loop_size = int(channels) // int(copy_per_cipher)
+    plaintexts = _read_kernel_group(
+        kernel_group,
+        input,
+        scale,
+        cryptoContext,
+        weights,
+    )
+    input_batch = input.cipher_like(input.cv, batch_size=1)
+    partial_sums = fhe.grouped_pairwise_mac(input_batch, plaintexts, loop_size, cryptoContext)
+    finalsum = fhe.giant_rotate_sum(partial_sums, rot_offset, cryptoContext, strategy=fhe.HOIST_NORMAL)
+    finalsum = fhe.homo_rotate(finalsum, loop_size * rot_offset, cryptoContext)
+    finalsum = rescale_one_level(finalsum, cryptoContext)
+    bias = weights.plaintext(
+        bias_key,
+        cryptoContext.L - finalsum.state.cur_limbs,
+        finalsum.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+    )
     return fhe.homo_add_pt(finalsum, bias, cryptoContext)
 
 
 def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
-    x = fhe.reduce_noise_to_one(x, cryptoContext)
-    n1 = weights.plaintext_for_cipher(f"{prefix}-n1", x, cryptoContext, scale)
+    x = reduce_noise_to_one(x, cryptoContext)
+    n1 = weights.plaintext(
+        f"{prefix}-n1",
+        cryptoContext.L - x.state.cur_limbs,
+        x.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+    )
     shifted = fhe.homo_add_pt(x, n1, cryptoContext)
-    squared = fhe.homo_square(shifted, cryptoContext)
-    squared = fhe.rescale_one_level(squared, cryptoContext)
-    n2 = weights.plaintext_for_cipher(f"{prefix}-n2", squared, cryptoContext, scale)
-    return fhe.homo_add_pt(squared, n2, cryptoContext)
+    out_cur_limbs = shifted.state.cur_limbs - 1
+    n2 = weights.plaintext(
+        f"{prefix}-n2",
+        cryptoContext.L - out_cur_limbs,
+        shifted.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+    )
+    return fhe.homo_mul_relin_rescale_add_pt(shifted, shifted, n2, cryptoContext)
 
 
 def aespa_add_shortcut(conv_out, shortcut, prefix, cryptoContext, weights, scale=1):
-    if cryptoContext.rescaleTech == "FIXEDMANUAL":
+    if cryptoContext.rescale_policy == "manual":
         shortcut = fhe.align_to(
             shortcut,
-            fhe.CipherState(shortcut.cur_limbs - (shortcut.cur_limbs - conv_out.cur_limbs), shortcut.noise_deg),
+            fhe.CipherState(shortcut.state.cur_limbs - (shortcut.state.cur_limbs - conv_out.state.cur_limbs), shortcut.state.noise_deg),
             cryptoContext,
         )
-    a2 = weights.plaintext_for_cipher(f"{prefix}-A2", shortcut, cryptoContext, scale)
+    a2 = weights.plaintext(
+        f"{prefix}-A2",
+        cryptoContext.L - shortcut.state.cur_limbs,
+        shortcut.slots,
+        cryptoContext,
+        _resolve_scalar(scale, weights),
+    )
     return fhe.homo_add(conv_out, fhe.homo_mul_pt(shortcut, a2, cryptoContext), cryptoContext)
