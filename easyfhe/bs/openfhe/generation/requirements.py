@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .plan import bootstrap_approx_depth as _bootstrap_approx_depth_from_plan
+from .rotations import bootstrap_required_rotations, normalize_bootstrap_strategy
 
 
 def bootstrap_depth(log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
@@ -27,7 +28,7 @@ def required_rotations(
     log_bs_slots,
     level_budget,
     *,
-    secret_key_dist="SPARSE_TERNARY",
+    strategy="double_hoist",
     dim1=None,
 ):
     """Return OpenFHE bootstrap rotation keys."""
@@ -36,21 +37,10 @@ def required_rotations(
     result = []
     params = _normalize_params(log_bs_slots, level_budget, dim1)
     _reject_linear_transform_budget(params)
+    strategy = normalize_bootstrap_strategy(strategy)
     for bs_slots, budget, dims in params:
-        result.extend(_bootstrap_rotation_indices(ring_dim, bs_slots, budget, secret_key_dist, dims))
+        result.extend(bootstrap_required_rotations(ring_dim, bs_slots, budget, dims, strategy))
     return _unique_preserve_order(result)
-
-
-def _bootstrap_rotation_indices(ring_dim, log_bs_slots, level_budget, secret_key_dist, dim1):
-    from .rotations import bootstrap_rotation_indices
-
-    return bootstrap_rotation_indices(
-        ring_dim,
-        log_bs_slots,
-        level_budget,
-        secret_key_dist,
-        dim1,
-    )
 
 
 def _normalize_params(log_bs_slots, level_budget, dim1):

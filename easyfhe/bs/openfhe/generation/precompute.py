@@ -12,7 +12,7 @@ from .rotations import (
 )
 
 
-class BsContext:
+class BootstrapPrecompute:
     def __init__(
         self,
         N,
@@ -212,46 +212,6 @@ class BsContext:
 
         return coeff
 
-
-    def _fft_special_inv(self, vals, M, rotGroup, ksiPows):
-
-        def _bit_reverse(vals):
-            size = len(vals)
-            vals = np.array(vals, dtype=np.complex128)
-            j = 0
-            for i in range(1, size):
-                bit = size >> 1
-                while j >= bit:
-                    j -= bit
-                    bit >>= 1
-                j += bit
-                if i < j:
-                    vals[i], vals[j] = vals[j], vals[i]
-            return vals
-
-        vals_size = len(vals)
-
-        len_size = vals_size
-        while len_size >= 1:
-            len_h = len_size >> 1
-            len_q = len_size << 2
-            gap = M // len_q
-
-            for i in range(0, vals_size, len_size):
-                for j in range(len_h):
-                    idx = (len_q - (rotGroup[j] % len_q)) * gap
-                    u = vals[i + j] + vals[i + j + len_h]
-                    v = vals[i + j] - vals[i + j + len_h]
-                    v *= ksiPows[idx]
-                    vals[i + j] = u
-                    vals[i + j + len_h] = v
-            len_size >>= 1
-
-        vals = _bit_reverse(vals)
-
-        for i in range(vals_size):
-            vals[i] /= vals_size
-        return vals
 
     def rotate(self, a, index):
         slots = len(a)

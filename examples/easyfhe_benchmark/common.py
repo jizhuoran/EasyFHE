@@ -189,7 +189,6 @@ class ContextCache:
                 log_n=int(self.args.logN),
                 log_bs_slots=log_bs_slots_list,
                 level_budget=level_budget_list,
-                secret_key_dist=str(self.args.secret_key_dist),
             )
             if need_bootstrap
             else ()

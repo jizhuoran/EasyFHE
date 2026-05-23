@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from .generation.constants import BootstrapPlan, generate_bootstrap_constants
+from .generation.constants import generate_bootstrap_constants
 from .generation.requirements import bootstrap_depth, required_rotations
+from .generation.types import BootstrapPlan
 
 
 def depth(*, log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"):
@@ -13,7 +14,7 @@ def plan_rot_keys(
     log_n,
     log_bs_slots,
     level_budget,
-    secret_key_dist="SPARSE_TERNARY",
+    strategy="double_hoist",
     dim1=None,
 ):
     return tuple(
@@ -21,7 +22,7 @@ def plan_rot_keys(
             log_n,
             log_bs_slots,
             level_budget,
-            secret_key_dist=secret_key_dist,
+            strategy=strategy,
             dim1=dim1,
         )
     )

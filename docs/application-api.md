@@ -195,7 +195,7 @@ rotations = bs.plan_rot_keys(
     log_n=16,
     log_bs_slots=14,
     level_budget=level_budget,
-    secret_key_dist="SPARSE_TERNARY",
+    strategy="double_hoist",
 )
 
 client, ctx = fhe.generate_client_context(

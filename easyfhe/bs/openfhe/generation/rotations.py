@@ -112,103 +112,24 @@ def collapsed_fft_params(slots, level_budget, dim1):
     )
 
 
-def _add_bsgs_rotations(index_list, num_rotations, g, b, scaling_factor, mod_j, mod_i):
-    half_rots = 1 - ((num_rotations + 1) // 2)
-    for j in range(half_rots, g + half_rots):
-        index_list.append(reduce_rotation(j * scaling_factor, mod_j))
-    for i in range(b):
-        index_list.append(reduce_rotation((g * i) * scaling_factor, mod_i))
-
-
-def _find_fft_rotation_indices(level_budget_vec, dim1_vec, slots, cycl_order, budget_idx, dim1_idx, coeffs_to_slots):
-    slots = int(slots)
-    cycl_order = int(cycl_order)
-    params = collapsed_fft_params(slots, level_budget_vec[budget_idx], dim1_vec[dim1_idx])
-
-    flag_rem = 0 if params.layers_rem == 0 else 1
-    if not coeffs_to_slots and params.level_budget < flag_rem:
-        raise ValueError("levelBudget can not be less than flagRem")
-
-    index_list = []
-    index_list_size = (
-        params.baby_step
-        + params.giant_step
-        - 2
-        + params.baby_step_rem
-        + params.giant_step_rem
-        - 2
-        + 1
-        + cycl_order
-    )
-    if index_list_size < 0:
-        raise ValueError("indexListSz can not be negative")
-
-    if coeffs_to_slots:
-        for s in range(params.level_budget - 1, flag_rem - 1, -1):
-            scaling_factor = 1 << ((s - flag_rem) * params.layers_coll + params.layers_rem)
-            _add_bsgs_rotations(
-                index_list,
-                params.num_rotations,
-                params.giant_step,
-                params.baby_step,
-                scaling_factor,
-                slots,
-                cycl_order // 4,
-            )
-    else:
-        for s in range(0, params.level_budget - flag_rem):
-            scaling_factor = 1 << (s * params.layers_coll)
-            _add_bsgs_rotations(
-                index_list,
-                params.num_rotations,
-                params.giant_step,
-                params.baby_step,
-                scaling_factor,
-                cycl_order // 4,
-                cycl_order // 4,
-            )
-
-    if flag_rem:
-        if coeffs_to_slots:
-            _add_bsgs_rotations(
-                index_list,
-                params.num_rotations_rem,
-                params.giant_step_rem,
-                params.baby_step_rem,
-                1,
-                slots,
-                cycl_order // 4,
-            )
-        else:
-            s = params.level_budget - flag_rem
-            scaling_factor = 1 << (s * params.layers_coll)
-            _add_bsgs_rotations(
-                index_list,
-                params.num_rotations_rem,
-                params.giant_step_rem,
-                params.baby_step_rem,
-                scaling_factor,
-                cycl_order // 4,
-                cycl_order // 4,
-            )
-
-    m = slots * 4
-    if m != cycl_order:
-        ratio = cycl_order // m
-        j = 1
-        while j < ratio:
-            index_list.append(j * slots)
-            j <<= 1
-
-    return index_list
-
-
-def _coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order):
-    return _find_fft_rotation_indices(level_budget, dim1, slots, cycl_order, 0, 0, True)
-
-
-def _slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order):
-    return _find_fft_rotation_indices(level_budget, dim1, slots, cycl_order, 1, 1, False)
+def normalize_bootstrap_strategy(strategy):
+    strategy = str(strategy or "double_hoist").lower()
+    aliases = {
+        "double_hoist": "double_hoist",
+        "double-hoist": "double_hoist",
+        "ext_double_hoist": "double_hoist",
+        "normal_giant": "normal_giant",
+        "normal-giant": "normal_giant",
+        "ext_normal_giant": "normal_giant",
+        "normal_bsgs": "normal_bsgs",
+        "normal-bsgs": "normal_bsgs",
+    }
+    try:
+        return aliases[strategy]
+    except KeyError as exc:
+        raise ValueError(
+            "bootstrap strategy must be one of: double_hoist, normal_giant, normal_bsgs"
+        ) from exc
 
 
 def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=0):
@@ -277,31 +198,63 @@ def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=
     )
 
 
-def _bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order):
-    rotations = []
-    rotations.extend(_coeffs_to_slots_rotation_indices(level_budget, dim1, slots, cycl_order))
-    rotations.extend(_slots_to_coeffs_rotation_indices(level_budget, dim1, slots, cycl_order))
-    rotations = set(rotations)
-    rotations.discard(0)
-    rotations.discard(cycl_order // 4)
-    return list(sorted(rotations))
-
-
-def bootstrap_rotation_indices(ring_dim, log_bs_slots, level_budget, secret_key_dist, dim1=None):
+def bootstrap_required_rotations(ring_dim, log_bs_slots, level_budget, dim1=None, strategy="double_hoist"):
     """Return bootstrap rotations plus the conjugation key rotation."""
-    log_bs_slots = int(log_bs_slots)
     dim1 = [0, 0] if dim1 is None else dim1
-    slots = 1 << log_bs_slots
     ring_dim = int(ring_dim)
-    cycl_order = ring_dim << 1
-    rotations = _bootstrap_core_rotation_indices(level_budget, dim1, slots, cycl_order)
-    half_ring_dim = ring_dim // 2
+    slots = 1 << int(log_bs_slots)
+    c2s_schedule = bootstrap_transform_schedule("C2S", slots, level_budget[0], ring_dim, dim1[0])
+    s2c_schedule = bootstrap_transform_schedule("S2C", slots, level_budget[1], ring_dim, dim1[1])
+    rotations = []
+    for schedule in (c2s_schedule, s2c_schedule):
+        rotations.extend(_schedule_required_rotations(schedule, strategy, ring_dim))
+    rotations.extend(_sparse_bootstrap_rotations(ring_dim, slots))
+    rotations.append((ring_dim << 1) - 1)
+    return _unique_preserve_order(rotations)
 
+
+def _schedule_required_rotations(schedule, strategy, ring_dim):
     result = []
-    for rot in rotations:
-        adj_rot = int(rot)
-        if adj_rot < 0:
-            adj_rot = half_ring_dim - abs(adj_rot)
-        result.append(adj_rot)
-    result.append(cycl_order - 1)
+    strategy = normalize_bootstrap_strategy(strategy)
+    for loop_pos, level in enumerate(schedule.loop_range):
+        if loop_pos == len(schedule.loop_range) - 1 and schedule.rem:
+            giant_step = schedule.giant_step_rem
+            baby_step = schedule.baby_step_rem
+        else:
+            giant_step = schedule.giant_step
+            baby_step = schedule.baby_step
+
+        result.extend(schedule.rot_in[level][:giant_step])
+        rot_out = schedule.rot_out[level][:baby_step]
+        if strategy == "double_hoist":
+            result.extend(rot_out)
+        else:
+            result.extend(_single_giant_rotation_key(rot_out, ring_dim))
+    return [int(rotation) for rotation in result if int(rotation) != 0]
+
+
+def _single_giant_rotation_key(offsets, ring_dim):
+    offsets = tuple(int(offset) for offset in offsets)
+    if len(offsets) <= 1:
+        return ()
+    modulus = int(ring_dim) // 2
+    step = (offsets[1] - offsets[0]) % modulus
+    return () if step == 0 else (step,)
+
+
+def _sparse_bootstrap_rotations(ring_dim, slots):
+    ring_dim = int(ring_dim)
+    slots = int(slots)
+    count = int(math.log2(ring_dim // (2 * slots)))
+    return [(1 << step) * slots for step in range(count)]
+
+
+def _unique_preserve_order(values):
+    seen = set()
+    result = []
+    for value in values:
+        value = int(value)
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
     return result

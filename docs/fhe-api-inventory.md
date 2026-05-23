@@ -211,7 +211,7 @@ Modules:
 - `easyfhe.bs.openfhe.runtime.approx`
 - `easyfhe.bs.openfhe.generation.constants`
 - `easyfhe.bs.openfhe.generation.plan`
-- `easyfhe.bs.openfhe.generation.precompute_context`
+- `easyfhe.bs.openfhe.generation.precompute`
 - `easyfhe.bs.openfhe.generation.requirements`
 - `easyfhe.bs.openfhe.generation.rotations`
 - `easyfhe.bs.cheddar.internal.*`
@@ -234,14 +234,14 @@ Names:
 - `BootstrapTransformPlan`
 - `CKKS_Boot_Params`
 - `round_half_away_from_zero`
-- `BsContext`
+- `BootstrapPrecompute`
 - `BootstrapFFTParams`
 - `BootstrapTransformSchedule`
 - `reduce_rotation`
 - `select_layers`
 - `collapsed_fft_params`
 - `bootstrap_transform_schedule`
-- `bootstrap_rotation_indices`
+- `bootstrap_required_rotations`
 - `coeffs_slots_conversion`
 - `eval_coeffs_to_slots`
 - `eval_slots_to_coeffs`

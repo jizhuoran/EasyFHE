@@ -8,8 +8,13 @@ import numpy as np
 from easyfhe.fhe.constants import ConstantBundle
 from easyfhe.fhe.ops.encoding import PreparedPlaintext
 from .plan import compile_flat_ps_plan, degree, get_bootstrap_approx_plan
-from .rotations import bootstrap_transform_schedule
-from .precompute_context import BsContext
+from .precompute import BootstrapPrecompute
+from .rotations import (
+    bootstrap_required_rotations,
+    bootstrap_transform_schedule,
+    normalize_bootstrap_strategy,
+)
+from .types import BootstrapPlan, BootstrapTransformPlan, BootstrapTransformStep
 
 
 def _round_half_away_from_zero(number, ndigits=0):
@@ -28,42 +33,6 @@ class _BootstrapConfig:
     dim1: list[int]
     strategy: str
     max_levels_remaining: int
-
-    @property
-    def slots(self):
-        return 1 << self.log_bs_slots
-
-
-@dataclass(frozen=True)
-class BootstrapTransformStep:
-    level: int
-    input_offsets: tuple[int, ...]
-    plaintext_name: str
-    plaintext_slots: int
-    giant_offset: int
-    baby_step: int
-    giant_step: int
-
-
-@dataclass(frozen=True)
-class BootstrapTransformPlan:
-    direction: str
-    steps: tuple[BootstrapTransformStep, ...]
-
-
-@dataclass(frozen=True)
-class BootstrapPlan:
-    log_bs_slots: int
-    level_budget: tuple[int, int]
-    dim1: tuple[int, int]
-    strategy: str
-    max_levels_remaining: int
-    c2s_plan: BootstrapTransformPlan
-    s2c_plan: BootstrapTransformPlan
-    approx_eval_plan: object
-    approx_scalar_names: dict[tuple[str, ...], tuple[str, ...]]
-    double_angle_scalar_names: tuple[str, ...]
-    required_rotations: tuple[int, ...]
 
     @property
     def slots(self):
@@ -91,23 +60,7 @@ def _normalize_dim1(dim1):
 
 
 def _normalize_strategy(strategy):
-    strategy = str(strategy or "double_hoist").lower()
-    aliases = {
-        "double_hoist": "double_hoist",
-        "double-hoist": "double_hoist",
-        "ext_double_hoist": "double_hoist",
-        "normal_giant": "normal_giant",
-        "normal-giant": "normal_giant",
-        "ext_normal_giant": "normal_giant",
-        "normal_bsgs": "normal_bsgs",
-        "normal-bsgs": "normal_bsgs",
-    }
-    try:
-        return aliases[strategy]
-    except KeyError as exc:
-        raise ValueError(
-            "bootstrap strategy must be one of: double_hoist, normal_giant, normal_bsgs"
-        ) from exc
+    return normalize_bootstrap_strategy(strategy)
 
 
 def _resolve_max_levels_remaining(max_levels_remaining):
@@ -130,8 +83,8 @@ def _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, di
     )
 
 
-def _make_bs_context(crypto_context, log_bs_slots):
-    return BsContext(
+def _make_precompute(crypto_context, log_bs_slots):
+    return BootstrapPrecompute(
         crypto_context.N,
         int(log_bs_slots),
         0,
@@ -150,60 +103,16 @@ def _unique_preserve_order(values):
     return result
 
 
-def _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan):
-    rotations = []
-    for transform_plan in (c2s_plan, s2c_plan):
-        rotations.extend(_transform_required_rotations(transform_plan, plan.strategy, crypto_context.N))
-    rotations.extend(_sparse_bootstrap_rotations(crypto_context.N, plan.slots))
-    rotations.append((int(crypto_context.N) << 1) - 1)
-    return _unique_preserve_order(rotations)
-
-
-def _transform_required_rotations(transform_plan, strategy, ring_dim):
-    rotations = []
-    for loop_pos, level in enumerate(transform_plan.loop_range):
-        if loop_pos == len(transform_plan.loop_range) - 1 and transform_plan.rem:
-            giant_step = transform_plan.giant_step_rem
-            baby_step = transform_plan.baby_step_rem
-        else:
-            giant_step = transform_plan.giant_step
-            baby_step = transform_plan.baby_step
-
-        rotations.extend(transform_plan.rot_in[level][:giant_step])
-        rot_out = transform_plan.rot_out[level][:baby_step]
-        if strategy == "double_hoist":
-            rotations.extend(rot_out)
-        else:
-            rotations.extend(_single_giant_rotation_key(rot_out, ring_dim))
-    return [int(rotation) for rotation in rotations if int(rotation) != 0]
-
-
-def _single_giant_rotation_key(offsets, ring_dim):
-    offsets = tuple(int(offset) for offset in offsets)
-    if len(offsets) <= 1:
-        return ()
-    modulus = int(ring_dim) // 2
-    step = (offsets[1] - offsets[0]) % modulus
-    return () if step == 0 else (step,)
-
-
-def _sparse_bootstrap_rotations(ring_dim, slots):
-    ring_dim = int(ring_dim)
-    slots = int(slots)
-    count = int(math.log2(ring_dim // (2 * slots)))
-    return [(1 << step) * slots for step in range(count)]
-
-
 def _run_bootstrap_setup(crypto_context, plan):
-    bs_context = _make_bs_context(crypto_context, plan.log_bs_slots)
-    bs_context.eval_bootstrap_setup(
+    precompute = _make_precompute(crypto_context, plan.log_bs_slots)
+    precompute.eval_bootstrap_setup(
         crypto_context,
         plan.level_budget,
         plan.dim1,
         plan.slots,
         0,
     )
-    return bs_context
+    return precompute
 
 
 def _compute_bootstrap_scalars(crypto_context, plan, k):
@@ -234,21 +143,26 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
     )
 
 
-def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context):
-    scalars = _compute_bootstrap_scalars(crypto_context, plan, bs_context.k)
+def _constants_from_precompute(plan, precompute, required_rotations, crypto_context):
+    scalars = _compute_bootstrap_scalars(crypto_context, plan, precompute.k)
     approx_plan = get_bootstrap_approx_plan(crypto_context.secretKeyDist)
     approx_eval_plan = compile_flat_ps_plan(approx_plan.ps_root)
-    approx_scalar_names = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
+    (
+        approx_scalar_names,
+        approx_constant_scalar_names,
+        approx_q_highest_scalar_names,
+    ) = _register_approx_scalars(scalars, crypto_context.secretKeyDist)
+    chebyshev_neg_one_scalar_name = _register_chebyshev_scalars(scalars)
     double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
-    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
-    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
+    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], precompute.N, plan.dim1[0])
+    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], precompute.N, plan.dim1[1])
     plaintext_names = {
         "C2S": _name_table(c2s_plan),
         "S2C": _name_table(s2c_plan),
     }
     vectors = {
-        **_flatten_table(plaintext_names["C2S"], bs_context.m_U0hatTPreFFT, bs_context.N, plan.slots),
-        **_flatten_table(plaintext_names["S2C"], bs_context.m_U0PreFFT, bs_context.N, plan.slots),
+        **_flatten_table(plaintext_names["C2S"], precompute.m_U0hatTPreFFT, plan.slots),
+        **_flatten_table(plaintext_names["S2C"], precompute.m_U0PreFFT, plan.slots),
     }
     c2s_runtime_plan = _build_runtime_transform_plan(c2s_plan, plaintext_names["C2S"], vectors)
     s2c_runtime_plan = _build_runtime_transform_plan(s2c_plan, plaintext_names["S2C"], vectors)
@@ -262,6 +176,9 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
         s2c_plan=s2c_runtime_plan,
         approx_eval_plan=approx_eval_plan,
         approx_scalar_names=approx_scalar_names,
+        approx_constant_scalar_names=approx_constant_scalar_names,
+        approx_q_highest_scalar_names=approx_q_highest_scalar_names,
+        chebyshev_neg_one_scalar_name=chebyshev_neg_one_scalar_name,
         double_angle_scalar_names=double_angle_scalar_names,
         required_rotations=tuple(required_rotations),
     )
@@ -271,11 +188,17 @@ def _constants_from_bs_context(plan, bs_context, required_rotations, crypto_cont
 
 def _register_approx_scalars(scalars, secret_key_dist):
     names = {}
+    constant_names = {}
+    q_highest_names = {}
     approx_plan = get_bootstrap_approx_plan(secret_key_dist)
 
     def add(path, coefficients, size=None):
         path = tuple(path)
         deg = _coeff_degree(coefficients, size)
+        const_name = "approx." + ".".join((*path, "const"))
+        scalars[const_name] = float(coefficients[0] / 2)
+        constant_names[path] = const_name
+
         item_names = []
         for index, value in enumerate(coefficients[1 : deg + 1], start=1):
             name = "approx." + ".".join((*path, str(index)))
@@ -283,17 +206,35 @@ def _register_approx_scalars(scalars, secret_key_dist):
             item_names.append(name)
         names[path] = tuple(item_names)
 
-    def walk(node, path):
+    def add_q_highest(path, node, root):
+        if root:
+            return
+        has_tail = _coeff_degree(node.divqr_q, node.k) > 0
+        coefficient = node.divqr_q[-1] + (1.1 if has_tail else 0.0)
+        value = 2 ** math.floor(math.log2(coefficient))
+        name = "approx." + ".".join((*path, "q", "highest"))
+        scalars[name] = int(value)
+        q_highest_names[tuple((*path, "q"))] = name
+
+    def walk(node, path, root=False):
         add((*path, "c"), node.divcs_q)
         add((*path, "q"), node.divqr_q, node.k)
         add((*path, "s"), node.s2, node.k)
+        if node.q_node is None:
+            add_q_highest(path, node, root)
         if node.q_node is not None:
             walk(node.q_node, (*path, "q_node"))
         if node.s_node is not None:
             walk(node.s_node, (*path, "s_node"))
 
-    walk(approx_plan.ps_root, ("root",))
-    return names
+    walk(approx_plan.ps_root, ("root",), root=True)
+    return names, constant_names, q_highest_names
+
+
+def _register_chebyshev_scalars(scalars):
+    name = "approx.chebyshev.neg_one"
+    scalars[name] = -1.0
+    return name
 
 
 def _register_double_angle_scalars(scalars, secret_key_dist):
@@ -317,7 +258,7 @@ def _coeff_degree(coefficients, size=None):
     return degree(truncated)
 
 
-def _flatten_table(name_table, table, ring_dim, default_slots):
+def _flatten_table(name_table, table, default_slots):
     vectors = {}
     zero_cache = {}
     for level, row in enumerate(table):
@@ -467,8 +408,12 @@ def _build_bootstrap_constants(
     strategy="double_hoist",
 ):
     plan = _make_generation_config(log_bs_slots, level_budget, max_levels_remaining, dim1, strategy)
-    bs_context = _run_bootstrap_setup(crypto_context, plan)
-    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], bs_context.N, plan.dim1[0])
-    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], bs_context.N, plan.dim1[1])
-    required_rotations = _bootstrap_rotation_indices(crypto_context, plan, c2s_plan, s2c_plan)
-    return _constants_from_bs_context(plan, bs_context, required_rotations, crypto_context)
+    precompute = _run_bootstrap_setup(crypto_context, plan)
+    required_rotations = bootstrap_required_rotations(
+        crypto_context.N,
+        plan.log_bs_slots,
+        plan.level_budget,
+        plan.dim1,
+        plan.strategy,
+    )
+    return _constants_from_precompute(plan, precompute, required_rotations, crypto_context)

@@ -289,7 +289,7 @@ def resnet20(config=None, args=None):
         log_n=config.log_n,
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
-        secret_key_dist=config.secret_key_dist,
+        strategy=config.bootstrap_strategy,
     )
     rotations = tuple(dict.fromkeys([*config.rotate_indices, *bootstrap_rotations]))
     client, cryptoContext = fhe.generate_client_context(
