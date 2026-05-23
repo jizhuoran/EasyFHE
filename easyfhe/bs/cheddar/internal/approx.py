@@ -107,7 +107,7 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         c = tail
         if c is not None:
             c = _add_chebyshev_constant(c, node.divcs_q, cryptoContext)
-            if not spec.root and _uses_manual_rescale(cryptoContext):
+            if not spec.root:
                 target = T2[node.m - 1]
                 c = alignment.align_to(
                     c,
@@ -139,7 +139,7 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         else:
             s = arithmetic.homo_add(s, T.items[node.k - 1], cryptoContext)
         s = _add_chebyshev_constant(s, node.s2, cryptoContext)
-        if not spec.root and _uses_manual_rescale(cryptoContext):
+        if not spec.root:
             s = alignment.align_to(
                 s,
                 alignment.CipherState(s.state.cur_limbs - 1, 1, None),
@@ -148,10 +148,6 @@ def _eval_small_spec_from_tail(spec, tail, T, T2, cryptoContext):
         return s
 
     raise ValueError(f"unknown flat PS small spec kind: {spec.kind}")
-
-
-def _uses_manual_rescale(cryptoContext):
-    return cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual"
 
 
 def _eval_small_specs_grouped(flat, T, T2, cryptoContext, constants, bootstrap_plan):
@@ -430,6 +426,4 @@ def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstra
 
 def eval_bootstrap_approx_mod(ciphertext, cryptoContext, constants, bootstrap_plan):
     ciphertext = eval_bootstrapping_chebyshev(ciphertext, -1, 1, cryptoContext, constants, bootstrap_plan)
-    if not _uses_manual_rescale(cryptoContext) and ciphertext.state.noise_deg > 1:
-        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan)

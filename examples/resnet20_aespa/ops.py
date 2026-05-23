@@ -306,7 +306,7 @@ def aespa_nonlinear(x, prefix, cryptoContext, weights, scale=1):
 
 
 def aespa_add_shortcut(conv_out, shortcut, prefix, cryptoContext, weights, scale=1):
-    if cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual":
+    if cryptoContext.rescale_policy == "manual":
         shortcut = fhe.align_to(
             shortcut,
             fhe.CipherState(shortcut.state.cur_limbs - (shortcut.state.cur_limbs - conv_out.state.cur_limbs), shortcut.state.noise_deg),

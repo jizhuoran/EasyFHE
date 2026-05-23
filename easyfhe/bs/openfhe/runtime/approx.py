@@ -22,10 +22,6 @@ from ..generation.plan import (
 # Scalar encoding and state helpers
 
 
-def _uses_manual_rescale(cryptoContext):
-    return cryptoContext.scale_mode == "fixed" and cryptoContext.rescale_policy == "manual"
-
-
 def _mul_rescale_constant(name, in0, in1, constants, cryptoContext):
     target, _ = alignment.plan_mul_alignment(in0, in1, cryptoContext)
     return constants.encoded_scalars(
@@ -219,7 +215,7 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
         bootstrap_plan,
         cryptoContext,
     )
-    if spec.align_policy == ALIGN_C_TO_BASE and _uses_manual_rescale(cryptoContext):
+    if spec.align_policy == ALIGN_C_TO_BASE:
         target = T2[spec.m - 1]
         value = alignment.align_to(
             value,
@@ -255,7 +251,7 @@ def _finish_s_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext
         bootstrap_plan,
         cryptoContext,
     )
-    if spec.align_policy == ALIGN_S_DROP_TO_NOISE_ONE and _uses_manual_rescale(cryptoContext):
+    if spec.align_policy == ALIGN_S_DROP_TO_NOISE_ONE:
         value = alignment.align_to(
             value,
             alignment.CipherState(value.state.cur_limbs - 1, 1, None),
@@ -381,6 +377,4 @@ def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstra
 
 def eval_bootstrap_approx_mod(ciphertext, cryptoContext, constants, bootstrap_plan):
     ciphertext = eval_bootstrapping_chebyshev(ciphertext, -1, 1, cryptoContext, constants, bootstrap_plan)
-    if not _uses_manual_rescale(cryptoContext) and ciphertext.state.noise_deg > 1:
-        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan)
