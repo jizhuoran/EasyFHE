@@ -1,5 +1,5 @@
 from ..ciphertext import CipherState
-from .alignment import align_to, reduce_noise_to_one
+from .alignment import align_to, reduce_noise_to_one, rescale_one_level
 from .arithmetic import (
     grouped_pairwise_mac,
     grouped_scalar_weighted_acc,
@@ -43,6 +43,7 @@ __all__ = [
     "CipherState",
     "align_to",
     "reduce_noise_to_one",
+    "rescale_one_level",
     "fast_rotate",
     "giant_rotate_sum",
     "HOIST_EXT_DOUBLE_HOIST",

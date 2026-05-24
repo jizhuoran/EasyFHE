@@ -22,6 +22,7 @@ CONSTANT_API = (
 ALIGNMENT_API = (
     "align_to",
     "reduce_noise_to_one",
+    "rescale_one_level",
 )
 
 BASIC_OPS_API = (

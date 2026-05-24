@@ -37,6 +37,7 @@ from .ops import (
     homo_rotate,
     homo_rotate_add,
     reduce_noise_to_one,
+    rescale_one_level,
     homo_sub,
     homo_sub_inplace,
     homo_sub_scalar_int,
