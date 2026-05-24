@@ -120,14 +120,19 @@ details. Application code should access constants by name through
 `plaintext(...)` or `encoded_scalars(...)` and let the bundle manage preparation,
 materialization, batching, and caching.
 
-Use `cache_mode="both"` with `plain_cache_limit_gb=<size>` when you want a
+Use `cache_mode="plain"` to cache only final plaintexts, `cache_mode="middle"`
+to cache only prepared middle encodings, and `cache_mode="both"` to cache both.
+These three modes do not support a plaintext cache limit; if cached plaintexts
+do not fit in memory, allocation fails normally.
+
+Use `cache_mode="mix"` with `plain_cache_limit_gb=<size>` when you want a
 bounded plaintext cache. Plaintexts are cached until the limit is reached; later
 constants keep only their prepared middle encoding and run stage2 on demand.
 Cached plaintexts do not keep duplicate middle encodings.
 
-Set `plain_cache_policy="small_first"` to prefer smaller plaintexts when a
-bounded plaintext cache is full. In `cache_mode="both"`, evicted plaintexts
-keep their middle encoding cached as the fallback.
+Set `plain_cache_policy="small_first"` to prefer smaller plaintexts when the
+`mix` plaintext cache is full. In `cache_mode="mix"`, evicted plaintexts keep
+their middle encoding cached as the fallback.
 
 ## Basic Homomorphic Ops
 

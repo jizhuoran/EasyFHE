@@ -5,7 +5,6 @@ import easyfhe as torch
 import easyfhe.fhe as fhe
 from easyfhe.fhe.ciphertext import Cipher, CipherState
 from easyfhe.fhe.ops.encoding import encode_stage1
-from examples.resnet20_aespa.weight_pack import WeightPack
 
 
 def _cipher(name, cv_count=2):
@@ -172,6 +171,75 @@ def test_constant_bundle_named_raw_batch_cache(monkeypatch):
     assert bundle.cache_info()["plain_misses"] == 1
 
 
+def test_constant_bundle_both_caches_plain_and_middle(monkeypatch):
+    bundle = fhe.ConstantBundle(
+        vectors={"w": np.asarray([1.0, 2.0], dtype=np.double)},
+        cache_mode="both",
+    )
+
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        return _cipher("w")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+    first = bundle.plaintext("w", 3, 4, ctx)
+    second = bundle.plaintext("w", 3, 4, ctx)
+    info = bundle.cache_info()
+
+    assert first is second
+    assert info["plain_entries"] == 1
+    assert info["middle_entries"] == 1
+    assert info["plain_hits"] == 1
+    assert info["middle_misses"] == 1
+
+
+def test_constant_bundle_plain_cache_limit_requires_mix_mode():
+    for mode in ("plain", "middle", "both"):
+        try:
+            fhe.ConstantBundle(vectors={"w": np.asarray([1.0])}, cache_mode=mode, plain_cache_limit_gb=1)
+        except ValueError as exc:
+            assert "cache_mode='mix'" in str(exc)
+        else:
+            raise AssertionError(f"expected plain cache limit to fail for {mode}")
+
+    bundle = fhe.ConstantBundle(vectors={"w": np.asarray([1.0])}, cache_mode="plain")
+    try:
+        bundle.set_plain_cache_limit_bytes(1)
+    except ValueError as exc:
+        assert "cache_mode='mix'" in str(exc)
+    else:
+        raise AssertionError("expected plain cache limit setter to fail outside mix mode")
+
+
+def test_constant_bundle_mix_restores_middle_when_plain_is_replaced(monkeypatch):
+    bundle = fhe.ConstantBundle(
+        vectors={
+            "large": np.asarray([1.0], dtype=np.double),
+            "small": np.asarray([2.0], dtype=np.double),
+        },
+        cache_mode="mix",
+        plain_cache_policy="small_first",
+    )
+    bundle.set_plain_cache_limit_bytes(200)
+
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        return _cipher("large", cv_count=3) if middle.values[0] == 1.0 else _cipher("small", cv_count=1)
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+
+    bundle.plaintext("large", 3, 4, ctx)
+    info = bundle.cache_info()
+    assert info["plain_entries"] == 1
+    assert info["middle_entries"] == 0
+
+    bundle.plaintext("small", 3, 4, ctx)
+    info = bundle.cache_info()
+    assert info["plain_entries"] == 1
+    assert info["middle_entries"] == 1
+    assert info["plain_cache_evictions"] == 1
+
+
 def test_constant_bundle_encodes_and_caches_scalars():
     ctx = SimpleNamespace(
         device="cpu",
@@ -235,11 +303,3 @@ def test_constant_bundle_encodes_double_scalars_at_requested_noise_degree():
 
     assert encoded.shape == (1, 3)
     assert encoded.tolist() == [[11, 1, 4]]
-
-
-def test_resnet_weight_pack_reuses_constant_bundle():
-    weights = WeightPack({"w": np.asarray([1.0], dtype=np.double)}, cache_mode="middle")
-
-    assert isinstance(weights, fhe.ConstantBundle)
-    assert "w" in weights.arrays
-    assert not hasattr(weights, "vectors")

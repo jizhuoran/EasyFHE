@@ -9,7 +9,7 @@ import easyfhe as torch
 from .ops.encoding import PreparedPlaintext, encode_stage1, encode_stage2
 
 
-_CACHE_MODES = {"none", "middle", "plain", "both"}
+_CACHE_MODES = {"none", "middle", "plain", "both", "mix"}
 _PLAIN_CACHE_POLICIES = {"first_fit", "small_first"}
 _MAX_ENCODED_BITS = 61
 _MAX_SCALAR_LOG_STEP = 60
@@ -31,6 +31,7 @@ class ConstantBundle:
         self._vectors = dict(vectors or {})
         self.cache_mode = _validate_cache_mode(cache_mode)
         self._plain_cache_limit_bytes = _cache_limit_gb_to_bytes(plain_cache_limit_gb)
+        _validate_plain_cache_limit_mode(self.cache_mode, self._plain_cache_limit_bytes)
         self.plain_cache_policy = _validate_plain_cache_policy(plain_cache_policy)
         self._middle_cache = {}
         self._plain_cache = {}
@@ -88,17 +89,23 @@ class ConstantBundle:
         return self._scalars[name]
 
     def set_cache_mode(self, cache_mode, clear=True):
-        self.cache_mode = _validate_cache_mode(cache_mode)
+        cache_mode = _validate_cache_mode(cache_mode)
+        _validate_plain_cache_limit_mode(cache_mode, self._plain_cache_limit_bytes)
+        self.cache_mode = cache_mode
         if clear:
             self.clear_cache()
 
     def set_plain_cache_limit_gb(self, limit_gb, clear=False):
-        self._plain_cache_limit_bytes = _cache_limit_gb_to_bytes(limit_gb)
+        limit_bytes = _cache_limit_gb_to_bytes(limit_gb)
+        _validate_plain_cache_limit_mode(self.cache_mode, limit_bytes)
+        self._plain_cache_limit_bytes = limit_bytes
         if clear:
             self._clear_plain_cache()
 
     def set_plain_cache_limit_bytes(self, limit_bytes, clear=False):
-        self._plain_cache_limit_bytes = _cache_limit_bytes(limit_bytes)
+        limit_bytes = _cache_limit_bytes(limit_bytes)
+        _validate_plain_cache_limit_mode(self.cache_mode, limit_bytes)
+        self._plain_cache_limit_bytes = limit_bytes
         if clear:
             self._clear_plain_cache()
 
@@ -203,11 +210,13 @@ class ConstantBundle:
             slots,
             cryptoContext,
             scale,
-            cache_on_miss=self.cache_mode == "middle",
+            cache_on_miss=self.cache_mode in {"middle", "both", "mix"},
         )
         plaintext = encode_stage2(middle, level, slots, is_ext, cryptoContext)
         cached_plain = self._maybe_cache_plain(plain_key, middle_key, plaintext, cache)
-        if cache and _cache_middle(self.cache_mode):
+        if cache and self.cache_mode == "both":
+            self._middle_cache.setdefault(middle_key, middle)
+        elif cache and self.cache_mode == "mix":
             if cached_plain:
                 self._middle_cache.pop(middle_key, None)
             elif not self._has_plain_for_middle(middle_key):
@@ -218,7 +227,7 @@ class ConstantBundle:
         if not (cache and _cache_plain(self.cache_mode)):
             return False
         plain_bytes = _object_nbytes(plaintext)
-        if self._plain_cache_limit_bytes is not None:
+        if self.cache_mode == "mix" and self._plain_cache_limit_bytes is not None:
             if plain_bytes > self._plain_cache_limit_bytes:
                 self._cache_stats["plain_cache_skips"] += 1
                 return False
@@ -276,6 +285,11 @@ def _validate_cache_mode(cache_mode):
     return cache_mode
 
 
+def _validate_plain_cache_limit_mode(cache_mode, limit_bytes):
+    if limit_bytes is not None and cache_mode != "mix":
+        raise ValueError("plain_cache_limit is only supported with cache_mode='mix'")
+
+
 def _validate_plain_cache_policy(policy):
     if policy not in _PLAIN_CACHE_POLICIES:
         raise ValueError(f"plain_cache_policy must be one of {sorted(_PLAIN_CACHE_POLICIES)}, got {policy!r}")
@@ -304,11 +318,11 @@ def _cache_remaining_bytes(limit_bytes, used_bytes):
 
 
 def _cache_middle(cache_mode):
-    return cache_mode in {"middle", "both"}
+    return cache_mode in {"middle", "both", "mix"}
 
 
 def _cache_plain(cache_mode):
-    return cache_mode in {"plain", "both"}
+    return cache_mode in {"plain", "both", "mix"}
 
 
 def _cache_nbytes(cache):
