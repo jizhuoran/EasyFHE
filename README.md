@@ -56,6 +56,14 @@ Prebuilt wheels currently target Linux x86_64, Python 3.12, and Ubuntu 22.04/24.
 python -m pip install "easyfhe==0.1.1+cu132" \
   --find-links https://jizhuoran.github.io/EasyFHE/whl/cu132
 
+# CUDA 13.0
+python -m pip install "easyfhe==0.1.1+cu130" \
+  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu130
+
+# CUDA 12.9
+python -m pip install "easyfhe==0.1.1+cu129" \
+  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu129
+
 # CUDA 12.4
 python -m pip install "easyfhe==0.1.1+cu124" \
   --find-links https://jizhuoran.github.io/EasyFHE/whl/cu124
