@@ -12,6 +12,17 @@ Requires Docker or Podman.
 packaging/manylinux/build_wheel.sh
 ```
 
+EasyFHE only supports the reduced inference build profile. The build scripts set
+`USE_EASYFHE_FAST_BUILD=1` and `USE_EASYFHE_FAST_INFERENCE=1` by default, and
+CMake rejects attempts to configure the full PyTorch build path.
+
+For a direct source build outside the manylinux container, `setup.py` also
+defaults EasyFHE-only build flags to the reduced profile. The minimal command is:
+
+```bash
+MAX_JOBS=$(nproc) python setup.py bdist_wheel
+```
+
 Common overrides:
 
 ```bash

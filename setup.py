@@ -229,6 +229,22 @@ import os
 import sys
 
 
+_EASYFHE_DEFAULT_BUILD_FLAGS = {
+    "BUILD_TEST": "0",
+    "USE_CUDNN": "0",
+    "USE_CUSPARSELT": "0",
+    "USE_CUDSS": "0",
+    "USE_CUFILE": "0",
+    "USE_NCCL": "0",
+    "USE_AVX": "0",
+    "USE_MSLK": "0",
+    "USE_EASYFHE_FAST_BUILD": "1",
+    "USE_EASYFHE_FAST_INFERENCE": "1",
+}
+for _name, _value in _EASYFHE_DEFAULT_BUILD_FLAGS.items():
+    os.environ.setdefault(_name, _value)
+
+
 if sys.platform == "win32" and sys.maxsize.bit_length() == 31:
     print(
         "32-bit Windows Python runtime is not supported. "
