@@ -31,6 +31,7 @@ class _BootstrapConfig:
     log_bs_slots: int
     level_budget: list[int]
     dim1: list[int]
+    baby_step: list[int]
     strategy: str
     post_bootstrap_levels: int
 
@@ -80,6 +81,7 @@ def _make_generation_config(
     level_budget,
     post_bootstrap_levels,
     dim1,
+    baby_step,
     strategy,
     max_levels_remaining=None,
 ):
@@ -87,6 +89,7 @@ def _make_generation_config(
         log_bs_slots=int(log_bs_slots),
         level_budget=_normalize_level_budget(level_budget),
         dim1=_normalize_dim1(dim1),
+        baby_step=_normalize_dim1(baby_step),
         strategy=_normalize_strategy(strategy),
         post_bootstrap_levels=_resolve_post_bootstrap_levels(post_bootstrap_levels, max_levels_remaining),
     )
@@ -120,6 +123,7 @@ def _run_bootstrap_setup(crypto_context, plan):
         plan.dim1,
         plan.slots,
         0,
+        baby_step=plan.baby_step,
     )
     return precompute
 
@@ -163,8 +167,12 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
     ) = _register_approx_scalars(scalars, approx_eval_plan)
     chebyshev_neg_one_scalar_name = _register_chebyshev_scalars(scalars)
     double_angle_scalar_names = _register_double_angle_scalars(scalars, crypto_context.secretKeyDist)
-    c2s_plan = bootstrap_transform_schedule("C2S", plan.slots, plan.level_budget[0], precompute.N, plan.dim1[0])
-    s2c_plan = bootstrap_transform_schedule("S2C", plan.slots, plan.level_budget[1], precompute.N, plan.dim1[1])
+    c2s_plan = bootstrap_transform_schedule(
+        "C2S", plan.slots, plan.level_budget[0], precompute.N, plan.dim1[0], baby_step=plan.baby_step[0]
+    )
+    s2c_plan = bootstrap_transform_schedule(
+        "S2C", plan.slots, plan.level_budget[1], precompute.N, plan.dim1[1], baby_step=plan.baby_step[1]
+    )
     plaintext_names = {
         "C2S": _name_table(c2s_plan),
         "S2C": _name_table(s2c_plan),
@@ -179,6 +187,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         log_bs_slots=plan.log_bs_slots,
         level_budget=tuple(plan.level_budget),
         dim1=tuple(plan.dim1),
+        baby_step=tuple(plan.baby_step),
         strategy=plan.strategy,
         post_bootstrap_levels=plan.post_bootstrap_levels,
         c2s_plan=c2s_runtime_plan,
@@ -365,7 +374,7 @@ def generate_bootstrap_constants(
 ):
     if dim1 is not None and baby_step is not None:
         raise ValueError("bootstrap generate accepts either dim1 or baby_step, not both")
-    dim1 = baby_step if baby_step is not None else dim1
+    baby_step = (0, 0) if baby_step is None else baby_step
 
     return _build_bootstrap_constants(
         crypto_context,
@@ -374,6 +383,7 @@ def generate_bootstrap_constants(
         post_bootstrap_levels=post_bootstrap_levels,
         max_levels_remaining=max_levels_remaining,
         dim1=_normalize_public_pair_or_scalar(dim1 or (0, 0), "dim1"),
+        baby_step=_normalize_public_pair_or_scalar(baby_step, "baby_step"),
         strategy=strategy,
     )
 
@@ -396,6 +406,7 @@ def _build_bootstrap_constants(
     level_budget,
     post_bootstrap_levels=None,
     dim1=None,
+    baby_step=None,
     strategy="double_hoist",
     max_levels_remaining=None,
 ):
@@ -404,6 +415,7 @@ def _build_bootstrap_constants(
         level_budget,
         post_bootstrap_levels,
         dim1,
+        baby_step,
         strategy,
         max_levels_remaining=max_levels_remaining,
     )
@@ -414,5 +426,6 @@ def _build_bootstrap_constants(
         plan.level_budget,
         plan.dim1,
         plan.strategy,
+        baby_step=plan.baby_step,
     )
     return _constants_from_precompute(plan, precompute, required_rotations, crypto_context)

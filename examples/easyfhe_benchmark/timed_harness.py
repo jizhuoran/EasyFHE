@@ -222,7 +222,12 @@ def _make_mul_pt_input(case: bench.BenchmarkCase, crypto_context: Any, openfhe_c
 
 def _build_encode_target(case: bench.BenchmarkCase, crypto_context: Any, _openfhe_context: Any) -> tuple[Callable[[], Any], Dict[str, Any]]:
     values = bench.vector_values(case.slots)
-    middle_value = encode_stage1(np.asarray(values, dtype=np.float64), case.slots, crypto_context.N)
+    middle_value = encode_stage1(
+        np.asarray(values, dtype=np.float64),
+        case.slots,
+        crypto_context.N,
+        device=crypto_context.device,
+    )
     level = bench.level_for_cur_limbs(crypto_context, case.cur_limbs)
     def op():
         return encode_stage2(

@@ -127,6 +127,7 @@ bs.plan_rot_keys(
     level_budget,
     strategy="double_hoist",
     dim1=None,
+    baby_step=None,
 ) -> tuple[int, ...]
 ```
 
@@ -144,9 +145,13 @@ Parameters:
 - `strategy`: one of `"double_hoist"`, `"normal_giant"`, or `"normal_bsgs"`.
   Controls which giant-rotation keys are required.
 - `dim1`: optional pair or sequence of pairs.
-  BSGS baby-step override for C2S and S2C. `None` uses OpenFHE-style defaults.
+  OpenFHE-style BSGS dimension override for C2S and S2C. `None` uses
+  OpenFHE-style defaults.
   For one bootstrap parameter set, pass `(c2s_dim1, s2c_dim1)`. For multiple
   parameter sets, pass a sequence of such pairs.
+- `baby_step`: optional int, pair, or sequence of pairs.
+  Actual BSGS baby-step count override. Do not pass both `dim1` and
+  `baby_step`.
 
 Returns:
 
@@ -194,10 +199,11 @@ Parameters:
 - `max_levels_remaining`: optional `int`.
   Backward-compatible alias for `post_bootstrap_levels`.
 - `dim1`: optional pair `(c2s_dim1, s2c_dim1)`.
-  BSGS baby-step override for the generated C2S and S2C linear transforms.
-  `0` means use the OpenFHE-style default for that direction.
-- `baby_step`: backward-compatible alias for `dim1`. Do not pass both `dim1`
-  and `baby_step`.
+  OpenFHE-style BSGS dimension override for the generated C2S and S2C linear
+  transforms. `0` means use the default for that direction.
+- `baby_step`: optional int or pair `(c2s_baby_step, s2c_baby_step)`.
+  Actual BSGS baby-step count override. Do not pass both `dim1` and
+  `baby_step`.
 - `strategy`: one of `"double_hoist"`, `"normal_giant"`, or `"normal_bsgs"`.
   Stored on the returned plan as the default runtime strategy.
 
@@ -220,17 +226,18 @@ Notes:
 
 ### Baby-Step Override
 
-`dim1` controls the BSGS split for the collapsed FFT linear transforms:
+Use `baby_step` to control the actual BSGS baby-step count for the collapsed
+FFT linear transforms:
 
 ```python
-dim1 = (c2s_baby_step, s2c_baby_step)
+baby_step = (8, 8)
 
 rotations = bs.plan_rot_keys(
     log_n=16,
     log_bs_slots=14,
     level_budget=(4, 4),
     strategy="double_hoist",
-    dim1=dim1,
+    baby_step=baby_step,
 )
 
 constants, plan = bs.generate(
@@ -239,31 +246,26 @@ constants, plan = bs.generate(
     level_budget=(4, 4),
     post_bootstrap_levels=12,
     strategy="double_hoist",
-    dim1=dim1,
+    baby_step=baby_step,
 )
 ```
 
-Use `0` for either entry to keep the default for that direction:
+Use `0` for either entry to keep the default for that direction. `dim1` is
+still available when you want the lower-level OpenFHE split parameter:
 
 ```python
-dim1 = (0, 8)  # default C2S split, explicit S2C split
+constants, plan = bs.generate(..., dim1=(0, 8))
 ```
 
-The `baby_step` keyword is accepted as an alias for `dim1`:
-
-```python
-constants, plan = bs.generate(..., baby_step=(8, 8))
-```
-
-Changing `dim1` can change:
+Changing `baby_step`/`dim1` can change:
 
 - the baby/giant grouping inside C2S and S2C;
 - the rotation-key set returned by `bs.plan_rot_keys(...)`;
 - the generated plaintext vector batches stored in `constants`;
 - runtime memory/cache shape and speed.
 
-It does not change the high-level bootstrap mode. The same `dim1`-generated
-plan can still run both `modraise_first` and `stc_first`.
+It does not change the high-level bootstrap mode. The same generated plan can
+still run both `modraise_first` and `stc_first`.
 
 ## `bs.bootstrap`
 
@@ -341,7 +343,9 @@ Important fields:
 - `level_budget: tuple[int, int]`
   `(c2s_budget, s2c_budget)`.
 - `dim1: tuple[int, int]`
-  BSGS baby-step settings for C2S and S2C.
+  OpenFHE-style BSGS dimension settings for C2S and S2C.
+- `baby_step: tuple[int, int]`
+  Requested actual BSGS baby-step settings, or `(0, 0)` for defaults.
 - `strategy: str`
   Default runtime strategy: `"double_hoist"`, `"normal_giant"`, or
   `"normal_bsgs"`.

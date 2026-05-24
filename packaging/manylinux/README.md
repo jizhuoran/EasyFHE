@@ -53,6 +53,23 @@ The unrepaired build output remains in:
 dist/
 ```
 
+## Python-only repack
+
+When only Python sources changed, reuse an existing repaired wheel and patch the
+Python files in place:
+
+```bash
+PYTHON_ONLY_REPACK=1 CUDA_VERSION=12.9 CUDA_FLAVOR=cu129 \
+  PYTORCH_BUILD_VERSION=0.1.1+cu129 PYTHON_TAG=cp312-cp312 \
+  packaging/manylinux/build_wheel.sh
+```
+
+This mode does not run CMake or Ninja. It opens the existing wheel in the
+CUDA-specific wheelhouse, replaces matching `easyfhe/**/*.py` and
+`easyfhe/**/*.pyi` files from the working tree, and rewrites the wheel `RECORD`.
+It is intended for Python-only fixes where the native `.so` files are already
+correct for that CUDA/Python/platform combination.
+
 ## Current target
 
 - Platform tag: `manylinux_2_28_x86_64`

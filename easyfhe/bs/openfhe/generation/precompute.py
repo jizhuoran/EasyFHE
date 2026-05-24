@@ -39,7 +39,7 @@ class BootstrapPrecompute:
         self.k = approx_plan.message_scaling_factor
 
 
-    def eval_bootstrap_setup(self, context, level_budget, dim1, numslots, correction_factor):
+    def eval_bootstrap_setup(self, context, level_budget, dim1, numslots, correction_factor, baby_step=None):
 
         M = context.M
         slots = M // 4 if numslots == 0 else numslots
@@ -63,8 +63,9 @@ class BootstrapPrecompute:
                     f"got {budget}"
                 )
 
-        self.paramsEnc = collapsed_fft_params(slots, new_budget[0], dim1[0])
-        self.paramsDec = collapsed_fft_params(slots, new_budget[1], dim1[1])
+        baby_step = (None, None) if baby_step is None else baby_step
+        self.paramsEnc = collapsed_fft_params(slots, new_budget[0], dim1[0], baby_step=baby_step[0])
+        self.paramsDec = collapsed_fft_params(slots, new_budget[1], dim1[1], baby_step=baby_step[1])
 
 
         K_SPARSE = 28

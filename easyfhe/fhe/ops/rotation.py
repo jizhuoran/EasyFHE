@@ -45,7 +45,7 @@ def homo_rotate_add(cipher, offset, cryptoContext, addend=None):
             return homo_add(addend, cipher, cryptoContext)
         return cipher.deep_copy()
 
-    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
+    swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext, cipher.state.cur_limbs)
     norm_index = _norm_rot_index(offset, cryptoContext)
     cv = F.cv_hrot(
         cipher.cv[0],
@@ -81,7 +81,11 @@ def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
     active_limbs = cipher.state.cur_limbs + cryptoContext.K
     nonzero_offsets, key_product_indices = _batch_rotation_product_plan(offsets, cryptoContext)
 
-    swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(tuple(nonzero_offsets), cryptoContext)
+    swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(
+        tuple(nonzero_offsets),
+        cryptoContext,
+        cipher.state.cur_limbs,
+    )
     key_product_bx, key_product_ax = F.cv_innerproduct_broadcast(
         digits.cv[0],
         digits.state.cur_limbs,
@@ -168,7 +172,7 @@ def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy=HOIST_NORMAL):
         inner_digits = _modup_to_ext(inner, cryptoContext)
         offsets = tuple(index * offset for index in range(1, int(tail_ext.batch_size) + 1))
         active_limbs = inner.state.cur_limbs + cryptoContext.K
-        swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(offsets, cryptoContext)
+        swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(offsets, cryptoContext, inner.state.cur_limbs)
         key_product_bx, key_product_ax = F.cv_innerproduct_pairwise(
             inner_digits.cv[0],
             inner_digits.state.cur_limbs,
@@ -234,12 +238,12 @@ def _batch_rotation_product_plan(offsets, cryptoContext):
     return tuple(nonzero_offsets), key_product_indices
 
 
-def _batch_rotation_keys_and_starts(offsets, cryptoContext):
+def _batch_rotation_keys_and_starts(offsets, cryptoContext, cur_limbs):
     swk_bxs = []
     swk_axs = []
     special_mod_starts = []
     for offset in offsets:
-        swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext)
+        swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, cryptoContext, cur_limbs)
         swk_bxs.append(swk_bx)
         swk_axs.append(swk_ax)
         special_mod_starts.append(special_mod_start)
@@ -248,10 +252,13 @@ def _batch_rotation_keys_and_starts(offsets, cryptoContext):
     return swk_bxs, swk_axs, starts
 
 
-def _rotation_key_and_start(offset, cryptoContext):
+def _rotation_key_and_start(offset, cryptoContext, cur_limbs):
     norm_index = _norm_rot_index(offset, cryptoContext)
-    swk_bx, swk_ax = cryptoContext.get_rotation_key(norm_index)
-    special_mod_start = cryptoContext.rotation_key_limb_limits.get(norm_index, cryptoContext.L)
+    if hasattr(cryptoContext, "get_rotation_key_for_limbs"):
+        (swk_bx, swk_ax), special_mod_start = cryptoContext.get_rotation_key_for_limbs(norm_index, cur_limbs)
+    else:
+        swk_bx, swk_ax = cryptoContext.get_rotation_key(norm_index)
+        special_mod_start = cryptoContext.rotation_key_limb_limits.get(norm_index, cryptoContext.L)
     return swk_bx, swk_ax, special_mod_start
 
 

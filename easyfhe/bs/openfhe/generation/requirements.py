@@ -11,7 +11,7 @@ def bootstrap_depth(log_bs_slots, level_budget, secret_key_dist="SPARSE_TERNARY"
     if not params:
         return 0
     _reject_linear_transform_budget(params)
-    max_budget = max((budget for _, budget, _ in params), key=sum)
+    max_budget = max((budget for _, budget, _, _ in params), key=sum)
     return (
         bootstrap_approx_depth(secret_key_dist)
         + int(max_budget[0])
@@ -30,23 +30,36 @@ def required_rotations(
     *,
     strategy="double_hoist",
     dim1=None,
+    baby_step=None,
 ):
     """Return OpenFHE bootstrap rotation keys."""
 
     ring_dim = 1 << int(log_n)
     result = []
-    params = _normalize_params(log_bs_slots, level_budget, dim1)
+    if dim1 is not None and baby_step is not None:
+        raise ValueError("bootstrap plan_rot_keys accepts either dim1 or baby_step, not both")
+    params = _normalize_params(log_bs_slots, level_budget, dim1, baby_step)
     _reject_linear_transform_budget(params)
     strategy = normalize_bootstrap_strategy(strategy)
-    for bs_slots, budget, dims in params:
-        result.extend(bootstrap_required_rotations(ring_dim, bs_slots, budget, dims, strategy))
+    for bs_slots, budget, dims, baby_steps in params:
+        result.extend(
+            bootstrap_required_rotations(
+                ring_dim,
+                bs_slots,
+                budget,
+                dims,
+                strategy,
+                baby_step=baby_steps,
+            )
+        )
     return _unique_preserve_order(result)
 
 
-def _normalize_params(log_bs_slots, level_budget, dim1):
+def _normalize_params(log_bs_slots, level_budget, dim1, baby_step=None):
     slots_values = _as_sequence(log_bs_slots)
     budget_values = _normalize_budget_sequence(level_budget, len(slots_values))
     dim_values = _normalize_dim_sequence(dim1, len(slots_values))
+    baby_step_values = _normalize_dim_sequence(baby_step, len(slots_values), default=(None, None))
     if len(slots_values) != len(budget_values):
         raise ValueError(
             "log_bs_slots and level_budget must describe the same number of bootstrap parameter sets"
@@ -55,14 +68,23 @@ def _normalize_params(log_bs_slots, level_budget, dim1):
         raise ValueError(
             "log_bs_slots and dim1 must describe the same number of bootstrap parameter sets"
         )
+    if len(slots_values) != len(baby_step_values):
+        raise ValueError(
+            "log_bs_slots and baby_step must describe the same number of bootstrap parameter sets"
+        )
     return tuple(
-        (int(slots), _normalize_pair(budget, "level_budget"), _normalize_pair(dims, "dim1"))
-        for slots, budget, dims in zip(slots_values, budget_values, dim_values)
+        (
+            int(slots),
+            _normalize_pair(budget, "level_budget"),
+            _normalize_pair(dims, "dim1"),
+            _normalize_pair_allow_none(baby_steps, "baby_step"),
+        )
+        for slots, budget, dims, baby_steps in zip(slots_values, budget_values, dim_values, baby_step_values)
     )
 
 
 def _reject_linear_transform_budget(params):
-    for _, budget, _ in params:
+    for _, budget, _, _ in params:
         if int(budget[0]) == 1 or int(budget[1]) == 1:
             raise NotImplementedError(
                 "OpenFHE bootstrap does not support the linear-transform route; "
@@ -78,9 +100,11 @@ def _normalize_budget_sequence(value, count):
     return tuple(value)
 
 
-def _normalize_dim_sequence(value, count):
+def _normalize_dim_sequence(value, count, default=(0, 0)):
     if value is None:
-        return tuple((0, 0) for _ in range(count))
+        return tuple(default for _ in range(count))
+    if _is_scalar(value):
+        return tuple((value, value) for _ in range(count))
     if _is_pair(value):
         return tuple(value for _ in range(count))
     return tuple(value)
@@ -115,6 +139,12 @@ def _normalize_pair(value, name):
     if value is None or len(value) != 2:
         raise ValueError(f"bootstrap {name} must have two entries, got {value}")
     return (int(value[0]), int(value[1]))
+
+
+def _normalize_pair_allow_none(value, name):
+    if value is None or len(value) != 2:
+        raise ValueError(f"bootstrap {name} must have two entries, got {value}")
+    return tuple(None if item is None else int(item) for item in value)
 
 
 def _unique_preserve_order(values):

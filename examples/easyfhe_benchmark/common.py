@@ -268,7 +268,12 @@ def make_plain_from_middle(crypto_context: Any, values: List[float], cur_limbs: 
     level = level_for_cur_limbs(crypto_context, cur_limbs)
     if level < 0:
         raise ValueError(f"cur_limbs={cur_limbs} exceeds context L={crypto_context.L}")
-    middle_value = encode_stage1(np.asarray(values, dtype=np.float64), slots, crypto_context.N)
+    middle_value = encode_stage1(
+        np.asarray(values, dtype=np.float64),
+        slots,
+        crypto_context.N,
+        device=crypto_context.device,
+    )
     return encode_stage2(
         middle_value,
         level=level,

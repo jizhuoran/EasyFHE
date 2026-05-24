@@ -45,3 +45,14 @@ python -m examples.resnet20_aespa.main
 ```
 
 where the second form expects `/path/to/data/cifar10/test_batch.bin`.
+
+## Benchmark and correctness split
+
+`examples/resnet20_aespa` keeps only the ResNet20 AESPA inference flow and its direct runtime dependencies.
+
+Bootstrap-focused utilities were moved to `examples/bootstrap`:
+
+```bash
+python -m examples.bootstrap.benchmark_bootstrap
+python -m examples.bootstrap.check_bootstrap_correctness
+```

@@ -8,12 +8,20 @@ import easyfhe as torch
 import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 
-try:
-    from .fhe_state import parse_rotation_key_limb_limits
-    from .main import build_config, _format_seconds, _format_bytes
-except ImportError:
-    from fhe_state import parse_rotation_key_limb_limits
-    from main import build_config, _format_seconds, _format_bytes
+from examples.resnet20_aespa.cli import parse_rotation_key_limb_limits
+from examples.resnet20_aespa.formatting import format_bytes, format_seconds
+from examples.resnet20_aespa.main import build_config
+
+
+def _parse_pair_or_scalar(value):
+    if value is None:
+        return None
+    parts = str(value).replace(",", ":").split(":")
+    if len(parts) == 1:
+        return int(parts[0])
+    if len(parts) == 2:
+        return (int(parts[0]), int(parts[1]))
+    raise ValueError(f"expected INT or C2S:S2C, got {value!r}")
 
 
 def _parse_args():
@@ -52,6 +60,12 @@ def _parse_args():
         default=[],
         metavar="ROT:LIMBS",
     )
+    parser.add_argument("--baby-step", default=None, help="BSGS baby-step override as INT or C2S:S2C")
+    parser.add_argument(
+        "--constant-cache-mode",
+        choices=("none", "plain", "middle", "both"),
+        default="both",
+    )
     parser.add_argument("--total", type=int, default=1)
     return parser.parse_args()
 
@@ -67,9 +81,9 @@ def _format_cache(constants):
     info = constants.cache_info()
     return (
         f"mode={info['mode']} "
-        f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])}) "
-        f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])}) "
-        f"scalar={info['scalar_entries']}({_format_bytes(info['scalar_bytes'])}) "
+        f"middle={info['middle_entries']}({format_bytes(info['middle_bytes'])}) "
+        f"plain={info['plain_entries']}({format_bytes(info['plain_bytes'])}) "
+        f"scalar={info['scalar_entries']}({format_bytes(info['scalar_bytes'])}) "
         f"plain_hits={info['plain_hits']} "
         f"plain_misses={info['plain_misses']} "
         f"scalar_hits={info['scalar_hits']} "
@@ -81,24 +95,25 @@ def _format_cache(constants):
 
 def _build_bootstrap_runtime(args):
     config = build_config(args)
+    baby_step = _parse_pair_or_scalar(args.baby_step)
     bootstrap_extra_depth = bs.depth(
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
         secret_key_dist=config.secret_key_dist,
-        bootstrap_mode=config.bootstrap_mode,
     )
     bootstrap_rotations = bs.plan_rot_keys(
         log_n=config.log_n,
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
         strategy=config.bootstrap_strategy,
+        baby_step=baby_step,
     )
     rotations = tuple(dict.fromkeys([*config.rotate_indices, *bootstrap_rotations]))
 
     setup_start = time.perf_counter()
     client, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(
-            depth=config.max_levels_remaining + bootstrap_extra_depth,
+            depth=config.post_bootstrap_levels + bootstrap_extra_depth,
             log_n=config.log_n,
             dnum=config.dnum,
             dcrt_bits=config.dcrt_bits,
@@ -123,10 +138,11 @@ def _build_bootstrap_runtime(args):
             ctx,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
-            max_levels_remaining=config.max_levels_remaining,
+            post_bootstrap_levels=config.post_bootstrap_levels,
             strategy=config.bootstrap_strategy,
-            bootstrap_mode=config.bootstrap_mode,
+            baby_step=baby_step,
         )
+        constants.set_cache_mode(args.constant_cache_mode)
         constant_seconds.append(time.perf_counter() - constant_start)
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
 
@@ -140,13 +156,13 @@ def _make_cipher(client, ctx, log_bs_slots, seed):
     return client.encrypt(values, device=ctx.device, scale_deg=1, level=0, slots=slots)
 
 
-def _run_timed_bootstrap(ctx, cipher, constants, plan, iters):
+def _run_timed_bootstrap(ctx, cipher, constants, plan, iters, bootstrap_mode):
     times = []
     out = None
     for _ in range(iters):
         _sync(ctx)
         start = time.perf_counter()
-        out = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.state.cur_limbs)
+        out = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.state.cur_limbs, bootstrap_mode=bootstrap_mode)
         _sync(ctx)
         times.append(time.perf_counter() - start)
     return out, times
@@ -160,11 +176,11 @@ def _print_timing(times):
     print(
         "timed bootstrap:",
         f"iters={len(times)}",
-        f"avg={_format_seconds(avg)}",
-        f"min={_format_seconds(min(times))}",
-        f"max={_format_seconds(max(times))}",
+        f"avg={format_seconds(avg)}",
+        f"min={format_seconds(min(times))}",
+        f"max={format_seconds(max(times))}",
     )
-    print("per-iter:", ", ".join(_format_seconds(value) for value in times))
+    print("per-iter:", ", ".join(format_seconds(value) for value in times))
 
 
 def main():
@@ -180,19 +196,20 @@ def main():
     print("================ ResNet20 AESPA bootstrap benchmark ================")
     print(f"device: {ctx.device}")
     print(f"bootstrap_strategy: {plan.strategy}")
-    print(f"bootstrap_mode: {plan.bootstrap_mode}")
+    print(f"bootstrap_mode: {config.bootstrap_mode}")
+    print(f"baby_step: {plan.baby_step}")
     print(f"log_bs_slots: {log_bs_slots}")
     print(f"cipher: cur_limbs={cipher.state.cur_limbs} noise_deg={cipher.state.noise_deg} slots={cipher.slots}")
-    print(f"context setup: {_format_seconds(setup_seconds)}")
-    print("constant/key setup:", ", ".join(_format_seconds(value) for value in constant_seconds))
+    print(f"context setup: {format_seconds(setup_seconds)}")
+    print("constant/key setup:", ", ".join(format_seconds(value) for value in constant_seconds))
     print("constant cache before:", _format_cache(constants))
 
     if args.warmup:
         print(f"warmup: {args.warmup}")
-        _run_timed_bootstrap(ctx, cipher, constants, plan, args.warmup)
+        _run_timed_bootstrap(ctx, cipher, constants, plan, args.warmup, config.bootstrap_mode)
         print("constant cache after warmup:", _format_cache(constants))
 
-    _, times = _run_timed_bootstrap(ctx, cipher, constants, plan, args.iters)
+    _, times = _run_timed_bootstrap(ctx, cipher, constants, plan, args.iters, config.bootstrap_mode)
 
     _print_timing(times)
     print("constant cache after:", _format_cache(constants))

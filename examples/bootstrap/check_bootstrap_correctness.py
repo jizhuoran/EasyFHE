@@ -4,16 +4,14 @@ import os
 
 import numpy as np
 
-import easyfhe as torch
 import easyfhe.bs.openfhe as bs
 from easyfhe.fhe.ops import alignment
-from easyfhe.fhe.ops import arithmetic
 from easyfhe.fhe.ops import rotation
 from easyfhe.bs.openfhe.runtime import approx as bootstrap_approx
-from easyfhe.bs.openfhe.runtime.bootstrap import (
-    _raise_ciphertext,
-    _scale_after_approx,
-    _scale_to_original_message,
+from easyfhe.bs.openfhe.runtime.bootstrap_common import (
+    raise_ciphertext,
+    scale_after_approx,
+    scale_to_original_message,
     eval_coeffs_to_slots,
     eval_slots_to_coeffs,
 )
@@ -21,7 +19,7 @@ from easyfhe.bs.openfhe.runtime.bootstrap import (
 try:
     from .benchmark_bootstrap import _build_bootstrap_runtime, _sync
 except ImportError:
-    from benchmark_bootstrap import _build_bootstrap_runtime, _sync
+    from examples.bootstrap.benchmark_bootstrap import _build_bootstrap_runtime, _sync
 
 
 def _parse_args():
@@ -52,6 +50,12 @@ def _parse_args():
     parser.add_argument("--no-auto-load-keys", dest="auto_load_keys", action="store_false")
     parser.add_argument("--rotation-random-mode", choices=("fresh", "reuse_by_shape"), default="fresh")
     parser.add_argument("--rot-key-limb-limit", action="append", default=[], metavar="ROT:LIMBS")
+    parser.add_argument("--baby-step", default=None, help="BSGS baby-step override as INT or C2S:S2C")
+    parser.add_argument(
+        "--constant-cache-mode",
+        choices=("none", "plain", "middle", "both"),
+        default="both",
+    )
     parser.add_argument("--total", type=int, default=1)
     return parser.parse_args()
 
@@ -88,7 +92,7 @@ def _print_stage(name, cipher, client, ctx, expected=None, slots=None):
     if expected is not None:
         stats = _error_stats(values[: len(expected)], expected)
         print(
-            f"        vs expected:",
+            "        vs expected:",
             f"max_abs={stats['max_abs']:.6e}",
             f"mean_abs={stats['mean_abs']:.6e}",
             f"rmse={stats['rmse']:.6e}",
@@ -108,8 +112,8 @@ def _replicate_sparse_slots(cipher, slots, ctx):
     return cipher.cipher_like(cipher.cv, slots=slots)
 
 
-def _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan):
-    if getattr(plan, "bootstrap_mode", "modraise_first") != "modraise_first":
+def _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan, bootstrap_mode):
+    if bootstrap_mode != "modraise_first":
         print("[trace] stage trace currently covers modraise_first only")
         return
     if int(plan.slots) == int(ctx.M // 4):
@@ -120,7 +124,7 @@ def _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan):
     print("================ OpenFHE bootstrap stage trace ================")
     _print_stage("input", cipher, client, ctx, expected=values, slots=slots)
 
-    raised = _raise_ciphertext(cipher, ctx, constants, cipher.state.cur_limbs)
+    raised = raise_ciphertext(cipher, ctx, constants, cipher.state.cur_limbs)
     _print_stage("raised", raised, client, ctx, slots=slots)
 
     replicated = _replicate_sparse_slots(raised, slots, ctx)
@@ -146,14 +150,14 @@ def _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan):
     approx = bootstrap_approx.eval_bootstrap_approx_mod(eval_mod_input, ctx, constants, plan)
     _print_stage("approx", approx, client, ctx, slots=slots)
 
-    scaled = _scale_after_approx(approx, ctx, constants)
+    scaled = scale_after_approx(approx, ctx, constants)
     scaled = alignment.reduce_noise_to_one(scaled, ctx)
     _print_stage("post_approx_scale", scaled, client, ctx, slots=slots)
 
     decoded = eval_slots_to_coeffs(scaled, ctx, constants, plan)
     decoded = rotation.homo_rotate_add(decoded, slots, ctx, addend=decoded)
     decoded = decoded.cipher_like(decoded.cv, slots=slots)
-    decoded = _scale_to_original_message(decoded, ctx, constants)
+    decoded = scale_to_original_message(decoded, ctx, constants)
     decoded = alignment.reduce_noise_to_one(decoded, ctx)
     _print_stage("decoded_scaled", decoded, client, ctx, expected=values, slots=slots)
 
@@ -170,10 +174,10 @@ def main():
 
     cipher = client.encrypt(values, device=ctx.device, scale_deg=1, level=int(args.input_level), slots=slots)
     if args.trace_stages:
-        _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan)
+        _trace_modraise_first_sparse(cipher, values, client, ctx, constants, plan, config.bootstrap_mode)
 
     _sync(ctx)
-    output = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.state.cur_limbs)
+    output = bs.bootstrap(cipher, ctx, constants, plan, L0=cipher.state.cur_limbs, bootstrap_mode=config.bootstrap_mode)
     _sync(ctx)
 
     decrypted = client.decrypt(output).cpu().numpy().reshape(-1)[:slots]
@@ -183,7 +187,8 @@ def main():
     print("================ OpenFHE bootstrap correctness ================")
     print(f"device: {ctx.device}")
     print(f"bootstrap_strategy: {plan.strategy}")
-    print(f"bootstrap_mode: {getattr(plan, 'bootstrap_mode', 'modraise_first')}")
+    print(f"bootstrap_mode: {config.bootstrap_mode}")
+    print(f"baby_step: {plan.baby_step}")
     print(f"secret_key_dist: {config.secret_key_dist}")
     print(f"log_bs_slots: {log_bs_slots}")
     print(f"input_state: {cipher.state}")

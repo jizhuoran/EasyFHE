@@ -7,20 +7,13 @@ import easyfhe as torch
 import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 
-try:
-    from .data import read_image
-    from .fhe_state import parse_rotation_key_limb_limits
-    from .main import build_config, _format_seconds, _format_bytes
-    from .model import AespaRuntime
-    from .weight_pack import WeightPack
-    from . import model
-except ImportError:
-    from data import read_image
-    from fhe_state import parse_rotation_key_limb_limits
-    from main import build_config, _format_seconds, _format_bytes
-    from model import AespaRuntime
-    from weight_pack import WeightPack
-    import model
+from .data import read_image
+from .cli import parse_rotation_key_limb_limits
+from .formatting import format_bytes, format_seconds
+from .main import build_config
+from .model import AespaRuntime
+from .weight_pack import WeightPack
+from . import model
 
 
 def _parse_args():
@@ -65,7 +58,6 @@ def _build_runtime(args):
         log_bs_slots=config.log_bs_slots,
         level_budget=config.level_budgets,
         secret_key_dist=config.secret_key_dist,
-        bootstrap_mode=config.bootstrap_mode,
     )
     bootstrap_rotations = bs.plan_rot_keys(
         log_n=config.log_n,
@@ -76,7 +68,7 @@ def _build_runtime(args):
     rotations = tuple(dict.fromkeys([*config.rotate_indices, *bootstrap_rotations]))
     client, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(
-            depth=config.max_levels_remaining + bootstrap_extra_depth,
+            depth=config.post_bootstrap_levels + bootstrap_extra_depth,
             log_n=config.log_n,
             dnum=config.dnum,
             dcrt_bits=config.dcrt_bits,
@@ -97,12 +89,16 @@ def _build_runtime(args):
             ctx,
             log_bs_slots=log_bs_slots,
             level_budget=level_budget,
-            max_levels_remaining=config.max_levels_remaining,
+            post_bootstrap_levels=config.post_bootstrap_levels,
             strategy=config.bootstrap_strategy,
-            bootstrap_mode=config.bootstrap_mode,
         )
         bootstrap_material[int(log_bs_slots)] = (constants, plan)
-    weights = WeightPack.from_npz(config.weights_path, cache_mode=config.weight_cache_mode)
+    weights = WeightPack.from_npz(
+        config.weights_path,
+        cache_mode=config.weight_cache_mode,
+        plain_cache_limit_gb=config.weight_plain_cache_limit_gb,
+        plain_cache_policy=config.weight_plain_cache_policy,
+    )
     return AespaRuntime(ctx, client, weights, config, bootstrap_material)
 
 
@@ -113,10 +109,17 @@ def _profile_wrappers(rt, records, block_records, op_records, state):
     original_down = model._downsample_residual_block
     originals = {}
 
-    def timed_bootstrap(cipher, crypto_context, constants, plan, *, L0):
+    def timed_bootstrap(cipher, crypto_context, constants, plan, *, L0, bootstrap_mode="modraise_first"):
         _sync(rt.ctx)
         start = time.perf_counter()
-        result = original_bootstrap(cipher, crypto_context, constants, plan, L0=L0)
+        result = original_bootstrap(
+            cipher,
+            crypto_context,
+            constants,
+            plan,
+            L0=L0,
+            bootstrap_mode=bootstrap_mode,
+        )
         _sync(rt.ctx)
         records.append(
             {
@@ -247,7 +250,7 @@ def _infer_profile(image_vector, rt, bootstrap_records, block_records, op_record
         res_layer3, timings["layer3"] = _time_stage("layer3", state, rt, model.layer3, res_layer2, rt)
         final_res, timings["final"] = _time_stage("final", state, rt, model.final_layer, res_layer3, rt)
     timings["model"] = sum(timings[name] for name in ("initial", "layer1", "layer2", "layer3", "final"))
-    timings["end_to_end"] = timings["encrypt"] + timings["model"]
+    timings["end_to_end"] = timings["model"]
     return final_res, timings
 
 
@@ -285,11 +288,11 @@ def _print_op_summary(op_records):
 
     print("\nOps by type:")
     for op, seconds in sorted(by_op.items(), key=lambda item: item[1], reverse=True):
-        print(f"{op:22s} total={_format_seconds(seconds)}")
+        print(f"{op:22s} total={format_seconds(seconds)}")
 
     print("\nOps by stage:")
     for (stage, op), seconds in sorted(by_stage_op.items(), key=lambda item: (str(item[0][0]), -item[1])):
-        print(f"{stage}.{op:22s} {_format_seconds(seconds)}")
+        print(f"{stage}.{op:22s} {format_seconds(seconds)}")
 
 
 def _print_cache(weights):
@@ -297,9 +300,15 @@ def _print_cache(weights):
     print(
         "weight cache:",
         f"mode={info['mode']}",
-        f"middle={info['middle_entries']}({_format_bytes(info['middle_bytes'])})",
-        f"plain={info['plain_entries']}({_format_bytes(info['plain_bytes'])})",
-        f"scalar={info.get('scalar_entries', 0)}({_format_bytes(info.get('scalar_bytes', 0))})",
+        f"plain_policy={info.get('plain_cache_policy', 'first_fit')}",
+        f"middle={info['middle_entries']}({format_bytes(info['middle_bytes'])})",
+        f"plain={info['plain_entries']}({format_bytes(info['plain_bytes'])})",
+        f"scalar={info.get('scalar_entries', 0)}({format_bytes(info.get('scalar_bytes', 0))})",
+        f"total={format_bytes(info.get('total_bytes', 0))}",
+        f"plain_limit={_format_optional_bytes(info.get('plain_cache_limit_bytes'))}",
+        f"plain_remaining={_format_optional_bytes(info.get('plain_cache_remaining_bytes'))}",
+        f"plain_skips={info.get('plain_cache_skips', 0)}",
+        f"plain_evictions={info.get('plain_cache_evictions', 0)}",
         f"plain_hits={info['plain_hits']}",
         f"plain_misses={info['plain_misses']}",
         f"scalar_hits={info.get('scalar_hits', 0)}",
@@ -309,6 +318,10 @@ def _print_cache(weights):
     )
 
 
+def _format_optional_bytes(num_bytes):
+    return "unlimited" if num_bytes is None else format_bytes(num_bytes)
+
+
 def main():
     args = _parse_args()
     rt = _build_runtime(args)
@@ -316,7 +329,7 @@ def main():
     print("================ ResNet20 AESPA inference benchmark ================")
     print(f"device: {rt.ctx.device}")
     print(f"bootstrap_strategy: {bootstrap_plan.strategy}")
-    print(f"bootstrap_mode: {bootstrap_plan.bootstrap_mode}")
+    print(f"bootstrap_mode: {rt.config.bootstrap_mode}")
     print(f"warmup: {args.warmup}")
     print(f"iters: {args.iters}")
     print(f"auto_load_keys: {rt.ctx.auto_load_keys_resolved}")
@@ -342,36 +355,36 @@ def main():
             f"[{tag} {idx + 1}/{args.warmup + args.iters}]",
             f"index={image_index}",
             f"label={label}",
-            f"model={_format_seconds(timings['model'])}",
-            f"end_to_end={_format_seconds(timings['end_to_end'])}",
+            f"model={format_seconds(timings['model'])}",
+            f"e2e_no_encrypt_decrypt={format_seconds(timings['end_to_end'])}",
         )
         print(
             "    layers:",
             " ".join(
-                f"{name}={_format_seconds(timings[name])}"
+                f"{name}={format_seconds(timings[name])}"
                 for name in ("encrypt", "initial", "layer1", "layer2", "layer3", "final")
             ),
         )
         print(
             "    bootstrap:",
             f"count={len(bootstrap_records)}",
-            f"total={_format_seconds(sum(row['seconds'] for row in bootstrap_records))}",
+            f"total={format_seconds(sum(row['seconds'] for row in bootstrap_records))}",
             " ".join(
-                f"{row['stage']}.{row['block']}={_format_seconds(row['seconds'])}"
+                f"{row['stage']}.{row['block']}={format_seconds(row['seconds'])}"
                 for row in bootstrap_records
             ),
         )
         print(
             "    blocks:",
             " ".join(
-                f"{row['stage']}.{row['block']}={_format_seconds(row['seconds'])}"
+                f"{row['stage']}.{row['block']}={format_seconds(row['seconds'])}"
                 for row in block_records
             ),
         )
         print(
             "    ops:",
             " ".join(
-                f"{op}={_format_seconds(seconds)}"
+                f"{op}={format_seconds(seconds)}"
                 for op, seconds in sorted(_sum_rows(op_records, "op").items(), key=lambda item: item[1], reverse=True)
             ),
         )
@@ -387,21 +400,22 @@ def main():
         print("\n================ measured summary ================")
         for name in ("encrypt", "initial", "layer1", "layer2", "layer3", "final", "model", "end_to_end"):
             avg = sum(row[name] for row in measured_timings) / len(measured_timings)
-            print(f"{name:10s} avg={_format_seconds(avg)}")
+            label = "e2e_no_encrypt_decrypt" if name == "end_to_end" else name
+            print(f"{label:24s} avg={format_seconds(avg)}")
 
     if measured_bootstraps:
         print("\nBootstrap calls:")
         for idx, row in enumerate(measured_bootstraps, 1):
             print(
                 f"{idx:2d}. {row['stage']}.{row['block']}",
-                f"time={_format_seconds(row['seconds'])}",
+                f"time={format_seconds(row['seconds'])}",
                 f"L0={row['L0']}",
                 f"in={row['in_limbs']}",
                 f"out={row['out_limbs']}",
             )
         by_stage = _sum_rows(measured_bootstraps, "stage")
-        print("Bootstrap by stage:", " ".join(f"{k}={_format_seconds(v)}" for k, v in by_stage.items()))
-        print(f"Bootstrap total: {_format_seconds(sum(row['seconds'] for row in measured_bootstraps))}")
+        print("Bootstrap by stage:", " ".join(f"{k}={format_seconds(v)}" for k, v in by_stage.items()))
+        print(f"Bootstrap total: {format_seconds(sum(row['seconds'] for row in measured_bootstraps))}")
 
     if measured_blocks:
         print("\nBlocks:")
@@ -409,7 +423,7 @@ def main():
             print(
                 f"{row['stage']}.{row['block']}",
                 f"kind={row['kind']}",
-                f"time={_format_seconds(row['seconds'])}",
+                f"time={format_seconds(row['seconds'])}",
             )
 
     _print_op_summary(measured_ops)

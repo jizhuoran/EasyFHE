@@ -181,6 +181,8 @@ bundle = fhe.ConstantBundle(
     scalars={"scale": 0.125},
     vectors={"weights": values},
     cache_mode="plain",
+    plain_cache_limit_gb=None,
+    plain_cache_policy="first_fit",
 )
 ```
 
@@ -192,7 +194,21 @@ encoded scalar tensors.
 - `"none"`: cache nothing.
 - `"middle"`: cache prepared vector encodings.
 - `"plain"`: cache plaintexts and encoded scalars.
-- `"both"`: cache both prepared encodings and plaintexts.
+- `"both"`: cache plaintexts first; when the plaintext cache limit is reached,
+  keep prepared vector encodings as a fallback. A vector that already has a
+  cached plaintext does not also keep its middle encoding.
+
+`plain_cache_limit_gb` limits how much plaintext cache `ConstantBundle` may
+keep. `None` means no explicit limit. The limit applies only to plaintext
+entries; middle encodings and encoded scalar tensors are still reported in
+`cache_info()`.
+
+`plain_cache_policy` controls admission when the plaintext cache is full:
+
+- `"first_fit"`: keep existing entries and skip new plaintexts that do not fit.
+- `"small_first"`: replace the largest cached plaintext when the new plaintext
+  is smaller. In `"both"` mode, evicted plaintexts keep their middle encoding
+  cached as the fallback.
 
 Methods:
 
@@ -201,8 +217,12 @@ len(bundle)
 bundle.plaintext(name, level, slots, cryptoContext, scale=1.0, is_ext=False, cache=True)
 bundle.encoded_scalars(names, cur_limbs, noise_deg, cryptoContext, mode="double", absolute=False, cache=True)
 bundle.cache_info()
+bundle.memory_info()
 bundle.clear_cache()
 bundle.set_cache_mode(cache_mode, clear=True)
+bundle.set_plain_cache_limit_gb(limit_gb, clear=False)
+bundle.set_plain_cache_limit_bytes(limit_bytes, clear=False)
+bundle.set_plain_cache_policy(policy)
 ```
 
 `len(bundle)` returns the number of named vector constants.

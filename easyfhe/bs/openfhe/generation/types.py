@@ -25,6 +25,7 @@ class BootstrapPlan:
     log_bs_slots: int
     level_budget: tuple[int, int]
     dim1: tuple[int, int]
+    baby_step: tuple[int, int]
     strategy: str
     post_bootstrap_levels: int
     c2s_plan: BootstrapTransformPlan

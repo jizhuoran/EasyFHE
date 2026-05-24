@@ -3,12 +3,7 @@ from dataclasses import dataclass
 
 import easyfhe.fhe as fhe
 
-try:
-    from .fhe_state import reduce_noise_to_one, rescale_one_level
-    from .weight_pack import fold_slots_mask_name
-except ImportError:
-    from fhe_state import reduce_noise_to_one, rescale_one_level
-    from weight_pack import fold_slots_mask_name
+from .weight_pack import fold_slots_mask_name
 
 __all__ = [
     "broadcast_slot_sum",
@@ -65,6 +60,14 @@ def _merge_fullpack(c1, c2, cryptoContext, weights):
     )
 
 
+def _rescale_one_level(cipher, cryptoContext):
+    return fhe.align_to(
+        cipher,
+        fhe.CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1),
+        cryptoContext,
+    )
+
+
 def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
     summed = fhe.homo_rotate_add(cipher, rotate_offset, cryptoContext, addend=cipher)
     cipher = fhe.homo_mul_pt(
@@ -77,14 +80,14 @@ def _masked_reduce(cipher, mask_n, rotate_offset, cryptoContext, weights):
         ),
         cryptoContext,
     )
-    return rescale_one_level(cipher, cryptoContext)
+    return _rescale_one_level(cipher, cryptoContext)
 
 
 def _spatial_reduce(fullpack, cryptoContext, weights, include_gen8, initial_rescale):
     if initial_rescale == "always":
-        fullpack = rescale_one_level(fullpack, cryptoContext)
+        fullpack = _rescale_one_level(fullpack, cryptoContext)
     else:
-        fullpack = reduce_noise_to_one(fullpack, cryptoContext)
+        fullpack = fhe.reduce_noise_to_one(fullpack, cryptoContext)
     fullpack = _masked_reduce(fullpack, 2, 1, cryptoContext, weights)
     fullpack = _masked_reduce(fullpack, 4, 2, cryptoContext, weights)
     if include_gen8:
@@ -109,7 +112,7 @@ def _pack_rows(fullpack, row_mask_prefix, row_width, spatial_size, row_count, ro
         rows = masked if rows is None else fhe.homo_add(rows, masked, cryptoContext)
         if i < row_count - 1:
             fullpack = fhe.homo_rotate(fullpack, row_rotate, cryptoContext)
-    return rescale_one_level(rows, cryptoContext)
+    return _rescale_one_level(rows, cryptoContext)
 
 
 def _pack_channels(rows, num_channel, spatial_size, out_spatial_size, cryptoContext, weights):
@@ -171,10 +174,10 @@ def _downsample_spatial(c1, c2, num_channel, cryptoContext, weights, spec):
     )
     channels = _pack_channels(rows, num_channel, spec.spatial_size, spec.out_spatial_size, cryptoContext, weights)
     if spec.rescale_before_fold:
-        channels = rescale_one_level(channels, cryptoContext)
+        channels = _rescale_one_level(channels, cryptoContext)
     channels = _fold_quarters(channels, cryptoContext)
     if spec.rescale_after_fold:
-        channels = rescale_one_level(channels, cryptoContext)
+        channels = _rescale_one_level(channels, cryptoContext)
     target_slots = channels.slots // 4
     mask = weights.plaintext(
         fold_slots_mask_name(channels.slots, target_slots),

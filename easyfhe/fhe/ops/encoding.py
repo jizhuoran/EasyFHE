@@ -72,7 +72,7 @@ def _bit_reverse_permutation(size):
     return indices
 
 
-def encode_stage1(raw_values, slots, ring_dim):
+def encode_stage1(raw_values, slots, ring_dim, device=None):
     """Encode raw slot values into a contiguous middle representation."""
 
     if ring_dim is None:
@@ -101,13 +101,14 @@ def encode_stage1(raw_values, slots, ring_dim):
             max_encoded_value = max(max_encoded_value, float(np.max(np.abs(encoded))))
 
     if is_batch:
+        encoded_values = _as_encoded_tensor(np.stack(encoded_values, axis=0), device)
         return PreparedPlaintext(
             np.stack(values, axis=0),
             slots,
-            np.stack(encoded_values, axis=0),
+            encoded_values,
             max_encoded_value,
         )
-    return PreparedPlaintext(values[0], slots, encoded_values[0], max_encoded_value)
+    return PreparedPlaintext(values[0], slots, _as_encoded_tensor(encoded_values[0], device), max_encoded_value)
 
 
 def encode_stage2(middle, level, slots, is_ext, cryptoContext):
@@ -124,12 +125,12 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
     scaling_factor = cryptoContext.scale_at(cur_limbs)
     _validate_scaled_range(middle, scaling_factor)
 
-    encoded_values = np.asarray(middle.encoded_values)
-    batch_size = 1 if encoded_values.ndim == 1 else int(encoded_values.shape[0])
+    encoded_values = middle.encoded_values
+    batch_size = 1 if encoded_values.dim() == 1 else int(encoded_values.shape[0])
     encoded_values = encoded_values.reshape(batch_size, 2 * slots)
 
     pt_encode = F.cv_encode(
-        torch.as_tensor(encoded_values, dtype=torch.float64, device=cryptoContext.device),
+        encoded_values,
         cryptoContext.N,
         cur_limbs,
         slots,
@@ -144,6 +145,10 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
         is_ext,
         batch_size=batch_size,
     )
+
+
+def _as_encoded_tensor(encoded_values, device):
+    return torch.as_tensor(encoded_values, dtype=torch.float64, device=device or "cpu")
 
 
 def _raw_rows(raw_values):

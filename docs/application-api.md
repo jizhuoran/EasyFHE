@@ -88,6 +88,8 @@ weights = fhe.ConstantBundle(
         "scale": 0.125,
     },
     cache_mode="plain",
+    plain_cache_limit_gb=None,
+    plain_cache_policy="first_fit",
 )
 
 pt = weights.plaintext(
@@ -106,14 +108,26 @@ Application-facing constant methods:
 bundle.plaintext(name, level, slots, ctx, scale=1.0, is_ext=False, cache=True)
 bundle.encoded_scalars(names, cur_limbs, noise_deg, ctx, mode="double", absolute=False, cache=True)
 bundle.cache_info()
+bundle.memory_info()
 bundle.clear_cache()
 bundle.set_cache_mode(mode, clear=True)
+bundle.set_plain_cache_limit_gb(limit_gb, clear=False)
+bundle.set_plain_cache_policy(policy)
 ```
 
 Raw scalar reads, middle encoding, and vector padding are internal implementation
 details. Application code should access constants by name through
 `plaintext(...)` or `encoded_scalars(...)` and let the bundle manage preparation,
 materialization, batching, and caching.
+
+Use `cache_mode="both"` with `plain_cache_limit_gb=<size>` when you want a
+bounded plaintext cache. Plaintexts are cached until the limit is reached; later
+constants keep only their prepared middle encoding and run stage2 on demand.
+Cached plaintexts do not keep duplicate middle encodings.
+
+Set `plain_cache_policy="small_first"` to prefer smaller plaintexts when a
+bounded plaintext cache is full. In `cache_mode="both"`, evicted plaintexts
+keep their middle encoding cached as the fallback.
 
 ## Basic Homomorphic Ops
 

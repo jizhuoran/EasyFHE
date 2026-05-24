@@ -69,7 +69,26 @@ def select_layers(log_slots, budget):
     return [int(layers), int(rows), int(rem)]
 
 
-def collapsed_fft_params(slots, level_budget, dim1):
+def _default_giant_step(num_rotations, layers):
+    if num_rotations > 7:
+        return 1 << (int(layers / 2) + 2)
+    return 1 << (int(layers / 2) + 1)
+
+
+def _split_from_baby_step(num_rotations, baby_step):
+    total = int(num_rotations) + 1
+    baby_step = min(int(baby_step), total)
+    if baby_step <= 0:
+        raise ValueError(f"bootstrap baby_step must be positive, got {baby_step}")
+    if total % baby_step != 0:
+        raise ValueError(
+            f"bootstrap baby_step={baby_step} must divide transform width {total}"
+        )
+    return baby_step, total // baby_step
+
+
+def collapsed_fft_params(slots, level_budget, dim1=0, baby_step=None):
+    requested_baby_step = baby_step
     dims = select_layers(int(math.log2(slots)), level_budget)
     layers_collapse = dims[0]
     rem_collapse = dims[2]
@@ -78,26 +97,26 @@ def collapsed_fft_params(slots, level_budget, dim1):
     num_rotations = (1 << (layers_collapse + 1)) - 1
     num_rotations_rem = (1 << (rem_collapse + 1)) - 1
 
-    if dim1 == 0 or dim1 > num_rotations:
-        if num_rotations > 7:
-            giant_step = 1 << (int(layers_collapse / 2) + 2)
-        else:
-            giant_step = 1 << (int(layers_collapse / 2) + 1)
+    if requested_baby_step is not None and int(requested_baby_step) > 0:
+        baby_step, giant_step = _split_from_baby_step(num_rotations, requested_baby_step)
+    elif dim1 == 0 or dim1 > num_rotations:
+        giant_step = _default_giant_step(num_rotations, layers_collapse)
+        baby_step = (num_rotations + 1) // giant_step
     else:
         giant_step = dim1
-
-    baby_step = (num_rotations + 1) // giant_step
+        baby_step = (num_rotations + 1) // giant_step
     baby_step_rem = 0
     giant_step_rem = 0
 
     if flag_rem:
-        if dim1 != 0 and dim1 <= num_rotations_rem:
+        if requested_baby_step is not None and int(requested_baby_step) > 0:
+            baby_step_rem, giant_step_rem = _split_from_baby_step(num_rotations_rem, requested_baby_step)
+        elif dim1 != 0 and dim1 <= num_rotations_rem:
             giant_step_rem = dim1
-        elif num_rotations_rem > 7:
-            giant_step_rem = 1 << (int(rem_collapse / 2) + 2)
         else:
-            giant_step_rem = 1 << (int(rem_collapse / 2) + 1)
-        baby_step_rem = (num_rotations_rem + 1) // giant_step_rem
+            giant_step_rem = _default_giant_step(num_rotations_rem, rem_collapse)
+        if baby_step_rem == 0:
+            baby_step_rem = (num_rotations_rem + 1) // giant_step_rem
 
     return BootstrapFFTParams(
         int(level_budget),
@@ -132,14 +151,14 @@ def normalize_bootstrap_strategy(strategy):
         ) from exc
 
 
-def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=0):
+def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=0, baby_step=None):
     direction = str(direction).upper()
     if direction not in ("C2S", "S2C"):
         raise ValueError(f"unknown bootstrap transform direction: {direction}")
 
     slots = int(slots)
     level_budget = int(level_budget)
-    params = collapsed_fft_params(slots, level_budget, int(dim1))
+    params = collapsed_fft_params(slots, level_budget, int(dim1), baby_step=baby_step)
     flag_rem = int(params.layers_rem != 0)
     cycl_order = int(ring_dim) << 1
 
@@ -198,13 +217,17 @@ def bootstrap_transform_schedule(direction, slots, level_budget, ring_dim, dim1=
     )
 
 
-def bootstrap_required_rotations(ring_dim, log_bs_slots, level_budget, dim1=None, strategy="double_hoist"):
+def bootstrap_required_rotations(ring_dim, log_bs_slots, level_budget, dim1=None, strategy="double_hoist", baby_step=None):
     """Return bootstrap rotations plus the conjugation key rotation."""
     dim1 = [0, 0] if dim1 is None else dim1
+    if baby_step is None:
+        baby_step = [None, None]
+    elif isinstance(baby_step, (int, float)):
+        baby_step = [baby_step, baby_step]
     ring_dim = int(ring_dim)
     slots = 1 << int(log_bs_slots)
-    c2s_schedule = bootstrap_transform_schedule("C2S", slots, level_budget[0], ring_dim, dim1[0])
-    s2c_schedule = bootstrap_transform_schedule("S2C", slots, level_budget[1], ring_dim, dim1[1])
+    c2s_schedule = bootstrap_transform_schedule("C2S", slots, level_budget[0], ring_dim, dim1[0], baby_step=baby_step[0])
+    s2c_schedule = bootstrap_transform_schedule("S2C", slots, level_budget[1], ring_dim, dim1[1], baby_step=baby_step[1])
     rotations = []
     for schedule in (c2s_schedule, s2c_schedule):
         rotations.extend(_schedule_required_rotations(schedule, strategy, ring_dim))

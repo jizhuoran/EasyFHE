@@ -56,6 +56,18 @@ if [[ -z "${PYTORCH_BUILD_VERSION:-}" ]]; then
   export PYTORCH_BUILD_NUMBER="${PYTORCH_BUILD_NUMBER:-1}"
 fi
 
+if [[ "${PYTHON_ONLY_REPACK:-0}" == "1" ]]; then
+  "${PYTHON_BIN}" /io/packaging/manylinux/repack_python_wheel.py \
+    --repo /io \
+    --wheelhouse "${WHEELHOUSE}" \
+    --python-tag "${PYTHON_TAG}" \
+    --cuda-flavor "${CUDA_FLAVOR}" \
+    --plat "${PLAT}" \
+    --version "${PYTORCH_BUILD_VERSION}"
+  ls -lh "${WHEELHOUSE}"
+  exit 0
+fi
+
 if [[ "${CLEAN_BUILD:-1}" == "1" ]]; then
   rm -rf /io/build
 fi

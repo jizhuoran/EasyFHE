@@ -142,22 +142,15 @@ class Context:
         self.inverse_precompute_auto_map = {
             key: value.to("cpu") for key, value in material.inverse_precompute_auto_map.items()
         }
+        self._rotation_key_cuda_cache = {}
+        self._precompute_auto_cuda_cache = {}
+        self._inverse_precompute_auto_cuda_cache = {}
 
         # Encode tables.
         self.encode_params_ksiPows = material.encode_params_ksiPows
         self.encode_params_rotGroup = material.encode_params_rotGroup
         self.encode_bitrev_indices = material.encode_bitrev_indices
             
-        if self.auto_load_keys_resolved and device == "cuda":
-            for key, value in self.left_rot_key_map.items():
-                self.left_rot_key_map[key] = [
-                    value[0].cuda(), value[1].cuda()
-                ]
-            for key, value in self.precompute_auto_map.items():
-                self.precompute_auto_map[key] = value.cuda()
-            for key, value in self.inverse_precompute_auto_map.items():
-                self.inverse_precompute_auto_map[key] = value.cuda()
-
     def construct_copy(self, device):
         return Context(
             self,
@@ -207,17 +200,83 @@ class Context:
         else:
             return self.left_rot_key_map[rot_index]
 
+    def get_rotation_key_for_limbs(self, rot_index, cur_limbs):
+        cur_limbs = int(cur_limbs)
+        available_special_mod_start = self._rotation_key_special_mod_start(rot_index)
+        if cur_limbs > available_special_mod_start:
+            raise ValueError(
+                f"rotation key {rot_index} has {available_special_mod_start} Q limbs, "
+                f"but rotation needs {cur_limbs}"
+            )
+        if self.device != "cuda":
+            return self.left_rot_key_map[rot_index], available_special_mod_start
+        if not self.auto_load_keys_resolved:
+            return self.get_rotation_key(rot_index), available_special_mod_start
+
+        beta = int((cur_limbs + self.alpha - 1) / self.alpha)
+        cached = self._rotation_key_cuda_cache.get(rot_index)
+        if cached is not None:
+            swk_bx, swk_ax, cached_special_mod_start, cached_beta = cached
+            if cached_special_mod_start >= cur_limbs and cached_beta >= beta:
+                return [swk_bx, swk_ax], cached_special_mod_start
+
+        target_special_mod_start = cur_limbs if cached is None else max(cur_limbs, cached[2])
+        target_beta = beta if cached is None else max(beta, cached[3])
+        swk_bx, swk_ax = self._load_rotation_key_to_cuda(
+            rot_index,
+            target_special_mod_start,
+            target_beta,
+            available_special_mod_start,
+        )
+        self._rotation_key_cuda_cache[rot_index] = (
+            swk_bx,
+            swk_ax,
+            target_special_mod_start,
+            target_beta,
+        )
+        return [swk_bx, swk_ax], target_special_mod_start
+
+    def _rotation_key_special_mod_start(self, rot_index):
+        bx, _ = self.left_rot_key_map[rot_index]
+        available_q_limbs = int(bx.shape[1]) - int(self.K)
+        configured = self.rotation_key_limb_limits.get(rot_index, self.L)
+        return min(int(configured), available_q_limbs)
+
+    def _load_rotation_key_to_cuda(self, rot_index, special_mod_start, beta, available_special_mod_start):
+        bx, ax = self.left_rot_key_map[rot_index]
+        return [
+            self._compact_rotation_key_component_to_cuda(bx, special_mod_start, beta, available_special_mod_start),
+            self._compact_rotation_key_component_to_cuda(ax, special_mod_start, beta, available_special_mod_start),
+        ]
+
+    def _compact_rotation_key_component_to_cuda(self, component, special_mod_start, beta, available_special_mod_start):
+        component = component[:beta]
+        q_part = component[:, :special_mod_start, :]
+        p_part = component[:, available_special_mod_start:available_special_mod_start + self.K, :]
+        compact = torch.cat((q_part, p_part), dim=1).contiguous()
+        return compact.cuda()
+
     def get_precompute_auto(self, key):
         if self.device == "cuda" and not self.precompute_auto_map[key].is_cuda:
+            if self.auto_load_keys_resolved:
+                cached = self._precompute_auto_cuda_cache.get(key)
+                if cached is None:
+                    cached = self.precompute_auto_map[key].cuda()
+                    self._precompute_auto_cuda_cache[key] = cached
+                return cached
             return self.precompute_auto_map[key].cuda()
-        else:
-            return self.precompute_auto_map[key]
+        return self.precompute_auto_map[key]
 
     def get_inverse_precompute_auto(self, key):
         if self.device == "cuda" and not self.inverse_precompute_auto_map[key].is_cuda:
+            if self.auto_load_keys_resolved:
+                cached = self._inverse_precompute_auto_cuda_cache.get(key)
+                if cached is None:
+                    cached = self.inverse_precompute_auto_map[key].cuda()
+                    self._inverse_precompute_auto_cuda_cache[key] = cached
+                return cached
             return self.inverse_precompute_auto_map[key].cuda()
-        else:
-            return self.inverse_precompute_auto_map[key]
+        return self.inverse_precompute_auto_map[key]
 
     def __repr__(self):
         s = []

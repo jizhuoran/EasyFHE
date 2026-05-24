@@ -17,6 +17,7 @@ def plan_rot_keys(
     level_budget,
     strategy="double_hoist",
     dim1=None,
+    baby_step=None,
 ):
     return tuple(
         required_rotations(
@@ -25,6 +26,7 @@ def plan_rot_keys(
             level_budget,
             strategy=strategy,
             dim1=dim1,
+            baby_step=baby_step,
         )
     )
 

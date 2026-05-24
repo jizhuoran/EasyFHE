@@ -3,44 +3,23 @@ from dataclasses import dataclass
 import easyfhe.bs.openfhe as bs
 import easyfhe.fhe as fhe
 
-try:
-    from .layout import (
-        broadcast_slot_sum,
-        downsample1024to256,
-        downsample256to64,
-        sum_adjacent_slots,
-        sum_channel_groups,
-    )
-    from .fhe_state import rescale_one_level
-    from .ops import (
-        aespa_add_shortcut,
-        aespa_nonlinear,
-        conv3x3,
-        conv3x3_sx,
-        initial_conv3x3,
-        pointwise_conv,
-        pointwise_conv_sx,
-    )
-    from .weight_pack import WeightPack
-except ImportError:
-    from layout import (
-        broadcast_slot_sum,
-        downsample1024to256,
-        downsample256to64,
-        sum_adjacent_slots,
-        sum_channel_groups,
-    )
-    from fhe_state import rescale_one_level
-    from ops import (
-        aespa_add_shortcut,
-        aespa_nonlinear,
-        conv3x3,
-        conv3x3_sx,
-        initial_conv3x3,
-        pointwise_conv,
-        pointwise_conv_sx,
-    )
-    from weight_pack import WeightPack
+from .layout import (
+    broadcast_slot_sum,
+    downsample1024to256,
+    downsample256to64,
+    sum_adjacent_slots,
+    sum_channel_groups,
+)
+from .ops import (
+    aespa_add_shortcut,
+    aespa_nonlinear,
+    conv3x3,
+    conv3x3_sx,
+    initial_conv3x3,
+    pointwise_conv,
+    pointwise_conv_sx,
+)
+from .weight_pack import WeightPack
 
 
 @dataclass
@@ -124,12 +103,21 @@ def _bootstrap(rt, input, L0):
         constants,
         plan,
         L0=L0,
+        bootstrap_mode=rt.config.bootstrap_mode,
     )
 
 
 def _bootstrap_and_resize_for_downsample(input, rt):
     boot = _bootstrap(rt, input, rt.ctx.L)
     return fhe.expand_slots(boot, boot.slots << 1, rt.ctx)
+
+
+def _rescale_one_level(cipher, ctx):
+    return fhe.align_to(
+        cipher,
+        fhe.CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1),
+        ctx,
+    )
 
 
 def _conv_then_aespa_nonlinear(input, block_id, conv_id, img_width, channels, rot_offset, rt, scale=1):
@@ -143,7 +131,7 @@ def _conv_then_aespa_nonlinear(input, block_id, conv_id, img_width, channels, ro
         rt.ctx,
         rt.weights,
     )
-    res = rescale_one_level(res, rt.ctx)
+    res = _rescale_one_level(res, rt.ctx)
     return aespa_nonlinear(res, _convbn_weight_prefix(block_id, conv_id), rt.ctx, rt.weights, scale)
 
 
@@ -182,7 +170,7 @@ def _downsample_conv_pair(input, block_id, in_img_width, in_channels, first_rot,
         rt.ctx,
         rt.weights,
     )
-    return rescale_one_level(first_half, rt.ctx), rescale_one_level(second_half, rt.ctx)
+    return _rescale_one_level(first_half, rt.ctx), _rescale_one_level(second_half, rt.ctx)
 
 
 def _downsample_conv_sx(input, block_id, in_img_width, out_channels, first_rot, copy_per_cipher, rt, scale):
@@ -198,7 +186,7 @@ def _downsample_conv_sx(input, block_id, in_img_width, out_channels, first_rot, 
         rt.ctx,
         rt.weights,
     )
-    return rescale_one_level(result, rt.ctx)
+    return _rescale_one_level(result, rt.ctx)
 
 
 def _projection_input_for_downsample(input, rt):
@@ -272,7 +260,7 @@ def _same_shape_residual_block(
         rt.weights,
     )
     res = aespa_add_shortcut(res, input, _convbn_weight_prefix(spec.block_id, 2), rt.ctx, rt.weights, scale)
-    res = rescale_one_level(res, rt.ctx)
+    res = _rescale_one_level(res, rt.ctx)
 
     if spec.bootstrap_l0 is not None:
         res = _bootstrap(rt, res, spec.bootstrap_l0)
@@ -322,7 +310,7 @@ def _downsample_residual_block(
         dx0, dx1 = _downsample_projection_pair(input, spec.block_id, spec.in_channels, spec.first_rot, rt, scale_dx)
     sx, dx = _downsample_spatial_pair(sx0, sx1, dx0, dx1, spec.in_channels, spec.downsample_kind, rt)
 
-    sx = rescale_one_level(sx, rt.ctx)
+    sx = _rescale_one_level(sx, rt.ctx)
     sx = aespa_nonlinear(sx, _convbn_weight_prefix(spec.block_id, 1), rt.ctx, rt.weights, scale_sx)
     sx = conv3x3(
         sx,
@@ -336,7 +324,7 @@ def _downsample_residual_block(
     )
     res = fhe.homo_add(sx, dx, rt.ctx)
     if spec.rescale_after_add:
-        res = rescale_one_level(res, rt.ctx)
+        res = _rescale_one_level(res, rt.ctx)
 
     if spec.bootstrap_after_nonlinear:
         res = aespa_nonlinear(res, _convbn_weight_prefix(spec.block_id, 2), rt.ctx, rt.weights, scale_dx)
@@ -357,7 +345,7 @@ def initial_layer(input, rt):
         rt.ctx,
         rt.weights,
     )
-    res = rescale_one_level(res, rt.ctx)
+    res = _rescale_one_level(res, rt.ctx)
     return aespa_nonlinear(res, "conv1bn1", rt.ctx, rt.weights)
 
 
@@ -430,7 +418,7 @@ def final_layer(input, rt):
         rt.ctx,
     )
     res = broadcast_slot_sum(res, fc_repeat, rt.ctx)
-    res = rescale_one_level(res, rt.ctx)
+    res = _rescale_one_level(res, rt.ctx)
     weight = rt.weights.plaintext(
         f"fc_{res.slots}",
         rt.ctx.L - res.state.cur_limbs,
@@ -438,7 +426,7 @@ def final_layer(input, rt):
         rt.ctx,
     )
     res = fhe.homo_mul_pt(res, weight, rt.ctx)
-    res = rescale_one_level(res, rt.ctx)
+    res = _rescale_one_level(res, rt.ctx)
     res = sum_channel_groups(res, spatial_size, channels, rt.ctx)
 
     bias = rt.weights.plaintext(
