@@ -212,13 +212,16 @@ class ConstantBundle:
             scale,
             cache_on_miss=self.cache_mode in {"middle", "both", "mix"},
         )
+        had_sibling_plain = self._has_plain_for_middle(middle_key)
         plaintext = encode_stage2(middle, level, slots, is_ext, cryptoContext)
         cached_plain = self._maybe_cache_plain(plain_key, middle_key, plaintext, cache)
         if cache and self.cache_mode == "both":
             self._middle_cache.setdefault(middle_key, middle)
         elif cache and self.cache_mode == "mix":
-            if cached_plain:
+            if cached_plain and not had_sibling_plain:
                 self._middle_cache.pop(middle_key, None)
+            elif cached_plain:
+                self._middle_cache.setdefault(middle_key, middle)
             elif not self._has_plain_for_middle(middle_key):
                 self._middle_cache.setdefault(middle_key, middle)
         return plaintext

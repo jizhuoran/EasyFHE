@@ -240,6 +240,38 @@ def test_constant_bundle_mix_restores_middle_when_plain_is_replaced(monkeypatch)
     assert info["plain_cache_evictions"] == 1
 
 
+def test_constant_bundle_mix_keeps_middle_for_sibling_plain_variants(monkeypatch):
+    bundle = fhe.ConstantBundle(
+        vectors={"w": np.asarray([1.0, 2.0], dtype=np.double)},
+        cache_mode="mix",
+    )
+
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+        return _cipher(f"w-level-{level}")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+    ctx = SimpleNamespace(N=8)
+
+    bundle.plaintext("w", 3, 4, ctx)
+    info = bundle.cache_info()
+    assert info["plain_entries"] == 1
+    assert info["middle_entries"] == 0
+    assert info["middle_misses"] == 1
+
+    bundle.plaintext("w", 2, 4, ctx)
+    info = bundle.cache_info()
+    assert info["plain_entries"] == 2
+    assert info["middle_entries"] == 1
+    assert info["middle_misses"] == 2
+
+    bundle.plaintext("w", 1, 4, ctx)
+    info = bundle.cache_info()
+    assert info["plain_entries"] == 3
+    assert info["middle_entries"] == 1
+    assert info["middle_hits"] == 1
+    assert info["middle_misses"] == 2
+
+
 def test_constant_bundle_encodes_and_caches_scalars():
     ctx = SimpleNamespace(
         device="cpu",

@@ -128,7 +128,9 @@ do not fit in memory, allocation fails normally.
 Use `cache_mode="mix"` with `plain_cache_limit_gb=<size>` when you want a
 bounded plaintext cache. Plaintexts are cached until the limit is reached; later
 constants keep only their prepared middle encoding and run stage2 on demand.
-Cached plaintexts do not keep duplicate middle encodings.
+Cached plaintexts usually do not keep duplicate middle encodings, but if the
+same middle encoding is needed by multiple plaintext variants, such as different
+levels, the middle encoding is retained to avoid repeating stage1.
 
 Set `plain_cache_policy="small_first"` to prefer smaller plaintexts when the
 `mix` plaintext cache is full. In `cache_mode="mix"`, evicted plaintexts keep

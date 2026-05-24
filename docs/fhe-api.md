@@ -197,8 +197,9 @@ encoded scalar tensors.
 - `"both"`: cache plaintexts and prepared vector encodings.
 - `"mix"`: cache plaintexts first with a plaintext cache limit; when a plaintext
   does not fit or is evicted, keep its prepared vector encoding as a fallback. A
-  vector that already has a cached plaintext does not also keep its middle
-  encoding.
+  vector with one cached plaintext usually does not also keep its middle
+  encoding, but the middle encoding is retained when multiple plaintext variants
+  share it.
 
 `plain_cache_limit_gb` limits how much plaintext cache `ConstantBundle` may
 keep in `cache_mode="mix"`. `None` means no explicit limit. Plain cache limits
