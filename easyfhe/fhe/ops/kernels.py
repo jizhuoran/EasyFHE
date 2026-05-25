@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import easyfhe as torch
@@ -365,7 +366,7 @@ def cv_mul_by_monomial(
     monomialDeg: int,
     context: Context,
 ) -> None:
-    component = _component_3d(input)
+    component = _component_3d(input).unsqueeze(0)
     torch.mul_by_monomial_(
         component,
         l=l,
@@ -581,6 +582,19 @@ def cv_encode(input, N, cur_limbs, slots, scaling_factor, is_ext, context):
         power_of_roots_shoup=context.power_of_roots_shoup,
         power_of_roots=context.power_of_roots,
     )
+
+
+def cv_pre_encode_stage1(input: Tensor, slots: int, context: Context) -> tuple[Tensor, float]:
+    log_slots = int(math.log2(int(slots)))
+    encoded, max_value = torch.fhe_pre_encode_stage1(
+        input=input,
+        slots=int(slots),
+        M=context.M,
+        rotGroup=context.encode_params_rotGroup,
+        ksiPows=context.encode_params_ksiPows,
+        bitrev=context.encode_bitrev_indices[log_slots],
+    )
+    return encoded, float(max_value.cpu().numpy())
 
 
 def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):

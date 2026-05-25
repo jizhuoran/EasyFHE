@@ -1412,7 +1412,7 @@ def configure_extension_build() -> tuple[
 
     ext_modules: list[Extension] = []
     # packages that we want to install into site-packages and include them in wheels
-    includes = ["easyfhe", "easyfhe.*", "torchgen", "torchgen.*"]
+    includes = ["easyfhe", "easyfhe.*", "torch", "torchgen", "torchgen.*"]
     # exclude folders that they look like Python packages but are not wanted in wheels
     excludes = [
         "tools",

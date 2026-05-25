@@ -6,6 +6,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include "ATen/native/fhe/cpu/CommonOperation.h"
@@ -197,4 +198,5 @@ Tensor encode_cpu(
   }
   return out;
 }
+
 } // namespace at::native

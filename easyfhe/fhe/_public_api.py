@@ -17,6 +17,12 @@ CONTEXT_API = (
 
 CONSTANT_API = (
     "ConstantBundle",
+    "PackedRaw",
+    "UnpackedRaw",
+)
+
+ENCODING_API = (
+    "encode_stage1_packed",
 )
 
 ALIGNMENT_API = (
@@ -74,6 +80,7 @@ SHAPE_API = (
 PUBLIC_API = (
     *CONTEXT_API,
     *CONSTANT_API,
+    *ENCODING_API,
     *ALIGNMENT_API,
     *BASIC_OPS_API,
     *HOISTED_OPS_API,

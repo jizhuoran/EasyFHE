@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 
+import easyfhe as torch
 import easyfhe.fhe as fhe
 from easyfhe.fhe.ops import encoding
 
@@ -32,6 +34,111 @@ def test_encode_stage1_accepts_raw_batch():
     assert middle.slots == 4
     assert middle.values.shape == (2, 4)
     assert middle.encoded_values.shape == (2, 8)
+
+
+def test_encode_stage1_uses_context_encode_tables():
+    ctx = _context()
+    values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
+    from_ring_dim = encoding.encode_stage1(values, slots=8, ring_dim=ctx.N)
+    from_context = encoding.encode_stage1(values, slots=8, cryptoContext=ctx)
+
+    np.testing.assert_allclose(
+        from_context.encoded_values.numpy(),
+        from_ring_dim.encoded_values.numpy(),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    assert from_context.max_encoded_value == pytest.approx(from_ring_dim.max_encoded_value)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA stage1 encode requires CUDA")
+def test_encode_stage1_cuda_matches_cpu_for_single_and_batch():
+    ctx = _context()
+    cuda_ctx = ctx.cuda()
+    single_values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
+    cpu_single = encoding.encode_stage1(single_values, slots=8, cryptoContext=ctx)
+    cuda_single = encoding.encode_stage1(single_values, slots=8, cryptoContext=cuda_ctx)
+
+    np.testing.assert_allclose(
+        cuda_single.encoded_values.cpu().numpy(),
+        cpu_single.encoded_values.numpy(),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert cuda_single.values.shape == cpu_single.values.shape
+    assert cuda_single.slots == cpu_single.slots
+    assert cuda_single.max_encoded_value == pytest.approx(cpu_single.max_encoded_value)
+
+    batch_values = np.asarray(
+        [
+            [1.0, 2.0, 3.0],
+            [-4.0, 0.5, 6.0],
+        ],
+        dtype=np.double,
+    )
+    cpu_batch = encoding.encode_stage1(batch_values, slots=8, cryptoContext=ctx)
+    cuda_batch = encoding.encode_stage1(batch_values, slots=8, cryptoContext=cuda_ctx)
+
+    np.testing.assert_allclose(
+        cuda_batch.encoded_values.cpu().numpy(),
+        cpu_batch.encoded_values.numpy(),
+        rtol=1e-6,
+        atol=1e-6,
+    )
+    assert cuda_batch.values.shape == cpu_batch.values.shape
+    assert cuda_batch.slots == cpu_batch.slots
+    assert cuda_batch.max_encoded_value == pytest.approx(cpu_batch.max_encoded_value)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed stage1 encode requires CUDA")
+def test_encode_stage1_packed_matches_raw_cuda_path():
+    ctx = _context()
+    cuda_ctx = ctx.cuda()
+
+    values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
+    raw = encoding.encode_stage1(values, slots=8, cryptoContext=cuda_ctx)
+
+    packed = torch.zeros(8, dtype=torch.complex128, device="cuda")
+    packed[: values.size] = torch.as_tensor(values, dtype=torch.complex128, device="cuda")
+    prepared = encoding.encode_stage1_packed(packed, cryptoContext=cuda_ctx)
+
+    assert prepared.packed is True
+    assert prepared.values is packed
+    assert prepared.slots == 8
+    assert prepared.encoded_values.shape == raw.encoded_values.shape
+    np.testing.assert_allclose(
+        prepared.encoded_values.cpu().numpy(),
+        raw.encoded_values.cpu().numpy(),
+        rtol=1e-12,
+        atol=1e-12,
+    )
+    assert prepared.max_encoded_value == pytest.approx(raw.max_encoded_value)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed stage1 encode requires CUDA")
+def test_encode_stage1_packed_accepts_batch_and_complex_dtypes():
+    ctx = _context()
+    cuda_ctx = ctx.cuda()
+    values = np.asarray([[1.0, 2.0, 0.5], [-4.0, 0.5, 6.0]], dtype=np.double)
+    raw = encoding.encode_stage1(values, slots=8, cryptoContext=cuda_ctx)
+
+    dtypes = [torch.complex64, torch.complex128]
+    if hasattr(torch, "complex32"):
+        dtypes.insert(0, torch.complex32)
+    for dtype in dtypes:
+        packed = torch.zeros((2, 8), dtype=dtype, device="cuda")
+        packed[:, : values.shape[1]] = torch.as_tensor(values, dtype=dtype, device="cuda")
+        prepared = encoding.encode_stage1_packed(packed, slots=8, cryptoContext=cuda_ctx)
+
+        assert prepared.packed is True
+        assert prepared.values is packed
+        assert prepared.encoded_values.shape == raw.encoded_values.shape
+        np.testing.assert_allclose(
+            prepared.encoded_values.cpu().numpy(),
+            raw.encoded_values.cpu().numpy(),
+            rtol=1e-6,
+            atol=1e-6,
+        )
 
 
 def test_encode_stage2_materializes_single_and_batch_plaintexts():

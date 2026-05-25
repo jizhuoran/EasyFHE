@@ -3,8 +3,9 @@
 from ._public_api import PUBLIC_API as _PUBLIC_API
 from .ciphertext import Cipher, CipherState
 from .client import Client
-from .constants import ConstantBundle
+from .constants import ConstantBundle, PackedRaw, UnpackedRaw
 from .context import Context
+from .ops.encoding import encode_stage1_packed
 from .ops import (
     HOIST_EXT_DOUBLE_HOIST,
     HOIST_EXT_NORMAL,

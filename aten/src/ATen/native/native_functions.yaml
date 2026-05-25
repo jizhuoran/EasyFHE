@@ -3388,10 +3388,10 @@
   dispatch:
     CPU: encrypt_cpu
 
-- func: pre_encode(Tensor input, int slots, int M, Tensor rotGroup, Tensor ksiPows, Tensor bitrev) -> Tensor
+- func: fhe_pre_encode_stage1(Tensor input, int slots, int M, Tensor rotGroup, Tensor ksiPows, Tensor bitrev) -> Tensor[]
   device_check: NoCheck
   dispatch:
-    CPU: pre_encode_cpu
+    CUDA: fhe_pre_encode_stage1_cuda
 
 - func: batched_pairwise_mac(Tensor cipher_bx, Tensor cipher_ax, Tensor plaintext, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_batches, int num_cipher, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck

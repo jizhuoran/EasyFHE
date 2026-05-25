@@ -1,18 +1,48 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
-
 import numpy as np
 import easyfhe as torch
 
-from .ops.encoding import PreparedPlaintext, encode_stage1, encode_stage2
+from .ops.encoding import PreparedPlaintext, encode_stage1, encode_stage1_packed, encode_stage2
 
 
-_CACHE_MODES = {"none", "middle", "plain", "both", "mix"}
+_CACHE_MODES = {"none", "middle", "plain", "both", "mix_of_middle_plain"}
 _PLAIN_CACHE_POLICIES = {"first_fit", "small_first"}
 _MAX_ENCODED_BITS = 61
 _MAX_SCALAR_LOG_STEP = 60
+
+
+class PackedRaw:
+    """Slot-ready tensor source for ConstantBundle."""
+
+    def __init__(self, tensor):
+        if not torch.is_tensor(tensor):
+            raise TypeError(f"PackedRaw tensor must be an easyfhe tensor, got {type(tensor)}")
+        self.tensor = tensor
+
+    def packed_tensor(self, slots, cryptoContext=None):
+        _validate_tensor_slots(self.tensor, slots, "PackedRaw")
+        return self.tensor
+
+
+class UnpackedRaw:
+    """Tensor source that is packed on demand before encoding."""
+
+    def __init__(self, tensor, packer):
+        if not torch.is_tensor(tensor):
+            raise TypeError(f"UnpackedRaw tensor must be an easyfhe tensor, got {type(tensor)}")
+        if not callable(packer):
+            raise ValueError("UnpackedRaw requires a packer")
+        self.tensor = tensor
+        self.packer = packer
+
+    def packed_tensor(self, slots, cryptoContext=None):
+        tensor = self.packer(self.tensor, int(slots), cryptoContext)
+        if not torch.is_tensor(tensor):
+            raise TypeError(f"UnpackedRaw packer must return an easyfhe tensor, got {type(tensor)}")
+        _validate_tensor_slots(tensor, slots, "UnpackedRaw packer output")
+        return tensor
 
 
 class ConstantBundle:
@@ -28,7 +58,7 @@ class ConstantBundle:
         plain_cache_policy="first_fit",
     ):
         self._scalars = dict(scalars or {})
-        self._vectors = dict(vectors or {})
+        self._vectors = _validate_vectors(vectors or {})
         self.cache_mode = _validate_cache_mode(cache_mode)
         self._plain_cache_limit_bytes = _cache_limit_gb_to_bytes(plain_cache_limit_gb)
         _validate_plain_cache_limit_mode(self.cache_mode, self._plain_cache_limit_bytes)
@@ -38,6 +68,7 @@ class ConstantBundle:
         self._plain_cache_bytes_by_key = {}
         self._plain_middle_key_by_plain_key = {}
         self._plain_middle_key_counts = {}
+        self._middle_crypto_context_by_key = {}
         self._plain_cache_bytes = 0
         self._scalar_cache = {}
         self._cache_stats = {
@@ -122,6 +153,7 @@ class ConstantBundle:
         self._plain_cache_bytes_by_key.clear()
         self._plain_middle_key_by_plain_key.clear()
         self._plain_middle_key_counts.clear()
+        self._middle_crypto_context_by_key.clear()
         self._plain_cache_bytes = 0
 
     def cache_info(self):
@@ -175,31 +207,37 @@ class ConstantBundle:
                 )
         return torch.from_numpy(np.asarray(rows, dtype=np.uint64)).to(cryptoContext.device)
 
-    def _encoded_middle(self, name, slots=None, cryptoContext=None, scale=1.0, ring_dim=None, cache_on_miss=True):
+    def _encoded_middle(self, name, slots=None, cryptoContext=None, ring_dim=None, cache_on_miss=True):
         ring_dim = _resolve_ring_dim(cryptoContext, ring_dim)
         if name not in self._vectors:
             raise KeyError(f"constant vector {name!r} is missing")
         vector = self._vectors[name]
         slots = _resolve_slots(vector, slots)
 
-        key = _middle_key(name, slots, ring_dim, scale, _device_key(cryptoContext))
+        key = _middle_key(name, slots, ring_dim, _device_key(cryptoContext))
         if self.cache_mode != "none" and key in self._middle_cache:
             self._cache_stats["middle_hits"] += 1
             return key, self._middle_cache[key]
 
         self._cache_stats["middle_misses"] += 1
-        middle = _prepare_vector(vector, slots, ring_dim, scale, _device_key(cryptoContext))
+        middle = _prepare_vector(
+            vector,
+            slots,
+            ring_dim,
+            _device_key(cryptoContext),
+            cryptoContext=cryptoContext,
+        )
         if cache_on_miss and _cache_middle(self.cache_mode):
             self._middle_cache[key] = middle
         return key, middle
 
-    def plaintext(self, name, level, slots, cryptoContext, scale=1.0, is_ext=False, cache=True):
+    def plaintext(self, name, level, slots, cryptoContext, is_ext=False, cache=True):
         if not isinstance(name, str):
             raise TypeError(f"ConstantBundle.plaintext name must be str, got {type(name)}")
-        return self._plaintext_single(name, level, slots, cryptoContext, scale, is_ext, cache)
+        return self._plaintext_single(name, level, slots, cryptoContext, is_ext, cache)
 
-    def _plaintext_single(self, name, level, slots, cryptoContext, scale, is_ext, cache):
-        plain_key = _plain_key(name, level, slots, cryptoContext, scale, is_ext)
+    def _plaintext_single(self, name, level, slots, cryptoContext, is_ext, cache):
+        plain_key = _plain_key(name, level, slots, cryptoContext, is_ext)
         if cache and self.cache_mode != "none" and plain_key in self._plain_cache:
             self._cache_stats["plain_hits"] += 1
             return self._plain_cache[plain_key]
@@ -209,15 +247,14 @@ class ConstantBundle:
             name,
             slots,
             cryptoContext,
-            scale,
-            cache_on_miss=self.cache_mode in {"middle", "both", "mix"},
+            cache_on_miss=self.cache_mode in {"middle", "both", "mix_of_middle_plain"},
         )
         had_sibling_plain = self._has_plain_for_middle(middle_key)
         plaintext = encode_stage2(middle, level, slots, is_ext, cryptoContext)
-        cached_plain = self._maybe_cache_plain(plain_key, middle_key, plaintext, cache)
+        cached_plain = self._maybe_cache_plain(plain_key, middle_key, plaintext, cache, cryptoContext)
         if cache and self.cache_mode == "both":
             self._middle_cache.setdefault(middle_key, middle)
-        elif cache and self.cache_mode == "mix":
+        elif cache and self.cache_mode == "mix_of_middle_plain":
             if cached_plain and not had_sibling_plain:
                 self._middle_cache.pop(middle_key, None)
             elif cached_plain:
@@ -226,11 +263,11 @@ class ConstantBundle:
                 self._middle_cache.setdefault(middle_key, middle)
         return plaintext
 
-    def _maybe_cache_plain(self, plain_key, middle_key, plaintext, cache):
+    def _maybe_cache_plain(self, plain_key, middle_key, plaintext, cache, cryptoContext):
         if not (cache and _cache_plain(self.cache_mode)):
             return False
         plain_bytes = _object_nbytes(plaintext)
-        if self.cache_mode == "mix" and self._plain_cache_limit_bytes is not None:
+        if self.cache_mode == "mix_of_middle_plain" and self._plain_cache_limit_bytes is not None:
             if plain_bytes > self._plain_cache_limit_bytes:
                 self._cache_stats["plain_cache_skips"] += 1
                 return False
@@ -238,7 +275,7 @@ class ConstantBundle:
                 if self.plain_cache_policy != "small_first" or not self._evict_for_smaller_plain(plain_bytes):
                     self._cache_stats["plain_cache_skips"] += 1
                     return False
-        self._store_plain(plain_key, middle_key, plaintext, plain_bytes)
+        self._store_plain(plain_key, middle_key, plaintext, plain_bytes, cryptoContext)
         return True
 
     def _evict_for_smaller_plain(self, plain_bytes):
@@ -250,11 +287,12 @@ class ConstantBundle:
         self._evict_plain(evict_key)
         return True
 
-    def _store_plain(self, plain_key, middle_key, plaintext, plain_bytes):
+    def _store_plain(self, plain_key, middle_key, plaintext, plain_bytes, cryptoContext):
         self._plain_cache[plain_key] = plaintext
         self._plain_cache_bytes_by_key[plain_key] = plain_bytes
         self._plain_middle_key_by_plain_key[plain_key] = middle_key
         self._plain_middle_key_counts[middle_key] = self._plain_middle_key_counts.get(middle_key, 0) + 1
+        self._middle_crypto_context_by_key[middle_key] = cryptoContext
         self._plain_cache_bytes += plain_bytes
 
     def _evict_plain(self, plain_key):
@@ -263,23 +301,31 @@ class ConstantBundle:
         count = self._plain_middle_key_counts[middle_key] - 1
         if count:
             self._plain_middle_key_counts[middle_key] = count
+            restore_context = self._middle_crypto_context_by_key.get(middle_key)
         else:
             del self._plain_middle_key_counts[middle_key]
+            restore_context = self._middle_crypto_context_by_key.pop(middle_key, None)
         del self._plain_cache[plain_key]
         self._plain_cache_bytes -= plain_bytes
         self._cache_stats["plain_cache_evictions"] += 1
         if _cache_middle(self.cache_mode) and not self._has_plain_for_middle(middle_key):
-            self._restore_middle(middle_key)
+            self._restore_middle(middle_key, restore_context)
 
     def _has_plain_for_middle(self, middle_key):
         return self._plain_middle_key_counts.get(middle_key, 0) > 0
 
-    def _restore_middle(self, middle_key):
+    def _restore_middle(self, middle_key, cryptoContext=None):
         if middle_key in self._middle_cache:
             return
-        name, slots, scale, ring_dim, device = middle_key
+        name, slots, ring_dim, device = middle_key
         vector = self._vectors[name]
-        self._middle_cache[middle_key] = _prepare_vector(vector, slots, ring_dim, scale, device)
+        self._middle_cache[middle_key] = _prepare_vector(
+            vector,
+            slots,
+            ring_dim,
+            device,
+            cryptoContext=cryptoContext,
+        )
 
 
 def _validate_cache_mode(cache_mode):
@@ -288,9 +334,19 @@ def _validate_cache_mode(cache_mode):
     return cache_mode
 
 
+def _validate_vectors(vectors):
+    result = dict(vectors)
+    for name, vector in result.items():
+        if not isinstance(vector, (PackedRaw, UnpackedRaw, PreparedPlaintext)):
+            raise TypeError(
+                f"ConstantBundle vector {name!r} must be PackedRaw, UnpackedRaw, or PreparedPlaintext, got {type(vector)}"
+            )
+    return result
+
+
 def _validate_plain_cache_limit_mode(cache_mode, limit_bytes):
-    if limit_bytes is not None and cache_mode != "mix":
-        raise ValueError("plain_cache_limit is only supported with cache_mode='mix'")
+    if limit_bytes is not None and cache_mode != "mix_of_middle_plain":
+        raise ValueError("plain_cache_limit is only supported with cache_mode='mix_of_middle_plain'")
 
 
 def _validate_plain_cache_policy(policy):
@@ -321,11 +377,11 @@ def _cache_remaining_bytes(limit_bytes, used_bytes):
 
 
 def _cache_middle(cache_mode):
-    return cache_mode in {"middle", "both", "mix"}
+    return cache_mode in {"middle", "both", "mix_of_middle_plain"}
 
 
 def _cache_plain(cache_mode):
-    return cache_mode in {"plain", "both", "mix"}
+    return cache_mode in {"plain", "both", "mix_of_middle_plain"}
 
 
 def _cache_nbytes(cache):
@@ -365,12 +421,6 @@ def _context_key(cryptoContext):
     )
 
 
-def _scale_key(scale):
-    if isinstance(scale, (tuple, list)):
-        return tuple(float(value) for value in scale)
-    return float(scale)
-
-
 def _device_key(cryptoContext):
     if cryptoContext is None:
         return None
@@ -378,16 +428,15 @@ def _device_key(cryptoContext):
     return None if device is None else str(device)
 
 
-def _middle_key(name, slots, ring_dim, scale, device):
-    return (name, slots, _scale_key(scale), ring_dim, device)
+def _middle_key(name, slots, ring_dim, device):
+    return (name, slots, ring_dim, device)
 
 
-def _plain_key(name, level, slots, cryptoContext, scale, is_ext):
+def _plain_key(name, level, slots, cryptoContext, is_ext):
     return (
         name,
         level,
         slots,
-        _scale_key(scale),
         is_ext,
         _context_key(cryptoContext),
     )
@@ -469,86 +518,77 @@ def _resolve_slots(vector, slots):
         return int(slots)
     if isinstance(vector, PreparedPlaintext):
         return int(vector.slots)
-    rows = _vector_rows(vector)
-    if rows is not None:
-        return max(int(row.size) for row in rows)
-    return int(_raw_values(vector).size)
+    if isinstance(vector, PackedRaw):
+        return _tensor_vector_slots(vector.tensor)
+    if isinstance(vector, UnpackedRaw):
+        raise ValueError("UnpackedRaw vectors require explicit slots")
+    raise TypeError("ConstantBundle vectors must be PackedRaw, UnpackedRaw, or PreparedPlaintext")
 
 
-def _prepare_vector(vector, slots, ring_dim, scale, device=None):
+def _prepare_vector(vector, slots, ring_dim, device=None, cryptoContext=None):
     if isinstance(vector, PreparedPlaintext):
         if int(vector.slots) != int(slots):
             raise ValueError(f"Prepared vector slots [{vector.slots}] do not match requested slots [{slots}]")
-        if scale == 1.0:
-            return vector
-        return PreparedPlaintext(
-            vector.values * scale,
-            vector.slots,
-            vector.encoded_values * scale,
-            vector.max_encoded_value * abs(scale),
+        return vector
+
+    if isinstance(vector, (PackedRaw, UnpackedRaw)):
+        return _prepare_tensor_vector(vector.packed_tensor(slots, cryptoContext), slots, ring_dim, device, cryptoContext)
+
+    raise TypeError("ConstantBundle vectors must be PackedRaw, UnpackedRaw, or PreparedPlaintext")
+
+
+def _tensor_vector_slots(vector):
+    _validate_tensor_rank(vector)
+    return int(vector.shape[-1])
+
+
+def _validate_tensor_rank(vector):
+    if vector.dim() not in (1, 2):
+        raise ValueError("raw constant tensors must be rank-1 or rank-2")
+
+
+def _validate_tensor_slots(vector, slots, source_name):
+    _validate_tensor_rank(vector)
+    actual_slots = int(vector.shape[-1])
+    if actual_slots != int(slots):
+        raise ValueError(
+            f"{source_name} tensor size [{actual_slots}] must match slots [{int(slots)}]; "
+            "pack, pad, or truncate before constructing the bundle"
         )
 
-    if isinstance(vector, Mapping):
-        raise TypeError("ConstantBundle vector values must be arrays or PreparedPlaintext, not mappings")
-    rows = _vector_rows(vector)
-    if rows is not None:
-        scales = _normalize_scales(scale, len(rows))
-        values = np.stack(
-            [_pad_and_scale_values(row, slots, item_scale) for row, item_scale in zip(rows, scales)],
-            axis=0,
-        )
-    else:
-        values = _pad_and_scale_values(_raw_values(vector), slots, scale)
-    return encode_stage1(values, slots, ring_dim, device=device)
 
-
-def _normalize_scales(scale, count):
-    if isinstance(scale, (tuple, list)):
-        if len(scale) != count:
-            raise ValueError(f"scale length [{len(scale)}] does not match batch size [{count}]")
-        return tuple(float(value) for value in scale)
-    return tuple(float(scale) for _ in range(count))
-
-
-def _vector_rows(vector):
-    if isinstance(vector, (PreparedPlaintext, Mapping)):
-        return None
-    try:
-        values = np.asarray(vector)
-    except ValueError as exc:
-        raise TypeError("ConstantBundle vector batches must be rectangular numeric arrays") from exc
-    if values.dtype == object:
-        raise TypeError("ConstantBundle vector batches must be rectangular numeric arrays")
-    if values.ndim < 2:
-        return None
-    values = values.reshape(values.shape[0], -1)
-    if np.iscomplexobj(values):
-        return [np.asarray(row, dtype=np.complex128).reshape(-1) for row in values]
-    return [np.asarray(row, dtype=np.double).reshape(-1) for row in values]
-
-
-def _raw_values(vector):
-    if isinstance(vector, PreparedPlaintext):
-        vector = vector.values
-    try:
-        values = np.asarray(vector)
-    except ValueError as exc:
-        raise TypeError("ConstantBundle vector values must be numeric arrays") from exc
-    if values.dtype == object:
-        raise TypeError("ConstantBundle vector values must be numeric arrays")
-    values = values.reshape(-1)
-    if np.iscomplexobj(values):
-        return np.asarray(values, dtype=np.complex128).reshape(-1)
-    return np.asarray(values, dtype=np.double).reshape(-1)
-
-
-def _pad_and_scale_values(values, slots, scale=1.0):
-    values = _raw_values(values)
+def _prepare_tensor_vector(vector, slots, ring_dim, device=None, cryptoContext=None):
     slots = int(slots)
-    if values.size < slots:
-        values = np.pad(values, (0, slots - values.size))
-    elif values.size > slots:
-        values = values[:slots]
-    if scale != 1.0:
-        values = values * scale
-    return values
+    actual_slots = _tensor_vector_slots(vector)
+    if actual_slots != slots:
+        raise ValueError(
+            f"ConstantBundle tensor vector size [{actual_slots}] must match slots [{slots}]; "
+            "pad or truncate before constructing the bundle"
+        )
+    if vector.is_cuda:
+        if cryptoContext is None:
+            raise ValueError("ConstantBundle CUDA tensor vectors require cryptoContext")
+        stage1_input = vector if _is_complex_tensor(vector) else vector.to(dtype=torch.complex128)
+        return encode_stage1_packed(stage1_input, slots=slots, cryptoContext=cryptoContext)
+
+    values = _tensor_values(vector)
+    return encode_stage1(values, slots, ring_dim, device=device, cryptoContext=cryptoContext)
+
+
+def _is_complex_tensor(vector):
+    return vector.dtype in tuple(
+        dtype
+        for dtype in (
+            getattr(torch, "complex32", None),
+            torch.complex64,
+            torch.complex128,
+        )
+        if dtype is not None
+    )
+
+
+def _tensor_values(vector):
+    values = np.asarray(vector)
+    if np.iscomplexobj(values):
+        return np.asarray(values, dtype=np.complex128)
+    return np.asarray(values, dtype=np.double)

@@ -51,7 +51,6 @@ NATIVE_FHE_OPS = {
     "mul_by_monomial_",
     "encode",
     "encrypt",
-    "pre_encode",
     "batched_pairwise_mac",
     "grouped_scalar_weighted_acc",
 }

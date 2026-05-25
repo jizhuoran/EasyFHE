@@ -4,8 +4,9 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+import easyfhe as torch
 
-from easyfhe.fhe.constants import ConstantBundle
+from easyfhe.fhe.constants import ConstantBundle, PackedRaw
 from easyfhe.fhe.ops.encoding import PreparedPlaintext
 from .plan import compile_flat_ps_plan, get_bootstrap_approx_plan
 from .precompute import BootstrapPrecompute
@@ -201,7 +202,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         double_angle_scalar_names=double_angle_scalar_names,
         required_rotations=tuple(required_rotations),
     )
-    constants = ConstantBundle(scalars=scalars, vectors=vectors)
+    constants = ConstantBundle(scalars=scalars, vectors=_wrap_vectors(vectors))
     return constants, bootstrap_plan
 
 
@@ -297,6 +298,15 @@ def _raw_vector(value):
     if isinstance(value, PreparedPlaintext):
         value = value.values
     return np.asarray(value, dtype=np.complex128).reshape(-1)
+
+
+def _wrap_vectors(vectors):
+    return {
+        name: vector
+        if isinstance(vector, PreparedPlaintext)
+        else PackedRaw(torch.from_numpy(np.asarray(vector, dtype=np.complex128)))
+        for name, vector in vectors.items()
+    }
 
 
 def _name_table(plan):

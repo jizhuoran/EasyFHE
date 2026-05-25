@@ -56,7 +56,7 @@ class Client:
         if not isinstance(x, np.ndarray):
             x = np.asarray(x)
         ptx = encode_stage2(
-            encode_stage1(x, slots, context.N, device=context.device),
+            encode_stage1(x, slots, cryptoContext=context),
             level=level,
             slots=slots,
             is_ext=False,

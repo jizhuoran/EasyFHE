@@ -12,7 +12,8 @@ pytestmark = pytest.mark.skipif(
 
 
 def _plaintext(values, context, *, level, slots, is_ext=False):
-    return fhe.ConstantBundle(vectors={"pt": values}, cache_mode="none").plaintext(
+    vector = fhe.PackedRaw(torch.from_numpy(np.asarray(values)))
+    return fhe.ConstantBundle(vectors={"pt": vector}, cache_mode="none").plaintext(
         "pt",
         level,
         slots,

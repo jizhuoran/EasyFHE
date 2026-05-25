@@ -147,9 +147,11 @@ class Context:
         self._inverse_precompute_auto_cuda_cache = {}
 
         # Encode tables.
-        self.encode_params_ksiPows = material.encode_params_ksiPows
-        self.encode_params_rotGroup = material.encode_params_rotGroup
-        self.encode_bitrev_indices = material.encode_bitrev_indices
+        self.encode_params_ksiPows = material.encode_params_ksiPows.to(device)
+        self.encode_params_rotGroup = material.encode_params_rotGroup.to(device)
+        self.encode_bitrev_indices = {
+            key: value.to(device) for key, value in material.encode_bitrev_indices.items()
+        }
             
     def construct_copy(self, device):
         return Context(

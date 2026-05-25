@@ -4,10 +4,10 @@
 #include <ATen/core/TensorBody.h>
 #include <ATen/core/interned_strings.h>
 #include <ATen/cuda/CUDAContext.h>
-#include <ATen/native/cuda/thread_constants.h>
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <cmath>
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 #include "ATen/native/fhe/cuda/Utils.cuh"
 

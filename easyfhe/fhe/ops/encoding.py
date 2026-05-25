@@ -12,22 +12,28 @@ ZERO_THRESHOLD = 1e-20
 
 
 class PreparedPlaintext:
-    def __init__(self, values, slots, encoded_values, max_encoded_value):
+    def __init__(self, values, slots, encoded_values, max_encoded_value, packed=False):
         self.values = values
         self.slots = slots
         self.encoded_values = encoded_values
         self.max_encoded_value = max_encoded_value
+        self.packed = bool(packed)
 
     def deep_copy(self):
+        if torch.is_tensor(self.values):
+            values = self.values.clone()
+        else:
+            values = self.values.copy()
         if torch.is_tensor(self.encoded_values):
             encoded_values = self.encoded_values.clone()
         else:
             encoded_values = np.array(self.encoded_values, copy=True)
         return PreparedPlaintext(
-            self.values.copy(),
+            values,
             self.slots,
             encoded_values,
             self.max_encoded_value,
+            packed=self.packed,
         )
 
 
@@ -72,43 +78,87 @@ def _bit_reverse_permutation(size):
     return indices
 
 
-def encode_stage1(raw_values, slots, ring_dim, device=None):
+def encode_stage1(raw_values, slots, ring_dim=None, device=None, cryptoContext=None):
     """Encode raw slot values into a contiguous middle representation."""
 
-    if ring_dim is None:
-        raise ValueError("encode_stage1 requires an explicit ring_dim")
     slots = int(slots)
-    ring_dim = int(ring_dim)
-    cycl_order = ring_dim << 1
-    rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
+    params = _resolve_stage1_params(slots, ring_dim, device, cryptoContext)
+    device = params["device"]
 
-    rows, is_batch = _raw_rows(raw_values)
-    values = []
-    encoded_values = []
-    max_encoded_value = 0.0
-    for row in rows:
-        padded = _pad_1d(row, slots, 0.0)
-        encoded = _fft_special_inv(
-            _pad_1d(_as_complex_array(row), slots, complex(0.0, 0.0)),
-            cycl_order,
-            rot_group,
-            ksi_pows,
+    if _use_torch_stage1(device):
+        output_values, stage1_values, is_batch = _raw_cuda_matrices(raw_values, slots)
+        encoded_values, max_encoded_value = _native_pre_encode_stage1_matrix(
+            stage1_values,
+            slots,
+            params["cryptoContext"],
+            device,
         )
-        encoded = np.ascontiguousarray(encoded, dtype=np.complex128).view(np.float64)
-        values.append(padded)
-        encoded_values.append(encoded)
-        if encoded.size:
-            max_encoded_value = max(max_encoded_value, float(np.max(np.abs(encoded))))
+    else:
+        rows, is_batch = _raw_rows(raw_values)
+        values = []
+        for row in rows:
+            padded = _pad_1d(row, slots, 0.0)
+            values.append(padded)
+
+        complex_rows = [
+            _pad_1d(_as_complex_array(row), slots, complex(0.0, 0.0))
+            for row in rows
+        ]
+        encoded_values = []
+        max_encoded_value = 0.0
+        for row in complex_rows:
+            encoded = _fft_special_inv(
+                row,
+                params["cycl_order"],
+                params["rot_group_np"],
+                params["ksi_pows_np"],
+                params["bitrev_np"],
+            )
+            encoded = np.ascontiguousarray(encoded, dtype=np.complex128).view(np.float64)
+            encoded_values.append(encoded)
+            if encoded.size:
+                max_encoded_value = max(max_encoded_value, float(np.max(np.abs(encoded))))
+        encoded_values = _as_encoded_tensor(np.stack(encoded_values, axis=0), device)
+        output_values = np.stack(values, axis=0)
 
     if is_batch:
-        encoded_values = _as_encoded_tensor(np.stack(encoded_values, axis=0), device)
-        return PreparedPlaintext(
-            np.stack(values, axis=0),
-            slots,
-            encoded_values,
-            max_encoded_value,
-        )
-    return PreparedPlaintext(values[0], slots, _as_encoded_tensor(encoded_values[0], device), max_encoded_value)
+        return PreparedPlaintext(output_values, slots, encoded_values, max_encoded_value)
+    return PreparedPlaintext(output_values[0], slots, encoded_values[0], max_encoded_value)
+
+
+def encode_stage1_packed(packed_values, slots=None, cryptoContext=None):
+    """Encode CUDA-packed complex slot values without Python-side padding."""
+
+    if cryptoContext is None:
+        raise ValueError("encode_stage1_packed requires cryptoContext")
+    if not torch.is_tensor(packed_values):
+        raise TypeError("encode_stage1_packed expects a CUDA tensor")
+    if not packed_values.is_cuda:
+        raise ValueError("encode_stage1_packed expects a CUDA tensor")
+    if packed_values.dim() not in (1, 2):
+        raise ValueError("encode_stage1_packed expects a rank-1 or rank-2 tensor")
+    if not _is_complex_tensor(packed_values):
+        raise TypeError("encode_stage1_packed expects complex32, complex64, or complex128 input")
+
+    inferred_slots = int(packed_values.shape[-1])
+    slots = inferred_slots if slots is None else int(slots)
+    if slots != inferred_slots:
+        raise ValueError(f"Packed values last dimension [{inferred_slots}] does not match slots [{slots}]")
+
+    encoded_values, max_encoded_value = F.cv_pre_encode_stage1(
+        packed_values,
+        slots,
+        cryptoContext,
+    )
+    if packed_values.dim() == 1:
+        encoded_values = encoded_values[0]
+    return PreparedPlaintext(
+        packed_values,
+        slots,
+        encoded_values,
+        max_encoded_value,
+        packed=True,
+    )
 
 
 def encode_stage2(middle, level, slots, is_ext, cryptoContext):
@@ -149,6 +199,153 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
 
 def _as_encoded_tensor(encoded_values, device):
     return torch.as_tensor(encoded_values, dtype=torch.float64, device=device or "cpu")
+
+
+def _resolve_stage1_params(slots, ring_dim, device, cryptoContext):
+    log_slots = int(math.log2(int(slots))) if int(slots) > 0 else 0
+    if cryptoContext is not None:
+        ring_dim = int(cryptoContext.N if ring_dim is None else ring_dim)
+        device = getattr(cryptoContext, "device", device)
+        if not _has_context_encode_tables(cryptoContext):
+            rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
+            return {
+                "device": device,
+                "cycl_order": ring_dim << 1,
+                "rot_group_np": rot_group,
+                "ksi_pows_np": ksi_pows,
+                "bitrev_np": None,
+                "cryptoContext": None,
+            }
+        if ring_dim != int(cryptoContext.N):
+            raise ValueError(
+                f"encode_stage1 ring_dim [{ring_dim}] does not match context N [{cryptoContext.N}]"
+            )
+        return {
+            "device": device,
+            "cycl_order": int(cryptoContext.M),
+            "rot_group_np": _table_numpy(cryptoContext.encode_params_rotGroup),
+            "ksi_pows_np": _table_numpy(cryptoContext.encode_params_ksiPows),
+            "bitrev_np": _bitrev_numpy_from_context(cryptoContext, log_slots),
+            "cryptoContext": cryptoContext,
+        }
+
+    if ring_dim is None:
+        raise ValueError("encode_stage1 requires ring_dim or cryptoContext")
+    if _use_torch_stage1(device):
+        raise ValueError("CUDA encode_stage1 requires cryptoContext")
+    ring_dim = int(ring_dim)
+    rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
+    return {
+        "device": device,
+        "cycl_order": ring_dim << 1,
+        "rot_group_np": rot_group,
+        "ksi_pows_np": ksi_pows,
+        "bitrev_np": None,
+        "cryptoContext": None,
+    }
+
+
+def _has_context_encode_tables(cryptoContext):
+    return all(
+        hasattr(cryptoContext, name)
+        for name in (
+            "M",
+            "encode_params_rotGroup",
+            "encode_params_ksiPows",
+            "encode_bitrev_indices",
+        )
+    )
+
+
+def _table_numpy(value):
+    if torch.is_tensor(value):
+        return value.cpu().numpy()
+    return np.asarray(value)
+
+
+def _bitrev_numpy_from_context(cryptoContext, log_slots):
+    indices = cryptoContext.encode_bitrev_indices.get(log_slots)
+    if indices is None:
+        return None
+    return _table_numpy(indices).astype(np.intp, copy=False)
+
+
+def _use_torch_stage1(device):
+    return device is not None and str(device) != "cpu"
+
+
+def _is_complex_tensor(value):
+    return value.dtype in tuple(
+        dtype
+        for dtype in (
+            getattr(torch, "complex32", None),
+            torch.complex64,
+            torch.complex128,
+        )
+        if dtype is not None
+    )
+
+
+def _native_pre_encode_stage1_matrix(values, slots, cryptoContext, device):
+    values = torch.as_tensor(
+        values,
+        device=device,
+    )
+    return F.cv_pre_encode_stage1(values, slots, cryptoContext)
+
+
+def _raw_matrix(raw_values, slots):
+    if isinstance(raw_values, PreparedPlaintext):
+        raise TypeError("encode_stage1 expects raw values, not PreparedPlaintext")
+    if isinstance(raw_values, (list, tuple)) and not raw_values:
+        raise ValueError("encode_stage1 requires at least one row")
+
+    values = np.asarray(raw_values)
+    if values.dtype == object:
+        rows, is_batch = _raw_rows(raw_values)
+        return np.stack([_pad_1d(row, slots, 0.0) for row in rows], axis=0), is_batch
+
+    is_batch = values.ndim >= 2
+    if is_batch:
+        matrix = values.reshape(values.shape[0], -1)
+    else:
+        matrix = values.reshape(1, -1)
+
+    if slots < matrix.shape[1]:
+        raise ValueError(f"The number of slots [{slots}] is less than the size of data [{matrix.shape[1]}]")
+
+    dtype = np.complex128 if np.iscomplexobj(matrix) else np.double
+    output = np.zeros((matrix.shape[0], slots), dtype=dtype)
+    output[:, : matrix.shape[1]] = matrix.astype(dtype, copy=False)
+    return output, is_batch
+
+
+def _raw_cuda_matrices(raw_values, slots):
+    if isinstance(raw_values, PreparedPlaintext):
+        raise TypeError("encode_stage1 expects raw values, not PreparedPlaintext")
+    if isinstance(raw_values, (list, tuple)) and not raw_values:
+        raise ValueError("encode_stage1 requires at least one row")
+
+    values = np.asarray(raw_values)
+    if values.dtype == object:
+        output, is_batch = _raw_matrix(raw_values, slots)
+        return output, np.ascontiguousarray(output, dtype=np.complex128), is_batch
+
+    is_batch = values.ndim >= 2
+    if is_batch:
+        matrix = values.reshape(values.shape[0], -1)
+    else:
+        matrix = values.reshape(1, -1)
+
+    if slots < matrix.shape[1]:
+        raise ValueError(f"The number of slots [{slots}] is less than the size of data [{matrix.shape[1]}]")
+
+    output_dtype = np.complex128 if np.iscomplexobj(matrix) else np.double
+    output = np.zeros((matrix.shape[0], slots), dtype=output_dtype)
+    stage1 = np.zeros((matrix.shape[0], slots), dtype=np.complex128)
+    output[:, : matrix.shape[1]] = matrix.astype(output_dtype, copy=False)
+    stage1[:, : matrix.shape[1]] = matrix.astype(np.complex128, copy=False)
+    return output, stage1, is_batch
 
 
 def _raw_rows(raw_values):
@@ -194,7 +391,7 @@ def _pad_1d(values, target_size, fill_value):
     )
 
 
-def _fft_special_inv(values, cycl_order, rot_group, ksi_pows):
+def _fft_special_inv(values, cycl_order, rot_group, ksi_pows, bitrev_indices=None):
     values_size = len(values)
     values = np.asarray(values, dtype=np.complex128).copy()
 
@@ -215,7 +412,9 @@ def _fft_special_inv(values, cycl_order, rot_group, ksi_pows):
         blocks[:, len_h:] = (left - right) * roots
         len_size >>= 1
 
-    values = values[_bit_reverse_permutation(values_size)]
+    if bitrev_indices is None:
+        bitrev_indices = _bit_reverse_permutation(values_size)
+    values = values[bitrev_indices]
     return values / values_size
 
 

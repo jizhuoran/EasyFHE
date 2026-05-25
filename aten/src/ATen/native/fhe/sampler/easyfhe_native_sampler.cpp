@@ -107,12 +107,17 @@ uint32_t NativeThreadCount() {
 }
 
 template <class Function>
-void ParallelFor(size_t count, Function fn) {
+void SequentialFor(size_t count, Function fn) {
+    for (size_t i = 0; i < count; ++i) {
+        fn(i);
+    }
+}
+
+template <class Function>
+void ParallelForKeys(size_t count, Function fn) {
     const uint32_t threadCount = std::min<uint32_t>(NativeThreadCount(), static_cast<uint32_t>(count));
     if (threadCount <= 1 || count <= 1) {
-        for (size_t i = 0; i < count; ++i) {
-            fn(i);
-        }
+        SequentialFor(count, fn);
         return;
     }
 
@@ -480,7 +485,7 @@ at::Tensor TrimmedSwitchKeyToTensor(const std::vector<UIntMatrix>& matrices,
         {static_cast<int64_t>(beta), static_cast<int64_t>(limb + pLimbs), static_cast<int64_t>(ringDim)}, at::kUInt64);
     auto* outPtr = out.data_ptr<uint64_t>();
 
-    ParallelFor(static_cast<size_t>(beta) * (limb + pLimbs), [&](size_t flatRow) {
+    SequentialFor(static_cast<size_t>(beta) * (limb + pLimbs), [&](size_t flatRow) {
         const uint32_t part = static_cast<uint32_t>(flatRow / (limb + pLimbs));
         const uint32_t row = static_cast<uint32_t>(flatRow % (limb + pLimbs));
         const uint32_t sourceRow = row < limb ? row : qLimbs + (row - limb);
@@ -1247,7 +1252,7 @@ UIntMatrix MatrixFromSignedCoeffVectorWithTables(const std::vector<uint64_t>& mo
     }
 
     UIntMatrix result(moduli.size(), std::vector<uint64_t>(ringDim));
-    ParallelFor(moduli.size(), [&](size_t limb) {
+    SequentialFor(moduli.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         auto& coeffs = result[limb];
         for (size_t coeffIndex = 0; coeffIndex < values.size(); ++coeffIndex) {
@@ -1322,7 +1327,7 @@ UIntMatrix MatrixEvalMul(const UIntMatrix& lhs, const UIntMatrix& rhs, const std
     if (result.size() != moduli.size()) {
         throw std::runtime_error("MatrixEvalMul modulus count mismatch");
     }
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         for (size_t coeff = 0; coeff < result[limb].size(); ++coeff) {
             result[limb][coeff] = ModMul(result[limb][coeff], rhs[limb][coeff], moduli[limb]);
         }
@@ -1335,7 +1340,7 @@ UIntMatrix MatrixShoupPrecon(const UIntMatrix& value, const std::vector<uint64_t
         throw std::runtime_error("MatrixShoupPrecon modulus count mismatch");
     }
     UIntMatrix result = value;
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         for (auto& coeff : result[limb]) {
             coeff = ShoupPrecon(coeff, modulus);
@@ -1354,7 +1359,7 @@ UIntMatrix MatrixEvalMulPrecon(const UIntMatrix& lhs,
     if (result.size() != moduli.size()) {
         throw std::runtime_error("MatrixEvalMulPrecon modulus count mismatch");
     }
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         for (size_t coeff = 0; coeff < result[limb].size(); ++coeff) {
             result[limb][coeff] =
@@ -1386,7 +1391,7 @@ UIntMatrix MatrixEvalScalePrecon(const UIntMatrix& value,
     if (result.size() != moduli.size() || result.size() != scalarPrecon.size()) {
         throw std::runtime_error("MatrixEvalScalePrecon modulus count mismatch");
     }
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         const uint64_t scalarMod = scalar % modulus;
         const uint64_t scalarShoup = scalarPrecon[limb];
@@ -1411,7 +1416,7 @@ UIntMatrix MatrixEvalScaledSubMul(const UIntMatrix& e,
     if (result.size() != moduli.size()) {
         throw std::runtime_error("MatrixEvalScaledSubMul modulus count mismatch");
     }
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         const uint64_t scalarMod = scalar % modulus;
         for (size_t coeff = 0; coeff < result[limb].size(); ++coeff) {
@@ -1436,7 +1441,7 @@ UIntMatrix MatrixEvalScaledSubMulPrecon(const UIntMatrix& e,
     if (result.size() != moduli.size() || result.size() != scalarPrecon.size()) {
         throw std::runtime_error("MatrixEvalScaledSubMulPrecon modulus count mismatch");
     }
-    ParallelFor(result.size(), [&](size_t limb) {
+    SequentialFor(result.size(), [&](size_t limb) {
         const uint64_t modulus = moduli[limb];
         const uint64_t scalarMod = scalar % modulus;
         const uint64_t scalarShoup = scalarPrecon[limb];
@@ -2163,7 +2168,7 @@ ManualSwitchKeyResult ManualHybridKeySwitchGen(const NativeRuntimeConfig& runtim
     };
 
     if (sampling.IsParallelDeterministic()) {
-        ParallelFor(nativeParams.numPartQ, [&](size_t partIndex) {
+        SequentialFor(nativeParams.numPartQ, [&](size_t partIndex) {
             auto partPrng = sampling.SwitchPartPrng(switchLabel, switchDomain, partIndex);
             generatePart(static_cast<uint32_t>(partIndex), partPrng);
         });
@@ -2228,7 +2233,7 @@ const RotationRandomRows& GetOrCreateRotationRandomRows(RotationRandomCache& cac
     std::vector<SwitchPartProfile> partProfiles(parts);
     LocalDiscreteGaussian dgg(1.0);
 
-    ParallelFor(parts, [&](size_t partIndex) {
+    SequentialFor(parts, [&](size_t partIndex) {
         const uint32_t part = static_cast<uint32_t>(partIndex);
         auto partPrng = sampling.SwitchPartPrng("rotation-reuse", shapeId, part);
         SwitchPartProfile localProfile;
@@ -2323,7 +2328,7 @@ RotationKeyTensorResult ManualTrimmedRotationSwitchKeyGenToTensorResult(const Na
         cachedRandom = &GetOrCreateRotationRandomRows(*randomCache, nativeParams, sampling, limb, beta, cachedSourceRows);
     }
 
-    ParallelFor(beta, [&](size_t partIndex) {
+    SequentialFor(beta, [&](size_t partIndex) {
         const uint32_t part = static_cast<uint32_t>(partIndex);
         auto partPrng = sampling.SwitchPartPrng("rotation", autoIndex, part);
         SwitchPartProfile localProfile;
@@ -2559,7 +2564,7 @@ RotationKeyTensorResult ManualFullRotationSwitchKeyGenToTensorResult(const Nativ
     };
 
     if (sampling.IsParallelDeterministic()) {
-        ParallelFor(nativeParams.numPartQ, [&](size_t partIndex) {
+        SequentialFor(nativeParams.numPartQ, [&](size_t partIndex) {
             auto partPrng = sampling.SwitchPartPrng("rotation", autoIndex, partIndex);
             generatePart(static_cast<uint32_t>(partIndex), partPrng);
         });
@@ -2683,8 +2688,13 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
         nativeParams.moduliQP, nativeParams.rootTablesQP, nativeParams.rootShoupTablesQP, nativeParams.ringDim, key.skCoeff);
     const UIntMatrix sExtShoup = MatrixShoupPrecon(sExt, nativeParams.moduliQP);
 
+    struct RotationKeyTask {
+        uint32_t autoIndex = 0;
+        uint32_t rotationIndex = 0;
+    };
+
     std::set<uint32_t> generatedAutoIndices;
-    std::vector<RotationKeyTensorResult> keyList;
+    std::vector<RotationKeyTask> tasks;
     for (const auto& group : rotationIndexGroups) {
         std::set<uint32_t> groupAutoIndices;
         std::map<uint32_t, uint32_t> rotationIndexByAutoIndex;
@@ -2701,6 +2711,14 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
             if (!forceRegenerate) {
                 generatedAutoIndices.insert(autoIndex);
             }
+            tasks.push_back(RotationKeyTask{autoIndex, rotationIndexByAutoIndex.at(autoIndex)});
+        }
+    }
+
+    std::vector<RotationKeyTensorResult> keyList(tasks.size());
+    auto generateTask = [&](size_t taskIndex, RotationRandomCache* taskRandomCache) -> RotationKeyTensorResult {
+            const auto& task = tasks[taskIndex];
+            const uint32_t autoIndex = task.autoIndex;
 
             if (!sampling.IsParallelDeterministic()) {
                 ConsumeKeyTag(prng);
@@ -2714,12 +2732,12 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                 ++gProfile.rotationKeys;
             }
             auto trimIt = rotationTrimLimbsByAutoIndex.find(autoIndex);
-            auto finalizeItem = [&](RotationKeyTensorResult&& item) {
-                item.rotationIndex = rotationIndexByAutoIndex.at(autoIndex);
+            auto finalizeItem = [&](RotationKeyTensorResult&& item) -> RotationKeyTensorResult {
+                item.rotationIndex = task.rotationIndex;
                 const auto autoMap = PrecomputeAutoMapLocal(nativeParams.ringDim, autoIndex);
                 item.autoMap = UInt32VectorToInt32Tensor(autoMap);
                 item.inverseAutoMap = UInt32VectorToInt32Tensor(InvertAutoMapLocal(autoMap));
-                keyList.push_back(std::move(item));
+                return item;
             };
             if (sampling.IsParallelDeterministic() && trimIt != rotationTrimLimbsByAutoIndex.end()) {
                 RotationKeyTensorResult item = ManualTrimmedRotationSwitchKeyGenToTensorResult(
@@ -2732,9 +2750,13 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                     autoIndex,
                     trimIt->second,
                     true,
-                    randomCache ? &*randomCache : nullptr);
+                    taskRandomCache);
                 stageStart = NowSeconds();
-                finalizeItem(std::move(item));
+                item = finalizeItem(std::move(item));
+                if (gProfile.enabled) {
+                    gProfile.tupleReturn += NowSeconds() - stageStart;
+                }
+                return item;
             }
             else if (sampling.IsParallelDeterministic()) {
                 RotationKeyTensorResult item = ManualFullRotationSwitchKeyGenToTensorResult(
@@ -2745,9 +2767,13 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                     nativeParams,
                     sampling,
                     autoIndex,
-                    randomCache ? &*randomCache : nullptr);
+                    taskRandomCache);
                 stageStart = NowSeconds();
-                finalizeItem(std::move(item));
+                item = finalizeItem(std::move(item));
+                if (gProfile.enabled) {
+                    gProfile.tupleReturn += NowSeconds() - stageStart;
+                }
+                return item;
             }
             else {
                 ManualRotationKey rotKey{
@@ -2756,19 +2782,34 @@ std::vector<RotationKeyTensorResult> ManualRotationKeyGenToTensorList(
                         runtime, key.sk, sNewExt, sNewExtShoup, nativeParams, prng, sampling, "rotation", autoIndex, false),
                 };
                 stageStart = NowSeconds();
-                finalizeItem(RotationKeyToTensorResult(rotKey,
-                                                       rotationTrimLimbsByAutoIndex,
-                                                       static_cast<uint32_t>(nativeParams.moduliQ.size()),
-                                                       static_cast<uint32_t>(nativeParams.moduliP.size()),
-                                                       dnum));
-            }
-            if (gProfile.enabled) {
-                gProfile.tupleReturn += NowSeconds() - stageStart;
-                if (gProfile.rotationKeys % 10 == 0) {
-                    std::cerr << "[native-profile] generated rotation keys=" << gProfile.rotationKeys
-                              << " elapsed_rotation=" << (NowSeconds() - rotationStart)
-                              << std::endl;
+                RotationKeyTensorResult item =
+                    finalizeItem(RotationKeyToTensorResult(rotKey,
+                                                           rotationTrimLimbsByAutoIndex,
+                                                           static_cast<uint32_t>(nativeParams.moduliQ.size()),
+                                                           static_cast<uint32_t>(nativeParams.moduliP.size()),
+                                                           dnum));
+                if (gProfile.enabled) {
+                    gProfile.tupleReturn += NowSeconds() - stageStart;
                 }
+                return item;
+            }
+    };
+
+    const bool parallelKeyGen = sampling.IsParallelDeterministic() &&
+                                rotationRandomMode == RotationRandomModeLocal::Fresh &&
+                                !gProfile.enabled;
+    if (parallelKeyGen) {
+        ParallelForKeys(tasks.size(), [&](size_t taskIndex) {
+            keyList[taskIndex] = generateTask(taskIndex, nullptr);
+        });
+    }
+    else {
+        for (size_t taskIndex = 0; taskIndex < tasks.size(); ++taskIndex) {
+            keyList[taskIndex] = generateTask(taskIndex, randomCache ? &*randomCache : nullptr);
+            if (gProfile.enabled && gProfile.rotationKeys % 10 == 0) {
+                std::cerr << "[native-profile] generated rotation keys=" << gProfile.rotationKeys
+                          << " elapsed_rotation=" << (NowSeconds() - rotationStart)
+                          << std::endl;
             }
         }
     }
