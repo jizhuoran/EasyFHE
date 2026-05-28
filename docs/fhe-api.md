@@ -10,6 +10,34 @@ import easyfhe.fhe as fhe
 Submodules under `easyfhe.fhe` may be importable, but they are implementation
 details unless their symbols are re-exported by `easyfhe.fhe.__all__`.
 
+## Migration Guide
+
+This table summarizes the main API changes from the older `homo_ops` /
+context-helper style to the current public `easyfhe.fhe` surface.
+
+| Old pattern | New pattern | Notes |
+|---|---|---|
+| `from easyfhe.fhe import homo_ops` | `import easyfhe.fhe as fhe` | `homo_ops` is no longer a public entry point. Use names re-exported by `easyfhe.fhe`. |
+| `homo_ops.prepare_plaintext(values, slots, N)` | `ConstantBundle` for application constants; `encode_stage1(...)` only for low-level/benchmark code | Application code should usually avoid stage-level encoding. |
+| `homo_ops.encode(middle, name, level, slots, is_ext, ctx)` | `bundle.plaintext(name, level, slots, ctx, is_ext=...)`; `encode_stage2(...)` only for low-level/benchmark code | `ConstantBundle` owns caching and stage1/stage2 reuse. |
+| `ConstantBundle(vectors={"w": numpy_array})` | `ConstantBundle(vectors={"w": fhe.PackedRaw(tensor)})` or `fhe.UnpackedRaw(tensor, packer)` | Raw vectors must be tensor-backed. `PackedRaw` is already slot-ready; `UnpackedRaw` calls a user packer to pad/pack before encoding. |
+| `bundle.plaintext(..., scale=...)` | Pre-scale the tensor before wrapping it, or store the scale as explicit data | `plaintext(...)` no longer accepts a vector scale argument. |
+| `cache_mode="mix"` | `cache_mode="mix_of_middle_plain"` | The mode keeps plain cache under a limit and restores middle encodings when plaintexts are evicted. |
+| `plain_cache_limit_gb` with `plain`, `middle`, or `both` | Use `plain_cache_limit_gb` only with `mix_of_middle_plain` | `plain`, `middle`, and `both` allocate until memory is exhausted. |
+| `fhe.RuntimeOptions(...)` | fields on `fhe.CKKSContextSpec(...)` | Use `auto_load_keys`, `rotation_random_mode`, and `rotation_key_limb_limits` on the spec. |
+| `fhe.generate_context(spec, options=...)` | `client, ctx = fhe.generate_client_context(fhe.CKKSContextSpec(...), device=...)` | Context generation now returns separate client/server-facing objects. |
+| `fhe.BootstrapSpec`, `fhe.bootstrap_depth(...)` | `easyfhe.bs.openfhe.depth(...)` | Bootstrap planning lives under the concrete bootstrap package. |
+| manual bootstrap rotation bookkeeping | `bs.plan_rot_keys(...)` before context generation | Add returned rotations to `CKKSContextSpec.rotations`. |
+| `fhe.generate_bootstrap_constants(...)` | `constants, plan = bs.generate(ctx, ...)` | Generation returns both reusable constants and the runtime plan. |
+| `fhe.homo_bootstrap(cipher, ctx, constants, L0=...)` | `bs.bootstrap(cipher, ctx, constants, plan, L0=...)` | Runtime bootstrap needs the generated plan. |
+| `cipher.cur_limbs`, `cipher.noise_deg` | `cipher.state.cur_limbs`, `cipher.state.noise_deg` | Scale metadata is grouped under `CipherState`; use `cipher.state.scaling_factor` when needed. |
+| `fhe.homo_square(cipher, ctx)` | `fhe.homo_mul_relin(cipher, cipher, ctx)` | Square is not a separate public op. |
+| raw multiply followed by custom relin handling | `fhe.homo_mul_no_relin(a, b, ctx)` | Returns the unrelinearized three-component product. |
+| `homo_mul_pt` only on two-component ciphertexts | `homo_mul_pt` supports two- and three-component ciphertexts | This allows multiplying the output of `homo_mul_no_relin` by a plaintext. |
+| raw Python numbers in scalar homo ops | `bundle.encoded_scalars(...)[i]` | Scalar ops expect encoded scalar rows, not arbitrary Python scalars. |
+| `modup_to_ext`, `eval_fast_rotate`, `key_switch_P_ext` | `fast_rotate(...)`, `hoisted_mac_sum(...)`, `giant_rotate_sum(...)`, `moddown_from_ext(...)` | Mod-up and eval-fast-rotate internals are not public. Use hoisted helpers or `fast_rotate(..., output_ext=True)` when an ext-domain intermediate is explicitly needed. |
+| `force_rescale` / direct limb-drop helper APIs | `align_to(cipher, fhe.CipherState(...), ctx)` or `rescale_one_level(cipher, ctx)` | Alignment is now the public way to express state targets. |
+
 ## Context And Client
 
 ### `CKKSContextSpec`
@@ -289,12 +317,15 @@ fhe.homo_add(in0, in1, cryptoContext)
 fhe.homo_add_inplace(in0, in1, cryptoContext)
 fhe.homo_sub(in0, in1, cryptoContext)
 fhe.homo_sub_inplace(in0, in1, cryptoContext)
+fhe.homo_mul_no_relin(in0, in1, cryptoContext)
 fhe.homo_mul_relin(in0, in1, cryptoContext)
 ```
 
 - `in0`, `in1`: `Cipher` objects with matching slot counts.
 - Returns: a `Cipher`.
 - In-place variants mutate and return `in0`.
+- `homo_mul_no_relin(...)` multiplies two 2-component ciphertexts and returns
+  the unrelinearized 3-component product. It does not rescale.
 - `homo_mul_relin(...)` multiplies two ciphertexts and relinearizes back to two
   components. It does not rescale by itself.
 
@@ -345,6 +376,7 @@ fhe.homo_mul_pt_inplace(cipher, plaintext, cryptoContext)
 ```
 
 - `cipher`: a non-extended `Cipher`.
+  `homo_mul_pt(...)` also accepts unrelinearized 3-component products.
 - `plaintext`: a plaintext produced by `ConstantBundle.plaintext(...)`.
 - Returns: a `Cipher`.
 - In-place variants mutate and return `cipher`.
