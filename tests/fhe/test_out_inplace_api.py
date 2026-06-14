@@ -233,6 +233,90 @@ def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(mon
     assert cipher2.cv[0] == "mul_double((4, 4, 4)).c0"
 
 
+def test_homo_mul_no_relin_exposes_raw_triplet(monkeypatch):
+    def fake_mul(left, right, context):
+        return left.cipher_like(
+            ["raw.c0", "raw.c1", "raw.c2"],
+            state=CipherState(left.state.cur_limbs, left.state.noise_deg + right.state.noise_deg, 5.0),
+        )
+
+    monkeypatch.setattr(arithmetic, "_cipher_mul", fake_mul)
+    ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed")
+    left = _cipher("left", noise_deg=1)
+    right = _cipher("right", noise_deg=2)
+
+    result = fhe.homo_mul_no_relin(left, right, ctx)
+
+    assert result.cv == ["raw.c0", "raw.c1", "raw.c2"]
+    assert result.state.noise_deg == 3
+
+
+def test_homo_mul_no_relin_rejects_triplet_inputs():
+    ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed")
+    left = Cipher(["left.c0", "left.c1", "left.c2"], CipherState(3, 2, 2.0), 8, False)
+    right = _cipher("right")
+
+    with pytest.raises(ValueError, match="expected 2 components"):
+        fhe.homo_mul_no_relin(left, right, ctx)
+
+
+def test_homo_mul_no_relin_requires_matching_batch_size():
+    ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed")
+    left = Cipher(["left.c0", "left.c1"], CipherState(3, 1, 2.0), 8, False, batch_size=2)
+    right = Cipher(["right.c0", "right.c1"], CipherState(3, 1, 2.0), 8, False, batch_size=3)
+
+    with pytest.raises(ValueError, match="batch_size mismatch"):
+        fhe.homo_mul_no_relin(left, right, ctx)
+
+
+def test_homo_mul_pt_supports_triplets(monkeypatch):
+    calls = []
+
+    def fake_cv_mul(component, plain, modulus, mu, cur_limbs, inplace=False):
+        calls.append((component, plain, cur_limbs, inplace))
+        return f"mul({component})"
+
+    monkeypatch.setattr(primitives.F, "cv_mul", fake_cv_mul)
+    ctx = SimpleNamespace(K=0, moduliQ="q", q_mu="mu")
+    triplet = Cipher(["c0", "c1", "c2"], CipherState(3, 2, 2.0), 8, False)
+    plain = Cipher(["p"], CipherState(3, 1, 2.0), 8, False)
+
+    result = fhe.homo_mul_pt(triplet, plain, ctx)
+
+    assert result.cv == ["mul(c0)", "mul(c1)", "mul(c2)"]
+    assert result.state.noise_deg == 3
+    assert result.state.scaling_factor == 4.0
+    assert calls == [
+        ("c0", "p", 3, False),
+        ("c1", "p", 3, False),
+        ("c2", "p", 3, False),
+    ]
+
+
+def test_homo_mul_pt_inplace_supports_triplets(monkeypatch):
+    calls = []
+
+    def fake_cv_mul(component, plain, modulus, mu, cur_limbs, inplace=False):
+        calls.append((component, plain, cur_limbs, inplace))
+        return component
+
+    monkeypatch.setattr(primitives.F, "cv_mul", fake_cv_mul)
+    ctx = SimpleNamespace(K=0, moduliQ="q", q_mu="mu")
+    triplet = Cipher(["c0", "c1", "c2"], CipherState(3, 2, 2.0), 8, False)
+    plain = Cipher(["p"], CipherState(3, 1, 2.0), 8, False)
+
+    result = fhe.homo_mul_pt_inplace(triplet, plain, ctx)
+
+    assert result is triplet
+    assert triplet.cv == ["c0", "c1", "c2"]
+    assert triplet.state.noise_deg == 3
+    assert calls == [
+        ("c0", "p", 3, True),
+        ("c1", "p", 3, True),
+        ("c2", "p", 3, True),
+    ]
+
+
 def test_scalar_ops_reject_raw_python_scalars():
     ctx = SimpleNamespace()
     cipher = _cipher("cipher")

@@ -27,7 +27,7 @@ Common overrides:
 
 ```bash
 MANYLINUX_PLAT=manylinux_2_28_x86_64 CUDA_VERSION=12.9 \
-  PYTHON_TAG=cp312-cp312 TORCH_CUDA_ARCH_LIST=8.0 MAX_JOBS=24 \
+  PYTHON_TAG=cp312-cp312 MAX_JOBS=24 \
   packaging/manylinux/build_wheel.sh
 ```
 
@@ -35,14 +35,14 @@ Ubuntu 24.04 / CUDA 13.2 target:
 
 ```bash
 MANYLINUX_PLAT=manylinux_2_28_x86_64 CUDA_VERSION=13.2 CUDA_FLAVOR=cu132 \
-  PYTHON_TAG=cp312-cp312 TORCH_CUDA_ARCH_LIST=8.0 MAX_JOBS=24 \
+  PYTHON_TAG=cp312-cp312 MAX_JOBS=24 \
   packaging/manylinux/build_wheel.sh
 ```
 
 Build a CUDA matrix:
 
 ```bash
-CUDA_VERSIONS="12.4 12.6 12.8 12.9 13.2" \
+CUDA_VERSIONS="12.9 13.0 13.2" \
   packaging/manylinux/build_all_cuda_wheels.sh
 ```
 
@@ -86,7 +86,9 @@ correct for that CUDA/Python/platform combination.
 - Platform tag: `manylinux_2_28_x86_64`
 - CUDA toolkit: selected by `CUDA_VERSION`
 - Default Python: CPython 3.12
-- Default GPU arch list: `8.0`
+- Default GPU arch list for CUDA 12.8+: `8.0;8.6;8.9;9.0;10.0;12.0+PTX`
+  (`sm_80` A100 through `sm_120` RTX 5090)
+- Default GPU arch list for older CUDA 12.x toolkits: `8.0;8.6;8.9;9.0+PTX`
 
 ## Ubuntu compatibility
 
@@ -102,7 +104,7 @@ manylinux baseline instead:
 Example for the default modern Ubuntu line:
 
 ```bash
-MANYLINUX_PLAT=manylinux_2_28_x86_64 CUDA_VERSIONS="12.4 12.6 12.8 12.9 13.2" \
+MANYLINUX_PLAT=manylinux_2_28_x86_64 CUDA_VERSIONS="12.9 13.0 13.2" \
   packaging/manylinux/build_all_cuda_wheels.sh
 ```
 
@@ -124,7 +126,7 @@ Each CUDA build gets a local version label by default, for example:
 easyfhe-0.1.1+cu129.git6e869e1-cp312-cp312-manylinux_2_28_x86_64.whl
 ```
 
-This prevents `cu124`, `cu128`, `cu129`, and `cu132` wheels from colliding
+This prevents `cu129`, `cu130`, and `cu132` wheels from colliding
 when they have the same Python and platform tags.
 
 PyPI does not accept every PyTorch-style local-version workflow cleanly. For

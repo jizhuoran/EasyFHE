@@ -24,6 +24,7 @@ from .ops import (
     homo_add_scalar_double_inplace,
     homo_add_scalar_int,
     homo_add_scalar_int_inplace,
+    homo_mul_no_relin,
     homo_mul_relin,
     homo_mul_relin_rescale_postop,
     homo_mul_relin_rescale_add_pt,

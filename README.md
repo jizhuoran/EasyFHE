@@ -13,7 +13,7 @@
 <p align="center">
   <img alt="Status" src="https://img.shields.io/badge/status-alpha-orange">
   <img alt="Python" src="https://img.shields.io/badge/python-3.12-blue">
-  <img alt="CUDA" src="https://img.shields.io/badge/CUDA-12.4%20%7C%2013.2-green">
+  <img alt="CUDA" src="https://img.shields.io/badge/CUDA-12.9%20%7C%2013.x-green">
   <img alt="License" src="https://img.shields.io/badge/license-GPL--3.0-blue">
 </p>
 
@@ -49,7 +49,7 @@ The project is being reduced from a broad PyTorch fork into a compact FHE runtim
 
 ## Install
 
-Prebuilt wheels currently target Linux x86_64, Python 3.12, and Ubuntu 22.04/24.04. Pick the wheel channel that matches your CUDA runtime.
+Prebuilt wheels currently target Linux x86_64, Python 3.12, and Ubuntu 22.04/24.04. CUDA 12.9 and 13.x wheels are built for `sm_80`, `sm_86`, `sm_89`, `sm_90`, `sm_100`, and `sm_120` with `compute_120` PTX, covering A100 through RTX 5090 class GPUs. Pick the wheel channel that matches your CUDA runtime.
 
 ```bash
 # CUDA 13.2
@@ -63,10 +63,6 @@ python -m pip install "easyfhe==0.1.1+cu130" \
 # CUDA 12.9
 python -m pip install "easyfhe==0.1.1+cu129" \
   --find-links https://jizhuoran.github.io/EasyFHE/whl/cu129
-
-# CUDA 12.4
-python -m pip install "easyfhe==0.1.1+cu124" \
-  --find-links https://jizhuoran.github.io/EasyFHE/whl/cu124
 ```
 
 For the latest wheel matrix and release assets, see the [installation page](https://jizhuoran.github.io/EasyFHE/).

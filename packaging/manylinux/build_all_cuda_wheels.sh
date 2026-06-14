@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CUDA_VERSIONS="${CUDA_VERSIONS:-12.4 12.6 12.8 12.9 13.2}"
+CUDA_VERSIONS="${CUDA_VERSIONS:-12.9 13.0 13.2}"
 MANYLINUX_PLAT="${MANYLINUX_PLAT:-manylinux_2_28_x86_64}"
 
 for cuda_version in ${CUDA_VERSIONS}; do

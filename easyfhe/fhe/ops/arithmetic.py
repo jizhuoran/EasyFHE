@@ -109,6 +109,19 @@ def homo_mul_relin(in0, in1, cryptoContext):
     )
 
 
+def homo_mul_no_relin(in0, in1, cryptoContext):
+    validation.validate_binary_cipher_op(
+        "homo_mul_no_relin",
+        in0,
+        in1,
+        require_ext=False,
+        require_components=2,
+        require_same_metadata=("slots", "batch_size"),
+    )
+    in0, in1 = _align_for_mul(in0, in1, cryptoContext)
+    return _cipher_mul(in0, in1, cryptoContext)
+
+
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
     validation.validate_cipher_plain_op(
         "homo_add_pt",
@@ -136,7 +149,6 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         "homo_mul_pt",
         cipher,
         plaintext,
-        require_noise_deg=1,
         require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
     )
     return _cipher_mul_plain(cipher, plaintext, cryptoContext)
@@ -147,7 +159,6 @@ def homo_mul_pt_inplace(cipher: Cipher, plaintext: Plaintext, cryptoContext):
         "homo_mul_pt_inplace",
         cipher,
         plaintext,
-        require_noise_deg=1,
         require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
     )
     return _cipher_mul_plain_inplace(cipher, plaintext, cryptoContext)

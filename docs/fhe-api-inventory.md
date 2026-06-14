@@ -44,6 +44,7 @@ Client public methods:
 - `homo_add_inplace`
 - `homo_sub`
 - `homo_sub_inplace`
+- `homo_mul_no_relin`
 - `homo_mul_relin`
 - `homo_mul_relin_rescale_postop`
 - `homo_mul_relin_rescale_add_scalar`

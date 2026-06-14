@@ -19,7 +19,8 @@
       "wheel": "easyfhe-0.1.1+cu132-cp312-cp312-manylinux_2_28_x86_64.whl",
       "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu132",
       "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.1.1/easyfhe-0.1.1+cu132-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Use this channel for CUDA 13.2 environments."
+      "gpuArch": "sm_80, sm_86, sm_89, sm_90, sm_100, sm_120 + compute_120 PTX",
+      "notes": "Use this channel for CUDA 13.2 environments. Built for A100 through RTX 5090 GPUs."
     },
     {
       "id": "cu130",
@@ -32,7 +33,8 @@
       "wheel": "easyfhe-0.1.1+cu130-cp312-cp312-manylinux_2_28_x86_64.whl",
       "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu130",
       "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.1.1/easyfhe-0.1.1+cu130-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Use this channel for CUDA 13.0 environments."
+      "gpuArch": "sm_80, sm_86, sm_89, sm_90, sm_100, sm_120 + compute_120 PTX",
+      "notes": "Use this channel for CUDA 13.0 environments. Built for A100 through RTX 5090 GPUs."
     },
     {
       "id": "cu129",
@@ -45,20 +47,8 @@
       "wheel": "easyfhe-0.1.1+cu129-cp312-cp312-manylinux_2_28_x86_64.whl",
       "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu129",
       "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.1.1/easyfhe-0.1.1+cu129-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Use this channel for CUDA 12.9 environments."
-    },
-    {
-      "id": "cu124",
-      "label": "CUDA 12.4",
-      "status": "alpha",
-      "python": "3.12",
-      "platform": "Linux x86_64",
-      "ubuntu": "Ubuntu 22.04, 24.04",
-      "version": "0.1.1+cu124",
-      "wheel": "easyfhe-0.1.1+cu124-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "findLinks": "https://jizhuoran.github.io/EasyFHE/whl/cu124",
-      "releaseAsset": "https://github.com/jizhuoran/EasyFHE/releases/download/v0.1.1/easyfhe-0.1.1+cu124-cp312-cp312-manylinux_2_28_x86_64.whl",
-      "notes": "Use this channel for CUDA 12.4 environments."
+      "gpuArch": "sm_80, sm_86, sm_89, sm_90, sm_100, sm_120 + compute_120 PTX",
+      "notes": "Use this channel for CUDA 12.9 environments. Built for A100 through RTX 5090 GPUs."
     }
   ]
 }

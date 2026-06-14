@@ -49,9 +49,10 @@
           <h2>Choose a CUDA wheel channel</h2>
           <p>
             EasyFHE keeps one Python package name and separates CUDA variants
-            by wheel channel. The v0.0.1 wheels target Linux x86_64,
-            Python 3.12, and Ubuntu 22.04/24.04 systems with a compatible
-            NVIDIA driver and CUDA runtime.
+            by wheel channel. The v0.1.1 CUDA 12.9 and 13.x wheels target
+            Linux x86_64, Python 3.12, and Ubuntu 22.04/24.04 systems, with
+            native GPU code from A100 (<code>sm_80</code>) through RTX 5090
+            (<code>sm_120</code>).
           </p>
         </div>
 
@@ -178,7 +179,7 @@
 Branch: docs
 Folder: /
 
-python -m pip install "easyfhe==0.0.1+cu132" \
+python -m pip install "easyfhe==0.1.1+cu132" \
   --find-links https://jizhuoran.github.io/EasyFHE/whl/cu132</code></pre>
       </section>
     </main>
@@ -193,24 +194,35 @@ python -m pip install "easyfhe==0.0.1+cu132" \
         {
           id: "cu132",
           label: "CUDA 13.2",
-          version: "0.0.1+cu132",
+          version: "0.1.1+cu132",
           findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu132",
           python: "3.12",
           platform: "Linux x86_64",
           ubuntu: "Ubuntu 22.04, 24.04",
           status: "alpha",
-          note: "Use this channel for CUDA 13.2 environments."
+          note: "Use this channel for CUDA 13.2 environments. Built for A100 through RTX 5090 GPUs."
         },
         {
-          id: "cu124",
-          label: "CUDA 12.4",
-          version: "0.0.1+cu124",
-          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu124",
+          id: "cu130",
+          label: "CUDA 13.0",
+          version: "0.1.1+cu130",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu130",
           python: "3.12",
           platform: "Linux x86_64",
           ubuntu: "Ubuntu 22.04, 24.04",
           status: "alpha",
-          note: "Use this channel for CUDA 12.4 environments."
+          note: "Use this channel for CUDA 13.0 environments. Built for A100 through RTX 5090 GPUs."
+        },
+        {
+          id: "cu129",
+          label: "CUDA 12.9",
+          version: "0.1.1+cu129",
+          findLinks: "https://jizhuoran.github.io/EasyFHE/whl/cu129",
+          python: "3.12",
+          platform: "Linux x86_64",
+          ubuntu: "Ubuntu 22.04, 24.04",
+          status: "alpha",
+          note: "Use this channel for CUDA 12.9 environments. Built for A100 through RTX 5090 GPUs."
         }
       ];
 

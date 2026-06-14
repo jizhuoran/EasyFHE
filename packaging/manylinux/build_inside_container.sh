@@ -9,6 +9,8 @@ DIST_DIR="${DIST_DIR:-/io/dist}"
 CUDA_VERSION="${CUDA_VERSION:-12.9}"
 CUDA_FLAVOR="${CUDA_FLAVOR:-cu${CUDA_VERSION/./}}"
 
+source /io/packaging/manylinux/cuda_arch_list.sh
+
 if [[ ! -x "${PYTHON_BIN}" ]]; then
   echo "Python '${PYTHON_TAG}' was not found under /opt/python." >&2
   echo "Available interpreters:" >&2
@@ -30,7 +32,7 @@ fi
 
 git config --global --add safe.directory /io >/dev/null 2>&1 || true
 
-export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.0}"
+export TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-$(easyfhe_default_cuda_arch_list "${CUDA_VERSION}")}"
 export MAX_JOBS="${MAX_JOBS:-$(nproc)}"
 export USE_CUDA="${USE_CUDA:-1}"
 export USE_CUDNN="${USE_CUDNN:-0}"

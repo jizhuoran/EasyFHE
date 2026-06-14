@@ -145,10 +145,7 @@ def _cipher_mul_plain(cipher, plaintext, cryptoContext):
             active_limbs,
         )
     else:
-        cv = [
-            F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, active_limbs),
-            F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, active_limbs),
-        ]
+        cv = [F.cv_mul(component, plaintext.cv[0], moduli, mu, active_limbs) for component in cipher.cv]
     return cipher.cipher_like(
         cv,
         state=CipherState(
@@ -173,8 +170,8 @@ def _cipher_mul_plain_inplace(cipher, plaintext, cryptoContext):
             active_limbs,
         )
     else:
-        F.cv_mul(cipher.cv[0], plaintext.cv[0], moduli, mu, active_limbs, inplace=True)
-        F.cv_mul(cipher.cv[1], plaintext.cv[0], moduli, mu, active_limbs, inplace=True)
+        for component in cipher.cv:
+            F.cv_mul(component, plaintext.cv[0], moduli, mu, active_limbs, inplace=True)
     return cipher.replace_with(
         cipher.cipher_like(
             cipher.cv,

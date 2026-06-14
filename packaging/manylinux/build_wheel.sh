@@ -10,7 +10,8 @@ MANYLINUX_IMAGE="${MANYLINUX_IMAGE:-quay.io/pypa/${MANYLINUX_PLAT}}"
 IMAGE="${IMAGE:-easyfhe-${MANYLINUX_PLAT}-${CUDA_FLAVOR}}"
 DOCKERFILE="${DOCKERFILE:-${ROOT_DIR}/packaging/manylinux/Dockerfile.cuda12.9}"
 PYTHON_TAG="${PYTHON_TAG:-cp312-cp312}"
-TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-8.0}"
+source "${ROOT_DIR}/packaging/manylinux/cuda_arch_list.sh"
+TORCH_CUDA_ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-$(easyfhe_default_cuda_arch_list "${CUDA_VERSION}")}"
 MAX_JOBS="${MAX_JOBS:-$(nproc)}"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-docker}"
 WHEELHOUSE="${WHEELHOUSE:-${ROOT_DIR}/wheelhouse/${MANYLINUX_PLAT}/${CUDA_FLAVOR}}"
@@ -34,6 +35,8 @@ fi
 if [[ -n "${CUDA_BASE_IMAGE:-}" ]]; then
   cuda_base_image_args+=(--build-arg CUDA_BASE_IMAGE="${CUDA_BASE_IMAGE}")
 fi
+
+echo "Building ${CUDA_FLAVOR} wheel with TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST}"
 
 "${CONTAINER_ENGINE}" build \
   -f "${DOCKERFILE}" \

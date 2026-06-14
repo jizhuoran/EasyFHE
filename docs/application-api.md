@@ -143,6 +143,7 @@ Use these for normal ciphertext arithmetic:
 ```python
 fhe.homo_add(a, b, ctx)
 fhe.homo_sub(a, b, ctx)
+fhe.homo_mul_no_relin(a, b, ctx)
 fhe.homo_mul_relin(a, b, ctx)
 
 fhe.homo_add_pt(cipher, plaintext, ctx)
