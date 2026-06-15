@@ -159,6 +159,31 @@ def test_encode_stage2_materializes_single_and_batch_plaintexts():
     assert batch_pt.is_ext is True
 
 
+def test_client_encrypt_decrypt_roundtrip_cpu():
+    client, _ = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cpu",
+    )
+    values = np.asarray([0.125, -0.25, 0.5, 1.0], dtype=np.double)
+    cipher = client.encrypt(values, device="cpu", level=0, slots=8)
+    decoded = client.decrypt(cipher).cpu().numpy()
+
+    np.testing.assert_allclose(decoded[: values.size], values, rtol=1e-4, atol=1e-4)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA decrypt/decode requires CUDA")
+def test_client_encrypt_decrypt_roundtrip_cuda():
+    client, _ = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=14, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cuda",
+    )
+    values = np.asarray([0.125, -0.25, 0.5, 1.0], dtype=np.double)
+    cipher = client.encrypt(values, device="cuda", level=0, slots=8)
+    decoded = client.decrypt(cipher).cpu().numpy()
+
+    np.testing.assert_allclose(decoded[: values.size], values, rtol=1e-4, atol=1e-4)
+
+
 def test_encode_stage2_checks_middle_metadata():
     ctx = _context()
     middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=2, ring_dim=ctx.N)

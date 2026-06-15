@@ -621,6 +621,40 @@ def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):
     )
 
 
+def cv_decrypt_decode(ct0, ct1, secret_key, moduli_q, roots_q, cur_limbs, plaintext_modulus_bits, noise_scale_deg, slots):
+    if not hasattr(torch, "ckks_decrypt_decode"):
+        return None
+    return torch.ckks_decrypt_decode(
+        ct0.cpu(),
+        ct1.cpu(),
+        secret_key.cpu(),
+        moduli_q.cpu(),
+        roots_q.cpu(),
+        cur_limbs=int(cur_limbs),
+        plaintext_modulus_bits=int(plaintext_modulus_bits),
+        noise_scale_deg=int(noise_scale_deg),
+        slots=int(slots),
+    )
+
+
+def cv_decode_phase_cuda(phase, moduli_q, crt_inv_moduli, cur_limbs, plaintext_modulus_bits, noise_scale_deg, slots, context):
+    if not hasattr(torch, "ckks_decode_phase"):
+        return None
+    return torch.ckks_decode_phase(
+        phase,
+        moduli_q,
+        crt_inv_moduli,
+        context.inverse_power_of_roots_div_two,
+        context.inverse_scaled_power_of_roots_div_two,
+        context.encode_params_rotGroup,
+        context.encode_params_ksiPows,
+        cur_limbs=int(cur_limbs),
+        plaintext_modulus_bits=int(plaintext_modulus_bits),
+        noise_scale_deg=int(noise_scale_deg),
+        slots=int(slots),
+    )
+
+
 def cipher_grouped_pairwise_mac(cipher, plaintext, groups, context):
     active_limbs = cipher.state.cur_limbs + (context.K if cipher.is_ext else 0)
     plaintext_values = _native_plaintext_batch(plaintext)

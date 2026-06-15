@@ -43,8 +43,13 @@ class Client:
         public_key_a = _as_uint64_matrix("public_key_a", material.public_key_a, shape=(len(self.moduli_q), self.N))
         self._public_key_b = _uint64_cpu_tensor(public_key_b)
         self._public_key_a = _uint64_cpu_tensor(public_key_a)
+        self._secret_key_cpu = _uint64_cpu_tensor(self._secret_key)
+        self._secret_key_device_cache = {"cpu": self._secret_key_cpu}
         self._moduli_p_cpu = _uint64_cpu_tensor(self.moduli_p)
         self._moduli_q_cpu = _uint64_cpu_tensor(self.moduli_q)
+        self._roots_q_cpu = _uint64_cpu_tensor(self.roots_q)
+        self._crt_inv_moduli_cpu = _uint64_cpu_tensor(_crt_inverse_matrix(self.moduli_q))
+        self._crt_inv_moduli_device_cache = {"cpu": self._crt_inv_moduli_cpu}
         self._params = _CkksParams(
             moduli_q=self.moduli_q,
             roots_q=self.roots_q,
@@ -75,6 +80,25 @@ class Client:
         )
 
     def decrypt(self, cipher):
+        if cipher.cv[0].is_cuda:
+            native_cuda_decoded = _decrypt_decode_cuda(
+                cipher,
+                self._secret_key_for_device(cipher.cv[0].device),
+                self._crt_inv_moduli_for_device(cipher.cv[0].device),
+                self._context_for(cipher.cv[0].device),
+                plaintext_modulus_bits=self.dcrt_bits,
+            )
+            if native_cuda_decoded is not None:
+                return native_cuda_decoded
+        native_decoded = _decrypt_decode_native(
+            cipher,
+            self._secret_key_cpu,
+            self._moduli_q_cpu,
+            self._roots_q_cpu,
+            plaintext_modulus_bits=self.dcrt_bits,
+        )
+        if native_decoded is not None:
+            return native_decoded.to(cipher.cv[0].device)
         phase = _decrypt_phase(cipher, self._secret_key, self.moduli_q)
         decoded = _decode_ckks_phase(
             phase,
@@ -85,6 +109,22 @@ class Client:
             slots=getattr(cipher, "slots", 0),
         )
         return torch.tensor(decoded, device=cipher.cv[0].device, dtype=torch.float64)
+
+    def _secret_key_for_device(self, device):
+        key = str(device)
+        cached = self._secret_key_device_cache.get(key)
+        if cached is None:
+            cached = self._secret_key_cpu.to(device).view(1, len(self.moduli_q), self.N)
+            self._secret_key_device_cache[key] = cached
+        return cached
+
+    def _crt_inv_moduli_for_device(self, device):
+        key = str(device)
+        cached = self._crt_inv_moduli_device_cache.get(key)
+        if cached is None:
+            cached = self._crt_inv_moduli_cpu.to(device)
+            self._crt_inv_moduli_device_cache[key] = cached
+        return cached
 
     def _context_for(self, device):
         device = str(device)
@@ -198,6 +238,16 @@ def _as_moduli_q(value, limbs=None):
     return np.ascontiguousarray(arr[:limbs] if limbs is not None else arr)
 
 
+def _crt_inverse_matrix(moduli_q):
+    moduli = _as_moduli_q(moduli_q)
+    result = np.zeros((len(moduli), len(moduli)), dtype=np.uint64)
+    for i, modulus_i in enumerate(moduli):
+        qi = int(modulus_i)
+        for j in range(i):
+            result[i, j] = pow(int(moduli[j]) % qi, -1, qi)
+    return np.ascontiguousarray(result)
+
+
 def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
     logn = context.logN
     cur_limbs = ptx.state.cur_limbs
@@ -261,6 +311,65 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
     return ptx.cipher_like(
         cv,
         state=CipherState(cur_limbs, scale_deg, base_scale ** scale_deg),
+    )
+
+
+def _decrypt_decode_native(cipher, secret_key, moduli_q, roots_q, *, plaintext_modulus_bits):
+    if len(cipher.cv) != 2:
+        raise ValueError(f"Expected a degree-1 ciphertext with two components, got {len(cipher.cv)}")
+    ct0_tensor = cipher.cv[0]
+    ct1_tensor = cipher.cv[1]
+    if ct0_tensor.dim() == 3:
+        if int(ct0_tensor.shape[0]) != 1:
+            raise ValueError("decrypt currently expects batch_size=1")
+        ct0_tensor = ct0_tensor[0]
+        ct1_tensor = ct1_tensor[0]
+    return F.cv_decrypt_decode(
+        ct0_tensor[: cipher.state.cur_limbs],
+        ct1_tensor[: cipher.state.cur_limbs],
+        secret_key[: cipher.state.cur_limbs],
+        moduli_q,
+        roots_q,
+        cipher.state.cur_limbs,
+        plaintext_modulus_bits,
+        cipher.state.noise_deg,
+        getattr(cipher, "slots", 0),
+    )
+
+
+def _decrypt_decode_cuda(cipher, secret_key, crt_inv_moduli, context, *, plaintext_modulus_bits):
+    if len(cipher.cv) != 2:
+        raise ValueError(f"Expected a degree-1 ciphertext with two components, got {len(cipher.cv)}")
+    ct0_tensor = cipher.cv[0]
+    ct1_tensor = cipher.cv[1]
+    if ct0_tensor.dim() != 3 or ct1_tensor.dim() != 3:
+        raise ValueError("CUDA decrypt currently expects [batch, limbs, N] ciphertext components")
+    if int(ct0_tensor.shape[0]) != 1:
+        raise ValueError("decrypt currently expects batch_size=1")
+
+    cur_limbs = cipher.state.cur_limbs
+    product = F.cv_mul(
+        ct1_tensor[:, :cur_limbs, :],
+        secret_key[:, :cur_limbs, :],
+        context.moduliQ,
+        context.q_mu,
+        cur_limbs,
+    )
+    phase = F.cv_add(
+        product,
+        ct0_tensor[:, :cur_limbs, :],
+        context.moduliQ,
+        cur_limbs,
+    )[0]
+    return F.cv_decode_phase_cuda(
+        phase,
+        context.moduliQ,
+        crt_inv_moduli[:cur_limbs, :cur_limbs].contiguous(),
+        cur_limbs,
+        plaintext_modulus_bits,
+        cipher.state.noise_deg,
+        getattr(cipher, "slots", 0) or context.Nh,
+        context,
     )
 
 
