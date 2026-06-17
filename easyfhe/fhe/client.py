@@ -43,6 +43,7 @@ class Client:
         public_key_a = _as_uint64_matrix("public_key_a", material.public_key_a, shape=(len(self.moduli_q), self.N))
         self._public_key_b = _uint64_cpu_tensor(public_key_b)
         self._public_key_a = _uint64_cpu_tensor(public_key_a)
+        self._public_key_device_cache = {"cpu": (self._public_key_b, self._public_key_a)}
         self._secret_key_cpu = _uint64_cpu_tensor(self._secret_key)
         self._secret_key_device_cache = {"cpu": self._secret_key_cpu}
         self._moduli_p_cpu = _uint64_cpu_tensor(self.moduli_p)
@@ -69,9 +70,10 @@ class Client:
         )
         ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
         cur_limbs = ptx.state.cur_limbs
+        pk0, pk1 = self._public_key_for_device(ptx.cv[0].device, cur_limbs)
         return _encrypt(
-            self._public_key_b[:cur_limbs],
-            self._public_key_a[:cur_limbs],
+            pk0,
+            pk1,
             ptx,
             device,
             context,
@@ -117,6 +119,14 @@ class Client:
             cached = self._secret_key_cpu.to(device).view(1, len(self.moduli_q), self.N)
             self._secret_key_device_cache[key] = cached
         return cached
+
+    def _public_key_for_device(self, device, cur_limbs):
+        key = str(device)
+        cached = self._public_key_device_cache.get(key)
+        if cached is None:
+            cached = (self._public_key_b.to(device), self._public_key_a.to(device))
+            self._public_key_device_cache[key] = cached
+        return cached[0][:cur_limbs], cached[1][:cur_limbs]
 
     def _crt_inv_moduli_for_device(self, device):
         key = str(device)
@@ -256,9 +266,9 @@ def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
 
     target_device = device
     cv = F.cv_encrypt(
-        ptx.cv[0].cpu(),
-        pk0.cpu(),
-        pk1.cpu(),
+        ptx.cv[0],
+        pk0,
+        pk1,
         l,
         logn,
         nh,

@@ -600,24 +600,21 @@ def cv_pre_encode_stage1(input: Tensor, slots: int, context: Context) -> tuple[T
 def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):
     cur_limbs = int(l)
 
-    def _cpu(value):
-        return value.cpu() if torch.is_tensor(value) else value
-
     return torch.encrypt(
-        ptx=ptx,
-        pk0=pk0,
-        pk1=pk1,
+        ptx=ptx.contiguous(),
+        pk0=pk0.contiguous(),
+        pk1=pk1.contiguous(),
         l=cur_limbs,
         logn=logn,
         nh=nh,
         moduliP_scalar=moduli_p,
         moduliQ_scalar=moduli_q,
-        primes=_cpu(context.QplusP_map[cur_limbs]),
-        max_int_diffs=_cpu(context.QmaxdiffplusPmaxdiff_map[cur_limbs]),
-        barret_ratio=_cpu(context.QbarretRatioplusPbarretRatio_map[cur_limbs]),
-        barret_k=_cpu(context.QbarretKplusPbarretK_map[cur_limbs]),
-        power_of_roots_shoup=_cpu(context.power_of_roots_shoup),
-        power_of_roots=_cpu(context.power_of_roots),
+        primes=context.QplusP_map[cur_limbs],
+        max_int_diffs=context.QmaxdiffplusPmaxdiff_map[cur_limbs],
+        barret_ratio=context.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        barret_k=context.QbarretKplusPbarretK_map[cur_limbs],
+        power_of_roots_shoup=context.power_of_roots_shoup,
+        power_of_roots=context.power_of_roots,
     )
 
 
