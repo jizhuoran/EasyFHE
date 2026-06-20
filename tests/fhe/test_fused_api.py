@@ -107,6 +107,88 @@ def test_grouped_pairwise_mac_rejects_mismatched_grouped_batch_lengths():
         )
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA pairwise MAC requires CUDA")
+def test_batched_pairwise_mac_32x64_cuda_matches_direct_and_numpy(monkeypatch):
+    _, ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=2, log_n=10, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cuda",
+    )
+    num_batches = 32
+    num_cipher = 64
+    cur_limbs = 2
+    N = ctx.N
+    rng = np.random.default_rng(1)
+
+    cipher_bx_np = rng.integers(0, 17, size=(num_cipher, cur_limbs, N), dtype=np.uint64)
+    cipher_ax_np = rng.integers(0, 17, size=(num_cipher, cur_limbs, N), dtype=np.uint64)
+    plaintext_np = rng.integers(
+        0,
+        17,
+        size=(num_batches * num_cipher, cur_limbs, N),
+        dtype=np.uint64,
+    )
+    primes_np = ctx.QplusP_map[cur_limbs].cpu().numpy()
+
+    plain_grouped = plaintext_np.reshape(num_batches, num_cipher, cur_limbs, N)
+    expected_bx = np.empty((num_batches, cur_limbs, N), dtype=np.uint64)
+    expected_ax = np.empty_like(expected_bx)
+    for limb in range(cur_limbs):
+        prime = np.uint64(primes_np[limb])
+        expected_bx[:, limb, :] = (
+            (plain_grouped[:, :, limb, :] * cipher_bx_np[None, :, limb, :]).sum(
+                axis=1,
+                dtype=np.uint64,
+            )
+            % prime
+        )
+        expected_ax[:, limb, :] = (
+            (plain_grouped[:, :, limb, :] * cipher_ax_np[None, :, limb, :]).sum(
+                axis=1,
+                dtype=np.uint64,
+            )
+            % prime
+        )
+
+    cipher_bx = torch.from_numpy(cipher_bx_np).to("cuda")
+    cipher_ax = torch.from_numpy(cipher_ax_np).to("cuda")
+    plaintext = torch.from_numpy(plaintext_np).to("cuda")
+
+    monkeypatch.delenv("EASYFHE_PAIRWISE_MAC_32_64_DIRECT", raising=False)
+    shared_bx, shared_ax = torch.batched_pairwise_mac(
+        cipher_bx,
+        cipher_ax,
+        plaintext,
+        ctx.QplusP_map[cur_limbs],
+        ctx.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        ctx.QbarretKplusPbarretK_map[cur_limbs],
+        num_batches,
+        num_cipher,
+        cur_limbs,
+        N,
+    )
+    torch.cuda.synchronize()
+
+    monkeypatch.setenv("EASYFHE_PAIRWISE_MAC_32_64_DIRECT", "1")
+    direct_bx, direct_ax = torch.batched_pairwise_mac(
+        cipher_bx,
+        cipher_ax,
+        plaintext,
+        ctx.QplusP_map[cur_limbs],
+        ctx.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        ctx.QbarretKplusPbarretK_map[cur_limbs],
+        num_batches,
+        num_cipher,
+        cur_limbs,
+        N,
+    )
+    torch.cuda.synchronize()
+
+    np.testing.assert_array_equal(shared_bx.cpu().numpy(), expected_bx)
+    np.testing.assert_array_equal(shared_ax.cpu().numpy(), expected_ax)
+    np.testing.assert_array_equal(direct_bx.cpu().numpy(), expected_bx)
+    np.testing.assert_array_equal(direct_ax.cpu().numpy(), expected_ax)
+
+
 def test_grouped_scalar_weighted_acc_matches_scalar_mul_add_loop():
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=6, dnum=1, dcrt_bits=30, first_mod=35),

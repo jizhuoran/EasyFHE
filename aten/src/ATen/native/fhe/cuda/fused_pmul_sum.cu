@@ -8,6 +8,7 @@
 #include <ATen/ops/copy.h>
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
+#include <cstdlib>
 #include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
@@ -446,6 +447,87 @@ __global__ void fusedPairwiseMACDirectKernel(
   }
 }
 
+template <int NB, int NC, int X, int BY, int R>
+__global__ void fusedPairwiseMACSharedKernel(
+    uint64_t* __restrict__ res_ptr,
+    const uint64_t* __restrict__ cipher_bx_ptr,
+    const uint64_t* __restrict__ cipher_ax_ptr,
+    const uint64_t* __restrict__ plain_ptr,
+    const uint64_t* __restrict__ mod_ptr,
+    const uint64_t* __restrict__ barret_ratio_ptr,
+    const uint64_t* __restrict__ barret_k_ptr,
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t L_PTN) {
+  static_assert(BY * R == NB, "shared pairwise MAC expects BY * R == NB");
+  auto tid_x = blockIdx.x * X + threadIdx.x;
+  auto bid_y = blockIdx.y;
+  auto lane = threadIdx.y;
+  int tid = threadIdx.y * X + threadIdx.x;
+  int block_threads = X * BY;
+
+  extern __shared__ uint64_t cipher_shared[];
+  uint64_t* sh_bx = cipher_shared;
+  uint64_t* sh_ax = cipher_shared + NC * X;
+
+  for (int idx = tid; idx < NC * X; idx += block_threads) {
+    int i = idx / X;
+    int x_lane = idx - i * X;
+    int x = blockIdx.x * X + x_lane;
+    uint64_t bx = 0;
+    uint64_t ax = 0;
+    if (x < N) {
+      auto cipher_off = i * L_CTN + bid_y * N + x;
+      bx = cipher_bx_ptr[cipher_off];
+      ax = cipher_ax_ptr[cipher_off];
+    }
+    sh_bx[idx] = bx;
+    sh_ax[idx] = ax;
+  }
+  __syncthreads();
+
+  if (tid_x >= N) {
+    return;
+  }
+
+  uint128_t sum_bx[R];
+  uint128_t sum_ax[R];
+#pragma unroll
+  for (int r = 0; r < R; ++r) {
+    sum_bx[r] = {0, 0};
+    sum_ax[r] = {0, 0};
+  }
+#pragma unroll
+  for (int i = 0; i < NC; ++i) {
+    auto cipher_val_bx = sh_bx[i * X + threadIdx.x];
+    auto cipher_val_ax = sh_ax[i * X + threadIdx.x];
+#pragma unroll
+    for (int r = 0; r < R; ++r) {
+      auto batch_id = lane * R + r;
+      auto plain_val =
+          plain_ptr[(batch_id * NC + i) * L_PTN + bid_y * N + tid_x];
+      inplace_add_128_128(
+          mult_64_64_128(cipher_val_bx, plain_val), sum_bx[r]);
+      inplace_add_128_128(
+          mult_64_64_128(cipher_val_ax, plain_val), sum_ax[r]);
+    }
+  }
+
+  auto mod = mod_ptr[bid_y];
+  auto barret_ratio = barret_ratio_ptr[bid_y];
+  auto barret_k = barret_k_ptr[bid_y];
+#pragma unroll
+  for (int r = 0; r < R; ++r) {
+    auto batch_id = lane * R + r;
+    res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
+        barret_reduction_128_64(sum_bx[r], mod, barret_ratio, barret_k);
+    res_ptr
+        [NB * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N + tid_x] =
+        barret_reduction_128_64(sum_ax[r], mod, barret_ratio, barret_k);
+  }
+}
+
 __global__ void fusedPairwiseMACDirectRuntimeKernel(
     uint64_t* __restrict__ res_ptr,
     const uint64_t* __restrict__ cipher_bx_ptr,
@@ -522,6 +604,38 @@ void launchPairwiseMACDirectTemplate(
       N,
       L_CTN,
       L_PTN);
+}
+
+template <int NB, int NC, int X, int BY, int R>
+void launchPairwiseMACSharedTemplate(
+    uint64_t* res_ptr,
+    const uint64_t* cipher_bx_ptr,
+    const uint64_t* cipher_ax_ptr,
+    const uint64_t* plain_ptr,
+    const uint64_t* mod_ptr,
+    const uint64_t* barret_ratio_ptr,
+    const uint64_t* barret_k_ptr,
+    const int64_t cur_limbs,
+    const int64_t N,
+    const int64_t L_CTN,
+    const int64_t L_PTN,
+    cudaStream_t stream) {
+  dim3 block(X, BY);
+  dim3 grid((N + X - 1) / X, cur_limbs);
+  constexpr size_t shared_bytes = 2ull * NC * X * sizeof(uint64_t);
+  fusedPairwiseMACSharedKernel<NB, NC, X, BY, R>
+      <<<grid, block, shared_bytes, stream>>>(
+          res_ptr,
+          cipher_bx_ptr,
+          cipher_ax_ptr,
+          plain_ptr,
+          mod_ptr,
+          barret_ratio_ptr,
+          barret_k_ptr,
+          cur_limbs,
+          N,
+          L_CTN,
+          L_PTN);
 }
 
 template <int NC>
@@ -678,6 +792,21 @@ std::vector<Tensor> batched_pairwise_mac_cuda(
       L_PTN,                                                                  \
       stream)
 
+#define LAUNCH_SHARED_32_64()                                                  \
+  fhe::launchPairwiseMACSharedTemplate<32, 64, 32, 8, 4>(                      \
+      res_ptr,                                                                \
+      cipher_bx_ptr,                                                          \
+      cipher_ax_ptr,                                                          \
+      plain_ptr,                                                              \
+      mod_ptr,                                                                \
+      ratio_ptr,                                                              \
+      k_ptr,                                                                  \
+      cur_limbs,                                                              \
+      N,                                                                      \
+      L_CTN,                                                                  \
+      L_PTN,                                                                  \
+      stream)
+
     if (number_batches == 64 && num_cipher <= 64) {
       switch (num_cipher) {
         case 2:
@@ -722,6 +851,10 @@ std::vector<Tensor> batched_pairwise_mac_cuda(
           break;
         }
       }
+    } else if (
+        number_batches == 32 && num_cipher == 64 &&
+        std::getenv("EASYFHE_PAIRWISE_MAC_32_64_DIRECT") == nullptr) {
+      LAUNCH_SHARED_32_64();
     } else {
       switch (number_batches) {
         case 2:
@@ -765,6 +898,7 @@ std::vector<Tensor> batched_pairwise_mac_cuda(
       }
     }
 
+#undef LAUNCH_SHARED_32_64
 #undef LAUNCH_REG64_FOR_NC
 #undef DISPATCH_DIRECT_NC
 #undef LAUNCH_DIRECT_FOR_NC

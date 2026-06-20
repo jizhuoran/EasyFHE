@@ -3404,6 +3404,11 @@
   dispatch:
     CUDA: fhe_pre_encode_stage1_cuda
 
+- func: fused_encode_batch(Tensor packed, int cur_limbs, int slots, int N, int M, float scaling_factor, Tensor rotGroup, Tensor ksiPows, Tensor primes, Tensor max_int_diffs, Tensor barret_ratio, Tensor barret_k, Tensor power_of_roots_shoup, Tensor power_of_roots) -> Tensor
+  device_check: NoCheck
+  dispatch:
+    CUDA: fused_encode_batch_cuda
+
 - func: batched_pairwise_mac(Tensor cipher_bx, Tensor cipher_ax, Tensor plaintext, Tensor param_primes, Tensor barret_ratio, Tensor barret_k, int num_batches, int num_cipher, int curr_limbs, int N) -> Tensor[]
   device_check: NoCheck
   dispatch:

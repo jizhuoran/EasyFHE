@@ -316,7 +316,6 @@ def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
         batch_size=groups,
     )
 
-
 def grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext):
     validation.require_batched_cipher("grouped_scalar_weighted_acc", ciphers, "ciphers")
     cv = F.cipher_grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext)

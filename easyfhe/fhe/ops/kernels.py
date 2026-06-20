@@ -597,6 +597,32 @@ def cv_pre_encode_stage1(input: Tensor, slots: int, context: Context) -> tuple[T
     return encoded, float(max_value.cpu().numpy())
 
 
+def cv_fused_encode_batch(
+    packed: Tensor,
+    *,
+    cur_limbs: int,
+    slots: int,
+    scaling_factor: float,
+    context: Context,
+) -> Tensor:
+    return torch.fused_encode_batch(
+        packed,
+        int(cur_limbs),
+        int(slots),
+        context.N,
+        context.M,
+        float(scaling_factor),
+        context.encode_params_rotGroup,
+        context.encode_params_ksiPows,
+        context.QplusP_map[cur_limbs],
+        context.QmaxdiffplusPmaxdiff_map[cur_limbs],
+        context.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        context.QbarretKplusPbarretK_map[cur_limbs],
+        context.power_of_roots_shoup,
+        context.power_of_roots,
+    )
+
+
 def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):
     cur_limbs = int(l)
 

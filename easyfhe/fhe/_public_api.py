@@ -22,6 +22,7 @@ CONSTANT_API = (
 )
 
 ENCODING_API = (
+    "fused_encode_batch",
     "encode_stage1_packed",
 )
 
