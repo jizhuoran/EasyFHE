@@ -194,6 +194,79 @@ def test_encode_stage2_materializes_single_and_batch_plaintexts():
     assert batch_pt.is_ext is True
 
 
+def test_flexible_encode_stage2_requires_explicit_scaling_factor():
+    middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=8)
+    ctx = type("Ctx", (), {"L": 4, "scale_mode": "flexible"})()
+
+    with pytest.raises(ValueError, match="requires scaling_factor"):
+        encoding.encode_stage2(middle, level=1, slots=4, is_ext=False, cryptoContext=ctx)
+
+
+def test_flexible_encode_stage2_uses_explicit_scaling_factor(monkeypatch):
+    middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=8)
+    ctx = type("Ctx", (), {"L": 4, "N": 8, "scale_mode": "flexible"})()
+    calls = {}
+
+    def fake_cv_encode(encoded_values, ring_dim, cur_limbs, slots, scaling_factor, is_ext, context):
+        calls["args"] = (ring_dim, cur_limbs, slots, scaling_factor, is_ext, context)
+        return torch.zeros((1, cur_limbs, ring_dim), dtype=torch.uint64)
+
+    monkeypatch.setattr(encoding.F, "cv_encode", fake_cv_encode)
+
+    plaintext = encoding.encode_stage2(
+        middle,
+        level=1,
+        slots=4,
+        is_ext=False,
+        cryptoContext=ctx,
+        scaling_factor=13.0,
+    )
+
+    assert calls["args"] == (8, 3, 4, 13.0, False, ctx)
+    assert plaintext.state == fhe.CipherState(3, 1, 13.0)
+
+
+def test_encode_stage2_accepts_explicit_cur_limbs(monkeypatch):
+    middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=8)
+    ctx = type("Ctx", (), {"L": 4, "N": 8, "scale_mode": "flexible"})()
+    calls = {}
+
+    def fake_cv_encode(encoded_values, ring_dim, cur_limbs, slots, scaling_factor, is_ext, context):
+        calls["cur_limbs"] = cur_limbs
+        return torch.zeros((1, cur_limbs, ring_dim), dtype=torch.uint64)
+
+    monkeypatch.setattr(encoding.F, "cv_encode", fake_cv_encode)
+
+    plaintext = encoding.encode_stage2(
+        middle,
+        level=None,
+        slots=4,
+        is_ext=False,
+        cryptoContext=ctx,
+        cur_limbs=2,
+        scaling_factor=17.0,
+    )
+
+    assert calls["cur_limbs"] == 2
+    assert plaintext.state == fhe.CipherState(2, 1, 17.0)
+
+
+def test_encode_stage2_rejects_inconsistent_level_and_cur_limbs():
+    middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=8)
+    ctx = type("Ctx", (), {"L": 4, "scale_mode": "flexible"})()
+
+    with pytest.raises(ValueError, match="inconsistent level and cur_limbs"):
+        encoding.encode_stage2(
+            middle,
+            level=1,
+            slots=4,
+            is_ext=False,
+            cryptoContext=ctx,
+            cur_limbs=2,
+            scaling_factor=17.0,
+        )
+
+
 def test_client_encrypt_decrypt_roundtrip_cpu():
     client, _ = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),

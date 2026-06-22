@@ -161,18 +161,22 @@ def encode_stage1_packed(packed_values, slots=None, cryptoContext=None):
     )
 
 
-def encode_stage2(middle, level, slots, is_ext, cryptoContext):
+def encode_stage2(middle, level, slots, is_ext, cryptoContext, *, scaling_factor=None, cur_limbs=None):
     """Materialize a middle representation as an FHE plaintext."""
 
     if not isinstance(middle, PreparedPlaintext):
         raise TypeError(f"encode_stage2 expected PreparedPlaintext, got {type(middle)}")
-    level = int(level)
     slots = int(slots)
     is_ext = bool(is_ext)
     _validate_prepared_slots(middle, slots)
 
-    cur_limbs = cryptoContext.L - level
-    scaling_factor = cryptoContext.scale_at(cur_limbs)
+    cur_limbs = _resolve_cur_limbs(cryptoContext, level, cur_limbs, "encode_stage2")
+    scaling_factor = _resolve_stage2_scale(
+        cryptoContext,
+        cur_limbs,
+        scaling_factor,
+        "encode_stage2",
+    )
     _validate_scaled_range(middle, scaling_factor)
 
     encoded_values = middle.encoded_values
@@ -197,7 +201,7 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext):
     )
 
 
-def fused_encode_batch(packed_values, level, slots=None, cryptoContext=None, is_ext=False):
+def fused_encode_batch(packed_values, level, slots=None, cryptoContext=None, is_ext=False, *, scaling_factor=None, cur_limbs=None):
     """Encode CUDA-packed complex slot values directly as a plaintext."""
 
     if cryptoContext is None:
@@ -222,14 +226,18 @@ def fused_encode_batch(packed_values, level, slots=None, cryptoContext=None, is_
     if int(cryptoContext.N) != 2 * slots:
         raise ValueError("fused_encode_batch currently expects N == 2 * slots")
 
-    level = int(level)
-    cur_limbs = int(cryptoContext.L) - level
+    cur_limbs = _resolve_cur_limbs(cryptoContext, level, cur_limbs, "fused_encode_batch")
     if cur_limbs <= 0:
         raise ValueError(
             "fused_encode_batch level leaves no active limbs: "
-            f"L={cryptoContext.L}, level={level}"
+            f"L={cryptoContext.L}, level={level}, cur_limbs={cur_limbs}"
         )
-    scaling_factor = cryptoContext.scale_at(cur_limbs)
+    scaling_factor = _resolve_stage2_scale(
+        cryptoContext,
+        cur_limbs,
+        scaling_factor,
+        "fused_encode_batch",
+    )
 
     is_single = packed_values.dim() == 1
     packed_2d = packed_values.reshape(1, slots) if is_single else packed_values
@@ -486,3 +494,36 @@ def _validate_scaled_range(prepared, scaling_factor):
             f"Prepared plaintext is too large for encoding: "
             f"max_encoded_value={prepared.max_encoded_value}, scaling_factor={scaling_factor}"
         )
+
+
+def _resolve_stage2_scale(cryptoContext, cur_limbs, scaling_factor, op_name):
+    if scaling_factor is None:
+        if _is_flexible_context(cryptoContext):
+            raise ValueError(f"{op_name} requires scaling_factor in flexible scale mode")
+        scaling_factor = cryptoContext.scale_at(cur_limbs)
+    scaling_factor = float(scaling_factor)
+    if scaling_factor <= 0:
+        raise ValueError(f"{op_name} scaling_factor must be positive, got {scaling_factor}")
+    return scaling_factor
+
+
+def _is_flexible_context(cryptoContext):
+    return str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible"
+
+
+def _resolve_cur_limbs(cryptoContext, level, cur_limbs, op_name):
+    if cur_limbs is None:
+        if level is None:
+            raise ValueError(f"{op_name} requires either level or cur_limbs")
+        return int(cryptoContext.L) - int(level)
+    cur_limbs = int(cur_limbs)
+    if cur_limbs <= 0:
+        raise ValueError(f"{op_name} cur_limbs must be positive, got {cur_limbs}")
+    if level is not None:
+        expected = int(cryptoContext.L) - int(level)
+        if expected != cur_limbs:
+            raise ValueError(
+                f"{op_name} received inconsistent level and cur_limbs: "
+                f"level={level} implies cur_limbs={expected}, got cur_limbs={cur_limbs}"
+            )
+    return cur_limbs

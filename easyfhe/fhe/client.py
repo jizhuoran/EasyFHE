@@ -56,7 +56,7 @@ class Client:
             roots_q=self.roots_q,
         )
 
-    def encrypt(self, x, *, device=None, scale_deg=1, level=0, slots=0):
+    def encrypt(self, x, *, device=None, scale_deg=1, level=0, slots=0, scaling_factor=None, cur_limbs=None):
         device = device or "cpu"
         context = self._context_for(device)
         if not isinstance(x, np.ndarray):
@@ -67,6 +67,8 @@ class Client:
             slots=slots,
             is_ext=False,
             cryptoContext=context,
+            scaling_factor=scaling_factor,
+            cur_limbs=cur_limbs,
         )
         ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
         cur_limbs = ptx.state.cur_limbs

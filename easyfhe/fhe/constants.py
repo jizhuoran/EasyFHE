@@ -85,7 +85,19 @@ class ConstantBundle:
     def __len__(self):
         return len(self._vectors)
 
-    def encoded_scalars(self, names, cur_limbs, noise_deg, cryptoContext, *, mode="double", absolute=False, cache=True):
+    def encoded_scalars(
+        self,
+        names,
+        cur_limbs,
+        noise_deg,
+        cryptoContext,
+        *,
+        mode="double",
+        absolute=False,
+        cache=True,
+        scaling_factor=None,
+        scale=None,
+    ):
         if isinstance(names, str):
             names = (names,)
         else:
@@ -98,7 +110,10 @@ class ConstantBundle:
         mode = _normalize_scalar_mode(mode)
         if mode == "double" and noise_deg < 1:
             raise ValueError("double scalar encoding requires noise_deg >= 1")
-        key = _scalar_key(names, cur_limbs, noise_deg, cryptoContext, mode, absolute)
+        scaling_factor = _resolve_scaling_factor_alias(scale, scaling_factor)
+        if mode == "double":
+            scaling_factor = _resolve_double_scalar_scale(cryptoContext, cur_limbs, scaling_factor)
+        key = _scalar_key(names, cur_limbs, noise_deg, cryptoContext, mode, absolute, scaling_factor)
         if cache and self.cache_mode != "none" and key in self._scalar_cache:
             self._cache_stats["scalar_hits"] += 1
             return self._scalar_cache[key]
@@ -111,6 +126,7 @@ class ConstantBundle:
             cryptoContext,
             mode,
             absolute,
+            scaling_factor,
         )
         if cache and _cache_plain(self.cache_mode):
             self._scalar_cache[key] = encoded
@@ -191,12 +207,12 @@ class ConstantBundle:
             )
         }
 
-    def _encode_scalar_values(self, values, cur_limbs, noise_deg, cryptoContext, mode, absolute):
+    def _encode_scalar_values(self, values, cur_limbs, noise_deg, cryptoContext, mode, absolute, scaling_factor):
         rows = []
         for value in values:
             value = abs(value) if absolute else value
             if mode == "double":
-                rows.append(_encode_double_scalar_value(value, cur_limbs, noise_deg, cryptoContext))
+                rows.append(_encode_double_scalar_value(value, cur_limbs, noise_deg, cryptoContext, scaling_factor))
             else:
                 encoded = int(value)
                 rows.append(
@@ -231,13 +247,26 @@ class ConstantBundle:
             self._middle_cache[key] = middle
         return key, middle
 
-    def plaintext(self, name, level, slots, cryptoContext, is_ext=False, cache=True):
+    def plaintext(
+        self,
+        name,
+        level,
+        slots,
+        cryptoContext,
+        is_ext=False,
+        cache=True,
+        *,
+        scaling_factor=None,
+        scale=None,
+        cur_limbs=None,
+    ):
         if not isinstance(name, str):
             raise TypeError(f"ConstantBundle.plaintext name must be str, got {type(name)}")
-        return self._plaintext_single(name, level, slots, cryptoContext, is_ext, cache)
+        scaling_factor = _resolve_scaling_factor_alias(scale, scaling_factor)
+        return self._plaintext_single(name, level, slots, cryptoContext, is_ext, cache, scaling_factor, cur_limbs)
 
-    def _plaintext_single(self, name, level, slots, cryptoContext, is_ext, cache):
-        plain_key = _plain_key(name, level, slots, cryptoContext, is_ext)
+    def _plaintext_single(self, name, level, slots, cryptoContext, is_ext, cache, scaling_factor, cur_limbs):
+        plain_key = _plain_key(name, level, slots, cryptoContext, is_ext, scaling_factor, cur_limbs)
         if cache and self.cache_mode != "none" and plain_key in self._plain_cache:
             self._cache_stats["plain_hits"] += 1
             return self._plain_cache[plain_key]
@@ -250,7 +279,22 @@ class ConstantBundle:
             cache_on_miss=self.cache_mode in {"middle", "both", "mix_of_middle_plain"},
         )
         had_sibling_plain = self._has_plain_for_middle(middle_key)
-        plaintext = encode_stage2(middle, level, slots, is_ext, cryptoContext)
+        if scaling_factor is None and cur_limbs is None:
+            plaintext = encode_stage2(middle, level, slots, is_ext, cryptoContext)
+        else:
+            encode_kwargs = {}
+            if scaling_factor is not None:
+                encode_kwargs["scaling_factor"] = scaling_factor
+            if cur_limbs is not None:
+                encode_kwargs["cur_limbs"] = cur_limbs
+            plaintext = encode_stage2(
+                middle,
+                level,
+                slots,
+                is_ext,
+                cryptoContext,
+                **encode_kwargs,
+            )
         cached_plain = self._maybe_cache_plain(plain_key, middle_key, plaintext, cache, cryptoContext)
         if cache and self.cache_mode == "both":
             self._middle_cache.setdefault(middle_key, middle)
@@ -432,17 +476,19 @@ def _middle_key(name, slots, ring_dim, device):
     return (name, slots, ring_dim, device)
 
 
-def _plain_key(name, level, slots, cryptoContext, is_ext):
+def _plain_key(name, level, slots, cryptoContext, is_ext, scaling_factor, cur_limbs):
     return (
         name,
         level,
         slots,
         is_ext,
         _context_key(cryptoContext),
+        None if scaling_factor is None else float(scaling_factor),
+        None if cur_limbs is None else int(cur_limbs),
     )
 
 
-def _scalar_key(names, cur_limbs, noise_deg, cryptoContext, mode, absolute):
+def _scalar_key(names, cur_limbs, noise_deg, cryptoContext, mode, absolute, scaling_factor):
     return (
         names,
         cur_limbs,
@@ -450,7 +496,7 @@ def _scalar_key(names, cur_limbs, noise_deg, cryptoContext, mode, absolute):
         mode,
         bool(absolute),
         _context_key(cryptoContext),
-        cryptoContext.scale_at(cur_limbs) if mode == "double" else None,
+        None if mode != "double" else float(scaling_factor),
     )
 
 
@@ -461,8 +507,8 @@ def _normalize_scalar_mode(mode):
     return mode
 
 
-def _encode_double_scalar_value(value, cur_limbs, noise_deg, cryptoContext):
-    sc_factor = cryptoContext.scale_at(cur_limbs)
+def _encode_double_scalar_value(value, cur_limbs, noise_deg, cryptoContext, scaling_factor):
+    sc_factor = float(scaling_factor)
 
     log_approx = 0
     magnitude = math.fabs(value * sc_factor)
@@ -503,6 +549,27 @@ def _encode_double_scalar_value(value, cur_limbs, noise_deg, cryptoContext):
 
 def _crt_mult(xs, ys, mods):
     return [(int(x) * int(y)) % int(mod) for x, y, mod in zip(xs, ys, mods)]
+
+
+def _resolve_scaling_factor_alias(scale, scaling_factor):
+    if scale is not None and scaling_factor is not None:
+        raise ValueError("pass either scale or scaling_factor, not both")
+    return scaling_factor if scale is None else scale
+
+
+def _resolve_double_scalar_scale(cryptoContext, cur_limbs, scaling_factor):
+    if scaling_factor is None:
+        if _is_flexible_context(cryptoContext):
+            raise ValueError("ConstantBundle.encoded_scalars requires scaling_factor in flexible scale mode")
+        scaling_factor = cryptoContext.scale_at(cur_limbs)
+    scaling_factor = float(scaling_factor)
+    if scaling_factor <= 0:
+        raise ValueError(f"scalar scaling_factor must be positive, got {scaling_factor}")
+    return scaling_factor
+
+
+def _is_flexible_context(cryptoContext):
+    return str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible"
 
 
 def _resolve_ring_dim(cryptoContext, ring_dim):

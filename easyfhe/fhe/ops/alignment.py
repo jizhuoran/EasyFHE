@@ -3,6 +3,8 @@ from . import kernels as F
 
 
 def plan_add_alignment(in0, in1, context) -> CipherState:
+    if context.scale_mode == "flexible":
+        raise ValueError("flexible mode does not support implicit add alignment; call align_to explicitly")
     if context.rescale_policy == "manual":
         if in0.state.noise_deg != in1.state.noise_deg:
             raise ValueError(
@@ -17,6 +19,8 @@ def plan_add_alignment(in0, in1, context) -> CipherState:
 
 
 def plan_mul_alignment(in0, in1, context) -> tuple[CipherState, CipherState]:
+    if context.scale_mode == "flexible":
+        raise ValueError("flexible mode does not support implicit multiply alignment; call align_to explicitly")
     if context.rescale_policy == "manual":
         target_limbs = min(in0.state.cur_limbs, in1.state.cur_limbs)
         return (
@@ -33,6 +37,8 @@ def align_to(cipher, target: CipherState, context):
     if context.scale_mode == "fixed":
         return _align_fixed(cipher, target, context)
     if context.scale_mode == "flexible":
+        if not _has_target_scale(target):
+            raise ValueError("flexible align_to requires target.scaling_factor")
         return _align_flexible(cipher, target, context)
     raise ValueError(f"Unsupported scale mode: {context.scale_mode}")
 
@@ -157,6 +163,8 @@ def _align_fixed(cipher, target, context):
 
 
 def _align_flexible(cipher, target, context):
+    _validate_flexible_noise(cipher.state.noise_deg, "_align_flexible source")
+    _validate_flexible_noise(target.noise_deg, "_align_flexible target")
     if cipher.state.cur_limbs == target.cur_limbs:
         return _align_flexible_same_limbs(cipher, target, context)
 
@@ -173,28 +181,54 @@ def _align_flexible(cipher, target, context):
 
 
 def _align_flexible_same_limbs(cipher, target, context):
-    if cipher.state.noise_deg < target.noise_deg:
-        return _multiply_by_scale_correction(cipher, 1.0, context)
+    if cipher.state.noise_deg == target.noise_deg:
+        if _has_target_scale(target) and not _scale_close(cipher.state.scaling_factor, target.scaling_factor):
+            raise ValueError(
+                "_align_flexible cannot change scale at the same limb/noise state without consuming a rescale limb: "
+                f"cur_limbs={cipher.state.cur_limbs}, noise_deg={cipher.state.noise_deg}"
+            )
+        return _with_target_scale(cipher.shallow_copy(), target)
+    if cipher.state.noise_deg == 1 and target.noise_deg == 2:
+        return _align_flexible_1_to_2(cipher, target, context)
+    if cipher.state.noise_deg == 2 and target.noise_deg == 1:
+        raise ValueError(
+            "_align_flexible cannot reduce noise_deg at the same limb count; "
+            "one rescale limb must be consumed"
+        )
     return cipher.shallow_copy()
 
 
 def _align_flexible_2_to_2(cipher, target, context):
-    target_scale = _require_target_scale(target, "_align_flexible_2_to_2")
-    scale = context.scale_at(cipher.state.cur_limbs)
-    divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
-    correction_factor = target_scale / cipher.state.scaling_factor * divisor / scale
-    cipher = _multiply_by_scale_correction(cipher, correction_factor, context)
+    if _scale_close(cipher.state.scaling_factor, target.scaling_factor):
+        if cipher.state.cur_limbs > target.cur_limbs:
+            cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
+        return _with_target_scale(cipher, target)
+    if cipher.state.cur_limbs <= target.cur_limbs:
+        raise ValueError(
+            "_align_flexible_2_to_2 cannot change scale without first rescaling to noise_deg=1"
+        )
     cipher = _rescale_one_level(cipher, context)
-    if cipher.state.cur_limbs > target.cur_limbs:
-        cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
-    return _with_target_scale(cipher, target)
+    return _align_flexible_1_to_2(cipher, target, context)
 
 
 def _align_flexible_1_to_1(cipher, target, context):
-    correction_factor = _flexible_1_to_1_correction_factor(cipher, target, context)
-    cipher = _multiply_by_scale_correction(cipher, correction_factor, context)
-    if cipher.state.cur_limbs > target.cur_limbs + 1:
-        cipher = _drop_to_limbs(cipher, target.cur_limbs + 1, context)
+    if _scale_close(cipher.state.scaling_factor, target.scaling_factor):
+        if cipher.state.cur_limbs > target.cur_limbs:
+            cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
+        return _with_target_scale(cipher, target)
+    if cipher.state.cur_limbs <= target.cur_limbs:
+        raise ValueError(
+            "_align_flexible_1_to_1 cannot change scale without consuming one rescale limb"
+        )
+    pre_rescale_limbs = int(target.cur_limbs) + 1
+    if cipher.state.cur_limbs > pre_rescale_limbs:
+        cipher = _drop_to_limbs(cipher, pre_rescale_limbs, context)
+    divisor = context.rescale_divisor_at(target.cur_limbs)
+    correction_scale = float(target.scaling_factor) * float(divisor) / _require_scale(
+        cipher.state.scaling_factor,
+        "_align_flexible_1_to_1",
+    )
+    cipher = _multiply_by_scale_correction(cipher, 1.0, context, scaling_factor=correction_scale)
     cipher = _rescale_one_level(cipher, context)
     return _with_target_scale(cipher, target)
 
@@ -202,44 +236,33 @@ def _align_flexible_1_to_1(cipher, target, context):
 def _align_flexible_2_to_1(cipher, target, context):
     if cipher.state.cur_limbs == target.cur_limbs + 1:
         cipher = _rescale_one_level(cipher, context)
+        if _has_target_scale(target) and not _scale_close(cipher.state.scaling_factor, target.scaling_factor):
+            raise ValueError(
+                "_align_flexible_2_to_1 target scale is not reachable at the requested limb count: "
+                f"natural_scale={cipher.state.scaling_factor}, target_scale={target.scaling_factor}"
+            )
         return _with_target_scale(cipher, target)
-
-    pre_rescale_target_scale = _pre_rescale_target_scale(target, context)
-    scale = context.scale_at(cipher.state.cur_limbs)
-    divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
-    correction_factor = pre_rescale_target_scale / cipher.state.scaling_factor * divisor / scale
-    cipher = _multiply_by_scale_correction(cipher, correction_factor, context)
     cipher = _rescale_one_level(cipher, context)
-    if cipher.state.cur_limbs > target.cur_limbs + 1:
-        cipher = _drop_to_limbs(cipher, target.cur_limbs + 1, context)
-    cipher = _rescale_one_level(cipher, context)
-    return _with_target_scale(cipher, target)
+    return _align_flexible_1_to_1(cipher, target, context)
 
 
 def _align_flexible_1_to_2(cipher, target, context):
-    target_scale = _require_target_scale(target, "_align_flexible_1_to_2")
-    correction_factor = target_scale / cipher.state.scaling_factor / context.scale_at(cipher.state.cur_limbs)
-    cipher = _multiply_by_scale_correction(cipher, correction_factor, context)
-    cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
-    return cipher.cipher_like(cipher.cv, state=cipher.state.replace(scaling_factor=target_scale))
-
-
-def _flexible_1_to_1_correction_factor(cipher, target, context):
-    if not _has_target_scale(target):
-        return 1.0
-    return (
-        target.scaling_factor
-        * context.rescale_divisor_at(target.cur_limbs)
-        / cipher.state.scaling_factor
-        / context.scale_at(cipher.state.cur_limbs)
+    if cipher.state.cur_limbs > target.cur_limbs:
+        cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
+    correction_scale = float(target.scaling_factor) / _require_scale(
+        cipher.state.scaling_factor,
+        "_align_flexible_1_to_2",
     )
+    cipher = _multiply_by_scale_correction(cipher, 1.0, context, scaling_factor=correction_scale)
+    return _with_target_scale(cipher, target)
 
 
-def _multiply_by_scale_correction(cipher, correction_factor, context):
+def _multiply_by_scale_correction(cipher, correction_factor, context, *, scaling_factor=None):
     if cipher.is_ext:
         raise ValueError("_multiply_by_scale_correction: ext ciphers must be moddowned before scale correction")
 
-    factors = _scale_correction_factors(correction_factor, cipher.state.cur_limbs, context)
+    scale = context.scale_at(cipher.state.cur_limbs) if scaling_factor is None else float(scaling_factor)
+    factors = _scale_correction_factors(correction_factor, cipher.state.cur_limbs, context, scaling_factor=scale)
     scalar_mod = F.gen_scalar_tensor(factors, context.moduliQ_scalar, cipher.state.cur_limbs)
     scalar_mod = scalar_mod.to(cipher.cv[0].device)
     cv = [
@@ -252,7 +275,6 @@ def _multiply_by_scale_correction(cipher, correction_factor, context):
         )
         for component in cipher.cv
     ]
-    scale = context.scale_at(cipher.state.cur_limbs)
     return cipher.cipher_like(
         cv,
         state=CipherState(
@@ -263,8 +285,8 @@ def _multiply_by_scale_correction(cipher, correction_factor, context):
     )
 
 
-def _scale_correction_factors(correction_factor, cur_limbs, context):
-    scale = context.scale_at(cur_limbs)
+def _scale_correction_factors(correction_factor, cur_limbs, context, *, scaling_factor=None):
+    scale = context.scale_at(cur_limbs) if scaling_factor is None else float(scaling_factor)
     value = int(correction_factor * scale + 0.5)
     return [value % int(context.moduliQ_scalar[i]) for i in range(cur_limbs)]
 
@@ -289,3 +311,23 @@ def _pre_rescale_target_scale(target: CipherState, context):
     if _has_target_scale(target):
         return target.scaling_factor * context.rescale_divisor_at(target.cur_limbs)
     return context.big_scale_at(target.cur_limbs + 1)
+
+
+def _validate_flexible_noise(noise_deg, op_name):
+    if int(noise_deg) not in (1, 2):
+        raise ValueError(f"{op_name}: u64 flexible alignment supports only noise_deg 1 or 2, got {noise_deg}")
+
+
+def _require_scale(scale, op_name):
+    if scale is None:
+        raise ValueError(f"{op_name}: scaling_factor is required for flexible scale alignment")
+    return float(scale)
+
+
+def _scale_close(actual, expected):
+    actual = _require_scale(actual, "_scale_close actual")
+    expected = _require_scale(expected, "_scale_close expected")
+    if actual <= 0 or expected <= 0:
+        return False
+    rel = abs(actual - expected) / max(abs(actual), abs(expected))
+    return rel <= 1e-8

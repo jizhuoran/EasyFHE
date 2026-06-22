@@ -193,13 +193,12 @@ def _cipher_mul(in0, in1, cryptoContext):
         in0.state.cur_limbs,
     )
     axax = F.cv_mul(in0.cv[1], in1.cv[1], cryptoContext.moduliQ, cryptoContext.q_mu, in0.state.cur_limbs)
-    sc_factor = cryptoContext.scale_at(in0.state.cur_limbs)
     return in0.cipher_like(
         [bx, ax, axax],
         state=CipherState(
             in0.state.cur_limbs,
             in0.state.noise_deg + in1.state.noise_deg,
-            in0.state.scaling_factor * sc_factor,
+            in0.state.scaling_factor * in1.state.scaling_factor,
         ),
     )
 

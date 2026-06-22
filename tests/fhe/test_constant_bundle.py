@@ -200,7 +200,7 @@ def test_constant_bundle_accepts_cuda_real_tensor_vectors(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")
-def test_constant_bundle_rejects_scale_argument_for_cuda_packed_tensor_vectors():
+def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors():
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
@@ -209,8 +209,9 @@ def test_constant_bundle_rejects_scale_argument_for_cuda_packed_tensor_vectors()
     packed = torch.zeros(8, dtype=torch.complex128, device="cuda")
     bundle = fhe.ConstantBundle(vectors={"w": fhe.PackedRaw(packed)}, cache_mode="none")
 
-    with pytest.raises(TypeError, match="unexpected keyword argument 'scale'"):
-        bundle.plaintext("w", 1, 8, cuda_ctx, scale=2.0)
+    plaintext = bundle.plaintext("w", 1, 8, cuda_ctx, scale=2.0)
+
+    assert plaintext.state.scaling_factor == 2.0
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")
@@ -284,14 +285,22 @@ def test_constant_bundle_rejects_unpadded_vector_values():
         raise AssertionError("expected unpadded raw vector to fail")
 
 
-def test_constant_bundle_rejects_scale_argument_for_vector_values():
+def test_constant_bundle_accepts_scale_alias_for_vector_values(monkeypatch):
     bundle = fhe.ConstantBundle(
         vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
         cache_mode="none",
     )
+    calls = []
 
-    with pytest.raises(TypeError, match="unexpected keyword argument 'scale'"):
-        bundle.plaintext("w", 3, 4, SimpleNamespace(N=8), scale=2.0)
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context, *, scaling_factor=None):
+        calls.append(scaling_factor)
+        return _cipher("w")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+
+    bundle.plaintext("w", 3, 4, SimpleNamespace(N=8), scale=2.0)
+
+    assert calls == [2.0]
 
 
 def test_constant_bundle_rejects_bare_list_and_numpy_vectors():
@@ -558,3 +567,84 @@ def test_constant_bundle_encodes_double_scalars_at_requested_noise_degree():
 
     assert encoded.shape == (1, 3)
     assert encoded.tolist() == [[11, 1, 4]]
+
+
+def test_constant_bundle_flexible_plaintext_requires_explicit_scaling_factor():
+    ctx = SimpleNamespace(N=8, L=4, scale_mode="flexible")
+    bundle = fhe.ConstantBundle(
+        vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
+        cache_mode="none",
+    )
+
+    with pytest.raises(ValueError, match="requires scaling_factor"):
+        bundle.plaintext("w", 3, 4, ctx)
+
+
+def test_constant_bundle_plain_cache_keys_include_scaling_factor(monkeypatch):
+    ctx = SimpleNamespace(N=8, L=4, scale_mode="flexible")
+    bundle = fhe.ConstantBundle(
+        vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
+        cache_mode="plain",
+    )
+    calls = []
+
+    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context, *, scaling_factor=None):
+        calls.append(scaling_factor)
+        return _cipher(f"w-{scaling_factor}")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+
+    first = bundle.plaintext("w", 3, 4, ctx, scaling_factor=8.0)
+    second = bundle.plaintext("w", 3, 4, ctx, scaling_factor=16.0)
+    again = bundle.plaintext("w", 3, 4, ctx, scaling_factor=8.0)
+
+    assert calls == [8.0, 16.0]
+    assert first is again
+    assert first is not second
+
+
+def test_constant_bundle_plaintext_passes_explicit_cur_limbs_and_scaling_factor(monkeypatch):
+    ctx = SimpleNamespace(N=8, L=4, scale_mode="flexible")
+    bundle = fhe.ConstantBundle(
+        vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
+        cache_mode="none",
+    )
+    calls = []
+
+    def fake_encode_stage2(
+        middle,
+        level,
+        slots,
+        is_ext,
+        crypto_context,
+        *,
+        scaling_factor=None,
+        cur_limbs=None,
+    ):
+        calls.append((level, scaling_factor, cur_limbs))
+        return _cipher("w")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
+
+    bundle.plaintext("w", level=None, slots=4, cryptoContext=ctx, scaling_factor=8.0, cur_limbs=2)
+
+    assert calls == [(None, 8.0, 2)]
+
+
+def test_constant_bundle_flexible_double_scalars_require_explicit_scaling_factor():
+    ctx = SimpleNamespace(
+        device="cpu",
+        N=8,
+        L=4,
+        scale_mode="flexible",
+        rescale_policy="auto",
+        moduliQ_scalar=[17, 19, 23, 29],
+    )
+    bundle = fhe.ConstantBundle(scalars={"alpha": 1.5}, cache_mode="none")
+
+    with pytest.raises(ValueError, match="requires scaling_factor"):
+        bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double")
+
+    encoded = bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double", scaling_factor=8.0)
+
+    assert encoded.tolist() == [[12, 12, 12]]

@@ -213,12 +213,150 @@ def test_flexible_alignment_uses_scale_correction_and_target_scale(monkeypatch):
     cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=1)
     result = alignment.align_to(cipher, CipherState(2, 1, 5.0), _flex_context())
 
-    assert calls["scalars"] == (8, 8, 8, 8)
-    assert calls["cur_limbs"] == 4
-    assert calls["mul_cur_limbs"] == 4
+    assert calls["scalars"] == (8, 8, 8)
+    assert calls["cur_limbs"] == 3
+    assert calls["mul_cur_limbs"] == 3
     assert calls["rescale_cur_limbs"] == 3
     assert result.state == CipherState(2, 1, 5.0)
     assert tuple(result.cv[0].shape) == (1, 2, 64)
+
+
+def test_flexible_alignment_rejects_same_limb_scale_change():
+    cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=1)
+
+    with pytest.raises(ValueError, match="cannot change scale at the same limb/noise state"):
+        alignment.align_to(cipher, CipherState(4, 1, 5.0), _flex_context())
+
+
+def test_flexible_alignment_can_raise_noise_degree_with_requested_scale(monkeypatch):
+    calls = {}
+
+    def fake_scalar_tensor(values, moduli, cur_limbs):
+        calls["scalars"] = tuple(int(value) for value in values)
+        calls["cur_limbs"] = cur_limbs
+        return torch.tensor(values, dtype=torch.uint64)
+
+    def fake_mul_scalar(component, scalar, moduli, mu, cur_limbs):
+        calls["mul_cur_limbs"] = cur_limbs
+        return component.clone()
+
+    monkeypatch.setattr(alignment.F, "gen_scalar_tensor", fake_scalar_tensor)
+    monkeypatch.setattr(alignment.F, "cv_mul_scalar", fake_mul_scalar)
+
+    cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=1)
+    result = alignment.align_to(cipher, CipherState(3, 2, 20.0), _flex_context())
+
+    assert calls["scalars"] == (10, 10, 10)
+    assert calls["cur_limbs"] == 3
+    assert calls["mul_cur_limbs"] == 3
+    assert result.state == CipherState(3, 2, 20.0)
+    assert tuple(result.cv[0].shape) == (1, 6, 64)
+
+
+def test_flexible_alignment_reduces_noise_by_physical_rescale(monkeypatch):
+    calls = {}
+
+    def fake_rescale(component, cur_limbs, _level, context):
+        calls["rescale_cur_limbs"] = cur_limbs
+        return component[..., : cur_limbs - 1, :].clone()
+
+    monkeypatch.setattr(alignment.F, "cv_rescale_one_level", fake_rescale)
+
+    cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=2)
+    cipher = cipher.cipher_like(cipher.cv, state=CipherState(4, 2, 21.0))
+    result = alignment.align_to(cipher, CipherState(3, 1, 7.0), _flex_context())
+
+    assert calls["rescale_cur_limbs"] == 4
+    assert result.state == CipherState(3, 1, 7.0)
+    assert tuple(result.cv[0].shape) == (1, 3, 64)
+
+
+def test_flexible_alignment_rejects_unreachable_2_to_1_scale_at_adjacent_limb(monkeypatch):
+    def fake_rescale(component, cur_limbs, _level, context):
+        return component[..., : cur_limbs - 1, :].clone()
+
+    monkeypatch.setattr(alignment.F, "cv_rescale_one_level", fake_rescale)
+
+    cipher = _cipher("flex", cur_limbs=4, capacity=6, noise_deg=2)
+    cipher = cipher.cipher_like(cipher.cv, state=CipherState(4, 2, 21.0))
+    with pytest.raises(ValueError, match="target scale is not reachable"):
+        alignment.align_to(cipher, CipherState(3, 1, 8.0), _flex_context())
+
+
+def test_flexible_homo_add_does_not_auto_align_scale():
+    ctx = _flex_context()
+    left = _cipher("left", cur_limbs=3, capacity=5, noise_deg=1)
+    right = _cipher("right", cur_limbs=3, capacity=5, noise_deg=1)
+    right = right.cipher_like(right.cv, state=right.state.replace(scaling_factor=5.0))
+
+    with pytest.raises(ValueError, match="scaling_factor"):
+        fhe.homo_add(left, right, ctx)
+
+
+def test_flexible_homo_mul_allows_different_scales_and_tracks_product(monkeypatch):
+    ctx = _flex_context()
+    left = _cipher("left", cur_limbs=3, capacity=5, noise_deg=1)
+    right = _cipher("right", cur_limbs=3, capacity=5, noise_deg=1)
+    right = right.cipher_like(right.cv, state=right.state.replace(scaling_factor=7.0))
+
+    def fake_mul(x, y, modulus, mu, cur_limbs):
+        assert cur_limbs == 3
+        return _uint64_tensor((1, 5, 64), fill=13)
+
+    def fake_add(x, y, modulus, cur_limbs):
+        assert cur_limbs == 3
+        return _uint64_tensor((1, 5, 64), fill=17)
+
+    monkeypatch.setattr(arithmetic.F, "cv_mul", fake_mul)
+    monkeypatch.setattr(arithmetic.F, "cv_add", fake_add)
+
+    result = fhe.homo_mul_no_relin(left, right, ctx)
+
+    assert result.state.cur_limbs == 3
+    assert result.state.noise_deg == 2
+    assert result.state.scaling_factor == 14.0
+
+
+def test_flexible_homo_mul_rejects_limb_mismatch():
+    ctx = _flex_context()
+    left = _cipher("left", cur_limbs=3, capacity=5, noise_deg=1)
+    right = _cipher("right", cur_limbs=2, capacity=5, noise_deg=1)
+
+    with pytest.raises(ValueError, match="cur_limbs"):
+        fhe.homo_mul_no_relin(left, right, ctx)
+
+
+def test_flexible_homo_mul_rejects_pending_noise_degree():
+    ctx = _flex_context()
+    left = _cipher("left", cur_limbs=3, capacity=5, noise_deg=2)
+    right = _cipher("right", cur_limbs=3, capacity=5, noise_deg=1)
+
+    with pytest.raises(ValueError, match="noise_deg=1"):
+        fhe.homo_mul_no_relin(left, right, ctx)
+
+
+def test_flexible_homo_mul_pt_allows_different_scales(monkeypatch):
+    ctx = _flex_context()
+    cipher = _cipher("cipher", cur_limbs=3, capacity=5, noise_deg=1)
+    plain = _plaintext_from_active(
+        "plain",
+        _uint64_tensor((3, 64), fill=3),
+        capacity=5,
+        inactive_fill=99,
+    )
+    plain = plain.cipher_like(plain.cv, state=plain.state.replace(scaling_factor=11.0))
+
+    def fake_mul(component, plaintext, modulus, mu, cur_limbs):
+        assert cur_limbs == 3
+        return component.clone()
+
+    monkeypatch.setattr(arithmetic.F, "cv_mul", fake_mul)
+
+    result = fhe.homo_mul_pt(cipher, plain, ctx)
+
+    assert result.state.cur_limbs == 3
+    assert result.state.noise_deg == 2
+    assert result.state.scaling_factor == 22.0
 
 
 def test_homo_add_preserves_left_operand_capacity():

@@ -31,13 +31,62 @@ _POST_PLAINTEXT = 4
 
 
 def _align_for_add_or_sub(in0, in1, cryptoContext):
+    if _is_flexible(cryptoContext):
+        validation.validate_binary_cipher_op(
+            "flexible add/sub",
+            in0,
+            in1,
+            require_same_metadata=("slots", "cur_limbs", "noise_deg", "scaling_factor"),
+        )
+        return in0, in1
     target = alignment.plan_add_alignment(in0, in1, cryptoContext)
     return alignment.align_to(in0, target, cryptoContext), alignment.align_to(in1, target, cryptoContext)
 
 
 def _align_for_mul(ct1: Cipher, ct2: Cipher, cryptoContext):
+    if _is_flexible(cryptoContext):
+        _validate_flexible_mul_inputs("flexible cipher multiplication", ct1, ct2)
+        return ct1, ct2
     target1, target2 = alignment.plan_mul_alignment(ct1, ct2, cryptoContext)
     return alignment.align_to(ct1, target1, cryptoContext), alignment.align_to(ct2, target2, cryptoContext)
+
+
+def _is_flexible(cryptoContext):
+    return str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible"
+
+
+def _validate_flexible_mul_inputs(op_name, left, right):
+    validation.validate_binary_cipher_op(
+        op_name,
+        left,
+        right,
+        require_same_metadata=("slots", "cur_limbs"),
+    )
+    for arg_name, value in (("left", left), ("right", right)):
+        if int(value.state.noise_deg) != 1:
+            raise ValueError(
+                f"{op_name}: flexible multiplication requires normalized noise_deg=1 inputs; "
+                f"{arg_name} has noise_deg={value.state.noise_deg}"
+            )
+        if value.state.scaling_factor is None:
+            raise ValueError(f"{op_name}: {arg_name} scaling_factor is required")
+
+
+def _validate_flexible_mul_plain_inputs(op_name, cipher, plaintext):
+    validation.validate_cipher_plain_op(
+        op_name,
+        cipher,
+        plaintext,
+        require_same_metadata=("cur_limbs", "slots"),
+    )
+    for arg_name, value in (("cipher", cipher), ("plaintext", plaintext)):
+        if int(value.state.noise_deg) != 1:
+            raise ValueError(
+                f"{op_name}: flexible plaintext multiplication requires normalized noise_deg=1 inputs; "
+                f"{arg_name} has noise_deg={value.state.noise_deg}"
+            )
+        if value.state.scaling_factor is None:
+            raise ValueError(f"{op_name}: {arg_name} scaling_factor is required")
 
 
 def _validate_inplace_add_or_sub(op_name, in0, in1):
@@ -145,6 +194,9 @@ def homo_add_pt_inplace(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    if _is_flexible(cryptoContext):
+        _validate_flexible_mul_plain_inputs("homo_mul_pt", cipher, plaintext)
+        return _cipher_mul_plain(cipher, plaintext, cryptoContext)
     validation.validate_cipher_plain_op(
         "homo_mul_pt",
         cipher,
@@ -155,6 +207,9 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, cryptoContext):
 
 
 def homo_mul_pt_inplace(cipher: Cipher, plaintext: Plaintext, cryptoContext):
+    if _is_flexible(cryptoContext):
+        _validate_flexible_mul_plain_inputs("homo_mul_pt_inplace", cipher, plaintext)
+        return _cipher_mul_plain_inplace(cipher, plaintext, cryptoContext)
     validation.validate_cipher_plain_op(
         "homo_mul_pt_inplace",
         cipher,
@@ -298,13 +353,16 @@ def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
             f"got {plaintexts.batch_size} != {groups} * {ciphers.batch_size}"
         )
 
-    validation.validate_cipher_plain_op(
-        "grouped_pairwise_mac",
-        ciphers,
-        plaintexts,
-        require_noise_deg=1,
-        require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
-    )
+    if _is_flexible(cryptoContext):
+        _validate_flexible_mul_plain_inputs("grouped_pairwise_mac", ciphers, plaintexts)
+    else:
+        validation.validate_cipher_plain_op(
+            "grouped_pairwise_mac",
+            ciphers,
+            plaintexts,
+            require_noise_deg=1,
+            require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
+        )
     cv = F.cipher_grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext)
     return ciphers.cipher_like(
         list(cv),
@@ -370,7 +428,7 @@ def homo_mul_relin_rescale_postop(
     mod_reduce_factor = cryptoContext.rescale_divisor_at(out_cur_limbs)
     out_scaling_factor = (
         in0.state.scaling_factor
-        * cryptoContext.scale_at(in0.state.cur_limbs)
+        * in1.state.scaling_factor
         / mod_reduce_factor
     )
     out_state = CipherState(
@@ -389,7 +447,16 @@ def homo_mul_relin_rescale_postop(
             require_ext=False,
             require_same_metadata=("slots",),
         )
-        add = alignment.align_to(add, out_state, cryptoContext)
+        if _is_flexible(cryptoContext):
+            validation.validate_binary_cipher_op(
+                "homo_mul_relin_rescale_postop post add",
+                in0.cipher_like(in0.cv, state=out_state),
+                add,
+                require_ext=False,
+                require_same_metadata=("cur_limbs", "noise_deg", "scaling_factor", "slots"),
+            )
+        else:
+            add = alignment.align_to(add, out_state, cryptoContext)
         post_c0, post_c1 = add.cv
         post_op = _POST_ADD
     elif sub is not None:
@@ -400,7 +467,16 @@ def homo_mul_relin_rescale_postop(
             require_ext=False,
             require_same_metadata=("slots",),
         )
-        sub = alignment.align_to(sub, out_state, cryptoContext)
+        if _is_flexible(cryptoContext):
+            validation.validate_binary_cipher_op(
+                "homo_mul_relin_rescale_postop post sub",
+                in0.cipher_like(in0.cv, state=out_state),
+                sub,
+                require_ext=False,
+                require_same_metadata=("cur_limbs", "noise_deg", "scaling_factor", "slots"),
+            )
+        else:
+            sub = alignment.align_to(sub, out_state, cryptoContext)
         post_c0, post_c1 = sub.cv
         post_op = _POST_SUB
     elif scalar is not None:
