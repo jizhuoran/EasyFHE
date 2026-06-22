@@ -148,6 +148,8 @@ def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count,
     if int(giant_count) == 1:
         result = cipher_batch_item(partial_sums, 0)
         return moddown_from_ext(result, cryptoContext) if result.is_ext else result
+    if int(giant_offset) == 0:
+        return _sum_batch_items_without_rotation(partial_sums, cryptoContext)
     return giant_rotate_sum(partial_sums, giant_offset, cryptoContext, strategy=strategy)
 
 
@@ -203,6 +205,17 @@ def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy=HOIST_NORMAL):
     for index in range(len(ciphers) - 2, -1, -1):
         result = homo_rotate_add(result, offset, cryptoContext, addend=ciphers[index])
     return result
+
+
+def _sum_batch_items_without_rotation(ciphers, cryptoContext):
+    from .primitives import _cipher_add
+
+    validation.require_batched_cipher("_sum_batch_items_without_rotation", ciphers, "ciphers")
+    items = unpack_cipher_batch(ciphers)
+    result = items[0]
+    for item in items[1:]:
+        result = _cipher_add(result, item, cryptoContext)
+    return moddown_from_ext(result, cryptoContext) if result.is_ext else result
 
 
 # Ext-domain conversion.
