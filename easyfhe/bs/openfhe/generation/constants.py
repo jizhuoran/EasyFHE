@@ -123,19 +123,18 @@ def _run_bootstrap_setup(crypto_context, plan):
         plan.level_budget,
         plan.dim1,
         plan.slots,
-        0,
+        _bootstrap_correction_factor(crypto_context),
         baby_step=plan.baby_step,
     )
     return precompute
 
 
 def _compute_bootstrap_scalars(crypto_context, plan, k):
-    q0 = float(crypto_context.moduliQ_scalar[0])
-    p = crypto_context.dcrtBits
-    deg = int(_round_half_away_from_zero(math.log2(q0) - p))
+    q0 = float(_first_logical_modulus(crypto_context))
+    deg = _bootstrap_evalmod_degree(crypto_context)
 
     N = crypto_context.N
-    correction_factor = 9
+    correction_factor = _bootstrap_correction_factor(crypto_context)
 
     correction = correction_factor - deg
     correction_scale = 2.0**(-correction)
@@ -155,6 +154,29 @@ def _compute_bootstrap_scalars(crypto_context, plan, k):
         constant_eval_mult=constant_eval_mult,
         cor_factor=cor_factor,
     )
+
+
+def _first_logical_modulus(crypto_context):
+    limb_count = int(getattr(crypto_context, "first_mod_limb_count", 1))
+    modulus = 1
+    for idx in range(limb_count):
+        modulus *= int(crypto_context.moduliQ_scalar[idx])
+    return modulus
+
+
+def _bootstrap_real_evaluation_scale(crypto_context):
+    return float(crypto_context.physical_rescale_divisor_for_limbs(crypto_context.L, 1))
+
+
+def _bootstrap_evalmod_degree(crypto_context):
+    return math.log2(float(_first_logical_modulus(crypto_context))) - math.log2(
+        _bootstrap_real_evaluation_scale(crypto_context)
+    )
+
+
+def _bootstrap_correction_factor(crypto_context):
+    deg = int(_round_half_away_from_zero(_bootstrap_evalmod_degree(crypto_context)))
+    return 9 if deg <= 9 else deg + 9
 
 
 def _constants_from_precompute(plan, precompute, required_rotations, crypto_context):

@@ -32,11 +32,14 @@ class CkksSamplerConfig:
     depth: int = 2
     dcrt_bits: int = 50
     first_mod: int = 60
+    first_mod_limb_count: int = 1
     dnum: int = 3
     secret_key_dist: str = "SPARSE_TERNARY"
     rotation_key_limb_limits: dict[int, int] | None = None
     random_mode: str = "sequential"
     rotation_random_mode: str = "fresh"
+    q_prime_bits: tuple[int, ...] | None = None
+    exact_q_primes: tuple[int, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -95,23 +98,48 @@ def sample_native_context(
     config: CkksSamplerConfig,
     slots: int = 0,
 ) -> NativeContextBundle:
-    tensors = torch.fhe_native_sample_ckks(
-        torch.as_tensor([0.0], dtype=torch.float64, device="cpu"),
-        int(config.log_n),
-        int(config.depth),
-        int(config.dcrt_bits),
-        int(config.first_mod),
-        int(config.dnum),
-        str(config.secret_key_dist),
-        True,
-        False,
-        1,
-        0,
-        int(slots),
-        str(config.random_mode),
-        3.19,
-        1,
-    )
+    values = torch.as_tensor([0.0], dtype=torch.float64, device="cpu")
+    try:
+        tensors = torch.fhe_native_sample_ckks(
+            values,
+            int(config.log_n),
+            int(config.depth),
+            int(config.dcrt_bits),
+            int(config.first_mod),
+            int(config.first_mod_limb_count),
+            _q_prime_bits(config),
+            torch.as_tensor(_exact_q_primes(config), dtype=torch.uint64, device="cpu"),
+            int(config.dnum),
+            str(config.secret_key_dist),
+            True,
+            False,
+            1,
+            0,
+            int(slots),
+            str(config.random_mode),
+            3.19,
+            1,
+        )
+    except TypeError:
+        if config.exact_q_primes is not None or config.q_prime_bits is not None or int(config.first_mod_limb_count) != 1:
+            raise
+        tensors = torch.fhe_native_sample_ckks(
+            values,
+            int(config.log_n),
+            int(config.depth),
+            int(config.dcrt_bits),
+            int(config.first_mod),
+            int(config.dnum),
+            str(config.secret_key_dist),
+            True,
+            False,
+            1,
+            0,
+            int(slots),
+            str(config.random_mode),
+            3.19,
+            1,
+        )
     (
         moduli_q,
         roots_q,
@@ -185,6 +213,24 @@ def split_native_client_server(
     return client, server
 
 
+def _q_prime_bits(config):
+    if config.q_prime_bits is None:
+        return ()
+    return tuple(int(bit) for bit in config.q_prime_bits)
+
+
+def _exact_q_primes(config):
+    if config.exact_q_primes is None:
+        return ()
+    primes = tuple(int(prime) for prime in config.exact_q_primes)
+    expected = int(config.depth) + 1
+    if len(primes) != expected:
+        raise ValueError(f"exact_q_primes must contain {expected} Q primes, got {len(primes)}")
+    if any(prime <= 2 for prime in primes):
+        raise ValueError("exact_q_primes must contain primes greater than 2")
+    return primes
+
+
 def sample_native_client_server(
     config: CkksSamplerConfig,
     rotation_indices=(),
@@ -228,24 +274,55 @@ def sample_native_rotation_keys(
     )
     trim_auto_indices = [int(key) for key in trim_map]
     trim_limbs = [int(trim_map[key]) for key in trim_map]
-    tensors = torch.fhe_native_sample_rotation_keys(
-        torch.as_tensor(np.asarray(secret_key, dtype=np.uint64), dtype=torch.uint64, device="cpu"),
-        torch.as_tensor(np.asarray(secret_key_coeff, dtype=np.int64), dtype=torch.int64, device="cpu"),
-        int(config.log_n),
-        int(config.depth),
-        int(config.dcrt_bits),
-        int(config.first_mod),
-        int(config.dnum),
-        str(config.secret_key_dist),
-        rotation_indices,
-        rotation_offsets,
-        trim_auto_indices,
-        trim_limbs,
-        str(config.rotation_random_mode),
-        str(config.random_mode),
-        3.19,
-        1,
+    secret_key_tensor = torch.as_tensor(np.asarray(secret_key, dtype=np.uint64), dtype=torch.uint64, device="cpu")
+    secret_key_coeff_tensor = torch.as_tensor(
+        np.asarray(secret_key_coeff, dtype=np.int64),
+        dtype=torch.int64,
+        device="cpu",
     )
+    try:
+        tensors = torch.fhe_native_sample_rotation_keys(
+            secret_key_tensor,
+            secret_key_coeff_tensor,
+            int(config.log_n),
+            int(config.depth),
+            int(config.dcrt_bits),
+            int(config.first_mod),
+            int(config.first_mod_limb_count),
+            _q_prime_bits(config),
+            torch.as_tensor(_exact_q_primes(config), dtype=torch.uint64, device="cpu"),
+            int(config.dnum),
+            str(config.secret_key_dist),
+            rotation_indices,
+            rotation_offsets,
+            trim_auto_indices,
+            trim_limbs,
+            str(config.rotation_random_mode),
+            str(config.random_mode),
+            3.19,
+            1,
+        )
+    except TypeError:
+        if config.exact_q_primes is not None or config.q_prime_bits is not None or int(config.first_mod_limb_count) != 1:
+            raise
+        tensors = torch.fhe_native_sample_rotation_keys(
+            secret_key_tensor,
+            secret_key_coeff_tensor,
+            int(config.log_n),
+            int(config.depth),
+            int(config.dcrt_bits),
+            int(config.first_mod),
+            int(config.dnum),
+            str(config.secret_key_dist),
+            rotation_indices,
+            rotation_offsets,
+            trim_auto_indices,
+            trim_limbs,
+            str(config.rotation_random_mode),
+            str(config.random_mode),
+            3.19,
+            1,
+        )
     return _decode_rotation_tensors(list(tensors))
 
 

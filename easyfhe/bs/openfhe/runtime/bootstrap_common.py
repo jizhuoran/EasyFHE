@@ -24,6 +24,8 @@ def coeffs_slots_conversion(ciphertext, transform_plan, constants, bootstrap_pla
             step.plaintext_slots,
             cryptoContext,
             is_ext=is_ext,
+            scaling_factor=_transform_plaintext_encode_scale(result.state, transform_plan, cryptoContext),
+            cur_limbs=result.state.cur_limbs,
         )
         result = rotation.hoisted_mac_sum(
             result,
@@ -79,18 +81,53 @@ def raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
     correction_scale = bootstrap_constants._scalar_value("correction_scale")
     result = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
 
+    source_scale = float(result.state.scaling_factor)
+    target_scale = float(cryptoContext.scale_at(cryptoContext.L))
+    correction_drop_count = int(getattr(cryptoContext, "first_mod_limb_count", 1))
+    correction_divisor = float(
+        cryptoContext.physical_rescale_divisor_for_limbs(
+            result.state.cur_limbs,
+            correction_drop_count,
+        )
+    )
+    correction_encoding_scale = float(cryptoContext.scale_at(result.state.cur_limbs))
+    adjustment_factor = (
+        target_scale
+        / source_scale
+        * correction_divisor
+        / source_scale
+        * correction_scale
+    )
+
     result = arithmetic.homo_mul_scalar_double(
         result,
-        arithmetic._encode_double_for_scalar_op(correction_scale, result.state.cur_limbs, cryptoContext),
+        arithmetic._encode_double_for_scalar_op(
+            adjustment_factor,
+            result.state.cur_limbs,
+            cryptoContext,
+            scaling_factor=correction_encoding_scale,
+        ),
         cryptoContext,
+        scaling_factor=correction_encoding_scale,
     )
     result = alignment.rescale_one_level(result, cryptoContext)
+    result = result.cipher_like(result.cv, state=result.state.replace(scaling_factor=target_scale))
 
     result = mod_raise(result, L0, cryptoContext)
     scalar = bootstrap_constants.encoded_scalars(
-        "constant_eval_mult", result.state.cur_limbs, 1, cryptoContext, mode="double"
+        "constant_eval_mult",
+        result.state.cur_limbs,
+        1,
+        cryptoContext,
+        mode="double",
+        scaling_factor=result.state.scaling_factor,
     )[0]
-    result = arithmetic.homo_mul_scalar_double(result, scalar, cryptoContext)
+    result = arithmetic.homo_mul_scalar_double(
+        result,
+        scalar,
+        cryptoContext,
+        scaling_factor=result.state.scaling_factor,
+    )
     return alignment.reduce_noise_to_one(result, cryptoContext)
 
 
@@ -98,11 +135,14 @@ def scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
     scalar = bootstrap_constants.encoded_scalars(
         "post_scalar", ciphertext.state.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
-    return arithmetic.homo_mul_scalar_int_inplace(
+    result = arithmetic.homo_mul_scalar_int_inplace(
         ciphertext,
         scalar,
         cryptoContext,
     )
+    if cryptoContext.scale_mode == "flexible":
+        return result.cipher_like(result.cv, state=result.state.replace(scaling_factor=cryptoContext.scale_at(cryptoContext.L)))
+    return result
 
 
 def scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
@@ -140,3 +180,8 @@ def eval_mod_sparse(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
     encoded = bootstrap_approx.eval_bootstrap_approx_mod(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
     encoded = scale_after_approx(encoded, cryptoContext, bootstrap_constants)
     return alignment.reduce_noise_to_one(encoded, cryptoContext)
+
+
+def _transform_plaintext_encode_scale(state, transform_plan, cryptoContext):
+    del transform_plan
+    return state.scaling_factor

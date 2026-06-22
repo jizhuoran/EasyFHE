@@ -54,7 +54,14 @@ def rescale_one_level(cipher, context):
         raise ValueError(f"rescale_one_level: cur_limbs must be > 1, got {cipher.state.cur_limbs}")
     if cipher.state.noise_deg <= 1:
         raise ValueError(f"rescale_one_level: noise_deg must be > 1, got {cipher.state.noise_deg}")
-    return align_to(cipher, CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1), context)
+    target_scale = None
+    if context.scale_mode == "flexible" and cipher.state.scaling_factor is not None:
+        target_scale = float(cipher.state.scaling_factor) / float(context.rescale_divisor_at(cipher.state.cur_limbs - 1))
+    return align_to(
+        cipher,
+        CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1, target_scale),
+        context,
+    )
 
 
 # Common planning and state helpers.
@@ -200,22 +207,36 @@ def _align_flexible_same_limbs(cipher, target, context):
 
 def _align_flexible_2_to_2(cipher, target, context):
     if _scale_close(cipher.state.scaling_factor, target.scaling_factor):
-        if cipher.state.cur_limbs > target.cur_limbs:
-            cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
-        return _with_target_scale(cipher, target)
+        if cipher.state.cur_limbs == target.cur_limbs:
+            return _with_target_scale(cipher, target)
     if cipher.state.cur_limbs <= target.cur_limbs:
         raise ValueError(
             "_align_flexible_2_to_2 cannot change scale without first rescaling to noise_deg=1"
         )
+    target_scale = _require_target_scale(target, "_align_flexible_2_to_2")
+    divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
+    correction_factor = (
+        target_scale
+        / _require_scale(cipher.state.scaling_factor, "_align_flexible_2_to_2")
+        * divisor
+        / target_scale
+    )
+    cipher = _multiply_by_scale_correction(
+        cipher,
+        correction_factor,
+        context,
+        scaling_factor=target_scale,
+    )
     cipher = _rescale_one_level(cipher, context)
-    return _align_flexible_1_to_2(cipher, target, context)
+    if cipher.state.cur_limbs > target.cur_limbs:
+        cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
+    return _with_target_scale(cipher, target)
 
 
 def _align_flexible_1_to_1(cipher, target, context):
     if _scale_close(cipher.state.scaling_factor, target.scaling_factor):
-        if cipher.state.cur_limbs > target.cur_limbs:
-            cipher = _drop_to_limbs(cipher, target.cur_limbs, context)
-        return _with_target_scale(cipher, target)
+        if cipher.state.cur_limbs == target.cur_limbs:
+            return _with_target_scale(cipher, target)
     if cipher.state.cur_limbs <= target.cur_limbs:
         raise ValueError(
             "_align_flexible_1_to_1 cannot change scale without consuming one rescale limb"
@@ -242,8 +263,26 @@ def _align_flexible_2_to_1(cipher, target, context):
                 f"natural_scale={cipher.state.scaling_factor}, target_scale={target.scaling_factor}"
             )
         return _with_target_scale(cipher, target)
+    pre_rescale_target_scale = _pre_rescale_target_scale(target, context)
+    divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
+    correction_factor = (
+        pre_rescale_target_scale
+        / _require_scale(cipher.state.scaling_factor, "_align_flexible_2_to_1")
+        * divisor
+        / pre_rescale_target_scale
+    )
+    cipher = _multiply_by_scale_correction(
+        cipher,
+        correction_factor,
+        context,
+        scaling_factor=pre_rescale_target_scale,
+    )
     cipher = _rescale_one_level(cipher, context)
-    return _align_flexible_1_to_1(cipher, target, context)
+    pre_rescale_limbs = int(target.cur_limbs) + 1
+    if cipher.state.cur_limbs > pre_rescale_limbs:
+        cipher = _drop_to_limbs(cipher, pre_rescale_limbs, context)
+    cipher = _rescale_one_level(cipher, context)
+    return _with_target_scale(cipher, target)
 
 
 def _align_flexible_1_to_2(cipher, target, context):
@@ -330,4 +369,4 @@ def _scale_close(actual, expected):
     if actual <= 0 or expected <= 0:
         return False
     rel = abs(actual - expected) / max(abs(actual), abs(expected))
-    return rel <= 1e-8
+    return rel <= 1e-7

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Sequence
 
 from .client import Client
 from ._keygen.context_material_builder import ContextMaterialBuilder
@@ -22,6 +22,7 @@ class CKKSContextSpec:
     auto_load_keys: Optional[bool] = None
     rotation_random_mode: str = "fresh"
     rotation_key_limb_limits: Mapping[int, int] = field(default_factory=dict)
+    exact_q_primes: Optional[Sequence[int]] = None
 
     def __post_init__(self):
         object.__setattr__(self, "depth", int(self.depth))
@@ -39,6 +40,14 @@ class CKKSContextSpec:
             "rotation_key_limb_limits",
             {int(rotation): int(limbs) for rotation, limbs in (self.rotation_key_limb_limits or {}).items()},
         )
+        exact_q_primes = None if self.exact_q_primes is None else tuple(int(prime) for prime in self.exact_q_primes)
+        if exact_q_primes is not None:
+            expected = int(self.depth) + 1
+            if len(exact_q_primes) != expected:
+                raise ValueError(f"exact_q_primes must contain {expected} Q primes, got {len(exact_q_primes)}")
+            if any(prime <= 2 for prime in exact_q_primes):
+                raise ValueError("exact_q_primes must contain primes greater than 2")
+        object.__setattr__(self, "exact_q_primes", exact_q_primes)
 
 
 def generate_client_context(spec: CKKSContextSpec, device="cpu"):
@@ -69,6 +78,7 @@ def _sample_material(spec: CKKSContextSpec):
         rotation_key_limb_limits=dict(spec.rotation_key_limb_limits),
         random_mode="parallel_deterministic",
         rotation_random_mode=spec.rotation_random_mode,
+        exact_q_primes=spec.exact_q_primes,
     )
     client_material, server_material = sample_native_client_server(
         sampler_config,
@@ -102,6 +112,7 @@ def _build_context(server_material: NativeServerMaterial, spec: CKKSContextSpec,
             "secretKeyDist": server_material.secret_key_dist,
             "scaleMode": server_material.scale_mode,
             "rescalePolicy": server_material.rescale_policy,
+            "exactQPrimes": None if spec.exact_q_primes is None else tuple(spec.exact_q_primes),
         },
         roots_q=server_material.roots_q,
         roots_p=server_material.roots_p,

@@ -23,6 +23,18 @@ from ..generation.plan import (
 
 
 def _mul_rescale_constant(name, in0, in1, constants, cryptoContext):
+    if str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible":
+        target = _mul_alignment_target_for_bs(in0, in1)
+        divisor = float(cryptoContext.rescale_divisor_at(target.cur_limbs - 1))
+        scalar_scale = float(target.scaling_factor) * float(target.scaling_factor) / divisor
+        return constants.encoded_scalars(
+            name,
+            target.cur_limbs - 1,
+            1,
+            cryptoContext,
+            mode="double",
+            scaling_factor=scalar_scale,
+        )[0]
     target, _ = alignment.plan_mul_alignment(in0, in1, cryptoContext)
     return constants.encoded_scalars(
         name,
@@ -42,6 +54,7 @@ def _add_chebyshev_constant(value, scalar_path, constants, bootstrap_plan, crypt
             1,
             cryptoContext,
             mode="double",
+            scaling_factor=value.state.scaling_factor,
         )[0],
         cryptoContext,
     )
@@ -60,11 +73,61 @@ def _require_unit_interval(a, b):
         )
 
 
+def _is_flexible(cryptoContext):
+    return str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible"
+
+
+def _align_mul_operands(left, right, cryptoContext):
+    if not _is_flexible(cryptoContext):
+        return left, right
+    target = _mul_alignment_target_for_bs(left, right)
+    return (
+        alignment.align_to(left, target, cryptoContext),
+        alignment.align_to(right, target, cryptoContext),
+    )
+
+
+def _mul_alignment_target_for_bs(left, right):
+    target_limbs = min(int(left.state.cur_limbs), int(right.state.cur_limbs))
+    for cipher in (left, right):
+        if int(cipher.state.cur_limbs) == target_limbs:
+            return alignment.CipherState(target_limbs, cipher.state.noise_deg, cipher.state.scaling_factor)
+    return alignment.CipherState(target_limbs, left.state.noise_deg, left.state.scaling_factor)
+
+
+def _align_add_operands(left, right, cryptoContext):
+    if not _is_flexible(cryptoContext):
+        return left, right
+    if int(left.state.cur_limbs) < int(right.state.cur_limbs):
+        target = left.state
+    elif int(right.state.cur_limbs) < int(left.state.cur_limbs):
+        target = right.state
+    elif int(left.state.noise_deg) <= int(right.state.noise_deg):
+        target = left.state
+    else:
+        target = right.state
+    return (
+        alignment.align_to(left, target, cryptoContext),
+        alignment.align_to(right, target, cryptoContext),
+    )
+
+
+def _add_aligned(left, right, cryptoContext):
+    left, right = _align_add_operands(left, right, cryptoContext)
+    return arithmetic.homo_add(left, right, cryptoContext)
+
+
+def _sub_aligned(left, right, cryptoContext):
+    left, right = _align_add_operands(left, right, cryptoContext)
+    return arithmetic.homo_sub(left, right, cryptoContext)
+
+
 def _chebyshev_basis(unit_x, k, cryptoContext, constants, bootstrap_plan):
     T = [unit_x]
     for order in range(2, k + 1):
         lhs = T[order // 2 - 1]
         rhs = T[(order + 1) // 2 - 1]
+        lhs, rhs = _align_mul_operands(lhs, rhs, cryptoContext)
         if order & 1:
             value = arithmetic.homo_mul_relin_rescale_postop(
                 lhs,
@@ -103,15 +166,16 @@ def _chebyshev_doubling_basis(Tk, m, cryptoContext, constants, bootstrap_plan):
     # T2[i] = T_{k * 2^i}(x). T2[0] is T_k(x).
     T2 = [Tk]
     for _ in range(1, m):
+        lhs, rhs = _align_mul_operands(T2[-1], T2[-1], cryptoContext)
         value = arithmetic.homo_mul_relin_rescale_postop(
-            T2[-1],
-            T2[-1],
+            lhs,
+            rhs,
             cryptoContext,
             apply_double=True,
             scalar=_mul_rescale_constant(
                 bootstrap_plan.chebyshev_neg_one_scalar_name,
-                T2[-1],
-                T2[-1],
+                lhs,
+                rhs,
                 constants,
                 cryptoContext,
             ),
@@ -124,6 +188,7 @@ def _chebyshev_odd_multiple(T2, cryptoContext):
     # Computes T_{k * (2^m - 1)}(x) from T_k, T_{2k}, ...
     value = T2[0]
     for doubled in T2[1:]:
+        value, doubled = _align_mul_operands(value, doubled, cryptoContext)
         value = arithmetic.homo_mul_relin_rescale_postop(
             value,
             doubled,
@@ -156,6 +221,7 @@ def _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan):
         1,
         cryptoContext,
         mode="double",
+        scaling_factor=batch.state.scaling_factor,
     )
     return scalars.reshape(len(flat.tail_specs), flat.tail_max_deg, batch.state.cur_limbs).contiguous()
 
@@ -165,7 +231,7 @@ def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
         return ()
     batch = _batch_prefix(T_batch, flat.tail_max_deg)
     scalars = _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan)
-    tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext)
+    tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext, scaling_factor=batch.state.scaling_factor)
     tails = alignment.rescale_one_level(tails, cryptoContext)
     return tuple(layout.cipher_batch_item(tails, index) for index in range(len(flat.tail_specs)))
 
@@ -231,7 +297,7 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
 
 def _finish_q_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext):
     highest = _q_highest_term(spec, T_items[spec.k - 1], constants, bootstrap_plan, cryptoContext)
-    value = highest if tail is None else arithmetic.homo_add(tail, highest, cryptoContext)
+    value = highest if tail is None else _add_aligned(tail, highest, cryptoContext)
     return _add_chebyshev_constant(
         value,
         spec.scalar_path,
@@ -243,7 +309,7 @@ def _finish_q_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext
 
 def _finish_s_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext):
     Tk = T_items[spec.k - 1]
-    value = Tk if tail is None else arithmetic.homo_add(tail, Tk, cryptoContext)
+    value = Tk if tail is None else _add_aligned(tail, Tk, cryptoContext)
     value = _add_chebyshev_constant(
         value,
         spec.scalar_path,
@@ -252,9 +318,21 @@ def _finish_s_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext
         cryptoContext,
     )
     if spec.align_policy == ALIGN_S_DROP_TO_NOISE_ONE:
+        divisor = float(cryptoContext.rescale_divisor_at(value.state.cur_limbs - 1))
+        source_scale = None if value.state.scaling_factor is None else float(value.state.scaling_factor)
+        if source_scale is None:
+            target_scale = None
+        elif int(value.state.noise_deg) > 1:
+            target_scale = source_scale / divisor
+        else:
+            target_scale = source_scale * source_scale / divisor
         value = alignment.align_to(
             value,
-            alignment.CipherState(value.state.cur_limbs - 1, 1, None),
+            alignment.CipherState(
+                value.state.cur_limbs - 1,
+                1,
+                target_scale,
+            ),
             cryptoContext,
         )
     return value
@@ -315,12 +393,14 @@ def _eval_combine_spec(spec, small_values, node_values, T2, constants, bootstrap
                 1,
                 cryptoContext,
                 mode="double",
+                scaling_factor=base.state.scaling_factor,
             )[0],
             cryptoContext,
         )
     else:
-        left = arithmetic.homo_add(base, c, cryptoContext)
+        left = _add_aligned(base, c, cryptoContext)
 
+    left, q = _align_mul_operands(left, q, cryptoContext)
     return arithmetic.homo_mul_relin_rescale_postop(left, q, cryptoContext, apply_double=False, add=s)
 
 
@@ -354,24 +434,27 @@ def eval_bootstrapping_chebyshev(x, a, b, cryptoContext, constants, bootstrap_pl
     node_values = _eval_combine_specs(flat, small_values, T2, constants, bootstrap_plan, cryptoContext)
 
     result = _read_ref(flat.root_ref, small_values, node_values)
-    return arithmetic.homo_sub(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
+    return _sub_aligned(result, _chebyshev_odd_multiple(T2, cryptoContext), cryptoContext)
 
 
 def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstrap_plan):
     for j in range(bootstrap_plan.double_angle_iterations):
-        ciphertext = arithmetic.homo_mul_relin_rescale_postop(
+        squared = arithmetic.homo_mul_relin(
             ciphertext,
             ciphertext,
             cryptoContext,
-            apply_double=True,
-            scalar=_mul_rescale_constant(
-                bootstrap_plan.double_angle_scalar_names[j],
-                ciphertext,
-                ciphertext,
-                constants,
-                cryptoContext,
-            ),
         )
+        doubled = arithmetic._cipher_add(squared, squared, cryptoContext)
+        scalar = constants.encoded_scalars(
+                bootstrap_plan.double_angle_scalar_names[j],
+                doubled.state.cur_limbs,
+                1,
+                cryptoContext,
+                mode="double",
+                scaling_factor=doubled.state.scaling_factor,
+            )[0]
+        ciphertext = arithmetic._cipher_add_scalar(doubled, scalar, cryptoContext)
+        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
     return ciphertext
 
 

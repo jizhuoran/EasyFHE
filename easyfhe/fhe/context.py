@@ -51,6 +51,10 @@ class Context:
         self.scale_mode = material.scale_mode
         self.rescale_policy = material.rescale_policy
         self.dcrtBits = material.dcrtBits
+        self.scaleBits = material.dcrtBits
+        self.prime_backend = "u64"
+        self.first_mod_limb_count = 1
+        self.scale_chain_bits = tuple(int(material.dcrtBits) for _ in range(int(material.L)))
         self.max_num_moduli = material.max_num_moduli
         self.secretKeyDist = material.secretKeyDist
         self.sigma = material.sigma
@@ -195,6 +199,22 @@ class Context:
         if self.scale_mode == "flexible":
             return float(self.moduliQ_scalar[int(drop_limb)])
         return self.approxSF
+
+    def physical_rescale_divisor_for_limbs(self, cur_limbs, drop_count=1):
+        cur_limbs = int(cur_limbs)
+        drop_count = int(drop_count)
+        if drop_count <= 0:
+            raise ValueError(f"drop_count must be positive, got {drop_count}")
+        if cur_limbs < drop_count:
+            raise ValueError(f"cannot drop {drop_count} limbs from cur_limbs={cur_limbs}")
+        divisor = 1
+        for idx in range(cur_limbs - drop_count, cur_limbs):
+            divisor *= int(self.moduliQ_scalar[idx])
+        return float(divisor)
+
+    def rescale_drop_count_for_state(self, state):
+        del state
+        return 1
 
     def get_rotation_key(self, rot_index):
         if self.device == "cuda" and not self.left_rot_key_map[rot_index][0].is_cuda:

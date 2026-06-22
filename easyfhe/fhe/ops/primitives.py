@@ -231,9 +231,9 @@ def _cipher_sub_scalar_inplace(in0, scalar, cryptoContext):
     return in0.replace_with(in0.cipher_like(in0.cv))
 
 
-def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
+def _cipher_mul_scalar_double(in0, scalar, cryptoContext, *, scaling_factor=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.state.cur_limbs, in0.cv[0].device)
-    sc_factor = cryptoContext.scale_at(in0.state.cur_limbs)
+    sc_factor = cryptoContext.scale_at(in0.state.cur_limbs) if scaling_factor is None else float(scaling_factor)
     if _can_use_pair_kernel(in0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu):
         cv = F.cv_mul_scalar_pair(
             in0.cv[0],
@@ -258,9 +258,9 @@ def _cipher_mul_scalar_double(in0, scalar, cryptoContext):
     )
 
 
-def _cipher_mul_scalar_double_inplace(in0, scalar, cryptoContext):
+def _cipher_mul_scalar_double_inplace(in0, scalar, cryptoContext, *, scaling_factor=None):
     scalar_mod = _scalar_tensor(scalar, cryptoContext, in0.state.cur_limbs, in0.cv[0].device)
-    sc_factor = cryptoContext.scale_at(in0.state.cur_limbs)
+    sc_factor = cryptoContext.scale_at(in0.state.cur_limbs) if scaling_factor is None else float(scaling_factor)
     if _can_use_pair_kernel(in0, scalar_mod, cryptoContext.moduliQ, cryptoContext.q_mu):
         F.cv_mul_scalar_pair_(
             in0.cv[0],

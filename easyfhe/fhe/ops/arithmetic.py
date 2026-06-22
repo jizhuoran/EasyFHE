@@ -102,8 +102,8 @@ def _reduce_scalar_to_crt(value, cur_limbs, moduli):
     return [int(value) % int(moduli[i]) for i in range(cur_limbs)]
 
 
-def _encode_double_for_scalar_op(constant, cur_limbs, cryptoContext):
-    scale = cryptoContext.scale_at(cur_limbs)
+def _encode_double_for_scalar_op(constant, cur_limbs, cryptoContext, *, scaling_factor=None):
+    scale = cryptoContext.scale_at(cur_limbs) if scaling_factor is None else float(scaling_factor)
     encoded = int(constant * scale + 0.5)
     return _reduce_scalar_to_crt(encoded, cur_limbs, cryptoContext.moduliQ_scalar)
 
@@ -313,7 +313,7 @@ def homo_mul_scalar_int_inplace(cipher, scalar, cryptoContext):
     )
 
 
-def homo_mul_scalar_double(cipher, constant, cryptoContext):
+def homo_mul_scalar_double(cipher, constant, cryptoContext, *, scaling_factor=None):
     validation.validate_cipher_op(
         "homo_mul_scalar_double",
         cipher,
@@ -324,10 +324,11 @@ def homo_mul_scalar_double(cipher, constant, cryptoContext):
         cipher,
         _require_encoded_scalar(constant, "homo_mul_scalar_double"),
         cryptoContext,
+        scaling_factor=scaling_factor,
     )
 
 
-def homo_mul_scalar_double_inplace(cipher, constant, cryptoContext):
+def homo_mul_scalar_double_inplace(cipher, constant, cryptoContext, *, scaling_factor=None):
     validation.validate_cipher_op(
         "homo_mul_scalar_double_inplace",
         cipher,
@@ -338,6 +339,7 @@ def homo_mul_scalar_double_inplace(cipher, constant, cryptoContext):
         cipher,
         _require_encoded_scalar(constant, "homo_mul_scalar_double_inplace"),
         cryptoContext,
+        scaling_factor=scaling_factor,
     )
 
 
@@ -374,16 +376,17 @@ def grouped_pairwise_mac(ciphers, plaintexts, groups, cryptoContext):
         batch_size=groups,
     )
 
-def grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext):
+def grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext, *, scaling_factor=None):
     validation.require_batched_cipher("grouped_scalar_weighted_acc", ciphers, "ciphers")
     cv = F.cipher_grouped_scalar_weighted_acc(ciphers, scalars, cryptoContext)
     groups = int(scalars.shape[0])
+    scalar_scale = cryptoContext.scale_at(ciphers.state.cur_limbs) if scaling_factor is None else float(scaling_factor)
     return ciphers.cipher_like(
         _grouped_acc_components(cv, groups, ciphers.state.cur_limbs, cryptoContext.N),
         state=CipherState(
             ciphers.state.cur_limbs,
             ciphers.state.noise_deg + 1,
-            ciphers.state.scaling_factor * cryptoContext.scale_at(ciphers.state.cur_limbs),
+            ciphers.state.scaling_factor * scalar_scale,
         ),
         batch_size=groups,
     )
@@ -448,13 +451,7 @@ def homo_mul_relin_rescale_postop(
             require_same_metadata=("slots",),
         )
         if _is_flexible(cryptoContext):
-            validation.validate_binary_cipher_op(
-                "homo_mul_relin_rescale_postop post add",
-                in0.cipher_like(in0.cv, state=out_state),
-                add,
-                require_ext=False,
-                require_same_metadata=("cur_limbs", "noise_deg", "scaling_factor", "slots"),
-            )
+            add = alignment.align_to(add, out_state, cryptoContext)
         else:
             add = alignment.align_to(add, out_state, cryptoContext)
         post_c0, post_c1 = add.cv
@@ -468,13 +465,7 @@ def homo_mul_relin_rescale_postop(
             require_same_metadata=("slots",),
         )
         if _is_flexible(cryptoContext):
-            validation.validate_binary_cipher_op(
-                "homo_mul_relin_rescale_postop post sub",
-                in0.cipher_like(in0.cv, state=out_state),
-                sub,
-                require_ext=False,
-                require_same_metadata=("cur_limbs", "noise_deg", "scaling_factor", "slots"),
-            )
+            sub = alignment.align_to(sub, out_state, cryptoContext)
         else:
             sub = alignment.align_to(sub, out_state, cryptoContext)
         post_c0, post_c1 = sub.cv
