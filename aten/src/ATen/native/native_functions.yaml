@@ -3162,12 +3162,12 @@
   variants: function
 # Below are operations for FHE
 
-- func: fhe_native_sample_ckks(Tensor values, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, bool include_eval_mult_key=False, bool include_encrypt_trace=True, int scale_deg=1, int level=0, int slots=0, str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
+- func: fhe_native_sample_ckks(Tensor values, int log_n, int depth, int dcrt_bits, int first_mod, int first_mod_limb_count, int[] q_prime_bits, Tensor exact_q_primes, int dnum, str secret_key_dist, bool include_eval_mult_key=False, bool include_encrypt_trace=True, int scale_deg=1, int level=0, int slots=0, str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CPU: fhe_native_sample_ckks_cpu
 
-- func: fhe_native_sample_rotation_keys(Tensor secret_key, Tensor secret_key_coeff, int log_n, int depth, int dcrt_bits, int first_mod, int dnum, str secret_key_dist, int[] rotation_indices=[], int[] rotation_group_offsets=[], int[] rotation_trim_auto_indices=[], int[] rotation_trim_limbs=[], str rotation_random_mode="fresh", str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
+- func: fhe_native_sample_rotation_keys(Tensor secret_key, Tensor secret_key_coeff, int log_n, int depth, int dcrt_bits, int first_mod, int first_mod_limb_count, int[] q_prime_bits, Tensor exact_q_primes, int dnum, str secret_key_dist, int[] rotation_indices=[], int[] rotation_group_offsets=[], int[] rotation_trim_auto_indices=[], int[] rotation_trim_limbs=[], str rotation_random_mode="fresh", str random_mode="sequential", float standard_deviation=3.19, int noise_scale=1) -> Tensor[]
   device_check: NoCheck
   dispatch:
     CPU: fhe_native_sample_rotation_keys_cpu

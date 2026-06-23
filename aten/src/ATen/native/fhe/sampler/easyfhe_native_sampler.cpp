@@ -420,6 +420,18 @@ std::vector<int64_t> Int64VectorFromTensor(const at::Tensor& tensor, const char*
     return out;
 }
 
+std::vector<uint64_t> UInt64VectorFromTensor(const at::Tensor& tensor, const char* name) {
+    const at::Tensor array = tensor.contiguous();
+    if (array.dim() != 1 || array.scalar_type() != at::kUInt64) {
+        throw std::invalid_argument(std::string(name) + " must be a 1D uint64 tensor");
+    }
+    const auto size = static_cast<size_t>(array.size(0));
+    const auto* ptr = array.data_ptr<uint64_t>();
+    std::vector<uint64_t> out(size);
+    std::copy(ptr, ptr + size, out.begin());
+    return out;
+}
+
 at::Tensor Int64VectorToTensor(const std::vector<int64_t>& values) {
     at::Tensor out = EmptyTensor({static_cast<int64_t>(values.size())}, at::kLong);
     std::copy(values.begin(), values.end(), out.data_ptr<int64_t>());
@@ -1887,6 +1899,9 @@ struct NativeSamplerRequest {
     int64_t depth = 2;
     int64_t dcrtBits = 50;
     int64_t firstMod = 60;
+    int64_t firstModLimbCount = 1;
+    std::vector<uint32_t> qPrimeBits;
+    std::vector<uint64_t> exactQPrimes;
     int64_t dnum = 3;
     std::string secretKeyDist = "SPARSE_TERNARY";
     bool includeEvalMultKey = false;
@@ -1923,40 +1938,88 @@ NativeCkksParams GenerateNativeCkksParams(const NativeSamplerRequest& request, F
 
     std::vector<uint64_t> moduliQ(numPrimesQ);
     std::vector<uint64_t> rootsQ(numPrimesQ);
-    uint64_t q = FirstPrimeLocal(dcrtBits, cyclOrder, prng);
-    moduliQ[numPrimesQ - 1] = q;
-    rootsQ[numPrimesQ - 1]  = RootOfUnityLocal(cyclOrder, moduliQ[numPrimesQ - 1], prng);
-
-    uint64_t maxPrime = q;
-    if (numPrimesQ > 1) {
-        uint64_t qPrev = q;
-        uint64_t qNext = q;
-        for (int64_t i = static_cast<int64_t>(numPrimesQ) - 2, cnt = 0; i >= 1; --i, ++cnt) {
-            if ((cnt % 2) == 0) {
-                qPrev            = PreviousPrimeLocal(qPrev, cyclOrder, prng);
-                moduliQ[size_t(i)] = qPrev;
-            }
-            else {
-                qNext            = NextPrimeLocal(qNext, cyclOrder, prng);
-                moduliQ[size_t(i)] = qNext;
-            }
-            if (moduliQ[size_t(i)] > maxPrime) {
-                maxPrime = moduliQ[size_t(i)];
-            }
-            rootsQ[size_t(i)] = RootOfUnityLocal(cyclOrder, moduliQ[size_t(i)], prng);
+    uint64_t maxPrime = 0;
+    if (!request.exactQPrimes.empty()) {
+        if (request.exactQPrimes.size() != numPrimesQ) {
+            throw std::invalid_argument("exact_q_primes length must equal depth + 1");
         }
-    }
-
-    if (firstMod == dcrtBits) {
-        moduliQ[0] = NextPrimeLocal(maxPrime, cyclOrder, prng);
+        std::set<uint64_t> seen;
+        for (uint32_t i = 0; i < numPrimesQ; ++i) {
+            const uint64_t prime = request.exactQPrimes[i];
+            if (prime <= 2 || (prime % cyclOrder) != 1) {
+                throw std::invalid_argument("exact_q_primes must be primes congruent to 1 mod 2N");
+            }
+            if (!seen.insert(prime).second) {
+                throw std::invalid_argument("exact_q_primes contains duplicate primes");
+            }
+            moduliQ[i] = prime;
+            rootsQ[i] = RootOfUnityLocal(cyclOrder, prime, prng);
+            maxPrime = std::max<uint64_t>(maxPrime, prime);
+        }
     }
     else {
-        moduliQ[0] = LastPrimeLocal(firstMod, cyclOrder, prng);
-        if (std::find(moduliQ.begin() + 1, moduliQ.end(), moduliQ[0]) != moduliQ.end()) {
-            moduliQ[0] = NextPrimeLocal(maxPrime, cyclOrder, prng);
+        const std::vector<uint32_t> legacyBits = [&]() {
+            std::vector<uint32_t> bits(numPrimesQ, dcrtBits);
+            bits[0] = firstMod;
+            return bits;
+        }();
+        const bool useLegacyPrimeOrdering =
+            request.qPrimeBits.empty() || request.qPrimeBits == legacyBits;
+        if (useLegacyPrimeOrdering) {
+            uint64_t q = FirstPrimeLocal(dcrtBits, cyclOrder, prng);
+            moduliQ[numPrimesQ - 1] = q;
+            rootsQ[numPrimesQ - 1]  = RootOfUnityLocal(cyclOrder, moduliQ[numPrimesQ - 1], prng);
+
+            maxPrime = q;
+            if (numPrimesQ > 1) {
+                uint64_t qPrev = q;
+                uint64_t qNext = q;
+                for (int64_t i = static_cast<int64_t>(numPrimesQ) - 2, cnt = 0; i >= 1; --i, ++cnt) {
+                    if ((cnt % 2) == 0) {
+                        qPrev            = PreviousPrimeLocal(qPrev, cyclOrder, prng);
+                        moduliQ[size_t(i)] = qPrev;
+                    }
+                    else {
+                        qNext            = NextPrimeLocal(qNext, cyclOrder, prng);
+                        moduliQ[size_t(i)] = qNext;
+                    }
+                    if (moduliQ[size_t(i)] > maxPrime) {
+                        maxPrime = moduliQ[size_t(i)];
+                    }
+                    rootsQ[size_t(i)] = RootOfUnityLocal(cyclOrder, moduliQ[size_t(i)], prng);
+                }
+            }
+
+            if (firstMod == dcrtBits) {
+                moduliQ[0] = NextPrimeLocal(maxPrime, cyclOrder, prng);
+            }
+            else {
+                moduliQ[0] = LastPrimeLocal(firstMod, cyclOrder, prng);
+                if (std::find(moduliQ.begin() + 1, moduliQ.end(), moduliQ[0]) != moduliQ.end()) {
+                    moduliQ[0] = NextPrimeLocal(maxPrime, cyclOrder, prng);
+                }
+            }
+            rootsQ[0] = RootOfUnityLocal(cyclOrder, moduliQ[0], prng);
+        }
+        else {
+            if (request.qPrimeBits.size() != numPrimesQ) {
+                throw std::invalid_argument("q_prime_bits length must equal depth + 1");
+            }
+            std::set<uint64_t> seen;
+            for (uint32_t i = 0; i < numPrimesQ; ++i) {
+                if (request.qPrimeBits[i] == 0 || request.qPrimeBits[i] > 63) {
+                    throw std::invalid_argument("q_prime_bits values must be in [1, 63]");
+                }
+                uint64_t prime = LastPrimeLocal(request.qPrimeBits[i], cyclOrder, prng);
+                while (!seen.insert(prime).second) {
+                    prime = PreviousPrimeLocal(prime, cyclOrder, prng);
+                }
+                moduliQ[i] = prime;
+                rootsQ[i] = RootOfUnityLocal(cyclOrder, prime, prng);
+                maxPrime = std::max<uint64_t>(maxPrime, prime);
+            }
         }
     }
-    rootsQ[0] = RootOfUnityLocal(cyclOrder, moduliQ[0], prng);
 
     const uint32_t numPartQ   = std::min<uint32_t>(std::max<uint32_t>(dnum, 1), numPrimesQ);
     const uint32_t numPerPart = static_cast<uint32_t>(std::ceil(static_cast<double>(numPrimesQ) / numPartQ));
@@ -2997,6 +3060,9 @@ NativeSamplerRequest MakeRequest(int64_t logN,
                                  int64_t depth,
                                  int64_t dcrtBits,
                                  int64_t firstMod,
+                                 int64_t firstModLimbCount,
+                                 at::IntArrayRef qPrimeBits,
+                                 const at::Tensor& exactQPrimes,
                                  int64_t dnum,
                                  std::string_view secretKeyDist,
                                  bool includeEvalMultKey,
@@ -3020,6 +3086,18 @@ NativeSamplerRequest MakeRequest(int64_t logN,
     request.depth = depth;
     request.dcrtBits = dcrtBits;
     request.firstMod = firstMod;
+    request.firstModLimbCount = firstModLimbCount;
+    if (firstModLimbCount <= 0) {
+        throw std::invalid_argument("first_mod_limb_count must be positive");
+    }
+    request.qPrimeBits.reserve(qPrimeBits.size());
+    for (const auto bit : qPrimeBits) {
+        if (bit <= 0 || bit > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+            throw std::invalid_argument("q_prime_bits contains an invalid bit size");
+        }
+        request.qPrimeBits.push_back(static_cast<uint32_t>(bit));
+    }
+    request.exactQPrimes = UInt64VectorFromTensor(exactQPrimes, "exact_q_primes");
     request.dnum = dnum;
     request.secretKeyDist = std::string(secretKeyDist);
     request.includeEvalMultKey = includeEvalMultKey;
@@ -3045,6 +3123,9 @@ std::vector<Tensor> fhe_native_sample_ckks_cpu(const Tensor& values,
                                                int64_t depth,
                                                int64_t dcrtBits,
                                                int64_t firstMod,
+                                               int64_t firstModLimbCount,
+                                               at::IntArrayRef qPrimeBits,
+                                               const Tensor& exactQPrimes,
                                                int64_t dnum,
                                                std::string_view secretKeyDist,
                                                bool includeEvalMultKey,
@@ -3059,6 +3140,9 @@ std::vector<Tensor> fhe_native_sample_ckks_cpu(const Tensor& values,
                                depth,
                                dcrtBits,
                                firstMod,
+                               firstModLimbCount,
+                               qPrimeBits,
+                               exactQPrimes,
                                dnum,
                                secretKeyDist,
                                includeEvalMultKey,
@@ -3083,6 +3167,9 @@ std::vector<Tensor> fhe_native_sample_rotation_keys_cpu(const Tensor& secretKey,
                                                         int64_t depth,
                                                         int64_t dcrtBits,
                                                         int64_t firstMod,
+                                                        int64_t firstModLimbCount,
+                                                        at::IntArrayRef qPrimeBits,
+                                                        const Tensor& exactQPrimes,
                                                         int64_t dnum,
                                                         std::string_view secretKeyDist,
                                                         at::IntArrayRef rotationIndices,
@@ -3097,6 +3184,9 @@ std::vector<Tensor> fhe_native_sample_rotation_keys_cpu(const Tensor& secretKey,
                                depth,
                                dcrtBits,
                                firstMod,
+                               firstModLimbCount,
+                               qPrimeBits,
+                               exactQPrimes,
                                dnum,
                                secretKeyDist,
                                false,
