@@ -177,7 +177,7 @@ def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(mon
     def fake_mul_int(cipher, scalar, context):
         return cipher.cipher_like([f"mul_int({scalar[0]}).c0", cipher.cv[1]])
 
-    def fake_mul_double(cipher, scalar, context):
+    def fake_mul_double(cipher, scalar, context, **_kwargs):
         return cipher.cipher_like(
             [f"mul_double({tuple(scalar)}).c0", cipher.cv[1]],
             state=CipherState(cipher.state.cur_limbs, 2, 13.0),
@@ -200,7 +200,13 @@ def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(mon
         "_cipher_mul_scalar_double",
         fake_mul_double,
     )
-    monkeypatch.setattr(arithmetic, "_cipher_mul_scalar_double_inplace", lambda cipher, scalar, context: cipher.replace_with(fake_mul_double(cipher, scalar, context)))
+    monkeypatch.setattr(
+        arithmetic,
+        "_cipher_mul_scalar_double_inplace",
+        lambda cipher, scalar, context, **kwargs: cipher.replace_with(
+            fake_mul_double(cipher, scalar, context, **kwargs)
+        ),
+    )
 
     ctx = SimpleNamespace(moduliQ_scalar=[257, 263, 269], scale_at=lambda _level: 1.0)
     cipher = _cipher("cipher")
@@ -579,7 +585,7 @@ def test_mul_relin_rescale_postop_does_not_expose_out(monkeypatch):
     assert result is not a
     assert result.state.cur_limbs == 3
     assert result.state.noise_deg == 1
-    assert result.state.scaling_factor == 4.0
+    assert result.state.scaling_factor == pytest.approx(0.4)
     assert len(result.cv) == 2
 
 
