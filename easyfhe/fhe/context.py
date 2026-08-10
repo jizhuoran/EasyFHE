@@ -236,27 +236,20 @@ class Context:
             return self.get_rotation_key(rot_index), available_special_mod_start
 
         beta = int((cur_limbs + self.alpha - 1) / self.alpha)
-        cached = self._rotation_key_cuda_cache.get(rot_index)
+        cache_key = (int(rot_index), cur_limbs, beta)
+        cached = self._rotation_key_cuda_cache.get(cache_key)
         if cached is not None:
-            swk_bx, swk_ax, cached_special_mod_start, cached_beta = cached
-            if cached_special_mod_start >= cur_limbs and cached_beta >= beta:
-                return [swk_bx, swk_ax], cached_special_mod_start
+            return cached, cur_limbs
 
-        target_special_mod_start = cur_limbs if cached is None else max(cur_limbs, cached[2])
-        target_beta = beta if cached is None else max(beta, cached[3])
         swk_bx, swk_ax = self._load_rotation_key_to_cuda(
             rot_index,
-            target_special_mod_start,
-            target_beta,
+            cur_limbs,
+            beta,
             available_special_mod_start,
         )
-        self._rotation_key_cuda_cache[rot_index] = (
-            swk_bx,
-            swk_ax,
-            target_special_mod_start,
-            target_beta,
-        )
-        return [swk_bx, swk_ax], target_special_mod_start
+        cached = [swk_bx, swk_ax]
+        self._rotation_key_cuda_cache[cache_key] = cached
+        return cached, cur_limbs
 
     def _rotation_key_special_mod_start(self, rot_index):
         bx, _ = self.left_rot_key_map[rot_index]

@@ -7,9 +7,7 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/native/cuda/thread_constants.h>
 #include <ATen/ops/empty.h>
-#include <ATen/ops/zeros.h>
 #include <c10/util/complex.h>
-#include <algorithm>
 #include <cmath>
 #include <vector>
 
@@ -18,7 +16,6 @@ static constexpr int kPreEncodeBlockSize = 256;
 static constexpr int kPreEncodeSharedMaxSlots = 2048;
 static constexpr int kPreEncodeMaxLargeTiles = 32;
 static constexpr int kAbsMaxBlockSize = 256;
-static constexpr int kAbsMaxMaxBlocks = 4096;
 
 template <typename scalar_t>
 __device__ __forceinline__ c10::complex<double> to_complex_double(
@@ -51,23 +48,6 @@ __device__ __forceinline__ double block_reduce_max(double value) {
     value = warp_reduce_max(value);
   }
   return value;
-}
-
-template <typename DDTYPE>
-__global__ void absmax_partial_kernel(
-    const DDTYPE* input,
-    double* partials,
-    int64_t numel) {
-  double local_max = 0.0;
-  for (int64_t i = blockIdx.x * blockDim.x + threadIdx.x; i < numel;
-       i += blockDim.x * gridDim.x) {
-    local_max = fmax(local_max, fabs(static_cast<double>(input[i])));
-  }
-
-  const double block_max = block_reduce_max(local_max);
-  if (threadIdx.x == 0) {
-    partials[blockIdx.x] = block_max;
-  }
 }
 
 __global__ void absmax_final_kernel(
@@ -145,6 +125,7 @@ __global__ void pre_encode_stage1_shared_kernel(
     const c10::complex<double>* ksi_pows,
     const uint32_t* bitrev,
     double* output,
+    double* absmax_partials,
     int64_t slots,
     int64_t M) {
   extern __shared__ unsigned char shared_bytes[];
@@ -180,11 +161,20 @@ __global__ void pre_encode_stage1_shared_kernel(
   }
 
   const double inv_slots = 1.0 / static_cast<double>(slots);
+  double local_absmax = 0.0;
   for (int64_t i = threadIdx.x; i < slots; i += blockDim.x) {
     const auto value = workspace[bitrev[i]] * inv_slots;
     const int64_t out_base = row * (2 * slots) + 2 * i;
     output[out_base] = value.real();
     output[out_base + 1] = value.imag();
+    local_absmax = fmax(
+        local_absmax,
+        fmax(fabs(value.real()), fabs(value.imag())));
+  }
+
+  const double block_max = block_reduce_max(local_absmax);
+  if (threadIdx.x == 0) {
+    absmax_partials[row] = block_max;
   }
 }
 
@@ -194,6 +184,7 @@ __global__ void pre_encode_stage1_tile_kernel(
     const c10::complex<double>* ksi_pows,
     const uint32_t* bitrev,
     double* output,
+    double* absmax_partials,
     int64_t slots,
     int64_t M) {
   extern __shared__ unsigned char shared_bytes[];
@@ -232,6 +223,7 @@ __global__ void pre_encode_stage1_tile_kernel(
   }
 
   const double inv_slots = 1.0 / static_cast<double>(slots);
+  double local_absmax = 0.0;
   for (int64_t i = threadIdx.x; i < tile_size; i += blockDim.x) {
     const int64_t source = tile_base + i;
     const int64_t output_index = bitrev[source];
@@ -239,39 +231,19 @@ __global__ void pre_encode_stage1_tile_kernel(
     const int64_t out_base = row * (2 * slots) + 2 * output_index;
     output[out_base] = value.real();
     output[out_base + 1] = value.imag();
+    local_absmax = fmax(
+        local_absmax,
+        fmax(fabs(value.real()), fabs(value.imag())));
+  }
+
+  const double block_max = block_reduce_max(local_absmax);
+  if (threadIdx.x == 0) {
+    absmax_partials[row * gridDim.x + tile] = block_max;
   }
 }
 } // namespace fhe
 
 namespace at::native {
-
-static Tensor absmax_cuda_impl(const Tensor& input) {
-  TORCH_INTERNAL_ASSERT(input.is_cuda(), "absmax_cuda_impl expects CUDA input");
-
-  Tensor output = at::empty({}, input.options().dtype(at::kDouble));
-  if (input.numel() == 0) {
-    return at::zeros({}, input.options().dtype(at::kDouble));
-  }
-
-  Tensor contiguous = input.contiguous();
-  const auto numel = contiguous.numel();
-  const int blocks = std::min<int64_t>(
-      (numel + fhe::kAbsMaxBlockSize - 1) / fhe::kAbsMaxBlockSize,
-      fhe::kAbsMaxMaxBlocks);
-  Tensor partials = at::empty({blocks}, output.options());
-  auto stream = at::cuda::getCurrentCUDAStream();
-
-  AT_DISPATCH_FLOATING_TYPES(input.scalar_type(), "absmax_cuda_impl", [&]() {
-    const auto input_ptr = contiguous.data_ptr<scalar_t>();
-    fhe::absmax_partial_kernel<scalar_t>
-        <<<blocks, fhe::kAbsMaxBlockSize, 0, stream>>>(
-            input_ptr, partials.data_ptr<double>(), numel);
-  });
-  fhe::absmax_final_kernel<<<1, fhe::kAbsMaxBlockSize, 0, stream>>>(
-      partials.data_ptr<double>(), output.data_ptr<double>(), blocks);
-  C10_CUDA_KERNEL_LAUNCH_CHECK();
-  return output;
-}
 
 std::vector<Tensor> fhe_pre_encode_stage1_cuda(
     const Tensor& input,
@@ -300,6 +272,13 @@ std::vector<Tensor> fhe_pre_encode_stage1_cuda(
   Tensor output = at::empty(
       {batch_size, 2 * slots},
       input_2d.options().dtype(at::kDouble));
+  const int64_t tiles_per_row = slots <= fhe::kPreEncodeSharedMaxSlots
+      ? 1
+      : slots / fhe::kPreEncodeSharedMaxSlots;
+  Tensor max_value = at::empty({}, output.options());
+  Tensor absmax_partials = at::empty(
+      {batch_size * tiles_per_row},
+      output.options());
 
   auto stream = at::cuda::getCurrentCUDAStream();
 
@@ -321,10 +300,10 @@ std::vector<Tensor> fhe_pre_encode_stage1_cuda(
                   ksiPows.data_ptr<c10::complex<double>>(),
                   bitrev.data_ptr<uint32_t>(),
                   output.data_ptr<double>(),
+                  absmax_partials.data_ptr<double>(),
                   slots,
                   M);
         } else {
-          const int64_t tiles_per_row = slots / fhe::kPreEncodeSharedMaxSlots;
           TORCH_INTERNAL_ASSERT(
               slots % fhe::kPreEncodeSharedMaxSlots == 0,
               "fhe_pre_encode_stage1_cuda expected slots to be a multiple of ",
@@ -367,12 +346,16 @@ std::vector<Tensor> fhe_pre_encode_stage1_cuda(
               ksiPows.data_ptr<c10::complex<double>>(),
               bitrev.data_ptr<uint32_t>(),
               output.data_ptr<double>(),
+              absmax_partials.data_ptr<double>(),
               slots,
               M);
         }
       });
 
-  Tensor max_value = absmax_cuda_impl(output);
+  fhe::absmax_final_kernel<<<1, fhe::kAbsMaxBlockSize, 0, stream>>>(
+      absmax_partials.data_ptr<double>(),
+      max_value.data_ptr<double>(),
+      absmax_partials.numel());
   C10_CUDA_KERNEL_LAUNCH_CHECK();
   return {output, max_value};
 }

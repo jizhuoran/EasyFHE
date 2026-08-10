@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import easyfhe as torch
+import numpy as np
 import pytest
 
 import easyfhe.fhe as fhe
@@ -568,3 +569,45 @@ def test_grouped_scalar_weighted_acc_ignores_inactive_limbs():
     result = fhe.grouped_scalar_weighted_acc(cipher, scalars.unsqueeze(0), ctx)
 
     assert tuple(result.cv[0].shape) == (1, cur_limbs, ctx.N)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA monomial kernels required")
+def test_u64_monomial_fast_paths_preserve_ring_identities_cuda():
+    _, cpu_ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=2, log_n=14, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cpu",
+    )
+    ctx = cpu_ctx.cuda()
+    cur_limbs = 2
+    rng = np.random.default_rng(17)
+    source_np = np.stack(
+        [
+            rng.integers(0, int(ctx.moduliQ_scalar[limb]), size=ctx.N, dtype=np.uint64)
+            for limb in range(ctx.L)
+        ],
+        axis=0,
+    )[None, ...]
+    source = torch.from_numpy(source_np).cuda()
+
+    unchanged = source.clone()
+    kernels.cv_mul_by_monomial(unchanged, cur_limbs, 0, ctx)
+    np.testing.assert_array_equal(unchanged.cpu().numpy(), source_np)
+
+    negated = source.clone()
+    kernels.cv_mul_by_monomial(negated, cur_limbs, ctx.N, ctx)
+    expected_negated = source_np.copy()
+    for limb in range(cur_limbs):
+        modulus = np.uint64(ctx.moduliQ_scalar[limb])
+        values = expected_negated[0, limb]
+        expected_negated[0, limb] = np.where(values == 0, 0, modulus - values)
+    np.testing.assert_array_equal(negated.cpu().numpy(), expected_negated)
+
+    half_twice = source.clone()
+    kernels.cv_mul_by_monomial(half_twice, cur_limbs, ctx.N // 2, ctx)
+    kernels.cv_mul_by_monomial(half_twice, cur_limbs, ctx.N // 2, ctx)
+    np.testing.assert_array_equal(half_twice.cpu().numpy(), expected_negated)
+
+    inverse_halves = source.clone()
+    kernels.cv_mul_by_monomial(inverse_halves, cur_limbs, ctx.N // 2, ctx)
+    kernels.cv_mul_by_monomial(inverse_halves, cur_limbs, 3 * ctx.N // 2, ctx)
+    np.testing.assert_array_equal(inverse_halves.cpu().numpy(), source_np)

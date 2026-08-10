@@ -244,3 +244,46 @@ def test_grouped_scalar_weighted_acc_matches_scalar_mul_add_loop():
     assert actual.batch_size == 1
     assert actual.state == CipherState(cur_limbs, 2, ctx.scale_at(cur_limbs))
     assert all(np.array_equal(a.numpy(), e.numpy()) for a, e in zip(actual.cv, expected))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA grouped accumulation requires CUDA")
+@pytest.mark.parametrize("num_groups", [6, 7])
+def test_u64_grouped_scalar_weighted_acc_resnet_shapes_cuda(num_groups):
+    _, cpu_ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=2, log_n=6, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cpu",
+    )
+    ctx = cpu_ctx.cuda()
+    num_cipher = 6
+    cur_limbs = 2
+    rng = np.random.default_rng(num_groups)
+    bx_np = rng.integers(0, 17, size=(num_cipher, cur_limbs, ctx.N), dtype=np.uint64)
+    ax_np = rng.integers(0, 17, size=(num_cipher, cur_limbs, ctx.N), dtype=np.uint64)
+    scalars_np = rng.integers(0, 17, size=(num_groups, num_cipher, cur_limbs), dtype=np.uint64)
+
+    actual_bx, actual_ax = torch.grouped_scalar_weighted_acc(
+        torch.from_numpy(bx_np).cuda(),
+        torch.from_numpy(ax_np).cuda(),
+        torch.from_numpy(scalars_np).cuda(),
+        ctx.moduliQ,
+        ctx.QbarretRatioplusPbarretRatio_map[cur_limbs],
+        ctx.QbarretKplusPbarretK_map[cur_limbs],
+        num_groups,
+        num_cipher,
+        cur_limbs,
+        ctx.N,
+        -1,
+    )
+    torch.cuda.synchronize()
+
+    expected_bx = np.empty((num_groups, cur_limbs, ctx.N), dtype=np.uint64)
+    expected_ax = np.empty_like(expected_bx)
+    for group in range(num_groups):
+        for limb in range(cur_limbs):
+            modulus = np.uint64(ctx.moduliQ_scalar[limb])
+            weights = scalars_np[group, :, limb, None]
+            expected_bx[group, limb] = np.sum(bx_np[:, limb] * weights, axis=0) % modulus
+            expected_ax[group, limb] = np.sum(ax_np[:, limb] * weights, axis=0) % modulus
+
+    np.testing.assert_array_equal(actual_bx.cpu().numpy(), expected_bx)
+    np.testing.assert_array_equal(actual_ax.cpu().numpy(), expected_ax)

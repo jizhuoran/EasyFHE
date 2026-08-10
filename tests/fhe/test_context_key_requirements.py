@@ -1,6 +1,7 @@
 import easyfhe.fhe as fhe
 import numpy as np
 import pytest
+from types import SimpleNamespace
 from easyfhe.fhe._keygen.context_material_builder import ContextMaterialBuilder
 from easyfhe.fhe._keygen.native_sampler import _find_auto_index_2n_complex
 
@@ -96,3 +97,27 @@ def test_flexible_context_scale_tables_are_level_aware():
     assert context.scale_at(1) == pytest.approx(269.0 * 269.0 / 263.0)
     assert context.big_scale_at(3) == pytest.approx(269.0 * 269.0)
     assert context.rescale_divisor_at(2) == pytest.approx(269.0)
+
+
+def test_rotation_key_cuda_cache_uses_exact_limb_shape():
+    loads = []
+    context = SimpleNamespace(
+        device="cuda",
+        auto_load_keys_resolved=True,
+        alpha=2,
+        _rotation_key_cuda_cache={},
+        _rotation_key_special_mod_start=lambda _rot_index: 5,
+        _load_rotation_key_to_cuda=lambda rot_index, cur_limbs, beta, available: (
+            loads.append((rot_index, cur_limbs, beta, available)) or f"bx-{cur_limbs}",
+            f"ax-{cur_limbs}",
+        ),
+    )
+
+    key4, special4 = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
+    key3, special3 = fhe.Context.get_rotation_key_for_limbs(context, 3, 3)
+    cached4, cached_special4 = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
+
+    assert loads == [(3, 4, 2, 5), (3, 3, 2, 5)]
+    assert key4 == cached4 == ["bx-4", "ax-4"]
+    assert key3 == ["bx-3", "ax-3"]
+    assert (special4, special3, cached_special4) == (4, 3, 4)

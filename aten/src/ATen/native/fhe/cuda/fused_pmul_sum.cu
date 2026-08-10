@@ -193,7 +193,7 @@ __global__ void groupedScalarWeightedAccGridKernel(
       barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
 }
 
-template <int NUM_GROUPS, int NUM_CIPHER>
+template <int NUM_GROUPS, int NUM_CIPHER, int X>
 __global__ void groupedScalarWeightedAccRegKernel(
     uint64_t* __restrict__ res_ptr,
     const uint64_t* __restrict__ cipher_bx_ptr,
@@ -205,7 +205,7 @@ __global__ void groupedScalarWeightedAccRegKernel(
     const int64_t cur_limbs,
     const int64_t N,
     const int64_t L_CTN) {
-  const int64_t tid_x = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  const int64_t tid_x = blockIdx.x * X + threadIdx.x;
   if (tid_x >= N) {
     return;
   }
@@ -246,63 +246,6 @@ __global__ void groupedScalarWeightedAccRegKernel(
     res_ptr[NUM_GROUPS * cur_limbs * N + out_off] =
         barret_reduction_128_64(sum_ax[group], mod, barret_ratio, barret_k);
   }
-}
-
-template <int NUM_GROUPS, int NUM_CIPHER, int X>
-__global__ void groupedScalarWeightedAccSharedKernel(
-    uint64_t* __restrict__ res_ptr,
-    const uint64_t* __restrict__ cipher_bx_ptr,
-    const uint64_t* __restrict__ cipher_ax_ptr,
-    const uint64_t* __restrict__ scalar_ptr,
-    const uint64_t* __restrict__ mod_ptr,
-    const uint64_t* __restrict__ barret_ratio_ptr,
-    const uint64_t* __restrict__ barret_k_ptr,
-    const int64_t cur_limbs,
-    const int64_t N,
-    const int64_t L_CTN) {
-  static_assert(X <= 128);
-  __shared__ uint64_t cipher_bx[NUM_CIPHER][X];
-  __shared__ uint64_t cipher_ax[NUM_CIPHER][X];
-
-  const int64_t coeff = blockIdx.x * X + threadIdx.x;
-  const int64_t limb = blockIdx.y;
-  const int group = threadIdx.y;
-
-  if (threadIdx.y == 0) {
-#pragma unroll
-    for (int i = 0; i < NUM_CIPHER; ++i) {
-      const int64_t cipher_off = i * L_CTN + limb * N + coeff;
-      const bool valid = coeff < N;
-      cipher_bx[i][threadIdx.x] = valid ? cipher_bx_ptr[cipher_off] : 0;
-      cipher_ax[i][threadIdx.x] = valid ? cipher_ax_ptr[cipher_off] : 0;
-    }
-  }
-  __syncthreads();
-
-  if (coeff >= N) {
-    return;
-  }
-
-  uint128_t sum_bx = {0, 0};
-  uint128_t sum_ax = {0, 0};
-#pragma unroll
-  for (int i = 0; i < NUM_CIPHER; ++i) {
-    const uint64_t scalar_val =
-        scalar_ptr[(group * NUM_CIPHER + i) * cur_limbs + limb];
-    inplace_add_128_128(
-        mult_64_64_128(cipher_bx[i][threadIdx.x], scalar_val), sum_bx);
-    inplace_add_128_128(
-        mult_64_64_128(cipher_ax[i][threadIdx.x], scalar_val), sum_ax);
-  }
-
-  const uint64_t mod = mod_ptr[limb];
-  const uint64_t barret_ratio = barret_ratio_ptr[limb];
-  const uint64_t barret_k = barret_k_ptr[limb];
-  const int64_t out_off = group * cur_limbs * N + limb * N + coeff;
-  res_ptr[out_off] =
-      barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
-  res_ptr[NUM_GROUPS * cur_limbs * N + out_off] =
-      barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
 }
 
 __global__ void cpmulBroadcastCipherKernel(
@@ -975,16 +918,12 @@ std::vector<Tensor> grouped_scalar_weighted_acc_cuda(
 
   const int64_t L_CTN = cipher_bx.size(1) * N;
 
-  const int64_t selected_strategy =
-      (strategy < 0 && num_cipher == 6 &&
-       (num_groups == 6 || num_groups == 7))
-      ? 3
-      : strategy;
-
-  if (selected_strategy == 1 && num_cipher == 6 && num_groups == 7) {
-    dim3 block(BLOCK_SIZE);
-    dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, cur_limbs);
-    fhe::groupedScalarWeightedAccRegKernel<7, 6>
+  (void)strategy;
+  if (num_cipher == 6 && num_groups == 7) {
+    constexpr int kGroupedRegBlock = 128;
+    dim3 block(kGroupedRegBlock);
+    dim3 grid((N + kGroupedRegBlock - 1) / kGroupedRegBlock, cur_limbs);
+    fhe::groupedScalarWeightedAccRegKernel<7, 6, kGroupedRegBlock>
         <<<grid, block, 0, stream>>>(
             res_ptr,
             cipher_bx_ptr,
@@ -996,106 +935,11 @@ std::vector<Tensor> grouped_scalar_weighted_acc_cuda(
             cur_limbs,
             N,
             L_CTN);
-  } else if (selected_strategy == 1 && num_cipher == 6 && num_groups == 6) {
-    dim3 block(BLOCK_SIZE);
-    dim3 grid((N + BLOCK_SIZE - 1) / BLOCK_SIZE, cur_limbs);
-    fhe::groupedScalarWeightedAccRegKernel<6, 6>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 2 && num_cipher == 6 && num_groups == 7) {
-    constexpr int X = 64;
-    dim3 block(X, 7);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 2 && num_cipher == 6 && num_groups == 6) {
-    constexpr int X = 64;
-    dim3 block(X, 6);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 3 && num_cipher == 6 && num_groups == 7) {
-    constexpr int X = 32;
-    dim3 block(X, 7);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 3 && num_cipher == 6 && num_groups == 6) {
-    constexpr int X = 32;
-    dim3 block(X, 6);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 4 && num_cipher == 6 && num_groups == 7) {
-    constexpr int X = 128;
-    dim3 block(X, 7);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<7, 6, X>
-        <<<grid, block, 0, stream>>>(
-            res_ptr,
-            cipher_bx_ptr,
-            cipher_ax_ptr,
-            scalar_ptr,
-            mod_ptr,
-            ratio_ptr,
-            k_ptr,
-            cur_limbs,
-            N,
-            L_CTN);
-  } else if (selected_strategy == 4 && num_cipher == 6 && num_groups == 6) {
-    constexpr int X = 128;
-    dim3 block(X, 6);
-    dim3 grid((N + X - 1) / X, cur_limbs);
-    fhe::groupedScalarWeightedAccSharedKernel<6, 6, X>
+  } else if (num_cipher == 6 && num_groups == 6) {
+    constexpr int kGroupedRegBlock = 128;
+    dim3 block(kGroupedRegBlock);
+    dim3 grid((N + kGroupedRegBlock - 1) / kGroupedRegBlock, cur_limbs);
+    fhe::groupedScalarWeightedAccRegKernel<6, 6, kGroupedRegBlock>
         <<<grid, block, 0, stream>>>(
             res_ptr,
             cipher_bx_ptr,
