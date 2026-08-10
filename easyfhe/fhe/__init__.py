@@ -5,7 +5,7 @@ from .ciphertext import Cipher, CipherState
 from .client import Client
 from .constants import ConstantBundle, PackedRaw, UnpackedRaw
 from .context import Context
-from .ops.encoding import fused_encode_batch, encode_stage1_packed
+from .ops.encoding import encode_stage1_packed
 from .ops import (
     HOIST_EXT_DOUBLE_HOIST,
     HOIST_EXT_NORMAL,
@@ -49,7 +49,7 @@ from .ops import (
     pack_cipher_batch,
     unpack_cipher_batch,
 )
-from .context_factory import CKKSContextSpec, generate_client_context
+from .context_factory import CKKSContextSpec, PrimeChainPlan, generate_client_context, plan_prime_chain
 
 
 __all__ = list(_PUBLIC_API)

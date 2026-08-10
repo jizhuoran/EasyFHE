@@ -12,7 +12,9 @@ CONTEXT_API = (
     "CKKSContextSpec",
     "Client",
     "Context",
+    "PrimeChainPlan",
     "generate_client_context",
+    "plan_prime_chain",
 )
 
 CONSTANT_API = (
@@ -22,7 +24,6 @@ CONSTANT_API = (
 )
 
 ENCODING_API = (
-    "fused_encode_batch",
     "encode_stage1_packed",
 )
 

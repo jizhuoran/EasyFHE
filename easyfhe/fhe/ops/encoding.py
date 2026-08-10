@@ -201,62 +201,6 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext, *, scaling_factor
     )
 
 
-def fused_encode_batch(packed_values, level, slots=None, cryptoContext=None, is_ext=False, *, scaling_factor=None, cur_limbs=None):
-    """Encode CUDA-packed complex slot values directly as a plaintext."""
-
-    if cryptoContext is None:
-        raise ValueError("fused_encode_batch requires cryptoContext")
-    if is_ext:
-        raise ValueError("fused_encode_batch currently supports only is_ext=False")
-    if not torch.is_tensor(packed_values):
-        raise TypeError("fused_encode_batch expects a CUDA tensor")
-    if not packed_values.is_cuda:
-        raise ValueError("fused_encode_batch expects a CUDA tensor")
-    if packed_values.dim() not in (1, 2):
-        raise ValueError("fused_encode_batch expects a rank-1 or rank-2 tensor")
-    if not _is_complex_tensor(packed_values):
-        raise TypeError("fused_encode_batch expects complex32, complex64, or complex128 input")
-
-    inferred_slots = int(packed_values.shape[-1])
-    slots = inferred_slots if slots is None else int(slots)
-    if slots != inferred_slots:
-        raise ValueError(f"Packed values last dimension [{inferred_slots}] does not match slots [{slots}]")
-    if slots != 32768:
-        raise ValueError("fused_encode_batch currently expects slots=32768")
-    if int(cryptoContext.N) != 2 * slots:
-        raise ValueError("fused_encode_batch currently expects N == 2 * slots")
-
-    cur_limbs = _resolve_cur_limbs(cryptoContext, level, cur_limbs, "fused_encode_batch")
-    if cur_limbs <= 0:
-        raise ValueError(
-            "fused_encode_batch level leaves no active limbs: "
-            f"L={cryptoContext.L}, level={level}, cur_limbs={cur_limbs}"
-        )
-    scaling_factor = _resolve_stage2_scale(
-        cryptoContext,
-        cur_limbs,
-        scaling_factor,
-        "fused_encode_batch",
-    )
-
-    is_single = packed_values.dim() == 1
-    packed_2d = packed_values.reshape(1, slots) if is_single else packed_values
-    pt_encode = F.cv_fused_encode_batch(
-        packed_2d,
-        cur_limbs=cur_limbs,
-        slots=slots,
-        scaling_factor=scaling_factor,
-        context=cryptoContext,
-    )
-    return Plaintext(
-        [pt_encode],
-        CipherState(cur_limbs, 1, scaling_factor),
-        slots,
-        False,
-        batch_size=1 if is_single else int(packed_values.shape[0]),
-    )
-
-
 def _as_encoded_tensor(encoded_values, device):
     return torch.as_tensor(encoded_values, dtype=torch.float64, device=device or "cpu")
 

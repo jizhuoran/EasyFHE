@@ -2,14 +2,10 @@ import math
 
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import rotation
-from .bootstrap_common import (
-    eval_coeffs_to_slots,
-    eval_mod_full,
-    eval_mod_sparse,
-    eval_slots_to_coeffs,
-    raise_ciphertext,
-    scale_to_original_message,
-)
+from .evalmod import eval_mod_full, eval_mod_sparse
+from .raising import raise_ciphertext
+from .scaling import scale_to_original_message
+from .transforms import eval_coeffs_to_slots, eval_slots_to_coeffs
 
 
 def _replicate_sparse_slots(raised, slots, cryptoContext):

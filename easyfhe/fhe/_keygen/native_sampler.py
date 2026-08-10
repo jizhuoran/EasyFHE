@@ -41,6 +41,44 @@ class CkksSamplerConfig:
     q_prime_bits: tuple[int, ...] | None = None
     exact_q_primes: tuple[int, ...] | None = None
 
+    def __post_init__(self):
+        object.__setattr__(self, "log_n", int(self.log_n))
+        object.__setattr__(self, "depth", int(self.depth))
+        object.__setattr__(self, "dcrt_bits", int(self.dcrt_bits))
+        object.__setattr__(self, "first_mod", int(self.first_mod))
+        object.__setattr__(self, "first_mod_limb_count", int(self.first_mod_limb_count))
+        object.__setattr__(self, "dnum", int(self.dnum))
+        object.__setattr__(self, "secret_key_dist", str(self.secret_key_dist))
+        object.__setattr__(self, "random_mode", str(self.random_mode))
+        object.__setattr__(self, "rotation_random_mode", str(self.rotation_random_mode))
+        object.__setattr__(self, "q_prime_bits", _optional_int_tuple(self.q_prime_bits))
+        object.__setattr__(self, "exact_q_primes", _optional_int_tuple(self.exact_q_primes))
+
+        if self.log_n <= 0:
+            raise ValueError(f"log_n must be positive, got {self.log_n}")
+        if self.depth < 0:
+            raise ValueError(f"depth must be nonnegative, got {self.depth}")
+        if self.dnum <= 0:
+            raise ValueError(f"dnum must be positive, got {self.dnum}")
+        if self.first_mod_limb_count != 1:
+            raise ValueError("the u64 sampler requires first_mod_limb_count=1")
+
+        expected = self.depth + 1
+        if self.q_prime_bits is not None:
+            if len(self.q_prime_bits) != expected:
+                raise ValueError(f"q_prime_bits must contain {expected} bit-sizes, got {len(self.q_prime_bits)}")
+            if any(not 1 <= bit <= 63 for bit in self.q_prime_bits):
+                raise ValueError("q_prime_bits values must be in [1, 63]")
+        if self.exact_q_primes is not None:
+            if len(self.exact_q_primes) != expected:
+                raise ValueError(f"exact_q_primes must contain {expected} Q primes, got {len(self.exact_q_primes)}")
+            if any(prime <= 2 for prime in self.exact_q_primes):
+                raise ValueError("exact_q_primes must contain primes greater than 2")
+
+
+def _optional_int_tuple(values):
+    return None if values is None else tuple(int(value) for value in values)
+
 
 @dataclass(frozen=True)
 class NativeContextBundle:
@@ -64,6 +102,7 @@ class NativeClientMaterial:
     log_n: int
     depth: int
     dcrt_bits: int
+    q_prime_bits: tuple[int, ...]
     special_mod: int
     dnum: int
     secret_key_dist: str
@@ -81,6 +120,7 @@ class NativeServerMaterial:
     log_n: int
     depth: int
     dcrt_bits: int
+    q_prime_bits: tuple[int, ...]
     special_mod: int
     dnum: int
     secret_key_dist: str
@@ -176,6 +216,7 @@ def split_native_client_server(
     rescale_policy,
 ):
     eval_mult_key = np.asarray([bundle.eval_mult_key_b, bundle.eval_mult_key_a], dtype=np.uint64)
+    q_prime_bits = _resolved_q_prime_bits(config)
     client = NativeClientMaterial(
         secret_key=bundle.secret_key,
         public_key_b=bundle.public_key_b,
@@ -183,6 +224,7 @@ def split_native_client_server(
         log_n=int(config.log_n),
         depth=int(config.depth),
         dcrt_bits=int(config.dcrt_bits),
+        q_prime_bits=q_prime_bits,
         special_mod=int(config.first_mod),
         dnum=int(config.dnum),
         secret_key_dist=str(config.secret_key_dist),
@@ -198,6 +240,7 @@ def split_native_client_server(
         log_n=int(config.log_n),
         depth=int(config.depth),
         dcrt_bits=int(config.dcrt_bits),
+        q_prime_bits=q_prime_bits,
         special_mod=int(config.first_mod),
         dnum=int(config.dnum),
         secret_key_dist=str(config.secret_key_dist),
@@ -217,6 +260,13 @@ def _q_prime_bits(config):
     if config.q_prime_bits is None:
         return ()
     return tuple(int(bit) for bit in config.q_prime_bits)
+
+
+def _resolved_q_prime_bits(config):
+    bits = _q_prime_bits(config)
+    if bits:
+        return bits
+    return (int(config.first_mod), *(int(config.dcrt_bits) for _ in range(int(config.depth))))
 
 
 def _exact_q_primes(config):

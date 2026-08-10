@@ -48,6 +48,46 @@ def test_ckks_context_spec_accepts_flexible_scale_mode():
     assert spec.scale_mode == "flexible"
 
 
+def test_ckks_context_spec_accepts_explicit_u64_limb_specs():
+    spec = fhe.CKKSContextSpec(
+        log_n=5,
+        dnum=1,
+        limb_specs=(35, 30, 30, 30),
+        scale_mode="fixed",
+    )
+
+    assert spec.depth == 3
+    assert spec.first_mod == 35
+    assert spec.dcrt_bits == 30
+    assert spec.q_prime_bits == (35, 30, 30, 30)
+
+
+def test_u64_prime_chain_plan_has_single_limb_rescale_semantics():
+    plan = fhe.plan_prime_chain(limb_specs=(60, 50, 49))
+
+    assert plan.dcrt_bits == (60, 50, 49)
+    assert plan.depth == 2
+    assert plan.physical_limb_count == 3
+    assert plan.first_mod_limb_count == 1
+    assert plan.rescale_limb_count == 1
+
+
+def test_u64_limb_specs_reject_composite_and_fixed_heterogeneous_chains():
+    with pytest.raises(ValueError, match="scalar prime bit-sizes"):
+        fhe.plan_prime_chain(limb_specs=((60, 30, 30), 30))
+
+    with pytest.raises(ValueError, match="fixed scale_mode"):
+        fhe.CKKSContextSpec(log_n=5, dnum=1, limb_specs=(35, 29, 30))
+
+    flexible = fhe.CKKSContextSpec(
+        log_n=5,
+        dnum=1,
+        limb_specs=(35, 29, 30),
+        scale_mode="flexible",
+    )
+    assert flexible.q_prime_bits == (35, 29, 30)
+
+
 def test_ckks_context_spec_rejects_flex_alias():
     with pytest.raises(ValueError, match="fixed.*flexible"):
         fhe.CKKSContextSpec(

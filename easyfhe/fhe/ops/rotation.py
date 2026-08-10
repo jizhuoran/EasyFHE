@@ -6,6 +6,7 @@ import numpy as np
 from . import kernels as F
 from . import validation
 from .layout import cipher_batch_item, unpack_cipher_batch
+from .metadata import active_limbs
 
 
 class HoistStrategy(Enum):
@@ -78,7 +79,7 @@ def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
 
     batch_size = len(offsets)
     digits = _modup_to_ext(cipher, cryptoContext)
-    active_limbs = cipher.state.cur_limbs + cryptoContext.K
+    active_limb_count = active_limbs(digits, cryptoContext)
     nonzero_offsets, key_product_indices = _batch_rotation_product_plan(offsets, cryptoContext)
 
     swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(
@@ -105,7 +106,7 @@ def fast_rotate(cipher, offsets, cryptoContext, *, output_ext=False):
             cipher.cv[1],
             precomp_maps,
             cipher.state.cur_limbs,
-            active_limbs,
+            active_limb_count,
             cryptoContext,
         )
         return cipher.cipher_like(list(cv), is_ext=True, batch_size=batch_size)
@@ -173,7 +174,7 @@ def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy=HOIST_NORMAL):
         inner = moddown_from_ext(tail_ext, cryptoContext)
         inner_digits = _modup_to_ext(inner, cryptoContext)
         offsets = tuple(index * offset for index in range(1, int(tail_ext.batch_size) + 1))
-        active_limbs = inner.state.cur_limbs + cryptoContext.K
+        active_limb_count = active_limbs(inner_digits, cryptoContext)
         swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(offsets, cryptoContext, inner.state.cur_limbs)
         key_product_bx, key_product_ax = F.cv_innerproduct_pairwise(
             inner_digits.cv[0],
@@ -192,7 +193,7 @@ def giant_rotate_sum(ciphers, offset, cryptoContext, *, strategy=HOIST_NORMAL):
             inner.cv[0],
             precomp_maps,
             inner.state.cur_limbs,
-            active_limbs,
+            active_limb_count,
             cryptoContext,
         )
         result_ext = result_ext.cipher_like(list(cv), is_ext=True, batch_size=1)

@@ -21,6 +21,7 @@ class Client:
         self.log_n = int(material.log_n)
         self.depth = int(material.depth)
         self.dcrt_bits = int(material.dcrt_bits)
+        self.q_prime_bits = tuple(int(bit) for bit in material.q_prime_bits)
         self.special_mod = int(material.special_mod)
         self.dnum = int(material.dnum)
         self.secret_key_dist = str(material.secret_key_dist)
@@ -154,7 +155,7 @@ class Client:
         builder = ContextMaterialBuilder.from_public_params(
             log_n=self.log_n,
             depth=self.depth,
-            dcrt_bits=self.dcrt_bits,
+            dcrt_bits=self.q_prime_bits,
             special_mod=self.special_mod,
             dnum=self.dnum,
             secret_key_dist=self.secret_key_dist,
@@ -203,6 +204,7 @@ class Client:
             "logN": self.log_n,
             "dnum": self.dnum,
             "dcrtBits": self.dcrt_bits,
+            "qPrimeBits": self.q_prime_bits,
             "firstMod": self.special_mod,
             "secretKeyDist": self.secret_key_dist,
             "scaleMode": self.scale_mode,

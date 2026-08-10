@@ -2,6 +2,15 @@ import easyfhe as torch
 import numpy as np
 
 
+def _validate_device(device):
+    device = str(device)
+    if device != "cpu" and device != "cuda" and not (
+        device.startswith("cuda:") and device[5:].isdigit()
+    ):
+        raise ValueError(f"device must be 'cpu', 'cuda', or 'cuda:<index>', got {device!r}")
+    return device
+
+
 def _resolved_auto_load_keys(value, device):
     if value is not None:
         return bool(value)
@@ -22,7 +31,7 @@ class Context:
         roots_p=None,
     ):
         # Context metadata.
-        self.device = device
+        self.device = _validate_device(device)
         self.auto_load_keys = auto_load_keys
         self.auto_load_keys_resolved = _resolved_auto_load_keys(auto_load_keys, device)
         self.rotation_key_limb_limits = dict(rotation_key_limb_limits or {})
@@ -51,10 +60,11 @@ class Context:
         self.scale_mode = material.scale_mode
         self.rescale_policy = material.rescale_policy
         self.dcrtBits = material.dcrtBits
+        self.dcrtBitsList = tuple(int(bit) for bit in material.dcrtBitsList)
         self.scaleBits = material.dcrtBits
         self.prime_backend = "u64"
         self.first_mod_limb_count = 1
-        self.scale_chain_bits = tuple(int(material.dcrtBits) for _ in range(int(material.L)))
+        self.scale_chain_bits = self.dcrtBitsList
         self.max_num_moduli = material.max_num_moduli
         self.secretKeyDist = material.secretKeyDist
         self.sigma = material.sigma
@@ -65,7 +75,7 @@ class Context:
         self.scalingFactorsRealBig = material.scalingFactorsRealBig
 
         # Device tensors.
-        self.primes = material.primes.to(device)
+        self.primes = material.primes.to(self.device)
         self.primes_list = [int(p) for p in material.primes.tolist()]
         switch_map = []
         for old_mod in self.primes_list:

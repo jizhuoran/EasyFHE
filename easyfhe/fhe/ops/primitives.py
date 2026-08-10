@@ -1,5 +1,6 @@
 from ..ciphertext import CipherState
 from . import kernels as F
+from .metadata import active_limbs as _active_limbs
 
 
 def _scalar_tensor(scalar, cryptoContext, cur_limbs, device):
@@ -22,10 +23,6 @@ def _can_use_pair_kernel(cipher, *extra_tensors):
 
 def _can_use_binary_pair_kernel(left, right, *extra_tensors):
     return _can_fuse_pairwise(left) and _can_use_pair_kernel(right, *left.cv, *extra_tensors)
-
-
-def _active_limbs(cipher, cryptoContext):
-    return cipher.state.cur_limbs + (cryptoContext.K if cipher.is_ext else 0)
 
 
 def _moduli_for(cipher, cryptoContext):

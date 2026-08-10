@@ -170,6 +170,7 @@ def _to_runtime_material(material):
         scale_mode=material.scale_mode,
         rescale_policy=material.rescale_policy,
         dcrtBits=material.dcrtBits,
+        dcrtBitsList=material.dcrtBitsList,
         max_num_moduli=material.max_num_moduli,
         secretKeyDist=material.secretKeyDist,
         sigma=material.sigma,
@@ -267,7 +268,7 @@ class ContextMaterialBuilder:
         return cls.from_public_params(
             log_n=server_material.log_n,
             depth=server_material.depth,
-            dcrt_bits=server_material.dcrt_bits,
+            dcrt_bits=server_material.q_prime_bits,
             special_mod=server_material.special_mod,
             dnum=server_material.dnum,
             secret_key_dist=server_material.secret_key_dist,
@@ -381,7 +382,15 @@ class ContextMaterialBuilder:
         self.inBS = False
 
         self.logN = log_n
-        self.dcrtBits = int(dcrt_bits)
+        if isinstance(dcrt_bits, int):
+            self.dcrtBitsList = (special_mod, *(int(dcrt_bits) for _ in range(L - 1)))
+        else:
+            self.dcrtBitsList = tuple(int(bit) for bit in dcrt_bits)
+            if len(self.dcrtBitsList) != L:
+                raise ValueError(
+                    f"dcrt_bits must contain one bit-size per Q prime ({L}), got {len(self.dcrtBitsList)}"
+                )
+        self.dcrtBits = int(self.dcrtBitsList[-1])
         self.L = int(L)
         self.K = int(K)
         self.dnum = dnum

@@ -19,7 +19,7 @@ import easyfhe.fhe as fhe
 
 The main entry points are:
 
-- `CKKSContextSpec` and `generate_client_context` for client/context
+- `CKKSContextSpec`, `plan_prime_chain`, and `generate_client_context` for client/context
   construction. Use
   `easyfhe.bs.openfhe` to plan bootstrap extra depth and bootstrap rotation keys
   before constructing the context.
@@ -40,11 +40,17 @@ New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
 construction and add it to the application's remaining-depth budget when
 choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
 directly. Call `bs.plan_rot_keys(...)` before key generation and include those
-offsets in `CKKSContextSpec.rotations`; key generation then returns separate
-client/server material, and `Context` is built from the server material only.
+  offsets in `CKKSContextSpec.rotations`; key generation then returns separate
+  client/server material, and `Context` is built from the server material only.
 After context construction, call `bs.generate(ctx, ...)` to generate bootstrap
 constants and a bootstrap plan, then call
 `bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at runtime.
+
+The current frontend uses the u64 prime backend: every Q prime is one physical
+limb and every rescale removes exactly one limb. Regular chains can keep using
+`depth`/`dcrt_bits`/`first_mod`; use `limb_specs=(first_bits, ..., last_bits)`
+when an explicit per-prime chain is useful. Composite or paired limb specs are
+not part of the u64 API.
 
 ## Package Map
 

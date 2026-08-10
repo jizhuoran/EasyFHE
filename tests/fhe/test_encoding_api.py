@@ -141,41 +141,6 @@ def test_encode_stage1_packed_accepts_batch_and_complex_dtypes():
         )
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA fused batch encode requires CUDA")
-def test_fused_encode_batch_matches_stage1_stage2_cuda():
-    _, cuda_ctx = fhe.generate_client_context(
-        fhe.CKKSContextSpec(depth=3, log_n=16, dnum=1, dcrt_bits=50, first_mod=55),
-        device="cuda",
-    )
-    rng = np.random.default_rng(0)
-    values = (
-        rng.standard_normal((2, 32768)) + 1j * rng.standard_normal((2, 32768))
-    ).astype(np.complex128) * 1e-3
-    packed = torch.from_numpy(values).to("cuda")
-    level = cuda_ctx.L - 2
-
-    old = encoding.encode_stage2(
-        encoding.encode_stage1_packed(packed, cryptoContext=cuda_ctx),
-        level=level,
-        slots=32768,
-        is_ext=False,
-        cryptoContext=cuda_ctx,
-    )
-    fast = encoding.fused_encode_batch(
-        packed,
-        level=level,
-        slots=32768,
-        cryptoContext=cuda_ctx,
-    )
-
-    assert fast.batch_size == 2
-    assert fast.state == old.state
-    np.testing.assert_array_equal(
-        fast.cv[0].cpu().numpy(),
-        old.cv[0].cpu().numpy(),
-    )
-
-
 def test_encode_stage2_materializes_single_and_batch_plaintexts():
     ctx = _context()
     single = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=4, ring_dim=ctx.N)
