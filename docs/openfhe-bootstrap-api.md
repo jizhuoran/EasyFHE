@@ -304,6 +304,10 @@ Returns:
   reduced to `1`, and output limbs aligned to `plan.post_bootstrap_levels + 1`
   when possible.
 
+The u64 bootstrap has one canonical output state. It does not expose H/L output
+rails: each transform/rescale step drops one physical Q prime and the final
+ciphertext is normalized to `noise_deg == 1`.
+
 Runtime requirements:
 
 - The context must contain all rotation keys required by the plan and runtime

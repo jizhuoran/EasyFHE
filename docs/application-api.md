@@ -24,6 +24,10 @@ Detailed references:
 Use `CKKSContextSpec` and `generate_client_context` to build the paired client
 and server context.
 
+The regular u64 form below is the recommended default. For an explicit
+per-prime chain, replace `depth`/`dcrt_bits`/`first_mod` with, for example,
+`limb_specs=(55, 52, 52, 52)`. Each u64 rescale removes one physical prime.
+
 ```python
 extra_depth = bs.depth(
     log_bs_slots=14,

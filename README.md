@@ -31,6 +31,11 @@ Write encrypted tensor programs from Python with `easyfhe.fhe`, then execute the
 
 EasyFHE includes GPU kernels for the operations that dominate CKKS runtime cost: encoding, NTT/iNTT, automorphism, key switching, modulus raising/downscaling, ciphertext arithmetic, homomorphic multiplication with relinearization and rescale, rotation, inner products, and fused multiply-accumulate paths.
 
+The current CKKS frontend uses u64 Q primes. One physical prime represents one
+level and one rescale removes one prime. Contexts support both the compact
+`depth`/`dcrt_bits`/`first_mod` form and an explicit per-prime `limb_specs`
+form; paired/composite limb behavior is intentionally outside this API.
+
 ### OpenFHE-compatible bootstrapping workflow
 
 The `easyfhe.bs.openfhe` package provides a clean bootstrapping flow: estimate the required bootstrap depth, plan rotation keys, generate constants and execution plans, then call `bs.bootstrap(...)` at runtime. This keeps application code explicit while making bootstrapping parameters reusable and inspectable.

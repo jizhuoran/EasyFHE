@@ -44,11 +44,11 @@ context-helper style to the current public `easyfhe.fhe` surface.
 
 ```python
 fhe.CKKSContextSpec(
-    depth: int,
     log_n: int,
     dnum: int,
-    dcrt_bits: int,
-    first_mod: int,
+    depth: int | None = None,
+    dcrt_bits: int | None = None,
+    first_mod: int | None = None,
     secret_key_dist: str = "SPARSE_TERNARY",
     scale_mode: str = "fixed",
     rescale_policy: str = "manual",
@@ -56,16 +56,24 @@ fhe.CKKSContextSpec(
     auto_load_keys: bool | None = None,
     rotation_random_mode: str = "fresh",
     rotation_key_limb_limits: Mapping[int, int] = {},
+    exact_q_primes: Sequence[int] | None = None,
+    limb_specs: Sequence[int] | None = None,
 )
 ```
 
 Specifies CKKS parameters for native EasyFHE context generation.
 
-- `depth`: number of available Q limbs / multiplicative depth.
+- `depth`: multiplicative depth. A regular context contains `depth + 1` Q
+  primes. Optional when `limb_specs` is supplied; if both are supplied they
+  must agree.
 - `log_n`: ring dimension log; the ring dimension is `1 << log_n`.
 - `dnum`: decomposition count for key switching.
 - `dcrt_bits`: bit size for ordinary CRT primes.
 - `first_mod`: bit size for the first / special modulus.
+- `limb_specs`: optional explicit u64 Q-chain bit sizes, ordered from the first
+  prime to the last. Each entry describes one physical prime. Do not combine it
+  with `dcrt_bits` or `first_mod`.
+- `exact_q_primes`: optional exact Q primes matching the selected chain.
 - `secret_key_dist`: secret-key distribution string.
 - `scale_mode`: `"fixed"` or `"flexible"`.
 - `rescale_policy`: `"manual"` or `"auto"`.
@@ -76,6 +84,23 @@ Specifies CKKS parameters for native EasyFHE context generation.
 - `rotation_key_limb_limits`: optional per-rotation key limb limit map.
 
 Returns an immutable dataclass instance used by `generate_client_context(...)`.
+
+The two equivalent regular-chain forms are:
+
+```python
+legacy = fhe.CKKSContextSpec(
+    depth=3, log_n=16, dnum=1, dcrt_bits=59, first_mod=60,
+)
+explicit = fhe.CKKSContextSpec(
+    log_n=16, dnum=1, limb_specs=(60, 59, 59, 59),
+)
+```
+
+`fhe.plan_prime_chain(limb_specs=..., exact_q_primes=None)` validates and
+returns a `PrimeChainPlan`. On this u64 backend, `first_mod_limb_count` and
+`rescale_limb_count` are always `1`; tuple/composite limb entries are rejected.
+Fixed scale mode requires all rescale-prime entries (`limb_specs[1:]`) to use
+the same bit size. Heterogeneous chains require `scale_mode="flexible"`.
 
 ### `generate_client_context(spec, device="cpu")`
 
