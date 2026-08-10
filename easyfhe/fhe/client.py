@@ -83,8 +83,11 @@ class Client:
             self._moduli_q_cpu,
         )
 
-    def decrypt(self, cipher):
-        if cipher.cv[0].is_cuda:
+    def decrypt(self, cipher, *, complex_output=False):
+        if cipher.cv[0].is_cuda and not complex_output and _cuda_decode_supports_state(
+            cipher,
+            self.dcrt_bits,
+        ):
             native_cuda_decoded = _decrypt_decode_cuda(
                 cipher,
                 self._secret_key_for_device(cipher.cv[0].device),
@@ -100,6 +103,7 @@ class Client:
             self._moduli_q_cpu,
             self._roots_q_cpu,
             plaintext_modulus_bits=self.dcrt_bits,
+            complex_output=complex_output,
         )
         if native_decoded is not None:
             return native_decoded.to(cipher.cv[0].device)
@@ -326,7 +330,15 @@ def _raise_plaintext_scale_degree(ptx, scale_deg, context):
     )
 
 
-def _decrypt_decode_native(cipher, secret_key, moduli_q, roots_q, *, plaintext_modulus_bits):
+def _decrypt_decode_native(
+    cipher,
+    secret_key,
+    moduli_q,
+    roots_q,
+    *,
+    plaintext_modulus_bits,
+    complex_output=False,
+):
     if len(cipher.cv) != 2:
         raise ValueError(f"Expected a degree-1 ciphertext with two components, got {len(cipher.cv)}")
     ct0_tensor = cipher.cv[0]
@@ -346,7 +358,17 @@ def _decrypt_decode_native(cipher, secret_key, moduli_q, roots_q, *, plaintext_m
         plaintext_modulus_bits,
         cipher.state.noise_deg,
         getattr(cipher, "slots", 0),
+        0.0 if cipher.state.scaling_factor is None else float(cipher.state.scaling_factor),
+        complex_output=complex_output,
     )
+
+
+def _cuda_decode_supports_state(cipher, plaintext_modulus_bits):
+    scaling_factor = cipher.state.scaling_factor
+    if scaling_factor is None:
+        return True
+    nominal = 2.0 ** (int(plaintext_modulus_bits) * int(cipher.state.noise_deg))
+    return math.isclose(float(scaling_factor), nominal, rel_tol=1e-12, abs_tol=0.0)
 
 
 def _decrypt_decode_cuda(cipher, secret_key, crt_inv_moduli, context, *, plaintext_modulus_bits):

@@ -29,29 +29,79 @@ def _restore_sparse_slots(decoded, slots, original_slots, cryptoContext):
     return decoded.cipher_like(decoded.cv, slots=original_slots)
 
 
-def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan):
+def _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan, *, active_l0=None):
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-    encoded = eval_mod_full(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+    encoded = eval_mod_full(
+        encoded,
+        cryptoContext,
+        bootstrap_constants,
+        bootstrap_plan,
+        active_l0=active_l0,
+    )
     return eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
 
 
-def _bootstrap_sparse(raised, original_slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan):
+def _bootstrap_sparse(
+    raised,
+    original_slots,
+    slots,
+    cryptoContext,
+    bootstrap_constants,
+    bootstrap_plan,
+    *,
+    active_l0=None,
+):
     raised = _replicate_sparse_slots(raised, slots, cryptoContext)
 
     encoded = eval_coeffs_to_slots(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
-    encoded = eval_mod_sparse(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
+    encoded = eval_mod_sparse(
+        encoded,
+        cryptoContext,
+        bootstrap_constants,
+        bootstrap_plan,
+        active_l0=active_l0,
+    )
 
     decoded = eval_slots_to_coeffs(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
     return _restore_sparse_slots(decoded, slots, original_slots, cryptoContext)
 
 
-def eval_bootstrap_modraise_first(ciphertext, cryptoContext, bootstrap_constants, bootstrap_plan, L0):
+def eval_bootstrap_modraise_first(
+    ciphertext,
+    cryptoContext,
+    bootstrap_constants,
+    bootstrap_plan,
+    L0,
+    *,
+    active_l0=None,
+):
+    active_l0 = int(L0 if active_l0 is None else active_l0)
     slots = bootstrap_plan.slots
-    raised = raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0)
+    raised = raise_ciphertext(
+        ciphertext,
+        cryptoContext,
+        bootstrap_constants,
+        L0,
+        active_l0=active_l0,
+    )
     if slots == cryptoContext.M // 4:
-        decoded = _bootstrap_fully_packed(raised, cryptoContext, bootstrap_constants, bootstrap_plan)
+        decoded = _bootstrap_fully_packed(
+            raised,
+            cryptoContext,
+            bootstrap_constants,
+            bootstrap_plan,
+            active_l0=active_l0,
+        )
     else:
-        decoded = _bootstrap_sparse(raised, ciphertext.slots, slots, cryptoContext, bootstrap_constants, bootstrap_plan)
+        decoded = _bootstrap_sparse(
+            raised,
+            ciphertext.slots,
+            slots,
+            cryptoContext,
+            bootstrap_constants,
+            bootstrap_plan,
+            active_l0=active_l0,
+        )
 
     decoded = scale_to_original_message(decoded, cryptoContext, bootstrap_constants)
     return decoded.cipher_like(decoded.cv, slots=ciphertext.slots)

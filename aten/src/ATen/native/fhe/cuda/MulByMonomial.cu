@@ -43,7 +43,7 @@ __global__ void mul_by_monomial_kernel(
   const int64_t src = wrapped ? tid_x + (N - shift) : tid_x - shift;
   const uint64_t in_val = in[in_base + src];
   if (wrapped == negated_wrap) {
-    out[out_base + tid_x] = qVec[limb] - in_val;
+    out[out_base + tid_x] = in_val == 0 ? 0 : qVec[limb] - in_val;
   } else {
     out[out_base + tid_x] = in_val;
   }

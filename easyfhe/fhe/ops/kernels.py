@@ -644,7 +644,19 @@ def cv_encrypt(ptx, pk0, pk1, l, logn, nh, moduli_p, moduli_q, context):
     )
 
 
-def cv_decrypt_decode(ct0, ct1, secret_key, moduli_q, roots_q, cur_limbs, plaintext_modulus_bits, noise_scale_deg, slots):
+def cv_decrypt_decode(
+    ct0,
+    ct1,
+    secret_key,
+    moduli_q,
+    roots_q,
+    cur_limbs,
+    plaintext_modulus_bits,
+    noise_scale_deg,
+    slots,
+    scaling_factor,
+    complex_output=False,
+):
     if not hasattr(torch, "ckks_decrypt_decode"):
         return None
     return torch.ckks_decrypt_decode(
@@ -653,10 +665,12 @@ def cv_decrypt_decode(ct0, ct1, secret_key, moduli_q, roots_q, cur_limbs, plaint
         secret_key.cpu(),
         moduli_q.cpu(),
         roots_q.cpu(),
-        cur_limbs=int(cur_limbs),
-        plaintext_modulus_bits=int(plaintext_modulus_bits),
-        noise_scale_deg=int(noise_scale_deg),
-        slots=int(slots),
+        int(cur_limbs),
+        int(plaintext_modulus_bits),
+        int(noise_scale_deg),
+        int(slots),
+        float(scaling_factor),
+        bool(complex_output),
     )
 
 

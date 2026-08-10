@@ -77,12 +77,13 @@ def mul_by_monomial_inplace(cipher, monomial_degree, cryptoContext):
     return cipher
 
 
-def raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
+def raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0, *, active_l0=None):
     correction_scale = bootstrap_constants._scalar_value("correction_scale")
     result = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
 
     source_scale = float(result.state.scaling_factor)
-    target_scale = float(cryptoContext.scale_at(cryptoContext.L))
+    active_l0 = int(L0 if active_l0 is None else active_l0)
+    target_scale = float(cryptoContext.scale_at(active_l0))
     correction_drop_count = int(getattr(cryptoContext, "first_mod_limb_count", 1))
     correction_divisor = float(
         cryptoContext.physical_rescale_divisor_for_limbs(
@@ -131,7 +132,7 @@ def raise_ciphertext(ciphertext, cryptoContext, bootstrap_constants, L0):
     return alignment.reduce_noise_to_one(result, cryptoContext)
 
 
-def scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
+def scale_after_approx(ciphertext, cryptoContext, bootstrap_constants, *, active_l0=None):
     scalar = bootstrap_constants.encoded_scalars(
         "post_scalar", ciphertext.state.cur_limbs, 0, cryptoContext, mode="int"
     )[0]
@@ -141,7 +142,11 @@ def scale_after_approx(ciphertext, cryptoContext, bootstrap_constants):
         cryptoContext,
     )
     if cryptoContext.scale_mode == "flexible":
-        return result.cipher_like(result.cv, state=result.state.replace(scaling_factor=cryptoContext.scale_at(cryptoContext.L)))
+        scale_limbs = int(cryptoContext.L if active_l0 is None else active_l0)
+        return result.cipher_like(
+            result.cv,
+            state=result.state.replace(scaling_factor=cryptoContext.scale_at(scale_limbs)),
+        )
     return result
 
 
@@ -156,7 +161,7 @@ def scale_to_original_message(ciphertext, cryptoContext, bootstrap_constants):
     )
 
 
-def eval_mod_full(encoded, cryptoContext, bootstrap_constants, bootstrap_plan):
+def eval_mod_full(encoded, cryptoContext, bootstrap_constants, bootstrap_plan, *, active_l0=None):
     conjugate = rotation.homo_rotate(encoded, 2 * cryptoContext.N - 1, cryptoContext)
     imag = arithmetic.homo_sub(encoded, conjugate, cryptoContext)
     real = arithmetic.homo_add(encoded, conjugate, cryptoContext)
@@ -170,15 +175,25 @@ def eval_mod_full(encoded, cryptoContext, bootstrap_constants, bootstrap_plan):
 
     imag = mul_by_monomial_inplace(imag, cryptoContext.M // 4, cryptoContext)
     encoded = arithmetic.homo_add(real, imag, cryptoContext)
-    encoded = scale_after_approx(encoded, cryptoContext, bootstrap_constants)
+    encoded = scale_after_approx(
+        encoded,
+        cryptoContext,
+        bootstrap_constants,
+        active_l0=active_l0,
+    )
     return alignment.reduce_noise_to_one(encoded, cryptoContext)
 
 
-def eval_mod_sparse(encoded, cryptoContext, bootstrap_constants, bootstrap_plan):
+def eval_mod_sparse(encoded, cryptoContext, bootstrap_constants, bootstrap_plan, *, active_l0=None):
     encoded = rotation.homo_rotate_add(encoded, 2 * cryptoContext.N - 1, cryptoContext, addend=encoded)
     encoded = alignment.reduce_noise_to_one(encoded, cryptoContext)
     encoded = bootstrap_approx.eval_bootstrap_approx_mod(encoded, cryptoContext, bootstrap_constants, bootstrap_plan)
-    encoded = scale_after_approx(encoded, cryptoContext, bootstrap_constants)
+    encoded = scale_after_approx(
+        encoded,
+        cryptoContext,
+        bootstrap_constants,
+        active_l0=active_l0,
+    )
     return alignment.reduce_noise_to_one(encoded, cryptoContext)
 
 

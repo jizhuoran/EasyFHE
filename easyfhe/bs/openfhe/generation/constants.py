@@ -116,25 +116,25 @@ def _unique_preserve_order(values):
     return result
 
 
-def _run_bootstrap_setup(crypto_context, plan):
+def _run_bootstrap_setup(crypto_context, plan, *, active_l0=None):
     precompute = _make_precompute(crypto_context, plan.log_bs_slots)
     precompute.eval_bootstrap_setup(
         crypto_context,
         plan.level_budget,
         plan.dim1,
         plan.slots,
-        _bootstrap_correction_factor(crypto_context),
+        _bootstrap_correction_factor(crypto_context, active_l0=active_l0),
         baby_step=plan.baby_step,
     )
     return precompute
 
 
-def _compute_bootstrap_scalars(crypto_context, plan, k):
+def _compute_bootstrap_scalars(crypto_context, plan, k, *, active_l0=None):
     q0 = float(_first_logical_modulus(crypto_context))
-    deg = _bootstrap_evalmod_degree(crypto_context)
+    deg = _bootstrap_evalmod_degree(crypto_context, active_l0=active_l0)
 
     N = crypto_context.N
-    correction_factor = _bootstrap_correction_factor(crypto_context)
+    correction_factor = _bootstrap_correction_factor(crypto_context, active_l0=active_l0)
 
     correction = correction_factor - deg
     correction_scale = 2.0**(-correction)
@@ -164,23 +164,30 @@ def _first_logical_modulus(crypto_context):
     return modulus
 
 
-def _bootstrap_real_evaluation_scale(crypto_context):
-    return float(crypto_context.physical_rescale_divisor_for_limbs(crypto_context.L, 1))
+def _bootstrap_real_evaluation_scale(crypto_context, *, active_l0=None):
+    l0 = int(crypto_context.L if active_l0 is None else active_l0)
+    return float(crypto_context.physical_rescale_divisor_for_limbs(l0, 1))
 
 
-def _bootstrap_evalmod_degree(crypto_context):
+def _bootstrap_evalmod_degree(crypto_context, *, active_l0=None):
     return math.log2(float(_first_logical_modulus(crypto_context))) - math.log2(
-        _bootstrap_real_evaluation_scale(crypto_context)
+        _bootstrap_real_evaluation_scale(crypto_context, active_l0=active_l0)
     )
 
 
-def _bootstrap_correction_factor(crypto_context):
-    deg = int(_round_half_away_from_zero(_bootstrap_evalmod_degree(crypto_context)))
+def _bootstrap_correction_factor(crypto_context, *, active_l0=None):
+    deg = int(_round_half_away_from_zero(_bootstrap_evalmod_degree(crypto_context, active_l0=active_l0)))
     return 9 if deg <= 9 else deg + 9
 
 
-def _constants_from_precompute(plan, precompute, required_rotations, crypto_context):
-    scalars = _compute_bootstrap_scalars(crypto_context, plan, precompute.k)
+def _constants_from_precompute(plan, precompute, required_rotations, crypto_context, *, active_l0=None):
+    active_l0 = None if active_l0 is None else int(active_l0)
+    scalars = _compute_bootstrap_scalars(
+        crypto_context,
+        plan,
+        precompute.k,
+        active_l0=active_l0,
+    )
     approx_plan = get_bootstrap_approx_plan(crypto_context.secretKeyDist)
     approx_eval_plan = compile_flat_ps_plan(approx_plan.ps_root)
     (
@@ -223,6 +230,7 @@ def _constants_from_precompute(plan, precompute, required_rotations, crypto_cont
         double_angle_iterations=approx_plan.double_angle_iterations,
         double_angle_scalar_names=double_angle_scalar_names,
         required_rotations=tuple(required_rotations),
+        active_l0=active_l0,
     )
     constants = ConstantBundle(scalars=scalars, vectors=_wrap_vectors(vectors))
     return constants, bootstrap_plan
@@ -403,6 +411,7 @@ def generate_bootstrap_constants(
     dim1=None,
     baby_step=None,
     strategy="double_hoist",
+    active_l0=None,
 ):
     if dim1 is not None and baby_step is not None:
         raise ValueError("bootstrap generate accepts either dim1 or baby_step, not both")
@@ -417,6 +426,7 @@ def generate_bootstrap_constants(
         dim1=_normalize_public_pair_or_scalar(dim1 or (0, 0), "dim1"),
         baby_step=_normalize_public_pair_or_scalar(baby_step, "baby_step"),
         strategy=strategy,
+        active_l0=active_l0,
     )
 
 
@@ -441,6 +451,7 @@ def _build_bootstrap_constants(
     baby_step=None,
     strategy="double_hoist",
     max_levels_remaining=None,
+    active_l0=None,
 ):
     plan = _make_generation_config(
         log_bs_slots,
@@ -451,7 +462,10 @@ def _build_bootstrap_constants(
         strategy,
         max_levels_remaining=max_levels_remaining,
     )
-    precompute = _run_bootstrap_setup(crypto_context, plan)
+    active_l0 = None if active_l0 is None else int(active_l0)
+    if active_l0 is not None and not 1 <= active_l0 <= int(crypto_context.L):
+        raise ValueError(f"bootstrap active_l0 must be in [1, {crypto_context.L}], got {active_l0}")
+    precompute = _run_bootstrap_setup(crypto_context, plan, active_l0=active_l0)
     required_rotations = bootstrap_required_rotations(
         crypto_context.N,
         plan.log_bs_slots,
@@ -460,4 +474,10 @@ def _build_bootstrap_constants(
         plan.strategy,
         baby_step=plan.baby_step,
     )
-    return _constants_from_precompute(plan, precompute, required_rotations, crypto_context)
+    return _constants_from_precompute(
+        plan,
+        precompute,
+        required_rotations,
+        crypto_context,
+        active_l0=active_l0,
+    )

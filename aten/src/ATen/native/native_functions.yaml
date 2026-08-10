@@ -3389,7 +3389,7 @@
     CPU: encrypt_cpu
     CUDA: encrypt_cuda
 
-- func: ckks_decrypt_decode(Tensor ct0, Tensor ct1, Tensor secret_key, Tensor moduli_q, Tensor roots_q, int cur_limbs, int plaintext_modulus_bits, int noise_scale_deg, int slots) -> Tensor
+- func: ckks_decrypt_decode(Tensor ct0, Tensor ct1, Tensor secret_key, Tensor moduli_q, Tensor roots_q, int cur_limbs, int plaintext_modulus_bits, int noise_scale_deg, int slots, float scaling_factor=0.0, bool complex_output=False) -> Tensor
   device_check: NoCheck
   dispatch:
     CPU: ckks_decrypt_decode_cpu

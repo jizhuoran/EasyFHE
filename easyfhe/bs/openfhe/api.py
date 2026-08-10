@@ -41,6 +41,7 @@ def generate(
     dim1=None,
     baby_step=None,
     strategy="double_hoist",
+    active_l0=None,
 ):
     if post_bootstrap_levels is None:
         post_bootstrap_levels = max_levels_remaining
@@ -54,6 +55,7 @@ def generate(
         dim1=dim1,
         baby_step=baby_step,
         strategy=strategy,
+        active_l0=active_l0,
     )
     return constants, plan
 
@@ -62,7 +64,22 @@ def describe_plan(plan):
     return describe_flat_ps_plan(plan.approx_eval_plan, plan)
 
 
-def bootstrap(cipher, crypto_context, constants, plan, *, L0, bootstrap_mode="modraise_first"):
+def bootstrap(
+    cipher,
+    crypto_context,
+    constants,
+    plan,
+    *,
+    L0=None,
+    bootstrap_mode="modraise_first",
+):
     from .runtime import homo_bootstrap
 
-    return homo_bootstrap(cipher, crypto_context, constants, plan, L0=L0, bootstrap_mode=bootstrap_mode)
+    return homo_bootstrap(
+        cipher,
+        crypto_context,
+        constants,
+        plan,
+        L0=L0,
+        bootstrap_mode=bootstrap_mode,
+    )

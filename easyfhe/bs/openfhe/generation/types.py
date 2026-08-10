@@ -38,6 +38,7 @@ class BootstrapPlan:
     double_angle_iterations: int
     double_angle_scalar_names: tuple[str, ...]
     required_rotations: tuple[int, ...]
+    active_l0: int | None = None
 
     @property
     def slots(self):

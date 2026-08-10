@@ -200,7 +200,7 @@ def test_constant_bundle_accepts_cuda_real_tensor_vectors(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")
-def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors():
+def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors(monkeypatch):
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
@@ -208,10 +208,28 @@ def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors():
     cuda_ctx = ctx.cuda()
     packed = torch.zeros(8, dtype=torch.complex128, device="cuda")
     bundle = fhe.ConstantBundle(vectors={"w": fhe.PackedRaw(packed)}, cache_mode="none")
+    calls = []
+
+    def fake_encode_stage2(
+        middle,
+        level,
+        slots,
+        is_ext,
+        crypto_context,
+        *,
+        scaling_factor=None,
+        cur_limbs=None,
+        noise_deg=1,
+    ):
+        calls.append((scaling_factor, cur_limbs, noise_deg))
+        return _cipher("w")
+
+    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
     plaintext = bundle.plaintext("w", 1, 8, cuda_ctx, scale=2.0)
 
-    assert plaintext.state.scaling_factor == 2.0
+    assert plaintext.name == "w"
+    assert calls == [(2.0, None, 1)]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")

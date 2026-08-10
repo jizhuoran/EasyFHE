@@ -33,7 +33,8 @@ void mul_by_monomial_impl(
     for (int64_t row = 0; row < l; ++row) {
       for (int64_t x = 0; x < N; ++x) {
         if (x < shift) {
-          out[row * N + x] = q_vec[row] - in[row * N + x + (N - shift)];
+          const auto in_val = in[row * N + x + (N - shift)];
+          out[row * N + x] = in_val == 0 ? 0 : q_vec[row] - in_val;
         } else {
           out[row * N + x] = in[row * N + x - shift];
         }
@@ -47,7 +48,8 @@ void mul_by_monomial_impl(
         if (x < shift) {
           out[row * N + x] = in[row * N + x + (N - shift)];
         } else {
-          out[row * N + x] = q_vec[row] - in[row * N + x - shift];
+          const auto in_val = in[row * N + x - shift];
+          out[row * N + x] = in_val == 0 ? 0 : q_vec[row] - in_val;
         }
       }
     }

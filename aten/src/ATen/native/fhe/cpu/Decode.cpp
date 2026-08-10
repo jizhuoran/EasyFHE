@@ -5,6 +5,7 @@
 #include <ATen/ops/empty_like.h>
 #include <ATen/ops/zeros.h>
 #include <c10/util/Exception.h>
+#include <c10/util/complex.h>
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -271,7 +272,9 @@ Tensor ckks_decrypt_decode_cpu(
     int64_t cur_limbs,
     int64_t plaintext_modulus_bits,
     int64_t noise_scale_deg,
-    int64_t slots) {
+    int64_t slots,
+    double scaling_factor,
+    bool complex_output) {
   TORCH_CHECK(ct0.scalar_type() == at::kUInt64, "ct0 must be uint64");
   TORCH_CHECK(ct1.scalar_type() == at::kUInt64, "ct1 must be uint64");
   TORCH_CHECK(secret_key.scalar_type() == at::kUInt64, "secret_key must be uint64");
@@ -333,10 +336,13 @@ Tensor ckks_decrypt_decode_cpu(
   }
 
   const auto inverses = garner_inverses(moduli_ptr, cur_limbs);
-  const double scaling_pre = std::pow(
-      2.0,
-      -static_cast<double>(plaintext_modulus_bits) *
-          static_cast<double>(std::max<int64_t>(noise_scale_deg - 1, 0)));
+  const bool has_explicit_scale = scaling_factor > 0.0;
+  const double scaling_pre = has_explicit_scale
+      ? 1.0
+      : std::pow(
+            2.0,
+            -static_cast<double>(plaintext_modulus_bits) *
+                static_cast<double>(std::max<int64_t>(noise_scale_deg - 1, 0)));
   std::vector<std::complex<double>> cur_values(static_cast<size_t>(slots));
   for (int64_t slot = 0; slot < slots; ++slot) {
     const int64_t idx = slot * gap;
@@ -346,8 +352,26 @@ Tensor ckks_decrypt_decode_cpu(
         std::complex<double>(real * scaling_pre, imag * scaling_pre);
   }
 
+  if (complex_output) {
+    const double complex_scale = has_explicit_scale
+        ? 1.0 / scaling_factor
+        : std::pow(2.0, -static_cast<double>(plaintext_modulus_bits));
+    fft_special(cur_values, ring_dim * 2);
+    Tensor output = at::empty(
+        {slots},
+        at::TensorOptions().dtype(at::kComplexDouble).device(at::kCPU));
+    auto* output_ptr = output.data_ptr<c10::complex<double>>();
+    for (int64_t slot = 0; slot < slots; ++slot) {
+      const auto value = cur_values[static_cast<size_t>(slot)] * complex_scale;
+      output_ptr[slot] = c10::complex<double>(value.real(), value.imag());
+    }
+    return output;
+  }
+
   const std::vector<std::complex<double>> conjugate = conjugate_slots(cur_values);
-  const double scale = 0.5 * std::pow(2.0, -static_cast<double>(plaintext_modulus_bits));
+  const double scale = has_explicit_scale
+      ? 0.5 / scaling_factor
+      : 0.5 * std::pow(2.0, -static_cast<double>(plaintext_modulus_bits));
   std::vector<std::complex<double>> real_values(static_cast<size_t>(slots));
   for (int64_t slot = 0; slot < slots; ++slot) {
     real_values[static_cast<size_t>(slot)] = std::complex<double>(
