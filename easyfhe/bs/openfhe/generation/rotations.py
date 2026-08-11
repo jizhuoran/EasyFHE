@@ -250,10 +250,25 @@ def _schedule_required_rotations(schedule, strategy, ring_dim):
         result.extend(schedule.rot_in[level][:giant_step])
         rot_out = schedule.rot_out[level][:baby_step]
         if strategy == "double_hoist":
-            result.extend(rot_out)
+            result.extend(_double_hoist_giant_rotation_keys(rot_out, ring_dim))
         else:
             result.extend(_single_giant_rotation_key(rot_out, ring_dim))
     return [int(rotation) for rotation in result if int(rotation) != 0]
+
+
+def _double_hoist_giant_rotation_keys(offsets, ring_dim):
+    offsets = tuple(int(offset) for offset in offsets)
+    if len(offsets) <= 1:
+        return ()
+    step = offsets[1] - offsets[0]
+    half_ring = int(ring_dim) // 2
+    keys = []
+    for index in range(1, len(offsets)):
+        key = index * step
+        if key > half_ring:
+            key %= half_ring
+        keys.append(key)
+    return tuple(keys)
 
 
 def _single_giant_rotation_key(offsets, ring_dim):

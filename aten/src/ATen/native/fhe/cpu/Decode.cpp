@@ -136,7 +136,8 @@ long double mixed_radix_fraction(
     const uint64_t* moduli,
     int64_t limbs) {
   long double value = 0.0L;
-  for (int64_t i = limbs - 1; i >= 0; --i) {
+  // Garner digit i is weighted by the product of all preceding moduli.
+  for (int64_t i = 0; i < limbs; ++i) {
     value = (value + static_cast<long double>(digits[static_cast<size_t>(i)])) /
         static_cast<long double>(moduli[i]);
   }

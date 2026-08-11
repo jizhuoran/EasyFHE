@@ -271,10 +271,11 @@ class Context:
             return self.get_rotation_key(rot_index), available_special_mod_start
 
         beta = int((cur_limbs + self.alpha - 1) / self.alpha)
-        cache_key = (int(rot_index), cur_limbs, beta)
-        cached = self._rotation_key_cuda_cache.get(cache_key)
+        rot_index = int(rot_index)
+        cached = self._find_cached_rotation_key(rot_index, cur_limbs, beta)
         if cached is not None:
-            return cached, cur_limbs
+            cached_key, cached_special_mod_start = cached
+            return cached_key, cached_special_mod_start
 
         swk_bx, swk_ax = self._load_rotation_key_to_cuda(
             rot_index,
@@ -283,8 +284,25 @@ class Context:
             available_special_mod_start,
         )
         cached = [swk_bx, swk_ax]
+        cache_key = (rot_index, cur_limbs, beta)
         self._rotation_key_cuda_cache[cache_key] = cached
         return cached, cur_limbs
+
+    def _find_cached_rotation_key(self, rot_index, cur_limbs, beta):
+        best = None
+        for (cached_rot, cached_special_mod_start, cached_beta), cached_key in self._rotation_key_cuda_cache.items():
+            if int(cached_rot) != int(rot_index):
+                continue
+            if int(cached_special_mod_start) < int(cur_limbs):
+                continue
+            if int(cached_beta) < int(beta):
+                continue
+            if best is None or int(cached_special_mod_start) < int(best[0]):
+                best = (int(cached_special_mod_start), cached_key)
+        if best is None:
+            return None
+        cached_special_mod_start, cached_key = best
+        return cached_key, cached_special_mod_start
 
     def _rotation_key_special_mod_start(self, rot_index):
         bx, _ = self.left_rot_key_map[rot_index]

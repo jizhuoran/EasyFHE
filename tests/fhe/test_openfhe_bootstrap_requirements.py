@@ -1,6 +1,9 @@
+from types import SimpleNamespace
+
 import pytest
 
 import easyfhe.bs.openfhe as bs
+from easyfhe.fhe.ops import rotation
 
 
 def test_bootstrap_spec_derives_context_depth_and_rotations():
@@ -124,3 +127,22 @@ def test_openfhe_bootstrap_rot_keys_supports_sparse_and_uniform(secret_key_dist,
     assert len(rotations) == len(set(rotations))
     assert rotations[-1] == (1 << 17) - 1
     assert rotations
+
+
+def test_double_hoist_full_slot_rotations_match_runtime_giant_keys():
+    spec = bs.BootstrapSpec(
+        log_slots=15,
+        level_budget=(2, 4),
+        output_levels=2,
+        strategy="double_hoist",
+    )
+
+    rotations = bs.requirements(spec, log_n=16).rotations
+    runtime_offsets = tuple(
+        rotation._double_hoist_giant_key_offset(index * 8192, SimpleNamespace(N=1 << 16))
+        for index in range(1, 8)
+    )
+
+    assert runtime_offsets == (8192, 16384, 24576, 32768, 8192, 16384, 24576)
+    assert set(runtime_offsets).issubset(rotations)
+    assert all(offset not in rotations for offset in (40960, 49152, 57344))

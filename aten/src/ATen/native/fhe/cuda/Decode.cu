@@ -39,7 +39,8 @@ __device__ __forceinline__ double mixed_radix_fraction_device(
     const uint64_t* moduli,
     int64_t limbs) {
   double value = 0.0;
-  for (int64_t i = limbs - 1; i >= 0; --i) {
+  // Garner digit i is weighted by the product of all preceding moduli.
+  for (int64_t i = 0; i < limbs; ++i) {
     value = (value + static_cast<double>(digits[i])) / static_cast<double>(moduli[i]);
   }
   return value;

@@ -193,7 +193,10 @@ def giant_rotate_sum(ciphers, offset, context, *, strategy="normal"):
         )
         inner = moddown_from_ext(tail_ext, context)
         inner_digits = _modup_to_ext(inner, context)
-        offsets = tuple(index * offset for index in range(1, int(tail_ext.batch_size) + 1))
+        offsets = tuple(
+            _double_hoist_giant_key_offset(index * offset, context)
+            for index in range(1, int(tail_ext.batch_size) + 1)
+        )
         active_limb_count = active_limbs(inner_digits, context)
         swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(offsets, context, inner.state.cur_limbs)
         key_product_bx, key_product_ax = F.cv_innerproduct_pairwise(
@@ -306,6 +309,14 @@ def _norm_rot_index(offset, context):
     offset = int(offset)
     if offset < 0:
         return int((int(context.N) // 2) + offset)
+    return offset
+
+
+def _double_hoist_giant_key_offset(offset, context):
+    offset = int(offset)
+    half_ring = int(context.N) // 2
+    if offset > half_ring:
+        return offset % half_ring
     return offset
 
 

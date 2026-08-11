@@ -151,7 +151,7 @@ def test_flexible_context_scale_tables_are_level_aware():
     assert context.rescale_divisor_at(2) == pytest.approx(269.0)
 
 
-def test_rotation_key_cuda_cache_uses_exact_limb_shape():
+def test_rotation_key_cuda_cache_reuses_sufficient_limb_key():
     loads = []
     context = SimpleNamespace(
         device="cuda",
@@ -164,12 +164,29 @@ def test_rotation_key_cuda_cache_uses_exact_limb_shape():
             f"ax-{cur_limbs}",
         ),
     )
+    context._find_cached_rotation_key = lambda rot_index, cur_limbs, beta: (
+        fhe.Context._find_cached_rotation_key(context, rot_index, cur_limbs, beta)
+    )
 
     key4, special4 = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
     key3, special3 = fhe.Context.get_rotation_key_for_limbs(context, 3, 3)
     cached4, cached_special4 = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
 
-    assert loads == [(3, 4, 2, 5), (3, 3, 2, 5)]
+    assert loads == [(3, 4, 2, 5)]
     assert key4 == cached4 == ["bx-4", "ax-4"]
-    assert key3 == ["bx-3", "ax-3"]
-    assert (special4, special3, cached_special4) == (4, 3, 4)
+    assert key3 == key4
+    assert (special4, special3, cached_special4) == (4, 4, 4)
+
+
+def test_rotation_key_cache_selects_smallest_sufficient_key():
+    context = fhe.Context.__new__(fhe.Context)
+    context._rotation_key_cuda_cache = {
+        (5, 12, 4): "large-key",
+        (5, 8, 3): "small-key",
+        (7, 16, 4): "other-rotation",
+    }
+
+    assert context._find_cached_rotation_key(5, 10, 3) == ("large-key", 12)
+    assert context._find_cached_rotation_key(5, 8, 3) == ("small-key", 8)
+    assert context._find_cached_rotation_key(5, 13, 4) is None
+    assert context._find_cached_rotation_key(5, 10, 5) is None

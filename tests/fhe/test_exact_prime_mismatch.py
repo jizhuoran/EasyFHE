@@ -210,10 +210,9 @@ def test_u64_exact_prime_bootstrap_with_lower_raise_target_cuda():
     assert max_error < 2e-2
 
 
-def _u64_full_slot_bootstrap_case():
+def _u64_full_slot_bootstrap_case(level_budget=(4, 4)):
     log_n = 16
     log_bs_slots = 15
-    level_budget = (4, 4)
     spec = bs.BootstrapSpec(
         log_slots=log_bs_slots,
         level_budget=level_budget,
@@ -281,4 +280,28 @@ def test_u64_full_slot_complex_bootstrap_precision_cuda():
     result = bs.bootstrap(cipher, ctx, program)
     decoded = client.decrypt(result, complex_output=True)[:slots].cpu().numpy()
 
+    assert float(np.max(np.abs(decoded - values))) < 3e-5
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA FHE kernels required")
+def test_u64_full_slot_double_hoist_2_4_bootstrap_precision_cuda():
+    client, ctx, program, log_bs_slots = _u64_full_slot_bootstrap_case((2, 4))
+    slots = 1 << log_bs_slots
+    idx = np.arange(slots, dtype=np.float64)
+    values = (
+        1e-4 * np.sin(2 * np.pi * idx / slots)
+        + 7e-5j * np.cos(4 * np.pi * idx / slots)
+    ).astype(np.complex128)
+    values[:8] += np.asarray([1, -2, 3, -4, 5, -6, 7, -8], dtype=np.float64) * 1e-6
+    cipher = client.encrypt(
+        values,
+        slots=slots,
+        cur_limbs=ctx.max_limbs,
+        scaling_factor=ctx.scale_at(ctx.max_limbs),
+    )
+
+    result = bs.bootstrap(cipher, ctx, program)
+    decoded = client.decrypt(result, complex_output=True)[:slots].cpu().numpy()
+
+    assert result.state == program.output_state
     assert float(np.max(np.abs(decoded - values))) < 3e-5
