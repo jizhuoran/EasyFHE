@@ -153,7 +153,7 @@ The stable `easyfhe.fhe` surface includes:
 
 - `CKKSContextSpec`, `generate_client_context`, `Client`, `Context`, `Cipher`, and `CipherState`
 - `ConstantBundle` for reusable scalar and vector constants
-- ciphertext alignment and noise-level helpers such as `align_to` and `reduce_noise_to_one`
+- ciphertext alignment and scale-state helpers such as `align_to`, `normalize_scale`, and `rescale`
 - homomorphic add/sub/mul, plaintext/scalar variants, rotations, fused multiply/relinearize/rescale paths, and batch/hoisted helpers
 - slot-shape helpers such as `expand_slots`, `fold_slots`, `pack_cipher_batch`, and `unpack_cipher_batch`
 

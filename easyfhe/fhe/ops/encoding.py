@@ -78,11 +78,11 @@ def _bit_reverse_permutation(size):
     return indices
 
 
-def encode_stage1(raw_values, slots, ring_dim=None, device=None, cryptoContext=None):
+def encode_stage1(raw_values, slots, ring_dim=None, device=None, context=None):
     """Encode raw slot values into a contiguous middle representation."""
 
     slots = int(slots)
-    params = _resolve_stage1_params(slots, ring_dim, device, cryptoContext)
+    params = _resolve_stage1_params(slots, ring_dim, device, context)
     device = params["device"]
 
     if _use_torch_stage1(device):
@@ -90,7 +90,7 @@ def encode_stage1(raw_values, slots, ring_dim=None, device=None, cryptoContext=N
         encoded_values, max_encoded_value = _native_pre_encode_stage1_matrix(
             stage1_values,
             slots,
-            params["cryptoContext"],
+            params["context"],
             device,
         )
     else:
@@ -126,11 +126,11 @@ def encode_stage1(raw_values, slots, ring_dim=None, device=None, cryptoContext=N
     return PreparedPlaintext(output_values[0], slots, encoded_values[0], max_encoded_value)
 
 
-def encode_stage1_packed(packed_values, slots=None, cryptoContext=None):
+def encode_stage1_packed(packed_values, slots=None, context=None):
     """Encode CUDA-packed complex slot values without Python-side padding."""
 
-    if cryptoContext is None:
-        raise ValueError("encode_stage1_packed requires cryptoContext")
+    if context is None:
+        raise ValueError("encode_stage1_packed requires context")
     if not torch.is_tensor(packed_values):
         raise TypeError("encode_stage1_packed expects a CUDA tensor")
     if not packed_values.is_cuda:
@@ -148,7 +148,7 @@ def encode_stage1_packed(packed_values, slots=None, cryptoContext=None):
     encoded_values, max_encoded_value = F.cv_pre_encode_stage1(
         packed_values,
         slots,
-        cryptoContext,
+        context,
     )
     if packed_values.dim() == 1:
         encoded_values = encoded_values[0]
@@ -161,7 +161,17 @@ def encode_stage1_packed(packed_values, slots=None, cryptoContext=None):
     )
 
 
-def encode_stage2(middle, level, slots, is_ext, cryptoContext, *, scaling_factor=None, cur_limbs=None):
+def encode_stage2(
+    middle,
+    level,
+    slots,
+    is_ext,
+    context,
+    *,
+    scaling_factor=None,
+    cur_limbs=None,
+    scale_degree=1,
+):
     """Materialize a middle representation as an FHE plaintext."""
 
     if not isinstance(middle, PreparedPlaintext):
@@ -170,9 +180,12 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext, *, scaling_factor
     is_ext = bool(is_ext)
     _validate_prepared_slots(middle, slots)
 
-    cur_limbs = _resolve_cur_limbs(cryptoContext, level, cur_limbs, "encode_stage2")
+    cur_limbs = _resolve_cur_limbs(context, level, cur_limbs, "encode_stage2")
+    scale_degree = int(scale_degree)
+    if scale_degree <= 0:
+        raise ValueError(f"encode_stage2 scale_degree must be positive, got {scale_degree}")
     scaling_factor = _resolve_stage2_scale(
-        cryptoContext,
+        context,
         cur_limbs,
         scaling_factor,
         "encode_stage2",
@@ -185,16 +198,16 @@ def encode_stage2(middle, level, slots, is_ext, cryptoContext, *, scaling_factor
 
     pt_encode = F.cv_encode(
         encoded_values,
-        cryptoContext.N,
+        context.N,
         cur_limbs,
         slots,
         scaling_factor,
         is_ext,
-        cryptoContext,
+        context,
     )
     return Plaintext(
         [pt_encode],
-        CipherState(cur_limbs, 1, scaling_factor),
+        CipherState(cur_limbs, scale_degree, scaling_factor),
         slots,
         is_ext,
         batch_size=batch_size,
@@ -205,12 +218,12 @@ def _as_encoded_tensor(encoded_values, device):
     return torch.as_tensor(encoded_values, dtype=torch.float64, device=device or "cpu")
 
 
-def _resolve_stage1_params(slots, ring_dim, device, cryptoContext):
+def _resolve_stage1_params(slots, ring_dim, device, context):
     log_slots = int(math.log2(int(slots))) if int(slots) > 0 else 0
-    if cryptoContext is not None:
-        ring_dim = int(cryptoContext.N if ring_dim is None else ring_dim)
-        device = getattr(cryptoContext, "device", device)
-        if not _has_context_encode_tables(cryptoContext):
+    if context is not None:
+        ring_dim = int(context.N if ring_dim is None else ring_dim)
+        device = getattr(context, "device", device)
+        if not _has_context_encode_tables(context):
             rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
             return {
                 "device": device,
@@ -218,25 +231,25 @@ def _resolve_stage1_params(slots, ring_dim, device, cryptoContext):
                 "rot_group_np": rot_group,
                 "ksi_pows_np": ksi_pows,
                 "bitrev_np": None,
-                "cryptoContext": None,
+                "context": None,
             }
-        if ring_dim != int(cryptoContext.N):
+        if ring_dim != int(context.N):
             raise ValueError(
-                f"encode_stage1 ring_dim [{ring_dim}] does not match context N [{cryptoContext.N}]"
+                f"encode_stage1 ring_dim [{ring_dim}] does not match context N [{context.N}]"
             )
         return {
             "device": device,
-            "cycl_order": int(cryptoContext.M),
-            "rot_group_np": _table_numpy(cryptoContext.encode_params_rotGroup),
-            "ksi_pows_np": _table_numpy(cryptoContext.encode_params_ksiPows),
-            "bitrev_np": _bitrev_numpy_from_context(cryptoContext, log_slots),
-            "cryptoContext": cryptoContext,
+            "cycl_order": int(context.M),
+            "rot_group_np": _table_numpy(context.encode_params_rotGroup),
+            "ksi_pows_np": _table_numpy(context.encode_params_ksiPows),
+            "bitrev_np": _bitrev_numpy_from_context(context, log_slots),
+            "context": context,
         }
 
     if ring_dim is None:
-        raise ValueError("encode_stage1 requires ring_dim or cryptoContext")
+        raise ValueError("encode_stage1 requires ring_dim or context")
     if _use_torch_stage1(device):
-        raise ValueError("CUDA encode_stage1 requires cryptoContext")
+        raise ValueError("CUDA encode_stage1 requires context")
     ring_dim = int(ring_dim)
     rot_group, ksi_pows = _prepare_plaintext_params(ring_dim)
     return {
@@ -245,13 +258,13 @@ def _resolve_stage1_params(slots, ring_dim, device, cryptoContext):
         "rot_group_np": rot_group,
         "ksi_pows_np": ksi_pows,
         "bitrev_np": None,
-        "cryptoContext": None,
+        "context": None,
     }
 
 
-def _has_context_encode_tables(cryptoContext):
+def _has_context_encode_tables(context):
     return all(
-        hasattr(cryptoContext, name)
+        hasattr(context, name)
         for name in (
             "M",
             "encode_params_rotGroup",
@@ -267,8 +280,8 @@ def _table_numpy(value):
     return np.asarray(value)
 
 
-def _bitrev_numpy_from_context(cryptoContext, log_slots):
-    indices = cryptoContext.encode_bitrev_indices.get(log_slots)
+def _bitrev_numpy_from_context(context, log_slots):
+    indices = context.encode_bitrev_indices.get(log_slots)
     if indices is None:
         return None
     return _table_numpy(indices).astype(np.intp, copy=False)
@@ -290,12 +303,12 @@ def _is_complex_tensor(value):
     )
 
 
-def _native_pre_encode_stage1_matrix(values, slots, cryptoContext, device):
+def _native_pre_encode_stage1_matrix(values, slots, context, device):
     values = torch.as_tensor(
         values,
         device=device,
     )
-    return F.cv_pre_encode_stage1(values, slots, cryptoContext)
+    return F.cv_pre_encode_stage1(values, slots, context)
 
 
 def _raw_matrix(raw_values, slots):
@@ -440,31 +453,31 @@ def _validate_scaled_range(prepared, scaling_factor):
         )
 
 
-def _resolve_stage2_scale(cryptoContext, cur_limbs, scaling_factor, op_name):
+def _resolve_stage2_scale(context, cur_limbs, scaling_factor, op_name):
     if scaling_factor is None:
-        if _is_flexible_context(cryptoContext):
+        if _is_flexible_context(context):
             raise ValueError(f"{op_name} requires scaling_factor in flexible scale mode")
-        scaling_factor = cryptoContext.scale_at(cur_limbs)
+        scaling_factor = context.scale_at(cur_limbs)
     scaling_factor = float(scaling_factor)
     if scaling_factor <= 0:
         raise ValueError(f"{op_name} scaling_factor must be positive, got {scaling_factor}")
     return scaling_factor
 
 
-def _is_flexible_context(cryptoContext):
-    return str(getattr(cryptoContext, "scale_mode", "")).lower() == "flexible"
+def _is_flexible_context(context):
+    return str(getattr(context, "scale_mode", "")).lower() == "flexible"
 
 
-def _resolve_cur_limbs(cryptoContext, level, cur_limbs, op_name):
+def _resolve_cur_limbs(context, level, cur_limbs, op_name):
     if cur_limbs is None:
         if level is None:
             raise ValueError(f"{op_name} requires either level or cur_limbs")
-        return int(cryptoContext.L) - int(level)
+        return int(context.L) - int(level)
     cur_limbs = int(cur_limbs)
     if cur_limbs <= 0:
         raise ValueError(f"{op_name} cur_limbs must be positive, got {cur_limbs}")
     if level is not None:
-        expected = int(cryptoContext.L) - int(level)
+        expected = int(context.L) - int(level)
         if expected != cur_limbs:
             raise ValueError(
                 f"{op_name} received inconsistent level and cur_limbs: "

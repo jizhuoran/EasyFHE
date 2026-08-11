@@ -40,7 +40,7 @@ def test_encode_stage1_uses_context_encode_tables():
     ctx = _context()
     values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
     from_ring_dim = encoding.encode_stage1(values, slots=8, ring_dim=ctx.N)
-    from_context = encoding.encode_stage1(values, slots=8, cryptoContext=ctx)
+    from_context = encoding.encode_stage1(values, slots=8, context=ctx)
 
     np.testing.assert_allclose(
         from_context.encoded_values.numpy(),
@@ -56,8 +56,8 @@ def test_encode_stage1_cuda_matches_cpu_for_single_and_batch():
     ctx = _context()
     cuda_ctx = ctx.cuda()
     single_values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
-    cpu_single = encoding.encode_stage1(single_values, slots=8, cryptoContext=ctx)
-    cuda_single = encoding.encode_stage1(single_values, slots=8, cryptoContext=cuda_ctx)
+    cpu_single = encoding.encode_stage1(single_values, slots=8, context=ctx)
+    cuda_single = encoding.encode_stage1(single_values, slots=8, context=cuda_ctx)
 
     np.testing.assert_allclose(
         cuda_single.encoded_values.cpu().numpy(),
@@ -76,8 +76,8 @@ def test_encode_stage1_cuda_matches_cpu_for_single_and_batch():
         ],
         dtype=np.double,
     )
-    cpu_batch = encoding.encode_stage1(batch_values, slots=8, cryptoContext=ctx)
-    cuda_batch = encoding.encode_stage1(batch_values, slots=8, cryptoContext=cuda_ctx)
+    cpu_batch = encoding.encode_stage1(batch_values, slots=8, context=ctx)
+    cuda_batch = encoding.encode_stage1(batch_values, slots=8, context=cuda_ctx)
 
     np.testing.assert_allclose(
         cuda_batch.encoded_values.cpu().numpy(),
@@ -96,11 +96,11 @@ def test_encode_stage1_packed_matches_raw_cuda_path():
     cuda_ctx = ctx.cuda()
 
     values = np.asarray([1.0, -2.0, 3.5], dtype=np.double)
-    raw = encoding.encode_stage1(values, slots=8, cryptoContext=cuda_ctx)
+    raw = encoding.encode_stage1(values, slots=8, context=cuda_ctx)
 
     packed = torch.zeros(8, dtype=torch.complex128, device="cuda")
     packed[: values.size] = torch.as_tensor(values, dtype=torch.complex128, device="cuda")
-    prepared = encoding.encode_stage1_packed(packed, cryptoContext=cuda_ctx)
+    prepared = encoding.encode_stage1_packed(packed, context=cuda_ctx)
 
     assert prepared.packed is True
     assert prepared.values is packed
@@ -120,7 +120,7 @@ def test_encode_stage1_packed_accepts_batch_and_complex_dtypes():
     ctx = _context()
     cuda_ctx = ctx.cuda()
     values = np.asarray([[1.0, 2.0, 0.5], [-4.0, 0.5, 6.0]], dtype=np.double)
-    raw = encoding.encode_stage1(values, slots=8, cryptoContext=cuda_ctx)
+    raw = encoding.encode_stage1(values, slots=8, context=cuda_ctx)
 
     dtypes = [torch.complex64, torch.complex128]
     if hasattr(torch, "complex32"):
@@ -128,7 +128,7 @@ def test_encode_stage1_packed_accepts_batch_and_complex_dtypes():
     for dtype in dtypes:
         packed = torch.zeros((2, 8), dtype=dtype, device="cuda")
         packed[:, : values.shape[1]] = torch.as_tensor(values, dtype=dtype, device="cuda")
-        prepared = encoding.encode_stage1_packed(packed, slots=8, cryptoContext=cuda_ctx)
+        prepared = encoding.encode_stage1_packed(packed, slots=8, context=cuda_ctx)
 
         assert prepared.packed is True
         assert prepared.values is packed
@@ -150,8 +150,8 @@ def test_encode_stage2_materializes_single_and_batch_plaintexts():
         ring_dim=ctx.N,
     )
 
-    single_pt = encoding.encode_stage2(single, level=1, slots=4, is_ext=False, cryptoContext=ctx)
-    batch_pt = encoding.encode_stage2(batch, level=1, slots=4, is_ext=True, cryptoContext=ctx)
+    single_pt = encoding.encode_stage2(single, level=1, slots=4, is_ext=False, context=ctx)
+    batch_pt = encoding.encode_stage2(batch, level=1, slots=4, is_ext=True, context=ctx)
 
     assert single_pt.batch_size == 1
     assert single_pt.is_ext is False
@@ -164,7 +164,7 @@ def test_flexible_encode_stage2_requires_explicit_scaling_factor():
     ctx = type("Ctx", (), {"L": 4, "scale_mode": "flexible"})()
 
     with pytest.raises(ValueError, match="requires scaling_factor"):
-        encoding.encode_stage2(middle, level=1, slots=4, is_ext=False, cryptoContext=ctx)
+        encoding.encode_stage2(middle, level=1, slots=4, is_ext=False, context=ctx)
 
 
 def test_flexible_encode_stage2_uses_explicit_scaling_factor(monkeypatch):
@@ -183,7 +183,7 @@ def test_flexible_encode_stage2_uses_explicit_scaling_factor(monkeypatch):
         level=1,
         slots=4,
         is_ext=False,
-        cryptoContext=ctx,
+        context=ctx,
         scaling_factor=13.0,
     )
 
@@ -207,7 +207,7 @@ def test_encode_stage2_accepts_explicit_cur_limbs(monkeypatch):
         level=None,
         slots=4,
         is_ext=False,
-        cryptoContext=ctx,
+        context=ctx,
         cur_limbs=2,
         scaling_factor=17.0,
     )
@@ -226,7 +226,7 @@ def test_encode_stage2_rejects_inconsistent_level_and_cur_limbs():
             level=1,
             slots=4,
             is_ext=False,
-            cryptoContext=ctx,
+            context=ctx,
             cur_limbs=2,
             scaling_factor=17.0,
         )
@@ -245,6 +245,15 @@ def test_client_encrypt_decrypt_roundtrip_cpu():
     assert client._context_for("cpu") is ctx
     assert cipher.state == fhe.CipherState(ctx.max_limbs, 1, ctx.scale_at(ctx.max_limbs))
     np.testing.assert_allclose(decoded[: values.size], values, rtol=1e-4, atol=1e-4)
+
+    limited_cipher = client.encrypt(values, slots=8, cur_limbs=ctx.max_limbs - 1)
+    limited_decoded = client.decrypt(limited_cipher).cpu().numpy()
+    assert limited_cipher.state == fhe.CipherState(
+        ctx.max_limbs - 1, 1, ctx.scale_at(ctx.max_limbs - 1)
+    )
+    np.testing.assert_allclose(
+        limited_decoded[: values.size], values, rtol=1e-4, atol=1e-4
+    )
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA decrypt/decode requires CUDA")
@@ -268,7 +277,7 @@ def test_encode_stage2_checks_middle_metadata():
     middle = encoding.encode_stage1(np.asarray([1.0, 2.0], dtype=np.double), slots=2, ring_dim=ctx.N)
 
     try:
-        encoding.encode_stage2(middle, level=0, slots=4, is_ext=False, cryptoContext=ctx)
+        encoding.encode_stage2(middle, level=0, slots=4, is_ext=False, context=ctx)
     except ValueError as exc:
         assert "Prepared plaintext slots" in str(exc)
     else:

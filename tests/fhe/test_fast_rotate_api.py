@@ -13,11 +13,12 @@ pytestmark = pytest.mark.skipif(
 
 def _plaintext(values, context, *, level, slots, is_ext=False):
     vector = fhe.PackedRaw(torch.from_numpy(np.asarray(values)))
+    cur_limbs = context.L - int(level)
     return fhe.ConstantBundle(vectors={"pt": vector}, cache_mode="none").plaintext(
         "pt",
-        level,
-        slots,
-        context,
+        state=fhe.CipherState(cur_limbs, 1, context.scale_at(cur_limbs)),
+        slots=slots,
+        context=context,
         is_ext=is_ext,
     )
 
@@ -76,7 +77,7 @@ def _hoisted_mac(cipher, offsets, plain_values, context):
         0,
         1,
         context,
-        strategy=fhe.HOIST_EXT_DOUBLE_HOIST,
+        strategy="ext_double_hoist",
     )
 
 
@@ -100,7 +101,7 @@ def _hoisted_mac_ext_double(cipher, offsets, groups, giant_offset, context):
         giant_offset,
         len(groups),
         context,
-        strategy=fhe.HOIST_EXT_DOUBLE_HOIST,
+        strategy="ext_double_hoist",
     )
 
 
@@ -123,7 +124,7 @@ def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
         giant_offset,
         len(groups),
         context,
-        strategy=fhe.HOIST_NORMAL,
+        strategy="normal",
     )
 
 
@@ -143,7 +144,9 @@ def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
             term = fhe.homo_mul_pt(rotated, plaintext, context)
             total = term if total is None else fhe.homo_add(total, term, context)
         partial_sums.append(total)
-    return fhe.giant_rotate_sum(layout.pack_cipher_batch(partial_sums), giant_offset, context, strategy=fhe.HOIST_NORMAL)
+    return fhe.giant_rotate_sum(
+        layout.pack_cipher_batch(partial_sums), giant_offset, context, strategy="normal"
+    )
 
 
 def test_fast_rotate_ext_mac_can_defer_moddown_once():
@@ -323,7 +326,7 @@ def test_giant_rotate_sum_rejects_zero_offset():
     cipher = client.encrypt(values, slots=slots)
 
     with pytest.raises(ValueError, match="offset must be nonzero"):
-        fhe.giant_rotate_sum((cipher,), 0, context, strategy=fhe.HOIST_NORMAL)
+        fhe.giant_rotate_sum((cipher,), 0, context, strategy="normal")
 
 
 def test_giant_rotate_sum_requires_batched_cipher():
@@ -343,7 +346,7 @@ def test_giant_rotate_sum_requires_batched_cipher():
     cipher = client.encrypt(values, slots=slots)
 
     with pytest.raises(TypeError, match="expected a batched Cipher"):
-        fhe.giant_rotate_sum((cipher,), 1, context, strategy=fhe.HOIST_NORMAL)
+        fhe.giant_rotate_sum((cipher,), 1, context, strategy="normal")
 
 
 def test_giant_rotate_sum_requires_multiple_cipher_batch():
@@ -364,4 +367,4 @@ def test_giant_rotate_sum_requires_multiple_cipher_batch():
     batched = cipher.cipher_like(cipher.cv, batch_size=1)
 
     with pytest.raises(ValueError, match="batch_size > 1"):
-        fhe.giant_rotate_sum(batched, 1, context, strategy=fhe.HOIST_NORMAL)
+        fhe.giant_rotate_sum(batched, 1, context, strategy="normal")

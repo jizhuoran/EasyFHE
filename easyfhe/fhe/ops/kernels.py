@@ -532,8 +532,9 @@ def cv_rescale_one_level(
     context: Context,
 ) -> Tensor:
     component = _component_3d(input)
+    native_input = component if component.is_cuda else component.unsqueeze(0)
     rescale = torch.rescale_one_level(
-        component,
+        native_input,
         curr_limbs=cur_limbs,
         l=l,
         L=context.L,
@@ -550,7 +551,7 @@ def cv_rescale_one_level(
         q_inv_mod_q=context.q_inv_mod_q,
         q_inv_mod_q_shoup=context.q_inv_mod_q_shoup,
     )
-    return rescale
+    return rescale if component.is_cuda else rescale.squeeze(0)
 
 
 def cv_mod_raise(input: Tensor, L0: int, context: Context) -> Tensor:

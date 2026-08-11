@@ -62,7 +62,7 @@ def homo_bootstrap(
         raise_to_limbs=raise_to_limbs,
         mode=mode,
     )
-    result = alignment.reduce_noise_to_one(result, crypto_context)
+    result = alignment.normalize_scale(result, crypto_context)
     if result.state != output_state:
         result = alignment.align_to(result, output_state, crypto_context)
     return result

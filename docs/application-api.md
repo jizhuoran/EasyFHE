@@ -1,32 +1,18 @@
 # EasyFHE Application API
 
-This page describes the API surface intended for application code. It is the
-contract for code that uses EasyFHE as a CKKS runtime, not for code that
-implements bootstrap internals or native kernels.
-
-Use package roots:
+Application code should import the two package roots:
 
 ```python
 import easyfhe.fhe as fhe
 import easyfhe.bs.openfhe as bs
 ```
 
-Importable submodules under `easyfhe.fhe` and `easyfhe.bs.openfhe` are
-implementation details unless their symbols are re-exported by the package root.
+Submodules are implementation details unless a symbol is re-exported from one
+of these roots.
 
-Detailed references:
+## Context and client
 
-- [EasyFHE FHE API](fhe-api.md)
-- [OpenFHE Bootstrap API](openfhe-bootstrap-api.md)
-
-## Contexts
-
-Use `CKKSContextSpec` and `generate_client_context` to build the paired client
-and server context.
-
-The regular u64 form below is the recommended default. For an explicit
-per-prime chain, replace `depth`/`dcrt_bits`/`first_mod` with, for example,
-`limb_specs=(55, 52, 52, 52)`. Each u64 rescale removes one physical prime.
+The regular u64 context form is:
 
 ```python
 bootstrap_spec = bs.BootstrapSpec(
@@ -34,99 +20,98 @@ bootstrap_spec = bs.BootstrapSpec(
     level_budget=(4, 4),
     output_levels=10,
 )
-requirements = bs.requirements(
-    bootstrap_spec,
-    log_n=16,
-    secret_key_dist="SPARSE_TERNARY",
-)
+requirements = bs.requirements(bootstrap_spec, log_n=16)
 
-client, ctx = fhe.generate_client_context(
+client, context = fhe.generate_client_context(
     fhe.CKKSContextSpec(
         depth=requirements.context_depth,
         log_n=16,
         dnum=3,
-        dcrt_bits=52,
-        first_mod=55,
-        secret_key_dist="SPARSE_TERNARY",
+        dcrt_bits=59,
+        first_mod=60,
         scale_mode="fixed",
         rescale_policy="manual",
-        rotations=tuple((*requirements.rotations, -1024, -256, -64, 1, 2, 4)),
-        auto_load_keys=True,
+        rotations=requirements.rotations,
     ),
     device="cuda",
 )
 ```
 
-Application-facing client methods:
+Use `limb_specs=(60, 59, 59, ...)` instead of
+`depth`/`dcrt_bits`/`first_mod` when each Q prime must be specified explicitly.
+Every u64 rescale removes exactly one Q prime. Fixed mode requires equal-size
+rescale primes; heterogeneous chains require flexible mode.
+
+Client operations are:
 
 ```python
-client.encrypt(values, slots=..., device=None, cur_limbs=None, scaling_factor=None)
-client.decrypt(cipher)
+cipher = client.encrypt(values, slots=..., cur_limbs=None, scaling_factor=None)
+values = client.decrypt(cipher)
 ```
 
-Encryption uses the device selected by `generate_client_context` unless an
-override is provided. Fresh u64 plaintexts and ciphertexts always start at
-`noise_deg == 1`; historical `level` and `scale_deg` controls are not part of
-the client API.
-
-Application-facing context methods:
+Fresh ciphertexts have `scale_degree == 1`. Runtime state lives in:
 
 ```python
-ctx.cuda()
-ctx.cpu()
-ctx.params
-ctx.max_limbs
-ctx.ring_dim
-ctx.max_slots
-ctx.q_prime_bits
-ctx.default_scale
-ctx.scale_at(cur_limbs=None)
-ctx.big_scale_at(cur_limbs=None)
-ctx.rescale_divisor_at(drop_limb=None)
-```
-
-The following are internal/debug helpers and should not be used by application
-code:
-
-```python
-ctx.get_rotation_key(...)
-ctx.get_precompute_auto(...)
-ctx.get_inverse_precompute_auto(...)
+cipher.state.cur_limbs
+cipher.state.scale_degree
+cipher.state.scaling_factor
 ```
 
 ## Constants
 
-Use `ConstantBundle` for reusable plaintext constants and weights.
+`ConstantBundle` accepts slot-ready tensor constants. Padding and layout belong
+in the application, so the requested `slots` must match the stored tensor.
 
 ```python
 weights = fhe.ConstantBundle(
-    vectors={
-        "kernel": raw_kernel_vectors,
-        "bias": raw_bias_vector,
-    },
-    scalars={
-        "scale": 0.125,
-    },
-    cache_mode="plain",
-    plain_cache_limit_gb=None,
-    plain_cache_policy="first_fit",
+    vectors={"kernel": fhe.PackedRaw(kernel_tensor)},
+    scalars={"gain": 0.125, "count": 4},
+    cache_mode="mix_of_middle_plain",
+    plain_cache_limit_gb=8,
+    plain_cache_policy="small_first",
 )
 
-pt = weights.plaintext(
+kernel = weights.plaintext(
     "kernel",
-    level=ctx.max_limbs - cipher.state.cur_limbs,
+    state=cipher.state,
     slots=cipher.slots,
-    cryptoContext=ctx,
-    scale=1.0,
-    is_ext=False,
+    context=context,
 )
 ```
 
-Application-facing constant methods:
+Plaintext state is explicit. For multiplication, use a normalized
+`scale_degree=1` state at the ciphertext's limb count and scale. For addition,
+use the exact output state that will receive the constant.
+
+Scalar encoding also returns a typed value with metadata:
 
 ```python
-bundle.plaintext(name, level, slots, ctx, scale=1.0, is_ext=False, cache=True)
-bundle.encoded_scalars(names, cur_limbs, noise_deg, ctx, mode="double", absolute=False, cache=True)
+gain = weights.encoded_scalars(
+    "gain",
+    cur_limbs=cipher.state.cur_limbs,
+    scale_degree=1,
+    scaling_factor=cipher.state.scaling_factor,
+    context=context,
+    mode="scaled",
+)[0]
+
+count = weights.encoded_scalars(
+    "count",
+    cur_limbs=cipher.state.cur_limbs,
+    scale_degree=0,
+    context=context,
+    mode="integer",
+)[0]
+```
+
+For a one-off value, use `fhe.encode_scalar(...)`. Raw residue tensors are not
+accepted by scalar homomorphic operations.
+
+Cache modes are `none`, `middle`, `plain`, `both`, and
+`mix_of_middle_plain`. Only `mix_of_middle_plain` supports a plaintext cache
+limit. Cache inspection and control methods are:
+
+```python
 bundle.cache_info()
 bundle.memory_info()
 bundle.clear_cache()
@@ -135,152 +120,113 @@ bundle.set_plain_cache_limit_gb(limit_gb, clear=False)
 bundle.set_plain_cache_policy(policy)
 ```
 
-Raw scalar reads, middle encoding, and vector padding are internal implementation
-details. Application code should access constants by name through
-`plaintext(...)` or `encoded_scalars(...)` and let the bundle manage preparation,
-materialization, batching, and caching.
-
-Use `cache_mode="plain"` to cache only final plaintexts, `cache_mode="middle"`
-to cache only prepared middle encodings, and `cache_mode="both"` to cache both.
-These three modes do not support a plaintext cache limit; if cached plaintexts
-do not fit in memory, allocation fails normally.
-
-Use `cache_mode="mix"` with `plain_cache_limit_gb=<size>` when you want a
-bounded plaintext cache. Plaintexts are cached until the limit is reached; later
-constants keep only their prepared middle encoding and run stage2 on demand.
-Cached plaintexts usually do not keep duplicate middle encodings, but if the
-same middle encoding is needed by multiple plaintext variants, such as different
-levels, the middle encoding is retained to avoid repeating stage1.
-
-Set `plain_cache_policy="small_first"` to prefer smaller plaintexts when the
-`mix` plaintext cache is full. In `cache_mode="mix"`, evicted plaintexts keep
-their middle encoding cached as the fallback.
-
-## Basic Homomorphic Ops
-
-Use these for normal ciphertext arithmetic:
+## Arithmetic and state control
 
 ```python
-fhe.homo_add(a, b, ctx)
-fhe.homo_sub(a, b, ctx)
-fhe.homo_mul_no_relin(a, b, ctx)
-fhe.homo_mul_relin(a, b, ctx)
+fhe.homo_add(a, b, context)
+fhe.homo_sub(a, b, context)
+fhe.homo_mul_no_relin(a, b, context)
+fhe.homo_mul_relin(a, b, context)
 
-fhe.homo_add_pt(cipher, plaintext, ctx)
-fhe.homo_mul_pt(cipher, plaintext, ctx)
-
-encoded = bundle.encoded_scalars("scale", cipher.state.cur_limbs, cipher.state.noise_deg, ctx, mode="double")[0]
-fhe.homo_mul_scalar_double(cipher, encoded, ctx)
-
-shift = bundle.encoded_scalars("shift", cipher.state.cur_limbs, 0, ctx, mode="int")[0]
-fhe.homo_add_scalar_int(cipher, shift, ctx)
-
-fhe.homo_rotate(cipher, offset, ctx)
-fhe.homo_rotate_add(cipher, offset, ctx, addend=other)
-fhe.expand_slots(cipher, slots, ctx)
-fhe.fold_slots(cipher, slots, ctx, mask=mask)
+fhe.homo_add_pt(cipher, plaintext, context)
+fhe.homo_mul_pt(cipher, plaintext, context)
+fhe.homo_add_scalar(cipher, encoded_scalar, context)
+fhe.homo_sub_scalar(cipher, encoded_scalar, context)
+fhe.homo_mul_scalar(cipher, encoded_scalar, context)
 ```
 
-`expand_slots(...)` only updates ciphertext metadata and requires the target
-slot count to be at least the current slot count. `fold_slots(...)` reduces the
-slot count with an explicit plaintext mask encoded at the source slot count.
+Add/subtract scalar metadata must match the ciphertext. Multiplication accepts
+an integer scalar (`scale_degree=0`) or a normalized scaled scalar
+(`scale_degree=1`). In-place variants use the `_inplace` suffix and require
+already aligned inputs.
 
-Use `align_to` when an application needs explicit state alignment:
+State operations are:
 
 ```python
-target = fhe.CipherState(cur_limbs=12, noise_deg=1, scaling_factor=None)
-cipher = fhe.align_to(cipher, target, ctx)
+target = fhe.CipherState(cur_limbs=12, scale_degree=1, scaling_factor=None)
+cipher = fhe.align_to(cipher, target, context)
+cipher = fhe.normalize_scale(cipher, context)
+cipher = fhe.rescale(cipher, context)
 ```
 
-## Hoisted Ops
+`rescale` always consumes one u64 Q prime and reduces `scale_degree` by one.
+`normalize_scale` brings a pending degree-two result back to degree one.
 
-These are advanced application APIs. They are useful for BSGS-style matrix,
-convolution, and linear-transform code.
+The common multiply-and-rescale forms are named directly:
 
 ```python
-rotated = fhe.fast_rotate(cipher, offsets, ctx, output_ext=False)
-partials = fhe.grouped_pairwise_mac(rotated, plaintexts, groups, ctx)  # batched Cipher
-weighted = fhe.grouped_scalar_weighted_acc(rotated, encoded_scalars, ctx)  # batched Cipher
-result = fhe.giant_rotate_sum(partials, giant_offset, ctx, strategy=fhe.HOIST_NORMAL)
-
-result = fhe.hoisted_mac_sum(
-    cipher,
-    baby_offsets,
-    plaintexts,
-    giant_offset,
-    giant_count,
-    ctx,
-    strategy=fhe.HOIST_NORMAL,
+fhe.homo_mul_pt_rescale(cipher, plaintext, context)
+fhe.homo_mul_scalar_rescale(cipher, scalar, context)
+fhe.grouped_pairwise_mac_rescale(ciphers, plaintexts, groups, context)
+fhe.hoisted_mac_sum_rescale(
+    cipher, baby_offsets, plaintexts, giant_offset, giant_count, context,
+    strategy="normal",
 )
 ```
 
-Strategies:
+Ciphertext multiplication also has a fused relin/rescale/post-op API:
 
 ```python
-fhe.HOIST_NORMAL           # fast rotate to normal ciphertexts, normal giant rotations
-fhe.HOIST_EXT_NORMAL       # fast rotate to ext, multiply in ext, moddown before giants
-fhe.HOIST_EXT_DOUBLE_HOIST # fast rotate to ext, multiply in ext, double-hoisted giants
+fhe.homo_mul_relin_rescale_postop(
+    a, b, context, add=None, sub=None, scalar=None, plaintext=None
+)
 ```
 
-Avoid using lower-level rotation helpers such as modup, moddown, automorphism
-precompute maps, and raw rotation-key access. Those are runtime internals.
+At most one post-op may be supplied.
+
+## Rotation, batching, and layouts
+
+```python
+fhe.homo_rotate(cipher, offset, context)
+fhe.homo_rotate_add(cipher, offset, context, addend=other)
+rotated = fhe.fast_rotate(cipher, offsets, context, output_ext=False)
+
+partials = fhe.grouped_pairwise_mac(rotated, plaintexts, groups, context)
+weighted = fhe.grouped_scalar_weighted_acc(rotated, scalars, context)
+result = fhe.giant_rotate_sum(partials, giant_offset, context, strategy="normal")
+result = fhe.hoisted_mac_sum(
+    cipher, baby_offsets, plaintexts, giant_offset, giant_count, context,
+    strategy="normal",
+)
+```
+
+Strategy is an explicit string: `normal`, `ext_normal`, or
+`ext_double_hoist`. There are no public strategy constants.
+
+Cipher batching and slot metadata APIs are:
+
+```python
+batch = fhe.pack_cipher_batch(ciphers)
+items = fhe.unpack_cipher_batch(batch)
+total = fhe.sum_cipher_batch(batch, context)
+
+expanded = fhe.expand_slots(cipher, target_slots, context)
+folded = fhe.fold_slots(expanded, target_slots, context, mask=mask)
+```
+
+`expand_slots` changes metadata only. `fold_slots` requires an explicit mask at
+the source slot count and performs a plaintext multiplication.
 
 ## Bootstrapping
 
-OpenFHE-compatible bootstrapping lives in `easyfhe.bs.openfhe`.
+Bootstrap planning belongs to the bootstrap package, not the application:
 
 ```python
-import easyfhe.bs.openfhe as bs
-
-bootstrap_spec = bs.BootstrapSpec(
+spec = bs.BootstrapSpec(
     log_slots=14,
     level_budget=(4, 4),
-    output_levels=12,
-    strategy="double_hoist",
+    output_levels=10,
+    strategy="normal_giant",
     mode="modraise_first",
 )
-requirements = bs.requirements(
-    bootstrap_spec,
-    log_n=16,
-)
-
-client, ctx = fhe.generate_client_context(
-    ... depth=requirements.context_depth, rotations=requirements.rotations ...
-)
-
-program = bs.generate(ctx, bootstrap_spec)
-
-cipher = bs.bootstrap(cipher, ctx, program)
+requirements = bs.requirements(spec, log_n=16)
+program = bs.generate(context, spec)
+bootstrapped = bs.bootstrap(cipher, context, program)
 ```
 
-Application-facing bootstrap API:
+The program owns constants, C2S/S2C schedules, the raise target, runtime mode,
+and output state. Applications do not select transform limb layouts, H/L rails,
+drop counts, or runtime overrides.
 
-```python
-bs.BootstrapSpec(...)
-bs.requirements(...)
-bs.generate(...)
-bs.bootstrap(...)
-bs.describe_plan(...)
-bs.BootstrapRequirements
-bs.BootstrapProgram
-```
-
-Detailed reference: [OpenFHE Bootstrap API](openfhe-bootstrap-api.md).
-
-`BootstrapProgram` binds constants and the runtime plan to one context. Use
-`bs.describe_plan(program)` when debugging the generated schedule.
-
-## Non-API Internals
-
-The following categories are intentionally outside the application API:
-
-- OpenFHE bootstrap implementation modules such as `easyfhe.bs.openfhe.runtime.*`
-  and `easyfhe.bs.openfhe.generation.*`
-- native kernel wrappers under `easyfhe.fhe.ops.kernels`
-- raw encoding stages
-- raw key-switch, modup, moddown, automorphism, and precompute-map helpers
-- debug/profiling-only helpers such as decryption phase
-- OpenFHE-style compatibility aliases when a newer EasyFHE name exists
-
-If application code needs one of these directly, the public API should probably
-gain a small, named operation instead of exposing the internal helper.
+See [FHE API](fhe-api.md) and
+[OpenFHE bootstrap API](openfhe-bootstrap-api.md) for the complete contracts.

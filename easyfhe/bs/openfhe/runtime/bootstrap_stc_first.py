@@ -21,7 +21,7 @@ def _replicate_sparse_slots(ciphertext, slots, cryptoContext):
 
 def _drop_to_stc_start(ciphertext, cryptoContext, bootstrap_plan):
     target_limbs = int(bootstrap_plan.level_budget[1]) + 2
-    ciphertext = alignment.reduce_noise_to_one(ciphertext, cryptoContext)
+    ciphertext = alignment.normalize_scale(ciphertext, cryptoContext)
     if ciphertext.state.cur_limbs < target_limbs:
         raise ValueError(
             "stc_first bootstrap needs at least "
@@ -31,7 +31,7 @@ def _drop_to_stc_start(ciphertext, cryptoContext, bootstrap_plan):
         return ciphertext
     return alignment.align_to(
         ciphertext,
-        ciphertext.state.replace(cur_limbs=target_limbs, noise_deg=1),
+        ciphertext.state.replace(cur_limbs=target_limbs, scale_degree=1),
         cryptoContext,
     )
 

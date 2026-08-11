@@ -40,7 +40,7 @@ NATIVE_FHE_OPS = {
     "modup",
     "moddown",
     "innerproduct_broadcast",
-    "rescale_one_level",
+    "rescale",
     "finalize_fast_rotation_ext",
     "finalize_fast_rotation_q",
     "hrot",

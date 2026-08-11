@@ -71,7 +71,7 @@ bs.BootstrapSpec(
   SlotsToCoeffs. Both entries must be greater than one.
 - `output_levels` is the number of usable multiplication levels after the
   bootstrap. The output has `output_levels + 1` u64 Q primes and
-  `noise_deg == 1`.
+  `scale_degree == 1`.
 - `strategy` is exactly `double_hoist`, `normal_giant`, or `normal_bsgs`.
 - `mode` is exactly `modraise_first` or `stc_first`. Historical aliases are not
   accepted.
@@ -122,7 +122,7 @@ Useful program fields are:
 - `program.output_state`.
 
 `program.output_state` is the exact state promised by `bootstrap`: its limb
-count is `spec.output_levels + 1`, its noise degree is one, and its scale is
+count is `spec.output_levels + 1`, its scale degree is one, and its scale is
 bound to the generated raise target.
 
 ## `bootstrap`

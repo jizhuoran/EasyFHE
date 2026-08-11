@@ -6,13 +6,13 @@ def plan_add_alignment(in0, in1, context) -> CipherState:
     if context.scale_mode == "flexible":
         raise ValueError("flexible mode does not support implicit add alignment; call align_to explicitly")
     if context.rescale_policy == "manual":
-        if in0.state.noise_deg != in1.state.noise_deg:
+        if in0.state.scale_degree != in1.state.scale_degree:
             raise ValueError(
-                f"plan_add_alignment: noise_deg mismatch: {in0.state.noise_deg} != {in1.state.noise_deg}"
+                f"plan_add_alignment: scale_degree mismatch: {in0.state.scale_degree} != {in1.state.scale_degree}"
             )
         return CipherState(
             cur_limbs=min(in0.state.cur_limbs, in1.state.cur_limbs),
-            noise_deg=in0.state.noise_deg,
+            scale_degree=in0.state.scale_degree,
             scaling_factor=None,
         )
     return _plan_auto_pair_alignment(in0, in1)
@@ -24,8 +24,8 @@ def plan_mul_alignment(in0, in1, context) -> tuple[CipherState, CipherState]:
     if context.rescale_policy == "manual":
         target_limbs = min(in0.state.cur_limbs, in1.state.cur_limbs)
         return (
-            CipherState(target_limbs, in0.state.noise_deg, None),
-            CipherState(target_limbs, in1.state.noise_deg, None),
+            CipherState(target_limbs, in0.state.scale_degree, None),
+            CipherState(target_limbs, in1.state.scale_degree, None),
         )
     target = _plan_auto_pair_alignment(in0, in1)
     target = _mul_ready_target(target, context)
@@ -43,23 +43,23 @@ def align_to(cipher, target: CipherState, context):
     raise ValueError(f"Unsupported scale mode: {context.scale_mode}")
 
 
-def reduce_noise_to_one(cipher, context):
+def normalize_scale(cipher, context):
     return align_to(cipher, _mul_ready_target(cipher.state, context), context)
 
 
-def rescale_one_level(cipher, context):
+def rescale(cipher, context):
     if cipher.is_ext:
-        raise ValueError("rescale_one_level: ext ciphers must be moddowned before rescale")
+        raise ValueError("rescale: ext ciphers must be moddowned before rescale")
     if cipher.state.cur_limbs <= 1:
-        raise ValueError(f"rescale_one_level: cur_limbs must be > 1, got {cipher.state.cur_limbs}")
-    if cipher.state.noise_deg <= 1:
-        raise ValueError(f"rescale_one_level: noise_deg must be > 1, got {cipher.state.noise_deg}")
+        raise ValueError(f"rescale: cur_limbs must be > 1, got {cipher.state.cur_limbs}")
+    if cipher.state.scale_degree <= 1:
+        raise ValueError(f"rescale: scale_degree must be > 1, got {cipher.state.scale_degree}")
     target_scale = None
     if context.scale_mode == "flexible" and cipher.state.scaling_factor is not None:
         target_scale = float(cipher.state.scaling_factor) / float(context.rescale_divisor_at(cipher.state.cur_limbs - 1))
     return align_to(
         cipher,
-        CipherState(cipher.state.cur_limbs - 1, cipher.state.noise_deg - 1, target_scale),
+        CipherState(cipher.state.cur_limbs - 1, cipher.state.scale_degree - 1, target_scale),
         context,
     )
 
@@ -75,15 +75,15 @@ def _coerce_state(cipher_or_state) -> CipherState:
 
 def _consumed_depth(cipher_or_state) -> int:
     state = _coerce_state(cipher_or_state)
-    return state.cur_limbs - state.noise_deg
+    return state.cur_limbs - state.scale_degree
 
 
 def _validate_alignment_request(cipher, target: CipherState):
     if _consumed_depth(cipher) < _consumed_depth(target):
         raise ValueError(
             "align_to: target state consumes more depth than source state: "
-            f"source cur_limbs={cipher.state.cur_limbs}, source noise_deg={cipher.state.noise_deg}, "
-            f"target cur_limbs={target.cur_limbs}, target noise_deg={target.noise_deg}"
+            f"source cur_limbs={cipher.state.cur_limbs}, source scale_degree={cipher.state.scale_degree}, "
+            f"target cur_limbs={target.cur_limbs}, target scale_degree={target.scale_degree}"
         )
     if cipher.state.cur_limbs < target.cur_limbs:
         raise ValueError(
@@ -97,14 +97,14 @@ def _plan_auto_pair_alignment(in0, in1) -> CipherState:
         return in1.state
     if in0.state.cur_limbs < in1.state.cur_limbs:
         return in0.state
-    return CipherState(in0.state.cur_limbs, max(in0.state.noise_deg, in1.state.noise_deg), None)
+    return CipherState(in0.state.cur_limbs, max(in0.state.scale_degree, in1.state.scale_degree), None)
 
 
 def _mul_ready_target(target: CipherState, context) -> CipherState:
-    if target.noise_deg == 1:
+    if target.scale_degree == 1:
         return target
-    if target.noise_deg != 2:
-        raise ValueError(f"Unsupported multiplication input noise degree: {target.noise_deg}")
+    if target.scale_degree != 2:
+        raise ValueError(f"Unsupported multiplication input scale degree: {target.scale_degree}")
 
     scaling_factor = target.scaling_factor
     if scaling_factor is not None:
@@ -134,8 +134,8 @@ def _rescale_one_level(cipher, context):
         raise ValueError("_rescale_one_level: ext ciphers must be moddowned before rescale")
     if cipher.state.cur_limbs <= 1:
         raise ValueError(f"_rescale_one_level: cur_limbs must be > 1, got {cipher.state.cur_limbs}")
-    if cipher.state.noise_deg <= 1:
-        raise ValueError(f"_rescale_one_level: noise_deg must be > 1, got {cipher.state.noise_deg}")
+    if cipher.state.scale_degree <= 1:
+        raise ValueError(f"_rescale_one_level: scale_degree must be > 1, got {cipher.state.scale_degree}")
 
     res_cv = [F.cv_rescale_one_level(cv, cipher.state.cur_limbs, 0, context) for cv in cipher.cv]
     divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
@@ -143,7 +143,7 @@ def _rescale_one_level(cipher, context):
         res_cv,
         state=CipherState(
             cipher.state.cur_limbs - 1,
-            cipher.state.noise_deg - 1,
+            cipher.state.scale_degree - 1,
             cipher.state.scaling_factor / divisor,
         ),
     )
@@ -152,13 +152,13 @@ def _rescale_one_level(cipher, context):
 
 
 def _align_fixed(cipher, target, context):
-    if cipher.state.noise_deg < target.noise_deg:
+    if cipher.state.scale_degree < target.scale_degree:
         raise ValueError(
-            "_align_fixed: cannot increase noise_deg: "
-            f"{cipher.state.noise_deg} -> {target.noise_deg}"
+            "_align_fixed: cannot increase scale_degree: "
+            f"{cipher.state.scale_degree} -> {target.scale_degree}"
         )
 
-    while cipher.state.noise_deg > target.noise_deg:
+    while cipher.state.scale_degree > target.scale_degree:
         cipher = _rescale_one_level(cipher, context)
 
     if cipher.state.cur_limbs > target.cur_limbs:
@@ -170,12 +170,12 @@ def _align_fixed(cipher, target, context):
 
 
 def _align_flexible(cipher, target, context):
-    _validate_flexible_noise(cipher.state.noise_deg, "_align_flexible source")
-    _validate_flexible_noise(target.noise_deg, "_align_flexible target")
+    _validate_flexible_scale_degree(cipher.state.scale_degree, "_align_flexible source")
+    _validate_flexible_scale_degree(target.scale_degree, "_align_flexible target")
     if cipher.state.cur_limbs == target.cur_limbs:
         return _align_flexible_same_limbs(cipher, target, context)
 
-    transition = (cipher.state.noise_deg, target.noise_deg)
+    transition = (cipher.state.scale_degree, target.scale_degree)
     if transition == (2, 2):
         return _align_flexible_2_to_2(cipher, target, context)
     if transition == (1, 1):
@@ -184,22 +184,23 @@ def _align_flexible(cipher, target, context):
         return _align_flexible_2_to_1(cipher, target, context)
     if transition == (1, 2):
         return _align_flexible_1_to_2(cipher, target, context)
-    raise ValueError(f"_align_flexible: unsupported noise transition {transition[0]} -> {transition[1]}")
+    raise ValueError(f"_align_flexible: unsupported scale-degree transition {transition[0]} -> {transition[1]}")
 
 
 def _align_flexible_same_limbs(cipher, target, context):
-    if cipher.state.noise_deg == target.noise_deg:
+    if cipher.state.scale_degree == target.scale_degree:
         if _has_target_scale(target) and not _scale_close(cipher.state.scaling_factor, target.scaling_factor):
             raise ValueError(
-                "_align_flexible cannot change scale at the same limb/noise state without consuming a rescale limb: "
-                f"cur_limbs={cipher.state.cur_limbs}, noise_deg={cipher.state.noise_deg}"
+                "_align_flexible cannot change scale at the same limb/scale-degree state "
+                "without consuming a rescale limb: "
+                f"cur_limbs={cipher.state.cur_limbs}, scale_degree={cipher.state.scale_degree}"
             )
         return _with_target_scale(cipher.shallow_copy(), target)
-    if cipher.state.noise_deg == 1 and target.noise_deg == 2:
+    if cipher.state.scale_degree == 1 and target.scale_degree == 2:
         return _align_flexible_1_to_2(cipher, target, context)
-    if cipher.state.noise_deg == 2 and target.noise_deg == 1:
+    if cipher.state.scale_degree == 2 and target.scale_degree == 1:
         raise ValueError(
-            "_align_flexible cannot reduce noise_deg at the same limb count; "
+            "_align_flexible cannot reduce scale_degree at the same limb count; "
             "one rescale limb must be consumed"
         )
     return cipher.shallow_copy()
@@ -211,7 +212,7 @@ def _align_flexible_2_to_2(cipher, target, context):
             return _with_target_scale(cipher, target)
     if cipher.state.cur_limbs <= target.cur_limbs:
         raise ValueError(
-            "_align_flexible_2_to_2 cannot change scale without first rescaling to noise_deg=1"
+            "_align_flexible_2_to_2 cannot change scale without first rescaling to scale_degree=1"
         )
     target_scale = _require_target_scale(target, "_align_flexible_2_to_2")
     divisor = context.rescale_divisor_at(cipher.state.cur_limbs - 1)
@@ -318,7 +319,7 @@ def _multiply_by_scale_correction(cipher, correction_factor, context, *, scaling
         cv,
         state=CipherState(
             cipher.state.cur_limbs,
-            cipher.state.noise_deg + 1,
+            cipher.state.scale_degree + 1,
             cipher.state.scaling_factor * scale,
         ),
     )
@@ -352,9 +353,9 @@ def _pre_rescale_target_scale(target: CipherState, context):
     return context.big_scale_at(target.cur_limbs + 1)
 
 
-def _validate_flexible_noise(noise_deg, op_name):
-    if int(noise_deg) not in (1, 2):
-        raise ValueError(f"{op_name}: u64 flexible alignment supports only noise_deg 1 or 2, got {noise_deg}")
+def _validate_flexible_scale_degree(scale_degree, op_name):
+    if int(scale_degree) not in (1, 2):
+        raise ValueError(f"{op_name}: u64 flexible alignment supports only scale_degree 1 or 2, got {scale_degree}")
 
 
 def _require_scale(scale, op_name):

@@ -71,11 +71,11 @@ class Client:
         if not isinstance(x, np.ndarray):
             x = np.asarray(x)
         ptx = encode_stage2(
-            encode_stage1(x, slots, cryptoContext=context),
-            level=0,
+            encode_stage1(x, slots, context=context),
+            level=0 if cur_limbs is None else None,
             slots=slots,
             is_ext=False,
-            cryptoContext=context,
+            context=context,
             scaling_factor=scaling_factor,
             cur_limbs=cur_limbs,
         )
@@ -120,7 +120,7 @@ class Client:
             phase,
             self._params,
             plaintext_modulus_bits=self.dcrt_bits,
-            noise_scale_deg=cipher.state.noise_deg,
+            noise_scale_deg=cipher.state.scale_degree,
             scaling_factor=cipher.state.scaling_factor,
             slots=getattr(cipher, "slots", 0),
         )
@@ -334,7 +334,7 @@ def _decrypt_decode_native(
         roots_q,
         cipher.state.cur_limbs,
         plaintext_modulus_bits,
-        cipher.state.noise_deg,
+        cipher.state.scale_degree,
         getattr(cipher, "slots", 0),
         0.0 if cipher.state.scaling_factor is None else float(cipher.state.scaling_factor),
         complex_output=complex_output,
@@ -345,7 +345,7 @@ def _cuda_decode_supports_state(cipher, plaintext_modulus_bits):
     scaling_factor = cipher.state.scaling_factor
     if scaling_factor is None:
         return True
-    nominal = 2.0 ** (int(plaintext_modulus_bits) * int(cipher.state.noise_deg))
+    nominal = 2.0 ** (int(plaintext_modulus_bits) * int(cipher.state.scale_degree))
     return math.isclose(float(scaling_factor), nominal, rel_tol=1e-12, abs_tol=0.0)
 
 
@@ -379,7 +379,7 @@ def _decrypt_decode_cuda(cipher, secret_key, crt_inv_moduli, context, *, plainte
         crt_inv_moduli[:cur_limbs, :cur_limbs].contiguous(),
         cur_limbs,
         plaintext_modulus_bits,
-        cipher.state.noise_deg,
+        cipher.state.scale_degree,
         getattr(cipher, "slots", 0) or context.Nh,
         context,
     )

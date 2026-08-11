@@ -7,24 +7,85 @@ import numpy as np
 @dataclass(frozen=True)
 class CipherState:
     cur_limbs: int
-    noise_deg: int
+    scale_degree: int
     scaling_factor: Optional[float] = None
 
-    def replace(self, *, cur_limbs=None, noise_deg=None, scaling_factor=None):
+    def __post_init__(self):
+        object.__setattr__(self, "cur_limbs", _positive_int("cur_limbs", self.cur_limbs))
+        object.__setattr__(self, "scale_degree", _positive_int("scale_degree", self.scale_degree))
+        if self.scaling_factor is not None:
+            scaling_factor = float(self.scaling_factor)
+            if scaling_factor <= 0.0:
+                raise ValueError(f"scaling_factor must be positive, got {scaling_factor}")
+            object.__setattr__(self, "scaling_factor", scaling_factor)
+
+    def replace(self, *, cur_limbs=None, scale_degree=None, scaling_factor=None):
         return CipherState(
             self.cur_limbs if cur_limbs is None else cur_limbs,
-            self.noise_deg if noise_deg is None else noise_deg,
+            self.scale_degree if scale_degree is None else scale_degree,
             self.scaling_factor if scaling_factor is None else scaling_factor,
         )
+
+
+@dataclass(frozen=True)
+class EncodedScalar:
+    """CRT-encoded scalar values together with their CKKS scale metadata."""
+
+    residues: object
+    cur_limbs: int
+    scale_degree: int = 1
+    scaling_factor: float = 1.0
+
+    def __post_init__(self):
+        object.__setattr__(self, "cur_limbs", _positive_int("cur_limbs", self.cur_limbs))
+        object.__setattr__(self, "scale_degree", _nonnegative_int("scale_degree", self.scale_degree))
+        scaling_factor = float(self.scaling_factor)
+        if scaling_factor <= 0.0:
+            raise ValueError(f"scaling_factor must be positive, got {scaling_factor}")
+        object.__setattr__(self, "scaling_factor", scaling_factor)
+
+    def to(self, device):
+        return EncodedScalar(
+            self.residues.to(device),
+            self.cur_limbs,
+            self.scale_degree,
+            self.scaling_factor,
+        )
+
+    def clone(self):
+        return EncodedScalar(
+            self.residues.clone(),
+            self.cur_limbs,
+            self.scale_degree,
+            self.scaling_factor,
+        )
+
+    def __getitem__(self, item):
+        return EncodedScalar(
+            self.residues[item],
+            self.cur_limbs,
+            self.scale_degree,
+            self.scaling_factor,
+        )
+
+    @property
+    def shape(self):
+        return self.residues.shape
+
+    def tolist(self):
+        return self.residues.tolist()
 
 
 class Cipher:
     def __init__(self, cv, state: CipherState, slots, is_ext, batch_size=1):
         self.cv = _normalize_components(cv)
+        if not isinstance(state, CipherState):
+            raise TypeError(f"state must be CipherState, got {type(state)}")
         self.state = state
-        self.slots = slots
-        self.is_ext = is_ext
-        self.batch_size = int(batch_size)
+        self.slots = _positive_int("slots", slots)
+        self.is_ext = bool(is_ext)
+        self.batch_size = _positive_int("batch_size", batch_size)
+        _validate_component_batch_size(self.cv, self.batch_size)
 
     def cipher_like(
         self,
@@ -94,6 +155,8 @@ def _normalize_components(cv):
     if hasattr(cv, "dim"):
         cv = [cv]
     components = list(cv)
+    if not components:
+        raise ValueError("cipher/plaintext components must not be empty")
     normalized = []
     for component in components:
         if hasattr(component, "dim"):
@@ -105,3 +168,29 @@ def _normalize_components(cv):
                 )
         normalized.append(component)
     return normalized
+
+
+def _validate_component_batch_size(components, batch_size):
+    for component in components:
+        if not hasattr(component, "dim"):
+            continue
+        component_batch = int(component.shape[0])
+        if component_batch != int(batch_size):
+            raise ValueError(
+                "cipher/plaintext component batch size mismatch: "
+                f"component={component_batch}, metadata={batch_size}"
+            )
+
+
+def _positive_int(name, value):
+    value = int(value)
+    if value <= 0:
+        raise ValueError(f"{name} must be positive, got {value}")
+    return value
+
+
+def _nonnegative_int(name, value):
+    value = int(value)
+    if value < 0:
+        raise ValueError(f"{name} must be non-negative, got {value}")
+    return value

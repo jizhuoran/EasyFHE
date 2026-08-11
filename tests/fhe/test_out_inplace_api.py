@@ -4,19 +4,25 @@ import easyfhe as torch
 import pytest
 
 import easyfhe.fhe as fhe
-from easyfhe.fhe.ciphertext import Cipher, CipherState
+from easyfhe.fhe.ciphertext import Cipher, CipherState, EncodedScalar
 from easyfhe.fhe.ops import arithmetic, kernels, primitives, rotation
 
 
-def _cipher(name, *, cur_limbs=3, scaling_factor=2.0, noise_deg=1, slots=8, is_ext=False):
+def _cipher(name, *, cur_limbs=3, scaling_factor=2.0, scale_degree=1, slots=8, is_ext=False):
     cipher = Cipher(
         [f"{name}.c0", f"{name}.c1"],
-        CipherState(cur_limbs, noise_deg, scaling_factor),
+        CipherState(cur_limbs, scale_degree, scaling_factor),
         slots=slots,
         is_ext=is_ext,
     )
     cipher.name = name
     return cipher
+
+
+def _scalar(values, *, cur_limbs=None, scaling_factor=2.0, scale_degree=1):
+    residues = torch.tensor(values, dtype=torch.uint64)
+    cur_limbs = residues.shape[-1] if cur_limbs is None else int(cur_limbs)
+    return EncodedScalar(residues, cur_limbs, scale_degree, scaling_factor)
 
 
 def _manual_fixed_context():
@@ -96,7 +102,7 @@ def test_homo_sub_does_not_expose_out_and_inplace_mutates_first_arg(monkeypatch)
     ("field", "kwargs"),
     [
         ("cur_limbs", {"cur_limbs": 2}),
-        ("noise_deg", {"noise_deg": 2}),
+        ("scale_degree", {"scale_degree": 2}),
         ("scaling_factor", {"scaling_factor": 3.0}),
     ],
 )
@@ -146,9 +152,9 @@ def test_plaintext_and_scalar_add_sub_do_not_expose_out_and_inplace_mutates(monk
     with pytest.raises(TypeError):
         fhe.homo_add_pt(cipher, plain, ctx, out=_cipher("out"))
     with pytest.raises(TypeError):
-        fhe.homo_add_scalar_int(cipher, 5, ctx, out=_cipher("out"))
+        fhe.homo_add_scalar(cipher, 5, ctx, out=_cipher("out"))
     with pytest.raises(TypeError):
-        fhe.homo_sub_scalar_int(cipher, 6, ctx, out=_cipher("out"))
+        fhe.homo_sub_scalar(cipher, 6, ctx, out=_cipher("out"))
 
     add_pt = fhe.homo_add_pt(cipher, plain, ctx)
     assert add_pt is not cipher
@@ -157,13 +163,13 @@ def test_plaintext_and_scalar_add_sub_do_not_expose_out_and_inplace_mutates(monk
     assert fhe.homo_add_pt_inplace(cipher, plain, ctx) is cipher
     assert cipher.cv == ["add_pt.c0", "cipher.c1"]
 
-    add_scalar = fhe.homo_add_scalar_int(cipher, [5, 5, 5], ctx)
+    add_scalar = fhe.homo_add_scalar(cipher, _scalar([5, 5, 5]), ctx)
     assert add_scalar.cv[0] == "add_scalar(5).c0"
 
-    sub_scalar = fhe.homo_sub_scalar_int(cipher, [6, 6, 6], ctx)
+    sub_scalar = fhe.homo_sub_scalar(cipher, _scalar([6, 6, 6]), ctx)
     assert sub_scalar.cv[0] == "sub_scalar(6).c0"
 
-    assert fhe.homo_add_scalar_int_inplace(cipher, [7, 7, 7], ctx) is cipher
+    assert fhe.homo_add_scalar_inplace(cipher, _scalar([7, 7, 7]), ctx) is cipher
     assert cipher.cv[0] == "add_scalar(7).c0"
 
 
@@ -179,7 +185,7 @@ def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(mon
 
     def fake_mul_double(cipher, scalar, context, **_kwargs):
         return cipher.cipher_like(
-            [f"mul_double({tuple(scalar)}).c0", cipher.cv[1]],
+            [f"mul_double({tuple(int(value) for value in scalar)}).c0", cipher.cv[1]],
             state=CipherState(cipher.state.cur_limbs, 2, 13.0),
         )
 
@@ -215,27 +221,31 @@ def test_plaintext_and_scalar_multiply_do_not_expose_out_and_inplace_mutates(mon
     with pytest.raises(TypeError):
         fhe.homo_mul_pt(cipher, plain, ctx, out=_cipher("out"))
     with pytest.raises(TypeError):
-        fhe.homo_mul_scalar_int(cipher, 3, ctx, out=_cipher("out"))
+        fhe.homo_mul_scalar(cipher, 3, ctx, out=_cipher("out"))
     with pytest.raises(TypeError):
-        fhe.homo_mul_scalar_double(cipher, 2.0, ctx, out=_cipher("out"))
+        fhe.homo_mul_scalar(cipher, 2.0, ctx, out=_cipher("out"))
 
     mul_pt = fhe.homo_mul_pt(cipher, plain, ctx)
     assert mul_pt is not cipher
     assert mul_pt.cv == ["mul_pt.c0", "mul_pt.c1"]
     assert mul_pt.state.scaling_factor == 11.0
-    assert mul_pt.state.noise_deg == 2
+    assert mul_pt.state.scale_degree == 2
 
     assert fhe.homo_mul_pt_inplace(cipher, plain, ctx) is cipher
     assert cipher.cv == ["mul_pt.c0", "mul_pt.c1"]
 
-    mul_int = fhe.homo_mul_scalar_int(cipher, [3, 3, 3], ctx)
+    mul_int = fhe.homo_mul_scalar(
+        cipher,
+        _scalar([3, 3, 3], scaling_factor=1.0, scale_degree=0),
+        ctx,
+    )
     assert mul_int.cv[0] == "mul_int(3).c0"
 
     cipher2 = _cipher("cipher2")
-    mul_double = fhe.homo_mul_scalar_double(cipher2, [2, 2, 2], ctx)
+    mul_double = fhe.homo_mul_scalar(cipher2, _scalar([2, 2, 2]), ctx)
     assert mul_double.cv[0] == "mul_double((2, 2, 2)).c0"
 
-    assert fhe.homo_mul_scalar_double_inplace(cipher2, [4, 4, 4], ctx) is cipher2
+    assert fhe.homo_mul_scalar_inplace(cipher2, _scalar([4, 4, 4]), ctx) is cipher2
     assert cipher2.cv[0] == "mul_double((4, 4, 4)).c0"
 
 
@@ -243,18 +253,18 @@ def test_homo_mul_no_relin_exposes_raw_triplet(monkeypatch):
     def fake_mul(left, right, context):
         return left.cipher_like(
             ["raw.c0", "raw.c1", "raw.c2"],
-            state=CipherState(left.state.cur_limbs, left.state.noise_deg + right.state.noise_deg, 5.0),
+            state=CipherState(left.state.cur_limbs, left.state.scale_degree + right.state.scale_degree, 5.0),
         )
 
     monkeypatch.setattr(arithmetic, "_cipher_mul", fake_mul)
     ctx = SimpleNamespace(rescale_policy="manual", scale_mode="fixed")
-    left = _cipher("left", noise_deg=1)
-    right = _cipher("right", noise_deg=2)
+    left = _cipher("left", scale_degree=1)
+    right = _cipher("right", scale_degree=2)
 
     result = fhe.homo_mul_no_relin(left, right, ctx)
 
     assert result.cv == ["raw.c0", "raw.c1", "raw.c2"]
-    assert result.state.noise_deg == 3
+    assert result.state.scale_degree == 3
 
 
 def test_homo_mul_no_relin_rejects_triplet_inputs():
@@ -290,7 +300,7 @@ def test_homo_mul_pt_supports_triplets(monkeypatch):
     result = fhe.homo_mul_pt(triplet, plain, ctx)
 
     assert result.cv == ["mul(c0)", "mul(c1)", "mul(c2)"]
-    assert result.state.noise_deg == 3
+    assert result.state.scale_degree == 3
     assert result.state.scaling_factor == 4.0
     assert calls == [
         ("c0", "p", 3, False),
@@ -315,7 +325,7 @@ def test_homo_mul_pt_inplace_supports_triplets(monkeypatch):
 
     assert result is triplet
     assert triplet.cv == ["c0", "c1", "c2"]
-    assert triplet.state.noise_deg == 3
+    assert triplet.state.scale_degree == 3
     assert calls == [
         ("c0", "p", 3, True),
         ("c1", "p", 3, True),
@@ -328,13 +338,13 @@ def test_scalar_ops_reject_raw_python_scalars():
     cipher = _cipher("cipher")
 
     for op, scalar in (
-        (fhe.homo_add_scalar_double, 1.5),
-        (fhe.homo_add_scalar_int, 5),
-        (fhe.homo_sub_scalar_int, 5),
-        (fhe.homo_mul_scalar_double, 1.5),
-        (fhe.homo_mul_scalar_int, 5),
+        (fhe.homo_add_scalar, 1.5),
+        (fhe.homo_add_scalar, 5),
+        (fhe.homo_sub_scalar, 5),
+        (fhe.homo_mul_scalar, 1.5),
+        (fhe.homo_mul_scalar, 5),
     ):
-        with pytest.raises(TypeError, match="expected an encoded scalar"):
+        with pytest.raises(TypeError, match="expected EncodedScalar"):
             op(cipher, scalar, ctx)
 
 
@@ -584,7 +594,7 @@ def test_mul_relin_rescale_postop_does_not_expose_out(monkeypatch):
     result = fhe.homo_mul_relin_rescale_postop(a, b, ctx)
     assert result is not a
     assert result.state.cur_limbs == 3
-    assert result.state.noise_deg == 1
+    assert result.state.scale_degree == 1
     assert result.state.scaling_factor == pytest.approx(0.4)
     assert len(result.cv) == 2
 
@@ -596,13 +606,13 @@ def test_mul_relin_rescale_postop_does_not_expose_out(monkeypatch):
         "homo_sub_inplace",
         "homo_add_pt_inplace",
         "homo_mul_pt_inplace",
-        "homo_add_scalar_double_inplace",
-        "homo_add_scalar_int_inplace",
-        "homo_mul_scalar_double_inplace",
-        "homo_mul_scalar_int_inplace",
-        "homo_sub_scalar_int",
-        "homo_sub_scalar_int_inplace",
-        "reduce_noise_to_one",
+        "homo_add_scalar",
+        "homo_add_scalar_inplace",
+        "homo_mul_scalar",
+        "homo_mul_scalar_inplace",
+        "homo_sub_scalar",
+        "homo_sub_scalar_inplace",
+        "normalize_scale",
     ],
 )
 def test_inplace_symbols_are_public(name):

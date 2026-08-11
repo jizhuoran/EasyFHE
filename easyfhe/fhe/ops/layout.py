@@ -6,10 +6,10 @@ from . import validation
 from .arithmetic import homo_mul_pt
 
 
-def expand_slots(cipher, slots, cryptoContext):
+def expand_slots(cipher, slots, context):
     validation.validate_cipher_op("expand_slots", cipher, require_ext=False)
-    slots = validation.validate_slot_count("expand_slots", slots, cryptoContext)
-    source_slots = validation.validate_slot_count("expand_slots", cipher.slots, cryptoContext)
+    slots = validation.validate_slot_count("expand_slots", slots, context)
+    source_slots = validation.validate_slot_count("expand_slots", cipher.slots, context)
     if slots < source_slots:
         raise ValueError(f"expand_slots: target slots [{slots}] must be >= source slots [{source_slots}]")
 
@@ -18,10 +18,10 @@ def expand_slots(cipher, slots, cryptoContext):
     return result
 
 
-def fold_slots(cipher, slots, cryptoContext, *, mask):
+def fold_slots(cipher, slots, context, *, mask):
     validation.validate_cipher_op("fold_slots", cipher, require_ext=False)
-    slots = validation.validate_slot_count("fold_slots", slots, cryptoContext)
-    source_slots = validation.validate_slot_count("fold_slots", cipher.slots, cryptoContext)
+    slots = validation.validate_slot_count("fold_slots", slots, context)
+    source_slots = validation.validate_slot_count("fold_slots", cipher.slots, context)
     if slots >= source_slots:
         raise ValueError(f"fold_slots: target slots [{slots}] must be < source slots [{source_slots}]")
     if mask is None:
@@ -29,9 +29,9 @@ def fold_slots(cipher, slots, cryptoContext, *, mask):
     if int(mask.slots) != source_slots:
         raise ValueError(f"fold_slots mask slots [{mask.slots}] must match source slots [{source_slots}]")
 
-    result = homo_mul_pt(cipher, mask, cryptoContext)
+    result = homo_mul_pt(cipher, mask, context)
     for level in range(_log2(slots), _log2(source_slots)):
-        result = homo_rotate_add(result, 1 << level, cryptoContext, addend=result)
+        result = homo_rotate_add(result, 1 << level, context, addend=result)
     result.slots = slots
     return result
 
@@ -86,10 +86,10 @@ def cipher_batch_item(cipher, index):
     return cipher.cipher_like([cv[int(index)] for cv in cipher.cv], batch_size=1)
 
 
-def homo_rotate_add(cipher, offset, cryptoContext, addend=None):
+def homo_rotate_add(cipher, offset, context, addend=None):
     from .rotation import homo_rotate_add as rotate_add
 
-    return rotate_add(cipher, offset, cryptoContext, addend=addend)
+    return rotate_add(cipher, offset, context, addend=addend)
 
 
 def _log2(slots):

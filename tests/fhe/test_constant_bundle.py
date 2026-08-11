@@ -23,6 +23,31 @@ def _vector(values):
     return fhe.PackedRaw(torch.from_numpy(np.asarray(values)))
 
 
+def _plaintext(
+    bundle,
+    name,
+    level,
+    slots,
+    context,
+    *,
+    is_ext=False,
+    scaling_factor=None,
+    cur_limbs=None,
+):
+    if cur_limbs is None:
+        cur_limbs = int(context.L) - int(level) if hasattr(context, "L") else max(int(level), 1)
+    if scaling_factor is None:
+        scale_at = getattr(context, "scale_at", None)
+        scaling_factor = float(scale_at(cur_limbs)) if scale_at is not None else 1.0
+    return bundle.plaintext(
+        name,
+        state=CipherState(cur_limbs, 1, scaling_factor),
+        slots=slots,
+        context=context,
+        is_ext=is_ext,
+    )
+
+
 def test_constant_bundle_encodes_middle_and_caches_vectors(monkeypatch):
     bundle = fhe.ConstantBundle(
         vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
@@ -30,14 +55,14 @@ def test_constant_bundle_encodes_middle_and_caches_vectors(monkeypatch):
     )
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    first = bundle.plaintext("w", 3, 4, ctx)
-    second = bundle.plaintext("w", 3, 4, ctx)
+    first = _plaintext(bundle, "w", 3, 4, ctx)
+    second = _plaintext(bundle, "w", 3, 4, ctx)
 
     assert first is not second
     assert calls[0] is calls[1]
@@ -51,13 +76,13 @@ def test_constant_bundle_accepts_prepared_vectors(monkeypatch):
     bundle = fhe.ConstantBundle(vectors={"w": prepared}, cache_mode="middle")
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    bundle.plaintext("w", 3, 2, ctx)
+    _plaintext(bundle, "w", 3, 2, ctx)
 
     assert calls == [prepared]
 
@@ -67,41 +92,20 @@ def test_constant_bundle_accepts_cpu_tensor_vectors(monkeypatch):
     bundle = fhe.ConstantBundle(vectors={"w": fhe.PackedRaw(values)}, cache_mode="middle")
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    bundle.plaintext("w", 3, 4, ctx)
+    _plaintext(bundle, "w", 3, 4, ctx)
 
     assert calls[0].slots == 4
     np.testing.assert_array_equal(calls[0].values, values.numpy())
 
 
-def test_constant_bundle_accepts_unpacked_raw_with_packer(monkeypatch):
-    values = torch.tensor([1.0, 2.0], dtype=torch.float64)
-    calls = []
-
-    def packer(tensor, slots, crypto_context):
-        calls.append((tensor, slots, crypto_context))
-        packed = torch.zeros(slots, dtype=tensor.dtype)
-        packed[: tensor.numel()] = tensor
-        return packed
-
-    bundle = fhe.ConstantBundle(vectors={"w": fhe.UnpackedRaw(values, packer)}, cache_mode="middle")
-    stage2_calls = []
-
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
-        stage2_calls.append(middle)
-        return _cipher("w")
-
-    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
-    ctx = SimpleNamespace(N=8)
-    bundle.plaintext("w", 3, 4, ctx)
-
-    assert calls == [(values, 4, ctx)]
-    np.testing.assert_array_equal(stage2_calls[0].values, np.asarray([1.0, 2.0, 0.0, 0.0]))
+def test_constant_bundle_does_not_expose_lazy_unpacked_raw():
+    assert not hasattr(fhe, "UnpackedRaw")
 
 
 def test_constant_bundle_accepts_packed_prepared_vectors(monkeypatch):
@@ -110,13 +114,13 @@ def test_constant_bundle_accepts_packed_prepared_vectors(monkeypatch):
     bundle = fhe.ConstantBundle(vectors={"w": prepared}, cache_mode="middle")
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    bundle.plaintext("w", 3, 2, ctx)
+    _plaintext(bundle, "w", 3, 2, ctx)
 
     assert calls == [prepared]
 
@@ -135,21 +139,21 @@ def test_constant_bundle_accepts_cuda_packed_tensor_vectors(monkeypatch):
     packed[: values.size] = torch.as_tensor(values, dtype=torch.complex128, device="cuda")
 
     bundle = fhe.ConstantBundle(vectors={"w": fhe.PackedRaw(packed)}, cache_mode="middle")
-    direct = encode_stage1_packed(packed, cryptoContext=cuda_ctx)
+    direct = encode_stage1_packed(packed, context=cuda_ctx)
     calls = []
 
-    def fake_encode_stage2(middle, level, stage2_slots, is_ext, crypto_context):
-        calls.append((middle, level, stage2_slots, is_ext, crypto_context))
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
+        calls.append((middle, level, slots, is_ext, context))
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
-    bundle.plaintext("w", 1, slots, cuda_ctx, is_ext=True)
+    _plaintext(bundle, "w", 1, slots, cuda_ctx, is_ext=True)
 
-    middle, level, stage2_slots, is_ext, crypto_context = calls[0]
-    assert level == 1
-    assert stage2_slots == slots
+    middle, level, slots, is_ext, context = calls[0]
+    assert level is None
+    assert slots == slots
     assert is_ext is True
-    assert crypto_context is cuda_ctx
+    assert context is cuda_ctx
     assert middle.packed is True
     assert middle.values is packed
     np.testing.assert_array_equal(
@@ -175,21 +179,21 @@ def test_constant_bundle_accepts_cuda_real_tensor_vectors(monkeypatch):
     complex_values = tensor_values.to(dtype=torch.complex128)
 
     bundle = fhe.ConstantBundle(vectors={"w": fhe.PackedRaw(tensor_values)}, cache_mode="middle")
-    direct = encode_stage1_packed(complex_values, cryptoContext=cuda_ctx)
+    direct = encode_stage1_packed(complex_values, context=cuda_ctx)
     calls = []
 
-    def fake_encode_stage2(middle, level, stage2_slots, is_ext, crypto_context):
-        calls.append((middle, level, stage2_slots, is_ext, crypto_context))
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
+        calls.append((middle, level, slots, is_ext, context))
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
-    bundle.plaintext("w", 1, slots, cuda_ctx, is_ext=True)
+    _plaintext(bundle, "w", 1, slots, cuda_ctx, is_ext=True)
 
-    middle, level, stage2_slots, is_ext, crypto_context = calls[0]
-    assert level == 1
-    assert stage2_slots == slots
+    middle, level, slots, is_ext, context = calls[0]
+    assert level is None
+    assert slots == slots
     assert is_ext is True
-    assert crypto_context is cuda_ctx
+    assert context is cuda_ctx
     assert middle.packed is True
     assert middle.values.is_cuda
     assert middle.values.dtype == torch.complex128
@@ -200,7 +204,7 @@ def test_constant_bundle_accepts_cuda_real_tensor_vectors(monkeypatch):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")
-def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors(monkeypatch):
+def test_constant_bundle_forwards_state_for_cuda_packed_tensor_vectors(monkeypatch):
     _, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
@@ -215,21 +219,27 @@ def test_constant_bundle_accepts_scale_alias_for_cuda_packed_tensor_vectors(monk
         level,
         slots,
         is_ext,
-        crypto_context,
+        context,
         *,
         scaling_factor=None,
         cur_limbs=None,
-        noise_deg=1,
+        scale_degree=1,
     ):
-        calls.append((scaling_factor, cur_limbs, noise_deg))
+        calls.append((scaling_factor, cur_limbs, scale_degree))
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
-    plaintext = bundle.plaintext("w", 1, 8, cuda_ctx, scale=2.0)
+    state = CipherState(cuda_ctx.L - 1, 1, 2.0)
+    plaintext = bundle.plaintext(
+        "w",
+        state=state,
+        slots=8,
+        context=cuda_ctx,
+    )
 
     assert plaintext.name == "w"
-    assert calls == [(2.0, None, 1)]
+    assert calls == [(2.0, state.cur_limbs, 1)]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA packed vectors require CUDA")
@@ -252,16 +262,16 @@ def test_constant_bundle_mix_restores_cuda_packed_middle_after_plain_eviction(mo
     bundle.set_plain_cache_limit_bytes(200)
     calls = []
 
-    def fake_encode_stage2(middle, level, stage2_slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("large", cv_count=3) if len(calls) == 1 else _cipher("small", cv_count=1)
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
-    bundle.plaintext("large", 1, slots, cuda_ctx)
+    _plaintext(bundle, "large", 1, slots, cuda_ctx)
     assert bundle.cache_info()["middle_entries"] == 0
 
-    bundle.plaintext("small", 1, slots, cuda_ctx)
+    _plaintext(bundle, "small", 1, slots, cuda_ctx)
     info = bundle.cache_info()
     assert info["plain_cache_evictions"] == 1
     assert info["middle_entries"] == 1
@@ -275,13 +285,13 @@ def test_constant_bundle_preserves_complex_vector_values(monkeypatch):
     bundle = fhe.ConstantBundle(vectors={"w": _vector(values)}, cache_mode="none")
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append(middle)
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    bundle.plaintext("w", 3, 4, ctx)
+    _plaintext(bundle, "w", 3, 4, ctx)
 
     encoded_values = calls[0].values
     assert encoded_values.dtype == np.complex128
@@ -295,7 +305,7 @@ def test_constant_bundle_rejects_unpadded_vector_values():
     )
 
     try:
-        bundle.plaintext("w", 3, 4, SimpleNamespace(N=8))
+        _plaintext(bundle, "w", 3, 4, SimpleNamespace(N=8))
     except ValueError as exc:
         assert "must match slots" in str(exc)
         assert "pack, pad, or truncate before constructing" in str(exc)
@@ -303,32 +313,29 @@ def test_constant_bundle_rejects_unpadded_vector_values():
         raise AssertionError("expected unpadded raw vector to fail")
 
 
-def test_constant_bundle_accepts_scale_alias_for_vector_values(monkeypatch):
+def test_constant_bundle_rejects_scale_alias():
     bundle = fhe.ConstantBundle(
         vectors={"w": _vector([1.0, 2.0, 0.0, 0.0])},
         cache_mode="none",
     )
-    calls = []
-
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context, *, scaling_factor=None):
-        calls.append(scaling_factor)
-        return _cipher("w")
-
-    monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
-
-    bundle.plaintext("w", 3, 4, SimpleNamespace(N=8), scale=2.0)
-
-    assert calls == [2.0]
+    with pytest.raises(TypeError, match="unexpected keyword argument 'scale'"):
+        bundle.plaintext(
+            "w",
+            state=CipherState(3, 1, 2.0),
+            slots=4,
+            context=SimpleNamespace(N=8),
+            scale=2.0,
+        )
 
 
 def test_constant_bundle_rejects_bare_list_and_numpy_vectors():
-    with pytest.raises(TypeError, match="must be PackedRaw, UnpackedRaw, or PreparedPlaintext"):
+    with pytest.raises(TypeError, match="must be PackedRaw or PreparedPlaintext"):
         fhe.ConstantBundle(
             vectors={"w": np.asarray([1.0, 2.0, 0.0, 0.0])},
             cache_mode="none",
         )
 
-    with pytest.raises(TypeError, match="must be PackedRaw, UnpackedRaw, or PreparedPlaintext"):
+    with pytest.raises(TypeError, match="must be PackedRaw or PreparedPlaintext"):
         fhe.ConstantBundle(
             vectors={"w": [np.asarray([1.0]), np.asarray([2.0, 3.0])]},
             cache_mode="none",
@@ -346,7 +353,7 @@ def test_constant_bundle_rejects_list_of_names():
 
     ctx = SimpleNamespace(N=8)
     try:
-        bundle.plaintext(["a", "b"], 3, 4, ctx, is_ext=True)
+        _plaintext(bundle, ["a", "b"], 3, 4, ctx, is_ext=True)
     except TypeError as exc:
         assert "name must be str" in str(exc)
     else:
@@ -370,19 +377,17 @@ def test_constant_bundle_named_vector_batch_matches_individual_encoding():
         cache_mode="none",
     )
 
-    batch = bundle.plaintext("group", 1, 4, ctx, is_ext=True)
-    first = fhe.ConstantBundle(
+    batch = _plaintext(bundle, "group", 1, 4, ctx, is_ext=True)
+    first_bundle = fhe.ConstantBundle(
         vectors={"a": _vector([1.0, 2.0, 0.0, 0.0])},
         cache_mode="none",
-    ).plaintext(
-        "a", 1, 4, ctx, is_ext=True
     )
-    second = fhe.ConstantBundle(
+    first = _plaintext(first_bundle, "a", 1, 4, ctx, is_ext=True)
+    second_bundle = fhe.ConstantBundle(
         vectors={"b": _vector([3.0, 4.0, 0.0, 0.0])},
         cache_mode="none",
-    ).plaintext(
-        "b", 1, 4, ctx, is_ext=True
     )
+    second = _plaintext(second_bundle, "b", 1, 4, ctx, is_ext=True)
 
     assert batch.batch_size == 2
     assert batch.is_ext is True
@@ -404,19 +409,19 @@ def test_constant_bundle_named_vector_batch_cache(monkeypatch):
     )
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         calls.append((middle.encoded_values.shape, level, slots, is_ext))
         return _cipher("group", cv_count=1).cipher_like([torch.zeros((2, 2, 4), dtype=torch.uint64)], batch_size=2)
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
     ctx = SimpleNamespace(N=8)
-    first = bundle.plaintext("group", 3, 4, ctx, is_ext=True)
-    second = bundle.plaintext("group", 3, 4, ctx, is_ext=True)
+    first = _plaintext(bundle, "group", 3, 4, ctx, is_ext=True)
+    second = _plaintext(bundle, "group", 3, 4, ctx, is_ext=True)
 
     assert first is second
     assert first.batch_size == 2
-    assert calls == [((2, 8), 3, 4, True)]
+    assert calls == [((2, 8), None, 4, True)]
     assert bundle.cache_info()["plain_hits"] == 1
     assert bundle.cache_info()["plain_misses"] == 1
 
@@ -427,13 +432,13 @@ def test_constant_bundle_both_caches_plain_and_middle(monkeypatch):
         cache_mode="both",
     )
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
-    first = bundle.plaintext("w", 3, 4, ctx)
-    second = bundle.plaintext("w", 3, 4, ctx)
+    first = _plaintext(bundle, "w", 3, 4, ctx)
+    second = _plaintext(bundle, "w", 3, 4, ctx)
     info = bundle.cache_info()
 
     assert first is second
@@ -472,18 +477,18 @@ def test_constant_bundle_mix_of_middle_plain_restores_middle_when_plain_is_repla
     )
     bundle.set_plain_cache_limit_bytes(200)
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         return _cipher("large", cv_count=3) if middle.values[0] == 1.0 else _cipher("small", cv_count=1)
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
 
-    bundle.plaintext("large", 3, 4, ctx)
+    _plaintext(bundle, "large", 3, 4, ctx)
     info = bundle.cache_info()
     assert info["plain_entries"] == 1
     assert info["middle_entries"] == 0
 
-    bundle.plaintext("small", 3, 4, ctx)
+    _plaintext(bundle, "small", 3, 4, ctx)
     info = bundle.cache_info()
     assert info["plain_entries"] == 1
     assert info["middle_entries"] == 1
@@ -496,25 +501,25 @@ def test_constant_bundle_mix_of_middle_plain_keeps_middle_for_sibling_plain_vari
         cache_mode="mix_of_middle_plain",
     )
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, **kwargs):
         return _cipher(f"w-level-{level}")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
     ctx = SimpleNamespace(N=8)
 
-    bundle.plaintext("w", 3, 4, ctx)
+    _plaintext(bundle, "w", 3, 4, ctx)
     info = bundle.cache_info()
     assert info["plain_entries"] == 1
     assert info["middle_entries"] == 0
     assert info["middle_misses"] == 1
 
-    bundle.plaintext("w", 2, 4, ctx)
+    _plaintext(bundle, "w", 2, 4, ctx)
     info = bundle.cache_info()
     assert info["plain_entries"] == 2
     assert info["middle_entries"] == 1
     assert info["middle_misses"] == 2
 
-    bundle.plaintext("w", 1, 4, ctx)
+    _plaintext(bundle, "w", 1, 4, ctx)
     info = bundle.cache_info()
     assert info["plain_entries"] == 3
     assert info["middle_entries"] == 1
@@ -534,11 +539,19 @@ def test_constant_bundle_encodes_and_caches_scalars():
     )
     bundle = fhe.ConstantBundle(scalars={"alpha": 1.5, "shift": -2}, cache_mode="plain")
 
-    first = bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double")
-    second = bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double")
-    integer = bundle.encoded_scalars("shift", 2, 0, ctx, mode="int")
+    first = bundle.encoded_scalars(
+        "alpha", cur_limbs=3, scale_degree=1, context=ctx, mode="scaled"
+    )
+    second = bundle.encoded_scalars(
+        "alpha", cur_limbs=3, scale_degree=1, context=ctx, mode="scaled"
+    )
+    integer = bundle.encoded_scalars(
+        "shift", cur_limbs=2, scale_degree=0, context=ctx, mode="integer"
+    )
 
     assert first is second
+    assert first.scale_degree == 1
+    assert first.scaling_factor == 8.0
     assert first.tolist() == [[12, 12, 12]]
     assert integer.tolist() == [[15, 17]]
     assert bundle.cache_info()["scalar_hits"] == 1
@@ -558,8 +571,12 @@ def test_constant_bundle_encodes_and_caches_scalar_batches():
     )
     bundle = fhe.ConstantBundle(scalars={"a": 1.5, "b": -2.0}, cache_mode="plain")
 
-    first = bundle.encoded_scalars(("a", "b"), 3, 1, ctx, mode="double")
-    second = bundle.encoded_scalars(("a", "b"), 3, 1, ctx, mode="double")
+    first = bundle.encoded_scalars(
+        ("a", "b"), cur_limbs=3, scale_degree=1, context=ctx, mode="scaled"
+    )
+    second = bundle.encoded_scalars(
+        ("a", "b"), cur_limbs=3, scale_degree=1, context=ctx, mode="scaled"
+    )
 
     assert first is second
     assert first.shape == (2, 3)
@@ -569,7 +586,7 @@ def test_constant_bundle_encodes_and_caches_scalar_batches():
     assert bundle.cache_info()["scalar_entries"] == 1
 
 
-def test_constant_bundle_encodes_double_scalars_at_requested_noise_degree():
+def test_constant_bundle_tracks_explicit_scalar_scale_degree():
     ctx = SimpleNamespace(
         device="cpu",
         N=8,
@@ -581,10 +598,19 @@ def test_constant_bundle_encodes_double_scalars_at_requested_noise_degree():
     )
     bundle = fhe.ConstantBundle(scalars={"shift": 1.5}, cache_mode="none")
 
-    encoded = bundle.encoded_scalars("shift", 3, 2, ctx, mode="double")
+    encoded = bundle.encoded_scalars(
+        "shift",
+        cur_limbs=3,
+        scale_degree=2,
+        context=ctx,
+        mode="scaled",
+        scaling_factor=8.0,
+    )
 
     assert encoded.shape == (1, 3)
-    assert encoded.tolist() == [[11, 1, 4]]
+    assert encoded.tolist() == [[12, 12, 12]]
+    assert encoded.scale_degree == 2
+    assert encoded.scaling_factor == 8.0
 
 
 def test_constant_bundle_flexible_plaintext_requires_explicit_scaling_factor():
@@ -594,8 +620,13 @@ def test_constant_bundle_flexible_plaintext_requires_explicit_scaling_factor():
         cache_mode="none",
     )
 
-    with pytest.raises(ValueError, match="requires scaling_factor"):
-        bundle.plaintext("w", 3, 4, ctx)
+    with pytest.raises(ValueError, match="state.scaling_factor is required"):
+        bundle.plaintext(
+            "w",
+            state=CipherState(1, 1, None),
+            slots=4,
+            context=ctx,
+        )
 
 
 def test_constant_bundle_plain_cache_keys_include_scaling_factor(monkeypatch):
@@ -606,15 +637,15 @@ def test_constant_bundle_plain_cache_keys_include_scaling_factor(monkeypatch):
     )
     calls = []
 
-    def fake_encode_stage2(middle, level, slots, is_ext, crypto_context, *, scaling_factor=None):
+    def fake_encode_stage2(middle, level, slots, is_ext, context, *, scaling_factor=None, **kwargs):
         calls.append(scaling_factor)
         return _cipher(f"w-{scaling_factor}")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
-    first = bundle.plaintext("w", 3, 4, ctx, scaling_factor=8.0)
-    second = bundle.plaintext("w", 3, 4, ctx, scaling_factor=16.0)
-    again = bundle.plaintext("w", 3, 4, ctx, scaling_factor=8.0)
+    first = _plaintext(bundle, "w", 3, 4, ctx, scaling_factor=8.0)
+    second = _plaintext(bundle, "w", 3, 4, ctx, scaling_factor=16.0)
+    again = _plaintext(bundle, "w", 3, 4, ctx, scaling_factor=8.0)
 
     assert calls == [8.0, 16.0]
     assert first is again
@@ -634,19 +665,20 @@ def test_constant_bundle_plaintext_passes_explicit_cur_limbs_and_scaling_factor(
         level,
         slots,
         is_ext,
-        crypto_context,
+        context,
         *,
         scaling_factor=None,
         cur_limbs=None,
+        scale_degree=1,
     ):
-        calls.append((level, scaling_factor, cur_limbs))
+        calls.append((level, scaling_factor, cur_limbs, scale_degree))
         return _cipher("w")
 
     monkeypatch.setattr("easyfhe.fhe.constants.encode_stage2", fake_encode_stage2)
 
-    bundle.plaintext("w", level=None, slots=4, cryptoContext=ctx, scaling_factor=8.0, cur_limbs=2)
+    _plaintext(bundle, "w", level=None, slots=4, context=ctx, scaling_factor=8.0, cur_limbs=2)
 
-    assert calls == [(None, 8.0, 2)]
+    assert calls == [(None, 8.0, 2, 1)]
 
 
 def test_constant_bundle_flexible_double_scalars_require_explicit_scaling_factor():
@@ -661,8 +693,17 @@ def test_constant_bundle_flexible_double_scalars_require_explicit_scaling_factor
     bundle = fhe.ConstantBundle(scalars={"alpha": 1.5}, cache_mode="none")
 
     with pytest.raises(ValueError, match="requires scaling_factor"):
-        bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double")
+        bundle.encoded_scalars(
+            "alpha", cur_limbs=3, scale_degree=1, context=ctx, mode="scaled"
+        )
 
-    encoded = bundle.encoded_scalars("alpha", 3, 1, ctx, mode="double", scaling_factor=8.0)
+    encoded = bundle.encoded_scalars(
+        "alpha",
+        cur_limbs=3,
+        scale_degree=1,
+        context=ctx,
+        mode="scaled",
+        scaling_factor=8.0,
+    )
 
     assert encoded.tolist() == [[12, 12, 12]]

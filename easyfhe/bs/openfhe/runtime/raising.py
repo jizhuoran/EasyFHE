@@ -1,6 +1,7 @@
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
 from easyfhe.fhe.ops import kernels as F
+from easyfhe.fhe.constants import encode_scalar
 
 
 def mod_raise(cipher, target_limbs, crypto_context):
@@ -14,7 +15,7 @@ def mod_raise(cipher, target_limbs, crypto_context):
 def raise_ciphertext(ciphertext, crypto_context, bootstrap_constants, raise_to_limbs):
     """Run the u64 bootstrap raise path (one physical limb per rescale)."""
     correction_scale = bootstrap_constants._scalar_value("correction_scale")
-    result = alignment.reduce_noise_to_one(ciphertext, crypto_context)
+    result = alignment.normalize_scale(ciphertext, crypto_context)
 
     source_scale = float(result.state.scaling_factor)
     raise_to_limbs = int(raise_to_limbs)
@@ -31,33 +32,32 @@ def raise_ciphertext(ciphertext, crypto_context, bootstrap_constants, raise_to_l
         * correction_scale
     )
 
-    result = arithmetic.homo_mul_scalar_double(
+    result = arithmetic.homo_mul_scalar(
         result,
-        arithmetic._encode_double_for_scalar_op(
+        encode_scalar(
             adjustment_factor,
-            result.state.cur_limbs,
-            crypto_context,
+            cur_limbs=result.state.cur_limbs,
+            scale_degree=1,
+            context=crypto_context,
             scaling_factor=correction_encoding_scale,
         ),
         crypto_context,
-        scaling_factor=correction_encoding_scale,
     )
-    result = alignment.rescale_one_level(result, crypto_context)
+    result = alignment.rescale(result, crypto_context)
     result = result.cipher_like(result.cv, state=result.state.replace(scaling_factor=target_scale))
 
     result = mod_raise(result, raise_to_limbs, crypto_context)
     scalar = bootstrap_constants.encoded_scalars(
         "constant_eval_mult",
-        result.state.cur_limbs,
-        1,
-        crypto_context,
-        mode="double",
+        cur_limbs=result.state.cur_limbs,
+        scale_degree=1,
+        context=crypto_context,
+        mode="scaled",
         scaling_factor=result.state.scaling_factor,
     )[0]
-    result = arithmetic.homo_mul_scalar_double(
+    result = arithmetic.homo_mul_scalar(
         result,
         scalar,
         crypto_context,
-        scaling_factor=result.state.scaling_factor,
     )
-    return alignment.reduce_noise_to_one(result, crypto_context)
+    return alignment.normalize_scale(result, crypto_context)

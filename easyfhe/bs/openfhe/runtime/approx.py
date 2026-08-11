@@ -3,6 +3,7 @@ import math
 from easyfhe.fhe.ops import alignment
 from easyfhe.fhe.ops import arithmetic
 from easyfhe.fhe.ops import layout
+from easyfhe.fhe.ciphertext import EncodedScalar
 
 from ..generation.plan import (
     ALIGN_C_TO_BASE,
@@ -29,31 +30,31 @@ def _mul_rescale_constant(name, in0, in1, constants, cryptoContext):
         scalar_scale = float(target.scaling_factor) * float(target.scaling_factor) / divisor
         return constants.encoded_scalars(
             name,
-            target.cur_limbs - 1,
-            1,
-            cryptoContext,
-            mode="double",
+            cur_limbs=target.cur_limbs - 1,
+            scale_degree=1,
+            context=cryptoContext,
+            mode="scaled",
             scaling_factor=scalar_scale,
         )[0]
     target, _ = alignment.plan_mul_alignment(in0, in1, cryptoContext)
     return constants.encoded_scalars(
         name,
-        target.cur_limbs - 1,
-        1,
-        cryptoContext,
-        mode="double",
+        cur_limbs=target.cur_limbs - 1,
+        scale_degree=1,
+        context=cryptoContext,
+        mode="scaled",
     )[0]
 
 
 def _add_chebyshev_constant(value, scalar_path, constants, bootstrap_plan, cryptoContext):
-    return arithmetic.homo_add_scalar_double(
+    return arithmetic.homo_add_scalar(
         value,
         constants.encoded_scalars(
             bootstrap_plan.approx_constant_scalar_names[tuple(scalar_path)],
-            value.state.cur_limbs,
-            1,
-            cryptoContext,
-            mode="double",
+            cur_limbs=value.state.cur_limbs,
+            scale_degree=value.state.scale_degree,
+            context=cryptoContext,
+            mode="scaled",
             scaling_factor=value.state.scaling_factor,
         )[0],
         cryptoContext,
@@ -91,8 +92,8 @@ def _mul_alignment_target_for_bs(left, right):
     target_limbs = min(int(left.state.cur_limbs), int(right.state.cur_limbs))
     for cipher in (left, right):
         if int(cipher.state.cur_limbs) == target_limbs:
-            return alignment.CipherState(target_limbs, cipher.state.noise_deg, cipher.state.scaling_factor)
-    return alignment.CipherState(target_limbs, left.state.noise_deg, left.state.scaling_factor)
+            return alignment.CipherState(target_limbs, cipher.state.scale_degree, cipher.state.scaling_factor)
+    return alignment.CipherState(target_limbs, left.state.scale_degree, left.state.scaling_factor)
 
 
 def _align_add_operands(left, right, cryptoContext):
@@ -102,7 +103,7 @@ def _align_add_operands(left, right, cryptoContext):
         target = left.state
     elif int(right.state.cur_limbs) < int(left.state.cur_limbs):
         target = right.state
-    elif int(left.state.noise_deg) <= int(right.state.noise_deg):
+    elif int(left.state.scale_degree) <= int(right.state.scale_degree):
         target = left.state
     else:
         target = right.state
@@ -155,7 +156,7 @@ def _chebyshev_basis(unit_x, k, cryptoContext, constants, bootstrap_plan):
     final = T[-1]
     target = alignment.CipherState(
         final.state.cur_limbs,
-        final.state.noise_deg,
+        final.state.scale_degree,
         final.state.scaling_factor,
     )
     items = tuple(alignment.align_to(item, target, cryptoContext) for item in T)
@@ -217,13 +218,22 @@ def _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan):
     names = tuple(name for row in bootstrap_plan.approx_tail_scalar_names for name in row)
     scalars = constants.encoded_scalars(
         names,
-        batch.state.cur_limbs,
-        1,
-        cryptoContext,
-        mode="double",
+        cur_limbs=batch.state.cur_limbs,
+        scale_degree=1,
+        context=cryptoContext,
+        mode="scaled",
         scaling_factor=batch.state.scaling_factor,
     )
-    return scalars.reshape(len(flat.tail_specs), flat.tail_max_deg, batch.state.cur_limbs).contiguous()
+    return EncodedScalar(
+        scalars.residues.reshape(
+            len(flat.tail_specs),
+            flat.tail_max_deg,
+            batch.state.cur_limbs,
+        ).contiguous(),
+        scalars.cur_limbs,
+        scalars.scale_degree,
+        scalars.scaling_factor,
+    )
 
 
 def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
@@ -231,8 +241,8 @@ def _eval_tail_table(flat, T_batch, cryptoContext, constants, bootstrap_plan):
         return ()
     batch = _batch_prefix(T_batch, flat.tail_max_deg)
     scalars = _tail_scalar_table(flat, batch, constants, cryptoContext, bootstrap_plan)
-    tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext, scaling_factor=batch.state.scaling_factor)
-    tails = alignment.rescale_one_level(tails, cryptoContext)
+    tails = arithmetic.grouped_scalar_weighted_acc(batch, scalars, cryptoContext)
+    tails = alignment.rescale(tails, cryptoContext)
     return tuple(layout.cipher_batch_item(tails, index) for index in range(len(flat.tail_specs)))
 
 
@@ -255,14 +265,14 @@ def _q_highest_term(spec, Tk, constants, bootstrap_plan, cryptoContext):
         return value
 
     if spec.q_highest_mode == Q_HIGHEST_SCALAR:
-        return arithmetic.homo_mul_scalar_int(
+        return arithmetic.homo_mul_scalar(
             Tk,
             constants.encoded_scalars(
                 bootstrap_plan.approx_q_highest_scalar_names[spec.scalar_path],
-                Tk.state.cur_limbs,
-                0,
-                cryptoContext,
-                mode="int",
+                cur_limbs=Tk.state.cur_limbs,
+                scale_degree=0,
+                context=cryptoContext,
+                mode="integer",
             )[0],
             cryptoContext,
         )
@@ -287,7 +297,7 @@ def _finish_c_spec(spec, tail, T2, constants, bootstrap_plan, cryptoContext):
             value,
             alignment.CipherState(
                 target.state.cur_limbs,
-                target.state.noise_deg,
+                target.state.scale_degree,
                 target.state.scaling_factor,
             ),
             cryptoContext,
@@ -322,7 +332,7 @@ def _finish_s_spec(spec, tail, T_items, constants, bootstrap_plan, cryptoContext
         source_scale = None if value.state.scaling_factor is None else float(value.state.scaling_factor)
         if source_scale is None:
             target_scale = None
-        elif int(value.state.noise_deg) > 1:
+        elif int(value.state.scale_degree) > 1:
             target_scale = source_scale / divisor
         else:
             target_scale = source_scale * source_scale / divisor
@@ -385,14 +395,14 @@ def _eval_combine_spec(spec, small_values, node_values, T2, constants, bootstrap
     base = T2[spec.base_idx]
 
     if c is None:
-        left = arithmetic.homo_add_scalar_double(
+        left = arithmetic.homo_add_scalar(
             base,
             constants.encoded_scalars(
                 bootstrap_plan.approx_constant_scalar_names[spec.c_const_scalar_path],
-                base.state.cur_limbs,
-                1,
-                cryptoContext,
-                mode="double",
+                cur_limbs=base.state.cur_limbs,
+                scale_degree=base.state.scale_degree,
+                context=cryptoContext,
+                mode="scaled",
                 scaling_factor=base.state.scaling_factor,
             )[0],
             cryptoContext,
@@ -446,15 +456,15 @@ def apply_double_angle_iterations(ciphertext, cryptoContext, constants, bootstra
         )
         doubled = arithmetic._cipher_add(squared, squared, cryptoContext)
         scalar = constants.encoded_scalars(
-                bootstrap_plan.double_angle_scalar_names[j],
-                doubled.state.cur_limbs,
-                1,
-                cryptoContext,
-                mode="double",
-                scaling_factor=doubled.state.scaling_factor,
-            )[0]
-        ciphertext = arithmetic._cipher_add_scalar(doubled, scalar, cryptoContext)
-        ciphertext = alignment.rescale_one_level(ciphertext, cryptoContext)
+            bootstrap_plan.double_angle_scalar_names[j],
+            cur_limbs=doubled.state.cur_limbs,
+            scale_degree=doubled.state.scale_degree,
+            context=cryptoContext,
+            mode="scaled",
+            scaling_factor=doubled.state.scaling_factor,
+        )[0]
+        ciphertext = arithmetic.homo_add_scalar(doubled, scalar, cryptoContext)
+        ciphertext = alignment.rescale(ciphertext, cryptoContext)
     return ciphertext
 
 

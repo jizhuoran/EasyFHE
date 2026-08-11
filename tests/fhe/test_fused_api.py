@@ -226,7 +226,13 @@ def test_grouped_scalar_weighted_acc_matches_scalar_mul_add_loop():
         batch_size=batch_size,
     )
 
-    actual = fhe.grouped_scalar_weighted_acc(cipher, scalars.unsqueeze(0), ctx)
+    encoded = fhe.EncodedScalar(
+        scalars.unsqueeze(0),
+        cur_limbs=cur_limbs,
+        scale_degree=1,
+        scaling_factor=ctx.scale_at(cur_limbs),
+    )
+    actual = fhe.grouped_scalar_weighted_acc(cipher, encoded, ctx)
     expected = []
     for component in cipher.cv:
         acc = None

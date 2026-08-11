@@ -1,101 +1,63 @@
 # FHE API Inventory
 
-Snapshot: 2026-05-21. This is a proposed ownership split for the EasyFHE FHE
-surface, based on the current Python modules and native `native_functions.yaml`.
+Snapshot: 2026-08-11.
 
-The target split is:
+The ownership split is:
 
-1. stable public: `import easyfhe.fhe as fhe`, normal users should call these.
-2. expert public: bootstrapping, ResNet20, benchmarks, and advanced workflows can call these.
-3. internal Python: implementation modules used by public APIs.
-4. native private: `torch.*`/ATen kernels; Python should wrap these before user code sees them.
+1. stable public: names exported by `easyfhe.fhe`;
+2. expert public: the small `easyfhe.bs.openfhe` package root;
+3. internal Python: implementation modules;
+4. native private: ATen entry points wrapped by `ops.kernels`.
 
-Current note: package roots should stay aligned with this split; boundary tests
-guard against examples importing private implementation modules directly.
+## Stable `easyfhe.fhe` API
 
-## 1. Stable Public
+### Context and values
 
-Package target: `easyfhe.fhe as fhe`.
+- `Cipher`, `CipherState`, `EncodedScalar`
+- `Client`, `Context`, `ContextParams`
+- `CKKSContextSpec`, `PrimeChainPlan`
+- `generate_client_context`, `plan_prime_chain`
+- `ConstantBundle`, `PackedRaw`, `encode_scalar`
 
-These are the names ordinary users should be able to rely on.
+### Alignment
 
-### Data And Context
+- `align_to`
+- `normalize_scale`
+- `rescale`
 
-- `Cipher`
-- `Context`
-- `CKKSContextSpec`
-- `ConstantBundle`
-- `generate_client_context`
-- `CipherState`
+### Arithmetic
 
-`Context` public methods should stay narrow:
-
-- `cuda()`
-- `cpu()`
-
-Client public methods:
-
-- `encrypt(...)`
-- `decrypt(...)`
-
-### Cipher Arithmetic
-
-- `homo_add`
-- `homo_add_inplace`
-- `homo_sub`
-- `homo_sub_inplace`
-- `homo_mul_no_relin`
-- `homo_mul_relin`
+- `homo_add`, `homo_add_inplace`
+- `homo_sub`, `homo_sub_inplace`
+- `homo_mul_no_relin`, `homo_mul_relin`
+- `homo_add_pt`, `homo_add_pt_inplace`
+- `homo_mul_pt`, `homo_mul_pt_inplace`, `homo_mul_pt_rescale`
+- `homo_add_scalar`, `homo_add_scalar_inplace`
+- `homo_sub_scalar`, `homo_sub_scalar_inplace`
+- `homo_mul_scalar`, `homo_mul_scalar_inplace`, `homo_mul_scalar_rescale`
 - `homo_mul_relin_rescale_postop`
 - `homo_mul_relin_rescale_add_scalar`
 - `homo_mul_relin_rescale_add_pt`
 
-### Plaintext And Scalar Arithmetic
+### Rotation and grouped operations
 
-- `homo_add_pt`
-- `homo_add_pt_inplace`
-- `homo_mul_pt`
-- `homo_mul_pt_inplace`
-- `homo_add_scalar_double`
-- `homo_add_scalar_double_inplace`
-- `homo_add_scalar_int`
-- `homo_add_scalar_int_inplace`
-- `homo_sub_scalar_int`
-- `homo_sub_scalar_int_inplace`
-- `homo_mul_scalar_double`
-- `homo_mul_scalar_double_inplace`
-- `homo_mul_scalar_int`
-- `homo_mul_scalar_int_inplace`
-
-### Rotation And Shape
-
-- `homo_rotate`
-- `homo_rotate_add`
-- `fast_rotate`
-- `hoisted_mac_sum`
-- `giant_rotate_sum`
-- `HOIST_NORMAL`
-- `HOIST_EXT_NORMAL`
-- `HOIST_EXT_DOUBLE_HOIST`
-- `moddown_from_ext`
-- `grouped_pairwise_mac`
+- `homo_rotate`, `homo_rotate_add`
+- `fast_rotate`, `moddown_from_ext`
+- `grouped_pairwise_mac`, `grouped_pairwise_mac_rescale`
 - `grouped_scalar_weighted_acc`
-- `expand_slots`
-- `fold_slots`
+- `giant_rotate_sum`
+- `hoisted_mac_sum`, `hoisted_mac_sum_rescale`
+- `sum_cipher_batch`
 
-### Manual Level Control
+Hoist strategies are the strings `normal`, `ext_normal`, and
+`ext_double_hoist`; public `HOIST_*` constants do not exist.
 
-- `align_to`
-- `reduce_noise_to_one`
+### Shape and batching
 
-## 2. Expert Public
+- `expand_slots`, `fold_slots`
+- `pack_cipher_batch`, `unpack_cipher_batch`
 
-These APIs are allowed for bootstrapping, examples, benchmarks, and advanced
-manual pipelines, but should not be presented as the default user surface.
-
-### Bootstrapping Packages
-
-`easyfhe.bs.openfhe`:
+## Expert `easyfhe.bs.openfhe` API
 
 - `BootstrapSpec`
 - `BootstrapRequirements`
@@ -105,235 +67,31 @@ manual pipelines, but should not be presented as the default user surface.
 - `bootstrap`
 - `describe_plan`
 
-Notes:
+`BootstrapProgram` owns the generated constants, transform plan, raise target,
+mode, and exact output `CipherState`.
 
-- `requirements(...)` derives context depth and rotation keys from one or more
-  `BootstrapSpec` values.
-- `generate(...)` returns a context-bound `BootstrapProgram`.
-- `bootstrap(...)` returns the exact `program.output_state`, with
-  `noise_deg == 1`.
-- `describe_plan(...)` returns a readable bootstrapping plan summary for
-  debugging.
-- `generate_bootstrap_constants`, `bootstrap_depth`, `bootstrap_approx_depth`,
-  and `required_rotations` are implementation/setup helpers, not package-root
-  public API.
+## Internal Python
 
-## 3. Internal Python
+The following categories are intentionally not package-root API:
 
-These should be importable by implementation code, but not documented for user
-or benchmark code. The main cleanup goal is to keep these out of package-level
-`__all__`.
+- stage encoders: `PreparedPlaintext`, `encode_stage1`,
+  `encode_stage1_packed`, `encode_stage2`;
+- validation and planning helpers under `easyfhe.fhe.ops`;
+- primitive operations beginning with `_cipher_`;
+- kernel wrappers beginning with `cv_` or `cipher_`;
+- key-generation material builders and native samplers;
+- OpenFHE generation/runtime modules and their transform schedules;
+- direct mod-up, key-switch, automorphism-map, and modulus-raise helpers.
 
-### FHE Kernel Wrappers
+Internal names can change without a compatibility alias. Applications and
+examples should import only the two public roots.
 
-Module: `easyfhe.fhe.ops.kernels`.
+## Native private
 
-- `gen_scalar_tensor`
-- `cv_neg`
-- `cv_add`
-- `cv_sub`
-- `cv_mul`
-- `cv_add_scalar`
-- `cv_sub_scalar`
-- `cv_mul_scalar`
-- `cv_modup`
-- `cv_moddown`
-- `cv_innerproduct_broadcast`
-- `cv_innerproduct_pairwise`
-- `cv_finalize_fast_rotation_ext`
-- `cv_finalize_fast_rotation_q`
-- `cv_keyswitch`
-- `cv_hrot`
-- `cv_hmul_relin_rescale`
-- `cv_rescale_one_level`
-- `cv_mul_by_monomial`
-- `cipher_grouped_pairwise_mac`
-- `cipher_grouped_scalar_weighted_acc`
+ATen functions such as modular arithmetic, paired ciphertext kernels,
+keyswitch/rotation kernels, encoding, encryption, rescale, modulus raise, and
+grouped accumulation are private implementation entry points. Calls belong in
+`easyfhe.fhe.ops.kernels` (native key sampling is the one sampler exception),
+not in application, bootstrap, or example code.
 
-### FHE Primitive Helpers
-
-Module: `easyfhe.fhe.ops.primitives`.
-
-- `_scalar_tensor`
-- `_all_cuda`
-- `_can_fuse_pairwise`
-- `_assign_out`
-- `_component_shape`
-- `_can_write_out`
-- `_metadata_like`
-- `_finish_out`
-- `_cipher_add`
-- `_cipher_sub`
-- `_cipher_add_plain`
-- `_cipher_mul_plain`
-- `_cipher_mul`
-- `_cipher_add_scalar`
-- `_cipher_sub_scalar`
-- `_cipher_mul_scalar_double`
-- `_cipher_mul_scalar_int`
-- `_cipher_neg`
-
-### Validation, Runtime, Material, And Fixture Internals
-
-- `pack_cipher_batch`
-- `unpack_cipher_batch`
-- `cipher_batch_item`
-- `validate_cipher_op`
-- `validate_binary_cipher_op`
-- `validate_cipher_plain_op`
-- `validate_matching_metadata`
-- `PreparedPlaintext`
-- `Plaintext`
-- `rescale_one_level`
-- `plan_add_alignment`
-- `plan_mul_alignment`
-- `encode_stage1`
-- `encode_stage2`
-- `Client`
-- `ContextMaterialBuilder`
-- `CkksSamplerConfig`
-- `NativeClientMaterial`
-- `NativeContextBundle`
-- `NativeServerMaterial`
-- `sample_native_client_server`
-- `sample_native_context`
-- `sample_native_rotation_keys`
-- `split_native_client_server`
-- `_decrypt_phase`
-- `mod_inverse`
-- `generate_bootstrap_constants`
-- `bootstrap_depth`
-- `bootstrap_approx_depth`
-- `required_rotations`
-
-### Bootstrap Internals
-
-Modules:
-
-- `easyfhe.bs.openfhe.runtime.bootstrap`
-- `easyfhe.bs.openfhe.runtime.approx`
-- `easyfhe.bs.openfhe.generation.constants`
-- `easyfhe.bs.openfhe.generation.plan`
-- `easyfhe.bs.openfhe.generation.precompute`
-- `easyfhe.bs.openfhe.generation.requirements`
-- `easyfhe.bs.openfhe.generation.rotations`
-
-Names:
-
-- `eval_bootstrapping_chebyshev`
-- `apply_double_angle_iterations`
-- `eval_bootstrap_approx_mod`
-- `ChebyshevPSNode`
-- `BootstrapApproxPlan`
-- `FlatPSSmallSpec`
-- `FlatPSCombineSpec`
-- `FlatPSPlan`
-- `degree`
-- `long_division_chebyshev`
-- `compile_flat_ps_plan`
-- `get_bootstrap_approx_plan`
-- `BootstrapTransformStep`
-- `BootstrapTransformPlan`
-- `CKKS_Boot_Params`
-- `round_half_away_from_zero`
-- `BootstrapPrecompute`
-- `BootstrapFFTParams`
-- `BootstrapTransformSchedule`
-- `reduce_rotation`
-- `select_layers`
-- `collapsed_fft_params`
-- `bootstrap_transform_schedule`
-- `bootstrap_required_rotations`
-- `coeffs_slots_conversion`
-- `eval_coeffs_to_slots`
-- `eval_slots_to_coeffs`
-- `eval_bootstrap`
-- `homo_bootstrap`
-
-## 4. Native Private
-
-These are ATen/native entry points. They should be called through Python wrappers
-only. User code, bootstrapping code, and examples should not call them directly.
-
-### Sampling And Encoding
-
-- `torch.fhe_native_sample_ckks`
-- `torch.fhe_native_sample_rotation_keys`
-- `torch.encode`
-- `torch.encrypt`
-- `torch.pre_encode`
-
-### Basic Modular Ops
-
-- `torch.neg_mod`
-- `torch.neg_mod_`
-- `torch.add_mod`
-- `torch.add_mod_`
-- `torch.sub_mod`
-- `torch.sub_mod_`
-- `torch.mul_mod`
-- `torch.mul_mod_`
-- `torch.add_scalar_mod`
-- `torch.add_scalar_mod_`
-- `torch.sub_scalar_mod`
-- `torch.sub_scalar_mod_`
-- `torch.mul_scalar_mod`
-- `torch.mul_scalar_mod_`
-
-### Fused Two-Component Ops
-
-- `torch.cv_add_pair`
-- `torch.cv_add_pair_`
-- `torch.cv_sub_pair`
-- `torch.cv_sub_pair_`
-- `torch.cv_mul_pt_pair`
-- `torch.cv_mul_pt_pair_`
-- `torch.cv_mul_scalar_pair`
-- `torch.cv_mul_scalar_pair_`
-- `torch.mul_pt_broadcast`
-- `torch.mul_pt_pairwise`
-- `torch.add_pt_broadcast`
-- `torch.add_pt_pairwise`
-
-### Keyswitch, Rotation, Modup, Moddown
-
-- `torch.modup`
-- `torch.moddown`
-- `torch.moddown_write`
-- `torch.innerproduct`
-- `torch.innerproduct_write`
-- `torch.innerproduct_write_pair`
-- `torch.innerproduct_broadcast_cipher`
-- `torch.innerproduct_broadcast_cipher_pair`
-- `torch.rescale_one_level`
-- `torch.fast_rotate_ext_batch_finalize`
-- `torch.fast_rotate_ext_batch_finalize_compact`
-- `torch.fast_rotate_ext_batch_finalize_pair`
-- `torch.fast_rotate_batch_finalize`
-- `torch.fast_rotate_batch_finalize_compact`
-- `torch.hrot`
-- `torch.mod_raise`
-- `torch.extend_ciphertext`
-- `torch.mul_by_monomial`
-- `torch.mul_by_monomial_`
-- `torch.mul_by_monomial.out`
-
-### Multiply And Fused Accumulation
-
-- `torch.hmul_relin_rescale`
-- `torch.batched_pairwise_mac`
-- `torch.grouped_scalar_weighted_acc`
-- `torch.cpmul_broadcast_pt`
-
-## Cleanup Implications
-
-- `easyfhe.fhe.__all__` should become the stable public list only.
-- `easyfhe.fhe.ops.__all__` may mirror the stable operation list for backward
-  compatibility, but `easyfhe.fhe.__all__` is the canonical stable surface.
-- OpenFHE bootstrapping package `__all__` should stay small:
-  `BootstrapSpec`, `BootstrapRequirements`, `BootstrapProgram`, `requirements`,
-  `generate`, `bootstrap`, and `describe_plan`.
-- `ops.kernels`, `ops.primitives`, and `bs.openfhe.*` internals should be treated as
-  unstable implementation modules.
-- Native `torch.*` FHE ops should be documented only in native/kernel developer
-  notes, not in user-facing API docs.
+Boundary tests enforce this ownership split and the package-root allowlists.

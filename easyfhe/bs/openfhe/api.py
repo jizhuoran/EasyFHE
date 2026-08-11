@@ -74,7 +74,7 @@ def generate(crypto_context, spec: BootstrapSpec):
         raise_to_limbs=raise_to_limbs,
         output_state=CipherState(
             cur_limbs=output_limbs,
-            noise_deg=1,
+            scale_degree=1,
             scaling_factor=float(crypto_context.scale_at(raise_to_limbs)),
         ),
     )

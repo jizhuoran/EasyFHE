@@ -19,8 +19,8 @@ def eval_mod_full(encoded, crypto_context, bootstrap_constants, bootstrap_plan, 
     real = arithmetic.homo_add(encoded, conjugate, crypto_context)
     imag = mul_by_monomial_inplace(imag, 3 * crypto_context.M // 4, crypto_context)
 
-    real = alignment.reduce_noise_to_one(real, crypto_context)
-    imag = alignment.reduce_noise_to_one(imag, crypto_context)
+    real = alignment.normalize_scale(real, crypto_context)
+    imag = alignment.normalize_scale(imag, crypto_context)
 
     real = bootstrap_approx.eval_bootstrap_approx_mod(real, crypto_context, bootstrap_constants, bootstrap_plan)
     imag = bootstrap_approx.eval_bootstrap_approx_mod(imag, crypto_context, bootstrap_constants, bootstrap_plan)
@@ -33,7 +33,7 @@ def eval_mod_full(encoded, crypto_context, bootstrap_constants, bootstrap_plan, 
         bootstrap_constants,
         raise_to_limbs=raise_to_limbs,
     )
-    return alignment.reduce_noise_to_one(encoded, crypto_context)
+    return alignment.normalize_scale(encoded, crypto_context)
 
 
 def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan, *, raise_to_limbs):
@@ -43,7 +43,7 @@ def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan
         crypto_context,
         addend=encoded,
     )
-    encoded = alignment.reduce_noise_to_one(encoded, crypto_context)
+    encoded = alignment.normalize_scale(encoded, crypto_context)
     encoded = bootstrap_approx.eval_bootstrap_approx_mod(
         encoded,
         crypto_context,
@@ -56,4 +56,4 @@ def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan
         bootstrap_constants,
         raise_to_limbs=raise_to_limbs,
     )
-    return alignment.reduce_noise_to_one(encoded, crypto_context)
+    return alignment.normalize_scale(encoded, crypto_context)
