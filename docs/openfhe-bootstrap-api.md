@@ -184,5 +184,5 @@ should not depend on the private runtime-plan fields.
 ## u64 level semantics
 
 The current frontend uses one physical u64 Q prime per limb. Every rescale
-drops exactly one prime. Bootstrap never exposes H/L rails, composite limbs,
-drop counts, or backend-width switches in its public API.
+drops exactly one prime. Transform schedules and raise details remain owned by
+the context-bound bootstrap program.

@@ -15,9 +15,7 @@ This frontend represents each Q prime as one physical u64 limb. Consequently:
 
 - `CipherState.cur_limbs` is the number of active Q primes;
 - `CipherState.scale_degree` records CKKS scale degree;
-- every `rescale(...)` drops one Q prime and one scale degree;
-- no H/L rail, backend-width, composite-limb, or public drop-count setting is
-  needed.
+- every `rescale(...)` drops one Q prime and one scale degree.
 
 ## Context and client
 
@@ -190,11 +188,16 @@ fhe.homo_add_inplace(a, b, context)
 fhe.homo_sub(a, b, context)
 fhe.homo_sub_inplace(a, b, context)
 fhe.homo_mul_no_relin(a, b, context)
+fhe.homo_relinearize(product, context)
 fhe.homo_mul_relin(a, b, context)
+fhe.homo_mul_i(cipher, context, negative=False)
 ```
 
-`homo_mul_no_relin` returns a three-component product. `homo_mul_relin`
-relinearizes to two components. Neither operation rescales.
+`homo_mul_no_relin` returns a three-component product.
+`homo_relinearize` converts such a product to two components, while
+`homo_mul_relin` performs multiplication and relinearization together.
+`homo_mul_i` multiplies packed complex slots by `i` (or `-i`). None of these
+operations rescales.
 
 ### Plaintext operations
 
@@ -290,21 +293,6 @@ total = fhe.sum_cipher_batch(batch, context)
 `expand_slots` changes metadata only. `fold_slots` multiplies by an explicit
 source-slot mask and folds rotations. Batching requires compatible state,
 slots, component count, and domain metadata.
-
-## Migration from the older API
-
-| Older form | Current form |
-|---|---|
-| `noise_deg` | `scale_degree` |
-| `reduce_noise_to_one` / `reduce_level_to_one` | `normalize_scale` |
-| `rescale_one_level` | `rescale` |
-| raw scalar residue tensor | `EncodedScalar` |
-| `homo_*_scalar_int/double` | typed `homo_*_scalar` |
-| positional constant level/scale arguments | `plaintext(..., state=..., slots=..., context=...)` |
-| `mode="int"` / `mode="double"` | `mode="integer"` / `mode="scaled"` |
-| `HOIST_*` constants | strategy strings |
-| public stage1/stage2 encoding | `PackedRaw` plus `ConstantBundle` |
-| separate bootstrap constants and plan | context-bound `BootstrapProgram` |
 
 See [OpenFHE bootstrap API](openfhe-bootstrap-api.md) for bootstrap planning and
 execution.

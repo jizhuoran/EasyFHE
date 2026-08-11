@@ -80,8 +80,10 @@ kernel = weights.plaintext(
 ```
 
 Plaintext state is explicit. For multiplication, use a normalized
-`scale_degree=1` state at the ciphertext's limb count and scale. For addition,
-use the exact output state that will receive the constant.
+`scale_degree=1` state at the ciphertext's limb count. In fixed mode its scale
+is normally `context.scale_at(cur_limbs)`, including when the ciphertext is an
+unrelinearized pending product with `scale_degree > 1`. For addition, use the
+exact output state that will receive the constant.
 
 Scalar encoding also returns a typed value with metadata:
 
@@ -126,7 +128,9 @@ bundle.set_plain_cache_policy(policy)
 fhe.homo_add(a, b, context)
 fhe.homo_sub(a, b, context)
 fhe.homo_mul_no_relin(a, b, context)
+fhe.homo_relinearize(product, context)
 fhe.homo_mul_relin(a, b, context)
+fhe.homo_mul_i(cipher, context, negative=False)
 
 fhe.homo_add_pt(cipher, plaintext, context)
 fhe.homo_mul_pt(cipher, plaintext, context)
@@ -224,9 +228,9 @@ program = bs.generate(context, spec)
 bootstrapped = bs.bootstrap(cipher, context, program)
 ```
 
-The program owns constants, C2S/S2C schedules, the raise target, runtime mode,
-and output state. Applications do not select transform limb layouts, H/L rails,
-drop counts, or runtime overrides.
+The program owns constants, transform schedules, the raise target, runtime
+mode, and output state. Applications do not supply those internal runtime
+details.
 
 See [FHE API](fhe-api.md) and
 [OpenFHE bootstrap API](openfhe-bootstrap-api.md) for the complete contracts.

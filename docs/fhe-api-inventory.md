@@ -29,7 +29,7 @@ The ownership split is:
 
 - `homo_add`, `homo_add_inplace`
 - `homo_sub`, `homo_sub_inplace`
-- `homo_mul_no_relin`, `homo_mul_relin`
+- `homo_mul_no_relin`, `homo_relinearize`, `homo_mul_relin`, `homo_mul_i`
 - `homo_add_pt`, `homo_add_pt_inplace`
 - `homo_mul_pt`, `homo_mul_pt_inplace`, `homo_mul_pt_rescale`
 - `homo_add_scalar`, `homo_add_scalar_inplace`

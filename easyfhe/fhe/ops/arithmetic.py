@@ -209,6 +209,45 @@ def homo_mul_no_relin(in0, in1, context):
     return _cipher_mul(in0, in1, context)
 
 
+def homo_relinearize(cipher, context):
+    """Relinearize a three-component ciphertext without rescaling it."""
+    validation.validate_cipher_op(
+        "homo_relinearize",
+        cipher,
+        require_ext=False,
+        require_components=3,
+    )
+    key_switched = F.cv_keyswitch(
+        cipher.cv[2],
+        cipher.state.cur_limbs,
+        context.L,
+        context.mult_swk_bx,
+        context.mult_swk_ax,
+        context,
+    )
+    return cipher.cipher_like(
+        [
+            F.cv_add(cipher.cv[0], key_switched[0], context.moduliQ, cipher.state.cur_limbs),
+            F.cv_add(cipher.cv[1], key_switched[1], context.moduliQ, cipher.state.cur_limbs),
+        ]
+    )
+
+
+def homo_mul_i(cipher, context, *, negative=False):
+    """Multiply every packed CKKS slot by ``i`` or ``-i`` without rescaling."""
+    validation.validate_cipher_op("homo_mul_i", cipher, require_ext=False)
+    monomial_degree = (3 if negative else 1) * int(context.M) // 4
+    result = cipher.deep_copy()
+    for component in result.cv:
+        F.cv_mul_by_monomial(
+            component,
+            l=result.state.cur_limbs,
+            monomialDeg=monomial_degree,
+            context=context,
+        )
+    return result
+
+
 def homo_add_pt(cipher: Cipher, plaintext: Plaintext, context):
     validation.validate_cipher_plain_op(
         "homo_add_pt",
@@ -237,7 +276,7 @@ def homo_mul_pt(cipher: Cipher, plaintext: Plaintext, context):
         "homo_mul_pt",
         cipher,
         plaintext,
-        require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
+        require_same_metadata=("cur_limbs", "slots"),
     )
     return _cipher_mul_plain(cipher, plaintext, context)
 
@@ -250,7 +289,7 @@ def homo_mul_pt_inplace(cipher: Cipher, plaintext: Plaintext, context):
         "homo_mul_pt_inplace",
         cipher,
         plaintext,
-        require_same_metadata=("cur_limbs", "scaling_factor", "slots"),
+        require_same_metadata=("cur_limbs", "slots"),
     )
     return _cipher_mul_plain_inplace(cipher, plaintext, context)
 

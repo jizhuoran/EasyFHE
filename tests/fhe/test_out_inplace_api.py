@@ -285,6 +285,54 @@ def test_homo_mul_no_relin_requires_matching_batch_size():
         fhe.homo_mul_no_relin(left, right, ctx)
 
 
+def test_homo_relinearize_exposes_standalone_public_step(monkeypatch):
+    triplet = Cipher(["c0", "c1", "c2"], CipherState(3, 2, 5.0), 8, False)
+    ctx = SimpleNamespace(
+        L=5,
+        mult_swk_bx="bx",
+        mult_swk_ax="ax",
+        moduliQ="q",
+    )
+    monkeypatch.setattr(arithmetic.F, "cv_keyswitch", lambda *args: ("ks0", "ks1"))
+    monkeypatch.setattr(
+        arithmetic.F,
+        "cv_add",
+        lambda left, right, modulus, cur_limbs: f"add({left},{right},{cur_limbs})",
+    )
+
+    result = fhe.homo_relinearize(triplet, ctx)
+
+    assert result.cv == ["add(c0,ks0,3)", "add(c1,ks1,3)"]
+    assert result.state == triplet.state
+
+
+def test_homo_relinearize_requires_triplet():
+    with pytest.raises(ValueError, match="expected 3 components"):
+        fhe.homo_relinearize(_cipher("cipher"), SimpleNamespace())
+
+
+def test_homo_mul_i_uses_ckks_quarter_monomial(monkeypatch):
+    calls = []
+    cipher = Cipher(
+        [torch.zeros((3, 4), dtype=torch.uint64), torch.ones((3, 4), dtype=torch.uint64)],
+        CipherState(3, 1, 2.0),
+        slots=8,
+        is_ext=False,
+    )
+    monkeypatch.setattr(
+        arithmetic.F,
+        "cv_mul_by_monomial",
+        lambda component, l, monomialDeg, context: calls.append((component, l, monomialDeg)),
+    )
+    ctx = SimpleNamespace(M=128)
+
+    result = fhe.homo_mul_i(cipher, ctx, negative=True)
+
+    assert result is not cipher
+    assert result.state == cipher.state
+    assert calls == [(result.cv[0], 3, 96), (result.cv[1], 3, 96)]
+
+
 def test_homo_mul_pt_supports_triplets(monkeypatch):
     calls = []
 
@@ -307,6 +355,22 @@ def test_homo_mul_pt_supports_triplets(monkeypatch):
         ("c1", "p", 3, False),
         ("c2", "p", 3, False),
     ]
+
+
+def test_fixed_homo_mul_pt_tracks_different_input_scales(monkeypatch):
+    monkeypatch.setattr(
+        primitives.F,
+        "cv_mul",
+        lambda component, plaintext, modulus, mu, cur_limbs, inplace=False: f"mul({component})",
+    )
+    ctx = SimpleNamespace(scale_mode="fixed", K=0, moduliQ="q", q_mu="mu")
+    cipher = _cipher("cipher", scaling_factor=8.0, scale_degree=2)
+    plain = Cipher(["plain"], CipherState(3, 1, 2.0), 8, False)
+
+    result = fhe.homo_mul_pt(cipher, plain, ctx)
+
+    assert result.state.scale_degree == 3
+    assert result.state.scaling_factor == 16.0
 
 
 def test_homo_mul_pt_inplace_supports_triplets(monkeypatch):
