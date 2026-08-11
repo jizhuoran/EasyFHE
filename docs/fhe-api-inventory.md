@@ -97,20 +97,20 @@ manual pipelines, but should not be presented as the default user surface.
 
 `easyfhe.bs.openfhe`:
 
-- `depth`
-- `plan_rot_keys`
+- `BootstrapSpec`
+- `BootstrapRequirements`
+- `BootstrapProgram`
+- `requirements`
 - `generate`
 - `bootstrap`
 - `describe_plan`
-- `BootstrapPlan`
 
 Notes:
 
-- `depth(...)` is the public name for `bootstrap_depth(...)`; keep one name at
-  package root.
-- `generate(...)` wraps constant generation and returns
-  `(constants, plan)`.
-- `bootstrap(...)` calls the runtime and currently returns a cipher reduced to
+- `requirements(...)` derives context depth and rotation keys from one or more
+  `BootstrapSpec` values.
+- `generate(...)` returns a context-bound `BootstrapProgram`.
+- `bootstrap(...)` returns the exact `program.output_state`, with
   `noise_deg == 1`.
 - `describe_plan(...)` returns a readable bootstrapping plan summary for
   debugging.
@@ -330,8 +330,9 @@ only. User code, bootstrapping code, and examples should not call them directly.
 - `easyfhe.fhe.__all__` should become the stable public list only.
 - `easyfhe.fhe.ops.__all__` may mirror the stable operation list for backward
   compatibility, but `easyfhe.fhe.__all__` is the canonical stable surface.
-- OpenFHE bootstrapping package `__all__` should stay small: `BootstrapPlan`,
-  `bootstrap`, `depth`, `describe_plan`, `generate`, `plan_rot_keys`.
+- OpenFHE bootstrapping package `__all__` should stay small:
+  `BootstrapSpec`, `BootstrapRequirements`, `BootstrapProgram`, `requirements`,
+  `generate`, `bootstrap`, and `describe_plan`.
 - `ops.kernels`, `ops.primitives`, and `bs.openfhe.*` internals should be treated as
   unstable implementation modules.
 - Native `torch.*` FHE ops should be documented only in native/kernel developer

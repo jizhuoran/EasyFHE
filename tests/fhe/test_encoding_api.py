@@ -233,27 +233,33 @@ def test_encode_stage2_rejects_inconsistent_level_and_cur_limbs():
 
 
 def test_client_encrypt_decrypt_roundtrip_cpu():
-    client, _ = fhe.generate_client_context(
+    client, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
         device="cpu",
     )
     values = np.asarray([0.125, -0.25, 0.5, 1.0], dtype=np.double)
-    cipher = client.encrypt(values, device="cpu", level=0, slots=8)
+    cipher = client.encrypt(values, slots=8)
     decoded = client.decrypt(cipher).cpu().numpy()
 
+    assert client.default_device == "cpu"
+    assert client._context_for("cpu") is ctx
+    assert cipher.state == fhe.CipherState(ctx.max_limbs, 1, ctx.scale_at(ctx.max_limbs))
     np.testing.assert_allclose(decoded[: values.size], values, rtol=1e-4, atol=1e-4)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA decrypt/decode requires CUDA")
 def test_client_encrypt_decrypt_roundtrip_cuda():
-    client, _ = fhe.generate_client_context(
+    client, ctx = fhe.generate_client_context(
         fhe.CKKSContextSpec(depth=3, log_n=14, dnum=1, dcrt_bits=30, first_mod=35),
         device="cuda",
     )
     values = np.asarray([0.125, -0.25, 0.5, 1.0], dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", level=0, slots=8)
+    cipher = client.encrypt(values, slots=8)
     decoded = client.decrypt(cipher).cpu().numpy()
 
+    assert client.default_device == "cuda"
+    assert client._context_for("cuda") is ctx
+    assert cipher.cv[0].is_cuda
     np.testing.assert_allclose(decoded[: values.size], values, rtol=1e-4, atol=1e-4)
 
 

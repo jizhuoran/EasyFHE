@@ -47,11 +47,8 @@ def eval_bootstrap_stc_first(
     cryptoContext,
     bootstrap_constants,
     bootstrap_plan,
-    L0,
-    *,
-    active_l0=None,
+    raise_to_limbs,
 ):
-    active_l0 = int(L0 if active_l0 is None else active_l0)
     slots = bootstrap_plan.slots
     sparse = slots != cryptoContext.M // 4
     ciphertext = _drop_to_stc_start(ciphertext, cryptoContext, bootstrap_plan)
@@ -65,8 +62,7 @@ def eval_bootstrap_stc_first(
         decoded,
         cryptoContext,
         bootstrap_constants,
-        L0,
-        active_l0=active_l0,
+        raise_to_limbs,
     )
     if sparse:
         raised = _replicate_sparse_slots(raised, slots, cryptoContext)
@@ -78,7 +74,7 @@ def eval_bootstrap_stc_first(
             cryptoContext,
             bootstrap_constants,
             bootstrap_plan,
-            active_l0=active_l0,
+            raise_to_limbs=raise_to_limbs,
         )
     else:
         encoded = eval_mod_full(
@@ -86,7 +82,7 @@ def eval_bootstrap_stc_first(
             cryptoContext,
             bootstrap_constants,
             bootstrap_plan,
-            active_l0=active_l0,
+            raise_to_limbs=raise_to_limbs,
         )
 
     encoded = scale_to_original_message(encoded, cryptoContext, bootstrap_constants)

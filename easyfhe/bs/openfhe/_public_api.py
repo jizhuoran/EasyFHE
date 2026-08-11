@@ -1,10 +1,11 @@
 CORE_API = (
-    "BootstrapPlan",
+    "BootstrapProgram",
+    "BootstrapRequirements",
+    "BootstrapSpec",
     "bootstrap",
     "describe_plan",
-    "depth",
     "generate",
-    "plan_rot_keys",
+    "requirements",
 )
 
 PUBLIC_API = (

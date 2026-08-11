@@ -158,15 +158,6 @@ class PrimeChainPlan:
     def dcrt_bit(self):
         return int(self.dcrt_bits[-1])
 
-    @property
-    def first_mod_limb_count(self):
-        return 1
-
-    @property
-    def rescale_limb_count(self):
-        return 1
-
-
 def plan_prime_chain(*, limb_specs: Sequence[int], exact_q_primes: Optional[Sequence[int]] = None):
     """Normalize an explicit u64 Q-chain description without sampling it."""
     if not limb_specs:
@@ -198,10 +189,12 @@ def generate_client_context(spec: CKKSContextSpec, device="cpu"):
     client_material, server_material = _sample_material(spec)
     client = Client(
         client_material,
+        default_device=device,
         auto_load_keys=spec.auto_load_keys,
         rotation_key_limb_limits=spec.rotation_key_limb_limits,
     )
     context = _build_context(server_material, spec, device=device)
+    client._bind_context(context)
     return client, context
 
 
@@ -247,19 +240,6 @@ def _build_context(server_material: NativeServerMaterial, spec: CKKSContextSpec,
         device,
         auto_load_keys=spec.auto_load_keys,
         rotation_key_limb_limits=spec.rotation_key_limb_limits,
-        native_context_gen=True,
-        generation_metadata={
-            "depth": int(server_material.depth),
-            "logN": int(server_material.log_n),
-            "dnum": int(server_material.dnum),
-            "dcrtBits": int(server_material.dcrt_bits),
-            "qPrimeBits": tuple(int(bit) for bit in server_material.q_prime_bits),
-            "firstMod": int(server_material.special_mod),
-            "secretKeyDist": server_material.secret_key_dist,
-            "scaleMode": server_material.scale_mode,
-            "rescalePolicy": server_material.rescale_policy,
-            "exactQPrimes": None if spec.exact_q_primes is None else tuple(spec.exact_q_primes),
-        },
         roots_q=server_material.roots_q,
         roots_p=server_material.roots_p,
     )

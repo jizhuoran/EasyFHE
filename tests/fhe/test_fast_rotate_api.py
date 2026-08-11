@@ -161,7 +161,7 @@ def test_fast_rotate_ext_mac_can_defer_moddown_once():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
     plaintext_values = [
         np.full(slots, 0.01 * (idx + 1), dtype=np.double)
         for idx in range(len(offsets))
@@ -206,7 +206,7 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
         "cuda",
     )
     values = np.linspace(-0.5, 0.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
     groups = [
         [np.full(slots, 0.01 * (group + 1) * (idx + 1), dtype=np.double) for idx in range(len(baby_offsets))]
         for group in range(3)
@@ -241,7 +241,7 @@ def test_hoisted_mac_sum_ext_double_uses_giant_step_offsets():
         "cuda",
     )
     values = np.linspace(-0.75, 0.75, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
     groups = [
         [np.full(slots, 0.01 * (group + 1) * (idx + 1), dtype=np.double) for idx in range(len(baby_offsets))]
         for group in range(group_count)
@@ -273,7 +273,7 @@ def test_fast_rotate_shapes_match_offsets():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
 
     normal_batch = fhe.fast_rotate(cipher, offsets, context)
     ext_batch = fhe.fast_rotate(cipher, offsets, context, output_ext=True)
@@ -300,7 +300,7 @@ def test_fast_rotate_rejects_all_zero_offsets():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
 
     with pytest.raises(ValueError, match="at least one nonzero offset"):
         fhe.fast_rotate(cipher, [0, 0], context)
@@ -320,7 +320,7 @@ def test_giant_rotate_sum_rejects_zero_offset():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
 
     with pytest.raises(ValueError, match="offset must be nonzero"):
         fhe.giant_rotate_sum((cipher,), 0, context, strategy=fhe.HOIST_NORMAL)
@@ -340,7 +340,7 @@ def test_giant_rotate_sum_requires_batched_cipher():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
 
     with pytest.raises(TypeError, match="expected a batched Cipher"):
         fhe.giant_rotate_sum((cipher,), 1, context, strategy=fhe.HOIST_NORMAL)
@@ -360,7 +360,7 @@ def test_giant_rotate_sum_requires_multiple_cipher_batch():
         "cuda",
     )
     values = np.linspace(0.0, 1.5, slots, dtype=np.double)
-    cipher = client.encrypt(values, device="cuda", scale_deg=1, level=0, slots=slots)
+    cipher = client.encrypt(values, slots=slots)
     batched = cipher.cipher_like(cipher.cv, batch_size=1)
 
     with pytest.raises(ValueError, match="batch_size > 1"):

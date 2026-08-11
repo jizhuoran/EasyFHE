@@ -26,10 +26,9 @@ context-helper style to the current public `easyfhe.fhe` surface.
 | `plain_cache_limit_gb` with `plain`, `middle`, or `both` | Use `plain_cache_limit_gb` only with `mix_of_middle_plain` | `plain`, `middle`, and `both` allocate until memory is exhausted. |
 | `fhe.RuntimeOptions(...)` | fields on `fhe.CKKSContextSpec(...)` | Use `auto_load_keys`, `rotation_random_mode`, and `rotation_key_limb_limits` on the spec. |
 | `fhe.generate_context(spec, options=...)` | `client, ctx = fhe.generate_client_context(fhe.CKKSContextSpec(...), device=...)` | Context generation now returns separate client/server-facing objects. |
-| `fhe.BootstrapSpec`, `fhe.bootstrap_depth(...)` | `easyfhe.bs.openfhe.depth(...)` | Bootstrap planning lives under the concrete bootstrap package. |
-| manual bootstrap rotation bookkeeping | `bs.plan_rot_keys(...)` before context generation | Add returned rotations to `CKKSContextSpec.rotations`. |
-| `fhe.generate_bootstrap_constants(...)` | `constants, plan = bs.generate(ctx, ...)` | Generation returns both reusable constants and the runtime plan. |
-| `fhe.homo_bootstrap(cipher, ctx, constants, L0=...)` | `bs.bootstrap(cipher, ctx, constants, plan, L0=...)` | Runtime bootstrap needs the generated plan. |
+| separate bootstrap depth and rotation calls | `bs.requirements(bs.BootstrapSpec(...), log_n=...)` | One specification derives context depth and rotation keys. |
+| separate bootstrap constants and plan | `program = bs.generate(ctx, spec)` | A context-bound program owns constants, plan, raise target, and output state. |
+| `fhe.homo_bootstrap(cipher, ctx, constants, L0=...)` | `bs.bootstrap(cipher, ctx, program)` | Runtime parameters are fixed by the program. |
 | `cipher.cur_limbs`, `cipher.noise_deg` | `cipher.state.cur_limbs`, `cipher.state.noise_deg` | Scale metadata is grouped under `CipherState`; use `cipher.state.scaling_factor` when needed. |
 | `fhe.homo_square(cipher, ctx)` | `fhe.homo_mul_relin(cipher, cipher, ctx)` | Square is not a separate public op. |
 | raw multiply followed by custom relin handling | `fhe.homo_mul_no_relin(a, b, ctx)` | Returns the unrelinearized three-component product. |
@@ -97,8 +96,8 @@ explicit = fhe.CKKSContextSpec(
 ```
 
 `fhe.plan_prime_chain(limb_specs=..., exact_q_primes=None)` validates and
-returns a `PrimeChainPlan`. On this u64 backend, `first_mod_limb_count` and
-`rescale_limb_count` are always `1`; tuple/composite limb entries are rejected.
+returns a `PrimeChainPlan`. On this u64 backend every entry is one physical
+prime and every rescale drops one prime; tuple/composite entries are rejected.
 Fixed scale mode requires all rescale-prime entries (`limb_specs[1:]`) to use
 the same bit size. Heterogeneous chains require `scale_mode="flexible"`.
 
@@ -125,17 +124,26 @@ Returns:
 Client-side encryption and decryption handle.
 
 ```python
-cipher = client.encrypt(values, device=None, scale_deg=1, level=0, slots=0)
+cipher = client.encrypt(
+    values,
+    slots=...,
+    device=None,
+    cur_limbs=None,
+    scaling_factor=None,
+)
 plain = client.decrypt(cipher)
 ```
 
 `encrypt(...)` parameters:
 
 - `values`: array-like plaintext values.
-- `device`: target ciphertext device. Defaults to CPU.
-- `scale_deg`: plaintext scale degree. Usually `1`.
-- `level`: encode level. Use `0` for a fresh ciphertext.
-- `slots`: active CKKS slot count. `0` lets encoding use its default.
+- `slots`: explicit active CKKS slot count.
+- `device`: optional target override. By default encryption uses the device
+  selected by `generate_client_context`.
+- `cur_limbs`: optional initial limb count. Defaults to `ctx.max_limbs`.
+- `scaling_factor`: optional expert scale override.
+
+Fresh u64 plaintexts and ciphertexts always have `noise_deg == 1`.
 
 `encrypt(...)` returns a `Cipher`.
 
@@ -156,6 +164,12 @@ Application-facing methods:
 ctx.construct_copy(device)
 ctx.cuda()
 ctx.cpu()
+ctx.params
+ctx.max_limbs
+ctx.ring_dim
+ctx.max_slots
+ctx.q_prime_bits
+ctx.default_scale
 ctx.scale_at(cur_limbs=None)
 ctx.big_scale_at(cur_limbs=None)
 ctx.rescale_divisor_at(drop_limb=None)
@@ -164,6 +178,9 @@ ctx.get_precompute_auto(key)
 ctx.get_inverse_precompute_auto(key)
 ```
 
+- `params` is immutable generation metadata. `max_limbs`, `ring_dim`,
+  `max_slots`, `q_prime_bits`, and `default_scale` are the stable public
+  capacity/scale properties.
 - `construct_copy(device)` returns a context copy on `device`.
 - `cuda()` / `cpu()` return a copy of the context on that device.
 - `scale_at(cur_limbs)` returns the active CKKS scale for a limb count.
@@ -287,7 +304,7 @@ bundle.set_plain_cache_policy(policy)
 `plaintext(...)` parameters:
 
 - `name`: vector constant name.
-- `level`: encoding level, usually `ctx.L - cipher.state.cur_limbs`.
+- `level`: encoding level, usually `ctx.max_limbs - cipher.state.cur_limbs`.
 - `slots`: plaintext slot count.
 - `cryptoContext`: runtime `Context`.
 - `scale`: scalar multiplier applied while preparing the vector.
@@ -589,7 +606,7 @@ spec = fhe.CKKSContextSpec(
 )
 client, ctx = fhe.generate_client_context(spec, device="cuda")
 
-cipher = client.encrypt([1.0, 2.0, 3.0, 4.0], device="cuda", slots=4)
+cipher = client.encrypt([1.0, 2.0, 3.0, 4.0], slots=4)
 constants = fhe.ConstantBundle(
     vectors={"mask": [1.0, 1.0, 0.0, 0.0]},
     scalars={"gain": 0.5},

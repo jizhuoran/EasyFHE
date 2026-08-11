@@ -38,7 +38,10 @@ form; paired/composite limb behavior is intentionally outside this API.
 
 ### OpenFHE-compatible bootstrapping workflow
 
-The `easyfhe.bs.openfhe` package provides a clean bootstrapping flow: estimate the required bootstrap depth, plan rotation keys, generate constants and execution plans, then call `bs.bootstrap(...)` at runtime. This keeps application code explicit while making bootstrapping parameters reusable and inspectable.
+The `easyfhe.bs.openfhe` package describes a bootstrap once with
+`BootstrapSpec`, derives its context/key requirements, and generates one
+context-bound `BootstrapProgram`. Constants, execution plan, raise target, and
+output state therefore cannot drift apart at runtime.
 
 ### Native CKKS material generation
 
@@ -83,26 +86,23 @@ import easyfhe.bs.openfhe as bs
 # 1. Plan the bootstrap before generating keys.
 device = "cuda"
 log_n = 16
-log_bs_slots = 12
-level_budget = (3, 3)
-post_bootstrap_levels = 6
-
-bootstrap_depth = bs.depth(
-    log_bs_slots=log_bs_slots,
-    level_budget=level_budget,
-    secret_key_dist="SPARSE_TERNARY",
-)
-bootstrap_rotations = bs.plan_rot_keys(
-    log_n=log_n,
-    log_bs_slots=log_bs_slots,
-    level_budget=level_budget,
+bootstrap_spec = bs.BootstrapSpec(
+    log_slots=12,
+    level_budget=(3, 3),
+    output_levels=6,
     strategy="double_hoist",
+    mode="modraise_first",
+)
+requirements = bs.requirements(
+    bootstrap_spec,
+    log_n=log_n,
+    secret_key_dist="SPARSE_TERNARY",
 )
 
 # 2. Generate client material and a server-side runtime context.
 client, ctx = fhe.generate_client_context(
     fhe.CKKSContextSpec(
-        depth=post_bootstrap_levels + bootstrap_depth,
+        depth=requirements.context_depth,
         log_n=log_n,
         dnum=3,
         dcrt_bits=58,
@@ -110,29 +110,21 @@ client, ctx = fhe.generate_client_context(
         secret_key_dist="SPARSE_TERNARY",
         scale_mode="fixed",
         rescale_policy="manual",
-        rotations=bootstrap_rotations,
+        rotations=requirements.rotations,
         auto_load_keys=True,
     ),
     device=device,
 )
 
-# 3. Generate bootstrapping constants and runtime plan.
-bootstrap_constants, bootstrap_plan = bs.generate(
-    ctx,
-    log_bs_slots=log_bs_slots,
-    level_budget=level_budget,
-    post_bootstrap_levels=post_bootstrap_levels,
-    strategy="double_hoist",
-)
+# 3. Bind constants and the runtime plan to this context.
+bootstrap_program = bs.generate(ctx, bootstrap_spec)
 
 # 4. Encrypt slots and run a small encrypted polynomial.
-slots = 1 << log_bs_slots
+slots = bootstrap_spec.slots
 x = client.encrypt(
     np.full(slots, 0.2, dtype=np.float64),
-    device=device,
-    scale_deg=1,
-    level=ctx.L - 6,
     slots=slots,
+    cur_limbs=6,
 )
 
 square = lambda c: fhe.homo_mul_relin_rescale_postop(c, c, ctx)
@@ -142,14 +134,7 @@ x8 = square(x4)
 x16 = square(x8)
 
 # Refresh the ciphertext before continuing with deeper computation.
-x16 = bs.bootstrap(
-    x16,
-    ctx,
-    bootstrap_constants,
-    bootstrap_plan,
-    L0=x16.state.cur_limbs,
-    bootstrap_mode="modraise_first",
-)
+x16 = bs.bootstrap(x16, ctx, bootstrap_program)
 
 x32 = square(x16)
 print(client.decrypt(x32)[:8])
@@ -174,9 +159,9 @@ The stable `easyfhe.fhe` surface includes:
 
 The OpenFHE-compatible bootstrapping surface includes:
 
-- `bs.depth(...)` for bootstrapping depth planning
-- `bs.plan_rot_keys(...)` for rotation-key planning
-- `bs.generate(...)` for constants and execution plans
+- `bs.BootstrapSpec(...)` for one reusable bootstrap configuration
+- `bs.requirements(...)` for context depth and rotation-key planning
+- `bs.generate(...)` for a context-bound `BootstrapProgram`
 - `bs.describe_plan(...)` for plan introspection
 - `bs.bootstrap(...)` for runtime bootstrapping
 
@@ -185,7 +170,7 @@ The OpenFHE-compatible bootstrapping surface includes:
 ```text
 Python applications
   ├─ easyfhe.fhe                CKKS frontend, ciphertext state, constants, ops
-  ├─ easyfhe.bs.openfhe         bootstrap depth, rotation planning, constants, runtime
+  ├─ easyfhe.bs.openfhe         bootstrap specifications, planning, programs, runtime
   └─ easyfhe tensor runtime     storage, dispatch, CUDA execution, Python bindings
         └─ ATen native FHE ops  CPU/CUDA kernels and native sampler
 ```

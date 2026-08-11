@@ -13,6 +13,20 @@ def test_context_has_no_runtime_keygen_or_client_crypto_methods():
     assert not hasattr(fhe.Context, "encrypt")
     assert not hasattr(fhe.Context, "decrypt")
 
+
+def test_context_exposes_stable_u64_capacity_properties():
+    _, ctx = fhe.generate_client_context(
+        fhe.CKKSContextSpec(depth=3, log_n=5, dnum=1, dcrt_bits=30, first_mod=35),
+        device="cpu",
+    )
+
+    assert ctx.max_limbs == 4
+    assert ctx.ring_dim == 32
+    assert ctx.max_slots == 16
+    assert ctx.q_prime_bits == (35, 30, 30, 30)
+    assert ctx.params.depth == 3
+    assert ctx.params.q_primes == tuple(int(prime) for prime in ctx.moduliQ_scalar)
+
 def test_rotation_offsets_map_to_auto_indices():
     cycl_order = 1 << 11
     assert {
@@ -68,8 +82,6 @@ def test_u64_prime_chain_plan_has_single_limb_rescale_semantics():
     assert plan.dcrt_bits == (60, 50, 49)
     assert plan.depth == 2
     assert plan.physical_limb_count == 3
-    assert plan.first_mod_limb_count == 1
-    assert plan.rescale_limb_count == 1
 
 
 def test_u64_limb_specs_reject_composite_and_fixed_heterogeneous_chains():

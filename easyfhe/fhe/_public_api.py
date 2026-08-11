@@ -12,6 +12,7 @@ CONTEXT_API = (
     "CKKSContextSpec",
     "Client",
     "Context",
+    "ContextParams",
     "PrimeChainPlan",
     "generate_client_context",
     "plan_prime_chain",

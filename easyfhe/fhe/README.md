@@ -36,15 +36,11 @@ from `easyfhe.fhe._public_api.PUBLIC_API`. Importable submodules are
 implementation details unless their symbols are re-exported by the package root.
 
 Bootstrap APIs live in concrete sibling packages such as `easyfhe.bs.openfhe`.
-New OpenFHE-compatible bootstrap code should call `bs.depth(...)` before context
-construction and add it to the application's remaining-depth budget when
-choosing `CKKSContextSpec.depth`. Applications may still provide their own depth
-directly. Call `bs.plan_rot_keys(...)` before key generation and include those
-  offsets in `CKKSContextSpec.rotations`; key generation then returns separate
-  client/server material, and `Context` is built from the server material only.
-After context construction, call `bs.generate(ctx, ...)` to generate bootstrap
-constants and a bootstrap plan, then call
-`bs.bootstrap(cipher, ctx, constants, plan, L0=...)` at runtime.
+Describe each bootstrap with `bs.BootstrapSpec(...)`, then call
+`bs.requirements(...)` before context construction. Use its `context_depth` and
+`rotations` in `CKKSContextSpec`. After context construction,
+`bs.generate(ctx, spec)` returns a context-bound program, which runs as
+`bs.bootstrap(cipher, ctx, program)`.
 
 The current frontend uses the u64 prime backend: every Q prime is one physical
 limb and every rescale removes exactly one limb. Regular chains can keep using

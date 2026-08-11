@@ -13,7 +13,7 @@ def mul_by_monomial_inplace(cipher, monomial_degree, crypto_context):
     return cipher
 
 
-def eval_mod_full(encoded, crypto_context, bootstrap_constants, bootstrap_plan, *, active_l0=None):
+def eval_mod_full(encoded, crypto_context, bootstrap_constants, bootstrap_plan, *, raise_to_limbs):
     conjugate = rotation.homo_rotate(encoded, 2 * crypto_context.N - 1, crypto_context)
     imag = arithmetic.homo_sub(encoded, conjugate, crypto_context)
     real = arithmetic.homo_add(encoded, conjugate, crypto_context)
@@ -31,12 +31,12 @@ def eval_mod_full(encoded, crypto_context, bootstrap_constants, bootstrap_plan, 
         encoded,
         crypto_context,
         bootstrap_constants,
-        active_l0=active_l0,
+        raise_to_limbs=raise_to_limbs,
     )
     return alignment.reduce_noise_to_one(encoded, crypto_context)
 
 
-def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan, *, active_l0=None):
+def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan, *, raise_to_limbs):
     encoded = rotation.homo_rotate_add(
         encoded,
         2 * crypto_context.N - 1,
@@ -54,6 +54,6 @@ def eval_mod_sparse(encoded, crypto_context, bootstrap_constants, bootstrap_plan
         encoded,
         crypto_context,
         bootstrap_constants,
-        active_l0=active_l0,
+        raise_to_limbs=raise_to_limbs,
     )
     return alignment.reduce_noise_to_one(encoded, crypto_context)

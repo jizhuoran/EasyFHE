@@ -7,13 +7,21 @@ import math
 import numpy as np
 import easyfhe as torch
 
-from .ciphertext import Cipher, CipherState
+from .ciphertext import Cipher
 from .ops import kernels as F
 from .ops.encoding import encode_stage1, encode_stage2
 
 
 class Client:
-    def __init__(self, material, *, auto_load_keys=None, rotation_key_limb_limits=None):
+    def __init__(
+        self,
+        material,
+        *,
+        default_device="cpu",
+        auto_load_keys=None,
+        rotation_key_limb_limits=None,
+    ):
+        self.default_device = _validate_client_device(default_device)
         self.auto_load_keys = auto_load_keys
         self.rotation_key_limb_limits = dict(rotation_key_limb_limits or {})
         self._contexts = {}
@@ -57,21 +65,20 @@ class Client:
             roots_q=self.roots_q,
         )
 
-    def encrypt(self, x, *, device=None, scale_deg=1, level=0, slots=0, scaling_factor=None, cur_limbs=None):
-        device = device or "cpu"
+    def encrypt(self, x, *, slots, device=None, scaling_factor=None, cur_limbs=None):
+        device = self.default_device if device is None else _validate_client_device(device)
         context = self._context_for(device)
         if not isinstance(x, np.ndarray):
             x = np.asarray(x)
         ptx = encode_stage2(
             encode_stage1(x, slots, cryptoContext=context),
-            level=level,
+            level=0,
             slots=slots,
             is_ext=False,
             cryptoContext=context,
             scaling_factor=scaling_factor,
             cur_limbs=cur_limbs,
         )
-        ptx = _raise_plaintext_scale_degree(ptx, scale_deg, context)
         cur_limbs = ptx.state.cur_limbs
         pk0, pk1 = self._public_key_for_device(ptx.cv[0].device, cur_limbs)
         return _encrypt(
@@ -172,13 +179,19 @@ class Client:
             device,
             auto_load_keys=self.auto_load_keys,
             rotation_key_limb_limits=self.rotation_key_limb_limits,
-            native_context_gen=True,
-            generation_metadata=self._generation_metadata(),
             roots_q=self.roots_q,
             roots_p=self.roots_p,
         )
-        self._contexts[device] = context
+        self._bind_context(context)
         return context
+
+    def _bind_context(self, context):
+        device = str(context.device)
+        self._contexts[device] = context
+        if device == "cuda":
+            self._contexts["cuda:0"] = context
+        elif device == "cuda:0":
+            self._contexts["cuda"] = context
 
     @property
     def N(self):
@@ -197,19 +210,6 @@ class Client:
             raise ValueError(f"roots_q shape must match moduli_q, got {self.roots_q.shape} vs {self.moduli_q.shape}")
         if self.roots_p.shape != self.moduli_p.shape:
             raise ValueError(f"roots_p shape must match moduli_p, got {self.roots_p.shape} vs {self.moduli_p.shape}")
-
-    def _generation_metadata(self):
-        return {
-            "depth": self.depth,
-            "logN": self.log_n,
-            "dnum": self.dnum,
-            "dcrtBits": self.dcrt_bits,
-            "qPrimeBits": self.q_prime_bits,
-            "firstMod": self.special_mod,
-            "secretKeyDist": self.secret_key_dist,
-            "scaleMode": self.scale_mode,
-            "rescalePolicy": self.rescale_policy,
-        }
 
     def __repr__(self):
         return (
@@ -299,37 +299,13 @@ def _encrypt(pk0, pk1, ptx, device, context, moduli_p, moduli_q):
     )
 
 
-def _raise_plaintext_scale_degree(ptx, scale_deg, context):
-    if scale_deg == ptx.state.noise_deg:
-        return ptx
-    if scale_deg < 1 or ptx.state.noise_deg != 1:
-        raise ValueError(f"unsupported plaintext scale degree transition: {ptx.state.noise_deg} -> {scale_deg}")
-
-    cur_limbs = ptx.state.cur_limbs
-    base_scale = context.scale_at(cur_limbs)
-    base_scale_int = round(base_scale)
-    scale_multiplier = [
-        pow(base_scale_int, scale_deg - 1, int(context.moduliQ_scalar[i]))
-        for i in range(cur_limbs)
-    ]
-    scale_multiplier = F.gen_scalar_tensor(
-        scale_multiplier,
-        context.moduliQ_scalar,
-        cur_limbs,
-    ).to(ptx.cv[0].device)
-    cv = [
-        F.cv_mul_scalar(
-            ptx.cv[0],
-            scale_multiplier,
-            context.moduliQ,
-            context.q_mu,
-            cur_limbs,
-        )
-    ]
-    return ptx.cipher_like(
-        cv,
-        state=CipherState(cur_limbs, scale_deg, base_scale ** scale_deg),
-    )
+def _validate_client_device(device):
+    device = str(device)
+    if device != "cpu" and device != "cuda" and not (
+        device.startswith("cuda:") and device[5:].isdigit()
+    ):
+        raise ValueError(f"device must be 'cpu', 'cuda', or 'cuda:<index>', got {device!r}")
+    return device
 
 
 def _decrypt_decode_native(

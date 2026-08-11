@@ -11,14 +11,14 @@ def mod_raise(cipher, target_limbs, crypto_context):
     return cipher.cipher_like(cv, state=cipher.state.replace(cur_limbs=target_limbs))
 
 
-def raise_ciphertext(ciphertext, crypto_context, bootstrap_constants, target_limbs, *, active_l0=None):
+def raise_ciphertext(ciphertext, crypto_context, bootstrap_constants, raise_to_limbs):
     """Run the u64 bootstrap raise path (one physical limb per rescale)."""
     correction_scale = bootstrap_constants._scalar_value("correction_scale")
     result = alignment.reduce_noise_to_one(ciphertext, crypto_context)
 
     source_scale = float(result.state.scaling_factor)
-    active_l0 = int(target_limbs if active_l0 is None else active_l0)
-    target_scale = float(crypto_context.scale_at(active_l0))
+    raise_to_limbs = int(raise_to_limbs)
+    target_scale = float(crypto_context.scale_at(raise_to_limbs))
     correction_divisor = float(
         crypto_context.physical_rescale_divisor_for_limbs(result.state.cur_limbs, 1)
     )
@@ -45,7 +45,7 @@ def raise_ciphertext(ciphertext, crypto_context, bootstrap_constants, target_lim
     result = alignment.rescale_one_level(result, crypto_context)
     result = result.cipher_like(result.cv, state=result.state.replace(scaling_factor=target_scale))
 
-    result = mod_raise(result, target_limbs, crypto_context)
+    result = mod_raise(result, raise_to_limbs, crypto_context)
     scalar = bootstrap_constants.encoded_scalars(
         "constant_eval_mult",
         result.state.cur_limbs,

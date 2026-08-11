@@ -1,5 +1,19 @@
 import easyfhe as torch
 import numpy as np
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ContextParams:
+    depth: int
+    log_n: int
+    dnum: int
+    q_prime_bits: tuple[int, ...]
+    q_primes: tuple[int, ...]
+    p_primes: tuple[int, ...]
+    secret_key_dist: str
+    scale_mode: str
+    rescale_policy: str
 
 
 def _validate_device(device):
@@ -25,22 +39,17 @@ class Context:
         *,
         auto_load_keys=None,
         rotation_key_limb_limits=None,
-        native_context_gen=False,
-        generation_metadata=None,
         roots_q=None,
         roots_p=None,
     ):
         # Context metadata.
+        self._source_material = getattr(material, "_source_material", material)
         self.device = _validate_device(device)
         self.auto_load_keys = auto_load_keys
         self.auto_load_keys_resolved = _resolved_auto_load_keys(auto_load_keys, device)
         self.rotation_key_limb_limits = dict(rotation_key_limb_limits or {})
-        self.native_context_gen = bool(native_context_gen)
-        self.context_generation_config = None if generation_metadata is None else dict(generation_metadata)
-        if roots_q is not None:
-            self.rootsQ = np.asarray(roots_q, dtype=np.uint64)
-        if roots_p is not None:
-            self.rootsP = np.asarray(roots_p, dtype=np.uint64)
+        self._roots_q = None if roots_q is None else np.asarray(roots_q, dtype=np.uint64)
+        self._roots_p = None if roots_p is None else np.asarray(roots_p, dtype=np.uint64)
 
         # Scalar parameters.
         self.L = material.L
@@ -52,27 +61,29 @@ class Context:
         self.Nh = material.Nh
         self.approxSF = material.approxSF
         self.h = material.h
-        self.levelBudget = material.levelBudget
         self.logN = material.logN
         self.logNh = material.logNh
-        self.logBsSlots_list = material.logBsSlots_list
         self.auxModSize = material.auxModSize
         self.scale_mode = material.scale_mode
         self.rescale_policy = material.rescale_policy
         self.dcrtBits = material.dcrtBits
-        self.dcrtBitsList = tuple(int(bit) for bit in material.dcrtBitsList)
-        self.scaleBits = material.dcrtBits
-        self.prime_backend = "u64"
-        self.first_mod_limb_count = 1
-        self.scale_chain_bits = self.dcrtBitsList
-        self.max_num_moduli = material.max_num_moduli
         self.secretKeyDist = material.secretKeyDist
         self.sigma = material.sigma
-        self.inBS = material.inBS
         self.moduliP_scalar = material.moduliP_scalar
         self.moduliQ_scalar = material.moduliQ_scalar
         self.scalingFactorsReal = material.scalingFactorsReal
         self.scalingFactorsRealBig = material.scalingFactorsRealBig
+        self.params = ContextParams(
+            depth=int(self.L) - 1,
+            log_n=int(self.logN),
+            dnum=int(self.dnum),
+            q_prime_bits=tuple(int(bit) for bit in material.dcrtBitsList),
+            q_primes=tuple(int(prime) for prime in self.moduliQ_scalar),
+            p_primes=tuple(int(prime) for prime in self.moduliP_scalar),
+            secret_key_dist=str(self.secretKeyDist),
+            scale_mode=str(self.scale_mode),
+            rescale_policy=str(self.rescale_policy),
+        )
 
         # Device tensors.
         self.primes = material.primes.to(self.device)
@@ -169,14 +180,12 @@ class Context:
             
     def construct_copy(self, device):
         return Context(
-            self,
+            self._source_material,
             device,
             auto_load_keys=self.auto_load_keys,
             rotation_key_limb_limits=self.rotation_key_limb_limits,
-            native_context_gen=self.native_context_gen,
-            generation_metadata=self.context_generation_config,
-            roots_q=getattr(self, "rootsQ", None),
-            roots_p=getattr(self, "rootsP", None),
+            roots_q=self._roots_q,
+            roots_p=self._roots_p,
         )
 
     def cuda(self):
@@ -184,6 +193,26 @@ class Context:
 
     def cpu(self):
         return self.construct_copy("cpu")
+
+    @property
+    def max_limbs(self):
+        return int(self.L)
+
+    @property
+    def ring_dim(self):
+        return int(self.N)
+
+    @property
+    def max_slots(self):
+        return int(self.N) // 2
+
+    @property
+    def q_prime_bits(self):
+        return self.params.q_prime_bits
+
+    @property
+    def default_scale(self):
+        return float(self.approxSF)
 
     def scale_at(self, cur_limbs=None):
         if cur_limbs is None:
@@ -221,10 +250,6 @@ class Context:
         for idx in range(cur_limbs - drop_count, cur_limbs):
             divisor *= int(self.moduliQ_scalar[idx])
         return float(divisor)
-
-    def rescale_drop_count_for_state(self, state):
-        del state
-        return 1
 
     def get_rotation_key(self, rot_index):
         if self.device == "cuda" and not self.left_rot_key_map[rot_index][0].is_cuda:
@@ -305,14 +330,11 @@ class Context:
 
     def __repr__(self):
         s = []
-        s.append(f"{'L:':20} {self.L}")
-        s.append(f"{'logBsSlots:':20} {self.logBsSlots_list}")
-        s.append(f"{'N:':20} {self.N}")
+        s.append(f"{'max_limbs:':20} {self.max_limbs}")
+        s.append(f"{'ring_dim:':20} {self.ring_dim}")
         s.append(f"{'dnum:':20} {self.dnum}")
-        s.append(f"{'dcrtBits:':20} {self.dcrtBits}")
-        # s.append(f"{'firstMod:':20} {self.firstMod}")  # todo: to add
+        s.append(f"{'q_prime_bits:':20} {self.q_prime_bits}")
         s.append(f"{'K:':20} {self.K}")
-        s.append(f"{'levelBudget_list:':20} {self.levelBudget}")
         s.append(f"{'scale_mode:':20} {self.scale_mode}")
         s.append(f"{'rescale_policy:':20} {self.rescale_policy}")
         s.append(f"{'secretKeyDist:':20} {self.secretKeyDist}")

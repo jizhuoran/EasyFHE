@@ -1,7 +1,8 @@
 """OpenFHE-compatible CKKS bootstrapping helpers."""
 
 from ._public_api import PUBLIC_API as _PUBLIC_API
-from .api import BootstrapPlan, bootstrap, depth, describe_plan, generate, plan_rot_keys
+from .api import bootstrap, describe_plan, generate
+from .spec import BootstrapProgram, BootstrapRequirements, BootstrapSpec, requirements
 
 
 __all__ = list(_PUBLIC_API)

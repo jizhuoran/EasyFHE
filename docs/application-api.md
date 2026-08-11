@@ -29,15 +29,20 @@ per-prime chain, replace `depth`/`dcrt_bits`/`first_mod` with, for example,
 `limb_specs=(55, 52, 52, 52)`. Each u64 rescale removes one physical prime.
 
 ```python
-extra_depth = bs.depth(
-    log_bs_slots=14,
+bootstrap_spec = bs.BootstrapSpec(
+    log_slots=14,
     level_budget=(4, 4),
+    output_levels=10,
+)
+requirements = bs.requirements(
+    bootstrap_spec,
+    log_n=16,
     secret_key_dist="SPARSE_TERNARY",
 )
 
 client, ctx = fhe.generate_client_context(
     fhe.CKKSContextSpec(
-        depth=10 + extra_depth,
+        depth=requirements.context_depth,
         log_n=16,
         dnum=3,
         dcrt_bits=52,
@@ -45,7 +50,7 @@ client, ctx = fhe.generate_client_context(
         secret_key_dist="SPARSE_TERNARY",
         scale_mode="fixed",
         rescale_policy="manual",
-        rotations=(-1024, -256, -64, 1, 2, 4),
+        rotations=tuple((*requirements.rotations, -1024, -256, -64, 1, 2, 4)),
         auto_load_keys=True,
     ),
     device="cuda",
@@ -55,15 +60,26 @@ client, ctx = fhe.generate_client_context(
 Application-facing client methods:
 
 ```python
-client.encrypt(values, device=None, scale_deg=1, level=0, slots=0)
+client.encrypt(values, slots=..., device=None, cur_limbs=None, scaling_factor=None)
 client.decrypt(cipher)
 ```
+
+Encryption uses the device selected by `generate_client_context` unless an
+override is provided. Fresh u64 plaintexts and ciphertexts always start at
+`noise_deg == 1`; historical `level` and `scale_deg` controls are not part of
+the client API.
 
 Application-facing context methods:
 
 ```python
 ctx.cuda()
 ctx.cpu()
+ctx.params
+ctx.max_limbs
+ctx.ring_dim
+ctx.max_slots
+ctx.q_prime_bits
+ctx.default_scale
 ctx.scale_at(cur_limbs=None)
 ctx.big_scale_at(cur_limbs=None)
 ctx.rescale_divisor_at(drop_limb=None)
@@ -98,7 +114,7 @@ weights = fhe.ConstantBundle(
 
 pt = weights.plaintext(
     "kernel",
-    level=ctx.L - cipher.state.cur_limbs,
+    level=ctx.max_limbs - cipher.state.cur_limbs,
     slots=cipher.slots,
     cryptoContext=ctx,
     scale=1.0,
@@ -216,59 +232,43 @@ OpenFHE-compatible bootstrapping lives in `easyfhe.bs.openfhe`.
 ```python
 import easyfhe.bs.openfhe as bs
 
-level_budget = (4, 4)
-extra_depth = bs.depth(
-    log_bs_slots=14,
-    level_budget=level_budget,
-    secret_key_dist="SPARSE_TERNARY",
-)
-rotations = bs.plan_rot_keys(
-    log_n=16,
-    log_bs_slots=14,
-    level_budget=level_budget,
+bootstrap_spec = bs.BootstrapSpec(
+    log_slots=14,
+    level_budget=(4, 4),
+    output_levels=12,
     strategy="double_hoist",
+    mode="modraise_first",
+)
+requirements = bs.requirements(
+    bootstrap_spec,
+    log_n=16,
 )
 
 client, ctx = fhe.generate_client_context(
-    ... depth=post_bootstrap_levels + extra_depth, rotations=rotations ...
+    ... depth=requirements.context_depth, rotations=requirements.rotations ...
 )
 
-bs_constants, bs_plan = bs.generate(
-    ctx,
-    log_bs_slots=14,
-    level_budget=level_budget,
-    post_bootstrap_levels=post_bootstrap_levels,
-    baby_step=None,
-    strategy="double_hoist",
-)
+program = bs.generate(ctx, bootstrap_spec)
 
-cipher = bs.bootstrap(
-    cipher,
-    ctx,
-    bs_constants,
-    bs_plan,
-    L0=cipher.state.cur_limbs,
-    bootstrap_mode="modraise_first",
-)
+cipher = bs.bootstrap(cipher, ctx, program)
 ```
 
 Application-facing bootstrap API:
 
 ```python
-bs.depth(...)
-bs.plan_rot_keys(...)
+bs.BootstrapSpec(...)
+bs.requirements(...)
 bs.generate(...)
 bs.bootstrap(...)
 bs.describe_plan(...)
-bs.BootstrapPlan
+bs.BootstrapRequirements
+bs.BootstrapProgram
 ```
 
 Detailed reference: [OpenFHE Bootstrap API](openfhe-bootstrap-api.md).
 
-`BootstrapPlan` is returned by `generate(...)` and passed back to
-`bootstrap(...)`. Treat it as an opaque plan object; application code should not
-depend on its internal fields. Use `bs.describe_plan(plan)` when debugging the
-generated bootstrapping schedule.
+`BootstrapProgram` binds constants and the runtime plan to one context. Use
+`bs.describe_plan(program)` when debugging the generated schedule.
 
 ## Non-API Internals
 

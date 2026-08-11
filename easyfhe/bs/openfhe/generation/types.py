@@ -27,7 +27,7 @@ class BootstrapPlan:
     dim1: tuple[int, int]
     baby_step: tuple[int, int]
     strategy: str
-    post_bootstrap_levels: int
+    output_levels: int
     c2s_plan: BootstrapTransformPlan
     s2c_plan: BootstrapTransformPlan
     approx_eval_plan: object
@@ -38,15 +38,11 @@ class BootstrapPlan:
     double_angle_iterations: int
     double_angle_scalar_names: tuple[str, ...]
     required_rotations: tuple[int, ...]
-    active_l0: int | None = None
+    raise_to_limbs: int
 
     @property
     def slots(self):
         return 1 << self.log_bs_slots
-
-    @property
-    def max_levels_remaining(self):
-        return self.post_bootstrap_levels
 
     def describe_approx(self):
         from .plan import describe_flat_ps_plan
