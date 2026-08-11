@@ -1,4 +1,6 @@
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include <ATen/cuda/CUDAContext.h>
+
+#include "ATen/native/fhe/cuda/device/Ntt.cuh"
 
 namespace fhe {
 __device__ __forceinline__ void butt_intt_local(
@@ -409,73 +411,6 @@ __global__ void INTT64PointPhase2Scaled(
   }
 }
 
-__device__ __forceinline__ void butt_ntt_local(
-    uint64_t& a,
-    uint64_t& b,
-    const uint64_t w,
-    const uint64_t w_,
-    const uint64_t p,
-    const uint64_t two_p) {
-  uint64_t U = mul_and_reduce_shoup(b, w, w_, p);
-  if (a >= two_p)
-    a -= two_p;
-  b = a + (two_p - U);
-  a += U;
-}
-
-template <uint8_t radix>
-__device__ __forceinline__ void LOCAL_NTT_RADIX(
-    uint64_t& local0,
-    uint64_t& local1,
-    uint64_t& local2,
-    uint64_t& local3,
-    uint64_t& local4,
-    uint64_t& local5,
-    uint64_t& local6,
-    uint64_t& local7,
-    const uint32_t tw_off,
-    const uint64_t* __restrict__ W,
-    const uint64_t* __restrict__ W_,
-    const uint64_t prime,
-    const uint64_t two_p) {
-  static_assert(radix == 2 || radix == 4 || radix == 8);
-  if constexpr (radix >= 8) {
-    const uint64_t w = W[tw_off];
-    const uint64_t ws = W_[tw_off];
-    butt_ntt_local(local0, local4, w, ws, prime, two_p);
-    butt_ntt_local(local1, local5, w, ws, prime, two_p);
-    butt_ntt_local(local2, local6, w, ws, prime, two_p);
-    butt_ntt_local(local3, local7, w, ws, prime, two_p);
-  }
-
-  if constexpr (radix >= 4) {
-    const uint32_t off = 2 * tw_off;
-    const uint64_t w0 = W[off];
-    const uint64_t ws0 = W_[off];
-    const uint64_t w1 = W[off + 1];
-    const uint64_t ws1 = W_[off + 1];
-    butt_ntt_local(local0, local2, w0, ws0, prime, two_p);
-    butt_ntt_local(local1, local3, w0, ws0, prime, two_p);
-    butt_ntt_local(local4, local6, w1, ws1, prime, two_p);
-    butt_ntt_local(local5, local7, w1, ws1, prime, two_p);
-  }
-  if constexpr (radix >= 2) {
-    const uint32_t off = 4 * tw_off;
-    const uint64_t w0 = W[off];
-    const uint64_t ws0 = W_[off];
-    const uint64_t w1 = W[off + 1];
-    const uint64_t ws1 = W_[off + 1];
-    const uint64_t w2 = W[off + 2];
-    const uint64_t ws2 = W_[off + 2];
-    const uint64_t w3 = W[off + 3];
-    const uint64_t ws3 = W_[off + 3];
-    butt_ntt_local(local0, local1, w0, ws0, prime, two_p);
-    butt_ntt_local(local2, local3, w1, ws1, prime, two_p);
-    butt_ntt_local(local4, local5, w2, ws2, prime, two_p);
-    butt_ntt_local(local6, local7, w3, ws3, prime, two_p);
-  }
-}
-
 template <size_t LOG_N, size_t NUM_GROUPS>
 __global__ void NTT64PointPhase1(
     uint64_t __restrict__* inout_ptr,
@@ -515,7 +450,7 @@ __global__ void NTT64PointPhase1(
     local[j] = inout_matrix[batch_id][j][groupID][N_init];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -543,7 +478,7 @@ __global__ void NTT64PointPhase1(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -613,7 +548,7 @@ __global__ void NTT64PointPhase1ModupMasked(
     local[j] = inout_matrix[limb_idx][j][groupID][N_init];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -641,7 +576,7 @@ __global__ void NTT64PointPhase1ModupMasked(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -716,7 +651,7 @@ __global__ void NTT64PointPhase1ModupAllMasked(
     local[j] = inout_matrix[physical_limb_idx][j][groupID][N_init];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -744,7 +679,7 @@ __global__ void NTT64PointPhase1ModupAllMasked(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -843,10 +778,10 @@ __global__ void ModupStepTwoNTT64PointPhase1All(
       uint128_t out = mult_64_64_128(op1, op2);
       inplace_add_128_128(out, accum);
     }
-    local[j] = barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
+    local[j] = barrett_reduction_128_64(accum, prime, barret_ratio, barret_k);
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -874,7 +809,7 @@ __global__ void ModupStepTwoNTT64PointPhase1All(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  LOCAL_NTT_RADIX<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -892,46 +827,6 @@ __global__ void ModupStepTwoNTT64PointPhase1All(
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     out_matrix[physical_limb_idx][groupID][j][N_init] = local[j];
-  }
-}
-
-template <int NUM_ROUNDS>
-__device__ __forceinline__ void warp_butterfly(
-    uint64_t& i1,
-    uint64_t& i2,
-    uint32_t& stage_off,
-    const uint32_t laneID,
-    const uint64_t* __restrict__ base_inv,
-    const uint64_t* __restrict__ base_inv_,
-    const uint64_t prime,
-    const uint64_t two_p) {
-  static_assert(NUM_ROUNDS >= 2);
-  butt_ntt_local(
-      i1, i2, base_inv[stage_off], base_inv_[stage_off], prime, two_p);
-
-#pragma unroll
-  for (int shift = NUM_ROUNDS - 2; shift >= 0;
-       --shift) { // offsets: 16, 8, 4, 2, 1
-    const uint32_t offset = 1u << shift; // 2^shift
-    const bool lower_half =
-        (laneID & offset) == 0; // bit‑test replaces costly “%”
-
-    // choose the value to exchange, then shuffle across the offset‑distance
-    auto tmp = lower_half ? i2 : i1;
-    tmp = __shfl_xor_sync(0xFFFFFFFF, tmp, offset);
-
-    // commit the exchanged value
-    if (lower_half)
-      i2 = tmp;
-    else
-      i1 = tmp;
-
-    // advance table pointer for the current NTT stage
-    stage_off <<= 1; // equivalent to stage_off *= 2
-    const uint32_t idx =
-        stage_off + (laneID >> shift); // laneID/offset ⇒ laneID >> shift
-
-    butt_ntt_local(i1, i2, base_inv[idx], base_inv_[idx], prime, two_p);
   }
 }
 
@@ -979,7 +874,7 @@ __global__ void NTTXPointPhase2(
   i1 = tile[0][groupID][laneID];
   i2 = tile[1][groupID][laneID];
 
-  warp_butterfly<6>(
+  ntt::warp_butterfly<6>(
       i1,
       i2,
       stage_off,
@@ -1009,7 +904,7 @@ __global__ void NTTXPointPhase2(
   }
 
   stage_off = stage_off * 2 + groupID;
-  warp_butterfly<LOG_RADIX - 6>(
+  ntt::warp_butterfly<LOG_RADIX - 6>(
       i1,
       i2,
       stage_off,
@@ -1086,7 +981,7 @@ __global__ void NTTXPointPhase2ModupMasked(
   i1 = tile[0][groupID][laneID];
   i2 = tile[1][groupID][laneID];
 
-  warp_butterfly<6>(
+  ntt::warp_butterfly<6>(
       i1,
       i2,
       stage_off,
@@ -1116,7 +1011,7 @@ __global__ void NTTXPointPhase2ModupMasked(
   }
 
   stage_off = stage_off * 2 + groupID;
-  warp_butterfly<LOG_RADIX - 6>(
+  ntt::warp_butterfly<LOG_RADIX - 6>(
       i1,
       i2,
       stage_off,
@@ -1199,7 +1094,7 @@ __global__ void NTTXPointPhase2ModupAllMasked(
   i1 = tile[0][groupID][laneID];
   i2 = tile[1][groupID][laneID];
 
-  warp_butterfly<6>(
+  ntt::warp_butterfly<6>(
       i1,
       i2,
       stage_off,
@@ -1229,7 +1124,7 @@ __global__ void NTTXPointPhase2ModupAllMasked(
   }
 
   stage_off = stage_off * 2 + groupID;
-  warp_butterfly<LOG_RADIX - 6>(
+  ntt::warp_butterfly<LOG_RADIX - 6>(
       i1,
       i2,
       stage_off,

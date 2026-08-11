@@ -12,7 +12,8 @@
 #include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Launch.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -47,9 +48,9 @@ __global__ void fusedPairwiseMACKernel(
   }
 
   auto mod = mods[bid_y];
-  res_ptr[bid_y * N + tid_x] = barret_reduction_128_64(
+  res_ptr[bid_y * N + tid_x] = barrett_reduction_128_64(
       sum_bx, mod, barret_ratio[bid_y], barret_k[bid_y]);
-  res_ptr[cur_limbs * N + bid_y * N + tid_x] = barret_reduction_128_64(
+  res_ptr[cur_limbs * N + bid_y * N + tid_x] = barrett_reduction_128_64(
       sum_ax, mod, barret_ratio[bid_y], barret_k[bid_y]);
 }
 
@@ -89,9 +90,9 @@ __global__ void fusedPairwiseMACKernel_batch(
     cipher_shared[BLOCK_SIZE * (num_ciphers + i) + threadIdx.x] = cipher_val_ax;
   }
   res_ptr[bid_y * N + tid_x] =
-      barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+      barrett_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
   res_ptr[num_batches * cur_limbs * N + bid_y * N + tid_x] =
-      barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+      barrett_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
 
   __syncthreads();
   for (int batch_id = 1; batch_id < num_batches; ++batch_id) {
@@ -107,10 +108,10 @@ __global__ void fusedPairwiseMACKernel_batch(
       inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
     }
     res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
     res_ptr
         [num_batches * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N +
-         tid_x] = barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+         tid_x] = barrett_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
   }
 }
 
@@ -188,9 +189,9 @@ __global__ void groupedScalarWeightedAccGridKernel(
 
   const int64_t out_off = group * cur_limbs * N + limb * N + tid_x;
   res_ptr[out_off] =
-      barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+      barrett_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
   res_ptr[num_groups * cur_limbs * N + out_off] =
-      barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+      barrett_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
 }
 
 template <int NUM_GROUPS, int NUM_CIPHER, int X>
@@ -242,9 +243,9 @@ __global__ void groupedScalarWeightedAccRegKernel(
   for (int group = 0; group < NUM_GROUPS; ++group) {
     const int64_t out_off = group * cur_limbs * N + limb * N + tid_x;
     res_ptr[out_off] =
-        barret_reduction_128_64(sum_bx[group], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx[group], mod, barret_ratio, barret_k);
     res_ptr[NUM_GROUPS * cur_limbs * N + out_off] =
-        barret_reduction_128_64(sum_ax[group], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_ax[group], mod, barret_ratio, barret_k);
   }
 }
 
@@ -324,10 +325,10 @@ __global__ void fusedPairwiseMACRegVecKernel(
       inplace_add_128_128(mult_64_64_128(cax[i], plain_val), sum_ax);
     }
     res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
     res_ptr
         [NB * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
   }
 }
 
@@ -383,10 +384,10 @@ __global__ void fusedPairwiseMACDirectKernel(
   for (int r = 0; r < R; ++r) {
     auto batch_id = lane * R + r;
     res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_bx[r], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx[r], mod, barret_ratio, barret_k);
     res_ptr
         [NB * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_ax[r], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_ax[r], mod, barret_ratio, barret_k);
   }
 }
 
@@ -464,10 +465,10 @@ __global__ void fusedPairwiseMACSharedKernel(
   for (int r = 0; r < R; ++r) {
     auto batch_id = lane * R + r;
     res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_bx[r], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx[r], mod, barret_ratio, barret_k);
     res_ptr
         [NB * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_ax[r], mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_ax[r], mod, barret_ratio, barret_k);
   }
 }
 
@@ -509,10 +510,10 @@ __global__ void fusedPairwiseMACDirectRuntimeKernel(
       inplace_add_128_128(mult_64_64_128(cipher_val_ax, plain_val), sum_ax);
     }
     res_ptr[batch_id * cur_limbs * N + bid_y * N + tid_x] =
-        barret_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
+        barrett_reduction_128_64(sum_bx, mod, barret_ratio, barret_k);
     res_ptr
         [num_batches * cur_limbs * N + batch_id * cur_limbs * N + bid_y * N +
-         tid_x] = barret_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
+         tid_x] = barrett_reduction_128_64(sum_ax, mod, barret_ratio, barret_k);
   }
 }
 

@@ -10,7 +10,8 @@
 #include <ATen/ops/zeros.h>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Launch.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -73,7 +74,7 @@ __global__ void modup_step_two_kernel(
     inplace_add_128_128(out, accum);
   }
 
-  to[out_idx_shared * N + degree_idx] = barret_reduction_128_64(
+  to[out_idx_shared * N + degree_idx] = barrett_reduction_128_64(
       accum, prime_shared, barret_ratio_shared, barret_k_shared);
 }
 

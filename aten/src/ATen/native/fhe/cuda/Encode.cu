@@ -9,7 +9,7 @@
 #include <ATen/ops/zeros.h>
 #include <cmath>
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 #define MAX_64BIT_VALUE 9223372036854775295LL
 #define MAX_BITS_IN_WORD 61
@@ -51,9 +51,9 @@ __global__ void new_fit_to_native_vector_kernel(
     uint64_t re_ = re;
     uint64_t im_ = im;
 
-    barret_reduction_64_64(
+    barrett_reduction_64_64(
         re_, re_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
-    barret_reduction_64_64(
+    barrett_reduction_64_64(
         im_, im_, native_modulus[l], barret_ratio_ptr[l], barret_k_ptr[l]);
 
     if (re > bigValueHf) {

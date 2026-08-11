@@ -12,8 +12,7 @@
 #include <ATen/ops/zeros.h>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/arithmetic.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 

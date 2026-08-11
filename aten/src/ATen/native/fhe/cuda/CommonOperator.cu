@@ -9,7 +9,8 @@
 #include <ATen/ops/empty.h>
 #include <ATen/ops/zeros.h>
 
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Launch.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 #include "ATen/native/fhe/cuda/CommonOperation.h"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"

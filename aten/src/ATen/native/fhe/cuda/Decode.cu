@@ -5,7 +5,6 @@
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/ops/empty.h>
 #include <ATen/native/fhe/cuda/CommonOperation.h>
-#include <ATen/native/fhe/cuda/Utils.cuh>
 #include <c10/cuda/CUDAException.h>
 #include <c10/util/complex.h>
 #include <algorithm>

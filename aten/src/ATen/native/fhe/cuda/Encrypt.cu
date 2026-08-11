@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 namespace fhe {
 namespace {
@@ -75,7 +75,7 @@ __device__ __forceinline__ uint64_t mul_mod_barrett_128(
     uint64_t barrett_ratio,
     uint64_t barrett_k) {
   const auto product = mult_64_64_128(a, b);
-  return barret_reduction_128_64(product, prime, barrett_ratio, barrett_k);
+  return barrett_reduction_128_64(product, prime, barrett_ratio, barrett_k);
 }
 
 __global__ void encrypt_finish_kernel(

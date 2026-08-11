@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Ntt.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -102,119 +102,6 @@ __global__ void hmul_relin_scale_last_limb_kernel(
   out_last[cv * N + coeff] = value;
 }
 
-__device__ __forceinline__ uint64_t hmul_reduce_lazy_4p(
-    uint64_t x,
-    const uint64_t p,
-    const uint64_t two_p) {
-  if (x >= two_p) {
-    x -= two_p;
-  }
-  if (x >= p) {
-    x -= p;
-  }
-  return x;
-}
-
-__device__ __forceinline__ void hmul_butt_ntt_local(
-    uint64_t& a,
-    uint64_t& b,
-    const uint64_t w,
-    const uint64_t w_shoup,
-    const uint64_t p,
-    const uint64_t two_p) {
-  uint64_t u = mul_and_reduce_shoup(b, w, w_shoup, p);
-  if (a >= two_p) {
-    a -= two_p;
-  }
-  b = a + (two_p - u);
-  a += u;
-}
-
-template <uint8_t radix>
-__device__ __forceinline__ void hmul_local_ntt_radix(
-    uint64_t& local0,
-    uint64_t& local1,
-    uint64_t& local2,
-    uint64_t& local3,
-    uint64_t& local4,
-    uint64_t& local5,
-    uint64_t& local6,
-    uint64_t& local7,
-    const uint32_t tw_off,
-    const uint64_t* __restrict__ W,
-    const uint64_t* __restrict__ W_shoup,
-    const uint64_t prime,
-    const uint64_t two_p) {
-  static_assert(radix == 2 || radix == 4 || radix == 8);
-  if constexpr (radix >= 8) {
-    const uint64_t w = W[tw_off];
-    const uint64_t ws = W_shoup[tw_off];
-    hmul_butt_ntt_local(local0, local4, w, ws, prime, two_p);
-    hmul_butt_ntt_local(local1, local5, w, ws, prime, two_p);
-    hmul_butt_ntt_local(local2, local6, w, ws, prime, two_p);
-    hmul_butt_ntt_local(local3, local7, w, ws, prime, two_p);
-  }
-
-  if constexpr (radix >= 4) {
-    const uint32_t off = 2 * tw_off;
-    const uint64_t w0 = W[off];
-    const uint64_t ws0 = W_shoup[off];
-    const uint64_t w1 = W[off + 1];
-    const uint64_t ws1 = W_shoup[off + 1];
-    hmul_butt_ntt_local(local0, local2, w0, ws0, prime, two_p);
-    hmul_butt_ntt_local(local1, local3, w0, ws0, prime, two_p);
-    hmul_butt_ntt_local(local4, local6, w1, ws1, prime, two_p);
-    hmul_butt_ntt_local(local5, local7, w1, ws1, prime, two_p);
-  }
-
-  if constexpr (radix >= 2) {
-    const uint32_t off = 4 * tw_off;
-    const uint64_t w0 = W[off];
-    const uint64_t ws0 = W_shoup[off];
-    const uint64_t w1 = W[off + 1];
-    const uint64_t ws1 = W_shoup[off + 1];
-    const uint64_t w2 = W[off + 2];
-    const uint64_t ws2 = W_shoup[off + 2];
-    const uint64_t w3 = W[off + 3];
-    const uint64_t ws3 = W_shoup[off + 3];
-    hmul_butt_ntt_local(local0, local1, w0, ws0, prime, two_p);
-    hmul_butt_ntt_local(local2, local3, w1, ws1, prime, two_p);
-    hmul_butt_ntt_local(local4, local5, w2, ws2, prime, two_p);
-    hmul_butt_ntt_local(local6, local7, w3, ws3, prime, two_p);
-  }
-}
-
-template <int NUM_ROUNDS>
-__device__ __forceinline__ void hmul_warp_butterfly(
-    uint64_t& i1,
-    uint64_t& i2,
-    uint32_t& stage_off,
-    const uint32_t laneID,
-    const uint64_t* __restrict__ W,
-    const uint64_t* __restrict__ W_shoup,
-    const uint64_t prime,
-    const uint64_t two_p) {
-  static_assert(NUM_ROUNDS >= 2);
-  hmul_butt_ntt_local(i1, i2, W[stage_off], W_shoup[stage_off], prime, two_p);
-
-#pragma unroll
-  for (int shift = NUM_ROUNDS - 2; shift >= 0; --shift) {
-    const uint32_t offset = 1u << shift;
-    const bool lower_half = (laneID & offset) == 0;
-    auto tmp = lower_half ? i2 : i1;
-    tmp = __shfl_xor_sync(0xFFFFFFFF, tmp, offset);
-    if (lower_half) {
-      i2 = tmp;
-    } else {
-      i1 = tmp;
-    }
-
-    stage_off <<= 1;
-    const uint32_t idx = stage_off + (laneID >> shift);
-    hmul_butt_ntt_local(i1, i2, W[idx], W_shoup[idx], prime, two_p);
-  }
-}
-
 template <size_t LOG_N, size_t NUM_GROUPS>
 __global__ void hmul_moddown_base_convert_ntt_phase1_kernel(
     uint64_t* __restrict__ workspace,
@@ -268,10 +155,10 @@ __global__ void hmul_moddown_base_convert_ntt_phase1_kernel(
       uint128_t out = mult_64_64_128(op1, op2);
       inplace_add_128_128(out, accum);
     }
-    local[j] = barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
+    local[j] = barrett_reduction_128_64(accum, prime, barret_ratio, barret_k);
   }
 
-  hmul_local_ntt_radix<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -299,7 +186,7 @@ __global__ void hmul_moddown_base_convert_ntt_phase1_kernel(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  hmul_local_ntt_radix<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -318,79 +205,6 @@ __global__ void hmul_moddown_base_convert_ntt_phase1_kernel(
   for (int j = 0; j < 8; ++j) {
     inout_matrix[limb][groupID][j][N_init] = local[j];
   }
-}
-
-template <size_t LOG_N, int NUM_WARP>
-__device__ __forceinline__ ulonglong2 hmul_ntt_phase2_pair(
-    uint64_t* __restrict__ inout_ptr,
-    const uint32_t poly_idx,
-    const uint32_t block_x,
-    const uint64_t* __restrict__ power_of_roots,
-    const uint64_t* __restrict__ power_of_roots_shoup,
-    const uint64_t prime,
-    const uint64_t two_p,
-    uint64_t (&tile)[2][NUM_WARP][WARP_SIZE + 1]) {
-  constexpr size_t LOG_RADIX = LOG_N - 6;
-  constexpr int R1_RADIX = 64;
-  constexpr int DATA_SIZE = 1u << LOG_RADIX;
-  constexpr int kBLOCK_SIZE = 1u << (LOG_RADIX - 1);
-
-  auto g_row = reinterpret_cast<uint64_t(*)[R1_RADIX][DATA_SIZE]>(inout_ptr);
-  uint32_t stage_off = R1_RADIX + block_x;
-
-  uint64_t i1 = g_row[poly_idx][block_x][threadIdx.x];
-  uint64_t i2 = g_row[poly_idx][block_x][threadIdx.x + kBLOCK_SIZE];
-
-  tile[0][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i1;
-  tile[1][threadIdx.x % NUM_WARP][threadIdx.x / NUM_WARP] = i2;
-  __syncthreads();
-
-  uint32_t laneID = threadIdx.x % WARP_SIZE;
-  uint32_t groupID = threadIdx.x / WARP_SIZE;
-  i1 = tile[0][groupID][laneID];
-  i2 = tile[1][groupID][laneID];
-
-  hmul_warp_butterfly<6>(
-      i1,
-      i2,
-      stage_off,
-      laneID,
-      power_of_roots,
-      power_of_roots_shoup,
-      prime,
-      two_p);
-
-  tile[0][groupID][laneID] = i1;
-  tile[1][groupID][laneID] = i2;
-  __syncthreads();
-
-  constexpr int SECOND_GROUP_SIZE = DATA_SIZE / WARP_SIZE / 4;
-  laneID = threadIdx.x % SECOND_GROUP_SIZE;
-  groupID = threadIdx.x / SECOND_GROUP_SIZE;
-
-  const uint32_t half_group = groupID >> 1;
-  if ((groupID & 1) == 0) {
-    i1 = tile[0][laneID][half_group];
-    i2 = tile[0][laneID + SECOND_GROUP_SIZE][half_group];
-  } else {
-    i1 = tile[1][laneID][half_group];
-    i2 = tile[1][laneID + SECOND_GROUP_SIZE][half_group];
-  }
-
-  stage_off = stage_off * 2 + groupID;
-  hmul_warp_butterfly<LOG_RADIX - 6>(
-      i1,
-      i2,
-      stage_off,
-      laneID,
-      power_of_roots,
-      power_of_roots_shoup,
-      prime,
-      two_p);
-
-  i1 = hmul_reduce_lazy_4p(i1, prime, two_p);
-  i2 = hmul_reduce_lazy_4p(i2, prime, two_p);
-  return {i1, i2};
 }
 
 template <size_t LOG_N>
@@ -416,7 +230,7 @@ __global__ void hmul_ntt_phase2_store_kernel(
   __shared__ uint64_t tile[2][NUM_WARP][WARP_SIZE + 1];
 
   uint64_t* cv_workspace = workspace + cv_id * L_IN * N;
-  const auto values = hmul_ntt_phase2_pair<LOG_N, NUM_WARP>(
+  const auto values = ntt::phase2_pair<LOG_N, NUM_WARP>(
       cv_workspace,
       limb,
       blockIdx.x,
@@ -485,7 +299,7 @@ __global__ void hmul_switch_const_mult_ntt_phase1_kernel(
     local[j] = scaled;
   }
 
-  hmul_local_ntt_radix<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -513,7 +327,7 @@ __global__ void hmul_switch_const_mult_ntt_phase1_kernel(
     local[l] = transpose_matrix[laneID][groupID][l];
   }
 
-  hmul_local_ntt_radix<8>(
+  ntt::local_radix<8>(
       local[0],
       local[1],
       local[2],
@@ -568,7 +382,7 @@ __global__ void hmul_ntt_phase2_finalize_kernel(
   __shared__ uint64_t tile[2][NUM_WARP][WARP_SIZE + 1];
 
   uint64_t* out_cv = out + cv * end_length * N;
-  const auto switched = hmul_ntt_phase2_pair<LOG_N, NUM_WARP>(
+  const auto switched = ntt::phase2_pair<LOG_N, NUM_WARP>(
       out_cv,
       limb,
       blockIdx.x,
@@ -679,9 +493,9 @@ __global__ void hmul_innerproduct_without_original_copy_kernel(
     swk_off += swk_stride;
   }
 
-  out[i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+  out[i] = barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
   out[length * N + i] =
-      barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+      barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
 }
 
 } // namespace fhe

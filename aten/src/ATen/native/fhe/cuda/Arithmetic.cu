@@ -3,9 +3,9 @@
 #include <ATen/core/Tensor.h>
 #include <ATen/cuda/CUDAContext.h>
 #include <ATen/native/cuda/thread_constants.h>
-#include <ATen/native/fhe/cuda/arithmetic.h>
 #include <ATen/ops/empty.h>
-#include <ATen/native/fhe/cuda/Utils.cuh>
+#include <ATen/native/fhe/cuda/device/Launch.cuh>
+#include <ATen/native/fhe/cuda/device/Modular.cuh>
 #include <vector>
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"

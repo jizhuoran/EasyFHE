@@ -4,7 +4,8 @@
 
 #include <vector>
 
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Launch.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 namespace fhe {
 __global__ void finalize_fast_rotation_ext_kernel(
@@ -40,12 +41,12 @@ __global__ void finalize_fast_rotation_ext_kernel(
       const int64_t c_offset = (c_batch == 1 ? 0 : b * curr_limbs * N);
       const auto prime = primes[limb];
       const auto p_mod_q_limb = p_mod_q[limb];
-      out_bx[out_index] = barret_reduction_128_64(
+      out_bx[out_index] = barrett_reduction_128_64(
           mult_64_64_128(c0[c_offset + coeff_index], p_mod_q_limb),
           prime,
           barret_ratios[limb],
           barret_ks[limb]);
-      out_ax[out_index] = barret_reduction_128_64(
+      out_ax[out_index] = barrett_reduction_128_64(
           mult_64_64_128(c1[c_offset + coeff_index], p_mod_q_limb),
           prime,
           barret_ratios[limb],
@@ -64,7 +65,7 @@ __global__ void finalize_fast_rotation_ext_kernel(
     const int64_t coeff_index = limb * N + src;
     const int64_t c_offset = (c_batch == 1 ? 0 : b * curr_limbs * N);
     const auto prime = primes[limb];
-    const auto scaled_c0 = barret_reduction_128_64(
+    const auto scaled_c0 = barrett_reduction_128_64(
         mult_64_64_128(c0[c_offset + coeff_index], p_mod_q[limb]),
         prime,
         barret_ratios[limb],
@@ -144,7 +145,7 @@ __global__ void double_hoist_giant_sum_ext_kernel(
     uint64_t rotated_bx = key_product_bx[key_index];
     if (limb < curr_limbs) {
       const int64_t coeff_index = (b * curr_limbs + limb) * N + src;
-      const auto scaled_c0 = barret_reduction_128_64(
+      const auto scaled_c0 = barrett_reduction_128_64(
           mult_64_64_128(c0[coeff_index], p_mod_q[limb]),
           prime,
           barret_ratios[limb],

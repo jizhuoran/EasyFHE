@@ -12,7 +12,8 @@
 
 #include <vector>
 
-#include "ATen/native/fhe/cuda/Utils.cuh"
+#include "ATen/native/fhe/cuda/device/Launch.cuh"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 __constant__ const uint64_t*  c_eval_swks[64];
 
@@ -62,9 +63,9 @@ namespace fhe {
 //   const auto barret_k = barret_ks[reduce_prime_idx];
 //   for(int j = 0; j < BATCH; j++) {
 //     auto res_ax =
-//       barret_reduction_128_64(accum_ax[j], prime, barret_ratio, barret_k);
+//       barrett_reduction_128_64(accum_ax[j], prime, barret_ratio, barret_k);
 //     auto res_bx =
-//       barret_reduction_128_64(accum_bx[j], prime, barret_ratio, barret_k);
+//       barrett_reduction_128_64(accum_bx[j], prime, barret_ratio, barret_k);
 //     out_ax[j * (N * length) + i] = res_ax;
 //     out_bx[j * (N * length) + i] = res_bx;
 //   }
@@ -125,9 +126,9 @@ __global__ void sum_reduce_fused_broadcast_key(
       inplace_add_128_128(mul_bx, accum_bx);
     }
     auto res_ax =
-        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+        barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
     auto res_bx =
-        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+        barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
     out_ax[j * (N * length) + i] = res_ax;
     out_bx[j * (N * length) + i] = res_bx;
   }
@@ -173,8 +174,8 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
     inplace_add_128_128(mul_bx, accum_bx);
   }
 
-  out_ax[i] = barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
-  out_bx[i] = barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
+  out_ax[i] = barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k);
+  out_bx[i] = barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k);
 }
 
 #define SWK_PARAMS_1  uint64_t* swk0
@@ -368,9 +369,9 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
       inplace_add_128_128(mul_bx, accum_bx);                              \
     }                                                                     \
     auto res_ax =                                                         \
-        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
     auto res_bx =                                                         \
-        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
     out_ptr[BATCH_ID * (N * length) * 2 + i] = res_bx;                    \
     out_ptr[BATCH_ID * (N * length) * 2 + i + (N * length)] = res_ax;     \
   }
@@ -434,9 +435,9 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
       inplace_add_128_128(mul_bx, accum_bx);                              \
     }                                                                     \
     auto res_ax =                                                         \
-        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
     auto res_bx =                                                         \
-        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
     out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
     out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
   }
@@ -502,9 +503,9 @@ __global__ void sum_reduce_fused_broadcast_key_batch1(
       inplace_add_128_128(mul_bx, accum_bx);                              \
     }                                                                     \
     auto res_ax =                                                         \
-        barret_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_ax, prime, barret_ratio, barret_k); \
     auto res_bx =                                                         \
-        barret_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
+        barrett_reduction_128_64(accum_bx, prime, barret_ratio, barret_k); \
     out_bx_ptr[BATCH_ID * (N * length) + i] = res_bx;                     \
     out_ax_ptr[BATCH_ID * (N * length) + i] = res_ax;                     \
   }

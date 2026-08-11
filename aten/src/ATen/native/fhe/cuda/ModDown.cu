@@ -12,8 +12,7 @@
 #include <ATen/ops/zeros.h>
 
 #include "ATen/native/fhe/cuda/CommonOperation.h"
-#include "ATen/native/fhe/cuda/Utils.cuh"
-#include "ATen/native/fhe/cuda/arithmetic.h"
+#include "ATen/native/fhe/cuda/device/Modular.cuh"
 
 #pragma clang diagnostic ignored "-Wmissing-prototypes"
 
@@ -89,7 +88,7 @@ __global__ void moddown_kernel(
   const auto barret_k = barret_ks[out_idx];
 
   to[out_idx * N + degree_idx] =
-      barret_reduction_128_64(accum, prime, barret_ratio, barret_k);
+      barrett_reduction_128_64(accum, prime, barret_ratio, barret_k);
 }
 
 } // namespace fhe
