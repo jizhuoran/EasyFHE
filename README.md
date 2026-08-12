@@ -77,16 +77,28 @@ For the latest wheel matrix and release assets, see the [installation page](http
 
 ## Reference performance
 
-The following end-to-end results were measured on one NVIDIA A100 80GB PCIe
-GPU. Each command used one synchronized warmup followed by one measured run;
-setup, key generation, encryption, decryption, and correctness checks are not
-included in the reported execution time.
+The following end-to-end results were measured with synchronized warmup
+excluded. Setup, key generation, encryption, decryption, and correctness checks
+are not included in the reported execution time.
 
-| Example | Measured work | Time |
-|---|---|---:|
-| Bootstrap | One full-slot complex bootstrap (`2^15` slots) | 41.726 ms |
-| ResNet20 AESPA | One encrypted CIFAR-10 inference | 0.866 s |
-| THOR | One encrypted 12-layer BERT inference on MRPC | 72.352 s |
+| Example | Measured work | A100 80GB PCIe | H100 80GB | RTX 5090 32GB |
+|---|---|---:|---:|---:|
+| Bootstrap | One full-slot complex bootstrap (`2^15` slots) | 41.726 ms | 31.569 ms | **25.335 ms** |
+| ResNet20 AESPA | One encrypted CIFAR-10 inference | 0.866 s | 0.687 s | **0.545 s** |
+| THOR | One encrypted 12-layer BERT inference on MRPC | 72.352 s | 55.125 s | **41.337 s** |
+
+The A100 column reports one measured run per application. The H100 Bootstrap
+and ResNet20 results average five measured runs, while its THOR result is one
+measured run. The RTX 5090 Bootstrap and ResNet20 results average five measured
+runs; its THOR result averages three measured runs after two full warmups
+(`41.304`, `41.333`, and `41.373` seconds).
+
+The 32GB RTX 5090 is close to the memory limit for the canonical ResNet20
+example: peak device memory was 32,066 MiB. It was run with
+`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` to avoid allocator
+fragmentation. THOR peaked at 23,646 MiB. The RTX 5090 measurements used the
+`cu129` wheel and Triton 3.5.1; Triton 3.7.1 produced `device kernel image is
+invalid` with the tested NVIDIA 570.124.06 driver.
 
 These are reference measurements rather than hardware-independent guarantees.
 The exact commands and downloadable, version-pinned assets live in the
