@@ -75,6 +75,23 @@ python -m pip install "easyfhe==0.1.1+cu129" \
 
 For the latest wheel matrix and release assets, see the [installation page](https://jizhuoran.github.io/EasyFHE/).
 
+## Reference performance
+
+The following end-to-end results were measured on one NVIDIA A100 80GB PCIe
+GPU. Each command used one synchronized warmup followed by one measured run;
+setup, key generation, encryption, decryption, and correctness checks are not
+included in the reported execution time.
+
+| Example | Measured work | Time |
+|---|---|---:|
+| Bootstrap | One full-slot complex bootstrap (`2^15` slots) | 41.726 ms |
+| ResNet20 AESPA | One encrypted CIFAR-10 inference | 0.866 s |
+| THOR | One encrypted 12-layer BERT inference on MRPC | 72.352 s |
+
+These are reference measurements rather than hardware-independent guarantees.
+The exact commands and downloadable, version-pinned assets live in the
+[EasyFHE examples repository](https://github.com/jizhuoran/easyfhe-examples).
+
 ## Quick start
 
 ```python
@@ -192,7 +209,9 @@ Reference applications and benchmarks live in a separate examples repository so 
 
 - [EasyFHE Examples](https://github.com/jizhuoran/easyfhe-examples)
 - `benchmark/` — foundational EasyFHE latency benchmark pipeline
+- `bootstrap/` — full-slot complex bootstrapping through the public API
 - `resnet20_aespa/` — encrypted CIFAR-10 ResNet-20 inference with AESPA
+- `thor/` — encrypted 12-layer BERT inference on MRPC
 
 ## Design background
 
