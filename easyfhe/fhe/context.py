@@ -277,6 +277,8 @@ class Context:
             cached_key, cached_special_mod_start = cached
             return cached_key, cached_special_mod_start
 
+        cache_key = (rot_index, cur_limbs, beta)
+        self._evict_dominated_rotation_key_versions(cache_key)
         swk_bx, swk_ax = self._load_rotation_key_to_cuda(
             rot_index,
             cur_limbs,
@@ -284,7 +286,6 @@ class Context:
             available_special_mod_start,
         )
         cached = [swk_bx, swk_ax]
-        cache_key = (rot_index, cur_limbs, beta)
         self._rotation_key_cuda_cache[cache_key] = cached
         return cached, cur_limbs
 
@@ -303,6 +304,32 @@ class Context:
             return None
         cached_special_mod_start, cached_key = best
         return cached_key, cached_special_mod_start
+
+    def _evict_dominated_rotation_key_versions(self, retained_key):
+        """Keep only non-dominated CUDA versions for one rotation.
+
+        A key compacted for at least as many Q limbs and decomposition digits
+        can serve every request handled by a smaller version.  Requests often
+        reach a rotation first at a low level and later at a higher one.  Drop
+        versions dominated by the requested shape before uploading the larger
+        tensors, avoiding both persistent duplication and an unnecessary
+        upgrade-time peak.  Tensor destruction remains stream ordered by the
+        CUDA caching allocator, so in-flight work keeps its storage alive
+        until the stream has passed the last queued use.
+        """
+
+        retained_rot, retained_special_mod_start, retained_beta = retained_key
+        for candidate in tuple(self._rotation_key_cuda_cache):
+            if candidate == retained_key:
+                continue
+            cached_rot, cached_special_mod_start, cached_beta = candidate
+            if int(cached_rot) != int(retained_rot):
+                continue
+            if int(cached_special_mod_start) > int(retained_special_mod_start):
+                continue
+            if int(cached_beta) > int(retained_beta):
+                continue
+            del self._rotation_key_cuda_cache[candidate]
 
     def _rotation_key_special_mod_start(self, rot_index):
         bx, _ = self.left_rot_key_map[rot_index]

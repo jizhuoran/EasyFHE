@@ -167,6 +167,9 @@ def test_rotation_key_cuda_cache_reuses_sufficient_limb_key():
     context._find_cached_rotation_key = lambda rot_index, cur_limbs, beta: (
         fhe.Context._find_cached_rotation_key(context, rot_index, cur_limbs, beta)
     )
+    context._evict_dominated_rotation_key_versions = lambda retained_key: (
+        fhe.Context._evict_dominated_rotation_key_versions(context, retained_key)
+    )
 
     key4, special4 = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
     key3, special3 = fhe.Context.get_rotation_key_for_limbs(context, 3, 3)
@@ -176,6 +179,46 @@ def test_rotation_key_cuda_cache_reuses_sufficient_limb_key():
     assert key4 == cached4 == ["bx-4", "ax-4"]
     assert key3 == key4
     assert (special4, special3, cached_special4) == (4, 4, 4)
+
+
+def test_rotation_key_cuda_cache_evicts_version_dominated_by_later_upgrade():
+    loads = []
+    cache_sizes_at_load = []
+    cache_ref = {}
+
+    def load(rot_index, cur_limbs, beta, available):
+        loads.append((rot_index, cur_limbs, beta, available))
+        cache_sizes_at_load.append(
+            len(cache_ref["context"]._rotation_key_cuda_cache)
+        )
+        return f"bx-{cur_limbs}", f"ax-{cur_limbs}"
+
+    context = SimpleNamespace(
+        device="cuda",
+        auto_load_keys_resolved=True,
+        alpha=2,
+        _rotation_key_cuda_cache={},
+        _rotation_key_special_mod_start=lambda _rot_index: 5,
+        _load_rotation_key_to_cuda=load,
+    )
+    cache_ref["context"] = context
+    context._find_cached_rotation_key = lambda rot_index, cur_limbs, beta: (
+        fhe.Context._find_cached_rotation_key(context, rot_index, cur_limbs, beta)
+    )
+    context._evict_dominated_rotation_key_versions = lambda retained_key: (
+        fhe.Context._evict_dominated_rotation_key_versions(context, retained_key)
+    )
+
+    small, small_limbs = fhe.Context.get_rotation_key_for_limbs(context, 3, 3)
+    large, large_limbs = fhe.Context.get_rotation_key_for_limbs(context, 3, 5)
+    reused, reused_limbs = fhe.Context.get_rotation_key_for_limbs(context, 3, 4)
+
+    assert loads == [(3, 3, 2, 5), (3, 5, 3, 5)]
+    assert cache_sizes_at_load == [0, 0]
+    assert small == ["bx-3", "ax-3"]
+    assert large == reused == ["bx-5", "ax-5"]
+    assert (small_limbs, large_limbs, reused_limbs) == (3, 5, 5)
+    assert tuple(context._rotation_key_cuda_cache) == ((3, 5, 3),)
 
 
 def test_rotation_key_cache_selects_smallest_sufficient_key():
