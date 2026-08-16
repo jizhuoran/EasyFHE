@@ -346,6 +346,85 @@ class Context:
             return self.inverse_precompute_auto_map[key].cuda()
         return self.inverse_precompute_auto_map[key]
 
+    def clear_cuda_rotation_cache(self, *, keep_rotations=(), empty_allocator_cache=True):
+        """Release reloadable CUDA rotation material.
+
+        Rotation keys and automorphism maps are kept on the host when
+        ``auto_load_keys`` is enabled.  Long heterogeneous programs may load
+        disjoint key sets for successive operators, so retaining every device
+        copy can unnecessarily determine peak memory.  This method removes
+        the device-side copies while preserving the host master material; a
+        later rotation transparently reloads what it needs.
+
+        ``keep_rotations`` uses the same signed offsets accepted by
+        :func:`easyfhe.fhe.homo_rotate`.  The returned counters make cache
+        eviction visible to application-level profilers without exposing the
+        private cache dictionaries.
+        """
+
+        if str(self.device).startswith("cuda"):
+            torch.cuda.synchronize(self.device)
+
+        half_ring = int(self.N) // 2
+
+        def normalize(rotation):
+            rotation = int(rotation)
+            return half_ring + rotation if rotation < 0 else rotation
+
+        keep_indices = {normalize(rotation) for rotation in keep_rotations}
+
+        def rotation_from_key(key):
+            candidate = key[0] if isinstance(key, tuple) and key else key
+            try:
+                return normalize(candidate)
+            except (TypeError, ValueError):
+                return None
+
+        stats = {}
+        for name in (
+            "_rotation_key_cuda_cache",
+            "_precompute_auto_cuda_cache",
+            "_inverse_precompute_auto_cuda_cache",
+        ):
+            cache = getattr(self, name, None)
+            before = len(cache) if isinstance(cache, dict) else 0
+            if isinstance(cache, dict):
+                for key in tuple(cache):
+                    rotation = rotation_from_key(key)
+                    if rotation is None or rotation not in keep_indices:
+                        del cache[key]
+            stats[f"{name}_entries"] = int(before)
+            stats[f"{name}_retained_entries"] = (
+                int(len(cache)) if isinstance(cache, dict) else 0
+            )
+
+        batch_cache = getattr(self, "precompute_auto_maps_cache", None)
+        before = len(batch_cache) if isinstance(batch_cache, dict) else 0
+        if isinstance(batch_cache, dict):
+            for key in tuple(batch_cache):
+                offsets = key[0] if isinstance(key, tuple) and key else ()
+                if isinstance(offsets, (int, np.integer)):
+                    offsets = (int(offsets),)
+                if not offsets or any(
+                    normalize(offset) not in keep_indices for offset in offsets
+                ):
+                    del batch_cache[key]
+        stats["precompute_auto_maps_cache_entries"] = int(before)
+        stats["precompute_auto_maps_cache_retained_entries"] = (
+            int(len(batch_cache)) if isinstance(batch_cache, dict) else 0
+        )
+
+        if (
+            bool(empty_allocator_cache)
+            and str(self.device).startswith("cuda")
+        ):
+            torch.cuda.empty_cache()
+        stats["cpu_master_rotation_keys_retained"] = int(
+            len(getattr(self, "left_rot_key_map", {}))
+        )
+        stats["requested_rotation_indices_kept"] = int(len(keep_indices))
+        return stats
+
     def __repr__(self):
         s = []
         s.append(f"{'max_limbs:':20} {self.max_limbs}")

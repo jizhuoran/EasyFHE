@@ -269,6 +269,49 @@ result = fhe.hoisted_mac_sum(
     cipher, baby_offsets, plaintexts, giant_offset, giant_count, context,
     strategy="normal",
 )
+
+# Preparation may be enqueued before online plaintext/weight construction.
+baby_rotations = fhe.prepare_hoisted_baby_rotations(
+    cipher,
+    baby_offsets,
+    context,
+    strategy="normal",
+    baby_anchor_step=32,
+)
+result = fhe.hoisted_mac_sum(
+    cipher, baby_offsets, plaintexts, giant_offset, giant_count, context,
+    strategy="normal",
+    baby_anchor_step=32,
+    baby_rotations=baby_rotations,
+)
+
+# Retain the hoisted baby-step batch for another plaintext chunk or weight.
+result, baby_rotations = fhe.hoisted_mac_sum(
+    cipher,
+    baby_offsets,
+    plaintexts,
+    giant_offset,
+    giant_count,
+    context,
+    strategy="ext_double_hoist",
+    baby_anchor_step=32,
+    return_baby_rotations=True,
+)
+next_result = fhe.hoisted_mac_sum(
+    cipher,
+    baby_offsets,
+    next_plaintexts,
+    giant_offset,
+    giant_count,
+    context,
+    strategy="ext_double_hoist",
+    baby_anchor_step=32,
+    baby_rotations=baby_rotations,
+)
+
+# Bstep is len(baby_offsets).  With Bstep=128 and anchorstep=32, the
+# implementation chains anchors 0/32/64/96 and issues four local fast
+# rotations for 0..31.  Only keys 1..31 and 32 are needed.
 result = fhe.hoisted_mac_sum_rescale(
     cipher, baby_offsets, plaintexts, giant_offset, giant_count, context,
     strategy="normal",

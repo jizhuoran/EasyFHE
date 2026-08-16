@@ -305,14 +305,30 @@ def cv_keyswitch(
         curr_limbs=cur_limbs,
         context=context,
     )
-    inner_product = cv_innerproduct_broadcast(
-        modup_res,
-        cur_limbs,
-        [special_mod_start],
-        [swk_bx],
-        [swk_ax],
-        context,
-    )
+    batch = int(_component_3d(modup_res).shape[0])
+    if batch == 1:
+        inner_product = cv_innerproduct_broadcast(
+            modup_res,
+            cur_limbs,
+            [special_mod_start],
+            [swk_bx],
+            [swk_ax],
+            context,
+        )
+    else:
+        # Relinearization applies the same evaluation key independently to
+        # every ciphertext in the batch.  The CUDA pairwise kernel already
+        # implements this schedule; repeat the key handles without copying
+        # their device storage instead of launching one broadcast keyswitch
+        # per ciphertext from Python.
+        inner_product = cv_innerproduct_pairwise(
+            modup_res,
+            cur_limbs,
+            [special_mod_start] * batch,
+            [swk_bx] * batch,
+            [swk_ax] * batch,
+            context,
+        )
     return tuple(cv_moddown(component, cur_limbs, context) for component in inner_product)
 
 

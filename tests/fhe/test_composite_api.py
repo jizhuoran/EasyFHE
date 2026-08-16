@@ -118,6 +118,71 @@ def test_grouped_and_hoisted_rescale_compositions(monkeypatch):
     assert calls[-1] == ("rescale", product, context)
 
 
+def test_hoisted_rescale_forwards_cached_baby_rotations(monkeypatch):
+    product = _cipher("product")
+    result = _cipher("result")
+    baby = _cipher("baby", batch_size=2)
+    context = object()
+    calls = []
+
+    monkeypatch.setattr(
+        rotation,
+        "hoisted_mac_sum",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or (product, baby),
+    )
+    from easyfhe.fhe.ops import alignment
+
+    monkeypatch.setattr(alignment, "rescale", lambda cipher, ctx: result)
+    actual, returned_baby = fhe.hoisted_mac_sum_rescale(
+        "cipher",
+        (0, 1),
+        "plaintexts",
+        8,
+        2,
+        context,
+        strategy="ext_double_hoist",
+        baby_rotations=baby,
+        return_baby_rotations=True,
+    )
+
+    assert actual is result
+    assert returned_baby is baby
+    assert calls[0][1]["baby_rotations"] is baby
+    assert calls[0][1]["return_baby_rotations"] is True
+
+
+def test_prepare_hoisted_baby_rotations_is_a_public_reusable_boundary(
+    monkeypatch,
+):
+    cipher = _cipher("source")
+    prepared = (_cipher("baby", batch_size=2),)
+    context = object()
+    calls = []
+
+    monkeypatch.setattr(
+        rotation,
+        "_create_hoisted_baby_rotations",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or prepared,
+    )
+
+    actual = fhe.prepare_hoisted_baby_rotations(
+        cipher,
+        (0, 1),
+        context,
+        strategy="normal",
+        baby_anchor_step=2,
+    )
+
+    assert actual is prepared
+    assert calls == [
+        (
+            (cipher, (0, 1), context),
+            {"strategy": "normal", "baby_anchor_step": 2},
+        )
+    ]
+    assert "prepare_hoisted_baby_rotations" in dir(fhe)
+
+
 def test_sum_cipher_batch_uses_cipher_addition(monkeypatch):
     batched = _cipher("batch", batch_size=3)
     items = (_cipher("a"), _cipher("b"), _cipher("c"))

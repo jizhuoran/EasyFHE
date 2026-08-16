@@ -128,6 +128,22 @@ def _hoisted_mac_normal(cipher, offsets, groups, giant_offset, context):
     )
 
 
+def _grouped_plaintexts(cipher, groups, context, *, is_ext):
+    plaintexts = []
+    for group in groups:
+        for values in group:
+            plaintexts.append(
+                _plaintext(
+                    values,
+                    context,
+                    level=context.L - cipher.state.cur_limbs,
+                    slots=cipher.slots,
+                    is_ext=bool(is_ext),
+                )
+            )
+    return layout.pack_cipher_batch(plaintexts)
+
+
 def _manual_normal_grouped_mac(cipher, offsets, groups, giant_offset, context):
     rotations = fhe.fast_rotate(cipher, offsets, context)
     partial_sums = []
@@ -204,7 +220,7 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
             dnum=1,
             dcrt_bits=30,
             first_mod=35,
-            rotations=(1, 2, giant_offset),
+            rotations=(1, 2, giant_offset, 2 * giant_offset),
         ),
         "cuda",
     )
@@ -221,6 +237,98 @@ def test_hoisted_mac_sum_normal_matches_manual_grouped_path():
     np.testing.assert_allclose(
         client.decrypt(manual).cpu().numpy()[:slots],
         client.decrypt(hoisted).cpu().numpy()[:slots],
+        rtol=1e-4,
+        atol=1e-4,
+    )
+
+
+def test_hoisted_mac_sum_can_return_and_reuse_baby_rotations():
+    slots = 1024
+    baby_offsets = [0, 1, 2, 3, 4, 5]
+    giant_offset = 7
+    client, context = _client_context(
+        fhe.CKKSContextSpec(
+            depth=4,
+            log_n=14,
+            dnum=1,
+            dcrt_bits=30,
+            first_mod=35,
+            # max_fast_steps=2 needs only local key 1 and anchor key 2.
+            # Direct fast rotation of all six offsets would also need 3,4,5.
+            rotations=(1, 2, giant_offset, 2 * giant_offset),
+        ),
+        "cuda",
+    )
+    values = np.linspace(-0.5, 0.5, slots, dtype=np.double)
+    cipher = client.encrypt(values, slots=slots)
+    groups = [
+        [
+            np.full(
+                slots,
+                0.01 * (group + 1) * (idx + 1),
+                dtype=np.double,
+            )
+            for idx in range(len(baby_offsets))
+        ]
+        for group in range(3)
+    ]
+    plaintexts = _grouped_plaintexts(
+        cipher, groups, context, is_ext=True
+    )
+
+    first, baby_rotations = fhe.hoisted_mac_sum(
+        cipher,
+        baby_offsets,
+        plaintexts,
+        giant_offset,
+        len(groups),
+        context,
+        strategy="ext_double_hoist",
+        baby_anchor_step=2,
+        return_baby_rotations=True,
+    )
+    second, returned_baby_rotations = fhe.hoisted_mac_sum(
+        cipher,
+        baby_offsets,
+        plaintexts,
+        giant_offset,
+        len(groups),
+        context,
+        strategy="ext_double_hoist",
+        baby_anchor_step=2,
+        baby_rotations=baby_rotations,
+        return_baby_rotations=True,
+    )
+    explicitly_prepared = fhe.prepare_hoisted_baby_rotations(
+        cipher,
+        baby_offsets,
+        context,
+        strategy="ext_double_hoist",
+        baby_anchor_step=2,
+    )
+    third = fhe.hoisted_mac_sum(
+        cipher,
+        baby_offsets,
+        plaintexts,
+        giant_offset,
+        len(groups),
+        context,
+        strategy="ext_double_hoist",
+        baby_anchor_step=2,
+        baby_rotations=explicitly_prepared,
+    )
+
+    assert returned_baby_rotations is baby_rotations
+    assert tuple(block.batch_size for block in baby_rotations) == (2, 2, 2)
+    np.testing.assert_allclose(
+        client.decrypt(first).cpu().numpy()[:slots],
+        client.decrypt(second).cpu().numpy()[:slots],
+        rtol=1e-4,
+        atol=1e-4,
+    )
+    np.testing.assert_allclose(
+        client.decrypt(first).cpu().numpy()[:slots],
+        client.decrypt(third).cpu().numpy()[:slots],
         rtol=1e-4,
         atol=1e-4,
     )

@@ -34,6 +34,7 @@ from .ops import (
     homo_mul_scalar_inplace,
     homo_mul_scalar_rescale,
     moddown_from_ext,
+    prepare_hoisted_baby_rotations,
     homo_rotate,
     homo_rotate_add,
     normalize_scale,

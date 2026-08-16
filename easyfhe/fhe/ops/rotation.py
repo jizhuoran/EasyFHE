@@ -3,7 +3,7 @@ import numpy as np
 
 from . import kernels as F
 from . import validation
-from .layout import cipher_batch_item, unpack_cipher_batch
+from .layout import cipher_batch_item, pack_cipher_batch, unpack_cipher_batch
 from .metadata import active_limbs
 
 
@@ -36,6 +36,14 @@ def homo_rotate_add(cipher, offset, context, addend=None):
             return homo_add(addend, cipher, context)
         return cipher.deep_copy()
 
+    if int(cipher.batch_size) > 1:
+        rotated = _batch_same_rotate(cipher, int(offset), context)
+        if addend is None:
+            return rotated
+        from .arithmetic import homo_add
+
+        return homo_add(addend, rotated, context)
+
     swk_bx, swk_ax, special_mod_start = _rotation_key_and_start(offset, context, cipher.state.cur_limbs)
     norm_index = _norm_rot_index(offset, context)
     cv = F.cv_hrot(
@@ -51,6 +59,51 @@ def homo_rotate_add(cipher, offset, context, addend=None):
         add_ax=None if addend is None else addend.cv[1],
     )
     return cipher.cipher_like(list(cv))
+
+
+def _batch_same_rotate(cipher, offset, context):
+    """Apply one automorphism to every item in a ciphertext batch.
+
+    ``fast_rotate`` broadcasts one input ciphertext over many offsets.  This
+    is the complementary schedule used by operator-level batching: many
+    ciphertexts all use the same offset and evaluation key.  Repeating Python
+    key handles does not duplicate their device storage.
+    """
+
+    batch_size = int(cipher.batch_size)
+    offsets = (int(offset),) * batch_size
+    digits = _modup_to_ext(cipher, context)
+    active_limb_count = active_limbs(digits, context)
+    nonzero_offsets, key_product_indices = _batch_rotation_product_plan(
+        offsets, context
+    )
+    swk_bxs, swk_axs, starts = _batch_rotation_keys_and_starts(
+        nonzero_offsets, context, cipher.state.cur_limbs
+    )
+    key_product_bx, key_product_ax = F.cv_innerproduct_pairwise(
+        digits.cv[0],
+        digits.state.cur_limbs,
+        starts,
+        swk_bxs,
+        swk_axs,
+        context,
+    )
+    precomp_maps = _precompute_auto_maps(nonzero_offsets, context)
+    cv = F.cv_finalize_fast_rotation_ext(
+        key_product_bx,
+        key_product_ax,
+        key_product_indices,
+        cipher.cv[0],
+        cipher.cv[1],
+        precomp_maps,
+        cipher.state.cur_limbs,
+        active_limb_count,
+        context,
+    )
+    result_ext = cipher.cipher_like(
+        list(cv), is_ext=True, batch_size=batch_size
+    )
+    return moddown_from_ext(result_ext, context)
 
 
 # Fast batched rotations.
@@ -122,27 +175,285 @@ def fast_rotate(cipher, offsets, context, *, output_ext=False):
 # Hoisted MAC and giant-rotation pipelines.
 
 
-def hoisted_mac_sum(cipher, baby_offsets, plaintexts, giant_offset, giant_count, context, *, strategy):
-    from .arithmetic import grouped_pairwise_mac
+def _baby_block_specs(baby_offsets, baby_anchor_step):
+    baby_offsets = tuple(int(offset) for offset in baby_offsets)
+    if not baby_offsets:
+        raise ValueError("hoisted_mac_sum: expected at least one baby offset")
+    baby_anchor_step = int(baby_anchor_step)
+    if baby_anchor_step < 0:
+        return baby_offsets, ((0, baby_offsets),)
+    if baby_anchor_step < 2:
+        raise ValueError(
+            "hoisted_mac_sum: baby_anchor_step must be at least two or -1"
+        )
+    if baby_offsets[0] != 0:
+        raise ValueError(
+            "hoisted_mac_sum: bounded baby steps require offsets to start at zero"
+        )
+    local_step = baby_offsets[1] if len(baby_offsets) > 1 else 1
+    if local_step <= 0 or any(
+        baby_offsets[index] - baby_offsets[index - 1] != local_step
+        for index in range(1, len(baby_offsets))
+    ):
+        raise ValueError(
+            "hoisted_mac_sum: anchored baby_offsets must be a positive "
+            "arithmetic sequence"
+        )
+    block_width = baby_anchor_step
+    specs = []
+    for start in range(0, len(baby_offsets), block_width):
+        width = min(block_width, len(baby_offsets) - start)
+        specs.append(
+            (start, tuple(local * local_step for local in range(width)))
+        )
+    return baby_offsets, tuple(specs)
 
+
+def _single_zero_rotation_ext(cipher, anchor_offset, context):
+    raw = fast_rotate(
+        cipher, (0, int(anchor_offset)), context, output_ext=True
+    )
+    return cipher_batch_item(raw, 0).deep_copy()
+
+
+def _create_hoisted_baby_rotations(
+    cipher,
+    baby_offsets,
+    context,
+    *,
+    strategy,
+    baby_anchor_step,
+):
+    baby_offsets, specs = _baby_block_specs(
+        baby_offsets, baby_anchor_step
+    )
+    output_ext = strategy != "normal"
+    blocks = []
+    anchor = cipher
+    anchor_offset = (
+        int(baby_offsets[int(baby_anchor_step)])
+        if len(baby_offsets) > int(baby_anchor_step)
+        else 0
+    )
+    for block_index, (start, local_offsets) in enumerate(specs):
+        if len(local_offsets) == 1 and local_offsets[0] == 0:
+            if output_ext:
+                block = _single_zero_rotation_ext(
+                    anchor, anchor_offset, context
+                )
+            else:
+                block = pack_cipher_batch((anchor.deep_copy(),))
+        else:
+            block = fast_rotate(
+                anchor, local_offsets, context, output_ext=output_ext
+            )
+        blocks.append(block)
+        if block_index + 1 < len(specs):
+            anchor = homo_rotate(anchor, anchor_offset, context)
+    return tuple(blocks)
+
+
+def prepare_hoisted_baby_rotations(
+    cipher,
+    baby_offsets,
+    context,
+    *,
+    strategy,
+    baby_anchor_step=-1,
+):
+    """Prepare the reusable baby-step basis for hoisted BSGS MACs.
+
+    The returned tuple is an opaque, caller-owned basis accepted by
+    :func:`hoisted_mac_sum` through its ``baby_rotations`` argument.  It may
+    be borrowed by any number of MACs as long as the source ciphertext,
+    level, offsets, anchor schedule, and hoisting strategy stay unchanged.
+
+    Keeping preparation separate from the first MAC lets an application
+    enqueue the decomposition before it prepares online plaintext weights,
+    while preserving the existing ``return_baby_rotations`` convenience
+    path for one-shot callers.
+    """
+
+    strategy = _require_hoist_strategy(
+        "prepare_hoisted_baby_rotations", strategy
+    )
+    baby_offsets, _ = _baby_block_specs(
+        baby_offsets, baby_anchor_step
+    )
+    return _create_hoisted_baby_rotations(
+        cipher,
+        baby_offsets,
+        context,
+        strategy=strategy,
+        baby_anchor_step=int(baby_anchor_step),
+    )
+
+
+def _validate_cached_baby_rotations(
+    cipher,
+    baby_offsets,
+    baby_rotations,
+    *,
+    strategy,
+    baby_anchor_step,
+):
+    if not isinstance(baby_rotations, (tuple, list)):
+        raise TypeError(
+            "hoisted_mac_sum: baby_rotations must be a tuple of cipher batches"
+        )
+    baby_offsets, specs = _baby_block_specs(
+        baby_offsets, baby_anchor_step
+    )
+    if len(baby_rotations) != len(specs):
+        raise ValueError("hoisted_mac_sum: cached baby rotation block count mismatch")
+    expected_ext = strategy != "normal"
+    for block, (_, local_offsets) in zip(
+        baby_rotations, specs, strict=True
+    ):
+        if int(block.batch_size) != len(local_offsets):
+            raise ValueError(
+                "hoisted_mac_sum: cached baby rotation block size mismatch"
+            )
+        if block.state != cipher.state or int(block.slots) != int(cipher.slots):
+            raise ValueError(
+                "hoisted_mac_sum: cached baby rotations must match the input "
+                "cipher metadata"
+            )
+        if bool(block.is_ext) != expected_ext:
+            raise ValueError(
+                "hoisted_mac_sum: cached baby rotation basis does not match "
+                f"strategy={strategy!r}"
+            )
+    return baby_offsets, specs
+
+
+def _plaintext_baby_block(
+    plaintexts,
+    *,
+    giant_count,
+    baby_count,
+    start,
+    width,
+):
+    components = []
+    for component in plaintexts.cv:
+        shaped = component.reshape(
+            int(giant_count), int(baby_count), *component.shape[1:]
+        )
+        selected = shaped[:, int(start) : int(start + width)]
+        components.append(
+            selected.reshape(
+                int(giant_count) * int(width), *component.shape[1:]
+            )
+        )
+    return plaintexts.cipher_like(
+        components, batch_size=int(giant_count) * int(width)
+    )
+
+
+def _grouped_mac_baby_blocks(
+    baby_rotations,
+    plaintexts,
+    giant_count,
+    context,
+    *,
+    baby_count,
+    specs,
+):
+    from .arithmetic import grouped_pairwise_mac, homo_add
+
+    partial_sums = None
+    for (start, _), block in zip(specs, baby_rotations, strict=True):
+        block_plaintexts = _plaintext_baby_block(
+            plaintexts,
+            giant_count=giant_count,
+            baby_count=baby_count,
+            start=start,
+            width=int(block.batch_size),
+        )
+        block_sums = grouped_pairwise_mac(
+            block.cipher_like(block.cv, slots=block_plaintexts.slots),
+            block_plaintexts,
+            giant_count,
+            context,
+        )
+        partial_sums = (
+            block_sums
+            if partial_sums is None
+            else homo_add(partial_sums, block_sums, context)
+        )
+    return partial_sums
+
+
+def hoisted_mac_sum(
+    cipher,
+    baby_offsets,
+    plaintexts,
+    giant_offset,
+    giant_count,
+    context,
+    *,
+    strategy,
+    baby_anchor_step=-1,
+    baby_rotations=None,
+    return_baby_rotations=False,
+):
+    """Run a hoisted BSGS MAC, optionally borrowing or returning baby steps.
+
+    The two schedule values are ``Bstep=len(baby_offsets)`` and
+    ``anchorstep=baby_anchor_step``.  For Bstep 128 and anchorstep 32, anchors
+    0/32/64/96 are reached sequentially and four fast rotations each cover
+    local offsets 0..31.  The physical stride and anchor rotation are inferred
+    from the arithmetic ``baby_offsets`` sequence.  Set
+    ``baby_anchor_step=-1`` to retain the traditional single fast batch.
+
+    ``baby_rotations`` is a tuple of cipher batches returned for the same
+    input and step parameters.  It is borrowed and never consumed or mutated.
+    With ``return_baby_rotations=True``, return ``(result, baby_rotations)`` so
+    the caller can reuse all blocks across plaintext chunks or weight pages.
+
+    The default call remains backward compatible and returns only ``result``.
+    """
     strategy = _require_hoist_strategy("hoisted_mac_sum", strategy)
-    if strategy == "normal":
-        baby_rotations = fast_rotate(cipher, baby_offsets, context)
+    baby_offsets, specs = _baby_block_specs(
+        baby_offsets, baby_anchor_step
+    )
+    if baby_rotations is None:
+        baby_rotations = prepare_hoisted_baby_rotations(
+            cipher,
+            baby_offsets,
+            context,
+            strategy=strategy,
+            baby_anchor_step=baby_anchor_step,
+        )
     else:
-        baby_rotations = fast_rotate(cipher, baby_offsets, context, output_ext=True)
-
-    partial_sums = grouped_pairwise_mac(
-        baby_rotations.cipher_like(baby_rotations.cv, slots=plaintexts.slots),
+        baby_offsets, specs = _validate_cached_baby_rotations(
+            cipher,
+            baby_offsets,
+            baby_rotations,
+            strategy=strategy,
+            baby_anchor_step=baby_anchor_step,
+        )
+    partial_sums = _grouped_mac_baby_blocks(
+        baby_rotations,
         plaintexts,
         giant_count,
         context,
+        baby_count=len(tuple(baby_offsets)),
+        specs=specs,
     )
     if int(giant_count) == 1:
         result = cipher_batch_item(partial_sums, 0)
-        return moddown_from_ext(result, context) if result.is_ext else result
-    if int(giant_offset) == 0:
-        return _sum_batch_items_without_rotation(partial_sums, context)
-    return giant_rotate_sum(partial_sums, giant_offset, context, strategy=strategy)
+        result = moddown_from_ext(result, context) if result.is_ext else result
+    elif int(giant_offset) == 0:
+        result = _sum_batch_items_without_rotation(partial_sums, context)
+    else:
+        result = giant_rotate_sum(
+            partial_sums, giant_offset, context, strategy=strategy
+        )
+    if bool(return_baby_rotations):
+        return result, baby_rotations
+    return result
 
 
 def hoisted_mac_sum_rescale(
@@ -154,23 +465,33 @@ def hoisted_mac_sum_rescale(
     context,
     *,
     strategy,
+    baby_anchor_step=-1,
+    baby_rotations=None,
+    return_baby_rotations=False,
 ):
-    """Run a hoisted MAC sum and consume the single u64 rescale limb."""
+    """Run a hoisted MAC sum and consume the single u64 rescale limb.
+
+    The optional baby-rotation input/output follows :func:`hoisted_mac_sum`.
+    """
 
     from .alignment import rescale
 
-    return rescale(
-        hoisted_mac_sum(
-            cipher,
-            baby_offsets,
-            plaintexts,
-            giant_offset,
-            giant_count,
-            context,
-            strategy=strategy,
-        ),
+    mac_result = hoisted_mac_sum(
+        cipher,
+        baby_offsets,
+        plaintexts,
+        giant_offset,
+        giant_count,
         context,
+        strategy=strategy,
+        baby_anchor_step=baby_anchor_step,
+        baby_rotations=baby_rotations,
+        return_baby_rotations=bool(return_baby_rotations),
     )
+    if bool(return_baby_rotations):
+        result, used_baby_rotations = mac_result
+        return rescale(result, context), used_baby_rotations
+    return rescale(mac_result, context)
 
 
 def giant_rotate_sum(ciphers, offset, context, *, strategy="normal"):

@@ -70,6 +70,7 @@ HOISTED_OPS_API = (
     "hoisted_mac_sum",
     "hoisted_mac_sum_rescale",
     "moddown_from_ext",
+    "prepare_hoisted_baby_rotations",
     "sum_cipher_batch",
 )
 

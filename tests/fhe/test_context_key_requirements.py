@@ -190,3 +190,37 @@ def test_rotation_key_cache_selects_smallest_sufficient_key():
     assert context._find_cached_rotation_key(5, 8, 3) == ("small-key", 8)
     assert context._find_cached_rotation_key(5, 13, 4) is None
     assert context._find_cached_rotation_key(5, 10, 5) is None
+
+
+def test_clear_cuda_rotation_cache_preserves_requested_offsets_and_host_keys():
+    context = fhe.Context.__new__(fhe.Context)
+    context.device = "cpu"
+    context.N = 32
+    context.left_rot_key_map = {1: "host-one", 15: "host-minus-one"}
+    context._rotation_key_cuda_cache = {
+        (1, 4, 2): "device-one",
+        (15, 4, 2): "device-minus-one",
+    }
+    context._precompute_auto_cuda_cache = {1: "auto-one", 15: "auto-minus-one"}
+    context._inverse_precompute_auto_cuda_cache = {
+        1: "inverse-one",
+        15: "inverse-minus-one",
+    }
+    context.precompute_auto_maps_cache = {
+        ((1,), "cuda"): "batch-one",
+        ((1, -1), "cuda"): "batch-mixed",
+    }
+
+    stats = context.clear_cuda_rotation_cache(
+        keep_rotations=(1,),
+        empty_allocator_cache=False,
+    )
+
+    assert tuple(context._rotation_key_cuda_cache) == ((1, 4, 2),)
+    assert tuple(context._precompute_auto_cuda_cache) == (1,)
+    assert tuple(context._inverse_precompute_auto_cuda_cache) == (1,)
+    assert tuple(context.precompute_auto_maps_cache) == (((1,), "cuda"),)
+    assert context.left_rot_key_map == {1: "host-one", 15: "host-minus-one"}
+    assert stats["_rotation_key_cuda_cache_entries"] == 2
+    assert stats["_rotation_key_cuda_cache_retained_entries"] == 1
+    assert stats["cpu_master_rotation_keys_retained"] == 2

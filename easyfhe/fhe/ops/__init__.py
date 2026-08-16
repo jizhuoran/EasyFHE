@@ -43,6 +43,7 @@ from .rotation import (
     homo_rotate_add,
     homo_rotate,
     moddown_from_ext,
+    prepare_hoisted_baby_rotations,
 )
 from .layout import expand_slots, fold_slots, pack_cipher_batch, unpack_cipher_batch
 
